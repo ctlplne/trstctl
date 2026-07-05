@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Building2, Gauge, Headphones, KeyRound, Loader2, Network, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { formatCurrency as formatCurrencyPolicy, formatDateTime, formatNumber as formatNumberPolicy, type FormatPolicy } from "@/i18n/format";
@@ -17,9 +20,13 @@ import {
   type ManagedTenantProvisionRequest,
   type Member,
   type OIDCMappingStatus,
+  type PAMSession,
+  type PAMSessionRequest,
+  type PlatformDistributionStatus,
   type RoleList,
   type ScaleOrchestrationPlan,
 } from "@/lib/api";
+import type { StatusTone } from "@/lib/statusVocab";
 
 function browserTransport(): { label: string; detail: string; warning?: string } {
   if (typeof window === "undefined") {
@@ -59,6 +66,30 @@ const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
   meters: [],
 };
 
+type PAMSessionFormState = {
+  target_type: PAMSessionRequest["target_type"];
+  target_id: string;
+  role: string;
+  method: string;
+  payload_base64: string;
+  reason: string;
+  ttl_seconds: string;
+  ssh_principal: string;
+  ssh_public_key: string;
+};
+
+const defaultPAMSessionForm: PAMSessionFormState = {
+  target_type: "postgres",
+  target_id: "",
+  role: "",
+  method: "",
+  payload_base64: "",
+  reason: "",
+  ttl_seconds: "",
+  ssh_principal: "",
+  ssh_public_key: "",
+};
+
 export function Platform() {
   const { user, preview } = useAuth();
   const { locale, timeZone, t } = useTranslation();
@@ -95,8 +126,47 @@ export function Platform() {
   const [hostedPlan, setHostedPlan] = useState("enterprise");
   const [hostedSupportTier, setHostedSupportTier] = useState("24x7");
   const [hostedSLOTier, setHostedSLOTier] = useState("99.95");
+  const [distribution, setDistribution] = useState<PlatformDistributionStatus | null>(null);
+  const [pamRows, setPAMRows] = useState<PAMSession[] | null>(null);
+  const [pamCursor, setPAMCursor] = useState<string | undefined>(undefined);
+  const [pamLoadingMore, setPAMLoadingMore] = useState(false);
+  const [pamDetail, setPAMDetail] = useState<PAMSession | null>(null);
+  const [pamFormOpen, setPAMFormOpen] = useState(false);
+  const [pamForm, setPAMForm] = useState<PAMSessionFormState>(defaultPAMSessionForm);
+  const [pamBusy, setPAMBusy] = useState(false);
+  const [pamFormError, setPAMFormError] = useState<string | null>(null);
+  const [pamCreated, setPAMCreated] = useState<PAMSession | null>(null);
+  const [pamCopied, setPAMCopied] = useState(false);
   const roleRows = useMemo(() => roles?.items ?? [], [roles]);
   const packaging = editions?.packaging ?? defaultPackaging;
+  const pamColumns = useMemo<DataGridColumn<PAMSession>[]>(
+    () => [
+      { id: "started", header: "Started", cell: (session) => formatOptionalDate(session.started_at, formatPolicy) },
+      {
+        id: "subject",
+        header: "Subject",
+        cell: (session) => <span className="break-all font-mono text-xs">{session.subject}</span>,
+      },
+      { id: "role", header: "Role", cell: (session) => session.role },
+      {
+        id: "target",
+        header: "Target",
+        cell: (session) => (
+          <div className="grid gap-1">
+            <span>{session.target_type}</span>
+            <span className="break-all font-mono text-xs text-muted-foreground">{session.target_id}</span>
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (session) => <StatusBadge value={session.status} label={session.status} tone={pamStatusTone(session.status)} />,
+      },
+      { id: "expires", header: "Expires", cell: (session) => formatOptionalDate(session.expires_at, formatPolicy) },
+    ],
+    [formatPolicy],
+  );
 
   async function loadAccessAdmin() {
     setAccessLoading(true);
@@ -132,6 +202,85 @@ export function Platform() {
   useEffect(() => {
     void loadAccessAdmin();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve()
+      .then(() => api.pamSessions({ limit: 20 }))
+      .then((page) => {
+        if (!active) return;
+        setPAMRows(page.items ?? []);
+        setPAMCursor(page.next_cursor);
+      })
+      .catch(() => null);
+    Promise.resolve()
+      .then(() => api.platformDistribution())
+      .then((status) => {
+        if (active) setDistribution(status);
+      })
+      .catch(() => null);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function loadMorePAMSessions() {
+    if (!pamCursor) return;
+    setPAMLoadingMore(true);
+    try {
+      const page = await api.pamSessions({ limit: 20, cursor: pamCursor });
+      setPAMRows((current) => [...(current ?? []), ...(page.items ?? [])]);
+      setPAMCursor(page.next_cursor);
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPAMLoadingMore(false);
+    }
+  }
+
+  function closePAMDialog() {
+    setPAMFormOpen(false);
+    setPAMFormError(null);
+    setPAMCreated(null);
+    setPAMCopied(false);
+  }
+
+  async function openPrivilegedSession(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPAMBusy(true);
+    setPAMFormError(null);
+    try {
+      const ttl = Number(pamForm.ttl_seconds.trim());
+      const input: PAMSessionRequest = {
+        method: pamForm.method.trim(),
+        payload_base64: pamForm.payload_base64.trim(),
+        role: pamForm.role.trim(),
+        target_id: pamForm.target_id.trim(),
+        target_type: pamForm.target_type,
+        ...(pamForm.reason.trim() ? { reason: pamForm.reason.trim() } : {}),
+        ...(pamForm.ttl_seconds.trim() && Number.isFinite(ttl) && ttl > 0 ? { ttl_seconds: Math.floor(ttl) } : {}),
+        ...(pamForm.target_type === "ssh" && pamForm.ssh_principal.trim() ? { ssh_principal: pamForm.ssh_principal.trim() } : {}),
+        ...(pamForm.target_type === "ssh" && pamForm.ssh_public_key.trim() ? { ssh_public_key: pamForm.ssh_public_key.trim() } : {}),
+      };
+      const created = await api.openPAMSession(input);
+      setPAMCreated(created);
+      setPAMRows((current) => [created, ...(current ?? []).filter((item) => item.id !== created.id)]);
+      setPAMForm(defaultPAMSessionForm);
+    } catch (err) {
+      setPAMFormError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPAMBusy(false);
+    }
+  }
+
+  async function copyPAMSessionID(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      setPAMCopied(true);
+    } catch {
+      setPAMCopied(false);
+    }
+  }
 
   async function onboardMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -423,18 +572,80 @@ export function Platform() {
         </div>
       </section>
 
-      <section className="ui-panel grid gap-3 p-comfortable" aria-labelledby="platform-region-heading">
-        <h2 id="platform-region-heading" className="text-title font-semibold">
-          Multi-region posture
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
-        </p>
-        {/* TRACE-014 source anchor: served worker */}
-      </section>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="platform-region-heading">
+          <h2 id="platform-region-heading" className="text-title font-semibold">
+            Multi-region posture
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
+          </p>
+          {/* TRACE-014 source anchor: served worker */}
+        </section>
+        {distribution && (
+          <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="distribution-posture-heading">
+            <h2 id="distribution-posture-heading" className="text-title font-semibold">
+              {t("parity.distributionPosture_10c8b4")}
+            </h2>
+            <dl className="grid gap-2 text-sm">
+              <div>
+                <dt className="font-medium text-muted-foreground">{t("parity.productionMode_1737a4")}</dt>
+                <dd>{humanizeToken(distribution.production_mode)}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{t("parity.controlPlaneLineage_513399")}</dt>
+                <dd>{humanizeToken(distribution.control_plane_lineage)}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{t("parity.builtInGuarantees_21db16")}</dt>
+                <dd className="flex flex-wrap gap-2">
+                  <StatusBadge
+                    value={distribution.offline_license_verifier ? "included" : "absent"}
+                    label={distribution.offline_license_verifier ? "Licenses verified offline" : "No offline license verifier"}
+                    tone={distribution.offline_license_verifier ? "success" : "neutral"}
+                  />
+                  <StatusBadge
+                    value={distribution.core_audit_and_export ? "included" : "absent"}
+                    label={distribution.core_audit_and_export ? "Audit log and export in core" : "Audit and export not in core"}
+                    tone={distribution.core_audit_and_export ? "success" : "neutral"}
+                  />
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{t("parity.runModes_6fced8")}</dt>
+                <dd className="grid gap-1">
+                  {distribution.run_modes.map((mode) => (
+                    <span key={mode.id}>
+                      <span className="font-medium">{mode.label}</span>
+                      <span className="text-muted-foreground"> — {mode.intended_use}</span>
+                    </span>
+                  ))}
+                  {distribution.run_modes.length === 0 && <span className="text-muted-foreground">-</span>}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{t("parity.supportedHostArchives_38c6c0")}</dt>
+                <dd className="grid gap-1">
+                  {distribution.supported_host_archives.map((archive) => (
+                    <span key={`${archive.os_arch}-${archive.postgres_version}`} className="font-mono text-xs">
+                      {archive.os_arch} · PostgreSQL {archive.postgres_version}
+                      {archive.evaluation_only ? " · evaluation only" : ""}
+                    </span>
+                  ))}
+                  {distribution.supported_host_archives.length === 0 && <span className="text-muted-foreground">-</span>}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{t("parity.airGap_a0134a")}</dt>
+                <dd>{airGapSummary(distribution.air_gap)}</dd>
+              </div>
+            </dl>
+          </section>
+        )}
+      </div>
 
       <section className="ui-panel p-comfortable" aria-labelledby="regional-issuance-heading">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -975,6 +1186,37 @@ export function Platform() {
             </Button>
           </form>
         </div>
+        {pamRows && (
+          <div className="ui-panel mb-4 grid gap-3 p-comfortable">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-body font-semibold">{t("parity.privilegedAccessSessions_368da5")}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{t("parity.justInTimeOperatorSessionsBrokered_df233f")}</p>
+              </div>
+              <Button type="button" size="sm" onClick={() => setPAMFormOpen(true)}>
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+                {t("parity.openSession_73b3ca")}
+              </Button>
+            </div>
+            <DataGrid
+              ariaLabel="Privileged access sessions"
+              rows={pamRows}
+              columns={pamColumns}
+              getRowId={(session) => session.id}
+              onRowOpen={(session) => setPAMDetail(session)}
+              rowActionLabel={() => "Details"}
+              pagination={
+                pamCursor ? (
+                  <div>
+                    <Button type="button" size="sm" variant="outline" disabled={pamLoadingMore} onClick={() => void loadMorePAMSessions()}>
+                      {pamLoadingMore ? "Loading more sessions..." : "Load more sessions"}
+                    </Button>
+                  </div>
+                ) : undefined
+              }
+            />
+          </div>
+        )}
         <div className="mb-4 grid gap-4 xl:grid-cols-2">
           <div className="overflow-x-auto rounded-panel border border-border">
             <table className="ui-table min-w-[34rem]">
@@ -1062,6 +1304,228 @@ export function Platform() {
           </div>
         </div>
       </section>
+
+      {pamDetail && (
+        <Dialog
+          open
+          onClose={() => setPAMDetail(null)}
+          titleId="pam-session-detail-heading"
+          descriptionId="pam-session-detail-description"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          overlayClassName="absolute inset-0 bg-black/55"
+          panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+        >
+          <header className="border-b border-border px-5 py-4">
+            <h2 id="pam-session-detail-heading" className="text-title font-semibold">
+              {`Privileged session ${pamDetail.id}`}
+            </h2>
+            <p id="pam-session-detail-description" className="mt-1 text-sm text-muted-foreground">
+              {t("parity.brokerEvidenceForThisJustIn_44ca48")}
+            </p>
+          </header>
+          <dl className="grid gap-2 p-5 text-sm">
+            <PlatformDetailRow term="ID" mono>
+              {pamDetail.id}
+            </PlatformDetailRow>
+            <PlatformDetailRow term="Status">
+              <StatusBadge value={pamDetail.status} label={pamDetail.status} tone={pamStatusTone(pamDetail.status)} />
+            </PlatformDetailRow>
+            <PlatformDetailRow term="Subject" mono>
+              {pamDetail.subject}
+            </PlatformDetailRow>
+            <PlatformDetailRow term="Requested by" mono>
+              {pamDetail.requested_by}
+            </PlatformDetailRow>
+            <PlatformDetailRow term="Role">{pamDetail.role}</PlatformDetailRow>
+            <PlatformDetailRow term="Target" mono>
+              {`${pamDetail.target_type} · ${pamDetail.target_id}`}
+            </PlatformDetailRow>
+            <PlatformDetailRow term="Reason">{pamDetail.reason || "-"}</PlatformDetailRow>
+            <PlatformDetailRow term="Started">{formatOptionalDate(pamDetail.started_at, formatPolicy)}</PlatformDetailRow>
+            <PlatformDetailRow term="Expires">{formatOptionalDate(pamDetail.expires_at, formatPolicy)}</PlatformDetailRow>
+            <PlatformDetailRow term="Ended">{formatOptionalDate(pamDetail.ended_at, formatPolicy)}</PlatformDetailRow>
+            {pamDetail.attestation ? (
+              <PlatformDetailRow term="Attestation">
+                <JSONBlock value={pamDetail.attestation} />
+              </PlatformDetailRow>
+            ) : null}
+            {pamDetail.audit ? (
+              <PlatformDetailRow term="Audit">
+                <JSONBlock value={pamDetail.audit} />
+              </PlatformDetailRow>
+            ) : null}
+            {pamDetail.postgres ? (
+              <PlatformDetailRow term="PostgreSQL credential">
+                <JSONBlock value={pamDetail.postgres} />
+              </PlatformDetailRow>
+            ) : null}
+            {pamDetail.ssh ? (
+              <PlatformDetailRow term="SSH credential">
+                <JSONBlock value={pamDetail.ssh} />
+              </PlatformDetailRow>
+            ) : null}
+          </dl>
+          <div className="flex justify-end border-t border-border px-5 py-4">
+            <Button type="button" variant="outline" onClick={() => setPAMDetail(null)}>
+              Close
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {pamFormOpen && (
+        <Dialog
+          open
+          onClose={closePAMDialog}
+          titleId="pam-open-heading"
+          descriptionId="pam-open-description"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          overlayClassName="absolute inset-0 bg-black/55"
+          panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+        >
+          <header className="border-b border-border px-5 py-4">
+            <h2 id="pam-open-heading" className="text-title font-semibold">
+              {t("parity.openPrivilegedSession_78a445")}
+            </h2>
+            <p id="pam-open-description" className="mt-1 text-sm text-muted-foreground">
+              Broker short-lived access to a PostgreSQL role or SSH principal; the session and its evidence land in the audit trail.
+            </p>
+          </header>
+          {pamCreated ? (
+            <div className="grid gap-3 p-5 text-sm">
+              <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-status-success">
+                {t("parity.sessionOpened_368838")}
+              </p>
+              <dl className="grid gap-2">
+                <PlatformDetailRow term="Session ID">
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                    <span className="break-all font-mono text-xs">{pamCreated.id}</span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => void copyPAMSessionID(pamCreated.id)}>
+                      {pamCopied ? "Copied" : "Copy ID"}
+                    </Button>
+                  </span>
+                </PlatformDetailRow>
+                <PlatformDetailRow term="Status">
+                  <StatusBadge value={pamCreated.status} label={pamCreated.status} tone={pamStatusTone(pamCreated.status)} />
+                </PlatformDetailRow>
+                <PlatformDetailRow term="Expires">{formatOptionalDate(pamCreated.expires_at, formatPolicy)}</PlatformDetailRow>
+              </dl>
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={closePAMDialog}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={(event) => void openPrivilegedSession(event)} className="grid gap-3 p-5">
+              {pamFormError && (
+                <p role="alert" className="rounded-control border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                  {pamFormError}
+                </p>
+              )}
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-body font-medium">
+                  {t("parity.targetType_a45f80")}
+                  <select
+                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                    value={pamForm.target_type}
+                    onChange={(event) => setPAMForm({ ...pamForm, target_type: event.target.value as PAMSessionRequest["target_type"] })}
+                  >
+                    <option value="postgres">{t("parity.postgres_afc848")}</option>
+                    <option value="ssh">{t("parity.ssh_e8b9f6")}</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-body font-medium">
+                  {t("parity.targetId_00960a")}
+                  <input
+                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                    value={pamForm.target_id}
+                    onChange={(event) => setPAMForm({ ...pamForm, target_id: event.target.value })}
+                    required
+                  />
+                </label>
+                <label className="grid gap-1 text-body font-medium">
+                  Role
+                  <input
+                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                    value={pamForm.role}
+                    onChange={(event) => setPAMForm({ ...pamForm, role: event.target.value })}
+                    required
+                  />
+                </label>
+                <label className="grid gap-1 text-body font-medium">
+                  Method
+                  <input
+                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                    value={pamForm.method}
+                    onChange={(event) => setPAMForm({ ...pamForm, method: event.target.value })}
+                    required
+                  />
+                </label>
+                {pamForm.target_type === "ssh" && (
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("parity.sshPrincipal_8d0a6c")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      value={pamForm.ssh_principal}
+                      onChange={(event) => setPAMForm({ ...pamForm, ssh_principal: event.target.value })}
+                    />
+                  </label>
+                )}
+                <label className="grid gap-1 text-body font-medium">
+                  Reason
+                  <input
+                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                    value={pamForm.reason}
+                    onChange={(event) => setPAMForm({ ...pamForm, reason: event.target.value })}
+                  />
+                </label>
+                <label className="grid gap-1 text-body font-medium">
+                  TTL seconds
+                  <input
+                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                    type="number"
+                    min={1}
+                    value={pamForm.ttl_seconds}
+                    onChange={(event) => setPAMForm({ ...pamForm, ttl_seconds: event.target.value })}
+                    placeholder="optional"
+                  />
+                </label>
+              </div>
+              {pamForm.target_type === "ssh" && (
+                <label className="grid gap-1 text-body font-medium">
+                  SSH public key
+                  <textarea
+                    className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+                    value={pamForm.ssh_public_key}
+                    onChange={(event) => setPAMForm({ ...pamForm, ssh_public_key: event.target.value })}
+                  />
+                </label>
+              )}
+              <label className="grid gap-1 text-body font-medium">
+                {t("parity.payloadBase64_738cc4")}
+                <textarea
+                  className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+                  value={pamForm.payload_base64}
+                  onChange={(event) => setPAMForm({ ...pamForm, payload_base64: event.target.value })}
+                  required
+                />
+              </label>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={closePAMDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={pamBusy || !pamForm.target_id.trim() || !pamForm.role.trim() || !pamForm.method.trim() || !pamForm.payload_base64.trim()}
+                >
+                  {pamBusy ? "Opening..." : "Open session"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </Dialog>
+      )}
     </section>
   );
 }
@@ -1159,4 +1623,45 @@ function providerPlaneClass(mode?: ManagedOfferingStatus["provider_plane_mode"])
 function scaleServedClass(served?: boolean): string {
   const base = "rounded-control border px-2 py-1 text-xs font-medium";
   return served ? `${base} border-status-success/30 bg-status-success/10 text-status-success` : `${base} border-border bg-muted text-muted-foreground`;
+}
+
+function pamStatusTone(status: string): StatusTone {
+  if (status === "open" || status === "active") return "success";
+  if (status === "expired" || status === "pending") return "warning";
+  if (status === "revoked" || status === "failed") return "critical";
+  return "neutral";
+}
+
+function humanizeToken(value: string): string {
+  return value ? value.replace(/[_-]+/g, " ") : "-";
+}
+
+function airGapSummary(airGap: PlatformDistributionStatus["air_gap"]): string {
+  const protections = [
+    airGap.no_phone_home_default ? "no phone-home by default" : null,
+    airGap.public_telemetry_fail_closed ? "public telemetry fails closed" : null,
+    airGap.cloud_ai_fail_closed ? "cloud AI fails closed" : null,
+    airGap.runtime_egress_guard ? "runtime egress guard" : null,
+  ].filter((item): item is string => item != null);
+  if (protections.length === 0) return "No air-gap protections reported.";
+  return `${airGap.served ? "Served" : "Not served"} · ${protections.join(" · ")}`;
+}
+
+function PlatformDetailRow({ term, children, mono = false }: { term: string; children: ReactNode; mono?: boolean }) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
+      <dt className="font-medium text-muted-foreground">{term}</dt>
+      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+    </div>
+  );
+}
+
+function JSONBlock({ value }: { value: unknown }) {
+  let text: string;
+  try {
+    text = JSON.stringify(value, null, 2);
+  } catch {
+    text = String(value);
+  }
+  return <pre className="max-h-48 overflow-auto rounded-control border border-border bg-muted/40 p-2 font-mono text-xs">{text}</pre>;
 }

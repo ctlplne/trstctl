@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
+import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
+import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory, SecretImport } from "@/components/secrets";
 import { formatDateTime as formatDate } from "@/i18n/format";
@@ -15,12 +17,16 @@ import {
   type CloudSecretManagerIntegration,
   type DynamicLease,
   type EphemeralAPIKey,
+  type EphemeralCredential,
   type KubernetesSecretOperator,
   type MachineLoginResponse,
   type PKISecret,
   type SecretApprovalAction,
   type SecretMeta,
   type SecretRepositoryScanPosture,
+  type SecretRotation,
+  type SecretRotationSchedule,
+  type SecretRotationScheduleRun,
   type SecretScan,
   type SecretSync,
   type SecretSyncTargetCatalog,
@@ -169,6 +175,41 @@ export function Secrets() {
   const [workloadInjection, setWorkloadInjection] = useState<SecretWorkloadInjection | null>(null);
   const [unvaultedPosture, setUnvaultedPosture] = useState<UnvaultedSecretPosture | null>(null);
 
+  const [rotationRunKey, setRotationRunKey] = useState("");
+  const [rotationRunOldRef, setRotationRunOldRef] = useState("");
+  const [rotationRunProvider, setRotationRunProvider] = useState("");
+  const [rotationRunTarget, setRotationRunTarget] = useState("");
+  const [rotationRunRemoteKey, setRotationRunRemoteKey] = useState("");
+  const [rotationRunTTL, setRotationRunTTL] = useState("");
+  const [rotationRunBusy, setRotationRunBusy] = useState(false);
+  const [rotationRunError, setRotationRunError] = useState<string | null>(null);
+  const [rotationRun, setRotationRun] = useState<SecretRotation | null>(null);
+
+  const [rotationSchedules, setRotationSchedules] = useState<SecretRotationSchedule[] | null>(null);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleKey, setScheduleKey] = useState("");
+  const [scheduleOldRef, setScheduleOldRef] = useState("");
+  const [scheduleProvider, setScheduleProvider] = useState("");
+  const [scheduleInterval, setScheduleInterval] = useState("86400");
+  const [scheduleNextRunAt, setScheduleNextRunAt] = useState("");
+  const [scheduleEnabled, setScheduleEnabled] = useState(true);
+  const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [runDueBusy, setRunDueBusy] = useState(false);
+  const [runDueError, setRunDueError] = useState<string | null>(null);
+  const [dueRuns, setDueRuns] = useState<SecretRotationScheduleRun[] | null>(null);
+
+  const [credentialRequestID, setCredentialRequestID] = useState("");
+  const [credentialMethod, setCredentialMethod] = useState("");
+  const [credentialPayload, setCredentialPayload] = useState("");
+  const [credentialPublicKey, setCredentialPublicKey] = useState("");
+  const [credentialTTL, setCredentialTTL] = useState("");
+  const [credentialBusy, setCredentialBusy] = useState(false);
+  const [credentialError, setCredentialError] = useState<string | null>(null);
+  const [credential, setCredential] = useState<EphemeralCredential | null>(null);
+  const [credentialCopied, setCredentialCopied] = useState<"request_id" | "certificate" | null>(null);
+
   async function load(cursor?: string) {
     setLoadError(null);
     setLoading(true);
@@ -239,6 +280,16 @@ export function Secrets() {
     void load();
   }, []);
 
+  const refreshRotationSchedules = () =>
+    Promise.resolve()
+      .then(() => api.secretRotationSchedules({ limit: 20 }))
+      .then((page) => setRotationSchedules(page.items ?? []))
+      .catch(() => undefined);
+
+  useEffect(() => {
+    void refreshRotationSchedules();
+  }, []);
+
   const selectedMeta = useMemo(() => items.find((item) => item.name === accessName) ?? items[0] ?? null, [items, accessName]);
   const filteredItems = useMemo(() => {
     const needle = secretSearch.trim().toLowerCase();
@@ -279,6 +330,37 @@ export function Secrets() {
       },
     ],
     [revealBusy],
+  );
+
+  const scheduleColumns = useMemo<Array<DataGridColumn<SecretRotationSchedule>>>(
+    () => [
+      { id: "name", header: "Name", sortable: true, cell: (item) => <span className="font-medium">{item.name}</span> },
+      {
+        id: "key",
+        header: "Key",
+        cell: (item) => (
+          <span className="block max-w-44 truncate font-mono text-xs" title={item.key}>
+            {item.key}
+          </span>
+        ),
+      },
+      { id: "interval", header: "Interval", cell: (item) => formatRotationInterval(item.interval_seconds) },
+      {
+        id: "enabled",
+        header: "Enabled",
+        cell: (item) => (
+          <StatusBadge
+            vocabulary="lifecycle"
+            value={item.enabled ? "enabled" : "disabled"}
+            label={item.enabled ? "Enabled" : "Disabled"}
+            tone={item.enabled ? "success" : "neutral"}
+          />
+        ),
+      },
+      { id: "last-run", header: "Last run", cell: (item) => <StatusBadge vocabulary="lifecycle" value={item.last_run_status || "never"} /> },
+      { id: "next-run", header: "Next run", cell: (item) => formatDate(item.next_run_at) },
+    ],
+    [],
   );
 
   function queueSecretApproval(action: SecretApprovalAction, name: string, err: unknown): boolean {
@@ -737,6 +819,144 @@ export function Secrets() {
     }
   }
 
+  async function submitRollbackRotation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRotationRunError(null);
+    setRotationRun(null);
+    setRotationRunBusy(true);
+    try {
+      const key = rotationRunKey.trim();
+      const oldRef = rotationRunOldRef.trim();
+      const provider = rotationRunProvider.trim();
+      if (!key) throw new Error("Key is required");
+      if (!oldRef) throw new Error("Old reference is required");
+      if (!provider) throw new Error("Provider is required");
+      const ttl = Number(rotationRunTTL);
+      if (rotationRunTTL.trim() && (!Number.isFinite(ttl) || ttl <= 0)) throw new Error("TTL seconds must be a positive number");
+      setRotationRun(
+        await api.runSecretRotation({
+          key,
+          old_ref: oldRef,
+          provider,
+          ...(rotationRunTarget.trim() ? { target: rotationRunTarget.trim() } : {}),
+          ...(rotationRunRemoteKey.trim() ? { remote_key: rotationRunRemoteKey.trim() } : {}),
+          ...(rotationRunTTL.trim() ? { ttl_seconds: Math.round(ttl) } : {}),
+        }),
+      );
+    } catch (err) {
+      setRotationRunError(apiProblemMessage(err, "Could not run rollback-safe rotation"));
+    } finally {
+      setRotationRunBusy(false);
+    }
+  }
+
+  function closeScheduleDialog() {
+    setScheduleDialogOpen(false);
+    setScheduleError(null);
+  }
+
+  async function submitRotationSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setScheduleError(null);
+    setScheduleBusy(true);
+    try {
+      const name = scheduleName.trim();
+      const key = scheduleKey.trim();
+      const oldRef = scheduleOldRef.trim();
+      const provider = scheduleProvider.trim();
+      if (!name) throw new Error("Schedule name is required");
+      if (!key) throw new Error("Key is required");
+      if (!oldRef) throw new Error("Old reference is required");
+      if (!provider) throw new Error("Provider is required");
+      const interval = Number(scheduleInterval);
+      if (!Number.isFinite(interval) || interval <= 0) throw new Error("Interval seconds must be a positive number");
+      let nextRunAt: string | undefined;
+      if (scheduleNextRunAt) {
+        const parsed = new Date(scheduleNextRunAt);
+        if (Number.isNaN(parsed.getTime())) throw new Error("First run must be a valid date and time");
+        nextRunAt = parsed.toISOString();
+      }
+      const created = await api.createSecretRotationSchedule({
+        name,
+        key,
+        old_ref: oldRef,
+        provider,
+        interval_seconds: Math.round(interval),
+        enabled: scheduleEnabled,
+        ...(nextRunAt ? { next_run_at: nextRunAt } : {}),
+      });
+      setScheduleDialogOpen(false);
+      setScheduleName("");
+      setScheduleKey("");
+      setScheduleOldRef("");
+      setScheduleNextRunAt("");
+      setNotice(`Rotation schedule ${created.name} created; next run ${formatDate(created.next_run_at)}.`);
+      await refreshRotationSchedules();
+    } catch (err) {
+      setScheduleError(apiProblemMessage(err, "Could not create rotation schedule"));
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
+
+  async function runDueRotationsNow() {
+    setRunDueError(null);
+    setNotice(null);
+    setRunDueBusy(true);
+    try {
+      const result = await api.runDueSecretRotations();
+      setDueRuns(result.runs ?? []);
+      setNotice(`Ran ${result.ran} due rotations.`);
+      await refreshRotationSchedules();
+    } catch (err) {
+      setRunDueError(apiProblemMessage(err, "Could not run due rotations"));
+    } finally {
+      setRunDueBusy(false);
+    }
+  }
+
+  async function submitEphemeralCredential(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCredentialError(null);
+    setCredential(null);
+    setCredentialCopied(null);
+    setCredentialBusy(true);
+    try {
+      const requestID = credentialRequestID.trim();
+      const method = credentialMethod.trim();
+      const payload = credentialPayload.trim();
+      const publicKey = credentialPublicKey.trim();
+      if (!requestID) throw new Error("Request ID is required");
+      if (!method) throw new Error("Attestation method is required");
+      if (!payload) throw new Error("Attestation payload is required");
+      if (!publicKey.includes("BEGIN")) throw new Error("Public key must be a PEM block including a BEGIN header");
+      const ttl = Number(credentialTTL);
+      if (credentialTTL.trim() && (!Number.isFinite(ttl) || ttl <= 0)) throw new Error("TTL seconds must be a positive number");
+      setCredential(
+        await api.requestEphemeralCredential({
+          request_id: requestID,
+          method,
+          payload_base64: payload,
+          public_key_pem: publicKey,
+          ...(credentialTTL.trim() ? { ttl_seconds: Math.round(ttl) } : {}),
+        }),
+      );
+    } catch (err) {
+      setCredentialError(apiProblemMessage(err, "Could not request ephemeral credential"));
+    } finally {
+      setCredentialBusy(false);
+    }
+  }
+
+  async function copyCredentialField(kind: "request_id" | "certificate", value: string) {
+    try {
+      await navigator.clipboard?.writeText(value);
+      setCredentialCopied(kind);
+    } catch {
+      setCredentialCopied(kind);
+    }
+  }
+
   return (
     <section aria-labelledby="secrets-heading" className="grid gap-6">
       <PageHeader
@@ -895,13 +1115,180 @@ export function Secrets() {
             Manual rotation and delete
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manual native-store rotation replaces one stored value at a time. Scheduled rotation and downstream sync controls aren't in the console yet.
+            Manual native-store rotation replaces one stored value at a time. Rollback-safe provider rotation and scheduled rotations run from the panels below;
+            downstream sync lives in the sync section.
           </p>
         </div>
-        <UnavailableState title="Scheduled rotation and downstream sync aren't in the console yet">
-          Rollback-safe static rotation is available for configured backends. Scheduled rotation, downstream sync, and delivery receipts are not yet exposed in
-          this console, so this page offers only per-secret rotate/delete controls.
-        </UnavailableState>
+        <div className="ui-panel grid gap-3 p-comfortable">
+          <div>
+            <h3 className="text-title font-semibold">{t("parity.rollbackSafeRotation_267d4a")}</h3>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {t("parity.rotateAProviderBackedCredentialBy_ec7a8f")}
+            </p>
+          </div>
+          <form
+            aria-label={t("parity.runRollbackSafeRotation_5a7f2d")}
+            onSubmit={(event) => void submitRollbackRotation(event)}
+            className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+          >
+            <label className="grid gap-1 text-body font-medium">
+              Key
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={rotationRunKey}
+                onChange={(event) => setRotationRunKey(event.target.value)}
+                placeholder={t("parity.paymentsDbPassword_50e8d6")}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.oldReference_69d1f6")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={rotationRunOldRef}
+                onChange={(event) => setRotationRunOldRef(event.target.value)}
+                placeholder="ref:v3"
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              Provider
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                list="secret-rotation-provider-options"
+                value={rotationRunProvider}
+                onChange={(event) => setRotationRunProvider(event.target.value)}
+                placeholder={t("parity.postgresql_519968")}
+                required
+              />
+            </label>
+            <datalist id="secret-rotation-provider-options">
+              {(cloudManagers?.providers ?? []).map((provider) => (
+                <option key={provider.id} value={provider.id} label={provider.name} />
+              ))}
+            </datalist>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.syncTargetOptional_189fc7")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={rotationRunTarget}
+                onChange={(event) => setRotationRunTarget(event.target.value)}
+                placeholder="kubernetes/prod"
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.remoteKeyOptional_b6dff8")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={rotationRunRemoteKey}
+                onChange={(event) => setRotationRunRemoteKey(event.target.value)}
+                placeholder="Secret/payments-db/password"
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.ttlSecondsOptional_68f1c5")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                type="number"
+                min="60"
+                value={rotationRunTTL}
+                onChange={(event) => setRotationRunTTL(event.target.value)}
+              />
+            </label>
+            <div className="md:col-span-2 xl:col-span-3">
+              <Button type="submit" disabled={rotationRunBusy || Boolean(loadError)}>
+                {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
+                Run rotation
+              </Button>
+            </div>
+          </form>
+          {rotationRunError && <ErrorState title={t("parity.rollbackSafeRotationFailed_5f1a57")}>{rotationRunError}</ErrorState>}
+          {rotationRun && (
+            <div role="status" className="grid gap-2 rounded-control border border-border bg-background p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge
+                  vocabulary="lifecycle"
+                  value={rotationRun.completed ? "completed" : "failed"}
+                  label={rotationRun.completed ? "Rotation completed" : "Rotation failed"}
+                  tone={rotationRun.completed ? "success" : "critical"}
+                />
+                <span className="break-all font-mono text-xs">{rotationRun.key}</span>
+              </div>
+              {rotationRun.completed ? (
+                <p className="break-all font-mono text-xs">
+                  {rotationRun.old_ref} → {rotationRun.new_ref}
+                </p>
+              ) : (
+                <div className="grid gap-2">
+                  <p>
+                    {t("parity.failedPhase_49b14a")} <span className="font-mono text-xs">{rotationRun.failed_phase ?? "unknown"}</span>
+                    {rotationRun.error ? ` — ${rotationRun.error}` : ""}
+                  </p>
+                  {rotationRun.rollback_failed ? (
+                    <p className="rounded-control border border-risk-critical/30 bg-risk-critical/10 px-3 py-2 text-risk-critical">
+                      Rollback failed — manual intervention required.{rotationRun.rollback_error ? ` ${rotationRun.rollback_error}` : ""}
+                    </p>
+                  ) : rotationRun.rolled_back ? (
+                    <p className="rounded-control border border-status-info/30 bg-status-info/10 px-3 py-2 text-status-info">
+                      {t("parity.theProviderWasRolledBackCleanly_3c888a")} <span className="font-mono text-xs">{rotationRun.old_ref}</span>.
+                    </p>
+                  ) : rotationRun.rollback_attempted ? (
+                    <p className="text-muted-foreground">Rollback was attempted; check the provider state before retrying.</p>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="ui-panel grid gap-3 p-comfortable">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-title font-semibold">{t("parity.scheduledRotations_1a0452")}</h3>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                {t("parity.recurringRollbackSafeRotationsRunBy_06c343")}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  setScheduleError(null);
+                  setScheduleDialogOpen(true);
+                }}
+              >
+                {t("parity.newSchedule_729465")}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => void runDueRotationsNow()} disabled={runDueBusy}>
+                {runDueBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                Run due now
+              </Button>
+            </div>
+          </div>
+          {runDueError && <ErrorState title={t("parity.runDueRotationsFailed_b9c511")}>{runDueError}</ErrorState>}
+          {rotationSchedules && (
+            <DataGrid
+              ariaLabel="Scheduled secret rotations"
+              rows={rotationSchedules}
+              columns={scheduleColumns}
+              getRowId={(item) => item.id}
+              state={rotationSchedules.length === 0 ? "empty" : "ready"}
+              stateTitle="No rotation schedules"
+              stateMessage="Create a schedule to run rollback-safe rotation on an interval."
+            />
+          )}
+          {dueRuns && dueRuns.length > 0 && (
+            <ul aria-label={t("parity.latestDueRotationRuns_ac4710")} className="grid gap-2">
+              {dueRuns.map((run) => (
+                <li key={run.run_id} className="flex flex-wrap items-center gap-2 rounded-control border border-border px-3 py-2 text-sm">
+                  <StatusBadge vocabulary="lifecycle" value={run.status} />
+                  <span className="break-all font-mono text-xs">{run.rotation.key}</span>
+                  <span className="text-muted-foreground">{formatDate(run.ran_at)}</span>
+                  {run.error && <span className="text-destructive">{run.error}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <form aria-label="Rotate secret" onSubmit={(event) => void submitRotate(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Secret to rotate</span>
@@ -1225,6 +1612,119 @@ export function Secrets() {
             Key <span className="font-mono text-xs">{ephemeralKey.id}</span> for {ephemeralKey.subject} expires {formatDate(ephemeralKey.expires_at)}. Scopes:{" "}
             {ephemeralKey.scopes.join(", ")}.
           </RevealPanel>
+        )}
+        <div className="grid gap-4 border-t border-border pt-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+          <form
+            aria-label={t("parity.requestAttestationGatedEphemeralCredential_4ce3ce")}
+            onSubmit={(event) => void submitEphemeralCredential(event)}
+            className="grid content-start gap-3"
+          >
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.requestId_63aa59")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={credentialRequestID}
+                onChange={(event) => setCredentialRequestID(event.target.value)}
+                placeholder={t("parity.req7c2f9a_03dd4e")}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              Attestation method
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={credentialMethod}
+                onChange={(event) => setCredentialMethod(event.target.value)}
+                placeholder={t("parity.tpmQuote_f72300")}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.attestationPayloadBase64_b7cf3a")}
+              <textarea
+                className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+                value={credentialPayload}
+                onChange={(event) => setCredentialPayload(event.target.value)}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.publicKeyPem_10749e")}
+              <textarea
+                className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+                value={credentialPublicKey}
+                onChange={(event) => setCredentialPublicKey(event.target.value)}
+                placeholder="-----BEGIN PUBLIC KEY-----"
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.ttlSecondsOptional_68f1c5")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                type="number"
+                min="60"
+                value={credentialTTL}
+                onChange={(event) => setCredentialTTL(event.target.value)}
+              />
+            </label>
+            <Button type="submit" disabled={credentialBusy || Boolean(loadError)}>
+              {credentialBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+              Request credential
+            </Button>
+            {credentialError && <ErrorState title={t("parity.ephemeralCredentialRequestFailed_12be63")}>{credentialError}</ErrorState>}
+          </form>
+          <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
+            <h3 className="text-title font-semibold">{t("parity.attestationGatedCredentials_2887bd")}</h3>
+            <p className="text-muted-foreground">
+              Submit workload attestation and a public key to mint a just-in-time credential. When approval quorum applies, the request waits for approvers;
+              share the request ID with an approver to finish issuance.
+            </p>
+          </div>
+        </div>
+        {credential && (
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              {credential.state === "issued" ? (
+                <StatusBadge vocabulary="lifecycle" value="issued" label="Issued" tone="success" />
+              ) : (
+                <StatusBadge
+                  vocabulary="lifecycle"
+                  value="awaiting_approval"
+                  label={`Awaiting approval — ${credential.approvals} of ${credential.required_approvals} approvals`}
+                  tone="warning"
+                />
+              )}
+              <span className="text-muted-foreground">
+                Subject <span className="font-medium text-foreground">{credential.subject}</span> · expires {formatDate(credential.expires_at)}
+              </span>
+            </div>
+            {credential.state === "awaiting_approval" && (
+              <div className="grid gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-control border border-border bg-muted px-2.5 py-1.5 font-mono text-xs">{credential.request_id}</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void copyCredentialField("request_id", credential.request_id)}>
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                    {t("parity.copyRequestId_a53908")}
+                  </Button>
+                  {credentialCopied === "request_id" && <span className="text-xs text-muted-foreground">{t("parity.copied_dd2ce2")}</span>}
+                </div>
+                <p className="text-muted-foreground">{t("parity.approversCanIssueThisFromThe_33b073")}</p>
+              </div>
+            )}
+            {credential.state === "issued" && credential.certificate_pem && (
+              <div className="grid gap-2">
+                <pre className="max-h-48 overflow-auto rounded bg-muted px-3 py-2 font-mono text-xs">{credential.certificate_pem}</pre>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => void copyCredentialField("certificate", credential.certificate_pem ?? "")}>
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                    {t("parity.copyCertificate_59db8a")}
+                  </Button>
+                  {credentialCopied === "certificate" && <span className="text-xs text-muted-foreground">{t("parity.copied_dd2ce2")}</span>}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </section>
 
@@ -1969,6 +2469,116 @@ export function Secrets() {
           </dl>
         )}
       </section>
+
+      {scheduleDialogOpen && (
+        <Dialog
+          open
+          onClose={closeScheduleDialog}
+          titleId="rotation-schedule-heading"
+          descriptionId="rotation-schedule-description"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          overlayClassName="absolute inset-0 bg-black/55"
+          panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+        >
+          <header className="border-b border-border px-5 py-4">
+            <h2 id="rotation-schedule-heading" className="text-title font-semibold">
+              {t("parity.newRotationSchedule_0d2b93")}
+            </h2>
+            <p id="rotation-schedule-description" className="mt-1 text-sm text-muted-foreground">
+              Schedule a rollback-safe rotation to repeat on an interval. Only key and reference metadata are stored; no secret values pass through this form.
+            </p>
+          </header>
+          <form aria-label={t("parity.createRotationSchedule_6a80bd")} className="grid gap-4 p-5" onSubmit={(event) => void submitRotationSchedule(event)}>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.scheduleName_fb63dc")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={scheduleName}
+                onChange={(event) => setScheduleName(event.target.value)}
+                placeholder={t("parity.paymentsDbMonthly_b690bc")}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              Key
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={scheduleKey}
+                onChange={(event) => setScheduleKey(event.target.value)}
+                placeholder={t("parity.paymentsDbPassword_50e8d6")}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.oldReference_69d1f6")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                value={scheduleOldRef}
+                onChange={(event) => setScheduleOldRef(event.target.value)}
+                placeholder="ref:v3"
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              Provider
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                list="secret-rotation-provider-options"
+                value={scheduleProvider}
+                onChange={(event) => setScheduleProvider(event.target.value)}
+                placeholder={t("parity.postgresql_519968")}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              Interval seconds
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                type="number"
+                min="60"
+                value={scheduleInterval}
+                onChange={(event) => setScheduleInterval(event.target.value)}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.firstRunOptional_7ecf76")}
+              <input
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                type="datetime-local"
+                value={scheduleNextRunAt}
+                onChange={(event) => setScheduleNextRunAt(event.target.value)}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-body font-medium">
+              <input type="checkbox" checked={scheduleEnabled} onChange={(event) => setScheduleEnabled(event.target.checked)} />
+              Enabled
+            </label>
+            {scheduleError && (
+              <p role="alert" className="text-sm text-destructive">
+                {scheduleError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={closeScheduleDialog}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={scheduleBusy}>
+                {scheduleBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                Create schedule
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
     </section>
   );
+}
+
+function formatRotationInterval(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "-";
+  if (seconds % 86400 === 0) return `${seconds / 86400}d`;
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
 }

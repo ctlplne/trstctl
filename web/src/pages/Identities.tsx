@@ -3,6 +3,8 @@ import {
   api,
   ApiError,
   identityState,
+  type BulkRevokeRequest,
+  type BulkRevokeResult,
   type ConnectorDelivery,
   type GraphImpact,
   type Identity,
@@ -34,8 +36,19 @@ interface Action {
 
 const lifecycleTargets: TransitionTo[] = ["issued", "deployed", "renewing", "revoked", "retired"];
 const identityKinds = ["x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"] as const satisfies Identity["kind"][];
+const bulkRevokeReasons: BulkRevokeRequest["reason"][] = [
+  "unspecified",
+  "keyCompromise",
+  "caCompromise",
+  "affiliationChanged",
+  "superseded",
+  "cessationOfOperation",
+  "certificateHold",
+  "removeFromCRL",
+  "privilegeWithdrawn",
+  "aaCompromise",
+];
 type KindFilter = "all" | Identity["kind"];
-type BulkResult = { id: string; name: string; status: "accepted" | "failed"; message: string };
 type DecommissionSignalType = NHIDecommissionRequest["signals"][number]["type"];
 type BlastRadiusState = {
   error: string | null;
@@ -297,7 +310,9 @@ export function Identities() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
+  const [bulkReason, setBulkReason] = useState<BulkRevokeRequest["reason"]>("keyCompromise");
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkResult, setBulkResult] = useState<BulkRevokeResult | null>(null);
   const [decommissionType, setDecommissionType] = useState<DecommissionSignalType>("departure");
   const [decommissionTarget, setDecommissionTarget] = useState("");
   const [decommissionReason, setDecommissionReason] = useState("");
@@ -349,11 +364,14 @@ export function Identities() {
     }
   }, []);
 
-  function openDetail(identity: Identity) {
-    setSelectedId(identity.id);
-    setDetail(identity);
-    void loadDetail(identity.id);
-  }
+  const openDetail = useCallback(
+    (identity: Identity) => {
+      setSelectedId(identity.id);
+      setDetail(identity);
+      void loadDetail(identity.id);
+    },
+    [loadDetail],
+  );
 
   const act = useCallback(
     async (id: string, to: TransitionTo, reason?: string) => {
@@ -444,34 +462,27 @@ export function Identities() {
     [act, loadBlastRadius],
   );
 
+  /** runBulkRevoke sends ONE bulk revocation request for the selected
+   * identities (no client-side fan-out); the server reports revoked, skipped,
+   * and failed per item. */
   async function runBulkRevoke() {
-    const rows = selectedRows;
+    const ids = selectedRows.map((identity) => identity.id);
+    if (ids.length === 0) return;
     setBulkBusy(true);
-    setBulkResults([]);
-    const results: BulkResult[] = [];
-    for (const identity of rows) {
-      if (!actionForTarget(identityState(identity), "revoked")) {
-        results.push({
-          id: identity.id,
-          name: identity.name,
-          status: "failed",
-          message: "revoke is not valid from this lifecycle state",
-        });
-        continue;
-      }
-      try {
-        await api.transitionIdentity(identity.id, "revoked", "bulk revoke via UI");
-        results.push({ id: identity.id, name: identity.name, status: "accepted", message: "accepted" });
-      } catch (err) {
-        results.push({ id: identity.id, name: identity.name, status: "failed", message: apiProblemMessage(err) });
-      }
+    setBulkError(null);
+    setBulkResult(null);
+    try {
+      const result = await api.bulkRevokeIdentities({ identity_ids: ids, reason: bulkReason });
+      setBulkResult(result);
+      setSelectedIds(new Set());
+      setBulkConfirmOpen(false);
+      await load();
+      await loadEvidence();
+    } catch (err) {
+      setBulkError(apiProblemMessage(err));
+    } finally {
+      setBulkBusy(false);
     }
-    setBulkResults(results);
-    setSelectedIds(new Set());
-    setBulkConfirmOpen(false);
-    setBulkBusy(false);
-    await load();
-    await loadEvidence();
   }
 
   async function runDecommission(event: FormEvent<HTMLFormElement>) {
@@ -544,6 +555,9 @@ export function Identities() {
           const actions = actionsFor(state);
           return (
             <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => openDetail(identity)}>
+                View details
+              </Button>
               {actions.map((a) => (
                 <div key={a.to} className="space-y-1">
                   <Button
@@ -563,13 +577,12 @@ export function Identities() {
                   )}
                 </div>
               ))}
-              {actions.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
             </div>
           );
         },
       },
     ],
-    [busyId, deniedTransitions, latestDelivery, latestRotation, request],
+    [busyId, deniedTransitions, latestDelivery, latestRotation, openDetail, request],
   );
 
   return (
@@ -740,7 +753,15 @@ export function Identities() {
       {selectedRows.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted px-3 py-2 text-sm">
           <span className="font-medium">{selectedRows.length} selected</span>
-          <Button type="button" size="sm" variant="outline" onClick={() => setBulkConfirmOpen(true)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setBulkError(null);
+              setBulkConfirmOpen(true);
+            }}
+          >
             Bulk revoke selected
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
@@ -765,9 +786,25 @@ export function Identities() {
             Revoke {selectedRows.length} selected identities?
           </h2>
           <p id="bulk-revoke-desc" className="mt-1 text-destructive">
-            This sends one idempotent revoke request per selected identity and reports accepted or failed for each item. Connector and downstream delivery still
-            complete asynchronously through the outbox.
+            This submits a single bulk revocation request for the {selectedRows.length} selected identities; the server reports revoked, skipped, and failed per
+            item. Connector and downstream delivery still complete asynchronously through the outbox.
           </p>
+          <label className="mt-3 grid gap-1 text-sm font-medium text-destructive" htmlFor="identity-bulk-revoke-reason">
+            Revocation reason
+            <select
+              id="identity-bulk-revoke-reason"
+              value={bulkReason}
+              onChange={(event) => setBulkReason(event.target.value as BulkRevokeRequest["reason"])}
+              className="min-h-9 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm font-normal text-foreground"
+            >
+              {bulkRevokeReasons.map((reason) => (
+                <option key={reason} value={reason}>
+                  {reason}
+                </option>
+              ))}
+            </select>
+          </label>
+          {bulkError && <p className="mt-3 text-sm font-medium text-risk-critical">{bulkError}</p>}
           <div className="mt-3 flex gap-2">
             <Button
               ref={bulkConfirmRef}
@@ -787,20 +824,23 @@ export function Identities() {
         </Dialog>
       )}
 
-      {bulkResults.length > 0 && (
+      {bulkResult && (
         <div role="status" className="mb-3 rounded-md border border-border p-3 text-sm">
           <p className="font-medium">
-            Bulk revoke results: accepted {bulkResults.filter((result) => result.status === "accepted").length}; failed{" "}
-            {bulkResults.filter((result) => result.status === "failed").length}
+            Revoked {bulkResult.total_revoked} of {bulkResult.total_matched} (skipped {bulkResult.total_skipped}, failed {bulkResult.total_failed})
           </p>
-          <ul className="mt-2 space-y-1">
-            {bulkResults.map((result) => (
-              <li key={result.id}>
-                {result.name} {result.status}
-                {result.status === "failed" ? `: ${result.message}` : ""}
-              </li>
-            ))}
-          </ul>
+          {bulkResult.items.some((item) => item.status !== "revoked") && (
+            <ul className="mt-2 space-y-1">
+              {bulkResult.items
+                .filter((item) => item.status !== "revoked")
+                .map((item) => (
+                  <li key={item.id}>
+                    {(items ?? []).find((identity) => identity.id === item.id)?.name ?? item.id} {item.status}
+                    {item.error ? `: ${item.error}` : ""}
+                  </li>
+                ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -844,8 +884,6 @@ export function Identities() {
             state={filteredItems.length === 0 ? "empty" : "ready"}
             stateTitle="No identities match this kind"
             stateMessage="Choose another identity kind or clear the filter."
-            onRowOpen={openDetail}
-            rowActionLabel={() => "View details"}
           />
         </div>
       )}

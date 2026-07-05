@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Connectors } from "@/pages/Connectors";
+import { ToastProvider } from "@/components/ToastProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -20,7 +21,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderConnectors() {
   return render(
     <MemoryRouter>
-      <Connectors />
+      <ToastProvider>
+        <Connectors />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

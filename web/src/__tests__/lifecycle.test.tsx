@@ -20,6 +20,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphBlastRadius: vi.fn(),
     connectorDeliveries: vi.fn(),
     rotationRuns: vi.fn(),
+    bulkRevokeIdentities: vi.fn(),
   },
 }));
 
@@ -431,15 +432,22 @@ describe("lifecycle actions from the UI", () => {
     expect(opener).toHaveFocus();
   });
 
-  it("bulk revokes selected identities with count confirmation and per-item results", async () => {
+  it("bulk revokes selected identities with one transactional request and a server-reported summary", async () => {
     apiMock.identities.mockResolvedValue([
       { id: "dep-1", name: "bulk-ok", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" },
       { id: "dep-2", name: "bulk-fail", kind: "x509_certificate", owner_id: "owner-2", status: "deployed" },
       { id: "req-1", name: "not-selected", kind: "x509_certificate", owner_id: "owner-3", status: "requested" },
     ]);
-    apiMock.transitionIdentity.mockImplementation(async (id: string) => {
-      if (id === "dep-2") throw new ApiError(500, JSON.stringify({ detail: "connector queue unavailable" }));
-      return { id, name: id, status: "revoked" };
+    // One transactional call; the server reports per-item outcomes (no client fan-out).
+    apiMock.bulkRevokeIdentities.mockResolvedValue({
+      total_matched: 2,
+      total_revoked: 1,
+      total_skipped: 0,
+      total_failed: 1,
+      items: [
+        { id: "dep-1", status: "revoked" },
+        { id: "dep-2", status: "failed", error: "connector queue unavailable" },
+      ],
     });
     const user = userEvent.setup();
     renderIdentities();
@@ -451,23 +459,19 @@ describe("lifecycle actions from the UI", () => {
     await user.click(screen.getByRole("button", { name: "Bulk revoke selected" }));
 
     const dialog = await screen.findByRole("alertdialog", { name: /Revoke 2 selected identities/i });
-    expect(within(dialog).getByText(/2 selected identities/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/single bulk revocation request/i)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Confirm bulk revoke" })).toHaveFocus();
 
-    await user.tab({ shift: true });
-    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
-
-    await user.tab();
-    expect(within(dialog).getByRole("button", { name: "Confirm bulk revoke" })).toHaveFocus();
-
+    // Pick an explicit RFC 5280 reason before confirming.
+    await user.selectOptions(within(dialog).getByLabelText("Revocation reason"), "keyCompromise");
     await user.click(within(dialog).getByRole("button", { name: "Confirm bulk revoke" }));
 
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2));
-    expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "revoked", "bulk revoke via UI");
-    expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-2", "revoked", "bulk revoke via UI");
-    expect(await screen.findByText("bulk-ok accepted")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.bulkRevokeIdentities).toHaveBeenCalledTimes(1));
+    expect(apiMock.bulkRevokeIdentities).toHaveBeenCalledWith({ identity_ids: ["dep-1", "dep-2"], reason: "keyCompromise" });
+    // No client-side fan-out through single-item transitions.
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Revoked 1 of 2 \(skipped 0, failed 1\)/i)).toBeInTheDocument();
     expect(screen.getByText(/bulk-fail failed: connector queue unavailable/)).toBeInTheDocument();
-    expect(screen.getByText(/accepted 1; failed 1/i)).toBeInTheDocument();
   });
 
   it("runs NHI decommission from a served governance signal", async () => {

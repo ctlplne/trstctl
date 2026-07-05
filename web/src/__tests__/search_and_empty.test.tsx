@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { ToastProvider } from "@/components/ToastProvider";
 import { Certificates } from "@/pages/Certificates";
 import { ApiError, UnauthorizedError } from "@/lib/api";
 
@@ -24,7 +25,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderCerts() {
   return render(
     <MemoryRouter>
-      <Certificates />
+      <ToastProvider>
+        <Certificates />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

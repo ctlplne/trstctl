@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
 import { CAHierarchy } from "@/pages/CAHierarchy";
+import { ToastProvider } from "@/components/ToastProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -24,6 +25,7 @@ const { apiMock } = vi.hoisted(() => ({
     revokeManagedKey: vi.fn(),
     zeroizeManagedKey: vi.fn(),
     issueExternalCA: vi.fn(),
+    caAuthorities: vi.fn(),
   },
 }));
 
@@ -35,7 +37,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderCAHierarchy() {
   return render(
     <MemoryRouter>
-      <CAHierarchy />
+      <ToastProvider>
+        <CAHierarchy />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -44,6 +48,7 @@ describe("CA hierarchy and custody surface", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.caAuthorities.mockResolvedValue({ items: [] });
     apiMock.issuers.mockReset().mockResolvedValue([
       {
         id: "iss-root",

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { RefreshCw, Save, Send } from "lucide-react";
+import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -109,6 +110,7 @@ export function Notifications() {
   const [policyBusy, setPolicyBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<NotificationChannelTest | null>(null);
+  const [detail, setDetail] = useState<Notification | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -171,6 +173,16 @@ export function Notifications() {
       toast({ kind: "error", title: markReadFailed, description: errorText(err, markReadLoadFailed) });
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function openDetails(notification: Notification) {
+    setDetail(notification);
+    try {
+      const fresh = await api.notification(notification.id);
+      setDetail((current) => (current && current.id === notification.id ? fresh : current));
+    } catch {
+      // Keep the row snapshot when the fresh fetch fails.
     }
   }
 
@@ -361,7 +373,113 @@ export function Notifications() {
           busyId={busyId}
           onMarkRead={(notification) => void markRead(notification)}
           onRequeue={(notification) => void requeue(notification)}
+          onDetails={(notification) => void openDetails(notification)}
         />
+      )}
+
+      {detail && (
+        <Dialog
+          open
+          onClose={() => setDetail(null)}
+          titleId="notification-detail-heading"
+          descriptionId="notification-detail-description"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          overlayClassName="absolute inset-0 bg-black/55"
+          panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+        >
+          <header className="border-b border-border px-5 py-4">
+            <h2 id="notification-detail-heading" className="text-title font-semibold">
+              {`Notification ${detail.id}`}
+            </h2>
+            <p id="notification-detail-description" className="mt-1 text-sm text-muted-foreground">
+              Created {formatDateTime(detail.created_at)} · full delivery, subject, ownership, and routing state.
+            </p>
+          </header>
+          <div className="grid gap-4 p-5">
+            <section aria-label="Delivery">
+              <h3 className="text-sm font-semibold">Delivery</h3>
+              <dl className="mt-2 grid gap-2 text-sm">
+                <NotificationDetailRow term="Destination">{detail.destination}</NotificationDetailRow>
+                <NotificationDetailRow term="Status">
+                  <StatusBadge value={detail.status} label={detail.status} tone={statusTone(detail.status)} />
+                </NotificationDetailRow>
+                <NotificationDetailRow term="Attempts">{`${detail.attempts} / ${maxNotificationAttempts}`}</NotificationDetailRow>
+                <NotificationDetailRow term="Delivered at">{detail.delivered_at ? formatDateTime(detail.delivered_at) : "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Read at">{detail.read_at ? formatDateTime(detail.read_at) : "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Last error">
+                  {detail.last_error ? (
+                    <span className="break-words font-medium text-risk-critical">{detail.last_error}</span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </NotificationDetailRow>
+                <NotificationDetailRow term="Idempotency key" mono>
+                  {detail.idempotency_key || "-"}
+                </NotificationDetailRow>
+              </dl>
+            </section>
+            <section aria-label="Subject">
+              <h3 className="text-sm font-semibold">Subject</h3>
+              <dl className="mt-2 grid gap-2 text-sm">
+                <NotificationDetailRow term="Subject">{detail.subject || "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Detail">{detail.detail || "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Certificate" mono>
+                  {detail.certificate_id || "-"}
+                </NotificationDetailRow>
+                <NotificationDetailRow term="Serial" mono>
+                  {detail.serial || "-"}
+                </NotificationDetailRow>
+                <NotificationDetailRow term="Not after">{detail.not_after ? formatDateTime(detail.not_after) : "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Threshold days">{detail.threshold_days != null ? String(detail.threshold_days) : "-"}</NotificationDetailRow>
+              </dl>
+            </section>
+            <section aria-label={t("parity.ownership_3e90e4")}>
+              <h3 className="text-sm font-semibold">{t("parity.ownership_3e90e4")}</h3>
+              <dl className="mt-2 grid gap-2 text-sm">
+                <NotificationDetailRow term="Owner">{detail.owner_name || "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Owner email">{detail.owner_email || "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Owner ID" mono>
+                  {detail.owner_id || "-"}
+                </NotificationDetailRow>
+              </dl>
+            </section>
+            <section aria-label={t("parity.routing_7d15dd")}>
+              <h3 className="text-sm font-semibold">{t("parity.routing_7d15dd")}</h3>
+              <dl className="mt-2 grid gap-2 text-sm">
+                <NotificationDetailRow term="Routing policy" mono>
+                  {detail.routing_policy_id || "-"}
+                </NotificationDetailRow>
+                <NotificationDetailRow term="Kind">{detail.kind || "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Severity">
+                  {detail.severity ? (
+                    <StatusBadge value={detail.severity} label={detail.severity} tone={severityTone(detail.severity)} />
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </NotificationDetailRow>
+                <NotificationDetailRow term="Escalation recipients">
+                  {detail.escalation_recipients?.length ? (
+                    <ul className="grid gap-1">
+                      {detail.escalation_recipients.map((recipient, index) => (
+                        <li key={`${recipient.subject}-${index}`}>
+                          <span className="text-muted-foreground">{recipient.kind}: </span>
+                          {recipientLabel(recipient)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </NotificationDetailRow>
+              </dl>
+            </section>
+          </div>
+          <div className="flex justify-end border-t border-border px-5 py-4">
+            <Button type="button" variant="outline" onClick={() => setDetail(null)}>
+              Close
+            </Button>
+          </div>
+        </Dialog>
       )}
     </section>
   );
@@ -696,11 +814,13 @@ function NotificationsTable({
   notifications,
   onMarkRead,
   onRequeue,
+  onDetails,
 }: {
   notifications: Notification[];
   busyId: string | null;
   onMarkRead: (notification: Notification) => void;
   onRequeue: (notification: Notification) => void;
+  onDetails: (notification: Notification) => void;
 }) {
   const { t } = useTranslation();
   const columns: DataGridColumn<Notification>[] = [
@@ -757,6 +877,15 @@ function NotificationsTable({
       header: t("notifications.table.actions"),
       cell: (notification) => (
         <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onDetails(notification)}
+            aria-label={`View details for notification ${notification.id}`}
+          >
+            <span>{t("parity.details_dc3dec")}</span>
+          </Button>
           {isUnread(notification) && (
             <Button
               type="button"
@@ -878,6 +1007,22 @@ function statusTone(status: NotificationStatus): StatusTone {
   if (status === "pending") return "warning";
   if (status === "sent") return "success";
   return "neutral";
+}
+
+function severityTone(severity: NonNullable<Notification["severity"]>): StatusTone {
+  if (severity === "critical") return "critical";
+  if (severity === "warning") return "warning";
+  if (severity === "informational") return "info";
+  return "low";
+}
+
+function NotificationDetailRow({ term, children, mono = false }: { term: string; children: ReactNode; mono?: boolean }) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
+      <dt className="font-medium text-muted-foreground">{term}</dt>
+      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+    </div>
+  );
 }
 
 function errorText(err: unknown, fallback: string): string {

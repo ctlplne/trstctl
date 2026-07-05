@@ -1471,3 +1471,137 @@ describe("graph contract", () => {
     expect((vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
   });
 });
+
+describe("CLI-parity client methods (S3.3)", () => {
+  interface ParityCase {
+    name: string;
+    call: () => Promise<unknown>;
+    method: string;
+    path: string;
+    status?: number;
+    body?: string;
+  }
+
+  const cases: ParityCase[] = [
+    { name: "pamSessions", call: () => api.pamSessions({ limit: 5 }), method: "GET", path: "/api/v1/access/sessions?limit=5" },
+    { name: "pamSession", call: () => api.pamSession("s/1"), method: "GET", path: "/api/v1/access/sessions/s%2F1" },
+    {
+      name: "openPAMSession",
+      call: () =>
+        api.openPAMSession({ method: "tpm", payload_base64: "cGF5", role: "dba", target_id: "db1", target_type: "postgres" }),
+      method: "POST",
+      path: "/api/v1/access/sessions",
+      status: 201,
+    },
+    { name: "acmeDNS01ProviderConfig", call: () => api.acmeDNS01ProviderConfig("c1"), method: "GET", path: "/api/v1/acme/dns-01/provider-configs/c1" },
+    {
+      name: "updateACMEDNS01ProviderConfig",
+      call: () => api.updateACMEDNS01ProviderConfig("c1", { name: "route53", provider: "route53" }),
+      method: "PUT",
+      path: "/api/v1/acme/dns-01/provider-configs/c1",
+    },
+    { name: "deleteACMEDNS01ProviderConfig", call: () => api.deleteACMEDNS01ProviderConfig("c1"), method: "DELETE", path: "/api/v1/acme/dns-01/provider-configs/c1", status: 204 },
+    { name: "acmeDNS01Preflight", call: () => api.acmeDNS01Preflight({ config_id: "c1", domain: "a.example.com" }), method: "POST", path: "/api/v1/acme/dns-01/preflight" },
+    { name: "revokeAgentCert", call: () => api.revokeAgentCert("ag1", { reason: "keyCompromise" }), method: "POST", path: "/api/v1/agents/ag1/cert-revocations", status: 201 },
+    { name: "caCeremony", call: () => api.caCeremony("cer1"), method: "GET", path: "/api/v1/ca/ceremonies/cer1" },
+    { name: "caAuthorities", call: () => api.caAuthorities(), method: "GET", path: "/api/v1/ca/authorities" },
+    { name: "createRootCA", call: () => api.createRootCA({ ceremony_id: "cer1", spec: { common_name: "Root CA" } }), method: "POST", path: "/api/v1/ca/authorities/roots", status: 201 },
+    {
+      name: "createIntermediateCA",
+      call: () => api.createIntermediateCA({ ceremony_id: "cer1", parent_id: "root1", spec: { common_name: "Intermediate CA" } }),
+      method: "POST",
+      path: "/api/v1/ca/authorities/intermediates",
+      status: 201,
+    },
+    {
+      name: "signIntermediateCSR",
+      call: () => api.signIntermediateCSR("root1", { ceremony_id: "cer1", csr_pem: "-----BEGIN CERTIFICATE REQUEST-----", spec: { common_name: "Issued Intermediate" } }),
+      method: "POST",
+      path: "/api/v1/ca/authorities/root1/intermediates/csr",
+      status: 201,
+    },
+    {
+      name: "issueLeafFromCA",
+      call: () => api.issueLeafFromCA("int1", { csr_pem: "-----BEGIN CERTIFICATE REQUEST-----" }),
+      method: "POST",
+      path: "/api/v1/ca/authorities/int1/issue",
+      status: 201,
+    },
+    { name: "bulkRevokeCertificates", call: () => api.bulkRevokeCertificates({ certificate_ids: ["c1"], reason: "keyCompromise" }), method: "POST", path: "/api/v1/certificates/bulk-revoke" },
+    { name: "bulkRevokeIdentities", call: () => api.bulkRevokeIdentities({ identity_ids: ["i1"], reason: "superseded" }), method: "POST", path: "/api/v1/identities/bulk-revoke" },
+    { name: "connectorTarget", call: () => api.connectorTarget("t1"), method: "GET", path: "/api/v1/connectors/targets/t1" },
+    { name: "updateConnectorTarget", call: () => api.updateConnectorTarget("t1", { connector: "nginx", name: "edge" }), method: "PUT", path: "/api/v1/connectors/targets/t1" },
+    { name: "deleteConnectorTarget", call: () => api.deleteConnectorTarget("t1"), method: "DELETE", path: "/api/v1/connectors/targets/t1", status: 204 },
+    { name: "outboxCircuits", call: () => api.outboxCircuits(), method: "GET", path: "/api/v1/connectors/outbox-circuits" },
+    { name: "connectorDeliveries", call: () => api.connectorDeliveries({ limit: 20, identityId: "i1" }), method: "GET", path: "/api/v1/connectors/deliveries?limit=20&identity_id=i1" },
+    { name: "connectorDelivery", call: () => api.connectorDelivery("d1"), method: "GET", path: "/api/v1/connectors/deliveries/d1" },
+    {
+      name: "requestEphemeralCredential",
+      call: () =>
+        api.requestEphemeralCredential({ method: "tpm-quote", payload_base64: "cGF5", public_key_pem: "-----BEGIN PUBLIC KEY-----", request_id: "req1" }),
+      method: "POST",
+      path: "/api/v1/ephemeral",
+      status: 202,
+      body: JSON.stringify({ state: "awaiting_approval" }),
+    },
+    { name: "approveEphemeralCredential", call: () => api.approveEphemeralCredential("req1", { action: "issue" }), method: "POST", path: "/api/v1/ephemeral/req1/approvals" },
+    { name: "issuer", call: () => api.issuer("iss1"), method: "GET", path: "/api/v1/issuers/iss1" },
+    { name: "rotationRuns", call: () => api.rotationRuns({ limit: 10 }), method: "GET", path: "/api/v1/lifecycle/rotation-runs?limit=10" },
+    { name: "rotationRun", call: () => api.rotationRun("run1"), method: "GET", path: "/api/v1/lifecycle/rotation-runs/run1" },
+    { name: "mdmSCEPPolicy", call: () => api.mdmSCEPPolicy("p1"), method: "GET", path: "/api/v1/mdm/scep/policies/p1" },
+    {
+      name: "updateMDMSCEPPolicy",
+      call: () => api.updateMDMSCEPPolicy("p1", { name: "intune", provider: "intune", scep_endpoint: "/scep", scep_profile: "device" }),
+      method: "PUT",
+      path: "/api/v1/mdm/scep/policies/p1",
+    },
+    { name: "deleteMDMSCEPPolicy", call: () => api.deleteMDMSCEPPolicy("p1"), method: "DELETE", path: "/api/v1/mdm/scep/policies/p1", status: 204 },
+    { name: "rotateMDMSCEPChallenge", call: () => api.rotateMDMSCEPChallenge("p1"), method: "POST", path: "/api/v1/mdm/scep/policies/p1/rotate-challenge" },
+    { name: "notification", call: () => api.notification("n1"), method: "GET", path: "/api/v1/notifications/n1" },
+    { name: "owner", call: () => api.owner("o1"), method: "GET", path: "/api/v1/owners/o1" },
+    { name: "updateOwner", call: () => api.updateOwner("o1", { kind: "team", name: "SRE" }), method: "PUT", path: "/api/v1/owners/o1" },
+    { name: "deleteOwner", call: () => api.deleteOwner("o1"), method: "DELETE", path: "/api/v1/owners/o1", status: 204 },
+    { name: "platformDistribution", call: () => api.platformDistribution(), method: "GET", path: "/api/v1/platform/distribution" },
+    {
+      name: "privacyArchiveAttestations",
+      call: () => api.privacyArchiveAttestations({ limit: 5, subjectRef: "owner-1" }),
+      method: "GET",
+      path: "/api/v1/privacy/archive-erasure-attestations?limit=5&subject_ref=owner-1",
+    },
+    {
+      name: "recordPrivacyArchiveAttestation",
+      call: () => api.recordPrivacyArchiveAttestation({ action: "deleted", artifact_type: "backup", subject: "owner-1" }),
+      method: "POST",
+      path: "/api/v1/privacy/archive-erasure-attestations",
+      status: 201,
+    },
+    { name: "remediationPlaybookRuns", call: () => api.remediationPlaybookRuns({ playbookId: "pb1" }), method: "GET", path: "/api/v1/remediation/playbook-runs?playbook_id=pb1" },
+    { name: "remediationOwnerActions", call: () => api.remediationOwnerActions("o1"), method: "GET", path: "/api/v1/remediation/owner-actions?owner_id=o1" },
+    { name: "remediationOwnerActionsUnscoped", call: () => api.remediationOwnerActions(), method: "GET", path: "/api/v1/remediation/owner-actions" },
+    {
+      name: "runSecretRotation",
+      call: () => api.runSecretRotation({ key: "db/pass", old_ref: "v1", provider: "aws" }),
+      method: "POST",
+      path: "/api/v1/secrets/rotations",
+    },
+    {
+      name: "createSecretRotationSchedule",
+      call: () => api.createSecretRotationSchedule({ interval_seconds: 3600, key: "db/pass", name: "hourly", old_ref: "v1", provider: "aws" }),
+      method: "POST",
+      path: "/api/v1/secrets/rotation-schedules",
+      status: 201,
+    },
+    { name: "secretRotationSchedules", call: () => api.secretRotationSchedules({ limit: 20 }), method: "GET", path: "/api/v1/secrets/rotation-schedules?limit=20" },
+    { name: "runDueSecretRotations", call: () => api.runDueSecretRotations(), method: "POST", path: "/api/v1/secrets/rotation-schedules/run-due" },
+  ];
+
+  it.each(cases.map((entry) => [entry.name, entry] as const))("%s calls its served route", async (_name, entry) => {
+    mockFetch(entry.status ?? 200, entry.body ?? "{}");
+    await entry.call();
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(entry.path);
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method ?? "GET").toBe(entry.method);
+    if (entry.method !== "GET") {
+      expect(lastSentHeaders()["Idempotency-Key"]).toBeTruthy();
+    }
+  });
+});

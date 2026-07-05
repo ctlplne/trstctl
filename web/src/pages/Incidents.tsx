@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, Bell, CheckCircle, Download, Pause, Play, RotateCcw, Send } from "lucide-react";
 import {
@@ -21,12 +21,16 @@ import {
   type RemediationPlaybookRunRequest,
   type ServiceNowTicketRequest,
 } from "@/lib/api";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
+import { formatDateTime } from "@/i18n/format";
+import type { StatusTone } from "@/lib/statusVocab";
 
 const defaultExecution: IncidentExecutionRequest = {
   identity_id: "",
@@ -155,6 +159,12 @@ export function Incidents() {
   const [dispatchingResponse, setDispatchingResponse] = useState(false);
   const [fleetAction, setFleetAction] = useState<string | null>(null);
   const [ticketing, setTicketing] = useState(false);
+  const [evidenceRuns, setEvidenceRuns] = useState<RemediationPlaybookRun[] | null>(null);
+  const [evidenceRunsCursor, setEvidenceRunsCursor] = useState<string | undefined>(undefined);
+  const [evidenceRunsLoadingMore, setEvidenceRunsLoadingMore] = useState(false);
+  const [evidenceRunsError, setEvidenceRunsError] = useState<string | null>(null);
+  const [evidenceRunDetail, setEvidenceRunDetail] = useState<RemediationPlaybookRun | null>(null);
+  const [ownerQueueEvidence, setOwnerQueueEvidence] = useState<OwnerRemediationQueue | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -185,6 +195,42 @@ export function Incidents() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve()
+      .then(() => api.remediationPlaybookRuns({ limit: 20 }))
+      .then((page) => {
+        if (!active) return;
+        setEvidenceRuns(page.items ?? []);
+        setEvidenceRunsCursor(page.next_cursor);
+      })
+      .catch(() => null);
+    Promise.resolve()
+      .then(() => api.remediationOwnerActions())
+      .then((queue) => {
+        if (active) setOwnerQueueEvidence(queue);
+      })
+      .catch(() => null);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function loadMoreEvidenceRuns() {
+    if (!evidenceRunsCursor) return;
+    setEvidenceRunsLoadingMore(true);
+    setEvidenceRunsError(null);
+    try {
+      const page = await api.remediationPlaybookRuns({ limit: 20, cursor: evidenceRunsCursor });
+      setEvidenceRuns((current) => [...(current ?? []), ...(page.items ?? [])]);
+      setEvidenceRunsCursor(page.next_cursor);
+    } catch (err) {
+      setEvidenceRunsError(apiProblemMessage(err, "Could not load more playbook runs"));
+    } finally {
+      setEvidenceRunsLoadingMore(false);
+    }
+  }
 
   async function previewBlastRadius() {
     if (!form.identity_id.trim()) {
@@ -1063,6 +1109,45 @@ export function Incidents() {
         )}
       </section>
 
+      {(evidenceRuns || ownerQueueEvidence) && (
+        <section aria-labelledby="remediation-evidence-heading" className="grid gap-3 border-y border-border py-4">
+          <div>
+            <h2 id="remediation-evidence-heading" className="text-title font-semibold">
+              {t("parity.remediationEvidence_5174c6")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {t("parity.recordedPlaybookRunsWithTheirConnector_bffffe")}
+            </p>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            {evidenceRuns && (
+              <div className="grid content-start gap-3">
+                <h3 className="text-body font-semibold">{t("parity.playbookRuns_da379d")}</h3>
+                {evidenceRunsError && <ErrorState title={t("parity.playbookRunHistoryUnavailable_8452d8")}>{evidenceRunsError}</ErrorState>}
+                <DataGrid
+                  ariaLabel="Remediation playbook runs"
+                  rows={evidenceRuns}
+                  columns={evidenceRunColumns}
+                  getRowId={(run) => run.id}
+                  onRowOpen={(run) => setEvidenceRunDetail(run)}
+                  rowActionLabel={() => "Details"}
+                  pagination={
+                    evidenceRunsCursor ? (
+                      <div>
+                        <Button type="button" size="sm" variant="outline" disabled={evidenceRunsLoadingMore} onClick={() => void loadMoreEvidenceRuns()}>
+                          {evidenceRunsLoadingMore ? "Loading more runs..." : "Load more runs"}
+                        </Button>
+                      </div>
+                    ) : undefined
+                  }
+                />
+              </div>
+            )}
+            {ownerQueueEvidence && <OwnerRemediationQueuePanel queue={ownerQueueEvidence} />}
+          </div>
+        </section>
+      )}
+
       <BreakGlassReconcile />
 
       <section aria-labelledby="fleet-heading" className="grid gap-3 border-y border-border py-4">
@@ -1221,6 +1306,102 @@ export function Incidents() {
           </Dialog>
         )}
       </section>
+
+      {evidenceRunDetail && (
+        <Dialog
+          open
+          onClose={() => setEvidenceRunDetail(null)}
+          titleId="playbook-run-detail-heading"
+          descriptionId="playbook-run-detail-description"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          overlayClassName="absolute inset-0 bg-black/55"
+          panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+        >
+          <header className="border-b border-border px-5 py-4">
+            <h2 id="playbook-run-detail-heading" className="text-title font-semibold">
+              {`Playbook run ${evidenceRunDetail.id}`}
+            </h2>
+            <p id="playbook-run-detail-description" className="mt-1 text-sm text-muted-foreground">
+              {t("parity.eventSourcedRemediationRunEvidenceIncluding_cec725")}
+            </p>
+          </header>
+          <dl className="grid gap-2 p-5 text-sm">
+            <IncidentDetailRow term="Run ID" mono>
+              {evidenceRunDetail.id}
+            </IncidentDetailRow>
+            <IncidentDetailRow term="Playbook" mono>
+              {evidenceRunDetail.playbook_id}
+            </IncidentDetailRow>
+            <IncidentDetailRow term="Action">{evidenceRunDetail.action}</IncidentDetailRow>
+            <IncidentDetailRow term="Status">
+              <StatusBadge value={evidenceRunDetail.status} label={evidenceRunDetail.status} tone={remediationRunTone(evidenceRunDetail.status)} />
+            </IncidentDetailRow>
+            <IncidentDetailRow term="Phase">{evidenceRunDetail.phase}</IncidentDetailRow>
+            <IncidentDetailRow term="Created">
+              {formatDateTime(evidenceRunDetail.created_at)}
+              {evidenceRunDetail.created_by ? ` · ${evidenceRunDetail.created_by}` : ""}
+            </IncidentDetailRow>
+            <IncidentDetailRow term="Updated">{formatDateTime(evidenceRunDetail.updated_at)}</IncidentDetailRow>
+            <IncidentDetailRow term="Reason">{evidenceRunDetail.reason || "-"}</IncidentDetailRow>
+            <IncidentDetailRow term="Target identity" mono>
+              {evidenceRunDetail.target_identity_id || "-"}
+            </IncidentDetailRow>
+            <IncidentDetailRow term="Inventory" mono>
+              {evidenceRunDetail.inventory_id || "-"}
+            </IncidentDetailRow>
+            <IncidentDetailRow term="Connector">{evidenceRunDetail.connector || "-"}</IncidentDetailRow>
+            <IncidentDetailRow term="Provider target">{evidenceRunDetail.target || "-"}</IncidentDetailRow>
+            <IncidentDetailRow term="Rollback refs">{evidenceRunDetail.rollback_refs.join(", ") || "-"}</IncidentDetailRow>
+            <IncidentDetailRow term="Evidence refs" mono>
+              {evidenceRunDetail.evidence_refs.join(", ") || "-"}
+            </IncidentDetailRow>
+            <IncidentDetailRow term="Idempotency key" mono>
+              {evidenceRunDetail.idempotency_key || "-"}
+            </IncidentDetailRow>
+            <IncidentDetailRow term="Outbox ID">{evidenceRunDetail.outbox_id != null ? String(evidenceRunDetail.outbox_id) : "-"}</IncidentDetailRow>
+            {Object.keys(evidenceRunDetail.scope_delta ?? {}).length > 0 && (
+              <IncidentDetailRow term="Scope delta">
+                <pre className="max-h-40 overflow-auto rounded-control border border-border bg-muted/40 p-2 font-mono text-xs">
+                  {JSON.stringify(evidenceRunDetail.scope_delta, null, 2)}
+                </pre>
+              </IncidentDetailRow>
+            )}
+          </dl>
+          {evidenceRunDetail.connector_delivery && (
+            <div className="border-t border-border px-5 py-4">
+              <h3 className="text-body font-semibold">Connector delivery</h3>
+              <dl className="mt-2 grid gap-2 text-sm">
+                <IncidentDetailRow term="Delivery ID" mono>
+                  {evidenceRunDetail.connector_delivery.id}
+                </IncidentDetailRow>
+                <IncidentDetailRow term="Status">
+                  <StatusBadge
+                    value={evidenceRunDetail.connector_delivery.status}
+                    label={evidenceRunDetail.connector_delivery.status}
+                    tone={connectorDeliveryTone(evidenceRunDetail.connector_delivery.status)}
+                  />
+                </IncidentDetailRow>
+                <IncidentDetailRow term="Connector">{evidenceRunDetail.connector_delivery.connector}</IncidentDetailRow>
+                <IncidentDetailRow term="Target">{evidenceRunDetail.connector_delivery.target}</IncidentDetailRow>
+                <IncidentDetailRow term="Destination" mono>
+                  {evidenceRunDetail.connector_delivery.destination}
+                </IncidentDetailRow>
+                <IncidentDetailRow term="Attempts">{evidenceRunDetail.connector_delivery.attempts}</IncidentDetailRow>
+                <IncidentDetailRow term="Detail">{evidenceRunDetail.connector_delivery.detail || "-"}</IncidentDetailRow>
+                <IncidentDetailRow term="Rollback ref" mono>
+                  {evidenceRunDetail.connector_delivery.rollback_ref || "-"}
+                </IncidentDetailRow>
+                <IncidentDetailRow term="Updated">{formatDateTime(evidenceRunDetail.connector_delivery.updated_at)}</IncidentDetailRow>
+              </dl>
+            </div>
+          )}
+          <div className="flex justify-end border-t border-border px-5 py-4">
+            <Button type="button" variant="outline" onClick={() => setEvidenceRunDetail(null)}>
+              Close
+            </Button>
+          </div>
+        </Dialog>
+      )}
     </section>
   );
 }
@@ -1526,6 +1707,112 @@ function markOwnerActionAccepted(queue: OwnerRemediationQueue, result: OwnerReme
       accepted: changed ? queue.summary.accepted + 1 : queue.summary.accepted,
     },
   };
+}
+
+const evidenceRunColumns: DataGridColumn<RemediationPlaybookRun>[] = [
+  { id: "created", header: "Created", cell: (run) => formatDateTime(run.created_at) },
+  {
+    id: "playbook",
+    header: "Playbook",
+    cell: (run) => (
+      <div className="grid gap-1">
+        <span className="font-medium">{run.playbook_id}</span>
+        <span className="text-xs text-muted-foreground">{run.action}</span>
+      </div>
+    ),
+  },
+  {
+    id: "status",
+    header: "Status",
+    cell: (run) => <StatusBadge value={run.status} label={run.status} tone={remediationRunTone(run.status)} />,
+  },
+  {
+    id: "target",
+    header: "Target",
+    cell: (run) => (
+      <span className="block max-w-[14rem] truncate font-mono text-xs" title={run.target_identity_id || run.inventory_id || run.target || ""}>
+        {run.target_identity_id || run.inventory_id || run.target || "-"}
+      </span>
+    ),
+  },
+];
+
+function remediationRunTone(status: string): StatusTone {
+  if (status.includes("fail") || status.includes("error")) return "critical";
+  if (status.includes("complete") || status.includes("succeed") || status.includes("recorded") || status.includes("done")) return "success";
+  if (status.includes("pending") || status.includes("running") || status.includes("progress") || status.includes("open")) return "warning";
+  return "neutral";
+}
+
+function connectorDeliveryTone(status: NonNullable<RemediationPlaybookRun["connector_delivery"]>["status"]): StatusTone {
+  if (status === "delivered" || status === "test_succeeded") return "success";
+  if (status === "failed") return "critical";
+  if (status === "unrouted") return "warning";
+  return "neutral";
+}
+
+function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue }) {
+  const { t } = useTranslation();
+  return (
+    <div className="grid content-start gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-body font-semibold">{t("parity.ownerRemediationQueue_610e16")}</h3>
+        <StatusBadge value={queue.status} label={queue.status} tone={remediationRunTone(queue.status)} />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Generated {formatDateTime(queue.generated_at)} · {queue.capability}
+      </p>
+      {queue.items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("parity.noOwnerRemediationActionsAreQueued_596b9b")}</p>
+      ) : (
+        <ul className="grid gap-2">
+          {queue.items.map((item) => (
+            <li key={item.id} className="grid gap-1 rounded-panel border border-border p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium">{item.display_name}</span>
+                <span className="flex flex-wrap items-center gap-2">
+                  <StatusBadge value={item.severity} label={item.severity} tone={item.severity} />
+                  <span className="text-xs text-muted-foreground">{item.status}</span>
+                </span>
+              </div>
+              <p className="break-all font-mono text-xs text-muted-foreground">
+                {item.inventory_id}
+                {item.target_identity_id ? ` · ${item.target_identity_id}` : ""}
+              </p>
+              <p className="text-muted-foreground">{item.recommendation}</p>
+              <p className="text-xs text-muted-foreground">
+                {item.playbook_id} · {item.action || item.kind} · {item.source} · {item.connector}
+                {item.target ? ` → ${item.target}` : ""} · risk {item.risk_score} · owner {item.owner_name}
+                {item.owner_email ? ` (${item.owner_email})` : ""}
+              </p>
+              {(item.remove_scopes.length > 0 || item.recommended_scopes.length > 0) && (
+                <p className="break-all font-mono text-xs text-muted-foreground">
+                  {item.remove_scopes.length > 0 ? `remove: ${item.remove_scopes.join(", ")}` : ""}
+                  {item.remove_scopes.length > 0 && item.recommended_scopes.length > 0 ? " · " : ""}
+                  {item.recommended_scopes.length > 0 ? `keep: ${item.recommended_scopes.join(", ")}` : ""}
+                </p>
+              )}
+              {item.reason && <p className="text-xs text-muted-foreground">Reason: {item.reason}</p>}
+              {item.rollback_ref && <p className="break-all font-mono text-xs text-muted-foreground">rollback: {item.rollback_ref}</p>}
+              {item.evidence_refs.length > 0 && (
+                <p className="break-all font-mono text-xs text-muted-foreground">evidence: {item.evidence_refs.join(", ")}</p>
+              )}
+              {item.remediation_run_id && <p className="break-all font-mono text-xs text-muted-foreground">run: {item.remediation_run_id}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function IncidentDetailRow({ term, children, mono = false }: { term: string; children: ReactNode; mono?: boolean }) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
+      <dt className="font-medium text-muted-foreground">{term}</dt>
+      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+    </div>
+  );
 }
 
 function apiProblemMessage(err: unknown, fallback: string): string {

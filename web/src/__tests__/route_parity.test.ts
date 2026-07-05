@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildOperations, type OpenAPIDocument } from "@/pages/ApiExplorer";
-import { apiWorkflowCoverage } from "@/lib/apiWorkflowCoverage";
+import { apiWorkflowCoverage, type ApiWorkflowCoverage } from "@/lib/apiWorkflowCoverage";
 import { appRoutePaths, contextualRouteItems, navGroups, realGuiSurfaces, taskNavItems } from "@/lib/navigation";
 
 interface FeatureMapBacklog {
@@ -234,7 +234,7 @@ describe("route-level product surface parity", () => {
       expect(coveragePaths).toContain(normalizeOpenAPIPath(path));
     }
 
-    for (const entry of apiWorkflowCoverage) {
+    for (const entry of apiWorkflowCoverage as readonly ApiWorkflowCoverage[]) {
       expect(servedPaths.has(normalizeOpenAPIPath(entry.path))).toBe(true);
       expect(appRoutePaths).toContain(entry.route);
       expect(entry.owner).toMatch(/^SURFACE\//);

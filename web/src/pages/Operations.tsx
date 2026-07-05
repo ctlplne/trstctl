@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { api, ApiError, type ConnectorDelivery, type RotationRun } from "@/lib/api";
 import { formatDateTime } from "@/i18n/format";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -216,6 +217,8 @@ export function Operations() {
           onReject={(row) => setRejectTarget(row)}
         />
       )}
+
+      <RotationRunsSection />
 
       {rejectTarget && (
         <RejectDialog
@@ -441,6 +444,219 @@ function statusTone(status: string) {
   if (status === "awaiting_approval" || status === "unrouted") return "warning";
   if (status === "running") return "operate";
   return "neutral";
+}
+
+function RotationRunsSection() {
+  const { t } = useTranslation();
+  const [runs, setRuns] = useState<RotationRun[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [gridState, setGridState] = useState<"loading" | "ready" | "empty" | "error">("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [identityDraft, setIdentityDraft] = useState("");
+  const [identityFilter, setIdentityFilter] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [detail, setDetail] = useState<RotationRun | null>(null);
+
+  const loadRuns = useCallback(async (identityId: string) => {
+    setGridState("loading");
+    setLoadError(null);
+    try {
+      const page = await api.rotationRuns(identityId ? { limit: 20, identityId } : { limit: 20 });
+      const items = page.items ?? [];
+      setRuns(items);
+      setNextCursor(page.next_cursor);
+      setGridState(items.length === 0 ? "empty" : "ready");
+    } catch (err) {
+      setLoadError(errorText(err, "Could not load rotation runs"));
+      setRuns([]);
+      setNextCursor(undefined);
+      setGridState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRuns("");
+  }, [loadRuns]);
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const page = await api.rotationRuns(
+        identityFilter ? { limit: 20, cursor: nextCursor, identityId: identityFilter } : { limit: 20, cursor: nextCursor },
+      );
+      setRuns((current) => [...current, ...(page.items ?? [])]);
+      setNextCursor(page.next_cursor);
+    } catch (err) {
+      setLoadError(errorText(err, "Could not load more rotation runs"));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  function applyIdentityFilter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const identityId = identityDraft.trim();
+    setIdentityFilter(identityId);
+    void loadRuns(identityId);
+  }
+
+  function clearIdentityFilter() {
+    setIdentityDraft("");
+    setIdentityFilter("");
+    void loadRuns("");
+  }
+
+  const columns: DataGridColumn<RotationRun>[] = [
+    { id: "created", header: "Created", cell: (row) => formatDateTime(row.created_at) },
+    {
+      id: "identity",
+      header: "Identity",
+      cell: (row) => (
+        <span className="block max-w-xs truncate font-mono text-xs" title={row.identity_id}>
+          {row.identity_id}
+        </span>
+      ),
+    },
+    { id: "trigger", header: "Trigger", cell: (row) => row.trigger },
+    { id: "status", header: "Status", cell: (row) => <StatusBadge value={row.status} label={row.status} tone={rotationRunTone(row.status)} /> },
+    { id: "completed", header: "Completed", cell: (row) => (row.completed_at ? formatDateTime(row.completed_at) : "-") },
+  ];
+
+  return (
+    <div className="grid gap-3">
+      <div>
+        <h2 className="text-title font-semibold">{t("parity.rotationRuns_5ec15c")}</h2>
+        <p className="text-sm text-muted-foreground">{t("parity.lifecycleRotationEvidenceWhoRotatedWhat_10ed9a")}</p>
+      </div>
+      <form aria-label={t("parity.filterRotationRuns_e652a6")} className="flex flex-wrap items-end gap-2" onSubmit={applyIdentityFilter}>
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.identityIdFilter_48db11")}
+          <input
+            value={identityDraft}
+            onChange={(event) => setIdentityDraft(event.target.value)}
+            placeholder={t("parity.identityUuid_209e1d")}
+            className="min-h-9 w-72 rounded-control border border-border bg-background px-3 py-2 text-body"
+          />
+        </label>
+        <Button type="submit" variant="outline" size="sm">
+          {t("parity.applyIdentityFilter_72d5ba")}
+        </Button>
+        {identityFilter && (
+          <Button type="button" variant="ghost" size="sm" onClick={clearIdentityFilter}>
+            {t("parity.clearIdentityFilter_3c0b9a")}
+          </Button>
+        )}
+      </form>
+      <DataGrid
+        ariaLabel="Rotation runs"
+        rows={runs}
+        columns={columns}
+        getRowId={(row) => row.id}
+        state={gridState}
+        stateTitle={gridState === "error" ? "Rotation runs unavailable" : gridState === "empty" ? "No rotation runs" : undefined}
+        stateMessage={
+          gridState === "error"
+            ? loadError
+            : gridState === "empty"
+              ? "No lifecycle rotation run has been recorded for this scope yet."
+              : undefined
+        }
+        onRowOpen={(row) => setDetail(row)}
+        pagination={
+          nextCursor ? (
+            <div>
+              <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>
+                {loadingMore ? "Loading more rotation runs..." : "Load more rotation runs"}
+              </Button>
+            </div>
+          ) : undefined
+        }
+      />
+      {detail && <RotationRunDetailDialog run={detail} onClose={() => setDetail(null)} />}
+    </div>
+  );
+}
+
+function RotationRunDetailDialog({ onClose, run }: { run: RotationRun; onClose: () => void }) {
+  const { t } = useTranslation();
+  const titleId = "rotation-run-detail-heading";
+  const descriptionId = "rotation-run-detail-description";
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="border-b border-border px-5 py-4">
+        <h2 id={titleId} className="text-title font-semibold">
+          {`Rotation run ${run.id}`}
+        </h2>
+        <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+          {t("parity.fullLifecycleRotationRunRecordIncluding_02687f")}
+        </p>
+      </header>
+      <dl className="grid gap-2 p-5 text-sm">
+        <RotationRunDetailRow term="Run ID" mono>
+          {run.id}
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Identity" mono>
+          {run.identity_id}
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Status">
+          <StatusBadge value={run.status} label={run.status} tone={rotationRunTone(run.status)} />
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Trigger">{run.trigger}</RotationRunDetailRow>
+        <RotationRunDetailRow term="Reason">{run.reason || "-"}</RotationRunDetailRow>
+        <RotationRunDetailRow term="Predecessor fingerprint" mono>
+          {run.predecessor_fingerprint || "-"}
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Successor fingerprint" mono>
+          {run.successor_fingerprint || "-"}
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Rollback ref" mono>
+          {run.rollback_ref || "-"}
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Error">
+          {run.error ? <span className={run.status === "failed" ? "text-risk-critical" : undefined}>{run.error}</span> : "-"}
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Idempotency key" mono>
+          {run.idempotency_key || "-"}
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Outbox ID">{run.outbox_id != null ? String(run.outbox_id) : "-"}</RotationRunDetailRow>
+        <RotationRunDetailRow term="Tenant" mono>
+          {run.tenant_id}
+        </RotationRunDetailRow>
+        <RotationRunDetailRow term="Created">{formatDateTime(run.created_at)}</RotationRunDetailRow>
+        <RotationRunDetailRow term="Completed">{run.completed_at ? formatDateTime(run.completed_at) : "-"}</RotationRunDetailRow>
+        <RotationRunDetailRow term="Updated">{formatDateTime(run.updated_at)}</RotationRunDetailRow>
+      </dl>
+      <div className="flex justify-end border-t border-border px-5 py-4">
+        <Button type="button" variant="outline" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+function RotationRunDetailRow({ children, mono = false, term }: { term: string; children: ReactNode; mono?: boolean }) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
+      <dt className="font-medium text-muted-foreground">{term}</dt>
+      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+    </div>
+  );
+}
+
+function rotationRunTone(status: RotationRun["status"]) {
+  if (status === "succeeded") return "success";
+  if (status === "failed") return "critical";
+  return "info";
 }
 
 function errorText(err: unknown, fallback: string): string {

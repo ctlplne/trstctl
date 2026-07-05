@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Info } from "lucide-react";
 import { Link } from "react-router-dom";
-import { ApiError, UnauthorizedError, api, type Identity } from "@/lib/api";
+import { ApiError, UnauthorizedError, api, type EphemeralApproval, type Identity } from "@/lib/api";
 import { approvalAuditHref, approvalRows, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -10,15 +10,21 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 type Notice = { kind: "permission" | "error"; message: string };
 
 export function Approvals() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [identities, setIdentities] = useState<Identity[] | null>(null);
   const [error, setError] = useState<Notice | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [ephemeralRequestID, setEphemeralRequestID] = useState("");
+  const [ephemeralBusy, setEphemeralBusy] = useState(false);
+  const [ephemeralError, setEphemeralError] = useState<string | null>(null);
+  const [ephemeralApproval, setEphemeralApproval] = useState<EphemeralApproval | null>(null);
   const rows = useMemo(() => approvalRows(identities ?? []), [identities]);
 
   const load = useCallback(async () => {
@@ -53,6 +59,22 @@ export function Approvals() {
     },
     [load],
   );
+
+  async function approveEphemeralCredential(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setEphemeralError(null);
+    setEphemeralApproval(null);
+    setEphemeralBusy(true);
+    try {
+      const result = await api.approveEphemeralCredential(ephemeralRequestID.trim(), { action: "issue" });
+      setEphemeralApproval(result);
+      setEphemeralRequestID("");
+    } catch (err) {
+      setEphemeralError(approvalErrorMessage(err));
+    } finally {
+      setEphemeralBusy(false);
+    }
+  }
 
   const columns = useMemo<Array<DataGridColumn<ApprovalQueueRow>>>(
     () => [
@@ -147,6 +169,44 @@ export function Approvals() {
         <EmptyState title="No pending approvals">No identities currently require an issue, rotate, or revoke approval.</EmptyState>
       )}
       {identities && rows.length > 0 && <DataGrid ariaLabel="Pending approvals" rows={rows} columns={columns} getRowId={rowKey} />}
+
+      <section aria-labelledby="ephemeral-approvals-heading" className="ui-panel grid max-w-xl gap-3 p-comfortable">
+        <div>
+          <h2 id="ephemeral-approvals-heading" className="text-title font-semibold">
+            {t("parity.ephemeralCredentialApprovals_9a4b68")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Attestation-gated JIT credentials awaiting quorum. There is no server-side pending list; paste the request id from the requester.
+          </p>
+        </div>
+        <form aria-label={t("parity.approveEphemeralCredential_760861")} className="grid gap-3" onSubmit={(event) => void approveEphemeralCredential(event)}>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.requestId_63aa59")}
+            <input
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+              value={ephemeralRequestID}
+              onChange={(event) => setEphemeralRequestID(event.target.value)}
+              placeholder={t("parity.req7c2f9a_03dd4e")}
+              required
+            />
+          </label>
+          <div>
+            <Button type="submit" disabled={ephemeralBusy || !ephemeralRequestID.trim()}>
+              Approve issue
+            </Button>
+          </div>
+        </form>
+        {ephemeralError && (
+          <p role="alert" className="text-sm text-destructive">
+            {ephemeralError}
+          </p>
+        )}
+        {ephemeralApproval && (
+          <p role="status" className="text-body text-status-success">
+            {`${ephemeralApproval.action} approval recorded for ${ephemeralApproval.resource} by ${ephemeralApproval.approver} (${ephemeralApproval.approvals} approvals)`}
+          </p>
+        )}
+      </section>
     </section>
   );
 }

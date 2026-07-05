@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Protocols } from "@/pages/Protocols";
+import { ToastProvider } from "@/components/ToastProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -20,7 +21,9 @@ vi.mock("@/lib/api", async (orig) => {
 async function renderProtocols() {
   const result = render(
     <MemoryRouter>
-      <Protocols />
+      <ToastProvider>
+        <Protocols />
+      </ToastProvider>
     </MemoryRouter>,
   );
   await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
@@ -317,9 +320,11 @@ describe("protocol surface", () => {
     expect(screen.queryByText(/Challenge rotation and enrollment failures stay in fixture form/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /enable ari|publish ari|set renewal window/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /token|api token|provider token/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /activate|preflight|save provider/i })).not.toBeInTheDocument();
+    // Preflight is now a real console feature (CLI parity), so it is intentionally present.
+    expect(screen.queryByRole("button", { name: /activate|save provider/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /issue wildcard|acknowledge wildcard|run challenge/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /rotate challenge|sync intune|retry enrollment/i })).not.toBeInTheDocument();
+    // Challenge rotation is now a real console feature (CLI parity), so it is intentionally present.
+    expect(screen.queryByRole("button", { name: /sync intune|retry enrollment/i })).not.toBeInTheDocument();
   });
 });
 

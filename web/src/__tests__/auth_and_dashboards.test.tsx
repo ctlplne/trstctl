@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, beginLogin, useAuth } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
+import { ToastProvider } from "@/components/ToastProvider";
 import { ApiError, type Me } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -33,9 +34,11 @@ function renderAt(path: string) {
   return render(
     <ThemeProvider>
       <AuthProvider>
-        <MemoryRouter initialEntries={[path]}>
-          <AppRoutes />
-        </MemoryRouter>
+        <ToastProvider>
+          <MemoryRouter initialEntries={[path]}>
+            <AppRoutes />
+          </MemoryRouter>
+        </ToastProvider>
       </AuthProvider>
     </ThemeProvider>,
   );

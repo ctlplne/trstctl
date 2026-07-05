@@ -532,8 +532,9 @@ describe("secrets surface", () => {
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
     expect(screen.getByText("native store")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
-    expect(screen.getByText("Scheduled rotation and downstream sync aren't in the console yet")).toBeInTheDocument();
-    expect(screen.getByText(/Rollback-safe static rotation is available for configured backends/i)).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "Run rollback-safe rotation" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Scheduled rotations" })).toBeInTheDocument();
+    expect(screen.queryByText("Scheduled rotation and downstream sync aren't in the console yet")).not.toBeInTheDocument();
     expect(screen.getByText("Auth-method administration isn't in the console yet")).toBeInTheDocument();
     expect(screen.getByText(/revoked methods are not available in the console yet/i)).toBeInTheDocument();
     expect(screen.getByText("Secret-change approvals")).toBeInTheDocument();

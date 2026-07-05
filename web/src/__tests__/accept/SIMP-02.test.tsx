@@ -3,6 +3,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { ToastProvider } from "@/components/ToastProvider";
 import { Protocols } from "@/pages/Protocols";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -22,7 +23,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderProtocols() {
   return render(
     <MemoryRouter>
-      <Protocols />
+      <ToastProvider>
+        <Protocols />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

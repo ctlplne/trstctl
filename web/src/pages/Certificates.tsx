@@ -5,6 +5,7 @@ import {
   ApiError,
   UnauthorizedError,
   api,
+  type BulkRevokeRequest,
   type Certificate,
   type CertificateHealthDashboard,
   type ConnectorDelivery,
@@ -17,6 +18,10 @@ import {
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
+import { Dialog } from "@/components/Dialog";
+import { Button } from "@/components/ui/button";
+import { BulkActionBar } from "@/components/bulk";
+import { useToast } from "@/components/ToastProvider";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
@@ -49,6 +54,19 @@ function expiringBefore(filter: ExpiryFilter): string | undefined {
 function expiryFromSearchParam(value: string | null): ExpiryFilter {
   return expiryFilters.some((filter) => filter.value === value) ? (value as ExpiryFilter) : "all";
 }
+
+const bulkRevokeReasons: BulkRevokeRequest["reason"][] = [
+  "unspecified",
+  "keyCompromise",
+  "caCompromise",
+  "affiliationChanged",
+  "superseded",
+  "cessationOfOperation",
+  "certificateHold",
+  "removeFromCRL",
+  "privilegeWithdrawn",
+  "aaCompromise",
+];
 
 type Notice = { kind: "permission" | "error"; message: string };
 type FacetFilter = "all" | string;
@@ -602,6 +620,12 @@ export function Certificates() {
   const [ctLoading, setCTLoading] = useState(false);
   const [ctError, setCTError] = useState<Notice | null>(null);
   const [ctResult, setCTResult] = useState<CTSubmission | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkRevokeOpen, setBulkRevokeOpen] = useState(false);
+  const [bulkReason, setBulkReason] = useState<BulkRevokeRequest["reason"]>("keyCompromise");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -808,6 +832,35 @@ export function Certificates() {
     }
   }
 
+  /** submitBulkRevoke sends ONE bulk revocation request for every selected
+   * certificate (no client-side fan-out) and reports the server's per-item
+   * totals, then refreshes the first inventory page. */
+  async function submitBulkRevoke() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    try {
+      const result = await api.bulkRevokeCertificates({ certificate_ids: ids, reason: bulkReason });
+      setBulkRevokeOpen(false);
+      setSelectedIds(new Set());
+      toast({
+        kind: result.total_failed > 0 ? "warning" : "success",
+        title: `Revoked ${result.total_revoked} of ${result.total_matched}`,
+        description: `Skipped ${result.total_skipped}, failed ${result.total_failed}.`,
+      });
+      const page = await settleOptional(() => api.certificatePage({ limit, expiringBefore: expiringBefore(expiry) }));
+      if (page) {
+        setCertificates(page.items ?? []);
+        setNextCursor(page.next_cursor || undefined);
+      }
+    } catch (err) {
+      setBulkError(noticeForError(err, "bulk revoke certificates").message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
   const issuerOptions = useMemo(
     () =>
@@ -1007,11 +1060,30 @@ export function Certificates() {
             </div>
             <DeploymentReceipts deliveries={deliveries} />
           </div>
+          <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())} className="sticky top-0 z-10 mb-3 shadow-elevation1">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
+              onClick={() => {
+                setBulkError(null);
+                setBulkRevokeOpen(true);
+              }}
+            >
+              Revoke selected ({selectedIds.size})…
+            </Button>
+          </BulkActionBar>
           <DataGrid
             ariaLabel="Inventoried certificates"
             rows={filtered}
             columns={columns}
             getRowId={(c) => c.id}
+            selection={{
+              selectedIds,
+              onSelectedIdsChange: setSelectedIds,
+              getRowLabel: (c) => c.subject,
+            }}
             state={filtered.length === 0 ? "empty" : "ready"}
             stateTitle="No certificates match your search."
             showColumnChooser
@@ -1155,6 +1227,58 @@ export function Certificates() {
           </div>
         </>
       )}
+
+      <Dialog
+        open={bulkRevokeOpen}
+        onClose={() => {
+          if (!bulkBusy) setBulkRevokeOpen(false);
+        }}
+        titleId="bulk-revoke-certs-title"
+        descriptionId="bulk-revoke-certs-desc"
+        role="alertdialog"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayClassName="absolute inset-0 bg-black/55"
+        panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
+      >
+        <h2 id="bulk-revoke-certs-title" className="text-title font-semibold text-destructive">
+          Revoke {selectedIds.size} selected certificate{selectedIds.size === 1 ? "" : "s"}?
+        </h2>
+        <p id="bulk-revoke-certs-desc" className="mt-1 text-destructive">
+          This submits one bulk revocation request for all {selectedIds.size} selected certificates. Revocation cannot be undone; CRL and OCSP distribution
+          completes asynchronously.
+        </p>
+        <label className="mt-3 grid gap-1 text-sm font-medium text-destructive" htmlFor="bulk-revoke-reason">
+          Revocation reason
+          <select
+            id="bulk-revoke-reason"
+            value={bulkReason}
+            onChange={(event) => setBulkReason(event.target.value as BulkRevokeRequest["reason"])}
+            className="min-h-9 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm font-normal text-foreground"
+          >
+            {bulkRevokeReasons.map((reason) => (
+              <option key={reason} value={reason}>
+                {reason}
+              </option>
+            ))}
+          </select>
+        </label>
+        {bulkError && <p className="mt-3 text-sm font-medium text-risk-critical">{bulkError}</p>}
+        <div className="mt-3 flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-destructive/50 text-destructive hover:bg-destructive/10"
+            disabled={bulkBusy || selectedIds.size === 0}
+            onClick={() => void submitBulkRevoke()}
+          >
+            {bulkBusy ? "Revoking…" : "Confirm bulk revoke"}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setBulkRevokeOpen(false)}>
+            Cancel
+          </Button>
+        </div>
+      </Dialog>
 
       <DetailDrawer
         open={!!detailID}

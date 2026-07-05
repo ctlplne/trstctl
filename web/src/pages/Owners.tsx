@@ -1,18 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { Dialog } from "@/components/Dialog";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ToastProvider";
 import { OrphanGovernance } from "@/components/nhi";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { useTranslation } from "@/i18n/I18nProvider";
 
-const columns: DataGridColumn<Owner>[] = [
-  { id: "name", header: "Name", cell: (owner) => owner.name },
-  { id: "kind", header: "Kind", cell: (owner) => owner.kind },
-  { id: "email", header: "Email", cell: (owner) => owner.email ?? "—" },
-];
+const ownerKinds: Owner["kind"][] = ["user", "team", "workload", "service"];
 
 function emptyOwnershipAttribution(): OwnershipAttribution {
   return { generated_at: new Date(0).toISOString(), items: [], summary: {}, coverage: [] };
@@ -30,7 +29,24 @@ export function Owners() {
   const [kind, setKind] = useState(() => searchParams.get("kind") ?? "all");
   const { data, loading, error } = useResource(api.owners);
   const attribution = useResource(readOwnershipAttribution);
-  const owners = useMemo(() => data ?? [], [data]);
+  const { toast } = useToast();
+  // useResource has no refetch, so the one-shot load is mirrored into local
+  // state and row edits/deletes update the grid optimistically.
+  const [rows, setRows] = useState<Owner[] | null>(null);
+  const [editTarget, setEditTarget] = useState<Owner | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editKind, setEditKind] = useState<Owner["kind"]>("user");
+  const [editEmail, setEditEmail] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Owner | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  useEffect(() => {
+    setRows(data);
+  }, [data]);
+  const owners = useMemo(() => rows ?? [], [rows]);
   const attributionRows = useMemo(() => attribution.data?.items ?? [], [attribution.data]);
   const attributionColumns = useMemo<DataGridColumn<OwnershipAttributionItem>[]>(
     () => [
@@ -45,6 +61,85 @@ export function Owners() {
   const kinds = useMemo(() => Array.from(new Set(owners.map((owner) => owner.kind).filter(Boolean))).sort(), [owners]);
   const filteredOwners = useMemo(() => filterOwners(owners, query, kind), [kind, owners, query]);
 
+  function openEdit(owner: Owner) {
+    setEditTarget(owner);
+    setEditName(owner.name);
+    setEditKind(owner.kind);
+    setEditEmail(owner.email ?? "");
+    setEditError(null);
+  }
+
+  function openDelete(owner: Owner) {
+    setDeleteTarget(owner);
+    setDeleteConfirm("");
+    setDeleteError(null);
+  }
+
+  async function submitEdit() {
+    if (!editTarget) return;
+    const name = editName.trim();
+    if (!name) {
+      setEditError("Name is required.");
+      return;
+    }
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      const updated = await api.updateOwner(editTarget.id, { name, kind: editKind, email: editEmail.trim() || undefined });
+      setRows((current) => (current ? current.map((owner) => (owner.id === updated.id ? updated : owner)) : current));
+      setEditTarget(null);
+      toast({ kind: "success", title: t("parity.ownerUpdated_07b92f"), description: updated.name });
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function submitDelete() {
+    if (!deleteTarget || deleteConfirm !== deleteTarget.name) return;
+    const target = deleteTarget;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api.deleteOwner(target.id);
+      setRows((current) => (current ? current.filter((owner) => owner.id !== target.id) : current));
+      setDeleteTarget(null);
+      setDeleteConfirm("");
+      toast({ kind: "success", title: t("parity.ownerDeleted_079d61"), description: target.name });
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  const columns: DataGridColumn<Owner>[] = [
+    { id: "name", header: "Name", cell: (owner) => owner.name },
+    { id: "kind", header: "Kind", cell: (owner) => owner.kind },
+    { id: "email", header: "Email", cell: (owner) => owner.email ?? "—" },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: (owner) => (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => openEdit(owner)}>
+            {t("parity.edit_530164")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
+            onClick={() => openDelete(owner)}
+          >
+            {t("parity.delete_f6fdbe")}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <section aria-labelledby="owners-heading" className="space-y-4">
       <PageHeader
@@ -55,7 +150,7 @@ export function Owners() {
       <OrphanGovernance owners={owners} />
       {loading && <LoadingState>Loading owners…</LoadingState>}
       {error && <ErrorState title="Could not load owners">{error}</ErrorState>}
-      {data && (
+      {rows && (
         <>
           <form className="flex flex-wrap items-end gap-3" role="search" onSubmit={(event) => event.preventDefault()}>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-search">
@@ -86,7 +181,7 @@ export function Owners() {
               </select>
             </label>
             <p className="pb-2 text-caption text-muted-foreground">
-              Showing {filteredOwners.length} of {data.length}
+              Showing {filteredOwners.length} of {rows.length}
             </p>
           </form>
 
@@ -96,8 +191,8 @@ export function Owners() {
             columns={columns}
             getRowId={(owner) => owner.id}
             state={filteredOwners.length === 0 ? "empty" : "ready"}
-            stateTitle={data.length === 0 ? "No owners yet" : "No owners match the current filters"}
-            stateMessage={data.length === 0 ? "Add an owner to start tracking accountability." : "No owners match the current search or kind filter."}
+            stateTitle={rows.length === 0 ? "No owners yet" : "No owners match the current filters"}
+            stateMessage={rows.length === 0 ? "Add an owner to start tracking accountability." : "No owners match the current search or kind filter."}
           />
         </>
       )}
@@ -119,6 +214,131 @@ export function Owners() {
           />
         </section>
       )}
+
+      <Dialog
+        open={editTarget !== null}
+        onClose={() => {
+          if (!editBusy) setEditTarget(null);
+        }}
+        titleId="owner-edit-title"
+        panelClassName="fixed left-1/2 top-1/2 grid w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        {editTarget && (
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitEdit();
+            }}
+          >
+            <h2 id="owner-edit-title" className="text-title font-semibold">
+              Edit {editTarget.name}
+            </h2>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-name">
+              Name
+              <input
+                id="owner-edit-name"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-kind">
+              Owner kind
+              <select
+                id="owner-edit-kind"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={editKind}
+                onChange={(event) => setEditKind(event.target.value as Owner["kind"])}
+              >
+                {ownerKinds.map((ownerKind) => (
+                  <option key={ownerKind} value={ownerKind}>
+                    {ownerKind}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-email">
+              {t("parity.emailOptional_5c10b5")}
+              <input
+                id="owner-edit-email"
+                type="email"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={editEmail}
+                onChange={(event) => setEditEmail(event.target.value)}
+              />
+            </label>
+            {editError && <p className="text-sm font-medium text-risk-critical">{editError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setEditTarget(null)} disabled={editBusy}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={editBusy}>
+                {t("parity.saveOwner_b67638")}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onClose={() => {
+          if (!deleteBusy) setDeleteTarget(null);
+        }}
+        titleId="owner-delete-title"
+        descriptionId="owner-delete-description"
+        role="alertdialog"
+        closeOnBackdropClick={false}
+        panelClassName="fixed left-1/2 top-1/2 grid w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        {deleteTarget && (
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitDelete();
+            }}
+          >
+            <div>
+              <h2 id="owner-delete-title" className="text-title font-semibold">
+                Delete {deleteTarget.name}
+              </h2>
+              <p id="owner-delete-description" className="mt-1 text-sm text-muted-foreground">
+                {t("parity.deletingAnOwnerRemovesTheAccountability_cdfad5")}
+              </p>
+            </div>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-delete-confirm">
+              {t("parity.typeTheExactOwnerName_1205b0")}
+              <input
+                id="owner-delete-confirm"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={deleteConfirm}
+                onChange={(event) => setDeleteConfirm(event.target.value)}
+                placeholder={deleteTarget.name}
+                autoComplete="off"
+                spellCheck={false}
+                required
+              />
+            </label>
+            {deleteError && <p className="text-sm font-medium text-risk-critical">{deleteError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="outline"
+                className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
+                disabled={deleteBusy || deleteConfirm !== deleteTarget.name}
+              >
+                {t("parity.deleteOwner_b5f9bd")}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
     </section>
   );
 }

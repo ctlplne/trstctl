@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { ToastProvider } from "@/components/ToastProvider";
 import { Certificates } from "@/pages/Certificates";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -24,11 +25,13 @@ vi.mock("@/lib/api", async (orig) => {
 function renderEmptyCertificates() {
   return render(
     <MemoryRouter initialEntries={["/certificates"]}>
-      <Routes>
-        <Route path="/certificates" element={<Certificates />} />
-        <Route path="/request" element={<h1>Credential request destination</h1>} />
-        <Route path="/ca-hierarchy" element={<h1>Issuer connection destination</h1>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/certificates" element={<Certificates />} />
+          <Route path="/request" element={<h1>Credential request destination</h1>} />
+          <Route path="/ca-hierarchy" element={<h1>Issuer connection destination</h1>} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

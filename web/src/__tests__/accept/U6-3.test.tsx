@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Privacy } from "@/pages/Privacy";
+import { ToastProvider } from "@/components/ToastProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -42,7 +43,9 @@ describe("U6-3 privacy / GDPR console", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <Privacy />
+        <ToastProvider>
+          <Privacy />
+        </ToastProvider>
       </MemoryRouter>,
     );
     await waitFor(() => expect(apiMock.privacyRetentionRuns).toHaveBeenCalled());

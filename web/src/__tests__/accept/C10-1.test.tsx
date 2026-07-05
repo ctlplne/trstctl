@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { ToastProvider } from "@/components/ToastProvider";
 import { ApiError, type Issuer } from "@/lib/api";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 
@@ -18,6 +19,7 @@ const { apiMock } = vi.hoisted(() => ({
     rotateManagedKey: vi.fn(),
     revokeManagedKey: vi.fn(),
     zeroizeManagedKey: vi.fn(),
+    caAuthorities: vi.fn(),
   },
 }));
 
@@ -42,7 +44,9 @@ function issuer(partial: Partial<Issuer>): Issuer {
 function renderCAHierarchy() {
   return render(
     <MemoryRouter>
-      <CAHierarchy />
+      <ToastProvider>
+        <CAHierarchy />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -51,6 +55,7 @@ describe("C10-1 issuer catalog and connection tests", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.caAuthorities.mockResolvedValue({ items: [] });
     apiMock.issuers.mockResolvedValue([
       issuer({ id: "acme-prod", name: "Production ACME" }),
       issuer({ id: "missing-upstream", name: "Unregistered External" }),

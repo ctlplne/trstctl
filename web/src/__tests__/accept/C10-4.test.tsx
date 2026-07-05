@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
+import { ToastProvider } from "@/components/ToastProvider";
 import { Certificates } from "@/pages/Certificates";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -31,8 +32,10 @@ function LocationProbe() {
 function renderCerts(initialEntry = "/certificates") {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <LocationProbe />
-      <Certificates />
+      <ToastProvider>
+        <LocationProbe />
+        <Certificates />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

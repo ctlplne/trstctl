@@ -12,28 +12,30 @@ export interface ApiWorkflowCoverage {
 export const apiWorkflowCoverage = [
   {
     path: "/api/v1/access/sessions",
-    route: "/integrate/api",
+    route: "/platform",
     owner: "SURFACE/access",
-    kind: "api-cli-exception",
-    workflow: "Access session ledger inspection",
-    rationale: "The Platform page shows the current browser session and access administration; the full session ledger remains an operator/API workflow.",
+    kind: "console-flow",
+    workflow: "Privileged access session ledger",
+    rationale:
+      "The Platform access administration area lists JIT privileged access sessions with status, target, expiry, per-session detail, and an open-session workflow.",
   },
   {
     path: "/api/v1/access/sessions/{id}",
-    route: "/integrate/api",
+    route: "/platform",
     owner: "SURFACE/access",
-    kind: "api-cli-exception",
-    workflow: "Access session detail inspection",
-    rationale: "Session detail is not mutated from the browser console; operators use the API Explorer or CLI until a dedicated session-admin table lands.",
+    kind: "console-flow",
+    workflow: "Privileged access session detail",
+    rationale:
+      "Each session row on the Platform page opens a detail dialog with attestation, audit, and target transcripts rendered from the served session record.",
   },
   {
     path: "/api/v1/agents/{id}/cert-revocations",
-    route: "/integrate/api",
+    route: "/agents",
     owner: "SURFACE/agents",
-    kind: "api-explorer",
-    workflow: "Agent certificate revocation receipt lookup",
+    kind: "console-flow",
+    workflow: "Agent mTLS certificate revocation",
     rationale:
-      "The Agents page owns enrollment and fleet visibility; per-agent revocation receipts are exposed through the API Explorer for support workflows.",
+      "The Agents page has a per-agent revoke-certificate action with RFC 5280 reason selection, optional serial/fingerprint, and a guarded confirmation dialog.",
   },
   {
     path: "/api/v1/ca/authorities",
@@ -46,36 +48,39 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/ca/authorities/intermediates",
-    route: "/integrate/api",
+    route: "/ca-hierarchy",
     owner: "SURFACE/ca",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Signer-backed intermediate CA creation",
-    rationale: "The console has offline/import intermediate flows; direct signer-backed intermediate creation remains an API Explorer ceremony workflow.",
+    rationale:
+      "The CA Hierarchy page creates signer-backed intermediates through a ceremony-gated dialog with parent selection and validated spec input.",
   },
   {
     path: "/api/v1/ca/authorities/roots",
-    route: "/integrate/api",
+    route: "/ca-hierarchy",
     owner: "SURFACE/ca",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Signer-backed root CA creation",
     rationale:
-      "The CA Hierarchy page starts root ceremonies; direct root authority creation is kept in the API Explorer until the ceremony UI binds this endpoint.",
+      "The CA Hierarchy page creates signer-backed roots through a ceremony-gated dialog binding the quorum-approved ceremony id to the create call.",
   },
   {
     path: "/api/v1/ca/authorities/{id}/intermediates/csr",
-    route: "/integrate/api",
+    route: "/ca-hierarchy",
     owner: "SURFACE/ca",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Issue intermediate CA from CSR",
-    rationale: "The console has offline intermediate CSR import flow; online CSR issuance remains an API Explorer operator action.",
+    rationale:
+      "Each served authority row offers a sign-intermediate-CSR dialog with ceremony id, CSR validation, and an in-dialog issued-certificate result.",
   },
   {
     path: "/api/v1/ca/authorities/{id}/issue",
-    route: "/integrate/api",
+    route: "/ca-hierarchy",
     owner: "SURFACE/ca",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Issue leaf certificate from CA authority",
-    rationale: "The Request Credential and Identities pages cover normal issuance; authority-specific leaf issue remains an advanced API Explorer action.",
+    rationale:
+      "Each served authority row offers an issue-leaf dialog with CSR validation and TTL, returning serial, expiry, and PEM with a copy affordance.",
   },
   {
     path: "/api/v1/ca/authorities/{id}/rekey",
@@ -88,20 +93,21 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/ca/ceremonies/{id}",
-    route: "/integrate/api",
+    route: "/ca-hierarchy",
     owner: "SURFACE/ca",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "CA ceremony detail lookup",
-    rationale: "The CA Hierarchy page displays newly started or approved ceremonies; arbitrary ceremony lookup is covered by the API Explorer.",
+    rationale:
+      "Ceremony rows on the CA Hierarchy page open a detail dialog showing approval progress against threshold, status, purpose, and opener.",
   },
   {
     path: "/api/v1/certificates/bulk-revoke",
-    route: "/integrate/api",
+    route: "/certificates",
     owner: "SURFACE/certificates",
-    kind: "api-explorer",
-    workflow: "Criteria-based certificate bulk revoke",
+    kind: "console-flow",
+    workflow: "Transactional certificate bulk revoke",
     rationale:
-      "The console exposes certificate detail and identity revocation; criteria-based certificate bulk revoke stays in API Explorer/CLI until a guarded batch wizard lands.",
+      "The Certificates inventory has row selection with a guarded bulk-revoke dialog that sends one transactional request and reports revoked/skipped/failed totals.",
   },
   {
     path: "/api/v1/certificates/{id}",
@@ -129,19 +135,21 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/connectors/deliveries/{id}",
-    route: "/integrate/api",
+    route: "/connectors",
     owner: "SURFACE/connectors",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Connector delivery receipt detail",
-    rationale: "Receipt lists are first-class in the console; arbitrary receipt detail by id is covered by the API Explorer.",
+    rationale:
+      "Delivery receipt rows on the Connectors page open a detail dialog rendering the full receipt including rollback reference, reason, and idempotency key.",
   },
   {
     path: "/api/v1/connectors/outbox-circuits",
-    route: "/integrate/api",
+    route: "/connectors",
     owner: "SURFACE/runops",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Outbox circuit breaker diagnostics",
-    rationale: "The Operations queue shows delivery status; low-level outbox circuit state remains a support/operator diagnostic through the API Explorer.",
+    rationale:
+      "The Connectors page shows outbox destination circuit state beside delivery receipts with tone-coded status and failure detail.",
   },
   {
     path: "/api/v1/connectors/targets/{id}",
@@ -161,20 +169,21 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/ephemeral",
-    route: "/integrate/api",
+    route: "/secrets",
     owner: "SURFACE/secrets",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Attestation-gated ephemeral credential request",
     rationale:
-      "The Secrets page covers scoped ephemeral API keys; the generic attestation-gated ephemeral credential endpoint remains an API Explorer workflow.",
+      "The Secrets ephemeral section requests attestation-gated JIT credentials and renders awaiting-approval progress or the issued certificate inline.",
   },
   {
     path: "/api/v1/ephemeral/{id}/approvals",
-    route: "/integrate/api",
+    route: "/approvals",
     owner: "SURFACE/secrets",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Ephemeral credential approval",
-    rationale: "General identity approvals are in the Approvals page; ephemeral credential approval by id is an API Explorer operator action.",
+    rationale:
+      "The Approvals page has an ephemeral-credential approval card that issues a pending request by id and reports approver and quorum progress.",
   },
   {
     path: "/api/v1/external-cas/{id}/issue",
@@ -186,12 +195,12 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/identities/bulk-revoke",
-    route: "/integrate/api",
+    route: "/identities",
     owner: "SURFACE/identities",
-    kind: "api-explorer",
-    workflow: "Criteria-based identity bulk revoke",
+    kind: "console-flow",
+    workflow: "Transactional identity bulk revoke",
     rationale:
-      "The Identities page has guarded selected-row bulk revoke via per-identity transitions; criteria-based bulk revoke is covered by the API Explorer.",
+      "The Identities bulk action now sends one transactional bulk-revoke request with reason selection and a server-computed result summary.",
   },
   {
     path: "/api/v1/identities/{id}",
@@ -211,11 +220,12 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/issuers/{id}",
-    route: "/integrate/api",
+    route: "/ca-hierarchy",
     owner: "SURFACE/ca",
-    kind: "api-explorer",
-    workflow: "Issuer detail lookup",
-    rationale: "Issuer lists and links are shown in CA Hierarchy; arbitrary issuer detail by id is covered by the API Explorer.",
+    kind: "console-flow",
+    workflow: "Issuer detail visibility",
+    rationale:
+      "The CA Hierarchy issuer table renders each issuer's kind, internal flag, chain, and public key; the typed client also exposes issuer lookup by id.",
   },
   {
     path: "/api/v1/lifecycle/rotation-runs",
@@ -227,11 +237,12 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/lifecycle/rotation-runs/{id}",
-    route: "/integrate/api",
+    route: "/operations",
     owner: "SURFACE/lifecycle",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Rotation run detail lookup",
-    rationale: "The console lists recent rotation runs; exact run lookup by id remains an API Explorer support action.",
+    rationale:
+      "Rotation run rows on the Operations page open a detail dialog with fingerprints, trigger, rollback reference, and failure detail.",
   },
   {
     path: "/api/v1/notifications/{id}",
@@ -243,12 +254,12 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/owners/{id}",
-    route: "/integrate/api",
+    route: "/owners",
     owner: "SURFACE/owners",
-    kind: "api-explorer",
+    kind: "console-flow",
     workflow: "Owner detail/update/delete",
     rationale:
-      "The Owners page handles owner lists and create flows; destructive owner update/delete by id is kept in the API Explorer until a guarded owner-admin workflow lands.",
+      "The Owners page has per-row edit and delete actions with a pre-filled form dialog and a typed-name destructive confirmation.",
   },
   {
     path: "/api/v1/privacy/subject-exports",
@@ -268,12 +279,12 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/secrets/rotations",
-    route: "/integrate/api",
+    route: "/secrets",
     owner: "SURFACE/secrets",
-    kind: "api-explorer",
-    workflow: "Rollback-safe static secret rotation",
+    kind: "console-flow",
+    workflow: "Rollback-safe secret rotation",
     rationale:
-      "The Secrets page supports manual native-store rotation; scheduled/backend static rotation remains API Explorer/CLI until a dedicated rotation wizard lands.",
+      "The Secrets rotation section runs rollback-safe rotations inline and renders phase, rollback outcome, and the old-to-new reference handoff.",
   },
   {
     path: "/api/v1/secrets/scans/repositories",
@@ -290,5 +301,86 @@ export const apiWorkflowCoverage = [
     kind: "console-flow",
     workflow: "Third-party secret scanning posture",
     rationale: "The Secrets page displays third-party artifact scanning posture and can ingest configured provider artifacts.",
+  },
+  {
+    path: "/api/v1/secrets/rotation-schedules",
+    route: "/secrets",
+    owner: "SURFACE/secrets",
+    kind: "console-flow",
+    workflow: "Scheduled secret rotation management",
+    rationale:
+      "The Secrets rotation section lists zero-downtime rotation schedules and creates new schedules through a validated dialog.",
+  },
+  {
+    path: "/api/v1/secrets/rotation-schedules/run-due",
+    route: "/secrets",
+    owner: "SURFACE/secrets",
+    kind: "console-flow",
+    workflow: "Run due secret rotations",
+    rationale:
+      "The Secrets rotation section runs all due schedules on demand and reports how many rotations ran with per-run outcomes.",
+  },
+  {
+    path: "/api/v1/privacy/archive-erasure-attestations",
+    route: "/privacy",
+    owner: "SURFACE/privacy",
+    kind: "console-flow",
+    workflow: "Archive erasure evidence",
+    rationale:
+      "The Privacy page lists backup and archive erasure attestations with subject filtering and records new attestations through a guided dialog.",
+  },
+  {
+    path: "/api/v1/remediation/owner-actions",
+    route: "/incidents",
+    owner: "SURFACE/incidents",
+    kind: "console-flow",
+    workflow: "Owner remediation queue",
+    rationale:
+      "The Incidents remediation evidence section renders the owner-driven self-remediation queue with severity, scope, and rollback references.",
+  },
+  {
+    path: "/api/v1/platform/distribution",
+    route: "/platform",
+    owner: "SURFACE/platform",
+    kind: "console-flow",
+    workflow: "Distribution posture disclosure",
+    rationale:
+      "The Platform page shows the run-anywhere distribution posture: production mode, lineage, run modes, host archives, and air-gap readiness.",
+  },
+  {
+    path: "/api/v1/acme/dns-01/preflight",
+    route: "/protocols",
+    owner: "SURFACE/protocols",
+    kind: "console-flow",
+    workflow: "DNS-01 preflight validation",
+    rationale:
+      "Each DNS-01 provider config row offers a preflight dialog validating propagation, CNAME, CAA, method, and wildcard policy before enrollment.",
+  },
+  {
+    path: "/api/v1/acme/dns-01/provider-configs/{id}",
+    route: "/protocols",
+    owner: "SURFACE/protocols",
+    kind: "console-flow",
+    workflow: "DNS-01 provider config administration",
+    rationale:
+      "DNS-01 provider config rows on the Protocols page support pre-filled edit and typed-name delete dialogs over the served config record.",
+  },
+  {
+    path: "/api/v1/mdm/scep/policies/{id}",
+    route: "/protocols",
+    owner: "SURFACE/protocols",
+    kind: "console-flow",
+    workflow: "SCEP policy administration",
+    rationale:
+      "SCEP policy rows on the Protocols page support pre-filled edit and typed-name delete dialogs covering the full policy request surface.",
+  },
+  {
+    path: "/api/v1/mdm/scep/policies/{id}/rotate-challenge",
+    route: "/protocols",
+    owner: "SURFACE/protocols",
+    kind: "console-flow",
+    workflow: "SCEP challenge rotation evidence",
+    rationale:
+      "SCEP policy rows offer a rotate-challenge action that records rotation evidence and surfaces the new rotation version.",
   },
 ] as const satisfies readonly ApiWorkflowCoverage[];

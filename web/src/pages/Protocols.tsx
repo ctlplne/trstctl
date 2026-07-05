@@ -1,12 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Braces, Copy, Signature } from "lucide-react";
+import { Braces, CheckCircle2, Copy, MinusCircle, Signature, X, XCircle } from "lucide-react";
+import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
+import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, ApiError, type ACMEDNS01ProviderCatalogItem, type ACMEDNS01ProviderConfig, type MDMSCEPStatus, type ProtocolRuntimeStatus } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type ACMEDNS01Preflight,
+  type ACMEDNS01PreflightRequest,
+  type ACMEDNS01ProviderCatalogItem,
+  type ACMEDNS01ProviderConfig,
+  type ACMEDNS01ProviderConfigRequest,
+  type MDMSCEPPolicy,
+  type MDMSCEPPolicyRequest,
+  type MDMSCEPStatus,
+  type ProtocolRuntimeStatus,
+} from "@/lib/api";
 
 interface ProtocolSnippet {
   label: string;
@@ -163,6 +178,13 @@ export function Protocols() {
   const [mdmSCEPStatus, setMDMSCEPStatus] = useState<MDMSCEPStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const { toast } = useToast();
+  const [scepEditPolicy, setSCEPEditPolicy] = useState<MDMSCEPPolicy | null>(null);
+  const [scepDeletePolicy, setSCEPDeletePolicy] = useState<MDMSCEPPolicy | null>(null);
+  const [scepRotatePolicy, setSCEPRotatePolicy] = useState<MDMSCEPPolicy | null>(null);
+  const [dnsEditConfig, setDNSEditConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
+  const [dnsDeleteConfig, setDNSDeleteConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
+  const [dnsPreflightConfig, setDNSPreflightConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -197,6 +219,44 @@ export function Protocols() {
     } finally {
       setCopied(`${protocol.id}:${snippet.label}`);
     }
+  }
+
+  function replaceSCEPPolicy(updated: MDMSCEPPolicy) {
+    setMDMSCEPStatus((current) =>
+      current ? { ...current, policies: current.policies.map((policy) => (policy.id === updated.id ? updated : policy)) } : current,
+    );
+  }
+
+  function handleSCEPPolicySaved(updated: MDMSCEPPolicy) {
+    replaceSCEPPolicy(updated);
+    setSCEPEditPolicy(null);
+    toast({ kind: "success", title: t("parity.scepPolicyUpdated_3a2953"), description: updated.name });
+  }
+
+  function handleSCEPPolicyDeleted(policy: MDMSCEPPolicy) {
+    setMDMSCEPStatus((current) =>
+      current ? { ...current, policies: current.policies.filter((candidate) => candidate.id !== policy.id) } : current,
+    );
+    setSCEPDeletePolicy(null);
+    toast({ kind: "success", title: t("parity.scepPolicyDeleted_45064c"), description: policy.name });
+  }
+
+  function handleSCEPChallengeRotated(policy: MDMSCEPPolicy) {
+    replaceSCEPPolicy(policy);
+    setSCEPRotatePolicy(null);
+    toast({ kind: "success", title: t("parity.scepChallengeRotated_77c4f1"), description: `${policy.name} rotation version ${policy.rotation_version}` });
+  }
+
+  function handleDNSConfigSaved(updated: ACMEDNS01ProviderConfig) {
+    setDNSProviderConfigs((current) => current.map((config) => (config.id === updated.id ? updated : config)));
+    setDNSEditConfig(null);
+    toast({ kind: "success", title: t("parity.dns01ProviderConfigUpdated_5a6d3d"), description: updated.name });
+  }
+
+  function handleDNSConfigDeleted(config: ACMEDNS01ProviderConfig) {
+    setDNSProviderConfigs((current) => current.filter((candidate) => candidate.id !== config.id));
+    setDNSDeleteConfig(null);
+    toast({ kind: "success", title: t("parity.dns01ProviderConfigDeleted_9ead6a"), description: config.name });
   }
 
   return (
@@ -377,7 +437,7 @@ export function Protocols() {
           {t("protocols.dns01.configHeading")}
         </h2>
         <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[68rem]">
+          <table className="ui-table min-w-[76rem]">
             <caption className="sr-only">{t("protocols.dns01.configCaption")}</caption>
             <thead>
               <tr>
@@ -386,6 +446,7 @@ export function Protocols() {
                 <th scope="col">{t("protocols.dns01.zone")}</th>
                 <th scope="col">{t("protocols.dns01.policy")}</th>
                 <th scope="col">{t("protocols.dns01.secretReferences")}</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -420,6 +481,26 @@ export function Protocols() {
                         ))}
                       </ul>
                     </td>
+                    <td>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => setDNSPreflightConfig(config)} aria-label={`Preflight check ${config.name}`}>
+                          {t("parity.preflightCheck_4a464a")}
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setDNSEditConfig(config)} aria-label={`Edit DNS-01 config ${config.name}`}>
+                          {t("parity.edit_530164")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                          onClick={() => setDNSDeleteConfig(config)}
+                          aria-label={`Delete DNS-01 config ${config.name}`}
+                        >
+                          {t("parity.delete_f6fdbe")}
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -438,7 +519,7 @@ export function Protocols() {
         </h2>
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="ui-panel overflow-x-auto">
-            <table className="ui-table min-w-[64rem]">
+            <table className="ui-table min-w-[72rem]">
               <caption className="sr-only">{t("protocols.mdm.caption")}</caption>
               <thead>
                 <tr>
@@ -447,6 +528,7 @@ export function Protocols() {
                   <th scope="col">{t("protocols.mdm.profile")}</th>
                   <th scope="col">{t("protocols.mdm.challenge")}</th>
                   <th scope="col">{t("protocols.mdm.references")}</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -484,6 +566,26 @@ export function Protocols() {
                             </li>
                           ))}
                         </ul>
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" size="sm" variant="outline" onClick={() => setSCEPEditPolicy(policy)} aria-label={`Edit SCEP policy ${policy.name}`}>
+                            {t("parity.edit_530164")}
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => setSCEPRotatePolicy(policy)} aria-label={`Rotate challenge for ${policy.name}`}>
+                            {t("parity.rotateChallenge_99fc02")}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                            onClick={() => setSCEPDeletePolicy(policy)}
+                            aria-label={`Delete SCEP policy ${policy.name}`}
+                          >
+                            {t("parity.delete_f6fdbe")}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -564,6 +666,19 @@ export function Protocols() {
           </section>
         ))}
       </section>
+
+      {scepEditPolicy && <MDMSCEPPolicyEditDialog policy={scepEditPolicy} onClose={() => setSCEPEditPolicy(null)} onSaved={handleSCEPPolicySaved} />}
+      {scepRotatePolicy && (
+        <MDMSCEPRotateChallengeDialog policy={scepRotatePolicy} onClose={() => setSCEPRotatePolicy(null)} onRotated={handleSCEPChallengeRotated} />
+      )}
+      {scepDeletePolicy && (
+        <MDMSCEPPolicyDeleteDialog policy={scepDeletePolicy} onClose={() => setSCEPDeletePolicy(null)} onDeleted={handleSCEPPolicyDeleted} />
+      )}
+      {dnsEditConfig && (
+        <DNS01ConfigEditDialog config={dnsEditConfig} providers={dnsProviders} onClose={() => setDNSEditConfig(null)} onSaved={handleDNSConfigSaved} />
+      )}
+      {dnsDeleteConfig && <DNS01ConfigDeleteDialog config={dnsDeleteConfig} onClose={() => setDNSDeleteConfig(null)} onDeleted={handleDNSConfigDeleted} />}
+      {dnsPreflightConfig && <DNS01PreflightDialog config={dnsPreflightConfig} onClose={() => setDNSPreflightConfig(null)} />}
     </section>
   );
 }
@@ -613,4 +728,810 @@ function protocolStatusError(err: unknown): string {
 function formatDate(value?: string): string {
   if (!value) return "Not recorded";
   return formatDateTimePolicy(value);
+}
+
+const acmeMethodOptions = ["http-01", "dns-01", "tls-alpn-01"] as const;
+type ACMEChallengeMethod = (typeof acmeMethodOptions)[number];
+
+function isACMEChallengeMethod(value: string): value is ACMEChallengeMethod {
+  return (acmeMethodOptions as readonly string[]).includes(value);
+}
+
+function stringifyRecord(value: Record<string, unknown> | undefined): string {
+  if (!value || Object.keys(value).length === 0) return "";
+  return JSON.stringify(value, null, 2);
+}
+
+function parseOptionalJSONRecord(value: string, label: string): Record<string, unknown> | null | string {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (err) {
+    return `${label} must be valid JSON: ${err instanceof Error ? err.message : "parse error"}`;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return `${label} must be a JSON object.`;
+  return parsed as Record<string, unknown>;
+}
+
+function MDMSCEPPolicyEditDialog({
+  onClose,
+  onSaved,
+  policy,
+}: {
+  policy: MDMSCEPPolicy;
+  onClose: () => void;
+  onSaved: (updated: MDMSCEPPolicy) => void;
+}) {
+  const { t } = useTranslation();
+  const [name, setName] = useState(policy.name);
+  const [provider, setProvider] = useState<MDMSCEPPolicyRequest["provider"]>(policy.provider === "jamf" ? "jamf" : "intune");
+  const [scepEndpoint, setSCEPEndpoint] = useState(policy.scep_endpoint);
+  const [scepProfile, setSCEPProfile] = useState(policy.scep_profile);
+  const [challengeMode, setChallengeMode] = useState<"" | NonNullable<MDMSCEPPolicyRequest["challenge_mode"]>>(
+    policy.challenge_mode === "intune-jws" || policy.challenge_mode === "hmac-dynamic" ? policy.challenge_mode : "",
+  );
+  const [enabled, setEnabled] = useState(policy.enabled);
+  const [expectedAudience, setExpectedAudience] = useState(policy.expected_audience ?? "");
+  const [trustAnchorRefsJSON, setTrustAnchorRefsJSON] = useState(() => stringifyRecord(policy.trust_anchor_refs));
+  const [profileGuidanceJSON, setProfileGuidanceJSON] = useState(() => stringifyRecord(policy.profile_guidance));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const titleId = "scep-policy-edit-heading";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trustAnchorRefs = parseOptionalJSONRecord(trustAnchorRefsJSON, "Trust anchor references");
+    if (typeof trustAnchorRefs === "string") {
+      setError(trustAnchorRefs);
+      return;
+    }
+    const profileGuidance = parseOptionalJSONRecord(profileGuidanceJSON, "Profile guidance");
+    if (typeof profileGuidance === "string") {
+      setError(profileGuidance);
+      return;
+    }
+    const input: MDMSCEPPolicyRequest = {
+      name: name.trim(),
+      provider,
+      scep_endpoint: scepEndpoint.trim(),
+      scep_profile: scepProfile.trim(),
+      enabled,
+    };
+    if (challengeMode) input.challenge_mode = challengeMode;
+    const audience = expectedAudience.trim();
+    if (audience) input.expected_audience = audience;
+    if (trustAnchorRefs) input.trust_anchor_refs = trustAnchorRefs;
+    if (profileGuidance) input.profile_guidance = profileGuidance;
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await api.updateMDMSCEPPolicy(policy.id, input));
+    } catch (err) {
+      setError(protocolStatusError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      initialFocusRef={nameRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="truncate text-title font-semibold">
+            Edit SCEP policy {policy.name}
+          </h2>
+          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{policy.id}</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeScepPolicyForm_ae9570")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
+        {error && <ErrorState title={t("parity.scepPolicyUpdateFailed_f92dc7")}>{error}</ErrorState>}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.policyName_101bf6")}
+            <input
+              ref={nameRef}
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            Provider
+            <select
+              value={provider}
+              onChange={(event) => setProvider(event.target.value === "jamf" ? "jamf" : "intune")}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            >
+              <option value="intune">{t("parity.intune_2c4886")}</option>
+              <option value="jamf">{t("parity.jamf_489375")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.scepEndpoint_f4bb21")}
+            <input
+              required
+              value={scepEndpoint}
+              onChange={(event) => setSCEPEndpoint(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.scepProfile_315862")}
+            <input
+              required
+              value={scepProfile}
+              onChange={(event) => setSCEPProfile(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.challengeMode_1c8fbd")}
+            <select
+              value={challengeMode}
+              onChange={(event) => {
+                const next = event.target.value;
+                setChallengeMode(next === "intune-jws" || next === "hmac-dynamic" ? next : "");
+              }}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            >
+              <option value="">{t("parity.providerDefault_f75bf4")}</option>
+              <option value="intune-jws">{t("parity.intuneJws_b47f57")}</option>
+              <option value="hmac-dynamic">{t("parity.hmacDynamic_cb11c5")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.expectedAudienceOptional_51c8b7")}
+            <input
+              value={expectedAudience}
+              onChange={(event) => setExpectedAudience(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+        </div>
+        <label className="flex items-center gap-2 text-body font-medium">
+          <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+          Enabled
+        </label>
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.trustAnchorReferencesJsonOptional_f5ea80")}
+          <textarea
+            rows={4}
+            value={trustAnchorRefsJSON}
+            onChange={(event) => setTrustAnchorRefsJSON(event.target.value)}
+            className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+          />
+        </label>
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.profileGuidanceJsonOptional_fd4738")}
+          <textarea
+            rows={4}
+            value={profileGuidanceJSON}
+            onChange={(event) => setProfileGuidanceJSON(event.target.value)}
+            className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+          />
+        </label>
+        <footer className="flex justify-end gap-2 border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={busy || name.trim() === "" || scepEndpoint.trim() === "" || scepProfile.trim() === ""}>
+            {t("parity.savePolicy_77d67c")}
+          </Button>
+        </footer>
+      </form>
+    </Dialog>
+  );
+}
+
+function MDMSCEPRotateChallengeDialog({
+  onClose,
+  onRotated,
+  policy,
+}: {
+  policy: MDMSCEPPolicy;
+  onClose: () => void;
+  onRotated: (policy: MDMSCEPPolicy) => void;
+}) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  async function confirmRotate() {
+    setBusy(true);
+    setError(null);
+    try {
+      const rotated = await api.rotateMDMSCEPChallenge(policy.id);
+      onRotated(rotated.policy);
+    } catch (err) {
+      setError(protocolStatusError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId="scep-rotate-title"
+      descriptionId="scep-rotate-desc"
+      initialFocusRef={confirmRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative w-full max-w-xl rounded-panel border border-border bg-card p-4 text-sm shadow-elevation2"
+    >
+      <h2 id="scep-rotate-title" className="text-title font-semibold">
+        Rotate SCEP challenge for {policy.name}?
+      </h2>
+      <p id="scep-rotate-desc" className="mt-1 text-muted-foreground">
+        {t("parity.rotationMintsFreshChallengeMaterialAnd_0aec47")}
+      </p>
+      <p className="mt-2 text-caption text-muted-foreground">Current rotation version: {policy.rotation_version}</p>
+      {error && <ErrorState title={t("parity.challengeRotationFailed_c4b11e")}>{error}</ErrorState>}
+      <div className="mt-3 flex gap-2">
+        <Button ref={confirmRef} type="button" size="sm" disabled={busy} onClick={() => void confirmRotate()}>
+          {t("parity.rotateChallenge_99fc02")}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+function MDMSCEPPolicyDeleteDialog({
+  onClose,
+  onDeleted,
+  policy,
+}: {
+  policy: MDMSCEPPolicy;
+  onClose: () => void;
+  onDeleted: (policy: MDMSCEPPolicy) => void;
+}) {
+  const { t } = useTranslation();
+  const [confirmName, setConfirmName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
+
+  async function confirmDelete() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteMDMSCEPPolicy(policy.id);
+      onDeleted(policy);
+    } catch (err) {
+      setError(protocolStatusError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      role="alertdialog"
+      onClose={onClose}
+      titleId="scep-policy-delete-title"
+      descriptionId="scep-policy-delete-desc"
+      initialFocusRef={confirmRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
+    >
+      <h2 id="scep-policy-delete-title" className="text-title font-semibold text-destructive">
+        Delete SCEP policy “{policy.name}”?
+      </h2>
+      <p id="scep-policy-delete-desc" className="mt-1 text-destructive">
+        Deleting this policy stops MDM SCEP challenge validation for its endpoint; devices enrolling through it will be denied. This cannot be undone.
+      </p>
+      {error && (
+        <p role="alert" className="mt-2 text-destructive">
+          {error}
+        </p>
+      )}
+      <label className="mt-3 block text-sm font-medium text-destructive" htmlFor="scep-policy-delete-confirm">
+        {t("parity.typePolicyNameToConfirm_fc5738")}
+      </label>
+      <input
+        ref={confirmRef}
+        id="scep-policy-delete-confirm"
+        value={confirmName}
+        onChange={(event) => setConfirmName(event.target.value)}
+        className="mt-1 w-full rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
+        placeholder={policy.name}
+      />
+      <div className="mt-3 flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+          disabled={busy || confirmName.trim() !== policy.name}
+          onClick={() => void confirmDelete()}
+        >
+          {t("parity.yesDeletePolicy_30ce34")}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+function DNS01ConfigEditDialog({
+  config,
+  onClose,
+  onSaved,
+  providers,
+}: {
+  config: ACMEDNS01ProviderConfig;
+  providers: ACMEDNS01ProviderCatalogItem[];
+  onClose: () => void;
+  onSaved: (updated: ACMEDNS01ProviderConfig) => void;
+}) {
+  const { t } = useTranslation();
+  const [name, setName] = useState(config.name);
+  const [provider, setProvider] = useState(config.provider);
+  const [zone, setZone] = useState(config.zone ?? "");
+  const [challengeDomain, setChallengeDomain] = useState(config.challenge_domain ?? "");
+  const [delegationTarget, setDelegationTarget] = useState(config.delegation_target ?? "");
+  const [caaIssuerDomain, setCAAIssuerDomain] = useState(config.caa_issuer_domain ?? "");
+  const [allowWildcards, setAllowWildcards] = useState(config.allow_wildcards ?? false);
+  const [allowedMethods, setAllowedMethods] = useState<ACMEChallengeMethod[]>(() => (config.allowed_methods ?? []).filter(isACMEChallengeMethod));
+  const [configJSON, setConfigJSON] = useState(() => stringifyRecord(config.config));
+  const [credentialRefsJSON, setCredentialRefsJSON] = useState(() => stringifyRecord(config.credential_refs));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const titleId = "dns01-config-edit-heading";
+  const providerOptions = providers.some((candidate) => candidate.name === config.provider)
+    ? providers.map((candidate) => candidate.name)
+    : [config.provider, ...providers.map((candidate) => candidate.name)];
+
+  function toggleMethod(method: ACMEChallengeMethod, checked: boolean) {
+    setAllowedMethods((current) => {
+      const next = new Set(current);
+      if (checked) next.add(method);
+      else next.delete(method);
+      return acmeMethodOptions.filter((candidate) => next.has(candidate));
+    });
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parsedConfig = parseOptionalJSONRecord(configJSON, "Provider config");
+    if (typeof parsedConfig === "string") {
+      setError(parsedConfig);
+      return;
+    }
+    const parsedRefs = parseOptionalJSONRecord(credentialRefsJSON, "Credential references");
+    if (typeof parsedRefs === "string") {
+      setError(parsedRefs);
+      return;
+    }
+    const input: ACMEDNS01ProviderConfigRequest = {
+      name: name.trim(),
+      provider: provider.trim(),
+      allow_wildcards: allowWildcards,
+    };
+    if (zone.trim()) input.zone = zone.trim();
+    if (challengeDomain.trim()) input.challenge_domain = challengeDomain.trim();
+    if (delegationTarget.trim()) input.delegation_target = delegationTarget.trim();
+    if (caaIssuerDomain.trim()) input.caa_issuer_domain = caaIssuerDomain.trim();
+    if (allowedMethods.length > 0) input.allowed_methods = allowedMethods;
+    if (parsedConfig) input.config = parsedConfig;
+    if (parsedRefs) input.credential_refs = parsedRefs;
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await api.updateACMEDNS01ProviderConfig(config.id, input));
+    } catch (err) {
+      setError(protocolStatusError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      initialFocusRef={nameRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="truncate text-title font-semibold">
+            Edit DNS-01 provider config {config.name}
+          </h2>
+          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{config.id}</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeDns01ConfigForm_00c6cb")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
+        {error && <ErrorState title={t("parity.dns01ConfigUpdateFailed_86ad97")}>{error}</ErrorState>}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.configName_11f179")}
+            <input
+              ref={nameRef}
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            Provider
+            <select
+              required
+              value={provider}
+              onChange={(event) => setProvider(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            >
+              {providerOptions.map((candidate) => (
+                <option key={candidate} value={candidate}>
+                  {candidate}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.zoneOptional_0f915d")}
+            <input
+              value={zone}
+              onChange={(event) => setZone(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.challengeDomainOptional_d7bed2")}
+            <input
+              value={challengeDomain}
+              onChange={(event) => setChallengeDomain(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.delegationTargetOptional_8439dd")}
+            <input
+              value={delegationTarget}
+              onChange={(event) => setDelegationTarget(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.caaIssuerDomainOptional_8c2f53")}
+            <input
+              value={caaIssuerDomain}
+              onChange={(event) => setCAAIssuerDomain(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+        </div>
+        <fieldset className="grid gap-2">
+          <legend className="text-body font-medium">{t("parity.allowedMethods_ac5c6c")}</legend>
+          <div className="flex flex-wrap gap-4">
+            {acmeMethodOptions.map((method) => (
+              <label key={method} className="flex items-center gap-2 text-body">
+                <input type="checkbox" checked={allowedMethods.includes(method)} onChange={(event) => toggleMethod(method, event.target.checked)} />
+                {method}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label className="flex items-center gap-2 text-body font-medium">
+          <input type="checkbox" checked={allowWildcards} onChange={(event) => setAllowWildcards(event.target.checked)} />
+          {t("parity.allowWildcardIssuance_0fe53c")}
+        </label>
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.providerConfigJsonOptional_02753c")}
+          <textarea
+            rows={4}
+            value={configJSON}
+            onChange={(event) => setConfigJSON(event.target.value)}
+            className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+          />
+        </label>
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.credentialReferencesJsonOptional_faddae")}
+          <textarea
+            rows={4}
+            value={credentialRefsJSON}
+            onChange={(event) => setCredentialRefsJSON(event.target.value)}
+            className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+          />
+          <span className="text-caption font-normal text-muted-foreground">{t("parity.secretReferencesOnlyRawCredentialsAre_f74f29")}</span>
+        </label>
+        <footer className="flex justify-end gap-2 border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={busy || name.trim() === "" || provider.trim() === ""}>
+            {t("parity.saveConfig_64e1de")}
+          </Button>
+        </footer>
+      </form>
+    </Dialog>
+  );
+}
+
+function DNS01ConfigDeleteDialog({
+  config,
+  onClose,
+  onDeleted,
+}: {
+  config: ACMEDNS01ProviderConfig;
+  onClose: () => void;
+  onDeleted: (config: ACMEDNS01ProviderConfig) => void;
+}) {
+  const { t } = useTranslation();
+  const [confirmName, setConfirmName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
+
+  async function confirmDelete() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteACMEDNS01ProviderConfig(config.id);
+      onDeleted(config);
+    } catch (err) {
+      setError(protocolStatusError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      role="alertdialog"
+      onClose={onClose}
+      titleId="dns01-config-delete-title"
+      descriptionId="dns01-config-delete-desc"
+      initialFocusRef={confirmRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
+    >
+      <h2 id="dns01-config-delete-title" className="text-title font-semibold text-destructive">
+        Delete DNS-01 provider config “{config.name}”?
+      </h2>
+      <p id="dns01-config-delete-desc" className="mt-1 text-destructive">
+        Deleting this config removes its challenge policy and credential references; ACME DNS-01 orders that rely on it will fail preflight. This cannot be
+        undone.
+      </p>
+      {error && (
+        <p role="alert" className="mt-2 text-destructive">
+          {error}
+        </p>
+      )}
+      <label className="mt-3 block text-sm font-medium text-destructive" htmlFor="dns01-config-delete-confirm">
+        {t("parity.typeConfigNameToConfirm_f46ed6")}
+      </label>
+      <input
+        ref={confirmRef}
+        id="dns01-config-delete-confirm"
+        value={confirmName}
+        onChange={(event) => setConfirmName(event.target.value)}
+        className="mt-1 w-full rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
+        placeholder={config.name}
+      />
+      <div className="mt-3 flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+          disabled={busy || confirmName.trim() !== config.name}
+          onClick={() => void confirmDelete()}
+        >
+          {t("parity.yesDeleteConfig_bd6fac")}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01ProviderConfig; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [domain, setDomain] = useState("");
+  const [expectedTXT, setExpectedTXT] = useState("");
+  const [methodOverride, setMethodOverride] = useState<"" | ACMEChallengeMethod>("");
+  const [observedTXT, setObservedTXT] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ACMEDNS01Preflight | null>(null);
+  const domainRef = useRef<HTMLInputElement>(null);
+  const titleId = "dns01-preflight-heading";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const input: ACMEDNS01PreflightRequest = { config_id: config.id, domain: domain.trim() };
+    const expected = expectedTXT.trim();
+    if (expected) input.expected_txt = expected;
+    if (methodOverride) input.method_override = methodOverride;
+    const observed = observedTXT
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (observed.length > 0) input.observed_txt = observed;
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await api.acmeDNS01Preflight(input));
+    } catch (err) {
+      setResult(null);
+      setError(protocolStatusError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      initialFocusRef={domainRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="truncate text-title font-semibold">
+            DNS-01 preflight: {config.name}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("parity.validatesDelegationTxtPropagationCaaPolicy_1ceb4c")}
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closePreflightDialog_97a0fb")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
+        {error && <ErrorState title={t("parity.preflightRequestFailed_69f031")}>{error}</ErrorState>}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.domain_9b1091")}
+            <input
+              ref={domainRef}
+              required
+              value={domain}
+              onChange={(event) => setDomain(event.target.value)}
+              placeholder={config.zone ? `api.${config.zone}` : "api.example.com"}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.methodOverrideOptional_154ad0")}
+            <select
+              value={methodOverride}
+              onChange={(event) => {
+                const next = event.target.value;
+                setMethodOverride(isACMEChallengeMethod(next) ? next : "");
+              }}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            >
+              <option value="">{t("parity.policyDefault_38146c")}</option>
+              {acmeMethodOptions.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.expectedTxtValueOptional_c4e94f")}
+          <input
+            value={expectedTXT}
+            onChange={(event) => setExpectedTXT(event.target.value)}
+            className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+          />
+        </label>
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.observedTxtRecordsOptionalOnePer_9b6c49")}
+          <textarea
+            rows={3}
+            value={observedTXT}
+            onChange={(event) => setObservedTXT(event.target.value)}
+            className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          <Button type="submit" disabled={busy || domain.trim() === ""}>
+            {result ? "Re-run preflight" : "Run preflight"}
+          </Button>
+        </div>
+        {result && <DNS01PreflightResultPanel result={result} />}
+      </form>
+    </Dialog>
+  );
+}
+
+function DNS01PreflightResultPanel({ result }: { result: ACMEDNS01Preflight }) {
+  const { t } = useTranslation();
+  return (
+    <section role="status" aria-label={`Preflight result for ${result.domain}`} className="grid gap-3 rounded-control border border-border p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge value={result.ready ? "ready" : "not-ready"} tone={result.ready ? "success" : "critical"} label={result.ready ? "Ready" : "Not ready"} />
+        <span className="font-medium">{result.domain}</span>
+        {result.wildcard && <span className="rounded-control border border-border px-2 py-0.5 text-caption text-muted-foreground">{t("parity.wildcard_08654e")}</span>}
+      </div>
+      <dl className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <dt className="text-caption text-muted-foreground">{t("parity.selectedMethod_9ad9ca")}</dt>
+          <dd className="font-mono text-xs">{result.selected_method}</dd>
+        </div>
+        <div>
+          <dt className="text-caption text-muted-foreground">{t("parity.challengeRecord_320513")}</dt>
+          <dd className="break-all font-mono text-xs">{result.record_name}</dd>
+        </div>
+      </dl>
+      {result.method_rationale && <p className="text-sm text-muted-foreground">{result.method_rationale}</p>}
+      <ul className="grid gap-2">
+        {result.checks.map((check) => (
+          <li
+            key={check.name}
+            className={
+              check.status === "fail"
+                ? "flex items-start gap-2 rounded-control border border-destructive/40 bg-destructive/10 p-2"
+                : "flex items-start gap-2 rounded-control border border-border p-2"
+            }
+          >
+            <PreflightCheckIcon status={check.status} />
+            <div className="min-w-0">
+              <p className={check.status === "fail" ? "font-medium text-destructive" : "font-medium"}>
+                {check.name}
+                <span className="sr-only">{` ${check.status}`}</span>
+              </p>
+              <p className={check.status === "fail" ? "text-sm text-destructive/90" : "text-sm text-muted-foreground"}>{check.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {result.failed_checks.length > 0 && <p className="text-sm font-medium text-destructive">Failed checks: {result.failed_checks.join(", ")}</p>}
+    </section>
+  );
+}
+
+function PreflightCheckIcon({ status }: { status: "pass" | "fail" | "skipped" }) {
+  if (status === "pass") return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-success" aria-hidden="true" />;
+  if (status === "fail") return <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />;
+  return <MinusCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
 }

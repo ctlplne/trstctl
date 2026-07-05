@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
-import { Building2, CheckCircle2, Cloud, FileKey2, Globe2, Home, KeyRound, LockKeyhole, Plus, RefreshCw, Server, ShieldCheck, X, XCircle } from "lucide-react";
+import { Building2, CheckCircle2, Cloud, Copy, FileKey2, Globe2, Home, KeyRound, LockKeyhole, Plus, RefreshCw, Server, ShieldCheck, X, XCircle } from "lucide-react";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { CAOverview } from "@/components/ca";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
+import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import {
@@ -15,6 +18,8 @@ import {
   type CAAuthorityRotation,
   type CACeremonyStartRequest,
   type CAIntermediateCSR,
+  type CAIssuedIntermediate,
+  type CAIssuedLeaf,
   type CAKeyCeremony,
   type ExternalCA,
   type ExternalCAIssuedCertificate,
@@ -84,6 +89,7 @@ const externalCAIssueDefaults: ExternalCAIssueForm = {
 };
 
 export function CAHierarchy() {
+  const { t } = useTranslation();
   const [issuers, setIssuers] = useState<Issuer[]>([]);
   const [caDiscovery, setCADiscovery] = useState<CADiscovery | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -130,11 +136,19 @@ export function CAHierarchy() {
   const [externalIssueBusy, setExternalIssueBusy] = useState(false);
   const [externalIssueError, setExternalIssueError] = useState<string | null>(null);
   const [externalIssueResult, setExternalIssueResult] = useState<ExternalCAIssueResult | null>(null);
+  const { toast } = useToast();
+  const [authorities, setAuthorities] = useState<CAAuthority[]>([]);
+  const [authoritiesError, setAuthoritiesError] = useState<string | null>(null);
+  const [authorityDetail, setAuthorityDetail] = useState<CAAuthority | null>(null);
+  const [createAuthorityKind, setCreateAuthorityKind] = useState<"root" | "intermediate" | null>(null);
+  const [leafTarget, setLeafTarget] = useState<CAAuthority | null>(null);
+  const [signTarget, setSignTarget] = useState<CAAuthority | null>(null);
+  const [ceremonyDetail, setCeremonyDetail] = useState<CAKeyCeremony | null>(null);
 
   async function load() {
     setLoading(true);
     setNotice(null);
-    const [issuerResult, discoveryResult] = await Promise.allSettled([api.issuers(), api.caDiscoveryInventory()]);
+    const [issuerResult, discoveryResult, authoritiesResult] = await Promise.allSettled([api.issuers(), api.caDiscoveryInventory(), api.caAuthorities()]);
     if (issuerResult.status === "fulfilled") {
       setIssuers(issuerResult.value);
     } else {
@@ -142,6 +156,13 @@ export function CAHierarchy() {
       setNotice(noticeForError(issuerResult.reason, "Could not load issuers"));
     }
     setCADiscovery(discoveryResult.status === "fulfilled" ? discoveryResult.value : null);
+    if (authoritiesResult.status === "fulfilled") {
+      setAuthorities(authoritiesResult.value.items ?? []);
+      setAuthoritiesError(null);
+    } else {
+      setAuthorities([]);
+      setAuthoritiesError(errorText(authoritiesResult.reason, "Could not load served authorities"));
+    }
     setLoading(false);
   }
 
@@ -163,6 +184,39 @@ export function CAHierarchy() {
   }, []);
 
   const sortedIssuers = useMemo(() => [...issuers].sort((a, b) => a.name.localeCompare(b.name)), [issuers]);
+  const authorityParents = useMemo(() => authorities.filter((authority) => authority.kind === "root" || authority.kind === "intermediate"), [authorities]);
+
+  async function refreshAuthorities() {
+    try {
+      const next = await api.caAuthorities();
+      setAuthorities(next.items ?? []);
+      setAuthoritiesError(null);
+    } catch (err) {
+      setAuthoritiesError(errorText(err, "Could not load served authorities"));
+    }
+  }
+
+  function handleAuthorityCreated(authority: CAAuthority) {
+    setCreateAuthorityKind(null);
+    toast({
+      kind: "success",
+      title: authority.kind === "root" ? "Root CA created" : "Intermediate CA created",
+      description: `${authority.common_name} (serial ${shortSerial(authority.serial)})`,
+    });
+    void refreshAuthorities();
+  }
+
+  async function viewCeremony(id: string) {
+    setCeremonyBusy(true);
+    setCeremonyError(null);
+    try {
+      setCeremonyDetail(await api.caCeremony(id));
+    } catch (err) {
+      setCeremonyError(errorText(err, "Could not load ceremony detail"));
+    } finally {
+      setCeremonyBusy(false);
+    }
+  }
 
   async function startRootCeremony() {
     setCeremonyBusy(true);
@@ -474,10 +528,20 @@ export function CAHierarchy() {
         title="CA hierarchy"
         description="Your certificate authorities — roots and intermediates — and their issuers, with multi-person approval ceremonies (no single admin can act alone) and custody controls for the signing keys."
         actions={
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            Refresh
-          </Button>
+          <>
+            <Button type="button" variant="outline" onClick={() => setCreateAuthorityKind("root")}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("parity.createRootCa_94fb33")}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setCreateAuthorityKind("intermediate")}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("parity.createIntermediateCa_829ab7")}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+              Refresh
+            </Button>
+          </>
         }
       />
 
@@ -486,6 +550,15 @@ export function CAHierarchy() {
       <IssuerCatalog onConfigure={(type) => setIssuerDialogType(type)} />
 
       <CADiscoveryInventoryPanel inventory={caDiscovery} />
+
+      <ServedAuthoritiesPanel
+        authorities={authorities}
+        error={authoritiesError}
+        loading={loading}
+        onIssueLeaf={setLeafTarget}
+        onShowDetail={setAuthorityDetail}
+        onSignCSR={setSignTarget}
+      />
 
       <ExternalCAIssuancePanel
         busy={externalIssueBusy}
@@ -585,7 +658,7 @@ export function CAHierarchy() {
         </div>
         {ceremonyError && <ErrorState title="Ceremony action failed">{ceremonyError}</ErrorState>}
         {ceremony ? (
-          <CeremonyPanel ceremony={ceremony} busy={ceremonyBusy} onApprove={(id) => void approveCeremony(id)} />
+          <CeremonyPanel ceremony={ceremony} busy={ceremonyBusy} onApprove={(id) => void approveCeremony(id)} onView={(id) => void viewCeremony(id)} />
         ) : (
           <EmptyState title="No ceremony loaded">Start a ceremony to see its purpose, approval threshold, and status.</EmptyState>
         )}
@@ -666,6 +739,14 @@ export function CAHierarchy() {
           onSubmit={(name, chainPEM) => void createIssuerFromCatalog(issuerDialogType, name, chainPEM)}
         />
       )}
+
+      {createAuthorityKind && (
+        <CreateAuthorityDialog kind={createAuthorityKind} parents={authorityParents} onClose={() => setCreateAuthorityKind(null)} onCreated={handleAuthorityCreated} />
+      )}
+      {leafTarget && <IssueLeafDialog authority={leafTarget} onClose={() => setLeafTarget(null)} />}
+      {signTarget && <SignIntermediateCSRDialog authority={signTarget} onClose={() => setSignTarget(null)} />}
+      {authorityDetail && <AuthorityDetailDialog authority={authorityDetail} onClose={() => setAuthorityDetail(null)} />}
+      {ceremonyDetail && <CeremonyDetailDialog ceremony={ceremonyDetail} onClose={() => setCeremonyDetail(null)} />}
     </section>
   );
 }
@@ -952,6 +1033,7 @@ function CARekeyPanel({
   onStartCeremony: () => void;
   onTTLChange: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   const authorities = (inventory?.items ?? []).filter((item) => item.source === "ca_hierarchy" && item.managed && item.issuance_path && item.status === "active");
   const readyToStart = authorityID.trim() !== "";
   const readyToRekey = readyToStart && ceremonyID.trim() !== "";
@@ -998,7 +1080,7 @@ function CARekeyPanel({
               </option>
             ))}
           </LabeledSelect>
-          <LabeledInput id="ca-rekey-ceremony" label="Ceremony ID" value={ceremonyID} onChange={onCeremonyChange} />
+          <LabeledInput id="ca-rekey-ceremony" label={t("parity.ceremonyId_6f8ee6")} value={ceremonyID} onChange={onCeremonyChange} />
           <LabeledInput id="ca-rekey-ttl" label="Validity days" value={ttlDays} type="number" onChange={onTTLChange} />
           <LabeledInput id="ca-rekey-reason" label="Re-key reason" value={reason} onChange={onReasonChange} />
         </div>
@@ -1385,7 +1467,18 @@ function OfflineSpecFields({
   );
 }
 
-function CeremonyPanel({ busy, ceremony, onApprove }: { busy: boolean; ceremony: CAKeyCeremony; onApprove: (id: string) => void }) {
+function CeremonyPanel({
+  busy,
+  ceremony,
+  onApprove,
+  onView,
+}: {
+  busy: boolean;
+  ceremony: CAKeyCeremony;
+  onApprove: (id: string) => void;
+  onView: (id: string) => void;
+}) {
+  const { t } = useTranslation();
   const complete = ceremony.approvals >= ceremony.threshold || ceremony.status === "approved";
   return (
     <section aria-labelledby="active-ceremony-heading" className="ui-panel p-comfortable text-sm">
@@ -1396,9 +1489,14 @@ function CeremonyPanel({ busy, ceremony, onApprove }: { busy: boolean; ceremony:
           </h3>
           <p className="mt-1 font-mono text-xs">{ceremony.id}</p>
         </div>
-        <Button type="button" variant="outline" disabled={busy || complete} onClick={() => onApprove(ceremony.id)} aria-label={`Approve ceremony ${ceremony.id}`}>
-          Approve
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" disabled={busy || complete} onClick={() => onApprove(ceremony.id)} aria-label={`Approve ceremony ${ceremony.id}`}>
+            Approve
+          </Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => onView(ceremony.id)} aria-label={`View ceremony ${ceremony.id}`}>
+            {t("parity.view_69bd4e")}
+          </Button>
+        </div>
       </div>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KeyValue label="Purpose" value={ceremony.purpose} mono />
@@ -1407,6 +1505,552 @@ function CeremonyPanel({ busy, ceremony, onApprove }: { busy: boolean; ceremony:
         <KeyValue label="Opened by" value={ceremony.opener || "-"} />
       </dl>
     </section>
+  );
+}
+
+function CeremonyDetailDialog({ ceremony, onClose }: { ceremony: CAKeyCeremony; onClose: () => void }) {
+  const { t } = useTranslation();
+  const titleId = "ceremony-detail-heading";
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="text-title font-semibold">
+            {t("parity.ceremonyDetail_9cb326")}
+          </h2>
+          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{ceremony.id}</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeCeremonyDetail_92fb97")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      <div className="grid gap-4 p-5 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge vocabulary="lifecycle" value={ceremony.status} />
+          <span className="text-body font-medium">{`${ceremony.approvals} of ${ceremony.threshold} approvals`}</span>
+        </div>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <KeyValue label="Purpose" value={ceremony.purpose} mono />
+          <KeyValue label="Opened by" value={ceremony.opener || "-"} />
+          <KeyValue label="Created" value={ceremony.created_at} />
+          <KeyValue label="Threshold" value={`${ceremony.threshold} approvals required`} />
+        </dl>
+        <footer className="flex justify-end border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </footer>
+      </div>
+    </Dialog>
+  );
+}
+
+function ServedAuthoritiesPanel({
+  authorities,
+  error,
+  loading,
+  onIssueLeaf,
+  onShowDetail,
+  onSignCSR,
+}: {
+  authorities: CAAuthority[];
+  error: string | null;
+  loading: boolean;
+  onIssueLeaf: (authority: CAAuthority) => void;
+  onShowDetail: (authority: CAAuthority) => void;
+  onSignCSR: (authority: CAAuthority) => void;
+}) {
+  const { t } = useTranslation();
+  const columns = useMemo<Array<DataGridColumn<CAAuthority>>>(
+    () => [
+      {
+        id: "common_name",
+        header: "Common name",
+        sortable: true,
+        cell: (authority) => <span className="font-medium">{authority.common_name}</span>,
+      },
+      { id: "kind", header: "Kind", cell: (authority) => authority.kind },
+      { id: "status", header: "Status", cell: (authority) => <StatusBadge vocabulary="certificate" value={authority.status} /> },
+      { id: "serial", header: "Serial", cell: (authority) => <span className="font-mono text-xs">{shortSerial(authority.serial)}</span> },
+      { id: "not_after", header: "Not after", cell: (authority) => authority.not_after || "-" },
+      {
+        id: "issuance",
+        header: "Issuance",
+        cell: (authority) => (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => onIssueLeaf(authority)} aria-label={`Issue leaf from ${authority.common_name}`}>
+              {t("parity.issueLeaf_f1c3ee")}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => onSignCSR(authority)} aria-label={`Sign intermediate CSR with ${authority.common_name}`}>
+              {t("parity.signIntermediateCsr_cf1361")}
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [onIssueLeaf, onSignCSR, t],
+  );
+
+  return (
+    <section aria-labelledby="served-authorities-heading" className="grid gap-3 border-y border-border py-4">
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <h2 id="served-authorities-heading" className="text-title font-semibold">
+            {t("parity.servedAuthorities_52df47")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {t("parity.signerBackedRootsAndIntermediatesThis_957f38")}
+          </p>
+        </div>
+      </div>
+      <DataGrid
+        ariaLabel="Served CA authorities"
+        rows={authorities}
+        columns={columns}
+        getRowId={(authority) => authority.id}
+        state={loading ? "loading" : error ? "error" : authorities.length === 0 ? "empty" : "ready"}
+        stateTitle={error ? "Served authorities unavailable" : "No served authorities yet"}
+        stateMessage={error ?? "Create a root CA from a quorum-approved ceremony to serve issuance from this control plane."}
+        onRowOpen={onShowDetail}
+        rowActionLabel={() => "Details"}
+      />
+    </section>
+  );
+}
+
+function CreateAuthorityDialog({
+  kind,
+  onClose,
+  onCreated,
+  parents,
+}: {
+  kind: "root" | "intermediate";
+  parents: CAAuthority[];
+  onClose: () => void;
+  onCreated: (authority: CAAuthority) => void;
+}) {
+  const { t } = useTranslation();
+  const isRoot = kind === "root";
+  const [ceremonyID, setCeremonyID] = useState("");
+  const [parentID, setParentID] = useState(parents[0]?.id ?? "");
+  const [specJSON, setSpecJSON] = useState(() =>
+    JSON.stringify(
+      isRoot
+        ? { common_name: "Trust Root CA", max_path_len: 1, signature_algorithm: "ECDSA-P256", ttl_seconds: 315_360_000 }
+        : { common_name: "Issuing Intermediate CA", max_path_len: 0, signature_algorithm: "ECDSA-P256", ttl_seconds: 71_280_000 },
+      null,
+      2,
+    ),
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ceremonyInputRef = useRef<HTMLInputElement>(null);
+  const titleId = "create-authority-heading";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const spec = parseSpecJSON(specJSON);
+    if (typeof spec === "string") {
+      setError(spec);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const created = isRoot
+        ? await api.createRootCA({ ceremony_id: ceremonyID.trim(), spec })
+        : await api.createIntermediateCA({ ceremony_id: ceremonyID.trim(), parent_id: parentID, spec });
+      onCreated(created);
+    } catch (err) {
+      setError(errorText(err, isRoot ? "Could not create root CA" : "Could not create intermediate CA"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      initialFocusRef={ceremonyInputRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="text-title font-semibold">
+            {isRoot ? t("parity.createRootCa_94fb33") : t("parity.createIntermediateCa_829ab7")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isRoot
+              ? "Mints a signer-backed root from a quorum-approved key ceremony."
+              : "Mints a signer-backed intermediate chained to a served parent authority."}
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeCreateCaForm_e01a8e")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
+        {error && <ErrorState title={isRoot ? "Root CA create failed" : "Intermediate CA create failed"}>{error}</ErrorState>}
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.ceremonyId_6f8ee6")}
+          <input
+            ref={ceremonyInputRef}
+            required
+            value={ceremonyID}
+            onChange={(event) => setCeremonyID(event.target.value)}
+            className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+          />
+          <span className="text-caption font-normal text-muted-foreground">{t("parity.quorumApprovedCeremonyId_df8e12")}</span>
+        </label>
+        {!isRoot && (
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.parentAuthority_d9bb89")}
+            <select
+              required
+              value={parentID}
+              onChange={(event) => setParentID(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            >
+              <option value="">{t("parity.selectParentAuthority_76a0a6")}</option>
+              {parents.map((parent) => (
+                <option key={parent.id} value={parent.id}>
+                  {parent.common_name} ({parent.kind}, {parent.status})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="grid gap-1 text-body font-medium">
+          {t("parity.specJson_e57c5c")}
+          <textarea
+            required
+            rows={7}
+            value={specJSON}
+            onChange={(event) => setSpecJSON(event.target.value)}
+            className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+          />
+          <span className="text-caption font-normal text-muted-foreground">{t("parity.commonNameMaxPathLenSignature_0d8b25")}</span>
+        </label>
+        <footer className="flex justify-end gap-2 border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={busy || ceremonyID.trim() === "" || (!isRoot && parentID === "")}>
+            {isRoot ? t("parity.createRootCa_94fb33") : t("parity.createIntermediateCa_829ab7")}
+          </Button>
+        </footer>
+      </form>
+    </Dialog>
+  );
+}
+
+function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [csrPEM, setCSRPEM] = useState("");
+  const [ttlSeconds, setTTLSeconds] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<CAIssuedLeaf | null>(null);
+  const csrRef = useRef<HTMLTextAreaElement>(null);
+  const titleId = "issue-leaf-heading";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const csr = csrPEM.trim();
+    if (!csr.includes("BEGIN CERTIFICATE REQUEST")) {
+      setError("CSR PEM must contain a BEGIN CERTIFICATE REQUEST block.");
+      return;
+    }
+    const ttl = Number.parseInt(ttlSeconds.trim(), 10);
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(
+        await api.issueLeafFromCA(authority.id, {
+          csr_pem: csr,
+          ttl_seconds: Number.isFinite(ttl) && ttl > 0 ? ttl : undefined,
+        }),
+      );
+    } catch (err) {
+      setError(errorText(err, "Could not issue leaf certificate"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      initialFocusRef={csrRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="truncate text-title font-semibold">
+            Issue leaf from {authority.common_name}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">The CA key never leaves the signer; the CSR public key is certified as a leaf.</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeIssueLeafForm_2c9eeb")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      {result ? (
+        <div className="grid gap-4 p-5">
+          <IssuedCertificateResult certificatePEM={result.certificate_pem} notAfter={result.not_after} serial={result.serial} />
+          <footer className="flex justify-end border-t border-border pt-4">
+            <Button type="button" onClick={onClose}>
+              Close
+            </Button>
+          </footer>
+        </div>
+      ) : (
+        <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
+          {error && <ErrorState title={t("parity.leafIssuanceFailed_235d03")}>{error}</ErrorState>}
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.csrPem_c5931f")}
+            <textarea
+              ref={csrRef}
+              required
+              rows={6}
+              value={csrPEM}
+              onChange={(event) => setCSRPEM(event.target.value)}
+              placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+              className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.ttlSecondsOptional_68f1c5")}
+            <input
+              type="number"
+              min={1}
+              value={ttlSeconds}
+              onChange={(event) => setTTLSeconds(event.target.value)}
+              placeholder="2592000"
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+          </label>
+          <footer className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || csrPEM.trim() === ""}>
+              {t("parity.issueLeafCertificate_bddf5d")}
+            </Button>
+          </footer>
+        </form>
+      )}
+    </Dialog>
+  );
+}
+
+function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthority; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [ceremonyID, setCeremonyID] = useState("");
+  const [csrPEM, setCSRPEM] = useState("");
+  const [specJSON, setSpecJSON] = useState(() => JSON.stringify({ common_name: "Issuing Intermediate CA", max_path_len: 0 }, null, 2));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<CAIssuedIntermediate | null>(null);
+  const ceremonyInputRef = useRef<HTMLInputElement>(null);
+  const titleId = "sign-intermediate-csr-heading";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const csr = csrPEM.trim();
+    if (!csr.includes("BEGIN CERTIFICATE REQUEST")) {
+      setError("CSR PEM must contain a BEGIN CERTIFICATE REQUEST block.");
+      return;
+    }
+    const spec = parseSpecJSON(specJSON);
+    if (typeof spec === "string") {
+      setError(spec);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await api.signIntermediateCSR(authority.id, { ceremony_id: ceremonyID.trim(), csr_pem: csr, spec }));
+    } catch (err) {
+      setError(errorText(err, "Could not sign intermediate CSR"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      initialFocusRef={ceremonyInputRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="truncate text-title font-semibold">
+            Sign intermediate CSR with {authority.common_name}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("parity.certifiesAnExternallyHeldIntermediateKey_d95cc4")}</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeSignIntermediateCsrForm_162507")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      {result ? (
+        <div className="grid gap-4 p-5">
+          <IssuedCertificateResult certificatePEM={result.certificate_pem} notAfter={result.not_after} serial={result.serial} />
+          <footer className="flex justify-end border-t border-border pt-4">
+            <Button type="button" onClick={onClose}>
+              Close
+            </Button>
+          </footer>
+        </div>
+      ) : (
+        <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
+          {error && <ErrorState title={t("parity.intermediateCsrSigningFailed_636cae")}>{error}</ErrorState>}
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.ceremonyId_6f8ee6")}
+            <input
+              ref={ceremonyInputRef}
+              required
+              value={ceremonyID}
+              onChange={(event) => setCeremonyID(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+            <span className="text-caption font-normal text-muted-foreground">{t("parity.quorumApprovedCeremonyId_df8e12")}</span>
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.csrPem_c5931f")}
+            <textarea
+              required
+              rows={6}
+              value={csrPEM}
+              onChange={(event) => setCSRPEM(event.target.value)}
+              placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+              className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+            />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("parity.specJson_e57c5c")}
+            <textarea
+              required
+              rows={5}
+              value={specJSON}
+              onChange={(event) => setSpecJSON(event.target.value)}
+              className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+            />
+            <span className="text-caption font-normal text-muted-foreground">{t("parity.theServedContractRequiresASpec_bf854f")}</span>
+          </label>
+          <footer className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || ceremonyID.trim() === "" || csrPEM.trim() === ""}>
+              {t("parity.signIntermediateCsr_e1f90b")}
+            </Button>
+          </footer>
+        </form>
+      )}
+    </Dialog>
+  );
+}
+
+function AuthorityDetailDialog({ authority, onClose }: { authority: CAAuthority; onClose: () => void }) {
+  const { t } = useTranslation();
+  const titleId = "authority-detail-heading";
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="truncate text-title font-semibold">
+            {authority.common_name}
+          </h2>
+          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{authority.id}</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeAuthorityDetail_9bee0e")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      <div className="grid gap-4 p-5 text-sm">
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <KeyValue label="Kind" value={authority.kind} />
+          <KeyValue label="Status" value={authority.status} />
+          <KeyValue label="Serial" value={authority.serial} mono />
+          <KeyValue label="Not after" value={authority.not_after || "-"} />
+          <KeyValue label={t("parity.parentAuthority_d9bb89")} value={authority.parent_id || "-"} mono />
+          <KeyValue label="Signer handle" value={authority.signer_handle || "-"} mono />
+        </dl>
+        <CertificatePEMBlock label="Certificate PEM" pem={authority.certificate_pem} />
+        <footer className="flex justify-end border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </footer>
+      </div>
+    </Dialog>
+  );
+}
+
+function IssuedCertificateResult({ certificatePEM, notAfter, serial }: { certificatePEM: string; notAfter: string; serial: string }) {
+  return (
+    <div role="status" className="grid gap-3 rounded-control border border-border p-3 text-sm">
+      <dl className="grid gap-3 sm:grid-cols-2">
+        <KeyValue label="Serial" value={serial} mono />
+        <KeyValue label="Not after" value={notAfter} />
+      </dl>
+      <CertificatePEMBlock label="Certificate PEM" pem={certificatePEM} />
+    </div>
+  );
+}
+
+function CertificatePEMBlock({ label, pem }: { label: string; pem: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard?.writeText(pem);
+    } finally {
+      setCopied(true);
+    }
+  }
+
+  return (
+    <div className="grid gap-1">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-body font-medium">{label}</span>
+        <Button type="button" size="sm" variant="outline" onClick={() => void copy()} aria-label={`Copy ${label}`}>
+          <Copy className="h-4 w-4" aria-hidden="true" />
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <pre className="max-h-48 overflow-auto rounded-control border border-border bg-muted/40 p-3 font-mono text-xs">{pem}</pre>
+    </div>
   );
 }
 
@@ -1888,6 +2532,25 @@ function offlineFormSpec(form: OfflineCAForm): CACeremonyStartRequest["spec"] {
     signature_algorithm: "ECDSA-P256",
     ttl_seconds: positiveInteger(form.ttlDays, 1) * 86_400,
   };
+}
+
+function shortSerial(serial: string): string {
+  return serial.length > 18 ? `${serial.slice(0, 18)}…` : serial;
+}
+
+function parseSpecJSON(value: string): CACeremonyStartRequest["spec"] | string {
+  const trimmed = value.trim();
+  if (trimmed === "") return "Spec JSON is required.";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (err) {
+    return `Spec must be valid JSON: ${err instanceof Error ? err.message : "parse error"}`;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return "Spec must be a JSON object.";
+  }
+  return parsed as CACeremonyStartRequest["spec"];
 }
 
 function positiveInteger(value: string, fallback: number): number {

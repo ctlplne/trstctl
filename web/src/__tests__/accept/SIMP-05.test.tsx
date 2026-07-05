@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { ToastProvider } from "@/components/ToastProvider";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -26,7 +27,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderCAHierarchy() {
   return render(
     <MemoryRouter>
-      <CAHierarchy />
+      <ToastProvider>
+        <CAHierarchy />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

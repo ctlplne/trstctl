@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Loader2, RefreshCw, UserX, X } from "lucide-react";
+import { Copy, Loader2, RefreshCw, ShieldOff, UserX, X } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
+import { useToast } from "@/components/ToastProvider";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -12,6 +13,18 @@ import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy 
 import { useTranslation } from "@/i18n/I18nProvider";
 
 const staleAfterMs = 24 * 60 * 60 * 1000;
+const certRevocationReasons = [
+  "unspecified",
+  "keyCompromise",
+  "caCompromise",
+  "affiliationChanged",
+  "superseded",
+  "cessationOfOperation",
+  "certificateHold",
+  "removeFromCRL",
+  "privilegeWithdrawn",
+  "aaCompromise",
+] as const;
 const defaultEndpointDiscoveryCapabilities = [
   {
     source_kind: "filesystem",
@@ -58,6 +71,7 @@ const defaultEndpointDiscoveryCapabilities = [
 ] as const;
 
 export function Agents() {
+  const { t } = useTranslation();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +88,14 @@ export function Agents() {
   const [offboardError, setOffboardError] = useState<string | null>(null);
   const [offboardEvidence, setOffboardEvidence] = useState<string | null>(null);
   const offboardConfirmRef = useRef<HTMLButtonElement>(null);
+  const [revokeTarget, setRevokeTarget] = useState<Agent | null>(null);
+  const [revokeReason, setRevokeReason] = useState("keyCompromise");
+  const [revokeSerial, setRevokeSerial] = useState("");
+  const [revokeFingerprint, setRevokeFingerprint] = useState("");
+  const [revokeConfirmed, setRevokeConfirmed] = useState(false);
+  const [revokeBusy, setRevokeBusy] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   async function load() {
     setError(null);
@@ -146,6 +168,38 @@ export function Agents() {
     }
   }
 
+  function openRevokeCert(agent: Agent) {
+    setRevokeTarget(agent);
+    setRevokeReason("keyCompromise");
+    setRevokeSerial("");
+    setRevokeFingerprint("");
+    setRevokeConfirmed(false);
+    setRevokeError(null);
+  }
+
+  async function revokeCert() {
+    if (!revokeTarget || !revokeConfirmed) return;
+    setRevokeBusy(true);
+    setRevokeError(null);
+    try {
+      const revocation = await api.revokeAgentCert(revokeTarget.id, {
+        reason: revokeReason,
+        serial: revokeSerial.trim() || undefined,
+        fingerprint: revokeFingerprint.trim() || undefined,
+      });
+      toast({
+        kind: "success",
+        title: `Certificate revoked for ${revokeTarget.name}`,
+        description: `Revoked at ${formatDate(revocation.revoked_at)}.`,
+      });
+      setRevokeTarget(null);
+    } catch (err) {
+      setRevokeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRevokeBusy(false);
+    }
+  }
+
   const agentColumns: DataGridColumn<Agent>[] = [
     { id: "name", header: "Name", className: "font-medium", cell: (agent) => agent.name },
     { id: "status", header: "Status", cell: (agent) => <StatusBadge vocabulary="agent" value={agent.status} /> },
@@ -180,16 +234,28 @@ export function Agents() {
             View details
           </Button>
           {!isOffboarded(agent) && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
-              onClick={() => openOffboard(agent)}
-            >
-              <UserX className="h-4 w-4" aria-hidden="true" />
-              Offboard
-            </Button>
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
+                onClick={() => openRevokeCert(agent)}
+              >
+                <ShieldOff className="h-4 w-4" aria-hidden="true" />
+                {t("parity.revokeCertificate_338ad7")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
+                onClick={() => openOffboard(agent)}
+              >
+                <UserX className="h-4 w-4" aria-hidden="true" />
+                Offboard
+              </Button>
+            </>
           )}
         </div>
       ),
@@ -346,6 +412,95 @@ export function Agents() {
               <Button ref={offboardConfirmRef} type="submit" disabled={offboardBusy}>
                 {offboardBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 Offboard agent
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={revokeTarget !== null}
+        onClose={() => {
+          if (!revokeBusy) setRevokeTarget(null);
+        }}
+        titleId="agent-revoke-cert-title"
+        descriptionId="agent-revoke-cert-description"
+        role="alertdialog"
+        closeOnBackdropClick={false}
+        panelClassName="fixed left-1/2 top-1/2 grid w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        {revokeTarget && (
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void revokeCert();
+            }}
+          >
+            <div>
+              <h2 id="agent-revoke-cert-title" className="text-title font-semibold">
+                Revoke certificate for {revokeTarget.name}
+              </h2>
+              <p id="agent-revoke-cert-description" className="mt-1 text-sm text-muted-foreground">
+                Records a revocation for this agent's client certificate; mTLS RPCs presenting it are rejected once CRL and OCSP propagate. Leave serial and
+                fingerprint empty to revoke the current certificate.
+              </p>
+            </div>
+            <label className="grid gap-1 text-body font-medium" htmlFor="agent-revoke-reason">
+              Reason
+              <select
+                id="agent-revoke-reason"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={revokeReason}
+                onChange={(event) => setRevokeReason(event.target.value)}
+              >
+                {certRevocationReasons.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="agent-revoke-serial">
+              {t("parity.serialOptional_e59169")}
+              <input
+                id="agent-revoke-serial"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs font-normal"
+                value={revokeSerial}
+                onChange={(event) => setRevokeSerial(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="agent-revoke-fingerprint">
+              {t("parity.fingerprintOptional_b6cd87")}
+              <input
+                id="agent-revoke-fingerprint"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs font-normal"
+                value={revokeFingerprint}
+                onChange={(event) => setRevokeFingerprint(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="flex items-start gap-2 text-body font-medium" htmlFor="agent-revoke-confirm">
+              <input
+                id="agent-revoke-confirm"
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-border"
+                checked={revokeConfirmed}
+                onChange={(event) => setRevokeConfirmed(event.target.checked)}
+              />
+              {t("parity.iUnderstandThisRevocationCannotBe_92d164")}
+            </label>
+            {revokeError && <p className="text-sm font-medium text-risk-critical">{revokeError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setRevokeTarget(null)} disabled={revokeBusy}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={revokeBusy || !revokeConfirmed}>
+                {revokeBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {t("parity.revokeCertificate_338ad7")}
               </Button>
             </div>
           </form>

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { ToastProvider } from "@/components/ToastProvider";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -24,7 +25,9 @@ describe("U7-4 ceremony + KMS custody console", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <CAHierarchy />
+        <ToastProvider>
+          <CAHierarchy />
+        </ToastProvider>
       </MemoryRouter>,
     );
     await user.click(screen.getByRole("button", { name: "Generate managed key" }));

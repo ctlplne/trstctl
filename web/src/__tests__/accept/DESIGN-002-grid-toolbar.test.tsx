@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { ToastProvider } from "@/components/ToastProvider";
 import { Certificates } from "@/pages/Certificates";
 import { Discovery } from "@/pages/Discovery";
 
@@ -38,7 +39,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderCertificates() {
   return render(
     <MemoryRouter initialEntries={["/certificates"]}>
-      <Certificates />
+      <ToastProvider>
+        <Certificates />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -46,7 +49,9 @@ function renderCertificates() {
 function renderDiscovery() {
   return render(
     <MemoryRouter initialEntries={["/discovery"]}>
-      <Discovery />
+      <ToastProvider>
+        <Discovery />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

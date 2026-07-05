@@ -5075,6 +5075,794 @@ export const messages = {
     defaultMessage: "Retention",
     description: "Personal-data catalog retention column.",
   },
+  "parity.airGap_a0134a": {
+    defaultMessage: "Air gap",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.allowWildcardIssuance_0fe53c": {
+    defaultMessage: "Allow wildcard issuance",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.allowedMethods_ac5c6c": {
+    defaultMessage: "Allowed methods",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.applyIdentityFilter_72d5ba": {
+    defaultMessage: "Apply identity filter",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.approveEphemeralCredential_760861": {
+    defaultMessage: "Approve ephemeral credential",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.approversCanIssueThisFromThe_33b073": {
+    defaultMessage: "Approvers can issue this from the Approvals page.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.archiveAttestationRequestFailed_6179ba": {
+    defaultMessage: "Archive attestation request failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.archiveErasureAttestationRecorded_4e1490": {
+    defaultMessage: "Archive erasure attestation recorded",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.archiveErasureEvidence_9a62ca": {
+    defaultMessage: "Archive erasure evidence",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.artifactUri_2088cf": {
+    defaultMessage: "Artifact URI",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.attestationGatedCredentials_2887bd": {
+    defaultMessage: "Attestation-gated credentials",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.attestationPayloadBase64_b7cf3a": {
+    defaultMessage: "Attestation payload (base64)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.backup_89121d": {
+    defaultMessage: "backup",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.brokerEvidenceForThisJustIn_44ca48": {
+    defaultMessage: "Broker evidence for this just-in-time access session, including attestation and audit records.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.builtInGuarantees_21db16": {
+    defaultMessage: "Built-in guarantees",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.caaIssuerDomainOptional_8c2f53": {
+    defaultMessage: "CAA issuer domain (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.captureEvidenceOfHowABackup_f00d4e": {
+    defaultMessage: "Capture evidence of how a backup or signed audit archive honored a subject erasure.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ceremonyDetail_9cb326": {
+    defaultMessage: "Ceremony detail",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ceremonyId_6f8ee6": {
+    defaultMessage: "Ceremony ID",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.certifiesAnExternallyHeldIntermediateKey_d95cc4": {
+    defaultMessage: "Certifies an externally held intermediate key under this authority via a quorum-approved ceremony.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.challengeDomainOptional_d7bed2": {
+    defaultMessage: "Challenge domain (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.challengeMode_1c8fbd": {
+    defaultMessage: "Challenge mode",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.challengeRecord_320513": {
+    defaultMessage: "Challenge record",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.challengeRotationFailed_c4b11e": {
+    defaultMessage: "Challenge rotation failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.clearIdentityFilter_3c0b9a": {
+    defaultMessage: "Clear identity filter",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.closeAuthorityDetail_9bee0e": {
+    defaultMessage: "Close authority detail",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.closeCeremonyDetail_92fb97": {
+    defaultMessage: "Close ceremony detail",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.closeCreateCaForm_e01a8e": {
+    defaultMessage: "Close create CA form",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.closeDns01ConfigForm_00c6cb": {
+    defaultMessage: "Close DNS-01 config form",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.closeIssueLeafForm_2c9eeb": {
+    defaultMessage: "Close issue leaf form",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.closePreflightDialog_97a0fb": {
+    defaultMessage: "Close preflight dialog",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.closeScepPolicyForm_ae9570": {
+    defaultMessage: "Close SCEP policy form",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.closeSignIntermediateCsrForm_162507": {
+    defaultMessage: "Close sign intermediate CSR form",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.commonNameMaxPathLenSignature_0d8b25": {
+    defaultMessage: "common_name, max_path_len, signature_algorithm, ttl_seconds",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.configName_11f179": {
+    defaultMessage: "Config name",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.controlPlaneLineage_513399": {
+    defaultMessage: "Control-plane lineage",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.copied_dd2ce2": {
+    defaultMessage: "Copied.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.copyCertificate_59db8a": {
+    defaultMessage: "Copy certificate",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.copyRequestId_a53908": {
+    defaultMessage: "Copy request ID",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.couldNotRecordAttestation_204858": {
+    defaultMessage: "Could not record attestation",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.createIntermediateCa_829ab7": {
+    defaultMessage: "Create intermediate CA",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.createRootCa_94fb33": {
+    defaultMessage: "Create root CA",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.createRotationSchedule_6a80bd": {
+    defaultMessage: "Create rotation schedule",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.credentialReferencesJsonOptional_faddae": {
+    defaultMessage: "Credential references JSON (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.cryptoAgilityMeansTheSystemCan_20c325": {
+    defaultMessage: "Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only state.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.cryptographicShred_caafb7": {
+    defaultMessage: "cryptographic shred",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.csrPem_c5931f": {
+    defaultMessage: "CSR PEM",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.delegationTargetOptional_8439dd": {
+    defaultMessage: "Delegation target (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.deleteOwner_b5f9bd": {
+    defaultMessage: "Delete owner",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.delete_f6fdbe": {
+    defaultMessage: "Delete",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.deleted_b639f5": {
+    defaultMessage: "deleted",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.deletingAnOwnerRemovesTheAccountability_cdfad5": {
+    defaultMessage: "Deleting an owner removes the accountability record for its credentials. This cannot be undone.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.details_dc3dec": {
+    defaultMessage: "Details",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.distributionPosture_10c8b4": {
+    defaultMessage: "Distribution posture",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.dns01ConfigUpdateFailed_86ad97": {
+    defaultMessage: "DNS-01 config update failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.dns01ProviderConfigDeleted_9ead6a": {
+    defaultMessage: "DNS-01 provider config deleted",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.dns01ProviderConfigUpdated_5a6d3d": {
+    defaultMessage: "DNS-01 provider config updated",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.domain_9b1091": {
+    defaultMessage: "Domain",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.editConnectorTarget_6063fb": {
+    defaultMessage: "Edit connector target",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.edit_530164": {
+    defaultMessage: "Edit",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.emailOptional_5c10b5": {
+    defaultMessage: "Email (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ephemeralCredentialApprovals_9a4b68": {
+    defaultMessage: "Ephemeral credential approvals",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ephemeralCredentialRequestFailed_12be63": {
+    defaultMessage: "Ephemeral credential request failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.eventSourcedRemediationRunEvidenceIncluding_cec725": {
+    defaultMessage: "Event-sourced remediation run evidence, including the connector delivery receipt when one was recorded.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.evidenceReferencesOnePerLine_2bb536": {
+    defaultMessage: "Evidence references (one per line)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.expectedAudienceOptional_51c8b7": {
+    defaultMessage: "Expected audience (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.expectedTxtValueOptional_c4e94f": {
+    defaultMessage: "Expected TXT value (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.failedPhase_49b14a": {
+    defaultMessage: "Failed phase:",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.failures_3eec15": {
+    defaultMessage: "Failures",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.filterRotationRuns_e652a6": {
+    defaultMessage: "Filter rotation runs",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.fingerprintOptional_b6cd87": {
+    defaultMessage: "Fingerprint (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.firstRunOptional_7ecf76": {
+    defaultMessage: "First run (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.fullConnectorDeliveryReceiptEvidenceIncluding_080df5": {
+    defaultMessage: "Full connector delivery receipt evidence, including rollback reference and failure reason.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.fullLifecycleRotationRunRecordIncluding_02687f": {
+    defaultMessage: "Full lifecycle rotation run record, including fingerprints, rollback reference, and error evidence.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.heldUntil_8cc7d7": {
+    defaultMessage: "Held until",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.hmacDynamic_cb11c5": {
+    defaultMessage: "hmac-dynamic",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.iUnderstandThisRevocationCannotBe_92d164": {
+    defaultMessage: "I understand this revocation cannot be undone.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.identityIdFilter_48db11": {
+    defaultMessage: "Identity ID filter",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.identityUuid_209e1d": {
+    defaultMessage: "identity UUID",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.intermediateCsrSigningFailed_636cae": {
+    defaultMessage: "Intermediate CSR signing failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.intuneJws_b47f57": {
+    defaultMessage: "intune-jws",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.intune_2c4886": {
+    defaultMessage: "intune",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.issueLeafCertificate_bddf5d": {
+    defaultMessage: "Issue leaf certificate",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.issueLeaf_f1c3ee": {
+    defaultMessage: "Issue leaf…",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.jamf_489375": {
+    defaultMessage: "jamf",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.justInTimeOperatorSessionsBrokered_df233f": {
+    defaultMessage: "Just-in-time operator sessions brokered for PostgreSQL roles and SSH principals.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.lastError_5e4df8": {
+    defaultMessage: "Last error",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.latestDueRotationRuns_ac4710": {
+    defaultMessage: "Latest due rotation runs",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.leafIssuanceFailed_235d03": {
+    defaultMessage: "Leaf issuance failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.legalHold_644327": {
+    defaultMessage: "legal hold",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.lifecycleRotationEvidenceWhoRotatedWhat_10ed9a": {
+    defaultMessage: "Lifecycle rotation evidence: who rotated what, when, and how it ended.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.methodOverrideOptional_154ad0": {
+    defaultMessage: "Method override (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.newRotationSchedule_0d2b93": {
+    defaultMessage: "New rotation schedule",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.newSchedule_729465": {
+    defaultMessage: "New schedule…",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.noOutboxCircuitBreakers_b8a7be": {
+    defaultMessage: "No outbox circuit breakers",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.noOutboxDestinationHasRecordedCircuit_1c248f": {
+    defaultMessage: "No outbox destination has recorded circuit state yet.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.noOwnerRemediationActionsAreQueued_596b9b": {
+    defaultMessage: "No owner remediation actions are queued.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.observedTxtRecordsOptionalOnePer_9b6c49": {
+    defaultMessage: "Observed TXT records (optional, one per line)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.oldReference_69d1f6": {
+    defaultMessage: "Old reference",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.openPrivilegedSession_78a445": {
+    defaultMessage: "Open privileged session",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.openSession_73b3ca": {
+    defaultMessage: "Open session…",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.openUntil_5c3e00": {
+    defaultMessage: "Open until",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.optionalEGS3Backups2026_891da1": {
+    defaultMessage: "optional, e.g. s3://backups/2026-06-30.tar.zst",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.outboxCircuitBreakers_278ec6": {
+    defaultMessage: "Outbox circuit breakers",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ownerDeleted_079d61": {
+    defaultMessage: "Owner deleted",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ownerRemediationQueue_610e16": {
+    defaultMessage: "Owner remediation queue",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ownerUpdated_07b92f": {
+    defaultMessage: "Owner updated",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ownership_3e90e4": {
+    defaultMessage: "Ownership",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.parentAuthority_d9bb89": {
+    defaultMessage: "Parent authority",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.parseError_387dc4": {
+    defaultMessage: "parse error",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.payloadBase64_738cc4": {
+    defaultMessage: "Payload (base64)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.paymentsDbMonthly_b690bc": {
+    defaultMessage: "payments-db-monthly",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.paymentsDbPassword_50e8d6": {
+    defaultMessage: "payments/db/password",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.playbookRunHistoryUnavailable_8452d8": {
+    defaultMessage: "Playbook run history unavailable",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.playbookRuns_da379d": {
+    defaultMessage: "Playbook runs",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.policyDefault_38146c": {
+    defaultMessage: "Policy default",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.policyName_101bf6": {
+    defaultMessage: "Policy name",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.postgres_afc848": {
+    defaultMessage: "postgres",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.postgresql_519968": {
+    defaultMessage: "postgresql",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.preflightCheck_4a464a": {
+    defaultMessage: "Preflight check…",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.preflightRequestFailed_69f031": {
+    defaultMessage: "Preflight request failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.privilegedAccessSessions_368da5": {
+    defaultMessage: "Privileged access sessions",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.productionMode_1737a4": {
+    defaultMessage: "Production mode",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.profileGuidanceJsonOptional_fd4738": {
+    defaultMessage: "Profile guidance JSON (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.providerConfigJsonOptional_02753c": {
+    defaultMessage: "Provider config JSON (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.providerDefault_f75bf4": {
+    defaultMessage: "Provider default",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.publicKeyPem_10749e": {
+    defaultMessage: "Public key (PEM)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.quorumApprovedCeremonyId_df8e12": {
+    defaultMessage: "quorum-approved ceremony id",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.recordedPlaybookRunsWithTheirConnector_bffffe": {
+    defaultMessage: "Recorded playbook runs with their connector delivery receipts, and the owner remediation queue snapshot.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.recurringRollbackSafeRotationsRunBy_06c343": {
+    defaultMessage: "Recurring rollback-safe rotations run by the scheduler. Run due now executes every enabled schedule whose next run is already due.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.remediationEvidence_5174c6": {
+    defaultMessage: "Remediation evidence",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.remoteKeyOptional_b6dff8": {
+    defaultMessage: "Remote key (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.req7c2f9a_03dd4e": {
+    defaultMessage: "req-7c2f9a",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.requestAttestationGatedEphemeralCredential_4ce3ce": {
+    defaultMessage: "Request attestation-gated ephemeral credential",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.requestId_63aa59": {
+    defaultMessage: "Request ID",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.revokeCertificate_338ad7": {
+    defaultMessage: "Revoke certificate",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.rollbackSafeRotationFailed_5f1a57": {
+    defaultMessage: "Rollback-safe rotation failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.rollbackSafeRotation_267d4a": {
+    defaultMessage: "Rollback-safe rotation",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.rotateAProviderBackedCredentialBy_ec7a8f": {
+    defaultMessage: "Rotate a provider-backed credential by reference. If a phase fails, the run rolls back to the old reference and the result below reports the exact outcome. No secret values pass through this form.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.rotateChallenge_99fc02": {
+    defaultMessage: "Rotate challenge",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.rotationMintsFreshChallengeMaterialAnd_0aec47": {
+    defaultMessage: "Rotation mints fresh challenge material and records rotation evidence — the rotation version increments and the rotation timestamp is persisted for audit. Profiles distributing the previous challenge stop validating for new enrollments.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.rotationRuns_5ec15c": {
+    defaultMessage: "Rotation runs",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.routing_7d15dd": {
+    defaultMessage: "Routing",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.runDueRotationsFailed_b9c511": {
+    defaultMessage: "Run due rotations failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.runModes_6fced8": {
+    defaultMessage: "Run modes",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.runRollbackSafeRotation_5a7f2d": {
+    defaultMessage: "Run rollback-safe rotation",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.saveConfig_64e1de": {
+    defaultMessage: "Save config",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.saveOwner_b67638": {
+    defaultMessage: "Save owner",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.savePolicy_77d67c": {
+    defaultMessage: "Save policy",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.saveTarget_fa5df1": {
+    defaultMessage: "Save target",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.scepChallengeRotated_77c4f1": {
+    defaultMessage: "SCEP challenge rotated",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.scepEndpoint_f4bb21": {
+    defaultMessage: "SCEP endpoint",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.scepPolicyDeleted_45064c": {
+    defaultMessage: "SCEP policy deleted",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.scepPolicyUpdateFailed_f92dc7": {
+    defaultMessage: "SCEP policy update failed",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.scepPolicyUpdated_3a2953": {
+    defaultMessage: "SCEP policy updated",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.scepProfile_315862": {
+    defaultMessage: "SCEP profile",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.scheduleName_fb63dc": {
+    defaultMessage: "Schedule name",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.scheduledRotations_1a0452": {
+    defaultMessage: "Scheduled rotations",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.secretReferencesOnlyRawCredentialsAre_f74f29": {
+    defaultMessage: "Secret references only — raw credentials are never stored on the config.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.selectParentAuthority_76a0a6": {
+    defaultMessage: "Select parent authority",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.selectedMethod_9ad9ca": {
+    defaultMessage: "Selected method",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.serialOptional_e59169": {
+    defaultMessage: "Serial (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.servedAuthorities_52df47": {
+    defaultMessage: "Served authorities",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.sessionOpened_368838": {
+    defaultMessage: "Session opened.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.signIntermediateCsr_cf1361": {
+    defaultMessage: "Sign intermediate CSR…",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.signIntermediateCsr_e1f90b": {
+    defaultMessage: "Sign intermediate CSR",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.signedAuditArchive_753384": {
+    defaultMessage: "signed audit archive",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.signerBackedRootsAndIntermediatesThis_957f38": {
+    defaultMessage: "Signer-backed roots and intermediates this control plane serves. Open a row for the certificate PEM, issue a leaf from an authority, or sign an externally generated intermediate CSR.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.specJson_e57c5c": {
+    defaultMessage: "Spec JSON",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.sshPrincipal_8d0a6c": {
+    defaultMessage: "SSH principal",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ssh_e8b9f6": {
+    defaultMessage: "ssh",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.subjectFilter_ae9f99": {
+    defaultMessage: "Subject filter",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.supportedHostArchives_38c6c0": {
+    defaultMessage: "Supported host archives",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.syncTargetOptional_189fc7": {
+    defaultMessage: "Sync target (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.targetConfigJson_68839a": {
+    defaultMessage: "Target config JSON",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.targetConnector_99a265": {
+    defaultMessage: "Target connector",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.targetId_00960a": {
+    defaultMessage: "Target ID",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.targetName_f2f724": {
+    defaultMessage: "Target name",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.targetType_a45f80": {
+    defaultMessage: "Target type",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.theCbomScannerInventoriesAlgorithmsKey_777219": {
+    defaultMessage: "The CBOM scanner inventories algorithms, key sizes, TLS versions, and weak crypto posture. The policy floor is RSA-2048, EC-256, and TLS 1.2, while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.theProviderWasRolledBackCleanly_3c888a": {
+    defaultMessage: "The provider was rolled back cleanly to",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.theServedContractRequiresASpec_bf854f": {
+    defaultMessage: "The served contract requires a spec (common_name, path length, TTL) for intermediate issuance.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.tpmQuote_f72300": {
+    defaultMessage: "tpm-quote",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.trustAnchorReferencesJsonOptional_f5ea80": {
+    defaultMessage: "Trust anchor references JSON (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.ttlSecondsOptional_68f1c5": {
+    defaultMessage: "TTL seconds (optional)",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.typeConfigNameToConfirm_f46ed6": {
+    defaultMessage: "Type config name to confirm",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.typePolicyNameToConfirm_fc5738": {
+    defaultMessage: "Type policy name to confirm",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.typeTargetNameToConfirm_aedaad": {
+    defaultMessage: "Type target name to confirm",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.typeTheExactOwnerName_1205b0": {
+    defaultMessage: "Type the exact owner name",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.updateTheConnectorTargetNameConnector_1dafe2": {
+    defaultMessage: "Update the connector target name, connector, and config JSON, then save to apply the change.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.validatesDelegationTxtPropagationCaaPolicy_1ceb4c": {
+    defaultMessage: "Validates delegation, TXT propagation, CAA policy, and challenge-method selection for a domain before an ACME order is placed.",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.view_69bd4e": {
+    defaultMessage: "View",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.wildcard_08654e": {
+    defaultMessage: "wildcard",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.yesDeleteConfig_bd6fac": {
+    defaultMessage: "Yes, delete config",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.yesDeletePolicy_30ce34": {
+    defaultMessage: "Yes, delete policy",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.yesDeleteTarget_729269": {
+    defaultMessage: "Yes, delete target",
+    description: "CLI-parity console flow copy.",
+  },
+  "parity.zoneOptional_0f915d": {
+    defaultMessage: "Zone (optional)",
+    description: "CLI-parity console flow copy.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;
@@ -6452,6 +7240,203 @@ const esESCatalog = {
   "privacy.catalog.ownerColumn": "Propietario",
   "privacy.catalog.purposeColumn": "Proposito",
   "privacy.catalog.retentionColumn": "Retencion",
+  "parity.airGap_a0134a": "Aislamiento de red",
+  "parity.allowWildcardIssuance_0fe53c": "Permitir emisión de comodín",
+  "parity.allowedMethods_ac5c6c": "Métodos permitidos",
+  "parity.applyIdentityFilter_72d5ba": "Aplicar filtro de identidad",
+  "parity.approveEphemeralCredential_760861": "Aprobar credencial efímera",
+  "parity.approversCanIssueThisFromThe_33b073": "Los aprobadores pueden emitirla desde la página de Aprobaciones.",
+  "parity.archiveAttestationRequestFailed_6179ba": "Error al registrar la atestación de archivo",
+  "parity.archiveErasureAttestationRecorded_4e1490": "Atestación de borrado de archivo registrada",
+  "parity.archiveErasureEvidence_9a62ca": "Evidencia de borrado de archivo",
+  "parity.artifactUri_2088cf": "URI del artefacto",
+  "parity.attestationGatedCredentials_2887bd": "Credenciales con atestación",
+  "parity.attestationPayloadBase64_b7cf3a": "Carga de atestación (base64)",
+  "parity.backup_89121d": "backup",
+  "parity.brokerEvidenceForThisJustIn_44ca48": "Evidencia intermediada de esta sesión de acceso puntual, incluidos registros de atestación y auditoría.",
+  "parity.builtInGuarantees_21db16": "Garantías integradas",
+  "parity.caaIssuerDomainOptional_8c2f53": "Dominio emisor CAA (opcional)",
+  "parity.captureEvidenceOfHowABackup_f00d4e": "Registra la evidencia de cómo una copia de seguridad o un archivo de auditoría firmado respetó el borrado de un sujeto.",
+  "parity.ceremonyDetail_9cb326": "Detalle de ceremonia",
+  "parity.ceremonyId_6f8ee6": "ID de ceremonia",
+  "parity.certifiesAnExternallyHeldIntermediateKey_d95cc4": "Certifica una clave intermedia externa bajo esta autoridad mediante una ceremonia aprobada por quórum.",
+  "parity.challengeDomainOptional_d7bed2": "Dominio de desafío (opcional)",
+  "parity.challengeMode_1c8fbd": "Modo de desafío",
+  "parity.challengeRecord_320513": "Registro de desafío",
+  "parity.challengeRotationFailed_c4b11e": "Error en la rotación del desafío",
+  "parity.clearIdentityFilter_3c0b9a": "Borrar filtro de identidad",
+  "parity.closeAuthorityDetail_9bee0e": "Cerrar detalle de autoridad",
+  "parity.closeCeremonyDetail_92fb97": "Cerrar detalle de ceremonia",
+  "parity.closeCreateCaForm_e01a8e": "Cerrar formulario de creación de CA",
+  "parity.closeDns01ConfigForm_00c6cb": "Cerrar formulario de configuración DNS-01",
+  "parity.closeIssueLeafForm_2c9eeb": "Cerrar formulario de emisión de hoja",
+  "parity.closePreflightDialog_97a0fb": "Cerrar diálogo de comprobación previa",
+  "parity.closeScepPolicyForm_ae9570": "Cerrar formulario de política SCEP",
+  "parity.closeSignIntermediateCsrForm_162507": "Cerrar formulario de firma de CSR intermedia",
+  "parity.commonNameMaxPathLenSignature_0d8b25": "common_name, max_path_len, signature_algorithm, ttl_seconds",
+  "parity.configName_11f179": "Nombre de configuración",
+  "parity.controlPlaneLineage_513399": "Linaje del plano de control",
+  "parity.copied_dd2ce2": "Copiado.",
+  "parity.copyCertificate_59db8a": "Copiar certificado",
+  "parity.copyRequestId_a53908": "Copiar ID de solicitud",
+  "parity.couldNotRecordAttestation_204858": "No se pudo registrar la atestación",
+  "parity.createIntermediateCa_829ab7": "Crear CA intermedia",
+  "parity.createRootCa_94fb33": "Crear CA raíz",
+  "parity.createRotationSchedule_6a80bd": "Crear programación de rotación",
+  "parity.credentialReferencesJsonOptional_faddae": "JSON de referencias de credenciales (opcional)",
+  "parity.cryptoAgilityMeansTheSystemCan_20c325": "La cripto-agilidad significa que el sistema puede ver algoritmos débiles, rechazar opciones no permitidas y planificar rotaciones seguras sin adivinar desde el estado del navegador.",
+  "parity.cryptographicShred_caafb7": "triturado criptográfico",
+  "parity.csrPem_c5931f": "CSR en PEM",
+  "parity.delegationTargetOptional_8439dd": "Destino de delegación (opcional)",
+  "parity.deleteOwner_b5f9bd": "Eliminar propietario",
+  "parity.delete_f6fdbe": "Eliminar",
+  "parity.deleted_b639f5": "eliminado",
+  "parity.deletingAnOwnerRemovesTheAccountability_cdfad5": "Eliminar un propietario borra el registro de responsabilidad de sus credenciales. Esto no se puede deshacer.",
+  "parity.details_dc3dec": "Detalles",
+  "parity.distributionPosture_10c8b4": "Postura de distribución",
+  "parity.dns01ConfigUpdateFailed_86ad97": "Error al actualizar la configuración DNS-01",
+  "parity.dns01ProviderConfigDeleted_9ead6a": "Configuración de proveedor DNS-01 eliminada",
+  "parity.dns01ProviderConfigUpdated_5a6d3d": "Configuración de proveedor DNS-01 actualizada",
+  "parity.domain_9b1091": "Dominio",
+  "parity.editConnectorTarget_6063fb": "Editar destino de conector",
+  "parity.edit_530164": "Editar",
+  "parity.emailOptional_5c10b5": "Correo electrónico (opcional)",
+  "parity.ephemeralCredentialApprovals_9a4b68": "Aprobaciones de credenciales efímeras",
+  "parity.ephemeralCredentialRequestFailed_12be63": "Error en la solicitud de credencial efímera",
+  "parity.eventSourcedRemediationRunEvidenceIncluding_cec725": "Evidencia de ejecución de remediación basada en eventos, incluido el recibo de entrega del conector cuando se registró.",
+  "parity.evidenceReferencesOnePerLine_2bb536": "Referencias de evidencia (una por línea)",
+  "parity.expectedAudienceOptional_51c8b7": "Audiencia esperada (opcional)",
+  "parity.expectedTxtValueOptional_c4e94f": "Valor TXT esperado (opcional)",
+  "parity.failedPhase_49b14a": "Fase fallida:",
+  "parity.failures_3eec15": "Fallos",
+  "parity.filterRotationRuns_e652a6": "Filtrar ejecuciones de rotación",
+  "parity.fingerprintOptional_b6cd87": "Huella digital (opcional)",
+  "parity.firstRunOptional_7ecf76": "Primera ejecución (opcional)",
+  "parity.fullConnectorDeliveryReceiptEvidenceIncluding_080df5": "Evidencia completa del recibo de entrega del conector, incluida la referencia de reversión y el motivo del fallo.",
+  "parity.fullLifecycleRotationRunRecordIncluding_02687f": "Registro completo de la ejecución de rotación del ciclo de vida, incluidas huellas, referencia de reversión y evidencia de errores.",
+  "parity.heldUntil_8cc7d7": "Retenido hasta",
+  "parity.hmacDynamic_cb11c5": "hmac-dynamic",
+  "parity.iUnderstandThisRevocationCannotBe_92d164": "Entiendo que esta revocación no se puede deshacer.",
+  "parity.identityIdFilter_48db11": "Filtro de ID de identidad",
+  "parity.identityUuid_209e1d": "UUID de identidad",
+  "parity.intermediateCsrSigningFailed_636cae": "Error al firmar la CSR intermedia",
+  "parity.intuneJws_b47f57": "intune-jws",
+  "parity.intune_2c4886": "intune",
+  "parity.issueLeafCertificate_bddf5d": "Emitir certificado de hoja",
+  "parity.issueLeaf_f1c3ee": "Emitir hoja…",
+  "parity.jamf_489375": "jamf",
+  "parity.justInTimeOperatorSessionsBrokered_df233f": "Sesiones de operador puntuales intermediadas para roles de PostgreSQL y entidades SSH.",
+  "parity.lastError_5e4df8": "Último error",
+  "parity.latestDueRotationRuns_ac4710": "Últimas ejecuciones de rotación vencidas",
+  "parity.leafIssuanceFailed_235d03": "Error en la emisión de hoja",
+  "parity.legalHold_644327": "retención legal",
+  "parity.lifecycleRotationEvidenceWhoRotatedWhat_10ed9a": "Evidencia de rotación del ciclo de vida: quién rotó qué, cuándo y cómo terminó.",
+  "parity.methodOverrideOptional_154ad0": "Anulación de método (opcional)",
+  "parity.newRotationSchedule_0d2b93": "Nueva programación de rotación",
+  "parity.newSchedule_729465": "Nueva programación…",
+  "parity.noOutboxCircuitBreakers_b8a7be": "Sin interruptores de circuito de bandeja de salida",
+  "parity.noOutboxDestinationHasRecordedCircuit_1c248f": "Ningún destino de bandeja de salida ha registrado estado de circuito todavía.",
+  "parity.noOwnerRemediationActionsAreQueued_596b9b": "No hay acciones de remediación de propietario en cola.",
+  "parity.observedTxtRecordsOptionalOnePer_9b6c49": "Registros TXT observados (opcional, uno por línea)",
+  "parity.oldReference_69d1f6": "Referencia anterior",
+  "parity.openPrivilegedSession_78a445": "Abrir sesión privilegiada",
+  "parity.openSession_73b3ca": "Abrir sesión…",
+  "parity.openUntil_5c3e00": "Abierto hasta",
+  "parity.optionalEGS3Backups2026_891da1": "opcional, p. ej. s3://backups/2026-06-30.tar.zst",
+  "parity.outboxCircuitBreakers_278ec6": "Interruptores de circuito de bandeja de salida",
+  "parity.ownerDeleted_079d61": "Propietario eliminado",
+  "parity.ownerRemediationQueue_610e16": "Cola de remediación de propietarios",
+  "parity.ownerUpdated_07b92f": "Propietario actualizado",
+  "parity.ownership_3e90e4": "Propiedad",
+  "parity.parentAuthority_d9bb89": "Autoridad principal",
+  "parity.parseError_387dc4": "error de análisis",
+  "parity.payloadBase64_738cc4": "Carga (base64)",
+  "parity.paymentsDbMonthly_b690bc": "payments-db-monthly",
+  "parity.paymentsDbPassword_50e8d6": "payments/db/password",
+  "parity.playbookRunHistoryUnavailable_8452d8": "Historial de ejecuciones de playbook no disponible",
+  "parity.playbookRuns_da379d": "Ejecuciones de playbook",
+  "parity.policyDefault_38146c": "Predeterminado de política",
+  "parity.policyName_101bf6": "Nombre de política",
+  "parity.postgres_afc848": "postgres",
+  "parity.postgresql_519968": "postgresql",
+  "parity.preflightCheck_4a464a": "Comprobación previa…",
+  "parity.preflightRequestFailed_69f031": "Error en la comprobación previa",
+  "parity.privilegedAccessSessions_368da5": "Sesiones de acceso privilegiado",
+  "parity.productionMode_1737a4": "Modo de producción",
+  "parity.profileGuidanceJsonOptional_fd4738": "JSON de guía de perfil (opcional)",
+  "parity.providerConfigJsonOptional_02753c": "JSON de configuración del proveedor (opcional)",
+  "parity.providerDefault_f75bf4": "Predeterminado del proveedor",
+  "parity.publicKeyPem_10749e": "Clave pública (PEM)",
+  "parity.quorumApprovedCeremonyId_df8e12": "id de ceremonia aprobada por quórum",
+  "parity.recordedPlaybookRunsWithTheirConnector_bffffe": "Ejecuciones de playbook registradas con sus recibos de entrega del conector y una instantánea de la cola de remediación de propietarios.",
+  "parity.recurringRollbackSafeRotationsRunBy_06c343": "Rotaciones recurrentes con reversión segura ejecutadas por el programador. «Ejecutar vencidas» ejecuta cada programación habilitada cuya próxima ejecución ya está vencida.",
+  "parity.remediationEvidence_5174c6": "Evidencia de remediación",
+  "parity.remoteKeyOptional_b6dff8": "Clave remota (opcional)",
+  "parity.req7c2f9a_03dd4e": "req-7c2f9a",
+  "parity.requestAttestationGatedEphemeralCredential_4ce3ce": "Solicitar credencial efímera con atestación",
+  "parity.requestId_63aa59": "ID de solicitud",
+  "parity.revokeCertificate_338ad7": "Revocar certificado",
+  "parity.rollbackSafeRotationFailed_5f1a57": "Error en la rotación con reversión segura",
+  "parity.rollbackSafeRotation_267d4a": "Rotación con reversión segura",
+  "parity.rotateAProviderBackedCredentialBy_ec7a8f": "Rota una credencial respaldada por un proveedor mediante referencia. Si una fase falla, la ejecución revierte a la referencia anterior y el resultado a continuación informa el resultado exacto. Ningún valor secreto pasa por este formulario.",
+  "parity.rotateChallenge_99fc02": "Rotar desafío",
+  "parity.rotationMintsFreshChallengeMaterialAnd_0aec47": "La rotación genera material de desafío nuevo y registra evidencia de rotación: la versión de rotación se incrementa y la marca de tiempo se conserva para auditoría. Los perfiles que distribuyen el desafío anterior dejan de validar nuevas inscripciones.",
+  "parity.rotationRuns_5ec15c": "Ejecuciones de rotación",
+  "parity.routing_7d15dd": "Enrutamiento",
+  "parity.runDueRotationsFailed_b9c511": "Error al ejecutar rotaciones vencidas",
+  "parity.runModes_6fced8": "Modos de ejecución",
+  "parity.runRollbackSafeRotation_5a7f2d": "Ejecutar rotación con reversión segura",
+  "parity.saveConfig_64e1de": "Guardar configuración",
+  "parity.saveOwner_b67638": "Guardar propietario",
+  "parity.savePolicy_77d67c": "Guardar política",
+  "parity.saveTarget_fa5df1": "Guardar destino",
+  "parity.scepChallengeRotated_77c4f1": "Desafío SCEP rotado",
+  "parity.scepEndpoint_f4bb21": "Punto de conexión SCEP",
+  "parity.scepPolicyDeleted_45064c": "Política SCEP eliminada",
+  "parity.scepPolicyUpdateFailed_f92dc7": "Error al actualizar la política SCEP",
+  "parity.scepPolicyUpdated_3a2953": "Política SCEP actualizada",
+  "parity.scepProfile_315862": "Perfil SCEP",
+  "parity.scheduleName_fb63dc": "Nombre de la programación",
+  "parity.scheduledRotations_1a0452": "Rotaciones programadas",
+  "parity.secretReferencesOnlyRawCredentialsAre_f74f29": "Solo referencias de secretos: las credenciales sin procesar nunca se almacenan en la configuración.",
+  "parity.selectParentAuthority_76a0a6": "Seleccionar autoridad principal",
+  "parity.selectedMethod_9ad9ca": "Método seleccionado",
+  "parity.serialOptional_e59169": "Número de serie (opcional)",
+  "parity.servedAuthorities_52df47": "Autoridades servidas",
+  "parity.sessionOpened_368838": "Sesión abierta.",
+  "parity.signIntermediateCsr_cf1361": "Firmar CSR intermedia…",
+  "parity.signIntermediateCsr_e1f90b": "Firmar CSR intermedia",
+  "parity.signedAuditArchive_753384": "archivo de auditoría firmado",
+  "parity.signerBackedRootsAndIntermediatesThis_957f38": "Raíces e intermedias respaldadas por el firmante que sirve este plano de control. Abra una fila para ver el PEM del certificado, emitir una hoja desde una autoridad o firmar una CSR intermedia generada externamente.",
+  "parity.specJson_e57c5c": "JSON de especificación",
+  "parity.sshPrincipal_8d0a6c": "Entidad SSH",
+  "parity.ssh_e8b9f6": "ssh",
+  "parity.subjectFilter_ae9f99": "Filtro de sujeto",
+  "parity.supportedHostArchives_38c6c0": "Archivos de host compatibles",
+  "parity.syncTargetOptional_189fc7": "Destino de sincronización (opcional)",
+  "parity.targetConfigJson_68839a": "JSON de configuración del destino",
+  "parity.targetConnector_99a265": "Conector del destino",
+  "parity.targetId_00960a": "ID de destino",
+  "parity.targetName_f2f724": "Nombre del destino",
+  "parity.targetType_a45f80": "Tipo de destino",
+  "parity.theCbomScannerInventoriesAlgorithmsKey_777219": "El escáner CBOM inventaría algoritmos, tamaños de clave, versiones de TLS y posturas criptográficas débiles. El mínimo de política es RSA-2048, EC-256 y TLS 1.2, mientras que 3DES/DES/RC4/NULL/EXPORT/MD5 están prohibidos.",
+  "parity.theProviderWasRolledBackCleanly_3c888a": "El proveedor se revirtió limpiamente a",
+  "parity.theServedContractRequiresASpec_bf854f": "El contrato servido requiere una especificación (common_name, longitud de ruta, TTL) para la emisión intermedia.",
+  "parity.tpmQuote_f72300": "tpm-quote",
+  "parity.trustAnchorReferencesJsonOptional_f5ea80": "JSON de referencias de anclas de confianza (opcional)",
+  "parity.ttlSecondsOptional_68f1c5": "Segundos de TTL (opcional)",
+  "parity.typeConfigNameToConfirm_f46ed6": "Escriba el nombre de la configuración para confirmar",
+  "parity.typePolicyNameToConfirm_fc5738": "Escriba el nombre de la política para confirmar",
+  "parity.typeTargetNameToConfirm_aedaad": "Escriba el nombre del destino para confirmar",
+  "parity.typeTheExactOwnerName_1205b0": "Escriba el nombre exacto del propietario",
+  "parity.updateTheConnectorTargetNameConnector_1dafe2": "Actualice el nombre del destino del conector, el conector y el JSON de configuración, luego guarde para aplicar el cambio.",
+  "parity.validatesDelegationTxtPropagationCaaPolicy_1ceb4c": "Valida la delegación, la propagación TXT, la política CAA y la selección del método de desafío de un dominio antes de emitir una orden ACME.",
+  "parity.view_69bd4e": "Ver",
+  "parity.wildcard_08654e": "comodín",
+  "parity.yesDeleteConfig_bd6fac": "Sí, eliminar configuración",
+  "parity.yesDeletePolicy_30ce34": "Sí, eliminar política",
+  "parity.yesDeleteTarget_729269": "Sí, eliminar destino",
+  "parity.zoneOptional_0f915d": "Zona (opcional)",
 } satisfies Record<MessageKey, string>;
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {
