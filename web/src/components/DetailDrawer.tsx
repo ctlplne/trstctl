@@ -28,6 +28,7 @@ export function DetailDrawer({ open, title, description, children, actions, onCl
       descriptionId={descriptionId}
       returnFocusRef={returnFocusRef}
       initialFocusRef={closeRef}
+      panelAnimation="drawer"
       overlayClassName="absolute inset-0 bg-foreground/20"
       panelClassName={cn("absolute right-0 top-0 flex h-full w-full max-w-xl flex-col border-l border-border bg-background shadow-elevation3", className)}
     >

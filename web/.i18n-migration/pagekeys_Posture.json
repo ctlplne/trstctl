@@ -1,0 +1,4 @@
+{
+ "Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only state.": "parity.cryptoAgilityMeansTheSystemCan_20c325",
+ "The CBOM scanner inventories algorithms, key sizes, TLS versions, and weak crypto posture. The policy floor is RSA-2048, EC-256, and TLS 1.2, while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.": "parity.theCbomScannerInventoriesAlgorithmsKey_777219"
+}

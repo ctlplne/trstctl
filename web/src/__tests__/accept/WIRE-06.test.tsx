@@ -67,6 +67,7 @@ describe("WIRE-06 ephemeral API-key issuance wiring", () => {
     renderSecrets();
 
     await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Sharing" }));
     const issueForm = within(screen.getByRole("form", { name: "Issue ephemeral API key" }));
     await user.type(issueForm.getByLabelText("Subject"), "ci/deploy-preview");
     await user.type(issueForm.getByLabelText("Scopes"), "repo:payments:read, deploy:staging:write");

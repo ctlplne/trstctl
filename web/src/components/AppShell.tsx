@@ -1,21 +1,26 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Activity,
   Bell,
   Bot,
   Boxes,
   Braces,
+  ChevronDown,
   CircleHelp,
+  ClipboardCheck,
+  Compass,
   FileClock,
   GitFork,
   LayoutDashboard,
   Menu,
   Network,
+  Radar,
   RadioTower,
   ScrollText,
   Settings2,
   ShieldAlert,
+  ShieldCheck,
   KeyRound,
   Languages,
   LockKeyhole,
@@ -26,6 +31,7 @@ import {
   Siren,
   Search,
   Users,
+  Vault,
   X,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
@@ -34,14 +40,21 @@ import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { hasAnyPermission } from "@/lib/access";
-import { contextualRouteItems, navGroups, permissionAnyForPath, taskNavItems, type NavIcon } from "@/lib/navigation";
+import { contextualRouteItems, navGroups, permissionAnyForPath, primaryNavItems, taskNavItems, type NavIcon } from "@/lib/navigation";
+import { persistCollapsedGroups, readCollapsedGroups } from "@/lib/navPreferences";
 import { cn } from "@/lib/utils";
 import type { Me } from "@/lib/api";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
-import { localeLabelKeys, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
+import { localeLabelKeys, productionLocales, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
+
+// Pseudo-locales (en-XA/ar-XB) are i18n test fixtures; only offer them in dev
+// builds so real users never see them in the language picker.
+const localeChoices: readonly Locale[] = import.meta.env.DEV ? supportedLocales : productionLocales;
 
 const iconMap: Record<NavIcon, typeof Activity> = {
   activity: Activity,
+  agent: Radar,
+  approval: ClipboardCheck,
   audit: FileClock,
   bot: Bot,
   certificate: ScrollText,
@@ -50,10 +63,12 @@ const iconMap: Record<NavIcon, typeof Activity> = {
   graph: GitFork,
   identity: KeyRound,
   incident: Siren,
+  journey: Compass,
   key: LockKeyhole,
   owner: Users,
   platform: ServerCog,
   policy: Settings2,
+  posture: ShieldCheck,
   profile: Settings2,
   protocol: RadioTower,
   notification: Bell,
@@ -63,7 +78,26 @@ const iconMap: Record<NavIcon, typeof Activity> = {
   signature: Signature,
   spiffe: Network,
   ssh: Braces,
+  vault: Vault,
 };
+
+function navBasePath(to: string): string {
+  return to.split("?")[0] || "/";
+}
+
+/** A worklist link ("/certificates?expiry=30d") is active only when the
+ * current URL carries its query; the plain page row stands down at the same
+ * time, so the rail never highlights two rows for one location. */
+function worklistMatches(to: string, pathname: string, search: string): boolean {
+  const [path, query = ""] = to.split("?");
+  if (pathname !== path) return false;
+  const wanted = new URLSearchParams(query);
+  const current = new URLSearchParams(search);
+  for (const [key, value] of wanted) {
+    if (current.get(key) !== value) return false;
+  }
+  return true;
+}
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 768));
@@ -85,15 +119,71 @@ type PrimaryNavProps = {
   user: Me | null;
 };
 
+function navItemClass(isActive: boolean): string {
+  return cn(
+    "flex min-h-9 items-center gap-2 rounded-control px-3 py-2 text-sm transition-colors",
+    isActive ? "bg-sidebar-active font-semibold text-primary" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
+  );
+}
+
 function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
   const { t } = useTranslation();
+  const location = useLocation();
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups());
+  const visiblePrimaryItems = primaryNavItems.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to)));
   const visibleTaskItems = taskNavItems.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to)));
   const visibleGroups = navGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to))) }))
     .filter((group) => group.items.length > 0);
+  const activeWorklist = visibleTaskItems.find((item) => worklistMatches(item.to, location.pathname, location.search));
+
+  // Deep-linking into a collapsed group re-opens it so the active row is
+  // always visible; manual collapse choices persist otherwise.
+  useEffect(() => {
+    const owning = navGroups.find((group) => group.items.some((item) => location.pathname === navBasePath(item.to)));
+    if (!owning) return;
+    setCollapsedGroups((current) => {
+      if (!current.has(owning.labelKey)) return current;
+      const next = new Set(current);
+      next.delete(owning.labelKey);
+      persistCollapsedGroups(next);
+      return next;
+    });
+  }, [location.pathname]);
+
+  function toggleGroup(labelKey: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(labelKey)) {
+        next.delete(labelKey);
+      } else {
+        next.add(labelKey);
+      }
+      persistCollapsedGroups(next);
+      return next;
+    });
+  }
+
   return (
     <nav aria-label={t("shell.primaryNavigation")} className={cn("p-3", className)} id={id}>
       <ul className="space-y-4">
+        {visiblePrimaryItems.length > 0 && (
+          <li>
+            <ul className="space-y-1">
+              {visiblePrimaryItems.map(({ to, labelKey, icon, end }) => {
+                const Icon = iconMap[icon];
+                return (
+                  <li key={`primary-${to}`}>
+                    <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive)}>
+                      <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{t(labelKey)}</span>
+                    </NavLink>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        )}
         {visibleTaskItems.length > 0 && (
           <li>
             <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.needsAction")}</p>
@@ -102,17 +192,17 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 const Icon = iconMap[icon];
                 const label = t(labelKey);
                 const description = t(descriptionKey);
+                const active = worklistMatches(to, location.pathname, location.search);
                 return (
                   <li key={`task-${to}`}>
                     <NavLink
                       to={to}
                       onClick={onNavigate}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-                          isActive ? "bg-sidebar-active font-semibold text-white" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
-                        )
-                      }
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm transition-colors",
+                        active ? "bg-sidebar-active font-semibold text-primary" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
+                      )}
                     >
                       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1">
@@ -126,36 +216,40 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
             </ul>
           </li>
         )}
-        {visibleGroups.map((group) => (
-          <li key={group.labelKey}>
-            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t(group.labelKey)}</p>
-            <ul className="space-y-1">
-              {group.items.map((item) => {
-                const { to, labelKey, icon, end } = item;
-                const label = t(labelKey);
-                const Icon = iconMap[icon];
-                return (
-                  <li key={`${group.labelKey}-${to}-${labelKey}`}>
-                    <NavLink
-                      to={to}
-                      end={end}
-                      onClick={onNavigate}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex min-h-9 items-center gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-                          isActive ? "bg-sidebar-active font-semibold text-white" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
-                        )
-                      }
-                    >
-                      <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{label}</span>
-                    </NavLink>
-                  </li>
-                );
-              })}
-            </ul>
-          </li>
-        ))}
+        {visibleGroups.map((group) => {
+          const collapsed = collapsedGroups.has(group.labelKey);
+          const contentId = `nav-group-${group.labelKey.replace(/[^a-zA-Z0-9]+/g, "-")}`;
+          return (
+            <li key={group.labelKey}>
+              <button
+                type="button"
+                aria-expanded={!collapsed}
+                aria-controls={contentId}
+                onClick={() => toggleGroup(group.labelKey)}
+                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
+              >
+                <span>{t(group.labelKey)}</span>
+                <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform duration-fast", collapsed && "-rotate-90")} />
+              </button>
+              <ul id={contentId} hidden={collapsed} className="space-y-1">
+                {group.items.map((item) => {
+                  const { to, labelKey, icon, end } = item;
+                  const label = t(labelKey);
+                  const Icon = iconMap[icon];
+                  const suppressed = activeWorklist != null && navBasePath(activeWorklist.to) === navBasePath(to);
+                  return (
+                    <li key={`${group.labelKey}-${to}-${labelKey}`}>
+                      <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive && !suppressed)}>
+                        <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                      </NavLink>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );
@@ -329,11 +423,22 @@ export function AppShell() {
             </svg>
           </span>
           <span className="min-w-0 leading-tight">
-            <span className="block truncate text-sm font-semibold tracking-tight">{t("app.brand.name")}</span>
+            <span className="block truncate font-display text-sm font-bold tracking-tight">{t("app.brand.name")}</span>
             <span className="hidden truncate text-[10px] font-medium uppercase tracking-wider text-brand-accent sm:block">{t("app.brand.subtitle")}</span>
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-2">
+          {!isDesktop && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label={t("shell.openCommandPalette")}
+              onClick={() => setCommandPaletteOpen(true)}
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          )}
           <Button
             ref={commandButtonRef}
             type="button"
@@ -362,13 +467,23 @@ export function AppShell() {
               value={locale}
               onChange={(event) => setLocale(event.target.value as Locale)}
             >
-              {supportedLocales.map((candidate) => (
+              {localeChoices.map((candidate) => (
                 <option key={candidate} value={candidate}>
                   {t(localeLabelKeys[candidate])}
                 </option>
               ))}
             </select>
           </label>
+          {user && hasAnyPermission(user, permissionAnyForPath("/notifications")) && (
+            <Link
+              to="/notifications"
+              aria-label={t("nav.item.notifications")}
+              title={t("nav.item.notifications")}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors duration-fast hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <Bell className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          )}
           <Button
             ref={shortcutsButtonRef}
             type="button"

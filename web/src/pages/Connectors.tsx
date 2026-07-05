@@ -309,13 +309,7 @@ export function Connectors() {
                             <Button type="button" size="sm" variant="outline" onClick={() => openEdit(target)}>
                               {`Edit ${target.name}`}
                             </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                              onClick={() => openDelete(target)}
-                            >
+                            <Button type="button" size="sm" variant="destructive-outline" onClick={() => openDelete(target)}>
                               {`Delete ${target.name}`}
                             </Button>
                           </div>
@@ -634,9 +628,9 @@ export function Connectors() {
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="border-destructive/50 text-destructive hover:bg-destructive/10"
-              disabled={deleteBusy || deleteConfirmName.trim() !== deleteTarget.name}
+              variant="destructive"
+              loading={deleteBusy}
+              disabled={deleteConfirmName.trim() !== deleteTarget.name}
               onClick={() => void confirmDelete()}
             >
               {t("parity.yesDeleteTarget_729269")}

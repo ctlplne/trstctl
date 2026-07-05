@@ -123,8 +123,11 @@ describe("inventory search", () => {
         },
       ],
     });
+    const user = userEvent.setup();
     renderCerts();
 
+    // Estate health lives behind the certificates workspace tab.
+    await user.click(await screen.findByRole("tab", { name: "Estate health" }));
     expect(await screen.findByRole("heading", { name: /estate certificate health/i })).toBeInTheDocument();
     expect(screen.getByText("warning")).toBeInTheDocument();
     expect(screen.getByText("External sources")).toBeInTheDocument();
@@ -198,8 +201,10 @@ describe("inventory search", () => {
       evidence_refs: ["projection:certificates", "projection:discovery_findings"],
     });
 
+    const user = userEvent.setup();
     renderCerts();
 
+    await user.click(await screen.findByRole("tab", { name: "Estate health" }));
     const posture = await screen.findByRole("region", { name: "Rogue certificate detection" });
     expect(apiMock.rogueCertificates).toHaveBeenCalled();
     expect(within(posture).getByText("2 findings")).toBeInTheDocument();
@@ -400,9 +405,12 @@ describe("certificate inventory gap closure", () => {
     renderCerts();
 
     await user.click(screen.getByRole("button", { name: /add certificate/i }));
+    // The ingest flow is a wizard: paste → assign ownership → review & ingest.
     await user.type(screen.getByLabelText(/certificate pem/i), "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----");
+    await user.click(screen.getByRole("button", { name: /next: assign ownership/i }));
     await user.type(screen.getByLabelText(/owner id/i), "owner-1");
     await user.type(screen.getByLabelText(/deployment location/i), "cluster-a/api");
+    await user.click(screen.getByRole("button", { name: /next: review/i }));
     await user.click(screen.getByRole("button", { name: /ingest certificate/i }));
 
     await waitFor(() =>
@@ -439,6 +447,9 @@ describe("certificate inventory gap closure", () => {
     const precertPEM = "-----BEGIN CERTIFICATE-----\nMIIC\n-----END CERTIFICATE-----";
     renderCerts();
 
+    // CT submission opens as a dialog from the CRL & CT workspace tab.
+    await user.click(await screen.findByRole("tab", { name: "CRL & CT" }));
+    await user.click(screen.getByRole("button", { name: "Submit to CT" }));
     expect(await screen.findByRole("heading", { name: "Certificate Transparency" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("Certificate PEM"), certPEM);
     await user.type(screen.getByLabelText("Precertificate PEM"), precertPEM);
@@ -466,6 +477,8 @@ describe("certificate inventory gap closure", () => {
 
     await user.click(screen.getByRole("button", { name: /add certificate/i }));
     await user.type(screen.getByLabelText(/certificate pem/i), "not a certificate");
+    await user.click(screen.getByRole("button", { name: /next: assign ownership/i }));
+    await user.click(screen.getByRole("button", { name: /next: review/i }));
     await user.click(screen.getByRole("button", { name: /ingest certificate/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not parse certificate/i);

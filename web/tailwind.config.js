@@ -40,8 +40,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"Inter Variable"', "Inter", "ui-sans-serif", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", "Helvetica", "Arial", "sans-serif"],
-        mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+        // Type ported from trstctl.com: Sora for UI text, DM Mono for
+        // credential material and technical accents, Syne for display/brand.
+        sans: ['"Sora Variable"', "Sora", "ui-sans-serif", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", "Helvetica", "Arial", "sans-serif"],
+        mono: ['"DM Mono"', "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+        display: ['"Syne Variable"', "Syne", '"Sora Variable"', "Sora", "ui-sans-serif", "sans-serif"],
       },
       borderRadius: {
         control: "var(--radius-control)",
@@ -62,6 +65,26 @@ export default {
       spacing: {
         compact: "var(--density-compact)",
         comfortable: "var(--density-comfortable)",
+      },
+      transitionDuration: {
+        fast: "var(--motion-fast)",
+        base: "var(--motion-base)",
+      },
+      keyframes: {
+        "overlay-in": { from: { opacity: "0" }, to: { opacity: "1" } },
+        "panel-in": {
+          from: { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "drawer-in": {
+          from: { opacity: "0", transform: "translateX(24px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+      },
+      animation: {
+        "overlay-in": "overlay-in var(--motion-fast) ease-out both",
+        "panel-in": "panel-in var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1) both",
+        "drawer-in": "drawer-in var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1) both",
       },
     },
   },

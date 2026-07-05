@@ -101,8 +101,16 @@ describe("SPA security sinks (SURFACE-I01)", () => {
         offenders.push(`${rel}: uses sessionStorage`);
       }
       // localStorage is allowed only for the theme preference, DataGrid view metadata,
-      // and the benign first-run onboarding-complete latch — each in its own module.
-      if (/\blocalStorage\b/.test(body) && !rel.includes("ThemeProvider") && !rel.includes("gridViews") && !rel.includes("onboardingState")) {
+      // the sidebar-group collapse preference, and the benign first-run
+      // onboarding-complete latch — each in its own module.
+      if (
+        /\blocalStorage\b/.test(body) &&
+        !rel.includes("ThemeProvider") &&
+        !rel.includes("gridViews") &&
+        !rel.includes("navPreferences") &&
+        !rel.includes("journeyProgress") &&
+        !rel.includes("onboardingState")
+      ) {
         offenders.push(`${rel}: uses localStorage outside approved metadata modules (auth state must live in an HttpOnly cookie, not web storage)`);
       }
       // Belt-and-braces: never write a token/secret into web storage.

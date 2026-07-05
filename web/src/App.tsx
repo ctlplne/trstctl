@@ -38,6 +38,8 @@ import { Approvals } from "@/pages/Approvals";
 import { Operations } from "@/pages/Operations";
 import { Notifications } from "@/pages/Notifications";
 import { RequestCredential } from "@/pages/RequestCredential";
+import { Styleguide } from "@/pages/Styleguide";
+import { Journeys } from "@/pages/Journeys";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -98,6 +100,8 @@ export function AppRoutes() {
         <Route path="assistant" element={<Assistant />} />
         <Route path="wizard" element={<Wizard />} />
         <Route path="platform" element={<Platform />} />
+        <Route path="styleguide" element={<Styleguide />} />
+        <Route path="journeys" element={<Journeys />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { CheckCircle2, Activity, ClipboardList, Code2, Eye, Play, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, Upload, XCircle } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
+import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -530,8 +531,21 @@ function initialStructuredJSONImports(): Record<StructuredSourceKind, string> {
   return Object.fromEntries(structuredSourceKinds.map((kind) => [kind, ""])) as Record<StructuredSourceKind, string>;
 }
 
+/** Findings render on the default tab; sources, schedules, and runs each get
+ * their own workspace tab with the matching create form (audit P0: the page
+ * previously stacked four KPI strips, two inline forms, and four tables). */
+type DiscoveryTab = "findings" | "sources" | "schedules" | "runs";
+const discoveryTabIds: readonly DiscoveryTab[] = ["findings", "sources", "schedules", "runs"];
+
+function discoveryTabFromSearchParam(value: string | null): DiscoveryTab {
+  return discoveryTabIds.includes(value as DiscoveryTab) ? (value as DiscoveryTab) : "findings";
+}
+
 export function Discovery() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<DiscoveryTab>(() => discoveryTabFromSearchParam(searchParams.get("tab")));
+  const [pendingFocus, setPendingFocus] = useState<"source" | "schedule" | null>(null);
   const [sources, setSources] = useState<DiscoverySource[]>([]);
   const [schedules, setSchedules] = useState<DiscoverySchedule[]>([]);
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
@@ -700,14 +714,41 @@ export function Discovery() {
     }
   }
 
+  function selectTab(next: string) {
+    const value = discoveryTabFromSearchParam(next);
+    setTab(value);
+    setSearchParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current);
+        if (value === "findings") {
+          nextParams.delete("tab");
+        } else {
+          nextParams.set("tab", value);
+        }
+        return nextParams;
+      },
+      { replace: true },
+    );
+  }
+
+  // The create forms live behind their workspace tabs, so "create source" CTAs
+  // first switch tabs and then focus once the form has mounted.
+  useEffect(() => {
+    if (!pendingFocus) return;
+    const ref = pendingFocus === "source" ? sourceNameRef : scheduleNameRef;
+    ref.current?.scrollIntoView?.({ block: "center" });
+    ref.current?.focus();
+    setPendingFocus(null);
+  }, [pendingFocus, tab]);
+
   function focusSourceForm() {
-    sourceNameRef.current?.scrollIntoView({ block: "center" });
-    sourceNameRef.current?.focus();
+    selectTab("sources");
+    setPendingFocus("source");
   }
 
   function focusScheduleForm() {
-    scheduleNameRef.current?.scrollIntoView({ block: "center" });
-    scheduleNameRef.current?.focus();
+    selectTab("schedules");
+    setPendingFocus("schedule");
   }
 
   return (
@@ -725,14 +766,34 @@ export function Discovery() {
       />
 
       <DiscoveryHero findings={findings} />
-      <CTDriftPanel findings={findings} sources={sources} />
-      <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
-      <ShadowPosturePanel posture={shadowPosture} />
 
       {notice && renderNotice(notice)}
       {loading && <LoadingState>Loading discovery records...</LoadingState>}
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <PageTabs
+        idPrefix="discovery"
+        ariaLabel="Discovery workspaces"
+        active={tab}
+        onChange={selectTab}
+        className="mb-0"
+        tabs={[
+          { id: "findings", label: t("discovery.tabs.findings") },
+          { id: "sources", label: t("discovery.tabs.sources") },
+          { id: "schedules", label: t("discovery.tabs.schedules") },
+          { id: "runs", label: t("discovery.tabs.runs") },
+        ]}
+      />
+
+      {tab === "findings" && (
+        <>
+          <CTDriftPanel findings={findings} sources={sources} />
+          <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
+          <ShadowPosturePanel posture={shadowPosture} />
+        </>
+      )}
+
+      {tab === "sources" && (
+        <div {...tabPanelProps("discovery", "sources")} className="grid gap-6">
         <form aria-labelledby="source-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSource}>
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -787,7 +848,11 @@ export function Discovery() {
             Create source
           </Button>
         </form>
+        </div>
+      )}
 
+      {tab === "schedules" && (
+        <div {...tabPanelProps("discovery", "schedules")} className="grid gap-6">
         <form aria-labelledby="schedule-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSchedule}>
           <div className="flex items-center gap-2">
             <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -827,8 +892,10 @@ export function Discovery() {
             Create schedule
           </Button>
         </form>
-      </div>
+        </div>
+      )}
 
+      {tab === "sources" && (
       <section aria-labelledby="sources-heading" className="grid gap-3 border-y border-border py-4">
         <h2 id="sources-heading" className="text-title font-semibold">
           Sources
@@ -846,7 +913,9 @@ export function Discovery() {
           <SourceTable sources={sources} busy={busy} onStart={startRun} />
         )}
       </section>
+      )}
 
+      {tab === "schedules" && (
       <section aria-labelledby="schedules-heading" className="grid gap-3 border-y border-border py-4">
         <h2 id="schedules-heading" className="text-title font-semibold">
           Schedules
@@ -864,8 +933,10 @@ export function Discovery() {
           <ScheduleTable schedules={schedules} sourceByID={sourceByID} />
         )}
       </section>
+      )}
 
-      <section aria-labelledby="runs-heading" className="grid gap-3 border-y border-border py-4">
+      {tab === "runs" && (
+      <section {...tabPanelProps("discovery", "runs")} aria-labelledby="runs-heading" className="grid gap-3 border-y border-border py-4">
         <h2 id="runs-heading" className="text-title font-semibold">
           Runs
         </h2>
@@ -882,8 +953,10 @@ export function Discovery() {
           <RunTable runs={runs} sourceByID={sourceByID} />
         )}
       </section>
+      )}
 
-      <section aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
+      {tab === "findings" && (
+      <section {...tabPanelProps("discovery", "findings")} aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
         <h2 id="findings-heading" className="text-title font-semibold">
           Findings
         </h2>
@@ -910,6 +983,7 @@ export function Discovery() {
           />
         )}
       </section>
+      )}
     </section>
   );
 }
@@ -992,7 +1066,7 @@ function StructuredSourceForm({
       </div>
 
       {csvError && (
-        <p role="alert" className="text-sm text-status-danger">
+        <p role="alert" className="text-sm text-destructive">
           {csvError}
         </p>
       )}
@@ -1201,7 +1275,7 @@ function topRecordEntries(value: unknown, limit: number): { key: string; value: 
 function severityTone(severity: string): string {
   switch (severity) {
     case "critical":
-      return "border-status-danger/60 bg-status-danger/15 text-status-danger";
+      return "border-destructive/60 bg-destructive/15 text-destructive";
     case "high":
       return "border-status-warning/60 bg-status-warning/15 text-status-warning";
     case "medium":
@@ -1890,7 +1964,7 @@ function TriagePill({ status }: { status: FindingTriageStatus }) {
       ? "border-muted-foreground/30 bg-muted text-muted-foreground"
       : status === "investigating"
       ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-      : "border-status-danger/40 bg-status-danger/10 text-status-danger";
+      : "border-destructive/40 bg-destructive/10 text-destructive";
   return <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${tone}`}>{triageStatusLabel(t, status)}</span>;
 }
 

@@ -609,75 +609,6 @@ export function Identities() {
         />
       )}
 
-      <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
-
-      <form
-        aria-label={t("identities.decommission.ariaLabel")}
-        className="mb-3 grid gap-3 rounded-md border border-border p-3 md:grid-cols-[minmax(10rem,12rem)_1fr_1fr_auto]"
-        onSubmit={(event) => void runDecommission(event)}
-      >
-        <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-type">
-          {t("identities.decommission.signal")}
-          <select
-            id="nhi-decommission-type"
-            className="ui-input"
-            value={decommissionType}
-            onChange={(event) => {
-              setDecommissionType(event.target.value as DecommissionSignalType);
-              setDecommissionTarget("");
-              setDecommissionResult(null);
-            }}
-          >
-            <option value="departure">{t("identities.decommission.departure")}</option>
-            <option value="vendor_term">{t("identities.decommission.vendorTerm")}</option>
-            <option value="inactivity">{t("identities.decommission.inactivity")}</option>
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-target">
-          {t(decommissionInputLabelKey(decommissionType))}
-          <input
-            id="nhi-decommission-target"
-            className="ui-input"
-            type={decommissionType === "inactivity" ? "datetime-local" : "text"}
-            value={decommissionTarget}
-            onChange={(event) => setDecommissionTarget(event.target.value)}
-            placeholder={decommissionType === "vendor_term" ? "Acme SaaS" : decommissionType === "departure" ? "alice@example.com" : undefined}
-            required
-          />
-        </label>
-        <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-reason">
-          Reason
-          <input
-            id="nhi-decommission-reason"
-            className="ui-input"
-            value={decommissionReason}
-            onChange={(event) => setDecommissionReason(event.target.value)}
-            placeholder={t("identities.decommission.reasonPlaceholder")}
-          />
-        </label>
-        <div className="flex items-end">
-          <Button type="submit" variant="outline" className="w-full text-status-danger" disabled={decommissionBusy}>
-            {t("identities.decommission.submit")}
-          </Button>
-        </div>
-      </form>
-
-      {decommissionResult && (
-        <div role="status" className="mb-3 rounded-md border border-border p-3 text-sm">
-          <p className="font-medium">
-            CAP-GOV-04: matched {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked}; retired{" "}
-            {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
-          </p>
-          <ul className="mt-2 space-y-1">
-            {decommissionResult.items.slice(0, 5).map((item) => (
-              <li key={item.identity_id}>
-                {item.name} {item.action} via {item.signal_type}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {notice && (
         <p role="status" className="mb-3 text-sm text-status-success">
           {notice}
@@ -732,8 +663,7 @@ export function Identities() {
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="border-destructive/50 text-destructive hover:bg-destructive/10"
+              variant="destructive"
               disabled={busyId === pending.id || pendingConfirmName.trim() !== pending.name}
               onClick={() => {
                 const p = pending;
@@ -810,9 +740,8 @@ export function Identities() {
               ref={bulkConfirmRef}
               type="button"
               size="sm"
-              variant="outline"
-              className="border-destructive/50 text-destructive hover:bg-destructive/10"
-              disabled={bulkBusy}
+              variant="destructive"
+              loading={bulkBusy}
               onClick={() => void runBulkRevoke()}
             >
               Confirm bulk revoke
@@ -887,6 +816,83 @@ export function Identities() {
           />
         </div>
       )}
+
+      <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
+
+      <section aria-labelledby="decommission-heading" className="mb-3 grid gap-3 rounded-md border border-border p-3">
+        <div>
+          <h2 id="decommission-heading" className="text-title font-semibold">
+            {t("identities.decommission.heading")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("identities.decommission.description")}</p>
+        </div>
+        <form
+          aria-label={t("identities.decommission.ariaLabel")}
+          className="grid gap-3 md:grid-cols-[minmax(10rem,12rem)_1fr_1fr_auto]"
+          onSubmit={(event) => void runDecommission(event)}
+        >
+          <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-type">
+            {t("identities.decommission.signal")}
+            <select
+              id="nhi-decommission-type"
+              className="ui-input"
+              value={decommissionType}
+              onChange={(event) => {
+                setDecommissionType(event.target.value as DecommissionSignalType);
+                setDecommissionTarget("");
+                setDecommissionResult(null);
+              }}
+            >
+              <option value="departure">{t("identities.decommission.departure")}</option>
+              <option value="vendor_term">{t("identities.decommission.vendorTerm")}</option>
+              <option value="inactivity">{t("identities.decommission.inactivity")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-target">
+            {t(decommissionInputLabelKey(decommissionType))}
+            <input
+              id="nhi-decommission-target"
+              className="ui-input"
+              type={decommissionType === "inactivity" ? "datetime-local" : "text"}
+              value={decommissionTarget}
+              onChange={(event) => setDecommissionTarget(event.target.value)}
+              placeholder={decommissionType === "vendor_term" ? "Acme SaaS" : decommissionType === "departure" ? "alice@example.com" : undefined}
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-reason">
+            Reason
+            <input
+              id="nhi-decommission-reason"
+              className="ui-input"
+              value={decommissionReason}
+              onChange={(event) => setDecommissionReason(event.target.value)}
+              placeholder={t("identities.decommission.reasonPlaceholder")}
+            />
+          </label>
+          <div className="flex items-end">
+            <Button type="submit" variant="destructive" className="w-full" loading={decommissionBusy}>
+              {t("identities.decommission.submit")}
+            </Button>
+          </div>
+        </form>
+
+        {decommissionResult && (
+          <div role="status" className="rounded-md border border-border p-3 text-sm">
+            <p className="font-medium">
+              CAP-GOV-04: matched {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked}; retired{" "}
+              {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
+            </p>
+            <ul className="mt-2 space-y-1">
+              {decommissionResult.items.slice(0, 5).map((item) => (
+                <li key={item.identity_id}>
+                  {item.name} {item.action} via {item.signal_type}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
 
       <DetailDrawer
         open={!!selectedId}

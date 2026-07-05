@@ -1,7 +1,20 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export type ChartTone = "critical" | "high" | "medium" | "low" | "neutral" | "success" | "warning" | "info" | "brand";
+export type ChartTone =
+  | "critical"
+  | "high"
+  | "medium"
+  | "low"
+  | "neutral"
+  | "success"
+  | "warning"
+  | "info"
+  | "brand"
+  | "operate"
+  | "observe"
+  | "disclose"
+  | "gold";
 
 const toneVar: Record<ChartTone, string> = {
   critical: "--risk-critical",
@@ -13,6 +26,10 @@ const toneVar: Record<ChartTone, string> = {
   warning: "--status-warning",
   info: "--status-info",
   brand: "--brand-accent",
+  operate: "--operate",
+  observe: "--observe",
+  disclose: "--disclose",
+  gold: "--primary",
 };
 
 const toneText: Record<ChartTone, string> = {
@@ -25,10 +42,21 @@ const toneText: Record<ChartTone, string> = {
   warning: "text-status-warning",
   info: "text-status-info",
   brand: "text-brand-accent",
+  operate: "text-operate",
+  observe: "text-observe",
+  disclose: "text-disclose",
+  gold: "text-primary",
 };
 
-function toneColor(tone: ChartTone): string {
+/** chartToneColor resolves a semantic chart tone to its themed CSS color.
+ * Use this (not raw hsl(var(--…)) strings) wherever chart-adjacent UI needs
+ * a matching swatch, so every chart pulls from one palette. */
+export function chartToneColor(tone: ChartTone): string {
   return `hsl(var(${toneVar[tone]}))`;
+}
+
+function toneColor(tone: ChartTone): string {
+  return chartToneColor(tone);
 }
 
 export type StatTileProps = {
@@ -91,7 +119,7 @@ export function BucketBar({ data, ariaLabel, height = 160, className }: { data: 
         return (
           <g key={datum.label}>
             <rect x={x} y={chartHeight - barHeight} width={barWidth} height={barHeight} rx={4} style={{ fill: toneColor(datum.tone ?? "neutral") }} />
-            <text x={x + barWidth / 2} y={chartHeight - barHeight - 6} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--foreground))" }}>
+            <text x={x + barWidth / 2} y={chartHeight - barHeight - 6} textAnchor="middle" fontSize={11} className="tabular-nums" style={{ fill: "hsl(var(--foreground))" }}>
               {datum.value}
             </text>
             <text x={x + barWidth / 2} y={height - 8} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--muted-foreground))" }}>
@@ -150,7 +178,7 @@ export function TimeBarChart({
             <rect x={x} y={y} width={barWidth} height={barHeight} rx={4} style={{ fill: toneColor(datum.tone ?? tone) }}>
               <title>{`${datum.label}: ${datum.value}`}</title>
             </rect>
-            <text x={x + barWidth / 2} y={Math.max(12, y - 6)} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--foreground))" }}>
+            <text x={x + barWidth / 2} y={Math.max(12, y - 6)} textAnchor="middle" fontSize={11} className="tabular-nums" style={{ fill: "hsl(var(--foreground))" }}>
               {datum.value}
             </text>
             <text x={x + barWidth / 2} y={height - 8} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--muted-foreground))" }}>
@@ -236,36 +264,84 @@ export function StackedTimeBarChart({
 
 export type DonutSegment = { value: number; tone: ChartTone; label: string };
 
-export function Donut({ segments, ariaLabel, size = 120, className }: { segments: DonutSegment[]; ariaLabel: string; size?: number; className?: string }) {
+export function Donut({
+  segments,
+  ariaLabel,
+  size = 128,
+  centerLabel,
+  centerSub,
+  withLegend = false,
+  className,
+}: {
+  segments: DonutSegment[];
+  ariaLabel: string;
+  size?: number;
+  /** Optional headline value rendered inside the ring (e.g. the total). */
+  centerLabel?: string;
+  centerSub?: string;
+  /** Renders a swatch legend beside the ring using the same tone palette. */
+  withLegend?: boolean;
+  className?: string;
+}) {
   const total = segments.reduce((sum, segment) => sum + segment.value, 0) || 1;
-  const radius = size / 2 - 10;
+  const strokeWidth = size / 8;
+  const radius = size / 2 - strokeWidth / 2 - 2;
   const circumference = 2 * Math.PI * radius;
-  return (
+  const ring = (
+    // aria-label only (no <title>) so the chart heading text is not duplicated
+    // for text queries and assistive tech.
     <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${size} ${size}`} width={size} height={size} className={className}>
-      <title>{ariaLabel}</title>
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={12} style={{ stroke: "hsl(var(--muted))" }} />
-      {segments.map((segment, index) => {
-        const before = segments.slice(0, index).reduce((sum, item) => sum + item.value, 0);
-        const offset = (before / total) * circumference;
-        const length = (segment.value / total) * circumference;
-        return (
-          <circle
-            key={segment.label}
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            strokeWidth={12}
-            strokeDasharray={`${length} ${circumference - length}`}
-            strokeDashoffset={-offset}
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            style={{ stroke: toneColor(segment.tone) }}
-          >
-            <title>{`${segment.label}: ${segment.value}`}</title>
-          </circle>
-        );
-      })}
+      <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={strokeWidth} style={{ stroke: "hsl(var(--muted))" }} />
+        {segments.map((segment, index) => {
+          const before = segments.slice(0, index).reduce((sum, item) => sum + item.value, 0);
+          const offset = (before / total) * circumference;
+          const length = (segment.value / total) * circumference;
+          return (
+            <circle
+              key={`${segment.label}-${index}`}
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${length} ${circumference - length}`}
+              strokeDashoffset={-offset}
+              style={{ stroke: toneColor(segment.tone) }}
+            >
+              <title>{`${segment.label}: ${segment.value}`}</title>
+            </circle>
+          );
+        })}
+      </g>
+      {centerLabel != null && (
+        <text x={size / 2} y={centerSub ? size / 2 - 3 : size / 2 + 5} textAnchor="middle" className="fill-foreground text-[18px] font-semibold tabular-nums">
+          {centerLabel}
+        </text>
+      )}
+      {centerSub != null && (
+        <text x={size / 2} y={size / 2 + 15} textAnchor="middle" className="fill-muted-foreground text-[9px]">
+          {centerSub}
+        </text>
+      )}
     </svg>
+  );
+  if (!withLegend) return ring;
+  return (
+    <div className="flex items-center gap-4">
+      {ring}
+      <ul className="min-w-0 flex-1 space-y-1.5">
+        {segments.map((segment, index) => (
+          <li key={`${segment.label}-${index}`} className="flex items-center justify-between gap-2 text-caption">
+            <span className="flex min-w-0 items-center gap-2">
+              <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: toneColor(segment.tone) }} />
+              <span className="truncate text-muted-foreground">{segment.label}</span>
+            </span>
+            <span className="shrink-0 font-medium tabular-nums">{segment.value}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -278,7 +354,8 @@ export function Sparkline({
   className,
 }: {
   points: number[];
-  ariaLabel: string;
+  /** Omit for purely decorative sparklines next to an already-labelled value. */
+  ariaLabel?: string;
   tone?: ChartTone;
   width?: number;
   height?: number;
@@ -288,13 +365,77 @@ export function Sparkline({
   const min = Math.min(0, ...points);
   const span = max - min || 1;
   const step = points.length > 1 ? width / (points.length - 1) : width;
-  const d = points
-    .map((point, index) => `${index === 0 ? "M" : "L"}${(index * step).toFixed(1)} ${(height - ((point - min) / span) * height).toFixed(1)}`)
-    .join(" ");
+  const pad = 2;
+  const y = (point: number) => pad + (1 - (point - min) / span) * (height - pad * 2);
+  const d = points.map((point, index) => `${index === 0 ? "M" : "L"}${(index * step).toFixed(1)} ${y(point).toFixed(1)}`).join(" ");
   return (
-    <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${width} ${height}`} width={width} height={height} className={className}>
-      <title>{ariaLabel}</title>
+    <svg
+      role={ariaLabel ? "img" : undefined}
+      aria-label={ariaLabel}
+      aria-hidden={ariaLabel ? undefined : true}
+      viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
+      className={cn("max-w-full", className)}
+    >
+      {ariaLabel && <title>{ariaLabel}</title>}
       <path d={d} fill="none" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" style={{ stroke: toneColor(tone) }} />
+    </svg>
+  );
+}
+
+/** AreaTrend is the standard filled line chart for time series (issuance
+ * trends and similar): quarter grid lines, a soft gradient fill, and point
+ * markers — all drawn from the shared tone palette. */
+export function AreaTrend({
+  points,
+  ariaLabel,
+  tone = "brand",
+  width = 640,
+  height = 200,
+  className,
+}: {
+  points: number[];
+  ariaLabel: string;
+  tone?: ChartTone;
+  width?: number;
+  height?: number;
+  className?: string;
+}) {
+  const gradientId = useId();
+  const pad = 8;
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const span = Math.max(1, max - min);
+  const x = (index: number) => pad + (points.length > 1 ? (index / (points.length - 1)) * (width - pad * 2) : 0);
+  const y = (value: number) => pad + (1 - (value - min) / span) * (height - pad * 2);
+  const line = points.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
+  const area = `M ${x(0)},${y(points[0] ?? 0)} L ${line.split(" ").join(" L ")} L ${x(points.length - 1)},${height - pad} L ${x(0)},${height - pad} Z`;
+  const color = toneColor(tone);
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className={cn("h-48 w-full", className)} role="img" aria-label={ariaLabel}>
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75].map((line_) => (
+        <line
+          key={line_}
+          x1={pad}
+          x2={width - pad}
+          y1={pad + line_ * (height - pad * 2)}
+          y2={pad + line_ * (height - pad * 2)}
+          stroke="hsl(var(--border))"
+          strokeWidth="1"
+        />
+      ))}
+      <path d={area} fill={`url(#${gradientId})`} />
+      <polyline points={line} fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      {points.map((value, index) => (
+        <circle key={index} cx={x(index)} cy={y(value)} r="2.6" fill="hsl(var(--card))" stroke={color} strokeWidth="1.6" />
+      ))}
     </svg>
   );
 }

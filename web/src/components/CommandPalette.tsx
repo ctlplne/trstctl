@@ -5,7 +5,7 @@ import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
 import { hasAnyPermission } from "@/lib/access";
 import { api, type Me } from "@/lib/api";
-import { appRoutePaths, contextualRouteItems, navGroups, permissionAnyForPath } from "@/lib/navigation";
+import { appRoutePaths, contextualRouteItems, navGroups, permissionAnyForPath, primaryNavItems } from "@/lib/navigation";
 import { useGlobalSearch, type GlobalSearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -48,6 +48,9 @@ function basePath(to: string): string {
 
 function routeCommands(t: (key: MessageKey, values?: Record<string, string | number>) => string, user: Me | null | undefined): RouteCommand[] {
   const labels = new Map<string, { labelKey: MessageKey; groupKey: MessageKey }>();
+  for (const item of primaryNavItems) {
+    labels.set(basePath(item.to), { labelKey: item.labelKey, groupKey: "nav.group.riskInsight" });
+  }
   for (const group of navGroups) {
     for (const item of group.items) {
       const path = basePath(item.to);

@@ -5,7 +5,17 @@ import { api, type Certificate, type NHIInventory as NHIInventoryResponse, type 
 import { useAuth } from "@/auth/AuthProvider";
 import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StackedTimeBarChart, TimeBarChart, type StackedTimeBarDatum, type TimeBarDatum } from "@/components/charts";
+import {
+  AreaTrend,
+  Donut,
+  Sparkline,
+  StackedTimeBarChart,
+  TimeBarChart,
+  type ChartTone,
+  type DonutSegment,
+  type StackedTimeBarDatum,
+  type TimeBarDatum,
+} from "@/components/charts";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { NhiInventory } from "@/components/nhi";
@@ -201,7 +211,7 @@ export function Dashboard() {
             </span>
           </CardHeader>
           <CardContent>
-            <AreaTrend values={d.issuanceTrend} />
+            <AreaTrend points={d.issuanceTrend} ariaLabel="Issuance trend over the last 12 months" />
           </CardContent>
         </Card>
         <Card>
@@ -211,7 +221,13 @@ export function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Donut segments={d.algoMix} centerLabel={formatNumber(kpis.certificates)} centerSub="certificates" />
+            <Donut
+              segments={algoSegments(d.algoMix)}
+              ariaLabel="Algorithm mix by key type"
+              centerLabel={formatNumber(kpis.certificates)}
+              centerSub="certificates"
+              withLegend
+            />
           </CardContent>
         </Card>
       </div>
@@ -376,9 +392,9 @@ function Kpi({
           <span className="text-brand-accent">{icon}</span>
           {label}
         </div>
-        <div className="mt-2 flex items-end justify-between gap-2">
+        <div className="mt-2 flex min-w-0 items-end justify-between gap-2">
           <span className="text-display font-semibold tracking-tight tabular-nums">{formatNumber(value)}</span>
-          {spark && <Sparkline values={spark} />}
+          {spark && <Sparkline points={spark} width={84} height={28} className="shrink" />}
         </div>
         {(delta || sub) && <div className={`mt-1 text-caption font-medium ${toneClass}`}>{delta ?? sub}</div>}
       </CardContent>
@@ -469,115 +485,13 @@ function shortDateLabel(day: string, policy: FormatPolicy): string {
   return formatShortDate(`${day}T12:00:00Z`, policy);
 }
 
-function Sparkline({ values }: { values: number[] }) {
-  const w = 84;
-  const h = 28;
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const span = Math.max(1, max - min);
-  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - ((v - min) / span) * (h - 4) - 2]);
-  const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" className="overflow-visible">
-      <polyline points={line} fill="none" stroke="hsl(var(--brand-accent))" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+/* Algorithm-mix donut tones: five tone families that stay distinct in BOTH
+ * themes (several semantic tokens alias to the same mint/blue in dark mode,
+ * so the cycle picks from non-overlapping families). */
+const algoTones: ChartTone[] = ["operate", "observe", "gold", "high", "disclose"];
 
-function AreaTrend({ values }: { values: number[] }) {
-  const w = 640;
-  const h = 200;
-  const pad = 8;
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const span = Math.max(1, max - min);
-  const x = (i: number) => pad + (i / (values.length - 1)) * (w - pad * 2);
-  const y = (v: number) => pad + (1 - (v - min) / span) * (h - pad * 2);
-  const line = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const area = `M ${x(0)},${y(values[0])} L ${line.split(" ").join(" L ")} L ${x(values.length - 1)},${h - pad} L ${x(0)},${h - pad} Z`;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-48 w-full" role="img" aria-label="Issuance trend over the last 12 months">
-      <defs>
-        <linearGradient id="trendfill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="hsl(var(--brand-accent))" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="hsl(var(--brand-accent))" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[0.25, 0.5, 0.75].map((g) => (
-        <line key={g} x1={pad} x2={w - pad} y1={pad + g * (h - pad * 2)} y2={pad + g * (h - pad * 2)} stroke="hsl(var(--border))" strokeWidth="1" />
-      ))}
-      <path d={area} fill="url(#trendfill)" />
-      <polyline points={line} fill="none" stroke="hsl(var(--brand-accent))" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      {values.map((v, i) => (
-        <circle key={i} cx={x(i)} cy={y(v)} r="2.6" fill="hsl(var(--card))" stroke="hsl(var(--brand-accent))" strokeWidth="1.6" />
-      ))}
-    </svg>
-  );
-}
-
-const donutPalette = ["hsl(var(--brand-accent))", "hsl(var(--observe))", "hsl(var(--status-info))", "hsl(var(--risk-medium))", "hsl(var(--disclose))"];
-
-function Donut({ segments, centerLabel, centerSub }: { segments: Array<{ algo: string; n: number }>; centerLabel: string; centerSub: string }) {
-  const total = segments.reduce((s, x) => s + x.n, 0) || 1;
-  const r = 52;
-  const c = 2 * Math.PI * r;
-  const arcs = segments.reduce<{ offset: number; items: Array<{ algo: string; dash: string; strokeDashoffset: string; color: string }> }>(
-    (state, seg, i) => {
-      const frac = seg.n / total;
-      return {
-        offset: state.offset + frac,
-        items: [
-          ...state.items,
-          {
-            algo: seg.algo,
-            dash: `${(frac * c).toFixed(2)} ${(c - frac * c).toFixed(2)}`,
-            strokeDashoffset: (-state.offset * c).toFixed(2),
-            color: donutPalette[i % donutPalette.length],
-          },
-        ],
-      };
-    },
-    { offset: 0, items: [] },
-  ).items;
-  return (
-    <div className="flex items-center gap-4">
-      <svg width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Algorithm mix by key type">
-        <g transform="rotate(-90 64 64)">
-          <circle cx="64" cy="64" r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth="16" />
-          {arcs.map((arc) => (
-            <circle
-              key={arc.algo}
-              cx="64"
-              cy="64"
-              r={r}
-              fill="none"
-              stroke={arc.color}
-              strokeWidth="16"
-              strokeDasharray={arc.dash}
-              strokeDashoffset={arc.strokeDashoffset}
-            />
-          ))}
-        </g>
-        <text x="64" y="60" textAnchor="middle" className="fill-foreground text-[18px] font-semibold">
-          {centerLabel}
-        </text>
-        <text x="64" y="78" textAnchor="middle" className="fill-muted-foreground text-[9px]">
-          {centerSub}
-        </text>
-      </svg>
-      <ul className="min-w-0 flex-1 space-y-1.5">
-        {segments.map((seg, i) => (
-          <li key={seg.algo} className="flex items-center justify-between gap-2 text-caption">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: donutPalette[i % donutPalette.length] }} />
-              <span className="truncate text-muted-foreground">{seg.algo}</span>
-            </span>
-            <span className="shrink-0 font-medium tabular-nums">{seg.n}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+function algoSegments(mix: Array<{ algo: string; n: number }>): DonutSegment[] {
+  return mix.map((segment, index) => ({ label: segment.algo, value: segment.n, tone: algoTones[index % algoTones.length] }));
 }
 
 function Bands({ bands }: { bands: Array<{ label: string; n: number; tone: "crit" | "warn" | "ok" }> }) {

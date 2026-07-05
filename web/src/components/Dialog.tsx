@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { cn } from "@/lib/utils";
 
 const focusableSelector = [
   "a[href]",
@@ -22,6 +23,8 @@ export type DialogProps = {
   overlayClassName?: string;
   panelClassName?: string;
   closeOnBackdropClick?: boolean;
+  /** Entrance motion for the panel: centered dialog pop, end-edge drawer slide, or none. */
+  panelAnimation?: "panel" | "drawer" | "none";
 };
 
 export function Dialog({
@@ -33,6 +36,7 @@ export function Dialog({
   onClose,
   open,
   overlayClassName = "absolute inset-0 bg-foreground/20",
+  panelAnimation = "panel",
   panelClassName,
   returnFocusRef,
   role = "dialog",
@@ -109,14 +113,18 @@ export function Dialog({
 
   return (
     <div ref={rootRef} className={className ?? "fixed inset-0 z-50"} role="presentation">
-      <div className={overlayClassName} aria-hidden="true" onClick={closeOnBackdropClick ? onClose : undefined} />
+      <div className={cn(overlayClassName, "motion-safe:animate-overlay-in")} aria-hidden="true" onClick={closeOnBackdropClick ? onClose : undefined} />
       <div
         ref={panelRef}
         role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className={panelClassName}
+        className={cn(
+          panelClassName,
+          panelAnimation === "panel" && "motion-safe:animate-panel-in",
+          panelAnimation === "drawer" && "motion-safe:animate-drawer-in",
+        )}
         tabIndex={-1}
       >
         {children}

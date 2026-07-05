@@ -309,13 +309,13 @@ describe("discovery control-plane surface", () => {
 
   it("renders served sources, schedules, runs, and findings without the old blocked disclosure", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
+    const user = userEvent.setup();
     renderDiscovery();
 
     expect(await screen.findByRole("heading", { name: "Discovery" })).toBeInTheDocument();
     expect(screen.queryByText("Discovery scan API not served yet")).not.toBeInTheDocument();
-    expect((await screen.findAllByText("edge")).length).toBeGreaterThanOrEqual(1);
-    expect((await screen.findAllByText("cloud-secret-managers")).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Cloud secrets").length).toBeGreaterThanOrEqual(1);
+
+    // Findings tab (default): monitoring/shadow posture plus the findings table.
     const monitoring = screen.getByRole("heading", { name: "Continuous monitoring" }).closest("section");
     expect(monitoring).toBeTruthy();
     expect(within(monitoring as HTMLElement).getByText("Scheduled")).toBeInTheDocument();
@@ -327,13 +327,23 @@ describe("discovery control-plane surface", () => {
     expect(within(shadow as HTMLElement).getByText("CAP-NHI-05")).toBeInTheDocument();
     expect(within(shadow as HTMLElement).getByText("Unregistered")).toBeInTheDocument();
     expect(within(shadow as HTMLElement).getByText("github:user/payments-ci/pat")).toBeInTheDocument();
-    expect(await screen.findByText("edge-hourly")).toBeInTheDocument();
-    expect(screen.getByText("run-1")).toBeInTheDocument();
     expect(screen.getAllByText("x509_certificate").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("abcdef1234...567890")).toBeInTheDocument();
     expect(screen.queryByText("RAW-TOKEN-VALUE")).not.toBeInTheDocument();
     expect(screen.getByText("fedcba9876...543210")).toBeInTheDocument();
     expect(screen.queryByText("VAULT-RAW-SECRET")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Sources" }));
+    expect((await screen.findAllByText("edge")).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText("cloud-secret-managers")).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Cloud secrets").length).toBeGreaterThanOrEqual(1);
+
+    await user.click(screen.getByRole("tab", { name: "Schedules" }));
+    expect(await screen.findByText("edge-hourly")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Runs" }));
+    expect(screen.getByText("run-1")).toBeInTheDocument();
+
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
@@ -441,7 +451,7 @@ describe("discovery control-plane surface", () => {
 
   it("creates a network source with host:port targets and can queue a run", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -462,7 +472,7 @@ describe("discovery control-plane surface", () => {
 
   it("uses structured templates instead of primary JSON textareas for complex source creation", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -491,7 +501,7 @@ describe("discovery control-plane surface", () => {
 
   it("creates a cross-surface NHI source from metadata-only observations", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -527,7 +537,7 @@ describe("discovery control-plane surface", () => {
 
   it("creates an API-key and token source from metadata-only observations", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -577,7 +587,7 @@ describe("discovery control-plane surface", () => {
 
   it("creates an OAuth grant source from metadata-only app consent records", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -611,7 +621,7 @@ describe("discovery control-plane surface", () => {
 
   it("creates a service-account source from AD and cloud inventory metadata", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -662,7 +672,7 @@ describe("discovery control-plane surface", () => {
 
   it("creates an NHI behavior source from metadata-only activity events", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -710,7 +720,7 @@ describe("discovery control-plane surface", () => {
 
   it("creates a compromised-credential source from metadata-only external signals", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -754,7 +764,7 @@ describe("discovery control-plane surface", () => {
 
   it("creates a Kubernetes ingress/gateway source from metadata-only TLS resources", async () => {
     const user = userEvent.setup();
-    renderDiscovery();
+    renderDiscovery(["/discovery?tab=sources"]);
 
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
@@ -803,12 +813,15 @@ describe("discovery control-plane surface", () => {
     apiMock.discoverySchedules.mockResolvedValueOnce({ items: [] });
     apiMock.discoveryRuns.mockResolvedValueOnce({ items: [] });
     apiMock.discoveryFindings.mockResolvedValueOnce({ items: [] });
+    const user = userEvent.setup();
     renderDiscovery();
 
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
     expect(screen.getByText("missing discovery:read")).toBeInTheDocument();
-    expect(screen.getByText("No discovery schedules")).toBeInTheDocument();
-    expect(screen.getByText("No discovery runs")).toBeInTheDocument();
     expect(screen.getByText("No discovery findings")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Schedules" }));
+    expect(screen.getByText("No discovery schedules")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Runs" }));
+    expect(screen.getByText("No discovery runs")).toBeInTheDocument();
   });
 });

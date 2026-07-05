@@ -86,6 +86,7 @@ describe("WIRE-07 dynamic secret lease wiring", () => {
     renderSecrets();
 
     await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Engines" }));
     const issueForm = within(screen.getByRole("form", { name: "Issue dynamic secret lease" }));
     await user.selectOptions(issueForm.getByLabelText("Provider"), "postgresql");
     await user.type(issueForm.getByLabelText("Role"), "readonly-reporting");

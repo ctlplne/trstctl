@@ -423,7 +423,7 @@ export function ApiExplorer() {
       )}
 
       {loadError && (
-        <div role="alert" className="rounded-panel border border-status-danger/30 bg-status-danger/10 p-4 text-sm text-status-danger">
+        <div role="alert" className="rounded-panel border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium">{t("apiExplorer.loadFailed")}</p>
@@ -602,7 +602,7 @@ export function ApiExplorer() {
                 </Button>
               </form>
               {keyError && (
-                <p role="alert" className="mt-3 rounded-control border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {t("apiExplorer.keyFailed")} {keyError}
                 </p>
               )}
@@ -638,7 +638,7 @@ export function ApiExplorer() {
                 {t("apiExplorer.response")}
               </h2>
               {runError && (
-                <p role="alert" className="mt-3 rounded-control border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {t("apiExplorer.runFailed")} {runError}
                 </p>
               )}

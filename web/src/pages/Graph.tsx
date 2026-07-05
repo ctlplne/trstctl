@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type GraphImpact, type GraphNode, type GraphQueryResult, type GraphReachable, type GraphResponse } from "@/lib/api";
+import { CredentialChip } from "@/components/CredentialChip";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import {
@@ -69,6 +70,18 @@ export function Graph() {
   );
   const selectedNode = selected ? (nodeByID.get(selected) ?? null) : null;
   const emptyGraph = data != null && data.nodes.length === 0 && data.edges.length === 0;
+  const analysisRef = useRef<HTMLDivElement>(null);
+  const impactIds = useMemo(() => {
+    if (!impact) return undefined;
+    return new Set([impact.node.id, ...impact.affected.map((node) => node.id)]);
+  }, [impact]);
+
+  // Analysis results render in the rail next to the map; make sure they enter
+  // the viewport when they arrive so the Analyze button visibly "did something".
+  // (Optional call: scrollIntoView is absent in some environments, e.g. jsdom.)
+  useEffect(() => {
+    if (impact || reachable) analysisRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [impact, reachable]);
 
   useEffect(() => {
     let active = true;
@@ -85,14 +98,14 @@ export function Graph() {
     if (data?.nodes?.[0] && (!selected || !nodeByID.has(selected))) setSelected(data.nodes[0].id);
   }, [data, nodeByID, selected]);
 
-  async function runNodeAnalysis() {
-    if (!selected) return;
+  async function runNodeAnalysisFor(id: string) {
+    if (!id) return;
     setBusy("analysis");
     setBlastError(null);
     setReachableError(null);
     setImpact(null);
     setReachable(null);
-    const [impactResult, reachableResult] = await Promise.allSettled([api.graphBlastRadius(selected), api.graphReachable(selected)]);
+    const [impactResult, reachableResult] = await Promise.allSettled([api.graphBlastRadius(id), api.graphReachable(id)]);
     if (impactResult.status === "fulfilled") {
       setImpact(impactResult.value);
     } else {
@@ -145,7 +158,14 @@ export function Graph() {
         description="Tenant-scoped credential graph: explore nodes and edges, compute blast radius and reachability, and run read-only graph queries."
       />
 
-      <BlastRadiusExplorer nodes={graph.data?.nodes ?? []} />
+      <BlastRadiusExplorer
+        nodes={graph.data?.nodes ?? []}
+        selectedId={selected}
+        onAnalyze={(id) => {
+          setSelected(id);
+          void runNodeAnalysisFor(id);
+        }}
+      />
 
       {loading && <LoadingState>Loading graph...</LoadingState>}
       {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
@@ -159,7 +179,7 @@ export function Graph() {
                 <CardTitle>Nodes</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold">{data.nodes.length}</p>
+                <p className="text-3xl font-semibold tabular-nums">{data.nodes.length}</p>
               </CardContent>
             </Card>
             <Card>
@@ -167,7 +187,7 @@ export function Graph() {
                 <CardTitle>Edges</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold">{data.edges.length}</p>
+                <p className="text-3xl font-semibold tabular-nums">{data.edges.length}</p>
               </CardContent>
             </Card>
             <Card>
@@ -175,7 +195,7 @@ export function Graph() {
                 <CardTitle>Blast radius</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold" data-testid="blast-radius-count">
+                <p className="text-3xl font-semibold tabular-nums" data-testid="blast-radius-count">
                   {impact?.affected.length ?? "-"}
                 </p>
               </CardContent>
@@ -217,7 +237,14 @@ export function Graph() {
 
               {!emptyGraph && (
                 <div className="my-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-                  <GraphView nodes={visibleNodes} edges={visibleEdges} selectedId={selected} onSelect={setSelected} />
+                  <GraphView
+                    nodes={visibleNodes}
+                    edges={visibleEdges}
+                    selectedId={selected}
+                    onSelect={setSelected}
+                    impactIds={impactIds}
+                    focusId={impact?.node.id}
+                  />
                   <GraphLegend
                     nodeKinds={legendNodeKinds}
                     edgeTypes={legendEdgeTypes}
@@ -296,7 +323,7 @@ export function Graph() {
                   )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button type="button" disabled={busy === "analysis" || !selected} onClick={() => void runNodeAnalysis()}>
+                  <Button type="button" loading={busy === "analysis"} disabled={!selected} onClick={() => void runNodeAnalysisFor(selected)}>
                     Analyze selected node
                   </Button>
                 </div>
@@ -329,7 +356,9 @@ export function Graph() {
                         <tr key={node.id}>
                           <td data-testid="graph-node-name">{node.name || "-"}</td>
                           <td>{node.kind}</td>
-                          <td className="font-mono text-xs">{node.id}</td>
+                          <td>
+                            <CredentialChip value={node.id} label="node ID" />
+                          </td>
                           <td>
                             <Button type="button" size="sm" variant="outline" onClick={() => setSelected(node.id)}>
                               Select {node.name || node.id}
@@ -355,14 +384,14 @@ export function Graph() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.edges.length === 0 && (
+                        {visibleEdges.length === 0 && (
                           <tr>
                             <td colSpan={4} className="text-muted-foreground">
-                              No graph edges returned.
+                              No graph edges match the current filters.
                             </td>
                           </tr>
                         )}
-                        {data.edges.map((edge) => (
+                        {visibleEdges.map((edge) => (
                           <tr key={`${edge.from}-${edge.type}-${edge.to}`}>
                             <td>{nodeByID.get(edge.from)?.name ?? edge.from}</td>
                             <td className="font-mono text-xs">{edge.type}</td>
@@ -375,11 +404,14 @@ export function Graph() {
                   </section>
                 </div>
 
-                <NodeDetail node={selectedNode} />
+                <div className="space-y-5">
+                  <NodeDetail node={selectedNode} />
+                  <div ref={analysisRef} className="space-y-5">
+                    {impact && <ImpactPanel impact={impact} />}
+                    {reachable && <ReachablePanel reachable={reachable} />}
+                  </div>
+                </div>
               </div>
-
-              {impact && <ImpactPanel impact={impact} />}
-              {reachable && <ReachablePanel reachable={reachable} />}
             </div>
           )}
 
@@ -458,7 +490,9 @@ function NodeDetail({ node }: { node: GraphNode | null }) {
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">Opaque node ID</dt>
-          <dd className="break-all font-mono text-xs">{node.id}</dd>
+          <dd className="mt-0.5">
+            <CredentialChip value={node.id} label="node ID" />
+          </dd>
         </div>
       </dl>
       <h3 className="mt-4 font-semibold">Attributes</h3>
@@ -478,25 +512,25 @@ function NodeDetail({ node }: { node: GraphNode | null }) {
       <ul className="mt-2 space-y-1">
         {node.id.startsWith("cert:") && (
           <li>
-            <a className="text-primary underline" href={`/certificates?credential=${encodeURIComponent(node.id.slice(5))}`}>
+            <Link className="text-brand-accent underline" to={`/certificates?credential=${encodeURIComponent(node.id.slice(5))}`}>
               Certificate detail
-            </a>
+            </Link>
           </li>
         )}
         <li>
-          <a className="text-primary underline" href={`/risk?node=${encodeURIComponent(node.id)}`}>
+          <Link className="text-brand-accent underline" to={`/risk?node=${encodeURIComponent(node.id)}`}>
             Risk row
-          </a>
+          </Link>
         </li>
         <li>
-          <a className="text-primary underline" href={`/identities?node=${encodeURIComponent(node.id)}`}>
+          <Link className="text-brand-accent underline" to={`/identities?node=${encodeURIComponent(node.id)}`}>
             Lifecycle identity
-          </a>
+          </Link>
         </li>
         <li>
-          <a className="text-primary underline" href={`/audit?node=${encodeURIComponent(node.id)}`}>
+          <Link className="text-brand-accent underline" to={`/audit?node=${encodeURIComponent(node.id)}`}>
             Audit evidence
-          </a>
+          </Link>
         </li>
       </ul>
     </section>
@@ -505,7 +539,7 @@ function NodeDetail({ node }: { node: GraphNode | null }) {
 
 function ImpactPanel({ impact }: { impact: GraphImpact }) {
   return (
-    <section aria-labelledby="blast-radius-heading" className="ui-panel mt-6 p-comfortable">
+    <section aria-labelledby="blast-radius-heading" className="ui-panel p-comfortable">
       <h2 id="blast-radius-heading" className="text-title font-semibold">
         Blast-radius paths and by-kind summary
       </h2>
@@ -527,7 +561,7 @@ function ImpactPanel({ impact }: { impact: GraphImpact }) {
 
 function ReachablePanel({ reachable }: { reachable: GraphReachable }) {
   return (
-    <section aria-labelledby="reachable-heading" className="ui-panel mt-6 p-comfortable">
+    <section aria-labelledby="reachable-heading" className="ui-panel p-comfortable">
       <h2 id="reachable-heading" className="text-title font-semibold">
         Reachable nodes
       </h2>
@@ -541,24 +575,25 @@ function ReachablePanel({ reachable }: { reachable: GraphReachable }) {
 
 function AffectedNodes({ nodes }: { nodes: GraphNode[] }) {
   return (
-    <ul className="mt-3 grid gap-2 md:grid-cols-2">
+    <ul className="mt-3 grid gap-2">
       {nodes.map((node) => (
         <li key={node.id} className="rounded-md border border-border p-2">
           <p className="font-medium">{node.name || node.id}</p>
-          <p className="font-mono text-xs text-muted-foreground">
-            {node.kind} · {node.id}
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>{node.kind}</span>
+            <CredentialChip value={node.id} label="node ID" />
           </p>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
-            <a className="text-primary underline" href={`/risk?node=${encodeURIComponent(node.id)}`}>
+            <Link className="text-brand-accent underline" to={`/risk?node=${encodeURIComponent(node.id)}`}>
               Risk
-            </a>
-            <a className="text-primary underline" href={`/audit?node=${encodeURIComponent(node.id)}`}>
+            </Link>
+            <Link className="text-brand-accent underline" to={`/audit?node=${encodeURIComponent(node.id)}`}>
               Audit
-            </a>
+            </Link>
             {node.id.startsWith("cert:") && (
-              <a className="text-primary underline" href={`/certificates?credential=${encodeURIComponent(node.id.slice(5))}`}>
+              <Link className="text-brand-accent underline" to={`/certificates?credential=${encodeURIComponent(node.id.slice(5))}`}>
                 Certificate
-              </a>
+              </Link>
             )}
           </div>
         </li>

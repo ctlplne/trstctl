@@ -1,17 +1,39 @@
 import { useState } from "react";
 import { SectionCard, AttentionList, AttentionRow } from "@/components/dashboard";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type GraphNode, type GraphImpact } from "@/lib/api";
 
-export function BlastRadiusExplorer({ nodes }: { nodes: GraphNode[] }) {
+/** BlastRadiusExplorer is the quick "what breaks if this is compromised?"
+ * entry point. Standalone it fetches and lists the blast radius itself; when
+ * the parent passes `onAnalyze` (the Graph page), it delegates instead so the
+ * whole page shares one selection and one analysis — picked credentials get
+ * painted on the map and detailed in the analysis rail, not in a second,
+ * disconnected result list. */
+export function BlastRadiusExplorer({
+  nodes,
+  selectedId,
+  onAnalyze,
+}: {
+  nodes: GraphNode[];
+  selectedId?: string;
+  onAnalyze?: (id: string) => void;
+}) {
+  const { t } = useTranslation();
   const [impact, setImpact] = useState<GraphImpact | null>(null);
-  const [selected, setSelected] = useState<string>("");
+  const [localSelected, setLocalSelected] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const delegated = Boolean(onAnalyze);
+  const selected = delegated ? (selectedId ?? "") : localSelected;
 
   async function explore(id: string) {
-    setSelected(id);
+    setLocalSelected(id);
     setError(null);
     setImpact(null);
     if (!id) return;
+    if (onAnalyze) {
+      onAnalyze(id);
+      return;
+    }
     try {
       setImpact(await api.graphBlastRadius(id));
     } catch (err) {
@@ -32,6 +54,7 @@ export function BlastRadiusExplorer({ nodes }: { nodes: GraphNode[] }) {
           ))}
         </select>
       </label>
+      {delegated && <p className="mt-2 text-caption text-muted-foreground">{t("graph.explorer.delegatedHint")}</p>}
       {impact ? (
         <div className="mt-3">
           <p className="text-caption text-muted-foreground">{impact.affected.length} affected credentials</p>

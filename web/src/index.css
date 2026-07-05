@@ -3,42 +3,46 @@
 @tailwind utilities;
 
 @layer base {
+  /* Palette ported from trstctl.com (trstctl-website/public/index.html):
+     ink-black blue surfaces, warm cream ink, gold primary (#ffd166), mint
+     accent (#5eead4). Dark is the flagship theme (a direct port); light is the
+     same language on warm paper with layered surfaces (bg ≠ card). */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --background: 40 30% 98%;
+    --foreground: 216 28% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --primary: 168 62% 29%;
-    --primary-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;
+    --card-foreground: 216 28% 9%;
+    --muted: 42 25% 94%;
+    --muted-foreground: 215 16% 44%;
+    --primary: 42 100% 70%;
+    --primary-foreground: 38 57% 5%;
+    --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 91%;
-    --brand-accent: 168 56% 42%;
+    --border: 214 25% 88%;
+    --brand-accent: 40 75% 36%;
     --brand-accent-foreground: 0 0% 100%;
-    --console-accent: 168 56% 42%;
-    /* Sidebar rail — a constant deep teal-black in both themes (the certctl
-       signature: one dark teal rail). Ported from certctl's sidebar tokens. */
-    --sidebar: 165 58% 11%;
-    --sidebar-hover: 165 56% 17%;
-    --sidebar-active: 164 59% 23%;
-    --sidebar-foreground: 161 40% 70%;
-    --operate: 244 60% 60%;
+    --console-accent: 40 75% 36%;
+    /* Sidebar rail — a constant ink-black blue in both themes (the website's
+       --bg-2 #0d1118 family), replacing the legacy certctl teal rail. */
+    --sidebar: 216 28% 7%;
+    --sidebar-hover: 214 32% 10%;
+    --sidebar-active: 210 31% 13%;
+    --sidebar-foreground: 204 15% 75%;
+    --operate: 222 70% 48%;
     --operate-foreground: 0 0% 100%;
-    --observe: 173 80% 32%;
+    --observe: 172 70% 30%;
     --observe-foreground: 0 0% 100%;
     --disclose: 271 81% 56%;
     --disclose-foreground: 0 0% 100%;
-    --risk-critical: 0 72% 51%;
-    --risk-high: 24 95% 53%;
-    --risk-medium: 45 93% 47%;
-    --risk-low: 173 80% 32%;
-    --risk-none: 215 16% 47%;
-    --status-success: 158 64% 38%;
-    --status-warning: 32 95% 44%;
-    --status-neutral: 215 16% 47%;
-    --status-info: 199 89% 48%;
+    --risk-critical: 0 72% 48%;
+    --risk-high: 24 95% 45%;
+    --risk-medium: 40 85% 38%;
+    --risk-low: 172 70% 30%;
+    --risk-none: 215 16% 44%;
+    --status-success: 158 64% 34%;
+    --status-warning: 32 95% 40%;
+    --status-neutral: 215 16% 44%;
+    --status-info: 218 80% 48%;
     --density-compact: 0.75rem;
     --density-default: 1rem;
     --density-comfortable: 1.25rem;
@@ -54,48 +58,50 @@
     --line-height-title: 1.5rem;
     --line-height-heading: 1.75rem;
     --line-height-display: 2rem;
-    --elevation-1: 0 1px 2px 0 hsl(222 47% 11% / 0.06);
-    --elevation-2: 0 8px 22px -14px hsl(222 47% 11% / 0.35);
-    --elevation-3: 0 22px 60px -30px hsl(222 47% 11% / 0.45);
+    --motion-fast: 160ms;
+    --motion-base: 220ms;
+    --elevation-1: 0 1px 2px 0 hsl(216 28% 9% / 0.08);
+    --elevation-2: 0 8px 22px -14px hsl(216 28% 9% / 0.35);
+    --elevation-3: 0 22px 60px -30px hsl(216 28% 9% / 0.45);
   }
 
   .dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 96%;
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 96%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --primary: 168 52% 52%;
-    --primary-foreground: 222 47% 11%;
-    --destructive: 0 63% 45%;
-    --destructive-foreground: 210 40% 96%;
-    --border: 217 33% 20%;
-    --brand-accent: 168 52% 52%;
-    --brand-accent-foreground: 222 47% 8%;
-    --console-accent: 168 52% 52%;
-    --sidebar: 165 58% 11%;
-    --sidebar-hover: 165 56% 17%;
-    --sidebar-active: 164 59% 23%;
-    --sidebar-foreground: 161 40% 70%;
-    --operate: 199 89% 48%;
-    --operate-foreground: 222 47% 8%;
-    --observe: 173 80% 42%;
-    --observe-foreground: 222 47% 8%;
+    --background: 223 30% 5%;
+    --foreground: 40 33% 93%;
+    --card: 214 32% 10%;
+    --card-foreground: 40 33% 93%;
+    --muted: 210 31% 13%;
+    --muted-foreground: 204 15% 75%;
+    --primary: 42 100% 70%;
+    --primary-foreground: 38 57% 5%;
+    --destructive: 0 100% 71%;
+    --destructive-foreground: 0 45% 6%;
+    --border: 211 28% 20%;
+    --brand-accent: 171 77% 64%;
+    --brand-accent-foreground: 223 30% 5%;
+    --console-accent: 42 100% 70%;
+    --sidebar: 216 28% 7%;
+    --sidebar-hover: 214 32% 10%;
+    --sidebar-active: 210 31% 13%;
+    --sidebar-foreground: 204 15% 75%;
+    --operate: 218 100% 77%;
+    --operate-foreground: 223 30% 5%;
+    --observe: 171 77% 64%;
+    --observe-foreground: 223 30% 5%;
     --disclose: 271 91% 65%;
-    --disclose-foreground: 222 47% 8%;
-    --risk-critical: 0 72% 62%;
+    --disclose-foreground: 223 30% 5%;
+    --risk-critical: 0 100% 71%;
     --risk-high: 24 95% 58%;
     --risk-medium: 45 93% 56%;
-    --risk-low: 173 80% 42%;
-    --risk-none: 215 20% 65%;
-    --status-success: 158 64% 48%;
+    --risk-low: 171 70% 58%;
+    --risk-none: 207 12% 60%;
+    --status-success: 158 64% 52%;
     --status-warning: 32 95% 54%;
-    --status-neutral: 215 20% 65%;
-    --status-info: 199 89% 58%;
-    --elevation-1: 0 1px 2px 0 hsl(222 47% 2% / 0.45);
-    --elevation-2: 0 12px 30px -18px hsl(222 47% 2% / 0.8);
-    --elevation-3: 0 28px 70px -34px hsl(222 47% 2% / 0.9);
+    --status-neutral: 207 12% 65%;
+    --status-info: 218 100% 77%;
+    --elevation-1: 0 1px 2px 0 hsl(220 40% 2% / 0.5);
+    --elevation-2: 0 12px 30px -18px hsl(220 40% 2% / 0.8);
+    --elevation-3: 0 28px 70px -34px hsl(220 40% 2% / 0.9);
   }
 
   * {
@@ -103,8 +109,8 @@
   }
   html {
     font-family:
-      "Inter Variable",
-      Inter,
+      "Sora Variable",
+      Sora,
       ui-sans-serif,
       -apple-system,
       BlinkMacSystemFont,
@@ -134,14 +140,30 @@
     letter-spacing: -0.01em;
   }
 
+  /* Digits align on every data surface: all tables get tabular figures so
+     numeric columns read as columns. Individual numerals elsewhere opt in
+     with the tabular-nums utility. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
   /* Visible focus for keyboard navigation (WCAG 2.4.7). */
   :focus-visible {
     outline: 2px solid hsl(var(--brand-accent));
     outline-offset: 2px;
     border-radius: 4px;
   }
+  /* The route-focus handler (AppShell useRouteFocus) programmatically focuses
+     each page's H1 so screen readers announce the new page. Chrome treats that
+     programmatic focus as :focus-visible and drew a ring around every page
+     title on navigation. Suppress the visual only — announcement behavior is
+     unchanged. */
+  h1[tabindex="-1"]:focus,
+  h1[tabindex="-1"]:focus-visible {
+    outline: none;
+  }
   ::selection {
-    background: hsl(var(--brand-accent) / 0.18);
+    background: hsl(var(--primary) / 0.35);
   }
 
   /* Respect the OS "reduce motion" setting (WCAG 2.3.3). Vestibular triggers
@@ -210,7 +232,7 @@
     border-bottom: 0;
   }
   .ui-table tbody tr {
-    transition: background-color 0.12s ease;
+    transition: background-color var(--motion-fast) ease;
   }
   .ui-table tbody tr:hover td {
     background: hsl(var(--foreground) / 0.03);

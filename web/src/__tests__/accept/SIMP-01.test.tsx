@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { Platform } from "@/pages/Platform";
@@ -253,6 +254,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
   });
 
   it("keeps only served access-admin data plus session posture on Platform", async () => {
+    const user = userEvent.setup();
     renderPlatform();
 
     expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
@@ -265,6 +267,8 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
     expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
 
+    // Read-only posture panels live behind the System posture workspace tab.
+    await user.click(screen.getByRole("tab", { name: "System posture" }));
     expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Transport" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Auth session" })).toBeInTheDocument();
@@ -277,6 +281,8 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
     expect(screen.getByText("idempotency")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Access administration" }));
     expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
     expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
     expect(screen.getByText("access-admins")).toBeInTheDocument();

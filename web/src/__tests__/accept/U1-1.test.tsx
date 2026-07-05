@@ -29,8 +29,11 @@ describe("U1-1 certificates dashboard", () => {
 
     render(<CertificatesDashboard certificates={certificates} risks={risks} />);
 
-    expect(screen.getByText("Total certificates")).toBeInTheDocument();
-    expect(screen.getByText("4")).toBeInTheDocument();
+    // The estate total/expiring KPIs live on the server-backed health panel;
+    // this dashboard keeps the client-derived tiles that panel lacks.
+    expect(screen.queryByText("Total certificates")).not.toBeInTheDocument();
+    expect(screen.getByText("Revoked")).toBeInTheDocument();
+    expect(screen.getByText("High risk")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Certificates by time to expiry" })).toBeInTheDocument();
 
     const list = screen.getByRole("list", { name: "Certificates needing attention" });

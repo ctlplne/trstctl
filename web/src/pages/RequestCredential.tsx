@@ -7,7 +7,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { api, ApiError, identityState, type Identity, type Profile } from "@/lib/api";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 function problemMessage(err: unknown, fallback: string): string {
@@ -68,6 +70,8 @@ function formatDate(value?: string): string {
 
 export function RequestCredential() {
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const [step, setStep] = useState(0);
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [requests, setRequests] = useState<Identity[] | null>(null);
@@ -189,12 +193,21 @@ export function RequestCredential() {
       setNotice(`Request accepted for ${created.name}. It is awaiting approval; no certificate has been minted yet.`);
       setName("");
       setPurpose("");
+      setStep(0);
     } catch (err) {
       setSubmitError(problemMessage(err, "Could not submit request"));
     } finally {
       setBusy(false);
     }
   }
+
+  const wizardSteps: CarouselStep[] = [
+    { id: "profile", label: t("request.wizard.profile.label"), description: t("request.wizard.profile.description") },
+    { id: "details", label: t("request.wizard.details.label"), description: t("request.wizard.details.description") },
+    { id: "review", label: t("request.wizard.review.label"), description: t("request.wizard.review.description") },
+  ];
+  const nextDisabled = step === 0 ? !selectedProfile : step === 1 ? !name.trim() || !ownerId.trim() : true;
+  const nextLabel = step === 0 ? t("request.wizard.nextDetails") : t("request.wizard.nextReview");
 
   const requestGridState: DataGridState = requestError ? "error" : requests == null ? "loading" : myRequests.length ? "ready" : "empty";
 
@@ -213,80 +226,133 @@ export function RequestCredential() {
       )}
 
       <section aria-labelledby="new-request-heading">
+        <h2 id="new-request-heading" className="sr-only">
+          New request
+        </h2>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
           <form aria-labelledby="new-request-heading" className="grid gap-4" onSubmit={submit}>
-            <h2 id="new-request-heading" className="text-title font-semibold">
-              New request
-            </h2>
+            <StepShell
+              steps={wizardSteps}
+              currentIndex={step}
+              nextDisabled={nextDisabled}
+              nextLabel={nextLabel}
+              onNext={step < 2 ? () => setStep((current) => Math.min(current + 1, 2)) : undefined}
+              onPrevious={() => setStep((current) => Math.max(current - 1, 0))}
+            >
+              {step === 0 && (
+                <div className="grid gap-4">
+                  {profileError && <ErrorState title="Profile list unavailable">{profileError}</ErrorState>}
+                  {profiles == null && !profileError && <LoadingState>Loading profiles...</LoadingState>}
+                  {profiles && activeProfiles.length === 0 && (
+                    <EmptyState title="No active profiles">Create or activate a certificate profile before self-service requests can be accepted.</EmptyState>
+                  )}
+                  <label className="grid max-w-xl gap-1 text-body font-medium" htmlFor="request-profile">
+                    Profile
+                    <select
+                      id="request-profile"
+                      value={selectedProfileKey}
+                      onChange={(event) => setSelectedProfileKey(event.target.value)}
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                      disabled={activeProfiles.length === 0}
+                      required
+                    >
+                      {activeProfiles.map((profile) => (
+                        <option key={profileKey(profile)} value={profileKey(profile)}>
+                          {`${profile.name} v${profile.version}${profile.active ? " active" : ""}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {selectedProfile && (
+                    <dl className="grid max-w-xl gap-2 rounded-panel border border-border bg-muted/40 p-3 text-body">
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-caption text-muted-foreground">Profile</dt>
+                        <dd className="font-medium">{`${selectedProfile.name} v${selectedProfile.version}`}</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-caption text-muted-foreground">Status</dt>
+                        <dd>
+                          <StatusBadge vocabulary="lifecycle" value={selectedProfile.active === false ? "retired" : "issued"} label={selectedProfile.active === false ? "inactive" : "active"} />
+                        </dd>
+                      </div>
+                    </dl>
+                  )}
+                </div>
+              )}
 
-            {profileError && <ErrorState title="Profile list unavailable">{profileError}</ErrorState>}
-            {profiles == null && !profileError && <LoadingState>Loading profiles...</LoadingState>}
-            {profiles && activeProfiles.length === 0 && (
-              <EmptyState title="No active profiles">Create or activate a certificate profile before self-service requests can be accepted.</EmptyState>
-            )}
+              {step === 1 && (
+                <div className="grid max-w-xl gap-4">
+                  <label className="grid gap-1 text-body font-medium" htmlFor="request-name">
+                    Credential name
+                    <input
+                      id="request-name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                      placeholder="payments-api"
+                      required
+                    />
+                  </label>
+                  <div className="grid gap-1">
+                    <label className="grid gap-1 text-body font-medium" htmlFor="request-owner">
+                      Owner id
+                      <input
+                        id="request-owner"
+                        value={ownerId}
+                        onChange={(event) => setOwnerId(event.target.value)}
+                        className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                        required
+                      />
+                    </label>
+                    <p className="text-caption text-muted-foreground">{t("request.wizard.ownerHint")}</p>
+                  </div>
+                  <label className="grid gap-1 text-body font-medium" htmlFor="request-purpose">
+                    Business purpose
+                    <textarea
+                      id="request-purpose"
+                      value={purpose}
+                      onChange={(event) => setPurpose(event.target.value)}
+                      className="min-h-20 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                      placeholder="service TLS for staging"
+                    />
+                  </label>
+                </div>
+              )}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-1 text-body font-medium" htmlFor="request-profile">
-                Profile
-                <select
-                  id="request-profile"
-                  value={selectedProfileKey}
-                  onChange={(event) => setSelectedProfileKey(event.target.value)}
-                  className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                  disabled={activeProfiles.length === 0}
-                  required
-                >
-                  {activeProfiles.map((profile) => (
-                    <option key={profileKey(profile)} value={profileKey(profile)}>
-                      {`${profile.name} v${profile.version}${profile.active ? " active" : ""}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-1 text-body font-medium" htmlFor="request-owner">
-                Owner id
-                <input
-                  id="request-owner"
-                  value={ownerId}
-                  onChange={(event) => setOwnerId(event.target.value)}
-                  className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                  required
-                />
-              </label>
-            </div>
-
-            <label className="grid gap-1 text-body font-medium" htmlFor="request-name">
-              Credential name
-              <input
-                id="request-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                placeholder="payments-api"
-                required
-              />
-            </label>
-
-            <label className="grid gap-1 text-body font-medium" htmlFor="request-purpose">
-              Business purpose
-              <textarea
-                id="request-purpose"
-                value={purpose}
-                onChange={(event) => setPurpose(event.target.value)}
-                className="min-h-20 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                placeholder="service TLS for staging"
-              />
-            </label>
-
-            {submitError && <ErrorState title="Request failed">{submitError}</ErrorState>}
-
-            <div>
-              <Button type="submit" disabled={busy || activeProfiles.length === 0}>
-                <Send className="h-4 w-4" aria-hidden="true" />
-                Submit request
-              </Button>
-            </div>
+              {step === 2 && (
+                <div className="grid max-w-xl gap-4">
+                  <dl className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3 text-body">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-caption text-muted-foreground">Profile</dt>
+                      <dd className="font-medium">{selectedProfile ? `${selectedProfile.name} v${selectedProfile.version}` : "—"}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-caption text-muted-foreground">Credential name</dt>
+                      <dd className="font-medium">{name.trim() || "—"}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-caption text-muted-foreground">Owner id</dt>
+                      <dd>{ownerId.trim() || "—"}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-caption text-muted-foreground">Business purpose</dt>
+                      <dd className="text-end">{purpose.trim() || "—"}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-caption text-muted-foreground">Requester</dt>
+                      <dd>{requester || "No session principal"}</dd>
+                    </div>
+                  </dl>
+                  {submitError && <ErrorState title="Request failed">{submitError}</ErrorState>}
+                  <div>
+                    <Button type="submit" loading={busy} disabled={activeProfiles.length === 0}>
+                      <Send className="h-4 w-4" aria-hidden="true" />
+                      Submit request
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </StepShell>
           </form>
 
           <div className="ui-panel grid content-start gap-3 p-comfortable text-body">

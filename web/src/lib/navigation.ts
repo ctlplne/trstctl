@@ -2,6 +2,8 @@ import type { MessageKey } from "@/i18n/messages";
 
 export type NavIcon =
   | "activity"
+  | "agent"
+  | "approval"
   | "audit"
   | "bot"
   | "certificate"
@@ -10,10 +12,12 @@ export type NavIcon =
   | "graph"
   | "identity"
   | "incident"
+  | "journey"
   | "key"
   | "owner"
   | "platform"
   | "policy"
+  | "posture"
   | "profile"
   | "protocol"
   | "notification"
@@ -22,7 +26,8 @@ export type NavIcon =
   | "secret"
   | "signature"
   | "spiffe"
-  | "ssh";
+  | "ssh"
+  | "vault";
 
 export interface NavItem {
   to: string;
@@ -85,6 +90,8 @@ export const appRoutePaths = [
   "/assistant",
   "/wizard",
   "/platform",
+  "/styleguide",
+  "/journeys",
 ] as const;
 
 const routePermissionAny: Record<string, string[]> = {
@@ -125,6 +132,14 @@ export function permissionAnyForPath(to: string): readonly string[] | undefined 
   return routePermissionAny[path];
 }
 
+/** primaryNavItems render above the grouped rail: the landing page and the
+ * guided-journeys hub belong at the top of the sidebar, not filed 20 links
+ * deep inside a band. */
+export const primaryNavItems: NavItem[] = [
+  { to: "/", labelKey: "nav.item.dashboard", icon: "dashboard", end: true, mode: "real", featureIds: ["F1", "F19"] },
+  { to: "/journeys", labelKey: "nav.item.journeys", icon: "journey", mode: "real", featureIds: ["F1", "F2", "F31"] },
+];
+
 export const taskNavItems: TaskNavItem[] = [
   {
     to: "/certificates?expiry=30d",
@@ -137,7 +152,7 @@ export const taskNavItems: TaskNavItem[] = [
     to: "/approvals?status=pending",
     labelKey: "nav.task.pendingApprovals.label",
     descriptionKey: "nav.task.pendingApprovals.description",
-    icon: "policy",
+    icon: "approval",
     featureIds: ["F33"],
   },
   {
@@ -167,7 +182,7 @@ export const navGroups: NavGroup[] = [
       {
         to: "/secrets",
         labelKey: "nav.item.secrets",
-        icon: "secret",
+        icon: "vault",
         mode: "real",
         featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
       },
@@ -177,7 +192,7 @@ export const navGroups: NavGroup[] = [
     labelKey: "nav.group.inventoryDiscovery",
     items: [
       { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
-      { to: "/agents", labelKey: "nav.item.agents", icon: "activity", mode: "real", featureIds: ["F3", "F54"] },
+      { to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] },
       { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
       { to: "/owners", labelKey: "nav.item.owners", icon: "owner", mode: "real", featureIds: ["F59"] },
     ],
@@ -186,14 +201,13 @@ export const navGroups: NavGroup[] = [
     labelKey: "nav.group.incidentsJit",
     items: [
       { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
-      { to: "/approvals", labelKey: "nav.item.approvals", icon: "policy", mode: "real", featureIds: ["F33"] },
+      { to: "/approvals", labelKey: "nav.item.approvals", icon: "approval", mode: "real", featureIds: ["F33"] },
     ],
   },
   {
     labelKey: "nav.group.riskInsight",
     items: [
-      { to: "/", labelKey: "nav.item.dashboard", icon: "dashboard", end: true, mode: "real", featureIds: ["F1", "F19"] },
-      { to: "/posture", labelKey: "nav.item.posture", icon: "risk", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
+      { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
       { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
       { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
       { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F76", "F77", "F78"] },

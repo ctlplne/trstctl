@@ -535,12 +535,18 @@ describe("secrets surface", () => {
     expect(screen.getByRole("form", { name: "Run rollback-safe rotation" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Scheduled rotations" })).toBeInTheDocument();
     expect(screen.queryByText("Scheduled rotation and downstream sync aren't in the console yet")).not.toBeInTheDocument();
-    expect(screen.getByText("Auth-method administration isn't in the console yet")).toBeInTheDocument();
-    expect(screen.getByText(/revoked methods are not available in the console yet/i)).toBeInTheDocument();
     expect(screen.getByText("Secret-change approvals")).toBeInTheDocument();
     expect(screen.getByText("No pending secret changes captured in this browser session.")).toBeInTheDocument();
     expect(screen.queryByText("Secret-change approvals aren't in the console yet")).not.toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
+
+    // Machine-login disclosures live on the Access workspace tab.
+    await user.click(screen.getByRole("tab", { name: "Access" }));
+    expect(screen.getByText("Auth-method administration isn't in the console yet")).toBeInTheDocument();
+    expect(screen.getByText(/revoked methods are not available in the console yet/i)).toBeInTheDocument();
+
+    // Sync and platform-integration posture live on the Sync workspace tab.
+    await user.click(screen.getByRole("tab", { name: "Sync" }));
     await waitFor(() => expect(apiMock.cloudSecretManagers).toHaveBeenCalled());
     expect(screen.getByText("CAP-SEC-04")).toBeInTheDocument();
     expect(screen.getByText("4 discovery providers, 3 sync targets configured")).toBeInTheDocument();
@@ -560,6 +566,7 @@ describe("secrets surface", () => {
     expect(screen.getByText("Git repository secret scanning: 1")).toBeInTheDocument();
     expect(screen.getAllByText("AWS Secrets Manager").length).toBeGreaterThan(0);
 
+    await user.click(screen.getByRole("tab", { name: "Store" }));
     await user.type(screen.getByRole("searchbox", { name: "Search native secret metadata" }), "cache");
     expect(screen.getByText("No secret metadata matches the current search.")).toBeInTheDocument();
     expect(screen.queryByText("app/db/password")).not.toBeInTheDocument();
@@ -686,6 +693,7 @@ describe("secrets surface", () => {
     const user = userEvent.setup();
     renderSecrets();
     await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Access" }));
 
     expect(screen.getByText(/trstctl secrets get app\/db\/password/)).toBeInTheDocument();
     expect(screen.getByText(/client\.secrets\.get/)).toBeInTheDocument();
@@ -704,6 +712,7 @@ describe("secrets surface", () => {
     const user = userEvent.setup();
     renderSecrets();
     await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Sharing" }));
 
     expect(screen.getByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
     expect(screen.getByText("Reveal-once key issuance")).toBeInTheDocument();
@@ -727,6 +736,7 @@ describe("secrets surface", () => {
     await user.click(screen.getByRole("button", { name: /dismiss/i }));
     expect(screen.queryByText("epk_live_reveal_once_123")).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "CI scanning" }));
     expect(screen.getByRole("heading", { name: "Code and CI secret scanning bridge" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.secretRepositoryScanning).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.thirdPartySecretScanning).toHaveBeenCalled());
@@ -762,6 +772,7 @@ describe("secrets surface", () => {
     expect(screen.getByText("config/ci.yml")).toBeInTheDocument();
     expect(screen.getByText("sha256:6e5a...91bb")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "Engines" }));
     expect(screen.getByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
     expect(screen.getByText("No dynamic lease issued yet.")).toBeInTheDocument();
     const leaseForm = within(screen.getByRole("form", { name: "Issue dynamic secret lease" }));
@@ -792,6 +803,7 @@ describe("secrets surface", () => {
     const user = userEvent.setup();
     renderSecrets();
     await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Engines" }));
 
     expect(screen.getByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
     const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
@@ -823,6 +835,7 @@ describe("secrets surface", () => {
     expect(screen.getByRole("button", { name: /compute hmac/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign message/i })).toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "Sync" }));
     expect(screen.getByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
     const syncForm = within(screen.getByRole("form", { name: "Sync stored secret" }));
     expect(syncForm.getByLabelText("Secret name")).toHaveValue("app/db/password");
@@ -854,6 +867,7 @@ describe("secrets surface", () => {
     const user = userEvent.setup();
     renderSecrets();
     await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Engines" }));
 
     const pkiForm = within(screen.getByRole("form", { name: "Issue PKI secret" }));
     await user.type(pkiForm.getByLabelText("Common name"), "svc.internal");
@@ -865,6 +879,7 @@ describe("secrets surface", () => {
     expect(await screen.findByText(/PKI bundle pki-01/i)).toBeInTheDocument();
     expect(screen.getByText(/BEGIN PRIVATE KEY/)).toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "Access" }));
     const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));
     await user.type(loginForm.getByLabelText("Credential"), "tenant-bound-machine-token");
     await user.click(loginForm.getByRole("button", { name: /test login/i }));
@@ -875,6 +890,7 @@ describe("secrets surface", () => {
     expect(loginForm.getByLabelText("Credential")).toHaveValue("");
     expect(screen.queryByText("tenant-bound-machine-token")).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "Sharing" }));
     const shareForm = within(screen.getByRole("form", { name: "Create one-time share" }));
     await user.type(shareForm.getByLabelText("Value to share"), "share-this-once");
     await user.click(shareForm.getByRole("button", { name: /create share/i }));

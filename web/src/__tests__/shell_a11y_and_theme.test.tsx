@@ -541,14 +541,17 @@ describe("app shell accessibility and theme", () => {
     await user.click(screen.getByRole("link", { name: /^Platform$/i }));
 
     expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "System posture" }));
+    expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
   });
 
   it("renders tenant context from the served session without an editable tenant input", async () => {
+    const user = userEvent.setup();
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
+    await user.click(screen.getByRole("tab", { name: "System posture" }));
     expect(screen.getByText("Tenant ID from session")).toBeInTheDocument();
     expect(within(screen.getByRole("main")).getByText("t1")).toBeInTheDocument();
     expect(screen.getByText(/browser never chooses a tenant id/i)).toBeInTheDocument();
@@ -587,9 +590,11 @@ describe("app shell accessibility and theme", () => {
   });
 
   it("shows honest auth and transport status without exposing key material", async () => {
+    const user = userEvent.setup();
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
+    await user.click(screen.getByRole("tab", { name: "System posture" }));
     expect(screen.getByText(/Plaintext local preview/i)).toBeInTheDocument();
     expect(screen.getByText(/No private cert\/key bytes are exposed/i)).toBeInTheDocument();
     expect(screen.getByText(/OIDC mapping status and API-token administration/i)).toBeInTheDocument();

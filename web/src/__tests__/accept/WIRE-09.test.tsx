@@ -458,8 +458,19 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     await waitFor(() => expect(apiMock.kubernetesSecretOperator).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.secretWorkloadInjection).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.unvaultedSecrets).toHaveBeenCalled());
+
+    // Scanning surfaces live on the CI scanning workspace tab.
+    await user.click(screen.getByRole("tab", { name: "CI scanning" }));
     expect(screen.getByText("CAP-SCAN-01")).toBeInTheDocument();
     expect(screen.getByText("CAP-SCAN-04")).toBeInTheDocument();
+    expect(screen.getByText("GitHub")).toBeInTheDocument();
+    expect(screen.getByText("GitLab")).toBeInTheDocument();
+    expect(screen.getByText("Bitbucket")).toBeInTheDocument();
+    expect(screen.getAllByText("Slack").length).toBeGreaterThan(0);
+    expect(screen.getByText("/api/v1/secrets/scans/third-party/slack/ingest")).toBeInTheDocument();
+
+    // Sync and platform-integration posture live on the Sync workspace tab.
+    await user.click(screen.getByRole("tab", { name: "Sync" }));
     expect(screen.getByText("CAP-SEC-04")).toBeInTheDocument();
     expect(screen.getByText("4 discovery providers, 3 sync targets configured")).toBeInTheDocument();
     expect(screen.getByText("CAP-SECR-03")).toBeInTheDocument();
@@ -477,11 +488,8 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     expect(screen.getByText("GitLab CI")).toBeInTheDocument();
     expect(screen.getByText("Vercel")).toBeInTheDocument();
     expect(screen.getByText("Generic CI secret endpoint")).toBeInTheDocument();
-    expect(screen.getByText("GitHub")).toBeInTheDocument();
-    expect(screen.getByText("GitLab")).toBeInTheDocument();
-    expect(screen.getByText("Bitbucket")).toBeInTheDocument();
-    expect(screen.getAllByText("Slack").length).toBeGreaterThan(0);
-    expect(screen.getByText("/api/v1/secrets/scans/third-party/slack/ingest")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "CI scanning" }));
     const thirdPartyForm = within(screen.getByRole("form", { name: "Queue third-party secret scan" }));
     await user.selectOptions(thirdPartyForm.getByLabelText("External source"), "slack");
     await user.type(thirdPartyForm.getByLabelText("Source ref"), "acme/slack");
@@ -507,6 +515,7 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     expect(screen.getByText("config/ci.yml")).toBeInTheDocument();
     expect(screen.getByText("sha256:6e5a...91bb")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "Sync" }));
     const syncForm = within(screen.getByRole("form", { name: "Sync stored secret" }));
     await user.clear(syncForm.getByLabelText("Target"));
     await user.type(syncForm.getByLabelText("Target"), "kubernetes/prod");

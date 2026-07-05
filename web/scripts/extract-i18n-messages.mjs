@@ -23,6 +23,10 @@ const excludedPathParts = [
   `${path.sep}i18n${path.sep}`,
   `${path.sep}lib${path.sep}api-types.gen.ts`,
   `${path.sep}vite-env.d.ts`,
+  // The styleguide is the internal living spec: its sample labels and fixture
+  // values are intentionally not customer copy, so they stay out of the
+  // extraction ratchet the same way test fixtures do.
+  `${path.sep}pages${path.sep}Styleguide.tsx`,
 ];
 
 const candidatePatterns = [

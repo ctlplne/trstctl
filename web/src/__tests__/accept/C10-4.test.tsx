@@ -119,10 +119,15 @@ describe("C10-4 certificate inventory filters", () => {
     renderCerts();
 
     expect(await screen.findByText("CN=payments.example.test")).toBeInTheDocument();
+
+    // CRL distribution lives behind the CRL & CT workspace tab.
+    await user.click(screen.getByRole("tab", { name: "CRL & CT" }));
     expect(screen.getByRole("heading", { name: "CRL distribution" })).toBeInTheDocument();
     expect(screen.getByText("ca-prod")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#42" })).toHaveAttribute("href", "/crl/t1");
     expect(screen.getByRole("link", { name: "base #41" })).toHaveAttribute("href", "/crl/t1/delta/41");
+
+    await user.click(screen.getByRole("tab", { name: "Inventory" }));
     expect(screen.getByRole("columnheader", { name: "Team" })).toBeInTheDocument();
     expect(screen.getAllByText("Platform Team").length).toBeGreaterThan(0);
 

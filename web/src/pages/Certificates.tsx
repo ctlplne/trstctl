@@ -15,6 +15,9 @@ import {
   type RogueCertificatePosture,
   type RotationRun,
 } from "@/lib/api";
+import { CredentialChip } from "@/components/CredentialChip";
+import { PageTabs, tabPanelProps } from "@/components/PageTabs";
+import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -53,6 +56,23 @@ function expiringBefore(filter: ExpiryFilter): string | undefined {
 
 function expiryFromSearchParam(value: string | null): ExpiryFilter {
   return expiryFilters.some((filter) => filter.value === value) ? (value as ExpiryFilter) : "all";
+}
+
+/** The page's object list (the inventory table) renders first; every
+ * specialist panel lives behind a sibling tab (audit P0: mega-page pattern). */
+type CertificatesTab = "inventory" | "health" | "crlct" | "renewal";
+const certificateTabIds: readonly CertificatesTab[] = ["inventory", "health", "crlct", "renewal"];
+
+function tabFromSearchParam(value: string | null): CertificatesTab {
+  return certificateTabIds.includes(value as CertificatesTab) ? (value as CertificatesTab) : "inventory";
+}
+
+function ingestSteps(t: (key: MessageKey) => string): CarouselStep[] {
+  return [
+    { id: "pem", label: t("certificates.ingest.pem.label"), description: t("certificates.ingest.pem.description") },
+    { id: "placement", label: t("certificates.ingest.placement.label"), description: t("certificates.ingest.placement.description") },
+    { id: "review", label: t("certificates.ingest.review.label"), description: t("certificates.ingest.review.description") },
+  ];
 }
 
 const bulkRevokeReasons: BulkRevokeRequest["reason"][] = [
@@ -148,7 +168,7 @@ function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard
   const state = health.summary.health;
   const stateClass =
     state === "critical"
-      ? "border-status-danger/40 bg-status-danger/10 text-status-danger"
+      ? "border-destructive/40 bg-destructive/10 text-destructive"
       : state === "warning"
         ? "border-status-warning/50 bg-status-warning/10 text-status-warning"
         : "border-status-success/40 bg-status-success/10 text-status-success";
@@ -340,7 +360,7 @@ function rogueTypeLabel(type: string, t: (key: MessageKey, values?: Record<strin
 function severityClass(severity: RogueCertificateFinding["severity"]): string {
   switch (severity) {
     case "critical":
-      return "border-status-danger/40 bg-status-danger/10 text-status-danger";
+      return "border-destructive/40 bg-destructive/10 text-destructive";
     case "high":
       return "border-status-warning/50 bg-status-warning/10 text-status-warning";
     case "medium":
@@ -364,7 +384,7 @@ function RogueCertificatePanel({ posture }: { posture: RogueCertificatePosture }
           <p className="mt-1 text-sm text-muted-foreground">{t("certificates.rogue.description")}</p>
         </div>
         <span
-          className={`inline-flex min-h-8 items-center gap-2 rounded-md border px-2.5 text-sm font-medium ${highOrCritical > 0 ? "border-status-danger/40 bg-status-danger/10 text-status-danger" : "border-status-success/40 bg-status-success/10 text-status-success"}`}
+          className={`inline-flex min-h-8 items-center gap-2 rounded-md border px-2.5 text-sm font-medium ${highOrCritical > 0 ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-status-success/40 bg-status-success/10 text-status-success"}`}
         >
           {highOrCritical > 0 ? <AlertTriangle className="h-4 w-4" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4" aria-hidden="true" />}
           {t("certificates.rogue.findingBadge", { count: formatCount(posture.summary.findings) })}
@@ -457,6 +477,7 @@ function CTSubmissionPanel({
   onLogs,
   onAllowPrivate,
   onSubmit,
+  className,
 }: {
   loading: boolean;
   error: Notice | null;
@@ -472,10 +493,11 @@ function CTSubmissionPanel({
   onLogs: (value: string) => void;
   onAllowPrivate: (value: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  className?: string;
 }) {
   const { t } = useTranslation();
   return (
-    <section aria-labelledby="ct-submission-heading" className="border-y border-border py-4">
+    <section aria-labelledby="ct-submission-heading" className={className ?? "border-y border-border py-4"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="ct-submission-heading" className="text-base font-semibold">
@@ -598,6 +620,7 @@ export function Certificates() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<Notice | null>(null);
   const [showIngest, setShowIngest] = useState(false);
+  const [ingestStep, setIngestStep] = useState(0);
   const [pem, setPem] = useState("");
   const [ownerID, setOwnerID] = useState("");
   const [source, setSource] = useState("manual-ui");
@@ -620,6 +643,8 @@ export function Certificates() {
   const [ctLoading, setCTLoading] = useState(false);
   const [ctError, setCTError] = useState<Notice | null>(null);
   const [ctResult, setCTResult] = useState<CTSubmission | null>(null);
+  const [ctDialogOpen, setCTDialogOpen] = useState(false);
+  const [tab, setTab] = useState<CertificatesTab>(() => tabFromSearchParam(searchParams.get("tab")));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkRevokeOpen, setBulkRevokeOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState<BulkRevokeRequest["reason"]>("keyCompromise");
@@ -691,6 +716,23 @@ export function Certificates() {
     } finally {
       setLoadingMore(false);
     }
+  }
+
+  function selectTab(next: string) {
+    const value = tabFromSearchParam(next);
+    setTab(value);
+    setSearchParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current);
+        if (value === "inventory") {
+          nextParams.delete("tab");
+        } else {
+          nextParams.set("tab", value);
+        }
+        return nextParams;
+      },
+      { replace: true },
+    );
   }
 
   function selectExpiry(nextExpiry: ExpiryFilter) {
@@ -948,71 +990,109 @@ export function Certificates() {
       />
 
       {showIngest && (
-        <form onSubmit={submitIngest} aria-labelledby="ingest-heading" className="mb-6 grid gap-4 border-y border-border py-4">
-          <div>
-            <h2 id="ingest-heading" className="text-title font-semibold">
-              Add certificate
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">Paste a public certificate PEM. Private keys do not belong in this form.</p>
-          </div>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="cert-pem">
-            Certificate PEM
-            <textarea
-              id="cert-pem"
-              value={pem}
-              onChange={(e) => setPem(e.target.value)}
-              rows={8}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-              placeholder="-----BEGIN CERTIFICATE-----"
-            />
-          </label>
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-owner">
-              Owner ID
-              <input
-                id="cert-owner"
-                value={ownerID}
-                onChange={(e) => setOwnerID(e.target.value)}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                placeholder="optional"
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-source">
-              Source
-              <input
-                id="cert-source"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-location">
-              Deployment location
-              <input
-                id="cert-location"
-                value={deploymentLocation}
-                onChange={(e) => setDeploymentLocation(e.target.value)}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                placeholder="cluster/service/path"
-              />
-            </label>
-          </div>
-          {ingestError?.kind === "permission" && <PermissionDeniedState>{ingestError.message}</PermissionDeniedState>}
-          {ingestError?.kind === "error" && <ErrorState title="Could not ingest certificate">{ingestError.message}</ErrorState>}
-          {ingestSuccess && (
-            <p role="status" className="text-sm text-status-success">
-              {ingestSuccess}
-            </p>
-          )}
-          <div>
-            <button
-              type="submit"
-              disabled={ingestLoading}
-              className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-            >
-              {ingestLoading ? "Ingesting..." : "Ingest certificate"}
-            </button>
-          </div>
+        <form onSubmit={submitIngest} aria-labelledby="ingest-heading" className="mb-6 grid gap-4">
+          <h2 id="ingest-heading" className="sr-only">
+            Add certificate
+          </h2>
+          <StepShell
+            steps={ingestSteps(t)}
+            currentIndex={ingestStep}
+            nextDisabled={ingestStep === 0 ? !pem.trim() : ingestStep >= 2}
+            nextLabel={ingestStep === 0 ? t("certificates.ingest.nextPlacement") : t("certificates.ingest.nextReview")}
+            onNext={ingestStep < 2 ? () => setIngestStep((current) => Math.min(current + 1, 2)) : undefined}
+            onPrevious={() => setIngestStep((current) => Math.max(current - 1, 0))}
+          >
+            {ingestStep === 0 && (
+              <label className="grid gap-1 text-sm font-medium" htmlFor="cert-pem">
+                Certificate PEM
+                <textarea
+                  id="cert-pem"
+                  value={pem}
+                  onChange={(e) => setPem(e.target.value)}
+                  rows={8}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                  placeholder="-----BEGIN CERTIFICATE-----"
+                />
+              </label>
+            )}
+            {ingestStep === 1 && (
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="grid gap-1 text-sm font-medium" htmlFor="cert-owner">
+                  Owner ID
+                  {/* Autocomplete from the loaded owner roster — no pasting owner
+                      UUIDs from another page. */}
+                  <input
+                    id="cert-owner"
+                    value={ownerID}
+                    onChange={(e) => setOwnerID(e.target.value)}
+                    list="cert-owner-options"
+                    className="rounded-md border border-border bg-background px-3 py-2 text-sm font-normal"
+                    placeholder="optional"
+                  />
+                  <datalist id="cert-owner-options">
+                    {owners.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name}
+                      </option>
+                    ))}
+                  </datalist>
+                </label>
+                <label className="grid gap-1 text-sm font-medium" htmlFor="cert-source">
+                  Source
+                  <input
+                    id="cert-source"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-medium" htmlFor="cert-location">
+                  Deployment location
+                  <input
+                    id="cert-location"
+                    value={deploymentLocation}
+                    onChange={(e) => setDeploymentLocation(e.target.value)}
+                    className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    placeholder="cluster/service/path"
+                  />
+                </label>
+              </div>
+            )}
+            {ingestStep === 2 && (
+              <div className="grid max-w-xl gap-4">
+                <dl className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-caption text-muted-foreground">Certificate PEM</dt>
+                    <dd className="font-mono text-xs">{`${pem.trim().split("\n").length} lines`}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-caption text-muted-foreground">Owner ID</dt>
+                    <dd>{owners.find((owner) => owner.id === ownerID)?.name ?? (ownerID.trim() || t("certificates.ingest.ownerUnassigned"))}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-caption text-muted-foreground">Source</dt>
+                    <dd>{source.trim() || "—"}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-caption text-muted-foreground">Deployment location</dt>
+                    <dd>{deploymentLocation.trim() || "—"}</dd>
+                  </div>
+                </dl>
+                {ingestError?.kind === "permission" && <PermissionDeniedState>{ingestError.message}</PermissionDeniedState>}
+                {ingestError?.kind === "error" && <ErrorState title="Could not ingest certificate">{ingestError.message}</ErrorState>}
+                {ingestSuccess && (
+                  <p role="status" className="text-sm text-status-success">
+                    {ingestSuccess}
+                  </p>
+                )}
+                <div>
+                  <Button type="submit" loading={ingestLoading}>
+                    Ingest certificate
+                  </Button>
+                </div>
+              </div>
+            )}
+          </StepShell>
         </form>
       )}
 
@@ -1033,39 +1113,68 @@ export function Certificates() {
 
       {certificates.length > 0 && (
         <>
-          <div className="mb-6 grid gap-4">
-            {health && <CertificateHealthPanel health={health} />}
-            {roguePosture && <RogueCertificatePanel posture={roguePosture} />}
-            <CRLDistributionPanel distributions={crlDistributions} />
-            <CTSubmissionPanel
-              loading={ctLoading}
-              error={ctError}
-              result={ctResult}
-              certificatePEM={ctCertificatePEM}
-              precertificatePEM={ctPrecertificatePEM}
-              chainPEM={ctChainPEM}
-              logs={ctLogs}
-              allowPrivate={ctAllowPrivate}
-              onCertificatePEM={setCTCertificatePEM}
-              onPrecertificatePEM={setCTPrecertificatePEM}
-              onChainPEM={setCTChainPEM}
-              onLogs={setCTLogs}
-              onAllowPrivate={setCTAllowPrivate}
-              onSubmit={submitCT}
-            />
-            <CertificatesDashboard certificates={certificates} risks={risks} />
-            <div className="grid gap-4 lg:grid-cols-2">
-              <ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />
-              <ReadinessSimulator certificates={certificates} autoRenewing={autoRenewingCount(certificates, rotationRuns)} />
+          <PageTabs
+            idPrefix="certs"
+            ariaLabel="Certificate workspaces"
+            active={tab}
+            onChange={selectTab}
+            tabs={[
+              { id: "inventory", label: t("certificates.tabs.inventory") },
+              { id: "health", label: t("certificates.tabs.health") },
+              { id: "crlct", label: t("certificates.tabs.crlct") },
+              { id: "renewal", label: t("certificates.tabs.renewal") },
+            ]}
+          />
+          {tab === "health" && (
+            <div {...tabPanelProps("certs", "health")} className="grid gap-4">
+              {health && <CertificateHealthPanel health={health} />}
+              {roguePosture && <RogueCertificatePanel posture={roguePosture} />}
+              <CertificatesDashboard certificates={certificates} risks={risks} />
             </div>
-            <DeploymentReceipts deliveries={deliveries} />
-          </div>
+          )}
+          {tab === "crlct" && (
+            <div {...tabPanelProps("certs", "crlct")} className="grid gap-4">
+              <CRLDistributionPanel distributions={crlDistributions} />
+              <section aria-labelledby="ct-launch-heading" className="border-y border-border py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 id="ct-launch-heading" className="text-base font-semibold">
+                      {t("certificates.ct.heading")}
+                    </h2>
+                    {ctResult ? (
+                      <p role="status" className="mt-1 text-sm text-status-success">
+                        {t(ctResult.logs.length === 1 ? "certificates.ct.acceptedOne" : "certificates.ct.acceptedMany", {
+                          count: formatCount(ctResult.logs.length),
+                        })}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-muted-foreground">{t("certificates.ct.launchDescription")}</p>
+                    )}
+                  </div>
+                  <Button type="button" variant="secondary" onClick={() => setCTDialogOpen(true)}>
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                    {t("certificates.ct.launch")}
+                  </Button>
+                </div>
+              </section>
+            </div>
+          )}
+          {tab === "renewal" && (
+            <div {...tabPanelProps("certs", "renewal")} className="grid gap-4">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />
+                <ReadinessSimulator certificates={certificates} autoRenewing={autoRenewingCount(certificates, rotationRuns)} />
+              </div>
+              <DeploymentReceipts deliveries={deliveries} />
+            </div>
+          )}
+          {tab === "inventory" && (
+            <div {...tabPanelProps("certs", "inventory")}>
           <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())} className="sticky top-0 z-10 mb-3 shadow-elevation1">
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
+              variant="destructive-outline"
               onClick={() => {
                 setBulkError(null);
                 setBulkRevokeOpen(true);
@@ -1225,6 +1334,8 @@ export function Certificates() {
               <p className="text-sm text-muted-foreground">No more certificate pages.</p>
             )}
           </div>
+            </div>
+          )}
         </>
       )}
 
@@ -1264,18 +1375,45 @@ export function Certificates() {
         </label>
         {bulkError && <p className="mt-3 text-sm font-medium text-risk-critical">{bulkError}</p>}
         <div className="mt-3 flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="border-destructive/50 text-destructive hover:bg-destructive/10"
-            disabled={bulkBusy || selectedIds.size === 0}
-            onClick={() => void submitBulkRevoke()}
-          >
-            {bulkBusy ? "Revoking…" : "Confirm bulk revoke"}
+          <Button type="button" size="sm" variant="destructive" loading={bulkBusy} disabled={selectedIds.size === 0} onClick={() => void submitBulkRevoke()}>
+            Confirm bulk revoke
           </Button>
           <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setBulkRevokeOpen(false)}>
             Cancel
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={ctDialogOpen}
+        onClose={() => {
+          if (!ctLoading) setCTDialogOpen(false);
+        }}
+        titleId="ct-submission-heading"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayClassName="absolute inset-0 bg-black/55"
+        panelClassName="relative max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-panel border border-border bg-card p-4 shadow-elevation3"
+      >
+        <CTSubmissionPanel
+          className=""
+          loading={ctLoading}
+          error={ctError}
+          result={ctResult}
+          certificatePEM={ctCertificatePEM}
+          precertificatePEM={ctPrecertificatePEM}
+          chainPEM={ctChainPEM}
+          logs={ctLogs}
+          allowPrivate={ctAllowPrivate}
+          onCertificatePEM={setCTCertificatePEM}
+          onPrecertificatePEM={setCTPrecertificatePEM}
+          onChainPEM={setCTChainPEM}
+          onLogs={setCTLogs}
+          onAllowPrivate={setCTAllowPrivate}
+          onSubmit={submitCT}
+        />
+        <div className="mt-3 flex justify-end">
+          <Button type="button" size="sm" variant="ghost" disabled={ctLoading} onClick={() => setCTDialogOpen(false)}>
+            Close
           </Button>
         </div>
       </Dialog>
@@ -1309,11 +1447,11 @@ export function Certificates() {
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">Serial</dt>
-              <dd className="break-all font-mono text-xs">{detail.serial || "-"}</dd>
+              <dd className="mt-0.5">{detail.serial ? <CredentialChip value={detail.serial} label="serial number" /> : "-"}</dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">Fingerprint</dt>
-              <dd className="break-all font-mono text-xs">{detail.fingerprint}</dd>
+              <dd className="mt-0.5">{detail.fingerprint ? <CredentialChip value={detail.fingerprint} label="fingerprint" head={12} tail={8} /> : "-"}</dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">Validity</dt>

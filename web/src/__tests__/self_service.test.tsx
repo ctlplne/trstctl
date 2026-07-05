@@ -74,11 +74,19 @@ describe("self-service credential requests", () => {
 
     expect(await screen.findByRole("heading", { name: "Request a credential" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Request credential/i })).toHaveAttribute("href", "/request");
-    await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
-    expect(screen.getByLabelText("Owner id")).toHaveValue("dev-1");
 
+    // Step 1 — choose the issuance profile.
+    await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
+    await user.click(screen.getByRole("button", { name: "Next: name it" }));
+
+    // Step 2 — name the credential; owner id is prefilled from the session.
+    expect(screen.getByLabelText("Owner id")).toHaveValue("dev-1");
     await user.type(screen.getByLabelText("Credential name"), "payments-api");
     await user.type(screen.getByLabelText("Business purpose"), "staging TLS");
+    await user.click(screen.getByRole("button", { name: "Next: review" }));
+
+    // Step 3 — review shows exactly what the approver will see, then submit.
+    expect(screen.getByText("staging TLS")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Submit request" }));
 
     await waitFor(() =>

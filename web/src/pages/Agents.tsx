@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Loader2, RefreshCw, ShieldOff, UserX, X } from "lucide-react";
+import { CredentialChip } from "@/components/CredentialChip";
 import { Dialog } from "@/components/Dialog";
 import { useToast } from "@/components/ToastProvider";
 import { EmptyState } from "@/components/EmptyState";
@@ -326,7 +327,9 @@ export function Agents() {
             <dl className="grid gap-2">
               <div>
                 <dt className="font-medium text-muted-foreground">Bootstrap token</dt>
-                <dd className="break-all font-mono text-xs">{token.token}</dd>
+                <dd className="mt-0.5">
+                  <CredentialChip value={token.token} label="bootstrap token" head={14} tail={8} />
+                </dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">Install command</dt>
@@ -528,7 +531,9 @@ function AgentDetail({ agent }: { agent: Agent }) {
       <dl className="grid gap-2 text-sm">
         <div>
           <dt className="font-medium text-muted-foreground">Agent ID</dt>
-          <dd className="break-all font-mono text-xs">{agent.id}</dd>
+          <dd className="mt-0.5">
+            <CredentialChip value={agent.id} label="agent ID" />
+          </dd>
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">Status</dt>

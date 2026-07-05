@@ -492,8 +492,7 @@ export function Protocols() {
                         <Button
                           type="button"
                           size="sm"
-                          variant="outline"
-                          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                          variant="destructive-outline"
                           onClick={() => setDNSDeleteConfig(config)}
                           aria-label={`Delete DNS-01 config ${config.name}`}
                         >
@@ -578,8 +577,7 @@ export function Protocols() {
                           <Button
                             type="button"
                             size="sm"
-                            variant="outline"
-                            className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                            variant="destructive-outline"
                             onClick={() => setSCEPDeletePolicy(policy)}
                             aria-label={`Delete SCEP policy ${policy.name}`}
                           >
@@ -1062,9 +1060,9 @@ function MDMSCEPPolicyDeleteDialog({
         <Button
           type="button"
           size="sm"
-          variant="outline"
-          className="border-destructive/50 text-destructive hover:bg-destructive/10"
-          disabled={busy || confirmName.trim() !== policy.name}
+          variant="destructive"
+          loading={busy}
+          disabled={confirmName.trim() !== policy.name}
           onClick={() => void confirmDelete()}
         >
           {t("parity.yesDeletePolicy_30ce34")}
@@ -1347,9 +1345,9 @@ function DNS01ConfigDeleteDialog({
         <Button
           type="button"
           size="sm"
-          variant="outline"
-          className="border-destructive/50 text-destructive hover:bg-destructive/10"
-          disabled={busy || confirmName.trim() !== config.name}
+          variant="destructive"
+          loading={busy}
+          disabled={confirmName.trim() !== config.name}
           onClick={() => void confirmDelete()}
         >
           {t("parity.yesDeleteConfig_bd6fac")}

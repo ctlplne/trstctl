@@ -1737,7 +1737,10 @@ const evidenceRunColumns: DataGridColumn<RemediationPlaybookRun>[] = [
   },
 ];
 
-function remediationRunTone(status: string): StatusTone {
+function remediationRunTone(status: string | undefined): StatusTone {
+  // Served runs may omit status while queued; render them as neutral instead
+  // of crashing the page.
+  if (!status) return "neutral";
   if (status.includes("fail") || status.includes("error")) return "critical";
   if (status.includes("complete") || status.includes("succeed") || status.includes("recorded") || status.includes("done")) return "success";
   if (status.includes("pending") || status.includes("running") || status.includes("progress") || status.includes("open")) return "warning";
@@ -1757,21 +1760,21 @@ function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue })
     <div className="grid content-start gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-body font-semibold">{t("parity.ownerRemediationQueue_610e16")}</h3>
-        <StatusBadge value={queue.status} label={queue.status} tone={remediationRunTone(queue.status)} />
+        <StatusBadge value={queue.status ?? "queued"} label={queue.status ?? "queued"} tone={remediationRunTone(queue.status)} />
       </div>
       <p className="text-xs text-muted-foreground">
         Generated {formatDateTime(queue.generated_at)} · {queue.capability}
       </p>
-      {queue.items.length === 0 ? (
+      {(queue.items ?? []).length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("parity.noOwnerRemediationActionsAreQueued_596b9b")}</p>
       ) : (
         <ul className="grid gap-2">
-          {queue.items.map((item) => (
+          {(queue.items ?? []).map((item) => (
             <li key={item.id} className="grid gap-1 rounded-panel border border-border p-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-medium">{item.display_name}</span>
                 <span className="flex flex-wrap items-center gap-2">
-                  <StatusBadge value={item.severity} label={item.severity} tone={item.severity} />
+                  <StatusBadge value={item.severity ?? "medium"} label={item.severity ?? "medium"} tone={item.severity ?? "medium"} />
                   <span className="text-xs text-muted-foreground">{item.status}</span>
                 </span>
               </div>

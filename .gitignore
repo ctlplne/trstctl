@@ -49,3 +49,19 @@ go.work.sum
 *~
 .idea/
 .vscode/
+
+# --- Local mount cruft & non-source artifacts (added 2026-07-05) ---
+# FUSE mount orphan files (created when an open file is deleted on the mount)
+.fuse_hidden*
+# Node deps for non-web SDKs (mirrors /web/node_modules; never committed)
+**/node_modules/
+# Local dev cert served by the test harness; never commit key/cert material
+served-ca.pem
+# Go build temp files, e.g. trstctl-agent.exe-go-tmp-umask
+*-go-tmp-umask
+# Non-standard coverage output that escapes the *.out rule
+cover.out.nogen
+# Local scratch/build markers
+.__b__
+.__scratch_test__
+.__target__

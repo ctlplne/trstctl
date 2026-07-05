@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Building2, Gauge, Headphones, KeyRound, Loader2, Network, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -90,9 +91,38 @@ const defaultPAMSessionForm: PAMSessionFormState = {
   ssh_public_key: "",
 };
 
+/** Access administration is the page's one operational surface, so it renders
+ * as the default tab; the read-only posture panels live behind "System
+ * posture" (audit P0: Access was buried under six disclosure panels). */
+type PlatformTab = "access" | "posture";
+
+function platformTabFromSearchParam(value: string | null): PlatformTab {
+  return value === "posture" ? "posture" : "access";
+}
+
 export function Platform() {
   const { user, preview } = useAuth();
   const { locale, timeZone, t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<PlatformTab>(() => platformTabFromSearchParam(searchParams.get("tab")));
+
+  function selectTab(next: string) {
+    const value = platformTabFromSearchParam(next);
+    setTab(value);
+    setSearchParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current);
+        if (value === "access") {
+          nextParams.delete("tab");
+        } else {
+          nextParams.set("tab", value);
+        }
+        return nextParams;
+      },
+      { replace: true },
+    );
+  }
+
   const formatPolicy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
   const transport = browserTransport();
   const csrfPresent = typeof document !== "undefined" && document.cookie.includes("trstctl_csrf=");
@@ -399,6 +429,20 @@ export function Platform() {
         }
       />
 
+      <PageTabs
+        idPrefix="platform"
+        ariaLabel="Platform workspaces"
+        active={tab}
+        onChange={selectTab}
+        className="mb-0"
+        tabs={[
+          { id: "access", label: t("platform.tabs.access") },
+          { id: "posture", label: t("platform.tabs.posture") },
+        ]}
+      />
+
+      {tab === "posture" && (
+      <div {...tabPanelProps("platform", "posture")} className="grid gap-6">
       <div className="grid gap-4 lg:grid-cols-4">
         <section className="ui-panel p-comfortable" aria-labelledby="packaging-heading">
           <h2 id="packaging-heading" className="text-title font-semibold">
@@ -1090,7 +1134,11 @@ export function Platform() {
           </form>
         </div>
       </section>
+      </div>
+      )}
 
+      {tab === "access" && (
+      <div {...tabPanelProps("platform", "access")} className="grid gap-6">
       <section aria-labelledby="access-heading">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 id="access-heading" className="text-title font-semibold">
@@ -1102,7 +1150,7 @@ export function Platform() {
           </Button>
         </div>
         {accessError && (
-          <p role="alert" className="mb-3 rounded-control border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+          <p role="alert" className="mb-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {accessError}
           </p>
         )}
@@ -1169,18 +1217,27 @@ export function Platform() {
           </form>
           <form onSubmit={(event) => void offboardMember(event)} className="ui-panel grid gap-3 p-comfortable">
             <div className="flex items-center gap-2">
-              <UserMinus className="h-4 w-4 text-status-danger" aria-hidden="true" />
+              <UserMinus className="h-4 w-4 text-destructive" aria-hidden="true" />
               <h3 className="text-body font-semibold">Offboard member</h3>
             </div>
             <label className="grid gap-1 text-sm">
               <span className="font-medium text-muted-foreground">Subject</span>
-              <input className="ui-input" value={offboardSubject} onChange={(event) => setOffboardSubject(event.target.value)} required />
+              {/* Autocomplete from the loaded member roster — no copy-pasting
+                  subjects out of the table above. */}
+              <input className="ui-input" value={offboardSubject} onChange={(event) => setOffboardSubject(event.target.value)} list="member-subject-options" required />
+              <datalist id="member-subject-options">
+                {members.map((member) => (
+                  <option key={member.subject} value={member.subject}>
+                    {member.email ?? member.subject}
+                  </option>
+                ))}
+              </datalist>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-medium text-muted-foreground">Reason</span>
               <input className="ui-input" value={offboardReason} onChange={(event) => setOffboardReason(event.target.value)} />
             </label>
-            <Button type="submit" variant="outline" className="text-status-danger" disabled={accessBusy || !offboardSubject.trim()}>
+            <Button type="submit" variant="destructive" loading={accessBusy} disabled={!offboardSubject.trim()}>
               <UserMinus className="h-4 w-4" aria-hidden="true" />
               Offboard
             </Button>
@@ -1419,7 +1476,7 @@ export function Platform() {
           ) : (
             <form onSubmit={(event) => void openPrivilegedSession(event)} className="grid gap-3 p-5">
               {pamFormError && (
-                <p role="alert" className="rounded-control border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                <p role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {pamFormError}
                 </p>
               )}
@@ -1526,6 +1583,8 @@ export function Platform() {
           )}
         </Dialog>
       )}
+      </div>
+      )}
     </section>
   );
 }
@@ -1582,7 +1641,7 @@ function editionStateClass(state?: EditionsInfo["state"]): string {
     case "grace":
       return `${base} border-status-warning/30 bg-status-warning/10 text-status-warning`;
     case "read_only":
-      return `${base} border-status-danger/30 bg-status-danger/10 text-status-danger`;
+      return `${base} border-destructive/30 bg-destructive/10 text-destructive`;
     default:
       return `${base} border-border bg-muted text-muted-foreground`;
   }

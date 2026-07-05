@@ -66,11 +66,13 @@ export function CertKpis({ certificates, risks }: { certificates: Certificate[];
   }).length;
   const revoked = certificates.filter((certificate) => certificate.status === "revoked").length;
   const highRisk = risks.filter((risk) => (risk.score ?? 0) >= 70).length;
+  // Total + expiring counts intentionally live on the server-backed estate
+  // health panel (one KPI strip per page — the two used to double-count the
+  // same estate as "Total inventory" vs "Total certificates").
+  void expiring7;
+  void expiring30;
   return (
     <DashboardGrid>
-      <StatTile label="Total certificates" value={certificates.length} />
-      <StatTile label="Expiring within 7 days" value={expiring7} tone={expiring7 ? "critical" : undefined} />
-      <StatTile label="Expiring within 30 days" value={expiring30} tone={expiring30 ? "warning" : undefined} />
       <StatTile label="Revoked" value={revoked} />
       <StatTile label="High risk" value={highRisk} tone={highRisk ? "high" : undefined} />
     </DashboardGrid>

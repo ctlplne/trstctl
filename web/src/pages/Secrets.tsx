@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
+import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -61,8 +63,20 @@ import {
   type SecretApprovalQueueItem,
 } from "./secrets/SecretsPageParts";
 
+/** The store (tree + table + lifecycle) renders first; every other workflow
+ * lives behind a workspace tab instead of stacking into a ~6,800px scroll
+ * (audit P0: mega-page pattern). */
+type SecretsTab = "store" | "access" | "sharing" | "engines" | "scanning" | "sync";
+const secretsTabIds: readonly SecretsTab[] = ["store", "access", "sharing", "engines", "scanning", "sync"];
+
+function secretsTabFromSearchParam(value: string | null): SecretsTab {
+  return secretsTabIds.includes(value as SecretsTab) ? (value as SecretsTab) : "store";
+}
+
 export function Secrets() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<SecretsTab>(() => secretsTabFromSearchParam(searchParams.get("tab")));
   const [items, setItems] = useState<SecretMeta[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
@@ -957,6 +971,23 @@ export function Secrets() {
     }
   }
 
+  function selectTab(next: string) {
+    const value = secretsTabFromSearchParam(next);
+    setTab(value);
+    setSearchParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current);
+        if (value === "store") {
+          nextParams.delete("tab");
+        } else {
+          nextParams.set("tab", value);
+        }
+        return nextParams;
+      },
+      { replace: true },
+    );
+  }
+
   return (
     <section aria-labelledby="secrets-heading" className="grid gap-6">
       <PageHeader
@@ -983,6 +1014,24 @@ export function Secrets() {
         </UnavailableState>
       )}
 
+      <PageTabs
+        idPrefix="secrets"
+        ariaLabel="Secrets workspaces"
+        active={tab}
+        onChange={selectTab}
+        tabs={[
+          { id: "store", label: t("secrets.tabs.store") },
+          { id: "access", label: t("secrets.tabs.access") },
+          { id: "sharing", label: t("secrets.tabs.sharing") },
+          { id: "engines", label: t("secrets.tabs.engines") },
+          { id: "scanning", label: t("secrets.tabs.scanning") },
+          { id: "sync", label: t("secrets.tabs.sync") },
+        ]}
+        className="mb-0"
+      />
+
+      {tab === "store" && (
+        <div {...tabPanelProps("secrets", "store")} className="grid gap-6">
       <SecretTree secrets={items} />
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -1289,6 +1338,13 @@ export function Secrets() {
             </ul>
           )}
         </div>
+        {/* Known names autocomplete from the loaded store — no copy-pasting
+            out of the metadata table above. */}
+        <datalist id="secret-name-options">
+          {items.map((item) => (
+            <option key={item.name} value={item.name} />
+          ))}
+        </datalist>
         <form aria-label="Rotate secret" onSubmit={(event) => void submitRotate(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Secret to rotate</span>
@@ -1297,6 +1353,7 @@ export function Secrets() {
               value={rotateName}
               onChange={(event) => setRotateName(event.target.value)}
               placeholder={selectedMeta?.name ?? "app/db/password"}
+              list="secret-name-options"
               required
             />
           </label>
@@ -1310,8 +1367,7 @@ export function Secrets() {
               required
             />
           </label>
-          <Button type="submit" className="self-end" disabled={rotateBusy || Boolean(loadError)}>
-            {rotateBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          <Button type="submit" className="self-end" loading={rotateBusy} disabled={Boolean(loadError)}>
             Rotate secret
           </Button>
         </form>
@@ -1325,6 +1381,7 @@ export function Secrets() {
               value={deleteName}
               onChange={(event) => setDeleteName(event.target.value)}
               placeholder={selectedMeta?.name ?? "app/db/password"}
+              list="secret-name-options"
               required
             />
           </label>
@@ -1337,8 +1394,13 @@ export function Secrets() {
               required
             />
           </label>
-          <Button type="submit" className="self-end" disabled={deleteBusy || !deleteName || deleteConfirm !== deleteName || Boolean(loadError)}>
-            {deleteBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          <Button
+            type="submit"
+            variant="destructive"
+            className="self-end"
+            loading={deleteBusy}
+            disabled={!deleteName || deleteConfirm !== deleteName || Boolean(loadError)}
+          >
             Delete secret
           </Button>
         </form>
@@ -1351,7 +1413,11 @@ export function Secrets() {
           onRetry={(item) => void retrySecretApproval(item)}
         />
       </section>
+        </div>
+      )}
 
+      {tab === "access" && (
+        <div {...tabPanelProps("secrets", "access")} className="grid gap-6">
       <section aria-labelledby="developer-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="developer-heading" className="text-title font-semibold">
@@ -1394,7 +1460,11 @@ export function Secrets() {
           </p>
         )}
       </section>
+        </div>
+      )}
 
+      {tab === "engines" && (
+        <div {...tabPanelProps("secrets", "engines")} className="grid gap-6">
       <section aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="pki-heading" className="text-title font-semibold">
@@ -1441,7 +1511,11 @@ export function Secrets() {
           </RevealPanel>
         )}
       </section>
+        </div>
+      )}
 
+      {tab === "access" && (
+        <div className="grid gap-6">
       <section aria-labelledby="machine-login-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="machine-login-heading" className="text-title font-semibold">
@@ -1483,7 +1557,11 @@ export function Secrets() {
           login exchange.
         </UnavailableState>
       </section>
+        </div>
+      )}
 
+      {tab === "sharing" && (
+        <div {...tabPanelProps("secrets", "sharing")} className="grid gap-6">
       <section aria-labelledby="share-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="share-heading" className="text-title font-semibold">
@@ -1727,7 +1805,11 @@ export function Secrets() {
           </div>
         )}
       </section>
+        </div>
+      )}
 
+      {tab === "scanning" && (
+        <div {...tabPanelProps("secrets", "scanning")} className="grid gap-6">
       <section aria-labelledby="secret-scanning-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="secret-scanning-heading" className="text-title font-semibold">
@@ -1903,7 +1985,11 @@ export function Secrets() {
           </div>
         )}
       </section>
+        </div>
+      )}
 
+      {tab === "engines" && (
+        <div className="grid gap-6">
       <section aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="dynamic-secrets-heading" className="text-title font-semibold">
@@ -2158,7 +2244,11 @@ export function Secrets() {
           </RevealPanel>
         )}
       </section>
+        </div>
+      )}
 
+      {tab === "sync" && (
+        <div {...tabPanelProps("secrets", "sync")} className="grid gap-6">
       <section aria-labelledby="secret-sync-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="secret-sync-heading" className="text-title font-semibold">
@@ -2469,6 +2559,8 @@ export function Secrets() {
           </dl>
         )}
       </section>
+        </div>
+      )}
 
       {scheduleDialogOpen && (
         <Dialog

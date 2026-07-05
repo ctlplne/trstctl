@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { Platform } from "@/pages/Platform";
@@ -279,6 +280,7 @@ describe("WIRE-12 Platform served admin surface", () => {
   });
 
   it("renders remaining Platform admin data from served access endpoints and hides unbacked status panels", async () => {
+    const user = userEvent.setup();
     renderPlatform();
 
     expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
@@ -292,11 +294,9 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
     expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
 
+    // Posture disclosures render behind the System posture workspace tab.
+    await user.click(screen.getByRole("tab", { name: "System posture" }));
     expect(screen.getByText("tenant-platform")).toBeInTheDocument();
-    expect(screen.getAllByText("platform-owner").length).toBeGreaterThan(0);
-    expect(screen.getByText("platform-admins")).toBeInTheDocument();
-    expect(screen.getAllByText("admin@example.test").length).toBeGreaterThan(0);
-    expect(screen.getByText("automation-client")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Editions" })).toBeInTheDocument();
     expect(screen.getByText("ENTERPRISE")).toBeInTheDocument();
     expect(screen.getByText("Acme Robotics")).toBeInTheDocument();
@@ -321,6 +321,12 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
     expect(screen.getByText("regional-smoke")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Access administration" }));
+    expect(screen.getAllByText("platform-owner").length).toBeGreaterThan(0);
+    expect(screen.getByText("platform-admins")).toBeInTheDocument();
+    expect(screen.getAllByText("admin@example.test").length).toBeGreaterThan(0);
+    expect(screen.getByText("automation-client")).toBeInTheDocument();
 
     expect(screen.queryByRole("heading", { name: "Single-binary runtime" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Plugin SDK and capability sandbox" })).not.toBeInTheDocument();

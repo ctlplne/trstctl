@@ -88,16 +88,27 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
   });
 
   it("serves discovery monitoring, source, schedule, run, and finding tables through the shared grid controls", async () => {
+    const user = userEvent.setup();
     renderDiscovery();
 
     expect(await screen.findByRole("heading", { name: "Discovery" })).toBeInTheDocument();
-    for (const heading of ["Continuous monitoring", "Sources", "Schedules", "Runs", "Findings"]) {
-      const section = screen.getByRole("heading", { name: heading }).closest("section");
+    // Each surface lives on its workspace tab; monitoring + findings share the default tab.
+    const surfaces: Array<{ heading: string; tab?: string }> = [
+      { heading: "Continuous monitoring" },
+      { heading: "Findings" },
+      { heading: "Sources", tab: "Sources" },
+      { heading: "Schedules", tab: "Schedules" },
+      { heading: "Runs", tab: "Runs" },
+    ];
+    for (const surface of surfaces) {
+      if (surface.tab) await user.click(screen.getByRole("tab", { name: surface.tab }));
+      const section = screen.getByRole("heading", { name: surface.heading }).closest("section");
       expect(section).toBeTruthy();
       expect(within(section as HTMLElement).getByRole("button", { name: "Columns" })).toBeInTheDocument();
       expect(within(section as HTMLElement).getByRole("button", { name: "Save view" })).toBeInTheDocument();
     }
 
+    await user.click(screen.getByRole("tab", { name: "Findings" }));
     const findings = screen.getByRole("heading", { name: "Findings" }).closest("section") as HTMLElement;
     expect(within(findings).getByLabelText("Triage status")).toBeInTheDocument();
     expect(within(findings).getByText("abcdef1234...567890")).toBeInTheDocument();

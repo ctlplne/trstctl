@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronsUpDown, ChevronUp, Columns3 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
-import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { readGridPreferences, sanitizeViewMetadata, writeGridPreferences, type GridViewPrimitive, type SavedGridView } from "@/lib/gridViews";
 import { cn } from "@/lib/utils";
@@ -402,7 +403,19 @@ function GridState({ state, title, children }: { state: DataGridState; title?: s
 
   switch (state) {
     case "loading":
-      return <LoadingState>{children ?? t("grid.state.loading")}</LoadingState>;
+      // A table-shaped skeleton keeps the page's silhouette while rows load,
+      // instead of collapsing the grid to a one-line spinner.
+      return (
+        <div role="status" data-state-primitive="loading" className="grid gap-2.5 rounded-panel border border-border bg-card p-4 shadow-elevation1">
+          <span className="sr-only">{children ?? t("grid.state.loading")}</span>
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-3/4" />
+        </div>
+      );
     case "error":
       return <ErrorState title={title ?? t("grid.state.error")}>{children}</ErrorState>;
     case "permission-denied":

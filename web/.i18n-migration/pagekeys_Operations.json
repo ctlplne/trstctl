@@ -1,0 +1,10 @@
+{
+ "Apply identity filter": "parity.applyIdentityFilter_72d5ba",
+ "Clear identity filter": "parity.clearIdentityFilter_3c0b9a",
+ "Filter rotation runs": "parity.filterRotationRuns_e652a6",
+ "Full lifecycle rotation run record, including fingerprints, rollback reference, and error evidence.": "parity.fullLifecycleRotationRunRecordIncluding_02687f",
+ "Identity ID filter": "parity.identityIdFilter_48db11",
+ "Lifecycle rotation evidence: who rotated what, when, and how it ended.": "parity.lifecycleRotationEvidenceWhoRotatedWhat_10ed9a",
+ "Rotation runs": "parity.rotationRuns_5ec15c",
+ "identity UUID": "parity.identityUuid_209e1d"
+}

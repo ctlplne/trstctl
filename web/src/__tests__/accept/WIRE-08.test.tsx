@@ -68,6 +68,7 @@ describe("WIRE-08 transit operation wiring", () => {
     renderSecrets();
 
     await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Engines" }));
     const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
     await user.type(transitForm.getByLabelText("Key name"), "payments-pii");
     await user.type(transitForm.getByLabelText("Plaintext"), "hello transit");
