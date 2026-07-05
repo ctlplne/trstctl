@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,6 +32,10 @@ const appRole = "trstctl_app"
 // projections) use the pool directly.
 type Store struct {
 	pool *pgxpool.Pool
+	// extraMigrations are additional migration sources registered through the
+	// feature-neutral WithExtraMigrations seam, applied after the core migrations.
+	// The core-only build registers none.
+	extraMigrations []fs.FS
 }
 
 // maxConns bounds the connection pool. It must comfortably exceed the number of

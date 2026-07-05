@@ -6,6 +6,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io/fs"
 	"sort"
 	"strconv"
 	"strings"
@@ -83,10 +84,51 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return err
 	}
 
-	names, err := migrationNames()
+	coreNames, err := migrationNames()
 	if err != nil {
 		return err
 	}
+	if err := applyMigrationSet(ctx, conn, applied, coreNames, func(name string) ([]byte, error) {
+		return migrationFS.ReadFile("migrations/" + name)
+	}); err != nil {
+		return err
+	}
+	// Feature-neutral extension migrations (registered via WithExtraMigrations),
+	// applied after the core migrations in the same ledger. The core-only build
+	// registers none.
+	for _, fsys := range s.extraMigrations {
+		src := fsys
+		names, err := sqlMigrationNames(src)
+		if err != nil {
+			return err
+		}
+		if err := applyMigrationSet(ctx, conn, applied, names, func(name string) ([]byte, error) {
+			return fs.ReadFile(src, "migrations/"+name)
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WithExtraMigrations registers an additional migration source whose "migrations"
+// subdirectory holds NNNNNN_*.sql files, applied after the core migrations (in
+// registration order) and tracked in the same schema_migrations ledger by
+// version. It is a feature-neutral seam — it names nothing edition-specific.
+// Extension code, wired only through the tagged ee_attach seam, registers its own
+// migrations here; the core-only build registers none, so core applies zero
+// extension migrations. Extension migrations must use versions in a reserved high
+// band (>= 900000) so they cannot collide with core versions. Call before Migrate.
+func (s *Store) WithExtraMigrations(fsys fs.FS) *Store {
+	s.extraMigrations = append(s.extraMigrations, fsys)
+	return s
+}
+
+// applyMigrationSet applies the named migrations that are not yet in applied,
+// recording each in the schema_migrations ledger. read returns a migration's SQL
+// body by name. It honors the `-- migrate: no-transaction` opt-out exactly as the
+// core path does.
+func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, applied map[int64]bool, names []string, read func(name string) ([]byte, error)) error {
 	for _, name := range names {
 		version, err := versionOf(name)
 		if err != nil {
@@ -95,7 +137,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if applied[version] {
 			continue
 		}
-		body, err := migrationFS.ReadFile("migrations/" + name)
+		body, err := read(name)
 		if err != nil {
 			return err
 		}
@@ -108,6 +150,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 			if _, err := conn.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", version); err != nil {
 				return fmt.Errorf("store: record no-transaction migration %s: %w", name, err)
 			}
+			applied[version] = true
 			continue
 		}
 		tx, err := conn.Begin(ctx)
@@ -125,8 +168,26 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("store: commit migration %s: %w", name, err)
 		}
+		applied[version] = true
 	}
 	return nil
+}
+
+// sqlMigrationNames lists the *.sql files in fsys's "migrations" directory,
+// sorted by name (numeric-prefix order).
+func sqlMigrationNames(fsys fs.FS) ([]string, error) {
+	entries, err := fs.ReadDir(fsys, "migrations")
+	if err != nil {
+		return nil, fmt.Errorf("store: read extra migrations: %w", err)
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func acquireMigrationLock(ctx context.Context, conn *pgxpool.Conn, key int64) error {
