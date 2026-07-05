@@ -35,6 +35,13 @@ type Server struct {
 	store   *KeyStore // optional sealed persistence; nil = in-memory only
 	keyspec KeyFactory
 
+	// minter, when non-nil, is the attached generic successor-minting extension
+	// (WithSuccessionMinter). The core defines only the seam; the concrete
+	// succession semantics (commitment forming, dual-signing, epoch discipline)
+	// live in an edition implementation. nil = the signer mints no successions
+	// (core-only build).
+	minter SuccessionMinter
+
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
 	// (RED-003). The signer uses it as verifier material; production token minting
