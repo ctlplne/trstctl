@@ -82,12 +82,16 @@ func (SuccessionV1) isSuccessionPayload() {}
 
 // RetirementV1 records retirement of the predecessor at a given epoch. The
 // succession record persists as durable proof linking the epochs (claim 8).
+// AckSetDigest binds a digest of the signed relying-party acknowledgements that
+// satisfied the cutover quorum, so the evidence condition is itself offline
+// verifiable (claim 3); it is empty for a policy-time-bound retirement embodiment.
 type RetirementV1 struct {
 	IdentityID    string `json:"identity_id"`
 	TenantID      string `json:"tenant_id"`
 	Epoch         uint64 `json:"epoch"`
 	RetiredAlg    string `json:"retired_algorithm,omitempty"`
 	SuccessionRef []byte `json:"succession_ref,omitempty"`
+	AckSetDigest  []byte `json:"ack_set_digest,omitempty"`
 }
 
 func (RetirementV1) isSuccessionPayload() {}
