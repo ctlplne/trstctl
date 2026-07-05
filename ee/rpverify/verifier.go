@@ -14,6 +14,7 @@
 package rpverify
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -29,6 +30,7 @@ var (
 	ErrInclusionInvalid  = errors.New("rpverify: transparency-log inclusion proof invalid")
 	ErrPreCRQC           = errors.New("rpverify: classical-predecessor record lacks a pre-cryptanalysis-relevance log timestamp")
 	ErrOverlapClosed     = errors.New("rpverify: predecessor credential rejected (overlap window closed / fail-closed)")
+	ErrStrengthRefusal   = errors.New("rpverify: weaker-class succession rejected (no valid break-glass authorization)")
 )
 
 // EpochStore is the caller-supplied durable last-accepted-epoch state per identity
@@ -56,6 +58,13 @@ type Options struct {
 	RequireInclusion bool
 	STHVerifyKeyDER  []byte // when set, each inclusion STH's signature is checked
 	PreCRQCBefore    int64  // classical-predecessor records need a log timestamp < this (unix nanos); 0 disables
+
+	// BreakGlassAuthorityDER is the break-glass authority's public key. When a
+	// record is a strength-downgrade (weaker successor class), the RP mirrors the
+	// signer's refusal (claim 17 / INV-8): it accepts the record only if it carries
+	// a valid, request-bound break-glass token this key signed. Empty => any
+	// weaker-class succession is rejected (fail-closed).
+	BreakGlassAuthorityDER []byte
 }
 
 // Input is everything the relying party needs, supplied by the caller (no network
@@ -118,6 +127,13 @@ func Verify(in Input, store EpochStore, opts Options) (Result, error) {
 		if opts.ExpectedTenant != "" && rec.Fields.TenantID != opts.ExpectedTenant {
 			return Result{}, fmt.Errorf("%w: record %d tenant %q", ErrWrongTenant, i, rec.Fields.TenantID)
 		}
+		// Mirror the signer's strength-downgrade refusal (claim 17 / INV-8): a
+		// weaker-class succession is accepted only with a valid break-glass token.
+		if succession.IsStrengthDowngrade(rec.Fields.PredecessorAlg, rec.Fields.SuccessorAlg) {
+			if err := verifyBreakGlass(rec, opts.BreakGlassAuthorityDER); err != nil {
+				return Result{}, fmt.Errorf("record %d: %w", i, err)
+			}
+		}
 		if opts.RequireInclusion {
 			if err := verifyInclusion(rec, in.Inclusion[i], opts); err != nil {
 				return Result{}, err
@@ -171,4 +187,43 @@ func AcceptPresentedEpoch(head, presented uint64, overlapOpen bool) error {
 		return nil
 	}
 	return fmt.Errorf("%w: presented epoch %d, head %d, overlapOpen=%v", ErrOverlapClosed, presented, head, overlapOpen)
+}
+
+type breakGlassEnvelope struct {
+	Payload json.RawMessage `json:"payload"`
+	Sig     []byte          `json:"sig"`
+}
+
+type breakGlassToken struct {
+	IdentityID               string           `json:"identity_id"`
+	TenantID                 string           `json:"tenant_id"`
+	AssertedPredecessorEpoch uint64           `json:"asserted_predecessor_epoch"`
+	TargetAlgorithm          crypto.Algorithm `json:"target_algorithm"`
+	Nonce                    string           `json:"nonce"`
+}
+
+// verifyBreakGlass checks a record's break-glass authorization: an
+// authority-signed token bound to this record's identity, tenant, predecessor
+// epoch, and successor algorithm. It mirrors the signer's verification (single-use
+// enforcement is the signer's responsibility).
+func verifyBreakGlass(rec succession.SuccessionRecord, authorityDER []byte) error {
+	if len(authorityDER) == 0 || len(rec.BreakGlassAuth) == 0 {
+		return ErrStrengthRefusal
+	}
+	var env breakGlassEnvelope
+	if err := json.Unmarshal(rec.BreakGlassAuth, &env); err != nil {
+		return fmt.Errorf("%w: %v", ErrStrengthRefusal, err)
+	}
+	if err := crypto.VerifyMessage(authorityDER, env.Payload, env.Sig); err != nil {
+		return fmt.Errorf("%w: authority signature: %v", ErrStrengthRefusal, err)
+	}
+	var t breakGlassToken
+	if err := json.Unmarshal(env.Payload, &t); err != nil {
+		return fmt.Errorf("%w: %v", ErrStrengthRefusal, err)
+	}
+	if t.IdentityID != rec.Fields.IdentityID || t.TenantID != rec.Fields.TenantID ||
+		t.AssertedPredecessorEpoch != rec.Fields.PredecessorEpoch || t.TargetAlgorithm != rec.Fields.SuccessorAlg {
+		return fmt.Errorf("%w: token binding mismatch", ErrStrengthRefusal)
+	}
+	return nil
 }

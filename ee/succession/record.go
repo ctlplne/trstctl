@@ -40,6 +40,13 @@ type SuccessionRecord struct {
 	// InclusionProof is a transparency-log inclusion proof (PCAS-06).
 	SignerAttestation []byte
 	InclusionProof    []byte
+
+	// BreakGlassAuth, when present, is the authority-signed, single-use break-glass
+	// token that authorized a forward strength-downgrade succession (claim 17 /
+	// INV-8, PCAS-15). It is self-authenticating (verified against the break-glass
+	// authority's key) and marks the record as a break-glass succession; the RP
+	// requires it for any weaker-class succession.
+	BreakGlassAuth []byte
 }
 
 // GenesisRecord anchors an identity's chain at epoch 0 (r11 genesis-establishment

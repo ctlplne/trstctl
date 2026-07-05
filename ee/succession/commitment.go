@@ -38,6 +38,19 @@ var algRegistry = map[crypto.Algorithm]uint64{
 	crypto.ECDSAP384: 11,
 	crypto.ECDSAP521: 12,
 	crypto.Ed25519:   20,
+
+	// Post-quantum and hybrid registry identifiers (algorithms implemented in
+	// ee/pqc; classified in algclass.go). Bound here by canonical identifier so
+	// commitments over PQ/hybrid records are well-defined without importing ee/pqc.
+	crypto.Algorithm("ML-DSA-44"):            30,
+	crypto.Algorithm("ML-DSA-65"):            31,
+	crypto.Algorithm("ML-DSA-87"):            32,
+	crypto.Algorithm("SLH-DSA-128s"):         33,
+	crypto.Algorithm("SLH-DSA-128f"):         34,
+	crypto.Algorithm("SLH-DSA-192s"):         35,
+	crypto.Algorithm("SLH-DSA-256s"):         36,
+	crypto.Algorithm("Ed25519+ML-DSA-65"):    40,
+	crypto.Algorithm("ECDSA-P256+ML-DSA-65"): 41,
 }
 
 func registryID(alg crypto.Algorithm) (uint64, error) {

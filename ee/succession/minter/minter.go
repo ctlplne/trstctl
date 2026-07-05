@@ -32,7 +32,15 @@ var (
 	ErrAuthorizationInvalid  = errors.New("minter: authorization invalid")
 	ErrKeygen                = errors.New("minter: successor key generation failed")
 	ErrFloorPersist          = errors.New("minter: failed to persist epoch floor")
+	ErrStrengthDowngrade     = errors.New("minter: refused forward succession to a weaker algorithm class absent break-glass")
 )
+
+// BreakGlassVerifier verifies a distinct, single-use, request-bound break-glass
+// token authorizing a forward strength-downgrade succession, inside the signer
+// (claim 17 / INV-8). It is separate from the dual-control AuthVerifier.
+type BreakGlassVerifier interface {
+	VerifyAndConsume(token []byte, req signing.MintRequest) error
+}
 
 // KeyResolver returns the predecessor signer for an opaque in-signer handle. The
 // private key stays inside the signer; only the Signer handle is returned.
@@ -73,6 +81,9 @@ type Minter struct {
 	auth        AuthVerifier   // optional
 	requireAuth bool
 
+	enforceStrength bool
+	breakGlass      BreakGlassVerifier // optional; nil => downgrades always refused
+
 	mu    sync.Mutex
 	floor map[string]uint64
 }
@@ -88,6 +99,17 @@ func WithDualControl(v AuthVerifier) Option {
 	return func(m *Minter) {
 		m.auth = v
 		m.requireAuth = true
+	}
+}
+
+// WithStrengthOrdering enforces the class partial order (PurePQ >= Hybrid >=
+// Classical): a forward succession to a strictly weaker class is refused unless
+// the request carries a valid break-glass token that bg verifies. A nil bg means
+// downgrades are always refused (claim 17 / INV-8).
+func WithStrengthOrdering(bg BreakGlassVerifier) Option {
+	return func(m *Minter) {
+		m.enforceStrength = true
+		m.breakGlass = bg
 	}
 }
 
@@ -134,6 +156,20 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	}
 	epoch := floor + 1
 	paramsDigest := RequestParamsDigest(req)
+
+	// Strength ordering: refuse a FORWARD succession to a strictly weaker
+	// algorithm class absent a valid, single-use break-glass token verified inside
+	// the signer (claim 17 / INV-8). This is distinct from epoch rollback (INV-3).
+	var breakGlassUsed bool
+	if m.enforceStrength && succession.IsStrengthDowngrade(pred.Algorithm(), req.TargetAlgorithm) {
+		if m.breakGlass == nil || len(req.BreakGlass) == 0 {
+			return signing.MintResult{}, ErrStrengthDowngrade
+		}
+		if err := m.breakGlass.VerifyAndConsume(req.BreakGlass, req); err != nil {
+			return signing.MintResult{}, fmt.Errorf("%w: %v", ErrStrengthDowngrade, err)
+		}
+		breakGlassUsed = true
+	}
 
 	// Policy verification BEFORE successor-key generation (claim 23).
 	if m.policy != nil {
@@ -193,6 +229,12 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		Fields:         fields,
 		PredecessorAtt: predSig,
 		Possession:     succession.PossessionProof{Kind: succession.ProofSuccessorSignature, Signature: succSig},
+	}
+	if breakGlassUsed {
+		// Mark the record as a break-glass succession; the RP requires this for any
+		// weaker-class succession (claim 17). It is self-authenticating (authority
+		// signature), so it needs no commitment binding.
+		rec.BreakGlassAuth = cloneBytesBG(req.BreakGlass)
 	}
 	encoded, err := EncodeRecord(rec)
 	if err != nil {
@@ -352,4 +394,64 @@ func SignEnvelope(authority crypto.Signer, payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(signedEnvelope{Payload: payload, Sig: sig})
+}
+
+// BreakGlassToken is the distinct, single-use m-of-n artifact an approval
+// authority signs to authorize one forward strength-downgrade succession (claim
+// 17). It binds the succession so it cannot be replayed or rebound.
+type BreakGlassToken struct {
+	IdentityID               string           `json:"identity_id"`
+	TenantID                 string           `json:"tenant_id"`
+	AssertedPredecessorEpoch uint64           `json:"asserted_predecessor_epoch"`
+	TargetAlgorithm          crypto.Algorithm `json:"target_algorithm"`
+	Nonce                    string           `json:"nonce"`
+}
+
+// SignedBreakGlassAuthorizer verifies authority-signed BreakGlassTokens and
+// enforces single-use. The RP mirror (ee/rpverify) verifies the same token.
+type SignedBreakGlassAuthorizer struct {
+	AuthorityPubDER []byte
+	mu              sync.Mutex
+	spent           map[string]bool
+}
+
+// NewSignedBreakGlassAuthorizer builds an authorizer trusting authorityPubDER.
+func NewSignedBreakGlassAuthorizer(authorityPubDER []byte) *SignedBreakGlassAuthorizer {
+	return &SignedBreakGlassAuthorizer{AuthorityPubDER: authorityPubDER, spent: map[string]bool{}}
+}
+
+// VerifyAndConsume checks the authority signature, the binding to the request,
+// and single-use.
+func (a *SignedBreakGlassAuthorizer) VerifyAndConsume(token []byte, req signing.MintRequest) error {
+	var env signedEnvelope
+	if err := json.Unmarshal(token, &env); err != nil {
+		return fmt.Errorf("break-glass decode: %w", err)
+	}
+	if err := crypto.VerifyMessage(a.AuthorityPubDER, env.Payload, env.Sig); err != nil {
+		return fmt.Errorf("break-glass authority signature: %w", err)
+	}
+	var t BreakGlassToken
+	if err := json.Unmarshal(env.Payload, &t); err != nil {
+		return err
+	}
+	if t.IdentityID != req.IdentityID || t.TenantID != req.TenantID ||
+		t.AssertedPredecessorEpoch != req.AssertedPredecessorEpoch || t.TargetAlgorithm != req.TargetAlgorithm {
+		return errors.New("break-glass token binding mismatch")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.spent[t.Nonce] {
+		return errors.New("break-glass token already used (single-use)")
+	}
+	a.spent[t.Nonce] = true
+	return nil
+}
+
+func cloneBytesBG(b []byte) []byte {
+	if b == nil {
+		return nil
+	}
+	out := make([]byte, len(b))
+	copy(out, b)
+	return out
 }

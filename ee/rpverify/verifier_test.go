@@ -3,6 +3,8 @@
 package rpverify_test
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,12 +12,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"trstctl.com/trstctl/ee/rpverify"
 	"trstctl.com/trstctl/ee/succession"
+	"trstctl.com/trstctl/ee/succession/minter"
 	"trstctl.com/trstctl/ee/translog"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 const tenant = "tenant-1"
@@ -229,5 +234,132 @@ func TestRPVerify_WASMParity(t *testing.T) {
 	}
 	if !strings.Contains(string(out), want) {
 		t.Fatalf("wasm parity mismatch: native %q, wasm output:\n%s", want, out)
+	}
+}
+
+// --- strength-refusal mirror (PCAS-15) -------------------------------------
+
+type rpClassSigner struct {
+	inner crypto.Signer
+	alg   crypto.Algorithm
+}
+
+func (c rpClassSigner) Public() crypto.PublicKey {
+	return crypto.PublicKey{Algorithm: c.alg, DER: c.inner.Public().DER}
+}
+func (c rpClassSigner) Algorithm() crypto.Algorithm { return c.alg }
+func (c rpClassSigner) Sign(m []byte, o crypto.SignOptions) ([]byte, error) {
+	return c.inner.Sign(m, o)
+}
+
+type mapResolverRP map[string]crypto.Signer
+
+func (r mapResolverRP) Resolve(h string) (crypto.Signer, error) {
+	s, ok := r[h]
+	if !ok {
+		return nil, errors.New("no handle")
+	}
+	return s, nil
+}
+
+type memFloorRP struct {
+	mu sync.Mutex
+	m  map[string]uint64
+}
+
+func newMemFloorRP() *memFloorRP { return &memFloorRP{m: map[string]uint64{}} }
+func (f *memFloorRP) Load() (map[string]uint64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]uint64{}
+	for k, v := range f.m {
+		out[k] = v
+	}
+	return out, nil
+}
+func (f *memFloorRP) Advance(id string, e uint64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.m[id] = e
+	return nil
+}
+
+// TestRPVerify_MirrorsStrengthRefusal: the RP rejects a weaker-class succession
+// that lacks a valid break-glass marker, and accepts one that has it (claim 17 /
+// INV-8).
+func TestRPVerify_MirrorsStrengthRefusal(t *testing.T) {
+	be := crypto.NewSoftwareBackend()
+	authority, err := be.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustRoot, err := be.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	predInner, err := be.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pred := rpClassSigner{inner: predInner, alg: "ML-DSA-65"} // PQ predecessor
+
+	// Mint a PQ->classical downgrade record with a valid break-glass token.
+	bg := minter.NewSignedBreakGlassAuthorizer(authority.Public().DER)
+	m, err := minter.New(mapResolverRP{"pred": pred}, be, newMemFloorRP(), minter.WithStrengthOrdering(bg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := signing.MintRequest{
+		IdentityID: "spiffe://td/db", TenantID: tenant, DeploymentScope: "spiffe://td",
+		PredecessorHandle: "pred", AssertedPredecessorEpoch: 0, TargetAlgorithm: crypto.ECDSAP384,
+		PolicyRef: "p", NotBefore: 1, NotAfter: 1000,
+	}
+	payload, err := json.Marshal(minter.BreakGlassToken{
+		IdentityID: req.IdentityID, TenantID: req.TenantID,
+		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch, TargetAlgorithm: req.TargetAlgorithm, Nonce: "n1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.BreakGlass, err = minter.SignEnvelope(authority, payload); err != nil {
+		t.Fatal(err)
+	}
+	res, err := m.MintSuccessor(context.Background(), req)
+	if err != nil {
+		t.Fatalf("mint downgrade: %v", err)
+	}
+	rec, err := minter.DecodeRecord(res.EncodedRecord)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	genesis := succession.GenesisRecord{
+		DeploymentScope: "spiffe://td", IdentityID: "spiffe://td/db", TenantID: tenant,
+		Algorithm: "ML-DSA-65", PublicKey: predInner.Public().DER, Epoch: 0,
+	}
+	gd, err := succession.GenesisDigest(genesis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if genesis.TrustRootAtt, err = trustRoot.Sign(gd, crypto.SignOptions{Hash: crypto.SHA256}); err != nil {
+		t.Fatal(err)
+	}
+	in := rpverify.Input{TrustRootPubDER: trustRoot.Public().DER, Genesis: genesis, Chain: []succession.SuccessionRecord{rec}}
+
+	// No configured authority => the weaker-class succession is refused (fail-closed).
+	if _, err := rpverify.Verify(in, newMemEpoch(), rpverify.Options{ExpectedTenant: tenant}); !errors.Is(err, rpverify.ErrStrengthRefusal) {
+		t.Fatalf("no authority: got %v, want ErrStrengthRefusal", err)
+	}
+	// With the authority, the valid break-glass token is accepted.
+	if _, err := rpverify.Verify(in, newMemEpoch(), rpverify.Options{ExpectedTenant: tenant, BreakGlassAuthorityDER: authority.Public().DER}); err != nil {
+		t.Fatalf("valid break-glass rejected: %v", err)
+	}
+	// A record whose break-glass marker is stripped is refused even with the authority.
+	stripped := rec
+	stripped.BreakGlassAuth = nil
+	in2 := in
+	in2.Chain = []succession.SuccessionRecord{stripped}
+	if _, err := rpverify.Verify(in2, newMemEpoch(), rpverify.Options{ExpectedTenant: tenant, BreakGlassAuthorityDER: authority.Public().DER}); !errors.Is(err, rpverify.ErrStrengthRefusal) {
+		t.Fatalf("stripped marker: got %v, want ErrStrengthRefusal", err)
 	}
 }

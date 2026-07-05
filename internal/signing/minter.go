@@ -33,6 +33,7 @@ type MintRequest struct {
 	PolicyRef                string
 	PolicyDecision           []byte // signed policy artifact (optional)
 	Authorization            []byte // dual-control authorization token (optional)
+	BreakGlass               []byte // strength-downgrade break-glass token (optional)
 	NotBefore                int64
 	NotAfter                 int64
 }
