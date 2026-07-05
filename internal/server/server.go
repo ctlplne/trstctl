@@ -129,6 +129,7 @@ type Deps struct {
 	APIOptions                []api.Option         // auth/audit/etc.
 	License                   *license.Manager     // offline edition state exposed by GET /v1/editions
 	EnableRemediation         bool                 // Enterprise remediation: incident execution and guided remediation routes
+	EnablePCAS                bool                 // Enterprise PCAS: proof-carrying algorithm succession (ee/succession); the succession API/orchestrator wiring keys off this
 	LicensedAPIOptionsFactory LicensedAPIOptionsFactory
 	LicensedOutboxFactory     LicensedOutboxFactory
 	LicensedLeafSigner        LicensedLeafSigner

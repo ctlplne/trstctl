@@ -45,11 +45,15 @@ const (
 	FeatureMetering        Feature = "metering"
 	FeatureWhiteLabel      Feature = "white_label"
 	FeatureSiloedIsolation Feature = "siloed_isolation"
+	// FeaturePCAS gates Proof-Carrying Algorithm Succession (the ee/succession
+	// family). It is the single AN-9 activation point for PCAS; attachEE has
+	// exactly one lic.Has(FeaturePCAS) block.
+	FeaturePCAS Feature = "pcas"
 )
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance},
+	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeaturePCAS},
 	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 

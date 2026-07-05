@@ -34,6 +34,16 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 			log.Info("Enterprise remediation attached", slog.String("feature", string(license.FeatureRemediation)))
 		}
 	}
+	if lic != nil && lic.Has(license.FeaturePCAS) {
+		// AN-9 activation point for Proof-Carrying Algorithm Succession (HARNESS
+		// §1.6.6). This one block gates PCAS; later cards extend it (the succession
+		// API/orchestrator and the ee/succession/store migrations key off
+		// deps.EnablePCAS). Unlicensed or core-only deployments run zero PCAS jobs.
+		deps.EnablePCAS = true
+		if log != nil {
+			log.Info("Enterprise PCAS attached", slog.String("feature", string(license.FeaturePCAS)))
+		}
+	}
 	if lic != nil && lic.Has(license.FeaturePQC) {
 		deps.LicensedAPIOptionsFactory = eepqcmigration.NewAPIOptionsFactory()
 		deps.LicensedOutboxFactory = eepqcmigration.NewOutboxFactory()
