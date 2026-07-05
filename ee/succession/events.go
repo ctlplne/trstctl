@@ -65,16 +65,17 @@ func (FindingV1) isSuccessionPayload() {}
 // cryptographic record itself is defined by PCAS-04; RecordDigest is an opaque
 // reference to it so PCAS-01 stays free of crypto.
 type SuccessionV1 struct {
-	IdentityID            string `json:"identity_id"`
-	TenantID              string `json:"tenant_id"`
-	PredecessorEpoch      uint64 `json:"predecessor_epoch"`
-	Epoch                 uint64 `json:"epoch"`
-	PredecessorAlgorithm  string `json:"predecessor_algorithm,omitempty"`
-	SuccessorAlgorithm    string `json:"successor_algorithm"`
-	SuccessorPublicKeyDER []byte `json:"successor_public_key_der,omitempty"`
-	PolicyRef             string `json:"policy_ref,omitempty"`
-	AlgorithmClass        string `json:"algorithm_class,omitempty"`
-	RecordDigest          []byte `json:"record_digest,omitempty"`
+	IdentityID              string `json:"identity_id"`
+	TenantID                string `json:"tenant_id"`
+	PredecessorEpoch        uint64 `json:"predecessor_epoch"`
+	Epoch                   uint64 `json:"epoch"`
+	PredecessorAlgorithm    string `json:"predecessor_algorithm,omitempty"`
+	PredecessorPublicKeyDER []byte `json:"predecessor_public_key_der,omitempty"`
+	SuccessorAlgorithm      string `json:"successor_algorithm"`
+	SuccessorPublicKeyDER   []byte `json:"successor_public_key_der,omitempty"`
+	PolicyRef               string `json:"policy_ref,omitempty"`
+	AlgorithmClass          string `json:"algorithm_class,omitempty"`
+	RecordDigest            []byte `json:"record_digest,omitempty"`
 }
 
 func (SuccessionV1) isSuccessionPayload() {}

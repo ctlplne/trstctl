@@ -18,11 +18,15 @@
 //     enables claim 10 and establishes INV-10 while preserving INV-4
 //     (idempotent under at-least-once/duplicate delivery).
 //
+// Card PCAS-03 additionally provides the AlgorithmEpoch model (epoch.go,
+// transition.go): a per-identity algorithm-epoch that is distinct from and
+// independent of the core byok rotation-version, so a same-algorithm re-key is
+// definitionally not a succession (claim 22 / INV-2).
+//
 // Deliberately out of scope here (see the named cards): the dual-signed
 // succession *record*, its commitment, and any cryptography (PCAS-04); the
-// durable RLS serving copy of this projection (PCAS-02); the AlgorithmEpoch
-// model and record fields (PCAS-03); minting inside the isolated signer
-// (PCAS-05); and the signed posture *report* of claim 50 (PCAS-30). A
-// succession event here carries only posture-relevant fields plus an opaque
-// RecordDigest reference to the record that PCAS-04 will define.
+// durable RLS serving copy of this projection (PCAS-02); minting inside the
+// isolated signer (PCAS-05); and the signed posture *report* of claim 50
+// (PCAS-30). A succession event here carries only posture-relevant fields plus
+// an opaque RecordDigest reference to the record that PCAS-04 will define.
 package succession
