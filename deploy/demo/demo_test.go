@@ -62,15 +62,16 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 		t.Fatalf("demo trstctl ports = %v, want only the browser/API port 9443:8443", cp.Ports)
 	}
 	for k, want := range map[string]string{
-		"TRSTCTL_AUTH_OIDC_ENABLED":         "true",
-		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":    "https://localhost:9443/auth/callback",
-		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":   "http://127.0.0.1:19081/authorize",
-		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":  "http://127.0.0.1:19081/token",
-		"TRSTCTL_SECRETS_ENABLE_API":        "true",
-		"TRSTCTL_MANAGED_KEYS_ENABLED":      "true",
-		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT": "http://localstack:4566",
-		"TRSTCTL_PROTOCOLS_ACME_TENANT_ID":  "11111111-1111-4111-8111-111111111111",
-		"TRSTCTL_PROTOCOLS_EST_TENANT_ID":   "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_AUTH_OIDC_ENABLED":            "true",
+		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":       "https://localhost:9443/auth/callback",
+		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":      "http://127.0.0.1:19081/authorize",
+		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":     "http://127.0.0.1:19081/token",
+		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS": "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
+		"TRSTCTL_SECRETS_ENABLE_API":           "true",
+		"TRSTCTL_MANAGED_KEYS_ENABLED":         "true",
+		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":    "http://localstack:4566",
+		"TRSTCTL_PROTOCOLS_ACME_TENANT_ID":     "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_PROTOCOLS_EST_TENANT_ID":      "11111111-1111-4111-8111-111111111111",
 	} {
 		if got := stringValue(cp.Environment[k]); got != want {
 			t.Fatalf("demo trstctl env %s = %q, want %q", k, got, want)

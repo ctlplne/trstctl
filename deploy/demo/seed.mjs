@@ -358,6 +358,17 @@ async function pollCertificates(minimum) {
   throw new Error(`certificate inventory did not reach ${minimum} rows`);
 }
 
+async function transitionIdentityIfNeeded(identityID, targetState, reason, idemKey) {
+  const current = await api("GET", `/api/v1/identities/${identityID}`);
+  if (current?.status === targetState) {
+    return current;
+  }
+  return api("POST", `/api/v1/identities/${identityID}/transitions`, {
+    to: targetState,
+    reason,
+  }, idemKey);
+}
+
 async function main() {
   if (checkMode) {
     checkSeedPlan();
@@ -424,17 +435,21 @@ async function main() {
     issuedIdentityCount += 1;
     if (item.targetState === "deployed") {
       await pollCertificates(Math.min(issuedIdentityCount, 6));
-      await api("POST", `/api/v1/identities/${identities[item.key].id}/transitions`, {
-        to: "deployed",
-        reason: `demo seed: deployed through ${item.connector}`,
-      }, stableKey(`identity-${item.key}-deploy`));
+      await transitionIdentityIfNeeded(
+        identities[item.key].id,
+        "deployed",
+        `demo seed: deployed through ${item.connector}`,
+        stableKey(`identity-${item.key}-deploy`),
+      );
     }
     if (item.targetState === "revoked") {
       await pollCertificates(Math.min(issuedIdentityCount, 6));
-      await api("POST", `/api/v1/identities/${identities[item.key].id}/transitions`, {
-        to: "revoked",
-        reason: item.revocationReason || "cessationOfOperation",
-      }, stableKey(`identity-${item.key}-revoke`));
+      await transitionIdentityIfNeeded(
+        identities[item.key].id,
+        "revoked",
+        item.revocationReason || "cessationOfOperation",
+        stableKey(`identity-${item.key}-revoke`),
+      );
     }
   }
 
