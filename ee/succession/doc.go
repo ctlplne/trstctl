@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+// Package succession implements the proprietary (Enterprise/Provider) core of
+// Proof-Carrying Algorithm Succession (PCAS): the append-only, per-identity
+// cryptographic-succession lifecycle for non-human identities.
+//
+// PCAS is a patented feature set and lives entirely under ee/ (SPDX
+// LicenseRef-trstctl-EE); MPL core never imports it outside the tagged attach
+// seam (AGENTS.md AN-9, HARNESS §1.6). This package touches no core code.
+//
+// This file set (card PCAS-01) provides two things:
+//
+//   - the versioned AN-2 ledger event vocabulary for the algorithm lifecycle —
+//     nhi.crypto.finding, nhi.algorithm.succession, nhi.algorithm.retirement,
+//     and nhi.rp.ack — with round-trip encode/decode (events.go); and
+//   - a deterministic per-identity crypto-posture projection folded from those
+//     events and reconstructable by replay of the ledger (posture.go), which
+//     enables claim 10 and establishes INV-10 while preserving INV-4
+//     (idempotent under at-least-once/duplicate delivery).
+//
+// Deliberately out of scope here (see the named cards): the dual-signed
+// succession *record*, its commitment, and any cryptography (PCAS-04); the
+// durable RLS serving copy of this projection (PCAS-02); the AlgorithmEpoch
+// model and record fields (PCAS-03); minting inside the isolated signer
+// (PCAS-05); and the signed posture *report* of claim 50 (PCAS-30). A
+// succession event here carries only posture-relevant fields plus an opaque
+// RecordDigest reference to the record that PCAS-04 will define.
+package succession
