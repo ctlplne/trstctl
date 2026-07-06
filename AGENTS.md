@@ -56,6 +56,15 @@ are:
 - `internal/protocols/AGENTS.md` - untrusted protocol parser and served-protocol rules.
 - `internal/query/AGENTS.md` - tenant/RBAC semantic-query scoping rules.
 
+PCAS (Proof-Carrying Algorithm Succession) security docs live under `docs/security/`:
+
+- `docs/security/pcas-key-custody.md` - claims 16 & 26 key custody (locked/zeroized
+  buffers; HSM/module boundary).
+- `docs/security/pcas-threat-model.md` - PCAS assets, trust boundaries, adversaries,
+  threat/mitigation map, and accepted residual risk (INT-22).
+- `docs/security/pcas-ceremony.md` - HSM key-ceremony and break-glass/emergency
+  succession runbooks (claims 26, 17, 37).
+
 Legacy `CLAUDE.md` files may remain beside those leaves for older tooling.
 
 Open-core hard do-nots: do not import `ee/` from core outside the tagged seam;
