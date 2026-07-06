@@ -35,6 +35,7 @@ var (
 	ErrFloorPersist          = errors.New("minter: failed to persist epoch floor")
 	ErrStrengthDowngrade     = errors.New("minter: refused forward succession to a weaker algorithm class absent break-glass")
 	ErrAttestation           = errors.New("minter: successor-custody attestation verification failed")
+	ErrDelegation            = errors.New("minter: succession violates the delegated-authority effective constraint")
 )
 
 // BreakGlassVerifier verifies a distinct, single-use, request-bound break-glass
@@ -93,7 +94,8 @@ type Minter struct {
 	provenance PlanProvenanceVerifier // optional; verifies the policy-decision provenance chain before keygen (PCAS-21)
 	attestGate AttestationGate        // optional; verifies successor-custody attestation before keygen (PCAS-29)
 
-	commitmentV2 bool // when set, mint records with the v2 commitment binding RecordType/authz/attestation/delegation (INT-08)
+	commitmentV2 bool                 // when set, mint records with the v2 commitment binding RecordType/authz/attestation/delegation (INT-08)
+	delegation   DelegationConstraint // optional; enforces the delegated-authority effective constraint before keygen (INT-13)
 
 	mu    sync.Mutex
 	floor map[string]uint64
@@ -126,6 +128,21 @@ func WithPolicy(v PolicyVerifier) Option { return func(m *Minter) { m.policy = v
 // delegation path IN the commitment (claims 24/33/35/42) so both dual signatures cover
 // them and base chain verification detects a tamper. v1 records remain verifiable.
 func WithCommitmentV2() Option { return func(m *Minter) { m.commitmentV2 = true } }
+
+// DelegationConstraint enforces the delegated-authority effective constraint for a
+// scope BEFORE successor keygen (claim 33, INT-13): given the scope and the target
+// (new) epoch, it refuses a succession that violates the effective ancestor floor and,
+// on success, returns the canonical delegation-path representation to bind in the
+// commitment. ee/succession/delegation.MinterConstraint implements it.
+type DelegationConstraint interface {
+	CheckAndBind(scope string, targetEpoch uint64) (delegationPath string, err error)
+}
+
+// WithDelegation enforces delegated-authority succession domains at the signer (claim
+// 33, INT-13): a succession whose target epoch violates the effective ancestor
+// constraint of req.DelegationScope is refused before keygen, and the delegation path
+// is bound in the v2 commitment.
+func WithDelegation(d DelegationConstraint) Option { return func(m *Minter) { m.delegation = d } }
 
 // WithDualControl requires a single-use authorization token on every mint (claim 5).
 func WithDualControl(v AuthVerifier) Option {
@@ -273,6 +290,19 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		breakGlassUsed = true
 	}
 
+	// Delegated-authority effective constraint BEFORE successor-key generation (claim
+	// 33, INT-13): refuse a succession whose target epoch violates the effective
+	// ancestor floor of the scope, and capture the delegation path to bind in the v2
+	// commitment. A weaker local floor can never undercut an ancestor's.
+	var delegationPath string
+	if m.delegation != nil && req.DelegationScope != "" {
+		dp, derr := m.delegation.CheckAndBind(req.DelegationScope, epoch)
+		if derr != nil {
+			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrDelegation, derr))
+		}
+		delegationPath = dp
+	}
+
 	// Policy verification BEFORE successor-key generation (claim 23).
 	if m.policy != nil {
 		if len(req.PolicyDecision) == 0 {
@@ -358,6 +388,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		fields.AuthzDigest = authzDigest
 		fields.AttestationEvidenceDigest = attestEvidenceDigest
 		fields.AttestationType = attestType
+		fields.DelegationPath = delegationPath
 	}
 	commitment, err := succession.Commit(fields)
 	if err != nil {

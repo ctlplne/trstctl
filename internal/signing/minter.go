@@ -40,6 +40,7 @@ type MintRequest struct {
 	Authorization            []byte // dual-control authorization token (optional)
 	BreakGlass               []byte // strength-downgrade break-glass token (optional)
 	Attestation              []byte // successor-custodian attestation evidence (optional; PCAS-29)
+	DelegationScope          string // delegated-authority scope id; when set, the minter enforces the effective ancestor constraint and binds the delegation path in the commitment (claim 33, INT-13)
 	NotBefore                int64
 	NotAfter                 int64
 }

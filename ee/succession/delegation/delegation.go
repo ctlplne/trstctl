@@ -96,6 +96,31 @@ func (t *Tree) CheckSuccession(id string, targetEpoch uint64) error {
 	return nil
 }
 
+// MinterConstraint adapts a Tree to the signer minter's delegation seam (INT-13,
+// minter.DelegationConstraint): it enforces the effective ancestor constraint for a
+// scope inside the signer, before successor keygen, and returns the canonical
+// delegation-path representation to bind in the commitment. It satisfies
+// minter.DelegationConstraint structurally, so the minter needs no import of this
+// package.
+type MinterConstraint struct{ tree *Tree }
+
+// NewMinterConstraint returns a minter delegation constraint over tree.
+func NewMinterConstraint(tree *Tree) *MinterConstraint { return &MinterConstraint{tree: tree} }
+
+// CheckAndBind refuses a succession of scope whose target epoch is below the effective
+// ancestor floor (ErrConstraintViolation), and otherwise returns the delegation-path
+// representation (DelegationPolicyRef of the root→scope path) to bind in the commitment.
+func (c *MinterConstraint) CheckAndBind(scope string, targetEpoch uint64) (string, error) {
+	if err := c.tree.CheckSuccession(scope, targetEpoch); err != nil {
+		return "", err
+	}
+	path, err := c.tree.Path(scope)
+	if err != nil {
+		return "", err
+	}
+	return DelegationPolicyRef(path), nil
+}
+
 // IdentityState is an identity's current scope and algorithm-epoch.
 type IdentityState struct {
 	Scope string
