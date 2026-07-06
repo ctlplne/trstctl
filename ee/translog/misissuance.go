@@ -55,6 +55,23 @@ func BuildMisissuanceProof(a, b succession.SuccessionRecord) (MisissuanceProof, 
 	return MisissuanceProof{RecordA: a, RecordB: b}, nil
 }
 
+// NamesMintingSigners returns the minting signer identifiers named by the two
+// conflicting records' signer attestations (claim 28, PCAS-20). Both attestations
+// must verify against the supplied roster of signer attestation keys, so the naming
+// is authenticated: a misissuance is attributable to the signer(s) that minted the
+// equivocating records (INV-13).
+func (p MisissuanceProof) NamesMintingSigners(roster map[string][]byte) (signerA, signerB string, err error) {
+	signerA, err = succession.VerifyAttestation(roster, p.RecordA)
+	if err != nil {
+		return "", "", fmt.Errorf("translog: record A attestation: %w", err)
+	}
+	signerB, err = succession.VerifyAttestation(roster, p.RecordB)
+	if err != nil {
+		return "", "", fmt.Errorf("translog: record B attestation: %w", err)
+	}
+	return signerA, signerB, nil
+}
+
 // VerifyMisissuanceProof independently checks a misissuance proof: both records
 // verify, and they collide on epoch. A third party can thus confirm misissuance
 // from the artifact alone.

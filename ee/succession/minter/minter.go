@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"trstctl.com/trstctl/ee/succession"
 	"trstctl.com/trstctl/internal/crypto"
@@ -84,6 +85,9 @@ type Minter struct {
 	enforceStrength bool
 	breakGlass      BreakGlassVerifier // optional; nil => downgrades always refused
 
+	attestSigner crypto.Signer // optional; when set, every mint is countersigned and every refusal is a signed artifact (PCAS-20)
+	signerID     string
+
 	mu    sync.Mutex
 	floor map[string]uint64
 }
@@ -111,6 +115,44 @@ func WithStrengthOrdering(bg BreakGlassVerifier) Option {
 		m.enforceStrength = true
 		m.breakGlass = bg
 	}
+}
+
+// WithAttestation makes the signer countersign every minted record with its
+// attestation key (claim 28) and emit a signed refusal artifact on every refusal
+// (claim 41). Once configured there is no mint path that skips the countersignature
+// (INV-13). signerID names the signer in both.
+func WithAttestation(attestSigner crypto.Signer, signerID string) Option {
+	return func(m *Minter) {
+		m.attestSigner = attestSigner
+		m.signerID = signerID
+	}
+}
+
+// RefusalError wraps a refusal sentinel with the signer's signed refusal artifact
+// (claim 41). errors.Is against the underlying sentinel still succeeds, so callers
+// that match on ErrEpochNotCurrent, ErrStrengthDowngrade, etc. are unaffected.
+type RefusalError struct {
+	Artifact succession.RefusalArtifact
+	sentinel error
+}
+
+func (e *RefusalError) Error() string { return "minter: refused — " + e.sentinel.Error() }
+func (e *RefusalError) Unwrap() error { return e.sentinel }
+
+// refuse builds a signed refusal artifact (when attestation is configured) and wraps
+// the sentinel; otherwise it returns the sentinel unchanged (pre-PCAS-20 behavior).
+func (m *Minter) refuse(constraint string, req signing.MintRequest, sentinel error) error {
+	if m.attestSigner == nil {
+		return sentinel
+	}
+	art, err := succession.SignRefusal(m.attestSigner, succession.RefusalArtifact{
+		SignerID: m.signerID, IdentityID: req.IdentityID, TenantID: req.TenantID,
+		RequestDigest: RequestParamsDigest(req), Constraint: constraint, IssuedAt: time.Now().Unix(),
+	})
+	if err != nil {
+		return sentinel
+	}
+	return &RefusalError{Artifact: art, sentinel: sentinel}
 }
 
 // New builds a Minter, loading the sealed epoch floors from the store.
@@ -152,7 +194,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// (claim 12 / INV-3).
 	floor := m.floor[req.IdentityID]
 	if req.AssertedPredecessorEpoch != floor {
-		return signing.MintResult{}, fmt.Errorf("%w: asserted %d, floor %d", ErrEpochNotCurrent, req.AssertedPredecessorEpoch, floor)
+		return signing.MintResult{}, m.refuse(succession.RefusalEpoch, req, ErrEpochNotCurrent)
 	}
 	epoch := floor + 1
 	paramsDigest := RequestParamsDigest(req)
@@ -163,10 +205,10 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	var breakGlassUsed bool
 	if m.enforceStrength && succession.IsStrengthDowngrade(pred.Algorithm(), req.TargetAlgorithm) {
 		if m.breakGlass == nil || len(req.BreakGlass) == 0 {
-			return signing.MintResult{}, ErrStrengthDowngrade
+			return signing.MintResult{}, m.refuse(succession.RefusalStrength, req, ErrStrengthDowngrade)
 		}
 		if err := m.breakGlass.VerifyAndConsume(req.BreakGlass, req); err != nil {
-			return signing.MintResult{}, fmt.Errorf("%w: %v", ErrStrengthDowngrade, err)
+			return signing.MintResult{}, m.refuse(succession.RefusalStrength, req, ErrStrengthDowngrade)
 		}
 		breakGlassUsed = true
 	}
@@ -174,20 +216,20 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// Policy verification BEFORE successor-key generation (claim 23).
 	if m.policy != nil {
 		if len(req.PolicyDecision) == 0 {
-			return signing.MintResult{}, ErrPolicyRequired
+			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyRequired)
 		}
 		if err := m.policy.Verify(req.PolicyDecision, req.IdentityID, req.TargetAlgorithm); err != nil {
-			return signing.MintResult{}, fmt.Errorf("%w: %v", ErrPolicyInvalid, err)
+			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyInvalid)
 		}
 	}
 
 	// Dual-control verification BEFORE successor-key generation (claim 5).
 	if m.requireAuth {
 		if len(req.Authorization) == 0 {
-			return signing.MintResult{}, ErrAuthorizationRequired
+			return signing.MintResult{}, m.refuse(succession.RefusalDualControl, req, ErrAuthorizationRequired)
 		}
 		if err := m.auth.VerifyAndConsume(req.Authorization, req, paramsDigest); err != nil {
-			return signing.MintResult{}, fmt.Errorf("%w: %v", ErrAuthorizationInvalid, err)
+			return signing.MintResult{}, m.refuse(succession.RefusalDualControl, req, ErrAuthorizationInvalid)
 		}
 	}
 
@@ -236,6 +278,22 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		// signature), so it needs no commitment binding.
 		rec.BreakGlassAuth = cloneBytesBG(req.BreakGlass)
 	}
+
+	// authz_digest: bind a digest of the dual-control authorization artifact, so the
+	// authorization is verifiable from the published record alone (claim 42).
+	rec.AuthzDigest = succession.AuthzDigest(req.Authorization)
+
+	// Signer attestation: countersign every record with the signer's attestation key
+	// (claim 28 / INV-13). When attestation is configured there is no path here that
+	// leaves a record unattested. It binds the commitment and authz_digest.
+	if m.attestSigner != nil {
+		att, err := succession.Attest(m.attestSigner, m.signerID, rec)
+		if err != nil {
+			return signing.MintResult{}, fmt.Errorf("minter: signer attestation: %w", err)
+		}
+		rec.SignerAttestation = att
+	}
+
 	encoded, err := EncodeRecord(rec)
 	if err != nil {
 		return signing.MintResult{}, err

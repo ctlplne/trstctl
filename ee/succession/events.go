@@ -23,6 +23,9 @@ const (
 	TypeRetirement = "nhi.algorithm.retirement"
 	// TypeRPAck is a signed relying-party capability acknowledgement (step 6).
 	TypeRPAck = "nhi.rp.ack"
+	// TypeRefusal records a signer's signed refusal of a mint (claim 41, PCAS-20):
+	// the refused request and the violated constraint, attributable to the signer.
+	TypeRefusal = "nhi.algorithm.refusal"
 )
 
 // Baseline (v1) payload-shape versions for each type (SCHEMA-001). Bump the
@@ -34,6 +37,7 @@ const (
 	SuccessionSchemaV1 = 1
 	RetirementSchemaV1 = 1
 	RPAckSchemaV1      = 1
+	RefusalSchemaV1    = 1
 )
 
 // Coarse algorithm-class hints carried on a succession event for posture only.
@@ -108,6 +112,20 @@ type RPAckV1 struct {
 
 func (RPAckV1) isSuccessionPayload() {}
 
+// RefusalV1 records a signer's signed refusal of a mint (claim 41, PCAS-20). It
+// carries the refusal artifact so a verifier can attribute the refusal to the signer.
+type RefusalV1 struct {
+	IdentityID    string `json:"identity_id"`
+	TenantID      string `json:"tenant_id"`
+	SignerID      string `json:"signer_id"`
+	Constraint    string `json:"constraint"`
+	RequestDigest []byte `json:"request_digest,omitempty"`
+	IssuedAt      int64  `json:"issued_at"`
+	Signature     []byte `json:"signature,omitempty"`
+}
+
+func (RefusalV1) isSuccessionPayload() {}
+
 // Unknown is returned for an event whose type is not a succession type, or whose
 // (known-type) schema version is newer than this build understands. It carries
 // no posture effect; the fold skips it. This is the forward-compatible "skip"
@@ -133,6 +151,8 @@ func Encode(p Payload) (events.Event, error) {
 		return marshalEvent(TypeRetirement, RetirementSchemaV1, v.TenantID, v)
 	case RPAckV1:
 		return marshalEvent(TypeRPAck, RPAckSchemaV1, v.TenantID, v)
+	case RefusalV1:
+		return marshalEvent(TypeRefusal, RefusalSchemaV1, v.TenantID, v)
 	default:
 		return events.Event{}, fmt.Errorf("succession: cannot encode payload of type %T", p)
 	}
@@ -188,6 +208,15 @@ func Decode(e events.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RPAckV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeRefusal:
+		if ver > RefusalSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RefusalV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}

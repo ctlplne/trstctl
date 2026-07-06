@@ -41,6 +41,12 @@ type SuccessionRecord struct {
 	SignerAttestation []byte
 	InclusionProof    []byte
 
+	// AuthzDigest is the digest of the claim-5 dual-control authorization artifact
+	// under which this record was minted (claim 42, PCAS-20). It is bound by the
+	// signer attestation, so the authorization is verifiable from the published
+	// record alone.
+	AuthzDigest []byte
+
 	// BreakGlassAuth, when present, is the authority-signed, single-use break-glass
 	// token that authorized a forward strength-downgrade succession (claim 17 /
 	// INV-8, PCAS-15). It is self-authenticating (verified against the break-glass
