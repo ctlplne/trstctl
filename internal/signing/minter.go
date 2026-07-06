@@ -34,6 +34,7 @@ type MintRequest struct {
 	PolicyDecision           []byte // signed policy artifact (optional)
 	Authorization            []byte // dual-control authorization token (optional)
 	BreakGlass               []byte // strength-downgrade break-glass token (optional)
+	Attestation              []byte // successor-custodian attestation evidence (optional; PCAS-29)
 	NotBefore                int64
 	NotAfter                 int64
 }

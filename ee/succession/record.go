@@ -59,6 +59,14 @@ type SuccessionRecord struct {
 	// record. The empty value is an ordinary succession. Exceptional records still
 	// chain, stay epoch-monotonic, and require a transparency-log inclusion proof.
 	RecordType RecordType
+
+	// AttestationEvidenceDigest and AttestationType bind the successor-custodian
+	// attestation evidence that gated the succession (claim 35, PCAS-29): the signer
+	// verified the evidence before generating the successor key, and bound its digest
+	// + type here so the record proves what custody evidence gated it. They are bound
+	// by the signer attestation (tamper-evident).
+	AttestationEvidenceDigest []byte
+	AttestationType           string
 }
 
 // RecordType marks an exceptional-but-chained succession record (claims 36, 37).

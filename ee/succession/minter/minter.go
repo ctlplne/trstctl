@@ -34,6 +34,7 @@ var (
 	ErrKeygen                = errors.New("minter: successor key generation failed")
 	ErrFloorPersist          = errors.New("minter: failed to persist epoch floor")
 	ErrStrengthDowngrade     = errors.New("minter: refused forward succession to a weaker algorithm class absent break-glass")
+	ErrAttestation           = errors.New("minter: successor-custody attestation verification failed")
 )
 
 // BreakGlassVerifier verifies a distinct, single-use, request-bound break-glass
@@ -89,9 +90,18 @@ type Minter struct {
 	signerID     string
 
 	provenance PlanProvenanceVerifier // optional; verifies the policy-decision provenance chain before keygen (PCAS-21)
+	attestGate AttestationGate        // optional; verifies successor-custody attestation before keygen (PCAS-29)
 
 	mu    sync.Mutex
 	floor map[string]uint64
+}
+
+// AttestationGate verifies the successor-custodian attestation evidence carried in the
+// request and enforces the class gate, BEFORE successor keygen (claim 35, PCAS-29). On
+// success it returns the evidence digest + type to bind into the record; an error
+// refuses the mint. ee/succession/attest.Gate implements it.
+type AttestationGate interface {
+	Verify(req signing.MintRequest) (evidenceDigest []byte, attestationType string, err error)
 }
 
 // PlanProvenanceVerifier verifies the policy-decision provenance chain (finding ⟵
@@ -125,6 +135,14 @@ func WithStrengthOrdering(bg BreakGlassVerifier) Option {
 		m.enforceStrength = true
 		m.breakGlass = bg
 	}
+}
+
+// WithAttestationGate verifies the successor-custodian attestation evidence and the
+// class gate inside the signer BEFORE successor keygen (claim 35): a failing or
+// absent attestation prevents keygen entirely, and the evidence digest + type are
+// bound into the record.
+func WithAttestationGate(g AttestationGate) Option {
+	return func(m *Minter) { m.attestGate = g }
 }
 
 // WithPlanProvenance verifies the policy-decision provenance chain (finding ⟵ plan ⟵
@@ -250,6 +268,19 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		}
 	}
 
+	// Custody-attestation verification BEFORE successor-key generation (claim 35): the
+	// successor-custodian evidence is verified and class-gated in-signer; a failing or
+	// absent attestation prevents keygen entirely.
+	var attestEvidenceDigest []byte
+	var attestType string
+	if m.attestGate != nil {
+		d, ty, err := m.attestGate.Verify(req)
+		if err != nil {
+			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrAttestation, err))
+		}
+		attestEvidenceDigest, attestType = d, ty
+	}
+
 	// Dual-control verification BEFORE successor-key generation (claim 5).
 	if m.requireAuth {
 		if len(req.Authorization) == 0 {
@@ -309,6 +340,11 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// authz_digest: bind a digest of the dual-control authorization artifact, so the
 	// authorization is verifiable from the published record alone (claim 42).
 	rec.AuthzDigest = succession.AuthzDigest(req.Authorization)
+
+	// Bind the successor-custody attestation evidence digest + type (claim 35), so the
+	// record proves what custody evidence gated it. The signer attestation binds these.
+	rec.AttestationEvidenceDigest = attestEvidenceDigest
+	rec.AttestationType = attestType
 
 	// Signer attestation: countersign every record with the signer's attestation key
 	// (claim 28 / INV-13). When attestation is configured there is no path here that

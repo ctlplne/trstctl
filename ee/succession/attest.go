@@ -61,6 +61,10 @@ func attestMessage(rec SuccessionRecord, signerID string) ([]byte, error) {
 	// Bind the record type so an exceptional record's kind (revocation / ceremony /
 	// emergency, PCAS-23) is signer-attested and cannot be stripped or altered.
 	writeField(&b, []byte(rec.RecordType))
+	// Bind the custody attestation evidence digest + type (claim 35, PCAS-29), so the
+	// custody evidence that gated the succession is tamper-evidently part of the record.
+	writeField(&b, rec.AttestationEvidenceDigest)
+	writeField(&b, []byte(rec.AttestationType))
 	return b.Bytes(), nil
 }
 
