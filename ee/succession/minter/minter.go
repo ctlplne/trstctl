@@ -494,13 +494,24 @@ type AuthorizationToken struct {
 // single-use by retaining spent nonces (claim 5).
 type SignedTokenAuthorizer struct {
 	AuthorityPubDER []byte
-	mu              sync.Mutex
-	spent           map[string]bool
+	spent           SpentStore
 }
 
-// NewSignedTokenAuthorizer builds an authorizer trusting authorityPubDER.
+// NewSignedTokenAuthorizer builds an authorizer trusting authorityPubDER with an
+// in-memory single-use store (spent nonces do not survive a restart).
 func NewSignedTokenAuthorizer(authorityPubDER []byte) *SignedTokenAuthorizer {
-	return &SignedTokenAuthorizer{AuthorityPubDER: authorityPubDER, spent: map[string]bool{}}
+	return &SignedTokenAuthorizer{AuthorityPubDER: authorityPubDER, spent: NewMemSpentStore()}
+}
+
+// NewDurableSignedTokenAuthorizer builds a dual-control authorizer whose single-use
+// state is durable within the signer custody dir, so a consumed token replayed after
+// a signer restart is refused (INT-06, claim 5).
+func NewDurableSignedTokenAuthorizer(authorityPubDER []byte, dir string) (*SignedTokenAuthorizer, error) {
+	s, err := NewDurableSpentStore(dir, "pcas-dualcontrol-spent")
+	if err != nil {
+		return nil, err
+	}
+	return &SignedTokenAuthorizer{AuthorityPubDER: authorityPubDER, spent: s}, nil
 }
 
 // VerifyAndConsume checks the authority signature, the binding to the request and
@@ -522,12 +533,13 @@ func (a *SignedTokenAuthorizer) VerifyAndConsume(token []byte, req signing.MintR
 		t.TargetAlgorithm != req.TargetAlgorithm || !bytes.Equal(t.ParamsDigest, paramsDigest) {
 		return errors.New("token binding mismatch")
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.spent[t.Nonce] {
+	already, err := a.spent.Consume(t.Nonce)
+	if err != nil {
+		return fmt.Errorf("token single-use store: %w", err)
+	}
+	if already {
 		return errors.New("token already used (single-use)")
 	}
-	a.spent[t.Nonce] = true
 	return nil
 }
 
@@ -557,13 +569,23 @@ type BreakGlassToken struct {
 // enforces single-use. The RP mirror (ee/rpverify) verifies the same token.
 type SignedBreakGlassAuthorizer struct {
 	AuthorityPubDER []byte
-	mu              sync.Mutex
-	spent           map[string]bool
+	spent           SpentStore
 }
 
-// NewSignedBreakGlassAuthorizer builds an authorizer trusting authorityPubDER.
+// NewSignedBreakGlassAuthorizer builds an authorizer trusting authorityPubDER with an
+// in-memory single-use store.
 func NewSignedBreakGlassAuthorizer(authorityPubDER []byte) *SignedBreakGlassAuthorizer {
-	return &SignedBreakGlassAuthorizer{AuthorityPubDER: authorityPubDER, spent: map[string]bool{}}
+	return &SignedBreakGlassAuthorizer{AuthorityPubDER: authorityPubDER, spent: NewMemSpentStore()}
+}
+
+// NewDurableSignedBreakGlassAuthorizer builds a break-glass authorizer whose
+// single-use state is durable within the signer custody dir (INT-06, claim 17).
+func NewDurableSignedBreakGlassAuthorizer(authorityPubDER []byte, dir string) (*SignedBreakGlassAuthorizer, error) {
+	s, err := NewDurableSpentStore(dir, "pcas-breakglass-spent")
+	if err != nil {
+		return nil, err
+	}
+	return &SignedBreakGlassAuthorizer{AuthorityPubDER: authorityPubDER, spent: s}, nil
 }
 
 // VerifyAndConsume checks the authority signature, the binding to the request,
@@ -584,12 +606,13 @@ func (a *SignedBreakGlassAuthorizer) VerifyAndConsume(token []byte, req signing.
 		t.AssertedPredecessorEpoch != req.AssertedPredecessorEpoch || t.TargetAlgorithm != req.TargetAlgorithm {
 		return errors.New("break-glass token binding mismatch")
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.spent[t.Nonce] {
+	already, err := a.spent.Consume(t.Nonce)
+	if err != nil {
+		return fmt.Errorf("break-glass single-use store: %w", err)
+	}
+	if already {
 		return errors.New("break-glass token already used (single-use)")
 	}
-	a.spent[t.Nonce] = true
 	return nil
 }
 
