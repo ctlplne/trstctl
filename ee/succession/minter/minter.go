@@ -88,8 +88,18 @@ type Minter struct {
 	attestSigner crypto.Signer // optional; when set, every mint is countersigned and every refusal is a signed artifact (PCAS-20)
 	signerID     string
 
+	provenance PlanProvenanceVerifier // optional; verifies the policy-decision provenance chain before keygen (PCAS-21)
+
 	mu    sync.Mutex
 	floor map[string]uint64
+}
+
+// PlanProvenanceVerifier verifies the policy-decision provenance chain (finding ⟵
+// plan ⟵ decision) carried in the request, inside the signer and BEFORE successor
+// keygen (claims 24, 40, PCAS-21). ee/succession/policy.ProvenanceVerifier implements
+// it.
+type PlanProvenanceVerifier interface {
+	Verify(req signing.MintRequest) error
 }
 
 // Option configures a Minter.
@@ -115,6 +125,14 @@ func WithStrengthOrdering(bg BreakGlassVerifier) Option {
 		m.enforceStrength = true
 		m.breakGlass = bg
 	}
+}
+
+// WithPlanProvenance verifies the policy-decision provenance chain (finding ⟵ plan ⟵
+// decision, its authority signatures, both digest bindings, the policy_ref = recorded-
+// decision digest, and recording) inside the signer before successor keygen (claims
+// 24, 40).
+func WithPlanProvenance(v PlanProvenanceVerifier) Option {
+	return func(m *Minter) { m.provenance = v }
 }
 
 // WithAttestation makes the signer countersign every minted record with its
@@ -220,6 +238,15 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		}
 		if err := m.policy.Verify(req.PolicyDecision, req.IdentityID, req.TargetAlgorithm); err != nil {
 			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyInvalid)
+		}
+	}
+
+	// Policy-decision provenance verification BEFORE successor-key generation (claims
+	// 24, 40): the finding⟵plan⟵decision chain, its digest bindings, and the
+	// policy_ref = recorded-decision digest are checked in-signer.
+	if m.provenance != nil {
+		if err := m.provenance.Verify(req); err != nil {
+			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrPolicyInvalid, err))
 		}
 	}
 
