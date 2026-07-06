@@ -26,6 +26,12 @@ const (
 	// TypeRefusal records a signer's signed refusal of a mint (claim 41, PCAS-20):
 	// the refused request and the violated constraint, attributable to the signer.
 	TypeRefusal = "nhi.algorithm.refusal"
+	// TypeRewrapStage records completion of one bounded, health-verified re-wrap stage
+	// (claim 39, PCAS-25).
+	TypeRewrapStage = "nhi.rewrap.stage"
+	// TypeRewrapCompleted records that all re-wrap stages for a predecessor completed;
+	// the predecessor's retirement condition consumes this event (claim 39).
+	TypeRewrapCompleted = "nhi.rewrap.completed"
 )
 
 // Baseline (v1) payload-shape versions for each type (SCHEMA-001). Bump the
@@ -33,11 +39,13 @@ const (
 // (Type, SchemaVersion) and treats an unknown or newer-than-known version as a
 // skip (Unknown), so replay is forward-compatible and never mis-projects.
 const (
-	FindingSchemaV1    = 1
-	SuccessionSchemaV1 = 1
-	RetirementSchemaV1 = 1
-	RPAckSchemaV1      = 1
-	RefusalSchemaV1    = 1
+	FindingSchemaV1         = 1
+	SuccessionSchemaV1      = 1
+	RetirementSchemaV1      = 1
+	RPAckSchemaV1           = 1
+	RefusalSchemaV1         = 1
+	RewrapStageSchemaV1     = 1
+	RewrapCompletedSchemaV1 = 1
 )
 
 // Coarse algorithm-class hints carried on a succession event for posture only.
@@ -126,6 +134,29 @@ type RefusalV1 struct {
 
 func (RefusalV1) isSuccessionPayload() {}
 
+// RewrapStageV1 records completion of one re-wrap stage (claim 39, PCAS-25).
+type RewrapStageV1 struct {
+	JobID            string `json:"job_id"`
+	IdentityID       string `json:"identity_id"`
+	TenantID         string `json:"tenant_id"`
+	PredecessorEpoch uint64 `json:"predecessor_epoch"`
+	StageID          string `json:"stage_id"`
+}
+
+func (RewrapStageV1) isSuccessionPayload() {}
+
+// RewrapCompletedV1 records that all re-wrap stages completed for a predecessor; the
+// retirement condition requires it for KEM/confidentiality credentials (claim 39).
+type RewrapCompletedV1 struct {
+	JobID            string `json:"job_id"`
+	IdentityID       string `json:"identity_id"`
+	TenantID         string `json:"tenant_id"`
+	PredecessorEpoch uint64 `json:"predecessor_epoch"`
+	Stages           int    `json:"stages"`
+}
+
+func (RewrapCompletedV1) isSuccessionPayload() {}
+
 // Unknown is returned for an event whose type is not a succession type, or whose
 // (known-type) schema version is newer than this build understands. It carries
 // no posture effect; the fold skips it. This is the forward-compatible "skip"
@@ -153,6 +184,10 @@ func Encode(p Payload) (events.Event, error) {
 		return marshalEvent(TypeRPAck, RPAckSchemaV1, v.TenantID, v)
 	case RefusalV1:
 		return marshalEvent(TypeRefusal, RefusalSchemaV1, v.TenantID, v)
+	case RewrapStageV1:
+		return marshalEvent(TypeRewrapStage, RewrapStageSchemaV1, v.TenantID, v)
+	case RewrapCompletedV1:
+		return marshalEvent(TypeRewrapCompleted, RewrapCompletedSchemaV1, v.TenantID, v)
 	default:
 		return events.Event{}, fmt.Errorf("succession: cannot encode payload of type %T", p)
 	}
@@ -217,6 +252,24 @@ func Decode(e events.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RefusalV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeRewrapStage:
+		if ver > RewrapStageSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RewrapStageV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeRewrapCompleted:
+		if ver > RewrapCompletedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RewrapCompletedV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}
