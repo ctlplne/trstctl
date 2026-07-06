@@ -16,6 +16,7 @@ var (
 	ErrRecoveryThresholdTooLow   = errors.New("rpverify: recovery approval threshold below the relying party's minimum")
 	ErrRecoveryInclusionRequired = errors.New("rpverify: recovery record requires a transparency-log inclusion proof")
 	ErrRecoveryOutOfBand         = errors.New("rpverify: recovery record requires out-of-band confirmation")
+	ErrStaleRecoveryEpoch        = errors.New("rpverify: recovery record epoch is not greater than the last-accepted epoch (replay)")
 )
 
 // RecoveryOptions is the relying party's strictly stronger policy for a recovery
@@ -29,7 +30,15 @@ type RecoveryOptions struct {
 	// proof is verified with the REAL RFC-6962 Merkle verifier: the recovery record's
 	// commitment must be the proven leaf under a head this key signed. Empty => the
 	// inclusion requirement fails closed (no injected-closure escape hatch, INT-18).
-	STHVerifyKeyDER  []byte
+	STHVerifyKeyDER []byte
+	// EpochStore enforces recovery-record epoch monotonicity across restarts, keyed by
+	// identity — the same discipline Verify applies to ordinary chains. A recovery
+	// record is a distinct type that never flows through VerifyChain, so without this a
+	// previously-valid recovery artifact could be replayed to roll an identity's posture
+	// back to a superseded epoch. A recovery whose epoch is not strictly greater than the
+	// last accepted value is rejected; on success the store is advanced. Nil disables the
+	// discipline (single-shot check).
+	EpochStore       EpochStore
 	ConfirmOutOfBand func() error // optional: when set, must succeed
 }
 
@@ -58,9 +67,27 @@ func VerifyRecovery(rec recovery.RecoveryRecord, opts RecoveryOptions) error {
 	if err := translog.VerifyEncodedInclusion(leaf, rec.InclusionProof, opts.STHVerifyKeyDER); err != nil {
 		return fmt.Errorf("%w: %v", ErrRecoveryInclusionRequired, err)
 	}
+	// Epoch-replay defense: a recovery record must strictly advance the identity's
+	// last-accepted epoch, so a captured, superseded recovery artifact cannot be
+	// replayed to downgrade posture.
+	if opts.EpochStore != nil {
+		identity := rec.Fields.IdentityID
+		last, ok, err := opts.EpochStore.LastAccepted(identity)
+		if err != nil {
+			return err
+		}
+		if ok && rec.Fields.Epoch <= last {
+			return fmt.Errorf("%w: recovery epoch %d <= last-accepted %d", ErrStaleRecoveryEpoch, rec.Fields.Epoch, last)
+		}
+	}
 	if opts.ConfirmOutOfBand != nil {
 		if err := opts.ConfirmOutOfBand(); err != nil {
 			return fmt.Errorf("%w: %v", ErrRecoveryOutOfBand, err)
+		}
+	}
+	if opts.EpochStore != nil {
+		if err := opts.EpochStore.SetLastAccepted(rec.Fields.IdentityID, rec.Fields.Epoch); err != nil {
+			return err
 		}
 	}
 	return nil

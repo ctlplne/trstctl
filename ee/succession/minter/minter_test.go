@@ -361,9 +361,9 @@ type orderPolicy struct {
 	rec   *orderRec
 }
 
-func (p orderPolicy) Verify(d []byte, id string, t crypto.Algorithm) error {
+func (p orderPolicy) Verify(d []byte, req signing.MintRequest) error {
 	p.rec.note("policy")
-	return p.inner.Verify(d, id, t)
+	return p.inner.Verify(d, req)
 }
 
 type orderKeygen struct {

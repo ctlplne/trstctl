@@ -63,7 +63,7 @@ func inclusionProof(leafHashes [][]byte, m int) [][]byte {
 
 // VerifyInclusion checks that leaf is the m-th of n leaves under root, using proof.
 func VerifyInclusion(leaf []byte, m, n int, proof [][]byte, root []byte) bool {
-	if m >= n || n == 0 {
+	if m < 0 || n <= 0 || m >= n {
 		return false
 	}
 	h, rest, ok := rootFromInclusion(leafHash(leaf), m, n, proof)

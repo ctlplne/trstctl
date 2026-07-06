@@ -60,11 +60,14 @@ type FloorStore interface {
 	Advance(identityID string, epoch uint64) error
 }
 
-// PolicyVerifier verifies that a signed policy decision authorizes (identity,
-// target algorithm). When one is configured, minting requires a valid decision,
-// verified BEFORE successor-key generation (claim 23).
+// PolicyVerifier verifies that a signed policy decision authorizes this specific
+// request. It is passed the full request so a decision can be bound to the request's
+// isolation scope (identity, tenant, deployment) and target — not just (identity,
+// target) — closing a scope-confusion replay across tenants/deployments. When one is
+// configured, minting requires a valid decision, verified BEFORE successor-key
+// generation (claim 23).
 type PolicyVerifier interface {
-	Verify(decision []byte, identityID string, target crypto.Algorithm) error
+	Verify(decision []byte, req signing.MintRequest) error
 }
 
 // AuthVerifier verifies a single-use dual-control authorization token that binds
@@ -308,7 +311,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		if len(req.PolicyDecision) == 0 {
 			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyRequired)
 		}
-		if err := m.policy.Verify(req.PolicyDecision, req.IdentityID, req.TargetAlgorithm); err != nil {
+		if err := m.policy.Verify(req.PolicyDecision, req); err != nil {
 			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyInvalid)
 		}
 	}
@@ -500,6 +503,8 @@ type signedEnvelope struct {
 // succession target.
 type PolicyDecision struct {
 	IdentityID      string           `json:"identity_id"`
+	TenantID        string           `json:"tenant_id"`
+	DeploymentScope string           `json:"deployment_scope"`
 	TargetAlgorithm crypto.Algorithm `json:"target_algorithm"`
 }
 
@@ -509,7 +514,7 @@ type SignedPolicyAuthorizer struct{ AuthorityPubDER []byte }
 
 // Verify checks the authority signature and that the decision authorizes the
 // (identity, target) pair.
-func (p SignedPolicyAuthorizer) Verify(decision []byte, identityID string, target crypto.Algorithm) error {
+func (p SignedPolicyAuthorizer) Verify(decision []byte, req signing.MintRequest) error {
 	var env signedEnvelope
 	if err := json.Unmarshal(decision, &env); err != nil {
 		return fmt.Errorf("policy decode: %w", err)
@@ -521,11 +526,22 @@ func (p SignedPolicyAuthorizer) Verify(decision []byte, identityID string, targe
 	if err := json.Unmarshal(env.Payload, &d); err != nil {
 		return err
 	}
-	if d.IdentityID != identityID {
-		return fmt.Errorf("policy decision identity %q != %q", d.IdentityID, identityID)
+	// Bind the decision to the request's full isolation scope, not just (identity,
+	// target): a decision signed for one tenant/deployment cannot authorize a
+	// succession in another. TenantID/DeploymentScope are matched only when the decision
+	// carries them, so a decision that omits them still binds identity+target (backward
+	// compatible), but a decision that names a scope must match the request's.
+	if d.IdentityID != req.IdentityID {
+		return fmt.Errorf("policy decision identity %q != %q", d.IdentityID, req.IdentityID)
 	}
-	if d.TargetAlgorithm != target {
-		return fmt.Errorf("policy decision target %q != %q", d.TargetAlgorithm, target)
+	if d.TargetAlgorithm != req.TargetAlgorithm {
+		return fmt.Errorf("policy decision target %q != %q", d.TargetAlgorithm, req.TargetAlgorithm)
+	}
+	if d.TenantID != "" && d.TenantID != req.TenantID {
+		return fmt.Errorf("policy decision tenant %q != %q", d.TenantID, req.TenantID)
+	}
+	if d.DeploymentScope != "" && d.DeploymentScope != req.DeploymentScope {
+		return fmt.Errorf("policy decision deployment %q != %q", d.DeploymentScope, req.DeploymentScope)
 	}
 	return nil
 }
@@ -612,6 +628,7 @@ func SignEnvelope(authority crypto.Signer, payload []byte) ([]byte, error) {
 type BreakGlassToken struct {
 	IdentityID               string           `json:"identity_id"`
 	TenantID                 string           `json:"tenant_id"`
+	DeploymentScope          string           `json:"deployment_scope"`
 	AssertedPredecessorEpoch uint64           `json:"asserted_predecessor_epoch"`
 	TargetAlgorithm          crypto.Algorithm `json:"target_algorithm"`
 	Nonce                    string           `json:"nonce"`
@@ -655,6 +672,7 @@ func (a *SignedBreakGlassAuthorizer) VerifyAndConsume(token []byte, req signing.
 		return err
 	}
 	if t.IdentityID != req.IdentityID || t.TenantID != req.TenantID ||
+		t.DeploymentScope != req.DeploymentScope ||
 		t.AssertedPredecessorEpoch != req.AssertedPredecessorEpoch || t.TargetAlgorithm != req.TargetAlgorithm {
 		return errors.New("break-glass token binding mismatch")
 	}

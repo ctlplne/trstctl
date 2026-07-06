@@ -20,6 +20,10 @@ import (
 
 const proofDomain = "trstctl/pcas/translog/proof/v1"
 
+// maxInt is the largest value representable by int on this platform, used to reject
+// uint64 proof fields that would wrap when narrowed to int.
+const maxInt = int(^uint(0) >> 1)
+
 // Inclusion-proof errors.
 var (
 	ErrProofMalformed = errors.New("translog: malformed inclusion proof")
@@ -90,6 +94,12 @@ func DecodeProof(in []byte) (Proof, error) {
 	// Bound the path length to the remaining bytes so a malformed count cannot force a
 	// huge allocation.
 	if n > uint64(len(r.b)) {
+		return Proof{}, ErrProofMalformed
+	}
+	// Reject values that would not survive the uint64->int narrowing below (e.g. on a
+	// 32-bit build, or a crafted index > 2^63 that would become negative), rather than
+	// silently wrapping into a nonsensical index/size.
+	if treeSize > uint64(maxInt) || idx > uint64(maxInt) {
 		return Proof{}, ErrProofMalformed
 	}
 	p.STH = STH{TreeSize: int(treeSize), RootHash: root, Timestamp: int64(ts), Signature: sig}

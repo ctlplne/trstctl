@@ -315,7 +315,7 @@ func TestRPVerify_MirrorsStrengthRefusal(t *testing.T) {
 		PolicyRef: "p", NotBefore: 1, NotAfter: 1000,
 	}
 	payload, err := json.Marshal(minter.BreakGlassToken{
-		IdentityID: req.IdentityID, TenantID: req.TenantID,
+		IdentityID: req.IdentityID, TenantID: req.TenantID, DeploymentScope: req.DeploymentScope,
 		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch, TargetAlgorithm: req.TargetAlgorithm, Nonce: "n1",
 	})
 	if err != nil {

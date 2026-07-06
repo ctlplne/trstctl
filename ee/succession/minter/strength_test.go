@@ -49,7 +49,7 @@ func downgradeReq() signing.MintRequest {
 func breakGlassToken(t *testing.T, authority crypto.Signer, req signing.MintRequest, nonce string) []byte {
 	t.Helper()
 	payload, err := json.Marshal(minter.BreakGlassToken{
-		IdentityID: req.IdentityID, TenantID: req.TenantID,
+		IdentityID: req.IdentityID, TenantID: req.TenantID, DeploymentScope: req.DeploymentScope,
 		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch, TargetAlgorithm: req.TargetAlgorithm, Nonce: nonce,
 	})
 	if err != nil {
@@ -149,5 +149,16 @@ func TestBreakGlass_TokenBoundSingleUse(t *testing.T) {
 	req3.BreakGlass = breakGlassToken(t, authority, wrong, "n2")
 	if _, err := m3.MintSuccessor(ctx, req3); !errors.Is(err, minter.ErrStrengthDowngrade) {
 		t.Fatalf("rebound break-glass token: got %v, want ErrStrengthDowngrade", err)
+	}
+
+	// Cross-deployment: a token bound to a DIFFERENT deployment scope cannot authorize
+	// this deployment's downgrade (security review MEDIUM: DeploymentScope is bound).
+	m4, _ := minter.New(pqPred(t, be, "ML-DSA-65"), be, newMemFloor(), minter.WithStrengthOrdering(bg))
+	req4 := downgradeReq()
+	foreign := req4
+	foreign.DeploymentScope = "spiffe://other-deployment"
+	req4.BreakGlass = breakGlassToken(t, authority, foreign, "n3")
+	if _, err := m4.MintSuccessor(ctx, req4); !errors.Is(err, minter.ErrStrengthDowngrade) {
+		t.Fatalf("cross-deployment break-glass token: got %v, want ErrStrengthDowngrade", err)
 	}
 }

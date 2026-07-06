@@ -159,10 +159,17 @@ func verifyInclusion(rec succession.SuccessionRecord, ev InclusionEvidence, opts
 	if err != nil {
 		return err
 	}
-	if len(opts.STHVerifyKeyDER) > 0 {
-		if err := translog.VerifySTH(opts.STHVerifyKeyDER, ev.STH); err != nil {
-			return fmt.Errorf("%w: STH signature: %v", ErrInclusionInvalid, err)
-		}
+	// Fail closed: when inclusion is required it must be anchored to a trusted,
+	// signed tree head. Without the log's public key the STH RootHash is
+	// attacker-controlled, so VerifyInclusion against it proves nothing — an
+	// unsigned/forged head would otherwise be accepted. This mirrors the exceptional /
+	// recovery paths (translog.VerifyLeafInclusion → ErrProofUntrusted) so no RP-facing
+	// inclusion check has a no-key escape hatch.
+	if len(opts.STHVerifyKeyDER) == 0 {
+		return fmt.Errorf("%w: inclusion required but no trusted transparency-log key configured", ErrInclusionInvalid)
+	}
+	if err := translog.VerifySTH(opts.STHVerifyKeyDER, ev.STH); err != nil {
+		return fmt.Errorf("%w: STH signature: %v", ErrInclusionInvalid, err)
 	}
 	if !translog.VerifyInclusion(leaf, ev.Index, ev.STH.TreeSize, ev.Proof, ev.STH.RootHash) {
 		return ErrInclusionInvalid
@@ -197,6 +204,7 @@ type breakGlassEnvelope struct {
 type breakGlassToken struct {
 	IdentityID               string           `json:"identity_id"`
 	TenantID                 string           `json:"tenant_id"`
+	DeploymentScope          string           `json:"deployment_scope"`
 	AssertedPredecessorEpoch uint64           `json:"asserted_predecessor_epoch"`
 	TargetAlgorithm          crypto.Algorithm `json:"target_algorithm"`
 	Nonce                    string           `json:"nonce"`
@@ -222,6 +230,7 @@ func verifyBreakGlass(rec succession.SuccessionRecord, authorityDER []byte) erro
 		return fmt.Errorf("%w: %v", ErrStrengthRefusal, err)
 	}
 	if t.IdentityID != rec.Fields.IdentityID || t.TenantID != rec.Fields.TenantID ||
+		t.DeploymentScope != rec.Fields.DeploymentScope ||
 		t.AssertedPredecessorEpoch != rec.Fields.PredecessorEpoch || t.TargetAlgorithm != rec.Fields.SuccessorAlg {
 		return fmt.Errorf("%w: token binding mismatch", ErrStrengthRefusal)
 	}
