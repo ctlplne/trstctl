@@ -13,8 +13,9 @@ import (
 // Domain separators distinguish PCAS commitments from any other signed structure
 // and from each other. They are frozen: changing one changes every commitment.
 const (
-	commitmentDomain = "trstctl/pcas/succession/commitment/v1"
-	genesisDomain    = "trstctl/pcas/succession/genesis/v1"
+	commitmentDomain   = "trstctl/pcas/succession/commitment/v1"
+	commitmentDomainV2 = "trstctl/pcas/succession/commitment/v2"
+	genesisDomain      = "trstctl/pcas/succession/genesis/v1"
 
 	// HashAlgSHA256 is the registry identifier of the commitment hash function H,
 	// bound in every commitment as hash_alg so verification stays well-defined
@@ -87,6 +88,18 @@ type CommitmentFields struct {
 	HashAlg          string
 	NotBefore        int64 // unix seconds
 	NotAfter         int64
+
+	// v2 bindings (INT-08) are bound in the commitment ONLY when CommitmentVersion >= 2,
+	// under a distinct v2 domain. v1 records (CommitmentVersion 0 or 1) encode exactly
+	// as before and keep the frozen v1 golden vector. Binding these in the commitment
+	// makes claims 24/33/35/42 literally "the commitment binds ...", and lets base
+	// VerifyChain detect a flipped RecordType (closing the naive-RP bypass, INT-09).
+	CommitmentVersion         uint32
+	RecordType                RecordType // "" ordinary; revocation/ceremony/emergency (claims 36/37)
+	AuthzDigest               []byte     // digest of the dual-control authorization artifact (claim 42)
+	AttestationEvidenceDigest []byte     // successor-custody attestation evidence digest (claim 35)
+	AttestationType           string     // attestation-type registry id (claim 35)
+	DelegationPath            string     // delegation-path representation (claim 33)
 }
 
 // encode produces the canonical, domain-separated, length-prefixed byte string
@@ -107,6 +120,9 @@ func (f CommitmentFields) encode() ([]byte, error) {
 	if f.HashAlg != HashAlgSHA256 {
 		return nil, fmt.Errorf("succession: unsupported hash_alg %q (want %q)", f.HashAlg, HashAlgSHA256)
 	}
+	if f.CommitmentVersion >= 2 {
+		return f.encodeV2(predID, succID), nil
+	}
 	var b bytes.Buffer
 	writeField(&b, []byte(commitmentDomain))
 	writeField(&b, []byte(f.DeploymentScope))
@@ -123,6 +139,38 @@ func (f CommitmentFields) encode() ([]byte, error) {
 	writeUint(&b, uint64(f.NotBefore))
 	writeUint(&b, uint64(f.NotAfter))
 	return b.Bytes(), nil
+}
+
+// encodeV2 is the version-2 canonical encoding (INT-08): the v1 core fields under a
+// distinct v2 domain with the version bound, followed by the additional
+// commitment-bound fields (RecordType, authz digest, attestation evidence digest and
+// type, delegation path). The distinct domain and bound version mean a v2 record
+// cannot be silently downgraded to a v1 commitment, and every added field is covered
+// by both dual signatures — so base VerifyChain alone detects a tamper of any of them.
+func (f CommitmentFields) encodeV2(predID, succID uint64) []byte {
+	var b bytes.Buffer
+	writeField(&b, []byte(commitmentDomainV2))
+	writeUint(&b, uint64(f.CommitmentVersion))
+	writeField(&b, []byte(f.DeploymentScope))
+	writeField(&b, []byte(f.IdentityID))
+	writeField(&b, []byte(f.TenantID))
+	writeUint(&b, f.PredecessorEpoch)
+	writeUint(&b, f.Epoch)
+	writeUint(&b, predID)
+	writeField(&b, f.PredecessorPub)
+	writeUint(&b, succID)
+	writeField(&b, f.SuccessorPub)
+	writeField(&b, []byte(f.PolicyRef))
+	writeField(&b, []byte(f.HashAlg))
+	writeUint(&b, uint64(f.NotBefore))
+	writeUint(&b, uint64(f.NotAfter))
+	// v2 additional bound fields:
+	writeField(&b, []byte(f.RecordType))
+	writeField(&b, f.AuthzDigest)
+	writeField(&b, f.AttestationEvidenceDigest)
+	writeField(&b, []byte(f.AttestationType))
+	writeField(&b, []byte(f.DelegationPath))
+	return b.Bytes()
 }
 
 // Commit returns the commitment digest H(encode(fields)), hashing through the

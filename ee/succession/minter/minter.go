@@ -93,6 +93,8 @@ type Minter struct {
 	provenance PlanProvenanceVerifier // optional; verifies the policy-decision provenance chain before keygen (PCAS-21)
 	attestGate AttestationGate        // optional; verifies successor-custody attestation before keygen (PCAS-29)
 
+	commitmentV2 bool // when set, mint records with the v2 commitment binding RecordType/authz/attestation/delegation (INT-08)
+
 	mu    sync.Mutex
 	floor map[string]uint64
 }
@@ -118,6 +120,12 @@ type Option func(*Minter)
 
 // WithPolicy requires a policy-authority-signed decision on every mint (claim 23).
 func WithPolicy(v PolicyVerifier) Option { return func(m *Minter) { m.policy = v } }
+
+// WithCommitmentV2 mints records with the version-2 commitment (INT-08), which binds
+// RecordType, the authz digest, the attestation evidence digest + type, and the
+// delegation path IN the commitment (claims 24/33/35/42) so both dual signatures cover
+// them and base chain verification detects a tamper. v1 records remain verifiable.
+func WithCommitmentV2() Option { return func(m *Minter) { m.commitmentV2 = true } }
 
 // WithDualControl requires a single-use authorization token on every mint (claim 5).
 func WithDualControl(v AuthVerifier) Option {
@@ -338,6 +346,19 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		NotBefore:        req.NotBefore,
 		NotAfter:         req.NotAfter,
 	}
+	authzDigest := succession.AuthzDigest(req.Authorization)
+	if m.commitmentV2 {
+		// Bind the record-level fields IN the commitment (INT-08): RecordType (ordinary
+		// for the minter), the authz digest (claim 42), and the attestation evidence
+		// digest + type (claim 35). Both dual signatures then cover them, so base
+		// VerifyChain alone detects a tamper (INT-09) and "the commitment binds ..." is
+		// literally true.
+		fields.CommitmentVersion = 2
+		fields.RecordType = succession.RecOrdinary
+		fields.AuthzDigest = authzDigest
+		fields.AttestationEvidenceDigest = attestEvidenceDigest
+		fields.AttestationType = attestType
+	}
 	commitment, err := succession.Commit(fields)
 	if err != nil {
 		return signing.MintResult{}, err
@@ -362,9 +383,9 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		rec.BreakGlassAuth = cloneBytesBG(req.BreakGlass)
 	}
 
-	// authz_digest: bind a digest of the dual-control authorization artifact, so the
-	// authorization is verifiable from the published record alone (claim 42).
-	rec.AuthzDigest = succession.AuthzDigest(req.Authorization)
+	// authz_digest on the record mirrors the v2 commitment binding (or, for v1, is bound
+	// by the signer attestation), so the authorization is verifiable from the record.
+	rec.AuthzDigest = authzDigest
 
 	// Bind the successor-custody attestation evidence digest + type (claim 35), so the
 	// record proves what custody evidence gated it. The signer attestation binds these.

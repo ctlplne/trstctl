@@ -61,6 +61,10 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 		// Downgrade refusal on by default (claim 17): a weaker-class successor is
 		// refused unless a break-glass token is presented (none configured here).
 		minter.WithStrengthOrdering(nil),
+		// Production records use the v2 commitment (INT-08): RecordType, authz digest,
+		// attestation evidence + type, and delegation path are bound IN the commitment,
+		// so base chain verification detects a tamper of any of them.
+		minter.WithCommitmentV2(),
 	}
 	if cfg.AttestSigner != nil {
 		opts = append(opts, minter.WithAttestation(cfg.AttestSigner, cfg.SignerID))

@@ -21,6 +21,7 @@ var (
 	ErrChainAnchor            = errors.New("succession: chain does not anchor to genesis / linkage broken")
 	ErrDowngrade              = errors.New("succession: chain head epoch <= last-accepted (downgrade)")
 	ErrGenesisAttestation     = errors.New("succession: genesis trust-root attestation invalid or missing")
+	ErrRecordFieldMismatch    = errors.New("succession: v2 record field does not match its committed value")
 )
 
 // VerifyRecord recomputes the commitment from rec.Fields and verifies BOTH limbs
@@ -56,6 +57,26 @@ func VerifyRecord(rec SuccessionRecord) error {
 		return fmt.Errorf("%w: %s (implemented in PCAS-14)", ErrUnsupportedProof, rec.Possession.Kind)
 	default:
 		return fmt.Errorf("%w: %q", ErrUnsupportedProof, rec.Possession.Kind)
+	}
+	// v2 consistency (INT-08/09): the record-level fields that readers consume must
+	// match the commitment-bound copies, so a flipped top-level RecordType / authz /
+	// attestation cannot diverge from what both dual signatures cover. This closes the
+	// naive-relying-party bypass — base chain verification alone now rejects a
+	// RecordType flip on a v2 record. (v1 records bind these via the signer attestation;
+	// that path is unchanged and verified by VerifyExceptional.)
+	if rec.Fields.CommitmentVersion >= 2 {
+		if rec.RecordType != rec.Fields.RecordType {
+			return fmt.Errorf("%w: record type %q != committed %q", ErrRecordFieldMismatch, rec.RecordType, rec.Fields.RecordType)
+		}
+		if !bytes.Equal(rec.AuthzDigest, rec.Fields.AuthzDigest) {
+			return fmt.Errorf("%w: authz digest", ErrRecordFieldMismatch)
+		}
+		if !bytes.Equal(rec.AttestationEvidenceDigest, rec.Fields.AttestationEvidenceDigest) {
+			return fmt.Errorf("%w: attestation evidence digest", ErrRecordFieldMismatch)
+		}
+		if rec.AttestationType != rec.Fields.AttestationType {
+			return fmt.Errorf("%w: attestation type", ErrRecordFieldMismatch)
+		}
 	}
 	return nil
 }
