@@ -62,6 +62,11 @@ func BuildExceptional(fields CommitmentFields, predecessor, successor crypto.Sig
 	}
 	fields.SuccessorAlg = successor.Algorithm()
 	fields.SuccessorPub = successor.Public().DER
+	// v2: bind the record TYPE in the commitment (INT-09), so base VerifyChain — not
+	// only VerifyExceptional — rejects a flip that would hide a revocation by turning it
+	// ordinary. RecordType is additionally bound by the signer attestation (below).
+	fields.CommitmentVersion = 2
+	fields.RecordType = rt
 	commitment, err := Commit(fields)
 	if err != nil {
 		return SuccessionRecord{}, err

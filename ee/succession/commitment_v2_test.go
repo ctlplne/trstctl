@@ -101,3 +101,36 @@ func TestINT08_V2CommitmentBindsRecordType(t *testing.T) {
 		t.Fatalf("flipped top-level RecordType err = %v, want ErrRecordFieldMismatch", err)
 	}
 }
+
+// TestINT09_VerifyChainCatchesRevocationFlip proves the dangerous case is closed: a
+// revocation tombstone (now a v2 exceptional record) cannot be hidden by flipping its
+// type to ordinary, because base VerifyRecord — which VerifyChain runs per record —
+// rejects the divergence. Previously only VerifyExceptional (the stricter RP path)
+// caught this, so a naive relying party verifying only the chain could miss it.
+func TestINT09_VerifyChainCatchesRevocationFlip(t *testing.T) {
+	be := crypto.NewSoftwareBackend()
+	key, err := be.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attest, err := be.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := BuildRevocation(key, "d", "id", "t", 0, 1, 2, attest, "signer-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Fields.CommitmentVersion < 2 {
+		t.Fatal("revocation record is not v2 (RecordType not committed)")
+	}
+	if err := VerifyRecord(rec); err != nil {
+		t.Fatalf("valid revocation failed base verification: %v", err)
+	}
+	// Hide the revocation by flipping its type to ordinary.
+	hidden := rec
+	hidden.RecordType = RecOrdinary
+	if err := VerifyRecord(hidden); !errors.Is(err, ErrRecordFieldMismatch) {
+		t.Fatalf("hidden revocation err = %v, want ErrRecordFieldMismatch (base verification must catch it)", err)
+	}
+}
