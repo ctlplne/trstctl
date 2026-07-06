@@ -25,7 +25,7 @@ func recEcdsa(t *testing.T) crypto.Signer {
 // craftRecoveryRecord builds a recovery record directly (bypassing Mint) so a test
 // can construct even an under-quorum record. threshold is the authorization
 // threshold; numApprovals distinct rostered approvers sign.
-func craftRecoveryRecord(t *testing.T, threshold, numApprovals int, withInclusion bool) (recovery.RecoveryRecord, []byte) {
+func craftRecoveryRecord(t *testing.T, threshold, numApprovals int, withInclusion bool) (rec recovery.RecoveryRecord, trustRootPub, logPub []byte) {
 	t.Helper()
 	trustRoot := recEcdsa(t)
 	succ := recEcdsa(t)
@@ -70,39 +70,46 @@ func craftRecoveryRecord(t *testing.T, threshold, numApprovals int, withInclusio
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec := recovery.RecoveryRecord{
+	rec = recovery.RecoveryRecord{
 		Fields:        fields,
 		Possession:    succession.PossessionProof{Kind: succession.ProofSuccessorSignature, Signature: possSig},
 		Authorization: recovery.RecoveryAuthorization{Statement: stmt, Threshold: threshold, Roster: roster, RosterSig: rosterSig, Approvals: approvals},
 	}
 	if withInclusion {
-		rec.InclusionProof = []byte("inclusion-proof")
+		leaf, err := succession.Commit(rec.Fields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec.InclusionProof, logPub = realProofFor(t, leaf)
 	}
-	return rec, trustRoot.Public().DER
+	return rec, trustRoot.Public().DER, logPub
 }
 
 // TestRecovery_RequiresQuorumAndInclusion: the RP rejects a recovery record without
 // the m-of-n authorization or without an inclusion proof, and accepts one with both
 // (INV-12).
 func TestRecovery_RequiresQuorumAndInclusion(t *testing.T) {
-	okInclusion := func([]byte) error { return nil }
-
 	// Under quorum (threshold 2, one approval) → rejected regardless of inclusion.
-	under, root := craftRecoveryRecord(t, 2, 1, true)
-	if err := rpverify.VerifyRecovery(under, rpverify.RecoveryOptions{TrustRootPubDER: root, MinThreshold: 2, VerifyInclusion: okInclusion}); !errors.Is(err, recovery.ErrQuorumNotMet) {
+	under, root, logPub := craftRecoveryRecord(t, 2, 1, true)
+	if err := rpverify.VerifyRecovery(under, rpverify.RecoveryOptions{TrustRootPubDER: root, MinThreshold: 2, STHVerifyKeyDER: logPub}); !errors.Is(err, recovery.ErrQuorumNotMet) {
 		t.Fatalf("under-quorum recovery: got %v, want ErrQuorumNotMet", err)
 	}
 
 	// Quorum met but no inclusion proof → rejected.
-	noIncl, root2 := craftRecoveryRecord(t, 2, 2, false)
-	if err := rpverify.VerifyRecovery(noIncl, rpverify.RecoveryOptions{TrustRootPubDER: root2, MinThreshold: 2, VerifyInclusion: okInclusion}); !errors.Is(err, rpverify.ErrRecoveryInclusionRequired) {
+	noIncl, root2, _ := craftRecoveryRecord(t, 2, 2, false)
+	if err := rpverify.VerifyRecovery(noIncl, rpverify.RecoveryOptions{TrustRootPubDER: root2, MinThreshold: 2}); !errors.Is(err, rpverify.ErrRecoveryInclusionRequired) {
 		t.Fatalf("recovery without inclusion: got %v, want ErrRecoveryInclusionRequired", err)
 	}
 
-	// Quorum + inclusion → accepted.
-	good, root3 := craftRecoveryRecord(t, 2, 2, true)
-	if err := rpverify.VerifyRecovery(good, rpverify.RecoveryOptions{TrustRootPubDER: root3, MinThreshold: 2, VerifyInclusion: okInclusion}); err != nil {
+	// Quorum + real inclusion proof under the log key → accepted.
+	good, root3, logPub3 := craftRecoveryRecord(t, 2, 2, true)
+	if err := rpverify.VerifyRecovery(good, rpverify.RecoveryOptions{TrustRootPubDER: root3, MinThreshold: 2, STHVerifyKeyDER: logPub3}); err != nil {
 		t.Fatalf("valid recovery: %v", err)
+	}
+
+	// Quorum + a proof present but NO trusted log key → fails closed (no mock escape).
+	if err := rpverify.VerifyRecovery(good, rpverify.RecoveryOptions{TrustRootPubDER: root3, MinThreshold: 2}); !errors.Is(err, rpverify.ErrRecoveryInclusionRequired) {
+		t.Fatalf("recovery without a trusted log key: got %v, want ErrRecoveryInclusionRequired", err)
 	}
 }
 
@@ -110,17 +117,16 @@ func TestRecovery_RequiresQuorumAndInclusion(t *testing.T) {
 // elevated approval threshold and a required out-of-band confirmation — beyond the
 // record's own validity (INV-12 / INV-6).
 func TestRPVerify_RecoveryStricterPolicy(t *testing.T) {
-	okInclusion := func([]byte) error { return nil }
-	rec, root := craftRecoveryRecord(t, 2, 2, true) // authorization threshold 2
+	rec, root, logPub := craftRecoveryRecord(t, 2, 2, true) // authorization threshold 2
 
 	// RP demands threshold >= 3: rejected even though the record's own quorum is met.
-	if err := rpverify.VerifyRecovery(rec, rpverify.RecoveryOptions{TrustRootPubDER: root, MinThreshold: 3, VerifyInclusion: okInclusion}); !errors.Is(err, rpverify.ErrRecoveryThresholdTooLow) {
+	if err := rpverify.VerifyRecovery(rec, rpverify.RecoveryOptions{TrustRootPubDER: root, MinThreshold: 3, STHVerifyKeyDER: logPub}); !errors.Is(err, rpverify.ErrRecoveryThresholdTooLow) {
 		t.Fatalf("elevated threshold: got %v, want ErrRecoveryThresholdTooLow", err)
 	}
 
 	// RP requires out-of-band confirmation, which is absent → rejected.
 	if err := rpverify.VerifyRecovery(rec, rpverify.RecoveryOptions{
-		TrustRootPubDER: root, MinThreshold: 2, VerifyInclusion: okInclusion,
+		TrustRootPubDER: root, MinThreshold: 2, STHVerifyKeyDER: logPub,
 		ConfirmOutOfBand: func() error { return errors.New("no operator confirmation on file") },
 	}); !errors.Is(err, rpverify.ErrRecoveryOutOfBand) {
 		t.Fatalf("required OOB absent: got %v, want ErrRecoveryOutOfBand", err)
@@ -128,7 +134,7 @@ func TestRPVerify_RecoveryStricterPolicy(t *testing.T) {
 
 	// All satisfied → accepted.
 	if err := rpverify.VerifyRecovery(rec, rpverify.RecoveryOptions{
-		TrustRootPubDER: root, MinThreshold: 2, VerifyInclusion: okInclusion,
+		TrustRootPubDER: root, MinThreshold: 2, STHVerifyKeyDER: logPub,
 		ConfirmOutOfBand: func() error { return nil },
 	}); err != nil {
 		t.Fatalf("fully-satisfied recovery policy: %v", err)

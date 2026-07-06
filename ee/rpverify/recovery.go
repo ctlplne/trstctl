@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 
+	"trstctl.com/trstctl/ee/succession"
 	"trstctl.com/trstctl/ee/succession/recovery"
+	"trstctl.com/trstctl/ee/translog"
 )
 
 // Recovery-record relying-party errors.
@@ -21,10 +23,14 @@ var (
 // approval threshold, an unconditional inclusion proof, and an optional out-of-band
 // confirmation hook.
 type RecoveryOptions struct {
-	TrustRootPubDER  []byte
-	MinThreshold     int                      // reject a recovery whose authorization threshold is below this
-	VerifyInclusion  func(proof []byte) error // mandatory: nil or a missing proof fails
-	ConfirmOutOfBand func() error             // optional: when set, must succeed
+	TrustRootPubDER []byte
+	MinThreshold    int // reject a recovery whose authorization threshold is below this
+	// STHVerifyKeyDER is the transparency log's public key. The mandatory inclusion
+	// proof is verified with the REAL RFC-6962 Merkle verifier: the recovery record's
+	// commitment must be the proven leaf under a head this key signed. Empty => the
+	// inclusion requirement fails closed (no injected-closure escape hatch, INT-18).
+	STHVerifyKeyDER  []byte
+	ConfirmOutOfBand func() error // optional: when set, must succeed
 }
 
 // VerifyRecovery applies the relying party's stricter recovery policy. It first
@@ -40,11 +46,17 @@ func VerifyRecovery(rec recovery.RecoveryRecord, opts RecoveryOptions) error {
 	if opts.MinThreshold > 0 && rec.Authorization.Threshold < opts.MinThreshold {
 		return fmt.Errorf("%w: %d < %d", ErrRecoveryThresholdTooLow, rec.Authorization.Threshold, opts.MinThreshold)
 	}
-	if len(rec.InclusionProof) == 0 || opts.VerifyInclusion == nil {
+	if len(rec.InclusionProof) == 0 {
 		return ErrRecoveryInclusionRequired
 	}
-	if err := opts.VerifyInclusion(rec.InclusionProof); err != nil {
-		return fmt.Errorf("rpverify: recovery inclusion: %w", err)
+	// Real RFC-6962 inclusion: the recovery record's commitment must be the proven leaf
+	// under a head signed by the trusted log key. No injected closure can stand in.
+	leaf, err := succession.Commit(rec.Fields)
+	if err != nil {
+		return err
+	}
+	if err := translog.VerifyEncodedInclusion(leaf, rec.InclusionProof, opts.STHVerifyKeyDER); err != nil {
+		return fmt.Errorf("%w: %v", ErrRecoveryInclusionRequired, err)
 	}
 	if opts.ConfirmOutOfBand != nil {
 		if err := opts.ConfirmOutOfBand(); err != nil {

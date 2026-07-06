@@ -11,7 +11,11 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-func exceptionalRecord(t *testing.T, rt succession.RecordType, withInclusion bool) (succession.SuccessionRecord, map[string][]byte) {
+// exceptionalRecord builds an exceptional record. When withInclusion is set, it
+// attaches a REAL transparency-log inclusion proof for the record's commitment and
+// returns the log's public key (logPub) so the RP policy can verify it with the real
+// Merkle verifier. When withInclusion is false, no proof is attached and logPub is nil.
+func exceptionalRecord(t *testing.T, rt succession.RecordType, withInclusion bool) (rec succession.SuccessionRecord, roster map[string][]byte, logPub []byte) {
 	t.Helper()
 	be := crypto.NewSoftwareBackend()
 	pred, _ := be.GenerateKey(crypto.ECDSAP256)
@@ -28,12 +32,14 @@ func exceptionalRecord(t *testing.T, rt succession.RecordType, withInclusion boo
 		t.Fatal(err)
 	}
 	if withInclusion {
-		rec.InclusionProof = []byte("inclusion-proof")
+		leaf, err := succession.Commit(rec.Fields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec.InclusionProof, logPub = realProofFor(t, leaf)
 	}
-	return rec, map[string][]byte{"signer-1": attest.Public().DER}
+	return rec, map[string][]byte{"signer-1": attest.Public().DER}, logPub
 }
-
-func okInclusion([]byte) error { return nil }
 
 // TestCeremony_NoLedgerBypass: no exceptional path takes effect outside the ledger —
 // a ceremony record without inclusion is refused; and the RP applies stricter policy
@@ -41,23 +47,23 @@ func okInclusion([]byte) error { return nil }
 // (claim 37 / INV-15).
 func TestCeremony_NoLedgerBypass(t *testing.T) {
 	// Never logged (no inclusion proof) → refused: the ledger cannot be bypassed.
-	unlogged, roster := exceptionalRecord(t, succession.RecCeremony, false)
-	if err := rpverify.VerifyExceptionalRecord(unlogged, rpverify.ExceptionalPolicy{SignerRoster: roster, VerifyInclusion: okInclusion}); !errors.Is(err, succession.ErrExceptionalInclusion) {
+	unlogged, roster, _ := exceptionalRecord(t, succession.RecCeremony, false)
+	if err := rpverify.VerifyExceptionalRecord(unlogged, rpverify.ExceptionalPolicy{SignerRoster: roster}); !errors.Is(err, succession.ErrExceptionalInclusion) {
 		t.Fatalf("unlogged ceremony: got %v, want ErrExceptionalInclusion", err)
 	}
 
-	// Logged + default accept policy → accepted.
-	rec, r2 := exceptionalRecord(t, succession.RecCeremony, true)
-	if err := rpverify.VerifyExceptionalRecord(rec, rpverify.ExceptionalPolicy{SignerRoster: r2, VerifyInclusion: okInclusion}); err != nil {
+	// Logged + default accept policy → accepted (real inclusion proof under the log key).
+	rec, r2, logPub := exceptionalRecord(t, succession.RecCeremony, true)
+	if err := rpverify.VerifyExceptionalRecord(rec, rpverify.ExceptionalPolicy{SignerRoster: r2, STHVerifyKeyDER: logPub}); err != nil {
 		t.Fatalf("logged ceremony under accept policy: %v", err)
 	}
 	// Stricter policy: reject ceremony outright.
-	if err := rpverify.VerifyExceptionalRecord(rec, rpverify.ExceptionalPolicy{SignerRoster: r2, VerifyInclusion: okInclusion, RejectCeremony: true}); !errors.Is(err, rpverify.ErrCeremonyRejected) {
+	if err := rpverify.VerifyExceptionalRecord(rec, rpverify.ExceptionalPolicy{SignerRoster: r2, STHVerifyKeyDER: logPub, RejectCeremony: true}); !errors.Is(err, rpverify.ErrCeremonyRejected) {
 		t.Fatalf("reject-ceremony policy: got %v, want ErrCeremonyRejected", err)
 	}
 	// Accept-with-elevation: the elevated confirmation must succeed.
 	if err := rpverify.VerifyExceptionalRecord(rec, rpverify.ExceptionalPolicy{
-		SignerRoster: r2, VerifyInclusion: okInclusion,
+		SignerRoster: r2, STHVerifyKeyDER: logPub,
 		ElevatedConfirm: func(succession.SuccessionRecord) error { return errors.New("no elevated approval on file") },
 	}); !errors.Is(err, rpverify.ErrCeremonyRejected) {
 		t.Fatalf("elevated-confirm failure: got %v, want ErrCeremonyRejected", err)

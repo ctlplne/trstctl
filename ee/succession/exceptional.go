@@ -120,7 +120,10 @@ func VerifyExceptional(rec SuccessionRecord, roster map[string][]byte, verifyInc
 		return ErrExceptionalInclusion
 	}
 	if err := verifyInclusion(rec.InclusionProof); err != nil {
-		return fmt.Errorf("%w: %v", ErrExceptionalInclusion, err)
+		// Wrap both the domain sentinel and the underlying reason so a caller can match
+		// either ErrExceptionalInclusion or the specific verifier error (e.g. the real
+		// translog inclusion/STH errors).
+		return fmt.Errorf("%w: %w", ErrExceptionalInclusion, err)
 	}
 	return nil
 }
