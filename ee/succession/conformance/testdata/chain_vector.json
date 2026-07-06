@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "description": "PCAS r11 succession chain — genesis + 2 dual-signed records",
+  "trust_root_pub_der": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtFACXPMPsDqo82rFXqGLic6QEqSH+yAgH2CekZ8e6SuuA3pBrsxFOaELvee8BGFO2UPOhCz49OqvA56gwdTcCw==",
+  "expected_tenant": "11111111-1111-1111-1111-111111111111",
+  "genesis": {
+    "DeploymentScope": "spiffe://trust-domain",
+    "IdentityID": "spiffe://trust-domain/workload/db",
+    "TenantID": "11111111-1111-1111-1111-111111111111",
+    "Algorithm": "ECDSA-P256",
+    "PublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEiiXUOgejOAqJuM81ACLjj81bWSK4ytavbwKSnX9DHesLhDiwg332A37TdbHzmUWU5Hl1971ZTQzrpnqnyJ+grQ==",
+    "Epoch": 0,
+    "TrustRootAtt": "MEUCIDzWoE912XbHjc3OgxTw4KvgZkM3FlzNYR/BBtiXYGBzAiEAueWeFbt+YDYELKhLvKlp6BFtbxkfQqsVJAtxEDrC3EY=",
+    "SignerAttestation": null
+  },
+  "chain": [
+    {
+      "Fields": {
+        "DeploymentScope": "spiffe://trust-domain",
+        "IdentityID": "spiffe://trust-domain/workload/db",
+        "TenantID": "11111111-1111-1111-1111-111111111111",
+        "PredecessorEpoch": 0,
+        "Epoch": 1,
+        "PredecessorAlg": "ECDSA-P256",
+        "PredecessorPub": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEiiXUOgejOAqJuM81ACLjj81bWSK4ytavbwKSnX9DHesLhDiwg332A37TdbHzmUWU5Hl1971ZTQzrpnqnyJ+grQ==",
+        "SuccessorAlg": "ECDSA-P384",
+        "SuccessorPub": "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE6b1r9PhxZJIqjq/T0+MMAS2mvG5BaIzG6XL+sJGZNnhJLe11WlXbm3lwfMUS25SyyQbmi9CSKb/P8tMCKAOdP2qfQ/0Sg6fT6jYIQSZDu3zTlNZWdxZu+XRH4ensJVYd",
+        "PolicyRef": "policy:hybrid",
+        "HashAlg": "SHA-256",
+        "NotBefore": 1000,
+        "NotAfter": 1000000
+      },
+      "PredecessorAtt": "MEUCIH2URtoeDgaU9YXwCk0P4fpsAy8PpaCS+7H6hEW47M05AiEAnN11kapjQMYkoJ9G4E9wzE77D77/vljFhsZktUyYNn0=",
+      "Possession": {
+        "Kind": "successor_signature",
+        "Signature": "MGYCMQCOsrccteu0cyP6v0KK3lffX6SUEsG52YXhr5LxEoiNF5c3SITuC5dddr1/TX0Y19gCMQDDkKN0/ZtDrBzzL5hDG/QPkHQEODBAmqplUzrkH4SRdCmSfXxukCZJ44WBHnRIvpA=",
+        "Transcript": null
+      },
+      "SignerAttestation": null,
+      "InclusionProof": null,
+      "AuthzDigest": null,
+      "BreakGlassAuth": null,
+      "RecordType": "",
+      "AttestationEvidenceDigest": null,
+      "AttestationType": ""
+    },
+    {
+      "Fields": {
+        "DeploymentScope": "spiffe://trust-domain",
+        "IdentityID": "spiffe://trust-domain/workload/db",
+        "TenantID": "11111111-1111-1111-1111-111111111111",
+        "PredecessorEpoch": 1,
+        "Epoch": 2,
+        "PredecessorAlg": "ECDSA-P384",
+        "PredecessorPub": "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE6b1r9PhxZJIqjq/T0+MMAS2mvG5BaIzG6XL+sJGZNnhJLe11WlXbm3lwfMUS25SyyQbmi9CSKb/P8tMCKAOdP2qfQ/0Sg6fT6jYIQSZDu3zTlNZWdxZu+XRH4ensJVYd",
+        "SuccessorAlg": "RSA-2048",
+        "SuccessorPub": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAumF0rslE6XA8JJWr3B+84D7C08G6XeDsUI3z/HL5x71WKQ0bciE92psR4q5cFYz3uJNCrf5XWKCMmJWTMtpOsmlW/gWO6C4hT3c1OsxxfC0htTmjDsFpDlLX4djwLgDei2PRmvbaUJw6498rAS6Lvu8wtFbBDSg07G9yFmqR2J7ZpEopCCAx5ShUOp/Co6rpj9rZiqYpDw0GKrFiIl8kAZqytR/KH6+kyoq2j5VG52SWxQxCtxGUGWFrei11ZXtuPBRH8eUaVSxP1uqI8I+i2upv6lvwDUHHYx4+PPFsGiyAm6VUyHmT7GzWa/Lolrkh/iiRHFXkyCYnuFaCJPzwAwIDAQAB",
+        "PolicyRef": "policy:pure-pq",
+        "HashAlg": "SHA-256",
+        "NotBefore": 1000,
+        "NotAfter": 1000000
+      },
+      "PredecessorAtt": "MGYCMQDy0pORD0CVt/qD6ngJb4f6Ei780f9HO9k9xgOwpJ4ekHnjIokn6LsNnjjK9b39z8kCMQCz/C5LbG6PXi1LsBbhXBknBZjOUDJ82dwr8j8DnlgxUpO+O7w+GioVtYF6M9MyY+4=",
+      "Possession": {
+        "Kind": "successor_signature",
+        "Signature": "elIiZ7liX2tiEy8hb/v4LCHABix3valFTuvU8DgzBnhN8RYcS86DiKByQARgq2IwcrqBTEhLpm4v0d85KzbeEs8S/4ELGwAhu8XQFlSCj6vSWHBQvrtZfvlhZVO629glqkZ+keJa7WVN1vv4v7IXmjgf9TGkFD3wvjqptiM0JC/kMd7dKMysonQ6Cez0qLXzHnDIxmBIZ26fubhT47Q0BOUJrZqH+sRgpBfKS/3J9aXUD9PtcCkY1vscXsBajJ6RBOEqm0f8cBM8RYOMzPQf9H20stvfnmjg1Gi4hR6nIuQ8+ER5KWdcASmFVrAr+jyCAzBqQNHrON/JMOd4ny4wow==",
+        "Transcript": null
+      },
+      "SignerAttestation": null,
+      "InclusionProof": null,
+      "AuthzDigest": null,
+      "BreakGlassAuth": null,
+      "RecordType": "",
+      "AttestationEvidenceDigest": null,
+      "AttestationType": ""
+    }
+  ],
+  "expected_epoch": 2
+}
