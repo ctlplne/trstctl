@@ -58,6 +58,9 @@ func attestMessage(rec SuccessionRecord, signerID string) ([]byte, error) {
 	writeField(&b, []byte(signerID))
 	writeField(&b, commitment)
 	writeField(&b, rec.AuthzDigest)
+	// Bind the record type so an exceptional record's kind (revocation / ceremony /
+	// emergency, PCAS-23) is signer-attested and cannot be stripped or altered.
+	writeField(&b, []byte(rec.RecordType))
 	return b.Bytes(), nil
 }
 

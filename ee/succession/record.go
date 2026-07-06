@@ -53,7 +53,30 @@ type SuccessionRecord struct {
 	// authority's key) and marks the record as a break-glass succession; the RP
 	// requires it for any weaker-class succession.
 	BreakGlassAuth []byte
+
+	// RecordType distinguishes exceptional-but-chained records (claims 36, 37,
+	// PCAS-23): a revocation tombstone, or a ceremony / break-glass / emergency
+	// record. The empty value is an ordinary succession. Exceptional records still
+	// chain, stay epoch-monotonic, and require a transparency-log inclusion proof.
+	RecordType RecordType
 }
+
+// RecordType marks an exceptional-but-chained succession record (claims 36, 37).
+type RecordType string
+
+const (
+	// RecOrdinary is an ordinary succession (the zero value).
+	RecOrdinary RecordType = ""
+	// RecRevocation is a revocation tombstone recorded as a chain record at the next
+	// epoch; the chain itself is the revocation status (claim 36).
+	RecRevocation RecordType = "revocation"
+	// RecCeremony is a break-glass / ceremony record (a claim-17 strength downgrade or
+	// an operator ceremony) recorded as a distinct chained record (claim 37).
+	RecCeremony RecordType = "ceremony"
+	// RecEmergency is a control-plane-unavailable emergency issuance recorded as a
+	// distinct chained record (claim 37).
+	RecEmergency RecordType = "emergency"
+)
 
 // GenesisRecord anchors an identity's chain at epoch 0 (r11 genesis-establishment
 // embodiment): the stable identity identifier, tenant, initial algorithm and
