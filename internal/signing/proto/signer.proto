@@ -34,6 +34,16 @@ service SignerService {
 
   // Health reports liveness and readiness. It returns no secret material.
   rpc Health(HealthRequest) returns (HealthResponse);
+
+  // MintSuccessor mints a dual-signed PCAS succession record inside the signer
+  // (INT-01). No private key crosses the boundary: the predecessor is referenced
+  // by an opaque handle held in the signer, the successor key is generated inside
+  // the signer, and only the successor public key and the opaque encoded record
+  // are returned. A succession minter must be attached (WithSuccessionMinter) or
+  // the signer fails closed with UNIMPLEMENTED. This is the wire path by which the
+  // control plane requests a succession without ever obtaining private key
+  // material (claims 1/12/49): the control plane can request, but cannot forge.
+  rpc MintSuccessor(MintSuccessorRequest) returns (MintSuccessorResponse);
 }
 
 // Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
@@ -168,4 +178,36 @@ message HealthResponse {
     STATUS_DRAINING = 3;
   }
   Status status = 1;
+}
+
+// MintSuccessorRequest mirrors internal/signing.MintRequest (INT-01). It carries
+// NO private key material: the predecessor is a handle held inside the signer, and
+// every authorization/policy/attestation input is opaque bytes verified in-signer
+// before any successor key is generated.
+message MintSuccessorRequest {
+  string identity_id = 1;
+  string tenant_id = 2;
+  string deployment_scope = 3;
+  // predecessor_handle is the opaque in-signer handle of the predecessor key. The
+  // control plane never sees the predecessor private key bytes.
+  string predecessor_handle = 4;
+  uint64 asserted_predecessor_epoch = 5;
+  Algorithm target_algorithm = 6;
+  string policy_ref = 7;
+  bytes policy_decision = 8; // signed policy artifact (optional)
+  bytes authorization = 9;   // dual-control authorization token (optional)
+  bytes break_glass = 10;    // strength-downgrade break-glass token (optional)
+  bytes attestation = 11;    // successor-custodian attestation evidence (optional)
+  int64 not_before = 12;
+  int64 not_after = 13;
+}
+
+// MintSuccessorResponse mirrors internal/signing.MintResult (INT-01). It carries
+// only public material: the successor public key and the opaque encoded dual-signed
+// succession record. No private key crosses the boundary.
+message MintSuccessorResponse {
+  uint64 epoch = 1;
+  Algorithm successor_algorithm = 2;
+  bytes successor_public_key = 3; // PKIX/DER (SubjectPublicKeyInfo)
+  bytes encoded_record = 4;       // opaque dual-signed succession record
 }

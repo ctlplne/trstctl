@@ -32,7 +32,8 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Algorithm mirrors internal/crypto.Algorithm.
+// Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
+// neutral licensed slots; the EE attach seam owns their concrete names.
 type Algorithm int32
 
 const (
@@ -918,6 +919,223 @@ func (x *HealthResponse) GetStatus() HealthResponse_Status {
 	return HealthResponse_STATUS_UNSPECIFIED
 }
 
+// MintSuccessorRequest mirrors internal/signing.MintRequest (INT-01). It carries
+// NO private key material: the predecessor is a handle held inside the signer, and
+// every authorization/policy/attestation input is opaque bytes verified in-signer
+// before any successor key is generated.
+type MintSuccessorRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IdentityId      string                 `protobuf:"bytes,1,opt,name=identity_id,json=identityId,proto3" json:"identity_id,omitempty"`
+	TenantId        string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	DeploymentScope string                 `protobuf:"bytes,3,opt,name=deployment_scope,json=deploymentScope,proto3" json:"deployment_scope,omitempty"`
+	// predecessor_handle is the opaque in-signer handle of the predecessor key. The
+	// control plane never sees the predecessor private key bytes.
+	PredecessorHandle        string    `protobuf:"bytes,4,opt,name=predecessor_handle,json=predecessorHandle,proto3" json:"predecessor_handle,omitempty"`
+	AssertedPredecessorEpoch uint64    `protobuf:"varint,5,opt,name=asserted_predecessor_epoch,json=assertedPredecessorEpoch,proto3" json:"asserted_predecessor_epoch,omitempty"`
+	TargetAlgorithm          Algorithm `protobuf:"varint,6,opt,name=target_algorithm,json=targetAlgorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"target_algorithm,omitempty"`
+	PolicyRef                string    `protobuf:"bytes,7,opt,name=policy_ref,json=policyRef,proto3" json:"policy_ref,omitempty"`
+	PolicyDecision           []byte    `protobuf:"bytes,8,opt,name=policy_decision,json=policyDecision,proto3" json:"policy_decision,omitempty"` // signed policy artifact (optional)
+	Authorization            []byte    `protobuf:"bytes,9,opt,name=authorization,proto3" json:"authorization,omitempty"`                         // dual-control authorization token (optional)
+	BreakGlass               []byte    `protobuf:"bytes,10,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`            // strength-downgrade break-glass token (optional)
+	Attestation              []byte    `protobuf:"bytes,11,opt,name=attestation,proto3" json:"attestation,omitempty"`                            // successor-custodian attestation evidence (optional)
+	NotBefore                int64     `protobuf:"varint,12,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
+	NotAfter                 int64     `protobuf:"varint,13,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *MintSuccessorRequest) Reset() {
+	*x = MintSuccessorRequest{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MintSuccessorRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MintSuccessorRequest) ProtoMessage() {}
+
+func (x *MintSuccessorRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MintSuccessorRequest.ProtoReflect.Descriptor instead.
+func (*MintSuccessorRequest) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *MintSuccessorRequest) GetIdentityId() string {
+	if x != nil {
+		return x.IdentityId
+	}
+	return ""
+}
+
+func (x *MintSuccessorRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *MintSuccessorRequest) GetDeploymentScope() string {
+	if x != nil {
+		return x.DeploymentScope
+	}
+	return ""
+}
+
+func (x *MintSuccessorRequest) GetPredecessorHandle() string {
+	if x != nil {
+		return x.PredecessorHandle
+	}
+	return ""
+}
+
+func (x *MintSuccessorRequest) GetAssertedPredecessorEpoch() uint64 {
+	if x != nil {
+		return x.AssertedPredecessorEpoch
+	}
+	return 0
+}
+
+func (x *MintSuccessorRequest) GetTargetAlgorithm() Algorithm {
+	if x != nil {
+		return x.TargetAlgorithm
+	}
+	return Algorithm_ALGORITHM_UNSPECIFIED
+}
+
+func (x *MintSuccessorRequest) GetPolicyRef() string {
+	if x != nil {
+		return x.PolicyRef
+	}
+	return ""
+}
+
+func (x *MintSuccessorRequest) GetPolicyDecision() []byte {
+	if x != nil {
+		return x.PolicyDecision
+	}
+	return nil
+}
+
+func (x *MintSuccessorRequest) GetAuthorization() []byte {
+	if x != nil {
+		return x.Authorization
+	}
+	return nil
+}
+
+func (x *MintSuccessorRequest) GetBreakGlass() []byte {
+	if x != nil {
+		return x.BreakGlass
+	}
+	return nil
+}
+
+func (x *MintSuccessorRequest) GetAttestation() []byte {
+	if x != nil {
+		return x.Attestation
+	}
+	return nil
+}
+
+func (x *MintSuccessorRequest) GetNotBefore() int64 {
+	if x != nil {
+		return x.NotBefore
+	}
+	return 0
+}
+
+func (x *MintSuccessorRequest) GetNotAfter() int64 {
+	if x != nil {
+		return x.NotAfter
+	}
+	return 0
+}
+
+// MintSuccessorResponse mirrors internal/signing.MintResult (INT-01). It carries
+// only public material: the successor public key and the opaque encoded dual-signed
+// succession record. No private key crosses the boundary.
+type MintSuccessorResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Epoch              uint64                 `protobuf:"varint,1,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	SuccessorAlgorithm Algorithm              `protobuf:"varint,2,opt,name=successor_algorithm,json=successorAlgorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"successor_algorithm,omitempty"`
+	SuccessorPublicKey []byte                 `protobuf:"bytes,3,opt,name=successor_public_key,json=successorPublicKey,proto3" json:"successor_public_key,omitempty"` // PKIX/DER (SubjectPublicKeyInfo)
+	EncodedRecord      []byte                 `protobuf:"bytes,4,opt,name=encoded_record,json=encodedRecord,proto3" json:"encoded_record,omitempty"`                  // opaque dual-signed succession record
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *MintSuccessorResponse) Reset() {
+	*x = MintSuccessorResponse{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MintSuccessorResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MintSuccessorResponse) ProtoMessage() {}
+
+func (x *MintSuccessorResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MintSuccessorResponse.ProtoReflect.Descriptor instead.
+func (*MintSuccessorResponse) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *MintSuccessorResponse) GetEpoch() uint64 {
+	if x != nil {
+		return x.Epoch
+	}
+	return 0
+}
+
+func (x *MintSuccessorResponse) GetSuccessorAlgorithm() Algorithm {
+	if x != nil {
+		return x.SuccessorAlgorithm
+	}
+	return Algorithm_ALGORITHM_UNSPECIFIED
+}
+
+func (x *MintSuccessorResponse) GetSuccessorPublicKey() []byte {
+	if x != nil {
+		return x.SuccessorPublicKey
+	}
+	return nil
+}
+
+func (x *MintSuccessorResponse) GetEncodedRecord() []byte {
+	if x != nil {
+		return x.EncodedRecord
+	}
+	return nil
+}
+
 var File_internal_signing_proto_signer_proto protoreflect.FileDescriptor
 
 const file_internal_signing_proto_signer_proto_rawDesc = "" +
@@ -961,7 +1179,31 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eSTATUS_SERVING\x10\x01\x12\x16\n" +
 	"\x12STATUS_NOT_SERVING\x10\x02\x12\x13\n" +
-	"\x0fSTATUS_DRAINING\x10\x03*\xf2\x02\n" +
+	"\x0fSTATUS_DRAINING\x10\x03\"\xa3\x04\n" +
+	"\x14MintSuccessorRequest\x12\x1f\n" +
+	"\videntity_id\x18\x01 \x01(\tR\n" +
+	"identityId\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12)\n" +
+	"\x10deployment_scope\x18\x03 \x01(\tR\x0fdeploymentScope\x12-\n" +
+	"\x12predecessor_handle\x18\x04 \x01(\tR\x11predecessorHandle\x12<\n" +
+	"\x1aasserted_predecessor_epoch\x18\x05 \x01(\x04R\x18assertedPredecessorEpoch\x12H\n" +
+	"\x10target_algorithm\x18\x06 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\x0ftargetAlgorithm\x12\x1d\n" +
+	"\n" +
+	"policy_ref\x18\a \x01(\tR\tpolicyRef\x12'\n" +
+	"\x0fpolicy_decision\x18\b \x01(\fR\x0epolicyDecision\x12$\n" +
+	"\rauthorization\x18\t \x01(\fR\rauthorization\x12\x1f\n" +
+	"\vbreak_glass\x18\n" +
+	" \x01(\fR\n" +
+	"breakGlass\x12 \n" +
+	"\vattestation\x18\v \x01(\fR\vattestation\x12\x1d\n" +
+	"\n" +
+	"not_before\x18\f \x01(\x03R\tnotBefore\x12\x1b\n" +
+	"\tnot_after\x18\r \x01(\x03R\bnotAfter\"\xd6\x01\n" +
+	"\x15MintSuccessorResponse\x12\x14\n" +
+	"\x05epoch\x18\x01 \x01(\x04R\x05epoch\x12N\n" +
+	"\x13successor_algorithm\x18\x02 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\x12successorAlgorithm\x120\n" +
+	"\x14successor_public_key\x18\x03 \x01(\fR\x12successorPublicKey\x12%\n" +
+	"\x0eencoded_record\x18\x04 \x01(\fR\rencodedRecord*\xf2\x02\n" +
 	"\tAlgorithm\x12\x19\n" +
 	"\x15ALGORITHM_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ALGORITHM_RSA_2048\x10\x01\x12\x16\n" +
@@ -995,14 +1237,15 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x14KEY_PURPOSE_LEAF_TLS\x10\x02\x12\x18\n" +
 	"\x14KEY_PURPOSE_SSH_CERT\x10\x03\x12\x19\n" +
 	"\x15KEY_PURPOSE_CODE_SIGN\x10\x04\x12\x17\n" +
-	"\x13KEY_PURPOSE_GENERIC\x10\x052\xcb\x03\n" +
+	"\x13KEY_PURPOSE_GENERIC\x10\x052\xb1\x04\n" +
 	"\rSignerService\x12^\n" +
 	"\vGenerateKey\x12&.trstctl.signing.v1.GenerateKeyRequest\x1a'.trstctl.signing.v1.GenerateKeyResponse\x12a\n" +
 	"\fGetPublicKey\x12'.trstctl.signing.v1.GetPublicKeyRequest\x1a(.trstctl.signing.v1.GetPublicKeyResponse\x12I\n" +
 	"\x04Sign\x12\x1f.trstctl.signing.v1.SignRequest\x1a .trstctl.signing.v1.SignResponse\x12[\n" +
 	"\n" +
 	"DestroyKey\x12%.trstctl.signing.v1.DestroyKeyRequest\x1a&.trstctl.signing.v1.DestroyKeyResponse\x12O\n" +
-	"\x06Health\x12!.trstctl.signing.v1.HealthRequest\x1a\".trstctl.signing.v1.HealthResponseB5Z3trstctl.com/trstctl/internal/signing/proto;signerpbb\x06proto3"
+	"\x06Health\x12!.trstctl.signing.v1.HealthRequest\x1a\".trstctl.signing.v1.HealthResponse\x12d\n" +
+	"\rMintSuccessor\x12(.trstctl.signing.v1.MintSuccessorRequest\x1a).trstctl.signing.v1.MintSuccessorResponseB5Z3trstctl.com/trstctl/internal/signing/proto;signerpbb\x06proto3"
 
 var (
 	file_internal_signing_proto_signer_proto_rawDescOnce sync.Once
@@ -1017,24 +1260,26 @@ func file_internal_signing_proto_signer_proto_rawDescGZIP() []byte {
 }
 
 var file_internal_signing_proto_signer_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_internal_signing_proto_signer_proto_goTypes = []any{
-	(Algorithm)(0),               // 0: trstctl.signing.v1.Algorithm
-	(Hash)(0),                    // 1: trstctl.signing.v1.Hash
-	(RSAPadding)(0),              // 2: trstctl.signing.v1.RSAPadding
-	(KeyPurpose)(0),              // 3: trstctl.signing.v1.KeyPurpose
-	(HealthResponse_Status)(0),   // 4: trstctl.signing.v1.HealthResponse.Status
-	(*KeyHandle)(nil),            // 5: trstctl.signing.v1.KeyHandle
-	(*GenerateKeyRequest)(nil),   // 6: trstctl.signing.v1.GenerateKeyRequest
-	(*GenerateKeyResponse)(nil),  // 7: trstctl.signing.v1.GenerateKeyResponse
-	(*GetPublicKeyRequest)(nil),  // 8: trstctl.signing.v1.GetPublicKeyRequest
-	(*GetPublicKeyResponse)(nil), // 9: trstctl.signing.v1.GetPublicKeyResponse
-	(*SignRequest)(nil),          // 10: trstctl.signing.v1.SignRequest
-	(*SignResponse)(nil),         // 11: trstctl.signing.v1.SignResponse
-	(*DestroyKeyRequest)(nil),    // 12: trstctl.signing.v1.DestroyKeyRequest
-	(*DestroyKeyResponse)(nil),   // 13: trstctl.signing.v1.DestroyKeyResponse
-	(*HealthRequest)(nil),        // 14: trstctl.signing.v1.HealthRequest
-	(*HealthResponse)(nil),       // 15: trstctl.signing.v1.HealthResponse
+	(Algorithm)(0),                // 0: trstctl.signing.v1.Algorithm
+	(Hash)(0),                     // 1: trstctl.signing.v1.Hash
+	(RSAPadding)(0),               // 2: trstctl.signing.v1.RSAPadding
+	(KeyPurpose)(0),               // 3: trstctl.signing.v1.KeyPurpose
+	(HealthResponse_Status)(0),    // 4: trstctl.signing.v1.HealthResponse.Status
+	(*KeyHandle)(nil),             // 5: trstctl.signing.v1.KeyHandle
+	(*GenerateKeyRequest)(nil),    // 6: trstctl.signing.v1.GenerateKeyRequest
+	(*GenerateKeyResponse)(nil),   // 7: trstctl.signing.v1.GenerateKeyResponse
+	(*GetPublicKeyRequest)(nil),   // 8: trstctl.signing.v1.GetPublicKeyRequest
+	(*GetPublicKeyResponse)(nil),  // 9: trstctl.signing.v1.GetPublicKeyResponse
+	(*SignRequest)(nil),           // 10: trstctl.signing.v1.SignRequest
+	(*SignResponse)(nil),          // 11: trstctl.signing.v1.SignResponse
+	(*DestroyKeyRequest)(nil),     // 12: trstctl.signing.v1.DestroyKeyRequest
+	(*DestroyKeyResponse)(nil),    // 13: trstctl.signing.v1.DestroyKeyResponse
+	(*HealthRequest)(nil),         // 14: trstctl.signing.v1.HealthRequest
+	(*HealthResponse)(nil),        // 15: trstctl.signing.v1.HealthResponse
+	(*MintSuccessorRequest)(nil),  // 16: trstctl.signing.v1.MintSuccessorRequest
+	(*MintSuccessorResponse)(nil), // 17: trstctl.signing.v1.MintSuccessorResponse
 }
 var file_internal_signing_proto_signer_proto_depIdxs = []int32{
 	0,  // 0: trstctl.signing.v1.GenerateKeyRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
@@ -1050,21 +1295,25 @@ var file_internal_signing_proto_signer_proto_depIdxs = []int32{
 	3,  // 10: trstctl.signing.v1.SignRequest.purpose:type_name -> trstctl.signing.v1.KeyPurpose
 	5,  // 11: trstctl.signing.v1.DestroyKeyRequest.handle:type_name -> trstctl.signing.v1.KeyHandle
 	4,  // 12: trstctl.signing.v1.HealthResponse.status:type_name -> trstctl.signing.v1.HealthResponse.Status
-	6,  // 13: trstctl.signing.v1.SignerService.GenerateKey:input_type -> trstctl.signing.v1.GenerateKeyRequest
-	8,  // 14: trstctl.signing.v1.SignerService.GetPublicKey:input_type -> trstctl.signing.v1.GetPublicKeyRequest
-	10, // 15: trstctl.signing.v1.SignerService.Sign:input_type -> trstctl.signing.v1.SignRequest
-	12, // 16: trstctl.signing.v1.SignerService.DestroyKey:input_type -> trstctl.signing.v1.DestroyKeyRequest
-	14, // 17: trstctl.signing.v1.SignerService.Health:input_type -> trstctl.signing.v1.HealthRequest
-	7,  // 18: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
-	9,  // 19: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
-	11, // 20: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
-	13, // 21: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
-	15, // 22: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
-	18, // [18:23] is the sub-list for method output_type
-	13, // [13:18] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	0,  // 13: trstctl.signing.v1.MintSuccessorRequest.target_algorithm:type_name -> trstctl.signing.v1.Algorithm
+	0,  // 14: trstctl.signing.v1.MintSuccessorResponse.successor_algorithm:type_name -> trstctl.signing.v1.Algorithm
+	6,  // 15: trstctl.signing.v1.SignerService.GenerateKey:input_type -> trstctl.signing.v1.GenerateKeyRequest
+	8,  // 16: trstctl.signing.v1.SignerService.GetPublicKey:input_type -> trstctl.signing.v1.GetPublicKeyRequest
+	10, // 17: trstctl.signing.v1.SignerService.Sign:input_type -> trstctl.signing.v1.SignRequest
+	12, // 18: trstctl.signing.v1.SignerService.DestroyKey:input_type -> trstctl.signing.v1.DestroyKeyRequest
+	14, // 19: trstctl.signing.v1.SignerService.Health:input_type -> trstctl.signing.v1.HealthRequest
+	16, // 20: trstctl.signing.v1.SignerService.MintSuccessor:input_type -> trstctl.signing.v1.MintSuccessorRequest
+	7,  // 21: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
+	9,  // 22: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
+	11, // 23: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
+	13, // 24: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
+	15, // 25: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
+	17, // 26: trstctl.signing.v1.SignerService.MintSuccessor:output_type -> trstctl.signing.v1.MintSuccessorResponse
+	21, // [21:27] is the sub-list for method output_type
+	15, // [15:21] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_internal_signing_proto_signer_proto_init() }
@@ -1078,7 +1327,7 @@ func file_internal_signing_proto_signer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_signing_proto_signer_proto_rawDesc), len(file_internal_signing_proto_signer_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   11,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -6,7 +6,11 @@ import (
 	"context"
 	"errors"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/crypto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // SuccessionMinter is a generic successor-minting extension attached to the AN-4
@@ -63,10 +67,12 @@ func WithSuccessionMinter(m SuccessionMinter) ServerOption {
 	}
 }
 
-// MintSuccessor dispatches to the attached minter, failing closed when none is
-// attached. It is the Go entry point that the edition RPC handler and tests use;
-// the wire RPC is added with generated code under the buf compatibility gates.
-func (s *Server) MintSuccessor(ctx context.Context, req MintRequest) (MintResult, error) {
+// mintSuccessor dispatches to the attached minter, failing closed when none is
+// attached. It is the in-process Go entry point; the exported gRPC handler
+// Server.MintSuccessor (server.go, satisfying signerpb.SignerServiceServer) calls
+// it after decoding the wire request, so the same custody discipline applies
+// whether a mint arrives in-process or over the transport (INT-01).
+func (s *Server) mintSuccessor(ctx context.Context, req MintRequest) (MintResult, error) {
 	s.mu.Lock()
 	m := s.minter
 	s.mu.Unlock()
@@ -74,4 +80,28 @@ func (s *Server) MintSuccessor(ctx context.Context, req MintRequest) (MintResult
 		return MintResult{}, ErrNoMinter
 	}
 	return m.MintSuccessor(ctx, req)
+}
+
+// MintSuccessor is the gRPC handler that satisfies signerpb.SignerServiceServer
+// (INT-01). It decodes the wire request, dispatches to the attached minter inside
+// the signer, and returns only public material — the successor public key and the
+// opaque encoded record. It fails closed with UNIMPLEMENTED when no minter is
+// attached (core-only or unlicensed signer). No private key crosses the boundary:
+// the control plane can request a succession over this RPC but cannot forge one,
+// because it never obtains the key material (claims 1/12/49).
+func (s *Server) MintSuccessor(ctx context.Context, req *signerpb.MintSuccessorRequest) (*signerpb.MintSuccessorResponse, error) {
+	mreq, err := mintRequestFromProto(req)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.mintSuccessor(ctx, mreq)
+	if err != nil {
+		if errors.Is(err, ErrNoMinter) {
+			return nil, status.Error(codes.Unimplemented, err.Error())
+		}
+		// The minter's typed refusals (epoch/strength/policy/attestation/dual-control)
+		// are precondition failures the caller can inspect via the status message.
+		return nil, status.Errorf(codes.FailedPrecondition, "mint successor: %v", err)
+	}
+	return mintResultToProto(res), nil
 }

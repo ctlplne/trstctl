@@ -61,6 +61,21 @@ func DialMTLS(addr string, tlsCfg mtls.SignerPeerConfig, serverName string) (*Cl
 // Close closes the underlying connection.
 func (c *Client) Close() error { return c.conn.Close() }
 
+// MintSuccessor asks the isolated signer to mint a dual-signed PCAS succession
+// record over the authenticated transport (INT-01). The request carries no private
+// key material (the predecessor is a handle); the response carries only the
+// successor public key and the opaque encoded record. This method makes *Client a
+// remote succession minter: it satisfies the control-plane orchestrator's Minter
+// interface, so the control-plane process requests successions without ever
+// constructing a key backend or holding key material (claims 1/12/49).
+func (c *Client) MintSuccessor(ctx context.Context, req MintRequest) (MintResult, error) {
+	resp, err := c.svc.MintSuccessor(ctx, mintRequestToProto(req))
+	if err != nil {
+		return MintResult{}, err
+	}
+	return mintResultFromProto(resp), nil
+}
+
 // DialReady connects to a signer at socketPath and waits up to timeout for it to
 // report SERVING. The control plane uses it to attach to an externally deployed
 // signer (R3.2 external mode), rather than supervising a child.

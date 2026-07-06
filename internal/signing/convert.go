@@ -91,6 +91,81 @@ func paddingToProto(p crypto.RSAPadding) signerpb.RSAPadding {
 	return signerpb.RSAPadding_RSA_PADDING_PKCS1V15
 }
 
+// mintRequestFromProto decodes a wire MintSuccessorRequest into the in-signer
+// MintRequest (INT-01). It never carries private key material — the predecessor is
+// a handle only.
+func mintRequestFromProto(req *signerpb.MintSuccessorRequest) (MintRequest, error) {
+	if req == nil {
+		return MintRequest{}, status.Error(codes.InvalidArgument, "nil mint request")
+	}
+	alg, err := algorithmFromProto(req.GetTargetAlgorithm())
+	if err != nil {
+		return MintRequest{}, err
+	}
+	return MintRequest{
+		IdentityID:               req.GetIdentityId(),
+		TenantID:                 req.GetTenantId(),
+		DeploymentScope:          req.GetDeploymentScope(),
+		PredecessorHandle:        req.GetPredecessorHandle(),
+		AssertedPredecessorEpoch: req.GetAssertedPredecessorEpoch(),
+		TargetAlgorithm:          alg,
+		PolicyRef:                req.GetPolicyRef(),
+		PolicyDecision:           req.GetPolicyDecision(),
+		Authorization:            req.GetAuthorization(),
+		BreakGlass:               req.GetBreakGlass(),
+		Attestation:              req.GetAttestation(),
+		NotBefore:                req.GetNotBefore(),
+		NotAfter:                 req.GetNotAfter(),
+	}, nil
+}
+
+// mintResultToProto encodes an in-signer MintResult for the wire (INT-01). Only
+// public material crosses the boundary.
+func mintResultToProto(res MintResult) *signerpb.MintSuccessorResponse {
+	return &signerpb.MintSuccessorResponse{
+		Epoch:              res.Epoch,
+		SuccessorAlgorithm: algorithmToProto(res.SuccessorAlgorithm),
+		SuccessorPublicKey: res.SuccessorPublicDER,
+		EncodedRecord:      res.EncodedRecord,
+	}
+}
+
+// mintRequestToProto encodes an in-signer MintRequest for the wire, used by the
+// control-plane client (INT-01).
+func mintRequestToProto(req MintRequest) *signerpb.MintSuccessorRequest {
+	return &signerpb.MintSuccessorRequest{
+		IdentityId:               req.IdentityID,
+		TenantId:                 req.TenantID,
+		DeploymentScope:          req.DeploymentScope,
+		PredecessorHandle:        req.PredecessorHandle,
+		AssertedPredecessorEpoch: req.AssertedPredecessorEpoch,
+		TargetAlgorithm:          algorithmToProto(req.TargetAlgorithm),
+		PolicyRef:                req.PolicyRef,
+		PolicyDecision:           req.PolicyDecision,
+		Authorization:            req.Authorization,
+		BreakGlass:               req.BreakGlass,
+		Attestation:              req.Attestation,
+		NotBefore:                req.NotBefore,
+		NotAfter:                 req.NotAfter,
+	}
+}
+
+// mintResultFromProto decodes a wire MintSuccessorResponse for the client (INT-01).
+// The authoritative successor algorithm is also bound inside the encoded record, so
+// an unknown enum here degrades to the empty algorithm rather than an error.
+func mintResultFromProto(resp *signerpb.MintSuccessorResponse) MintResult {
+	if resp == nil {
+		return MintResult{}
+	}
+	alg, _ := algorithmFromProto(resp.GetSuccessorAlgorithm())
+	return MintResult{
+		Epoch:              resp.GetEpoch(),
+		SuccessorAlgorithm: alg,
+		SuccessorPublicDER: resp.GetSuccessorPublicKey(),
+		EncodedRecord:      resp.GetEncodedRecord(),
+	}
+}
+
 // validateSignRequest is the request-parser guard fuzzed by the protocol fuzz
 // test. It must never panic on arbitrary input and must reject malformed
 // requests with a structured error.

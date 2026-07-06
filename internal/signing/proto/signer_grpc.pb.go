@@ -30,11 +30,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SignerService_GenerateKey_FullMethodName  = "/trstctl.signing.v1.SignerService/GenerateKey"
-	SignerService_GetPublicKey_FullMethodName = "/trstctl.signing.v1.SignerService/GetPublicKey"
-	SignerService_Sign_FullMethodName         = "/trstctl.signing.v1.SignerService/Sign"
-	SignerService_DestroyKey_FullMethodName   = "/trstctl.signing.v1.SignerService/DestroyKey"
-	SignerService_Health_FullMethodName       = "/trstctl.signing.v1.SignerService/Health"
+	SignerService_GenerateKey_FullMethodName   = "/trstctl.signing.v1.SignerService/GenerateKey"
+	SignerService_GetPublicKey_FullMethodName  = "/trstctl.signing.v1.SignerService/GetPublicKey"
+	SignerService_Sign_FullMethodName          = "/trstctl.signing.v1.SignerService/Sign"
+	SignerService_DestroyKey_FullMethodName    = "/trstctl.signing.v1.SignerService/DestroyKey"
+	SignerService_Health_FullMethodName        = "/trstctl.signing.v1.SignerService/Health"
+	SignerService_MintSuccessor_FullMethodName = "/trstctl.signing.v1.SignerService/MintSuccessor"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -59,6 +60,15 @@ type SignerServiceClient interface {
 	DestroyKey(ctx context.Context, in *DestroyKeyRequest, opts ...grpc.CallOption) (*DestroyKeyResponse, error)
 	// Health reports liveness and readiness. It returns no secret material.
 	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
+	// MintSuccessor mints a dual-signed PCAS succession record inside the signer
+	// (INT-01). No private key crosses the boundary: the predecessor is referenced
+	// by an opaque handle held in the signer, the successor key is generated inside
+	// the signer, and only the successor public key and the opaque encoded record
+	// are returned. A succession minter must be attached (WithSuccessionMinter) or
+	// the signer fails closed with UNIMPLEMENTED. This is the wire path by which the
+	// control plane requests a succession without ever obtaining private key
+	// material (claims 1/12/49): the control plane can request, but cannot forge.
+	MintSuccessor(ctx context.Context, in *MintSuccessorRequest, opts ...grpc.CallOption) (*MintSuccessorResponse, error)
 }
 
 type signerServiceClient struct {
@@ -119,6 +129,16 @@ func (c *signerServiceClient) Health(ctx context.Context, in *HealthRequest, opt
 	return out, nil
 }
 
+func (c *signerServiceClient) MintSuccessor(ctx context.Context, in *MintSuccessorRequest, opts ...grpc.CallOption) (*MintSuccessorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MintSuccessorResponse)
+	err := c.cc.Invoke(ctx, SignerService_MintSuccessor_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SignerServiceServer is the server API for SignerService service.
 // All implementations must embed UnimplementedSignerServiceServer
 // for forward compatibility.
@@ -141,6 +161,15 @@ type SignerServiceServer interface {
 	DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error)
 	// Health reports liveness and readiness. It returns no secret material.
 	Health(context.Context, *HealthRequest) (*HealthResponse, error)
+	// MintSuccessor mints a dual-signed PCAS succession record inside the signer
+	// (INT-01). No private key crosses the boundary: the predecessor is referenced
+	// by an opaque handle held in the signer, the successor key is generated inside
+	// the signer, and only the successor public key and the opaque encoded record
+	// are returned. A succession minter must be attached (WithSuccessionMinter) or
+	// the signer fails closed with UNIMPLEMENTED. This is the wire path by which the
+	// control plane requests a succession without ever obtaining private key
+	// material (claims 1/12/49): the control plane can request, but cannot forge.
+	MintSuccessor(context.Context, *MintSuccessorRequest) (*MintSuccessorResponse, error)
 	mustEmbedUnimplementedSignerServiceServer()
 }
 
@@ -165,6 +194,9 @@ func (UnimplementedSignerServiceServer) DestroyKey(context.Context, *DestroyKeyR
 }
 func (UnimplementedSignerServiceServer) Health(context.Context, *HealthRequest) (*HealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Health not implemented")
+}
+func (UnimplementedSignerServiceServer) MintSuccessor(context.Context, *MintSuccessorRequest) (*MintSuccessorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MintSuccessor not implemented")
 }
 func (UnimplementedSignerServiceServer) mustEmbedUnimplementedSignerServiceServer() {}
 func (UnimplementedSignerServiceServer) testEmbeddedByValue()                       {}
@@ -277,6 +309,24 @@ func _SignerService_Health_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_MintSuccessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MintSuccessorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).MintSuccessor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_MintSuccessor_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).MintSuccessor(ctx, req.(*MintSuccessorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SignerService_ServiceDesc is the grpc.ServiceDesc for SignerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -303,6 +353,10 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Health",
 			Handler:    _SignerService_Health_Handler,
+		},
+		{
+			MethodName: "MintSuccessor",
+			Handler:    _SignerService_MintSuccessor_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
