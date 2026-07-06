@@ -18,11 +18,34 @@ import (
 	eepqcmigration "trstctl.com/trstctl/ee/pqcmigration"
 	eeprovider "trstctl.com/trstctl/ee/provider"
 	eesilo "trstctl.com/trstctl/ee/silo"
+	eesuccessionapi "trstctl.com/trstctl/ee/succession/api"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/server"
 )
+
+// appendAPIFactory composes two licensed-API-options factories so multiple gated
+// features can each contribute routes to the single deps.LicensedAPIOptionsFactory
+// field, order-independently. A nil existing factory yields add alone.
+func appendAPIFactory(existing, add editionseam.LicensedAPIOptionsFactory) editionseam.LicensedAPIOptionsFactory {
+	if existing == nil {
+		return add
+	}
+	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
+		a, err := existing(d)
+		if err != nil {
+			return nil, err
+		}
+		b, err := add(d)
+		if err != nil {
+			return nil, err
+		}
+		return append(a, b...), nil
+	}
+}
 
 // attachEE is the single sanctioned open-core seam. S-E0 attaches no features:
 // the table is empty and behavior stays Community. Later cards add exactly one
@@ -40,12 +63,16 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		// API/orchestrator and the ee/succession/store migrations key off
 		// deps.EnablePCAS). Unlicensed or core-only deployments run zero PCAS jobs.
 		deps.EnablePCAS = true
+		// Attach the PCAS external API (request-succession, chain fetch, RP acks)
+		// through the feature-neutral route seam, composing with any other licensed
+		// API routes (e.g. PQC migration) already registered.
+		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eesuccessionapi.NewAPIOptionsFactory())
 		if log != nil {
 			log.Info("Enterprise PCAS attached", slog.String("feature", string(license.FeaturePCAS)))
 		}
 	}
 	if lic != nil && lic.Has(license.FeaturePQC) {
-		deps.LicensedAPIOptionsFactory = eepqcmigration.NewAPIOptionsFactory()
+		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eepqcmigration.NewAPIOptionsFactory())
 		deps.LicensedOutboxFactory = eepqcmigration.NewOutboxFactory()
 		deps.LicensedLeafSigner = eepqc.SignHybridLeafFromCSRWithProfile
 		deps.LicensedCSRInspector = eepqc.InspectHybridCSR

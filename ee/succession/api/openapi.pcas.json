@@ -1,0 +1,226 @@
+{
+  "components": {
+    "schemas": {
+      "PCASAck": {
+        "type": "object",
+        "properties": {
+          "ack_id": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "relying_party": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ack_id",
+          "identity_id",
+          "epoch",
+          "relying_party"
+        ]
+      },
+      "PCASAckRequest": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "relying_party": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "epoch",
+          "relying_party",
+          "signature"
+        ]
+      },
+      "PCASSuccessionAck": {
+        "type": "object",
+        "properties": {
+          "credential_type": {
+            "type": "string"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "queued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target_algorithm": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "identity_id",
+          "status"
+        ]
+      },
+      "PCASSuccessionChain": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "identity_id",
+          "records",
+          "count"
+        ]
+      },
+      "PCASSuccessionRequest": {
+        "type": "object",
+        "properties": {
+          "credential_type": {
+            "type": "string"
+          },
+          "deployment_scope": {
+            "type": "string"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "policy_ref": {
+            "type": "string"
+          },
+          "target_algorithm": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "credential_type",
+          "target_algorithm"
+        ]
+      }
+    }
+  },
+  "info": {
+    "description": "Proof-Carrying Algorithm Succession external surface (ee/, LicenseRef-trstctl-EE).",
+    "title": "trstctl PCAS API",
+    "version": "v1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/pcas/acks": {
+      "post": {
+        "operationId": "recordRPAck",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASAckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "success"
+          }
+        },
+        "summary": "Record a signed relying-party post-quantum capability acknowledgement"
+      }
+    },
+    "/api/v1/pcas/chain": {
+      "get": {
+        "operationId": "getSuccessionChain",
+        "parameters": [
+          {
+            "description": "stable identity identifier",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Fetch an identity's succession chain for offline relying-party verification"
+      }
+    },
+    "/api/v1/pcas/successions": {
+      "post": {
+        "operationId": "requestSuccession",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASSuccessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "success"
+          }
+        },
+        "summary": "Request an algorithm succession for an identity (idempotent)"
+      }
+    }
+  }
+}
