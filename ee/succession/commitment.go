@@ -51,6 +51,14 @@ var algRegistry = map[crypto.Algorithm]uint64{
 	crypto.Algorithm("SLH-DSA-256s"):         36,
 	crypto.Algorithm("Ed25519+ML-DSA-65"):    40,
 	crypto.Algorithm("ECDSA-P256+ML-DSA-65"): 41,
+
+	// ML-KEM key-establishment identifiers (confidentiality-key succession, PCAS-14 /
+	// claims 15, 30). Registered so a commitment may name a KEM successor or
+	// predecessor; possession for these is proven by a decapsulation transcript or a
+	// paired epoch-bound signing key, not by a signature over the commitment.
+	crypto.Algorithm("ML-KEM-512"):  50,
+	crypto.Algorithm("ML-KEM-768"):  51,
+	crypto.Algorithm("ML-KEM-1024"): 52,
 }
 
 func registryID(alg crypto.Algorithm) (uint64, error) {

@@ -233,6 +233,14 @@ type CutoverRequest struct {
 	Successor     Successor
 	RetiredAlg    string
 	SuccessionRef []byte // opaque reference to the dual-signed succession record (PCAS-04)
+
+	// PreRetire, when set, is a precondition evaluated after the quorum is met and
+	// the succession is announced, but BEFORE the predecessor is revoked/zeroized. A
+	// non-nil error blocks retirement (the succession stands, the predecessor is left
+	// usable). PCAS-14 supplies a re-wrap gate here so a confidentiality (KEM) key is
+	// not retired until data protected under it has been re-wrapped under the
+	// successor.
+	PreRetire func(ctx context.Context) error
 }
 
 // CutoverResult is the outcome of an evidence-gated cutover.
@@ -295,6 +303,14 @@ func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime t
 		RecordDigest:          req.SuccessionRef,
 	}); err != nil {
 		return CutoverResult{QuorumMet: true, Quorum: q, AckSetDigest: digest}, err
+	}
+
+	// Re-wrap (or any) precondition gates retirement: if it fails, the succession
+	// stands but the predecessor is NOT retired (PCAS-14 re-wrap-before-retire).
+	if req.PreRetire != nil {
+		if err := req.PreRetire(ctx); err != nil {
+			return CutoverResult{QuorumMet: true, Quorum: q, AckSetDigest: digest, Advanced: true}, fmt.Errorf("retirement: pre-retire gate: %w", err)
+		}
 	}
 
 	// claim 8 / INV-9: revoke (fail-closed) THEN zeroize the predecessor.
