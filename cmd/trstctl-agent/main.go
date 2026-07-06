@@ -88,6 +88,17 @@ func main() {
 	sshTrustReloadCmd := flag.String("ssh-trust-reload-cmd", "", "validated argv command line to reload sshd after a validated config change (e.g. \"systemctl reload sshd\"); shell metacharacters are rejected; required for --ssh-trust-add-ca")
 	sshTrustValidateCmd := flag.String("ssh-trust-validate-cmd", "sshd -t", "validated argv command line that validates sshd config before reload; shell metacharacters are rejected")
 	sshTrustHealthCmd := flag.String("ssh-trust-health-cmd", "", "validated argv command line that proves sshd is healthy after reload (for example, a localhost SSH handshake); shell metacharacters are rejected; required for --ssh-trust-add-ca")
+	// Workload-held predecessor co-sign (PCAS claim 19, INT-16) — DEFAULT OFF. When
+	// --workload-cosign-listen is set, the agent holds the workload's predecessor key
+	// and serves the succession co-sign RPC so the control plane can mint a
+	// workload-held succession without the platform ever holding the leaf key. It is a
+	// self-contained mode (no enrollment settings needed) and requires the enterprise
+	// build.
+	workloadCoSignListen := flag.String("workload-cosign-listen", "", "serve the workload-held predecessor co-sign service at this address (\"unix:/path\" or \"host:port\"); enterprise build only")
+	workloadIdentity := flag.String("workload-identity", "", "workload identity id the agent co-signs successions for")
+	workloadTenant := flag.String("workload-tenant", "", "workload tenant id for the co-sign binding")
+	workloadDeployment := flag.String("workload-deployment", "", "workload deployment scope for the co-sign binding")
+	workloadPredecessorKey := flag.String("workload-predecessor-key", "", "path to the workload predecessor key (PKCS#8 PEM) the agent holds and co-signs with")
 	flag.Parse()
 
 	if *showVersion {
@@ -138,6 +149,25 @@ func main() {
 			Once:      *secretInjectOnce,
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Workload-held predecessor co-sign service (INT-16): a self-contained, default-off
+	// mode that serves the succession co-sign RPC and blocks until signal. It needs no
+	// enroll/connection settings, so it runs before the steady-state agent loop.
+	if *workloadCoSignListen != "" {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		if err := runWorkloadCoSign(ctx, workloadCoSignConfig{
+			Listen:             *workloadCoSignListen,
+			DeploymentScope:    *workloadDeployment,
+			IdentityID:         *workloadIdentity,
+			TenantID:           *workloadTenant,
+			PredecessorKeyPath: *workloadPredecessorKey,
+		}); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(1)
 		}

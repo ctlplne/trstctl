@@ -124,7 +124,11 @@ func isEEPath(filename string) bool {
 
 func isTaggedAttachSeam(filename string) bool {
 	return strings.HasSuffix(filename, "/cmd/trstctl/ee_attach.go") ||
-		strings.HasSuffix(filename, "/cmd/trstctl-signer/ee_attach.go")
+		strings.HasSuffix(filename, "/cmd/trstctl-signer/ee_attach.go") ||
+		// The workload agent's co-sign seam (INT-16): the enterprise build serves the
+		// ee/succession/agent CoSignerService; the core build stubs it out. Behind the
+		// same !trstctl_core tag as the other attach seams.
+		strings.HasSuffix(filename, "/cmd/trstctl-agent/cosign_attach.go")
 }
 
 func isPQCAllowedCorePath(filename string) bool {
