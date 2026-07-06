@@ -32,6 +32,11 @@ const (
 	// TypeRewrapCompleted records that all re-wrap stages for a predecessor completed;
 	// the predecessor's retirement condition consumes this event (claim 39).
 	TypeRewrapCompleted = "nhi.rewrap.completed"
+	// TypeMisissuance records a detected algorithm-epoch equivocation: two distinct
+	// dual-signed records for one identity at the same epoch (claims 11, 28). A monitor
+	// emits it, binding both record commitments and the named minting signers, so the
+	// misissuance is durable and attributable on the ledger.
+	TypeMisissuance = "nhi.algorithm.misissuance"
 )
 
 // Baseline (v1) payload-shape versions for each type (SCHEMA-001). Bump the
@@ -46,6 +51,7 @@ const (
 	RefusalSchemaV1         = 1
 	RewrapStageSchemaV1     = 1
 	RewrapCompletedSchemaV1 = 1
+	MisissuanceSchemaV1     = 1
 )
 
 // Coarse algorithm-class hints carried on a succession event for posture only.
@@ -157,6 +163,23 @@ type RewrapCompletedV1 struct {
 
 func (RewrapCompletedV1) isSuccessionPayload() {}
 
+// MisissuanceV1 records a detected algorithm-epoch equivocation (claims 11, 28): two
+// distinct dual-signed records for one identity at the same epoch. It binds both
+// record commitments and, when the records carry verifiable signer attestations, the
+// named minting signers — so the misissuance is durable and attributable from the
+// ledger event alone (the self-contained proof re-derives from the two records).
+type MisissuanceV1 struct {
+	IdentityID    string `json:"identity_id"`
+	TenantID      string `json:"tenant_id"`
+	Epoch         uint64 `json:"epoch"`
+	RecordADigest []byte `json:"record_a_digest,omitempty"`
+	RecordBDigest []byte `json:"record_b_digest,omitempty"`
+	SignerA       string `json:"signer_a,omitempty"`
+	SignerB       string `json:"signer_b,omitempty"`
+}
+
+func (MisissuanceV1) isSuccessionPayload() {}
+
 // Unknown is returned for an event whose type is not a succession type, or whose
 // (known-type) schema version is newer than this build understands. It carries
 // no posture effect; the fold skips it. This is the forward-compatible "skip"
@@ -188,6 +211,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeRewrapStage, RewrapStageSchemaV1, v.TenantID, v)
 	case RewrapCompletedV1:
 		return marshalEvent(TypeRewrapCompleted, RewrapCompletedSchemaV1, v.TenantID, v)
+	case MisissuanceV1:
+		return marshalEvent(TypeMisissuance, MisissuanceSchemaV1, v.TenantID, v)
 	default:
 		return eventspec.Event{}, fmt.Errorf("succession: cannot encode payload of type %T", p)
 	}
@@ -270,6 +295,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RewrapCompletedV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeMisissuance:
+		if ver > MisissuanceSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p MisissuanceV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}
