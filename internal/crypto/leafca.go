@@ -724,6 +724,31 @@ func parseOID(s string) (asn1.ObjectIdentifier, error) {
 	return oid, nil
 }
 
+// LeafExtensionValue extracts the raw DER value of the non-core X.509 extension with
+// the given dotted OID from a parsed certificate. It routes the crypto/x509 parse
+// through the internal/crypto boundary (AN-3) so edition packages can read a custom
+// extension they had this package emit (for example a PCAS succession-authority-epoch
+// extension) without importing crypto/* themselves. found is false when the cert
+// carries no such extension.
+func LeafExtensionValue(certDER []byte, oid string) (value []byte, critical, found bool, err error) {
+	target, err := parseOID(oid)
+	if err != nil {
+		return nil, false, false, fmt.Errorf("crypto: extension OID %q: %w", oid, err)
+	}
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, false, false, fmt.Errorf("crypto: parse certificate: %w", err)
+	}
+	for _, ext := range cert.Extensions {
+		if ext.Id.Equal(target) {
+			out := make([]byte, len(ext.Value))
+			copy(out, ext.Value)
+			return out, ext.Critical, true, nil
+		}
+	}
+	return nil, false, false, nil
+}
+
 func trimLeadingDot(s string) string { return strings.TrimPrefix(s, ".") }
 
 func hasDotSuffix(name, suffix string) bool { return strings.HasSuffix(name, "."+suffix) }
