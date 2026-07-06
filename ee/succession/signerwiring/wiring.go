@@ -22,9 +22,13 @@ type Config struct {
 	// Keygen generates successor keys INSIDE the signer. Default: software backend.
 	// INT-07 replaces this with a module-resident (PKCS#11/KMS) backend.
 	Keygen crypto.KeyGenerator
-	// Floors is the durable per-identity epoch floor. Default: interim in-memory.
-	// INT-05 replaces this with a floor durable within the signer custody boundary.
+	// Floors is the per-identity epoch floor. Default: interim in-memory (or durable
+	// when FloorDir is set, INT-05).
 	Floors minter.FloorStore
+	// FloorDir, when set and Floors is nil, selects a DURABLE, restart-surviving
+	// file-backed epoch floor under this directory within the signer custody boundary
+	// (INT-05, claim 21). Empty (and Floors nil) => interim in-memory floor.
+	FloorDir string
 	// AttestSigner, when set, countersigns every minted record with the signer's
 	// attestation key. INT-11 makes attestation mandatory with a frozen vector.
 	AttestSigner crypto.Signer
@@ -43,7 +47,15 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 	}
 	floors := cfg.Floors
 	if floors == nil {
-		floors = newInterimFloorStore()
+		if cfg.FloorDir != "" {
+			df, err := minter.NewDurableFloorStore(cfg.FloorDir)
+			if err != nil {
+				return nil, err
+			}
+			floors = df
+		} else {
+			floors = newInterimFloorStore()
+		}
 	}
 	opts := []minter.Option{
 		// Downgrade refusal on by default (claim 17): a weaker-class successor is

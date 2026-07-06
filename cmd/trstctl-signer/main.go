@@ -108,7 +108,7 @@ func main() {
 		defer authz.Destroy()
 		opts = append(opts, signing.WithAuthorizer(authz))
 	}
-	opts = appendEEOptions(opts, lic)
+	opts = appendEEOptions(opts, lic, *keystore)
 
 	// With a key store, persist keys sealed at rest so a restart preserves the
 	// issuing CA instead of silently rotating it (R3.2). Without one, keys are

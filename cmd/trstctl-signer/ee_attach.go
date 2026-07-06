@@ -23,10 +23,13 @@ import (
 // depend on the NATS-free internal/eventspec, not internal/events, so the minter's
 // transitive closure links no message bus and no SQL driver (enforced by
 // TestSignerDependencyClosure / TestNoHTTPServerLinkedIntoSigner).
-func appendEEOptions(opts []signing.ServerOption, lic *license.Manager) []signing.ServerOption {
+func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir string) []signing.ServerOption {
 	opts = append(opts, signing.WithKeyFactory(eepqc.NewSignerKeyFactory()))
 	if lic != nil && lic.Has(license.FeaturePCAS) {
-		m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer"})
+		// floorDir (the signer keystore dir) gives a DURABLE, restart-surviving epoch
+		// floor (INT-05); empty (in-memory signer) => interim floor, matching ephemeral
+		// keys.
+		m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer", FloorDir: floorDir})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trstctl-signer: build PCAS minter: %v\n", err)
 			os.Exit(1)
