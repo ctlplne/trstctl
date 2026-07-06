@@ -17,6 +17,7 @@ import (
 	"github.com/nats-io/nuid"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/tenancy"
 )
 
@@ -30,34 +31,15 @@ const (
 	importMissingField = "events: import requires source event id and time"
 )
 
-// DefaultSchemaVersion is the schema version stamped on every appended event
-// whose producer does not set one explicitly, and the version assumed for a
-// legacy stored event that predates the field (SCHEMA-001). It is the baseline
-// (v1) payload shape for each event type; bump the producer's SchemaVersion when
-// an existing type's payload shape changes so a version-aware projector can tell
-// old events from new ones on replay rather than silently mis-projecting them.
-const DefaultSchemaVersion = 1
+// DefaultSchemaVersion is defined in internal/eventspec (a NATS-free leaf) and
+// re-exported here so existing events.DefaultSchemaVersion references keep working.
+const DefaultSchemaVersion = eventspec.DefaultSchemaVersion
 
-// Event is the immutable envelope appended to the AN-2 event log. The event log
-// is the source of truth; both the relational read state and the audit trail
-// are projections of these events.
-type Event struct {
-	ID       string    // unique event id (assigned on Append if empty)
-	Type     string    // event type, e.g. "tenant.registered"
-	TenantID string    // AN-1: every event carries its tenant
-	Time     time.Time // emit time (assigned on Append if zero)
-	Data     []byte    // opaque domain payload
-	Sequence uint64    // stream sequence; assigned on Append and set on Replay
-	Actor    *Actor    // who performed the mutation (R2.1); nil for system/background events
-
-	// SchemaVersion is the payload-shape version of this event's Type (SCHEMA-001,
-	// AN-2). It is assigned DefaultSchemaVersion on Append when left zero, and is
-	// reconstructed on Replay (a legacy event with no stored version reads back as
-	// DefaultSchemaVersion). A projector dispatches on (Type, SchemaVersion) so a
-	// payload-shape change to an existing type cannot silently mis-project on a
-	// rebuild — the new shape carries a new version and old events keep theirs.
-	SchemaVersion int
-}
+// Event is the immutable AN-2 event envelope. Its definition lives in
+// internal/eventspec so projection-only packages (e.g. ee/succession) can construct
+// and read events without linking the embedded message bus (AN-4); this alias keeps
+// every events.Event reference working and is the identical type.
+type Event = eventspec.Event
 
 // NewID returns an event-log-compatible identifier for producers that need to
 // derive durable payload fields from the event ID before appending the event.

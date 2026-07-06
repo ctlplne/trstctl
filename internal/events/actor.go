@@ -2,17 +2,16 @@
 
 package events
 
-import "context"
+import (
+	"context"
 
-// Actor identifies the authenticated caller responsible for an event — the "who"
-// of the who-did-what-when-under-what-authorization audit trail (R2.1, F9). It is
-// recorded on every event appended under a request context that carries it;
-// background or system appends leave it nil (honestly unattributed rather than
-// fabricated).
-type Actor struct {
-	Subject string   `json:"subject"`         // authenticated subject (token subject or OIDC sub)
-	Roles   []string `json:"roles,omitempty"` // role names the subject acted under (the "authorization")
-}
+	"trstctl.com/trstctl/internal/eventspec"
+)
+
+// Actor is defined in internal/eventspec (a NATS-free leaf) and re-exported here as
+// an alias so every events.Actor reference keeps working and stays the identical
+// type. The context helpers below operate on it.
+type Actor = eventspec.Actor
 
 type actorCtxKey struct{}
 

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventspec"
 )
 
 // Ledger event types for the NHI algorithm lifecycle, carried on the AN-2 event
@@ -172,7 +172,7 @@ func (Unknown) isSuccessionPayload() {}
 // Encode marshals a typed payload into an AN-2 event envelope, stamping the type
 // and baseline schema version and propagating the tenant (AN-1). ID, Time, and
 // Sequence are assigned by events.Log.Append.
-func Encode(p Payload) (events.Event, error) {
+func Encode(p Payload) (eventspec.Event, error) {
 	switch v := p.(type) {
 	case FindingV1:
 		return marshalEvent(TypeFinding, FindingSchemaV1, v.TenantID, v)
@@ -189,26 +189,26 @@ func Encode(p Payload) (events.Event, error) {
 	case RewrapCompletedV1:
 		return marshalEvent(TypeRewrapCompleted, RewrapCompletedSchemaV1, v.TenantID, v)
 	default:
-		return events.Event{}, fmt.Errorf("succession: cannot encode payload of type %T", p)
+		return eventspec.Event{}, fmt.Errorf("succession: cannot encode payload of type %T", p)
 	}
 }
 
-func marshalEvent(typ string, ver int, tenant string, v any) (events.Event, error) {
+func marshalEvent(typ string, ver int, tenant string, v any) (eventspec.Event, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
-		return events.Event{}, fmt.Errorf("succession: marshal %s: %w", typ, err)
+		return eventspec.Event{}, fmt.Errorf("succession: marshal %s: %w", typ, err)
 	}
-	return events.Event{Type: typ, TenantID: tenant, SchemaVersion: ver, Data: data}, nil
+	return eventspec.Event{Type: typ, TenantID: tenant, SchemaVersion: ver, Data: data}, nil
 }
 
 // Decode returns the typed payload for an AN-2 event. Unknown event types and
 // newer-than-known schema versions of known types decode to Unknown (skip) —
 // never an error and never a panic — so replay is forward-compatible and safe on
 // untrusted input. A malformed payload of a known type+version is an error.
-func Decode(e events.Event) (Payload, error) {
+func Decode(e eventspec.Event) (Payload, error) {
 	ver := e.SchemaVersion
 	if ver == 0 {
-		ver = events.DefaultSchemaVersion
+		ver = eventspec.DefaultSchemaVersion
 	}
 	switch e.Type {
 	case TypeFinding:

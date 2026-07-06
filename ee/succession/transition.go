@@ -6,7 +6,7 @@ import (
 	"errors"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventspec"
 )
 
 // ErrNotASuccession is returned by Succeed when the requested successor algorithm
@@ -39,9 +39,9 @@ type Transition struct {
 // with the nhi.algorithm.succession ledger event (PCAS-01) to append to the AN-2
 // log. It returns ErrNotASuccession — advancing nothing and emitting nothing —
 // when successorAlg equals the current bound identifier (claim 22 / INV-2).
-func (i *Identity) Succeed(successorAlg crypto.Algorithm, successorPubDER, proof []byte) (Transition, events.Event, error) {
+func (i *Identity) Succeed(successorAlg crypto.Algorithm, successorPubDER, proof []byte) (Transition, eventspec.Event, error) {
 	if successorAlg == i.alg {
-		return Transition{}, events.Event{}, ErrNotASuccession
+		return Transition{}, eventspec.Event{}, ErrNotASuccession
 	}
 	t := Transition{
 		IdentityID:           i.id,
@@ -66,7 +66,7 @@ func (i *Identity) Succeed(successorAlg crypto.Algorithm, successorPubDER, proof
 		RecordDigest:            cloneBytes(proof),
 	})
 	if err != nil {
-		return Transition{}, events.Event{}, err
+		return Transition{}, eventspec.Event{}, err
 	}
 	i.epoch++
 	i.alg = successorAlg

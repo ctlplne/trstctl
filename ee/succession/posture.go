@@ -5,7 +5,7 @@ package succession
 import (
 	"fmt"
 
-	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventspec"
 )
 
 // State is the per-identity cryptographic-posture state (FIG. 4). It advances
@@ -62,7 +62,7 @@ func stateForClass(class string) State {
 //
 // A malformed payload of a known type+version is a corruption error and fails
 // the fold closed rather than being silently dropped.
-func Fold(seq []events.Event) (Posture, error) {
+func Fold(seq []eventspec.Event) (Posture, error) {
 	p := make(Posture)
 	for i, e := range seq {
 		pl, err := Decode(e)
@@ -114,7 +114,7 @@ func Fold(seq []events.Event) (Posture, error) {
 }
 
 // Source is anything that yields an ordered AN-2 event sequence for replay.
-type Source interface{ Events() []events.Event }
+type Source interface{ Events() []eventspec.Event }
 
 // Replay folds every event yielded by src, in order, into the posture
 // projection. It is a thin convenience over Fold that reads from a Source.
@@ -125,14 +125,14 @@ func Replay(src Source) (Posture, error) {
 // MemSink is an in-memory, ordered AN-2 event sink. It is NOT a durable store
 // (PCAS-02 provides the serving copy); it exists so a posture projection can be
 // asserted by deterministic replay in tests and offline tooling.
-type MemSink struct{ evs []events.Event }
+type MemSink struct{ evs []eventspec.Event }
 
 // Append records e at the tail of the sink.
-func (m *MemSink) Append(e events.Event) { m.evs = append(m.evs, e) }
+func (m *MemSink) Append(e eventspec.Event) { m.evs = append(m.evs, e) }
 
 // Events returns a copy of the recorded events, in append order.
-func (m *MemSink) Events() []events.Event {
-	out := make([]events.Event, len(m.evs))
+func (m *MemSink) Events() []eventspec.Event {
+	out := make([]eventspec.Event, len(m.evs))
 	copy(out, m.evs)
 	return out
 }

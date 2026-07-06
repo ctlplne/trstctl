@@ -5,32 +5,33 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	eepqc "trstctl.com/trstctl/ee/pqc"
+	"trstctl.com/trstctl/ee/succession/signerwiring"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/signing"
 )
 
-// appendEEOptions attaches the Enterprise signer options.
+// appendEEOptions attaches the Enterprise signer options. The PCAS succession minter
+// is attached iff the deployment is licensed for PCAS (INT-02/INT-02a). Fail-closed:
+// no license, or a license without the PCAS feature, means no minter is attached and
+// the signer's MintSuccessor RPC returns UNIMPLEMENTED.
 //
-// The PCAS succession-minter attach (INT-02) is gated on lic.Has(FeaturePCAS) but
-// is DEFERRED to INT-02a. Importing the minter (ee/succession/signerwiring ->
-// ee/succession/minter -> ee/succession) currently drags internal/events, and thus
-// the embedded NATS client, into the sacred signer process — which the AN-4
-// dependency-closure guard (TestSignerDependencyClosure / TestNoHTTPServerLinked-
-// IntoSigner) correctly forbids: the isolated signer has no message bus and no SQL
-// driver. INT-02a decouples ee/succession's crypto primitives from the AN-2 event
-// layer so the minter's transitive closure is AN-4-clean; the attach block then
-// lands here. Until then, a PCAS-licensed signer attaches no minter and
-// MintSuccessor returns UNIMPLEMENTED (fail-closed) — the RPC path, resolver seam,
-// and production minter are proven by ee/succession/signerwiring's integration
-// tests, which serve a real signer with the minter attached.
+// Attaching the minter is AN-4-safe as of INT-02a: ee/succession's crypto primitives
+// depend on the NATS-free internal/eventspec, not internal/events, so the minter's
+// transitive closure links no message bus and no SQL driver (enforced by
+// TestSignerDependencyClosure / TestNoHTTPServerLinkedIntoSigner).
 func appendEEOptions(opts []signing.ServerOption, lic *license.Manager) []signing.ServerOption {
 	opts = append(opts, signing.WithKeyFactory(eepqc.NewSignerKeyFactory()))
-	// INT-02a will add here, once AN-4-clean:
-	//   if lic != nil && lic.Has(license.FeaturePCAS) {
-	//       m, _ := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer"})
-	//       opts = append(opts, signing.WithSuccessionMinter(m))
-	//   }
-	_ = lic
+	if lic != nil && lic.Has(license.FeaturePCAS) {
+		m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer"})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: build PCAS minter: %v\n", err)
+			os.Exit(1)
+		}
+		opts = append(opts, signing.WithSuccessionMinter(m))
+	}
 	return opts
 }
