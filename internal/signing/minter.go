@@ -105,3 +105,44 @@ func (s *Server) MintSuccessor(ctx context.Context, req *signerpb.MintSuccessorR
 	}
 	return mintResultToProto(res), nil
 }
+
+// PredecessorResolver resolves an in-signer predecessor key handle to a message
+// Signer whose private key never leaves the signer (INT-02). The attached
+// succession minter uses it to obtain predecessor keys this signer holds — for
+// example an issuing CA key under succession — so a mint resolves the predecessor
+// against the signer's own custody rather than any control-plane-supplied material.
+type PredecessorResolver interface {
+	ResolvePredecessor(handle string) (crypto.Signer, error)
+}
+
+// resolverAwareMinter is implemented by a succession minter that wants the signer's
+// own key custody injected as its predecessor resolver. Core defines only this
+// seam; the edition minter opts in, so core never imports ee/ and the minter never
+// needs a standalone key store.
+type resolverAwareMinter interface {
+	UsePredecessorResolver(PredecessorResolver)
+}
+
+// ResolvePredecessor returns a message-Signer view of a held key by handle, so the
+// attached succession minter can use it as a predecessor. Private key bytes never
+// leave the signer: signing goes through the in-signer DigestSigner. It implements
+// PredecessorResolver.
+func (s *Server) ResolvePredecessor(handle string) (crypto.Signer, error) {
+	held, err := s.lookup(&signerpb.KeyHandle{Id: handle})
+	if err != nil {
+		return nil, err
+	}
+	return crypto.SignerFromDigestSigner(held.signer), nil
+}
+
+// bindMinterResolver injects this signer's key custody into the attached minter as
+// its predecessor resolver, if the minter opts into the seam (INT-02). Called once
+// at construction, before serving, so no lock is required.
+func (s *Server) bindMinterResolver() {
+	if s.minter == nil {
+		return
+	}
+	if ra, ok := s.minter.(resolverAwareMinter); ok {
+		ra.UsePredecessorResolver(s)
+	}
+}

@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/kmswrap"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/signing"
 )
 
@@ -49,6 +50,11 @@ func main() {
 	mtlsKey := flag.String("mtls-key", "", "PEM private key for --mtls-cert (required with --mtls-listen)")
 	mtlsPeerCA := flag.String("mtls-peer-ca", "", "PEM CA bundle that anchors the control plane's client certificate (required with --mtls-listen)")
 	mtlsPeerPin := flag.String("mtls-peer-pin", "", "hex SHA-256 of the control plane client certificate's public key, pinned both ways (required with --mtls-listen)")
+
+	// PCAS succession minting (ee/) is attached only when the license grants the
+	// PCAS feature (INT-02). Fail-closed: no --license, or a license without PCAS,
+	// means the signer mints no successions and MintSuccessor returns UNIMPLEMENTED.
+	licenseFile := flag.String("license", "", "path to the signed license file; enables PCAS succession minting only when the license grants the PCAS feature (fail-closed)")
 	flag.Parse()
 
 	if *showVersion {
@@ -80,6 +86,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Load the license (if provided) so the EE attach seam can gate PCAS minting on
+	// it. An absent license leaves lic nil => the signer mints no successions.
+	var lic *license.Manager
+	if *licenseFile != "" {
+		m, err := license.Load(*licenseFile, license.TrustedKeys())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: load license: %v\n", err)
+			os.Exit(1)
+		}
+		lic = m
+	}
+
 	var opts []signing.ServerOption
 	if *authSecret != "" {
 		authz, err := signing.LoadOrCreateAuthorizer(*authSecret)
@@ -90,7 +108,7 @@ func main() {
 		defer authz.Destroy()
 		opts = append(opts, signing.WithAuthorizer(authz))
 	}
-	opts = appendEEOptions(opts)
+	opts = appendEEOptions(opts, lic)
 
 	// With a key store, persist keys sealed at rest so a restart preserves the
 	// issuing CA instead of silently rotating it (R3.2). Without one, keys are

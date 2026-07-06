@@ -89,6 +89,7 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, o := range opts {
 		o(s)
 	}
+	s.bindMinterResolver()
 	return s
 }
 
@@ -108,6 +109,7 @@ func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error)
 		return nil, err
 	}
 	s.keys = keys
+	s.bindMinterResolver()
 	return s, nil
 }
 

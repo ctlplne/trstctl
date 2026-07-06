@@ -104,6 +104,28 @@ func Digest(h Hash, data []byte) ([]byte, error) {
 	return hasher.Sum(nil), nil
 }
 
+// SignerFromDigestSigner adapts a DigestSigner (which signs a pre-computed digest)
+// into a message Signer (which hashes the message per opts, then signs). The
+// message-hashing stays inside internal/crypto so callers in other packages need
+// not import a standard-library crypto package (AN-3). The underlying private key
+// never leaves the DigestSigner; this is a thin signing view, used for example to
+// let the succession minter treat a signer-held custody key as a message Signer
+// without moving key material (INT-02).
+func SignerFromDigestSigner(d DigestSigner) Signer { return digestBackedSigner{d: d} }
+
+type digestBackedSigner struct{ d DigestSigner }
+
+func (s digestBackedSigner) Public() PublicKey    { return s.d.Public() }
+func (s digestBackedSigner) Algorithm() Algorithm { return s.d.Algorithm() }
+
+func (s digestBackedSigner) Sign(message []byte, opts SignOptions) ([]byte, error) {
+	digest, err := Digest(opts.Hash, message)
+	if err != nil {
+		return nil, err
+	}
+	return s.d.SignDigest(digest, opts)
+}
+
 // classifyStdlibKey maps a parsed standard-library private key to the trstctl
 // Algorithm it implements, by key type and parameter size/curve. It returns the
 // empty Algorithm for a key it does not recognize. It backs the BYOK import path

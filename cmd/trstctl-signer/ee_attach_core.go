@@ -4,8 +4,14 @@
 
 package main
 
-import "trstctl.com/trstctl/internal/signing"
+import (
+	"trstctl.com/trstctl/internal/license"
+	"trstctl.com/trstctl/internal/signing"
+)
 
-func appendEEOptions(opts []signing.ServerOption) []signing.ServerOption {
+// appendEEOptions is the core-build stub: no ee/ attaches, so no PCAS minter and no
+// licensed key factory. The license manager is accepted for signature parity with
+// the EE seam and ignored.
+func appendEEOptions(opts []signing.ServerOption, _ *license.Manager) []signing.ServerOption {
 	return opts
 }

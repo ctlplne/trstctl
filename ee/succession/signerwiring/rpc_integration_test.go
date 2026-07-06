@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -168,10 +169,18 @@ func (f *memFloor) Advance(id string, epoch uint64) error {
 // connected control-plane client, tearing both down at test end.
 func serveSigner(t *testing.T, svc *signing.Server) *signing.Client {
 	t.Helper()
-	sock := filepath.Join(t.TempDir(), "signer.sock")
+	// A short socket dir: a Unix domain socket path must fit in sun_path (~108
+	// bytes), which t.TempDir()'s long test-name path can overflow.
+	dir, err := os.MkdirTemp("", "pcas-sgn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "s.sock")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go func() { _ = signing.ServeServer(ctx, sock, svc) }()
+	errc := make(chan error, 1)
+	go func() { errc <- signing.ServeServer(ctx, sock, svc) }()
 
 	client, err := signing.Dial(sock)
 	if err != nil {
@@ -179,8 +188,13 @@ func serveSigner(t *testing.T, svc *signing.Server) *signing.Client {
 	}
 	t.Cleanup(func() { _ = client.Close() })
 
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(8 * time.Second)
 	for !client.Healthy(context.Background()) {
+		select {
+		case serveErr := <-errc:
+			t.Fatalf("signer serve failed: %v", serveErr)
+		default:
+		}
 		if time.Now().After(deadline) {
 			t.Fatal("signer did not become healthy in time")
 		}

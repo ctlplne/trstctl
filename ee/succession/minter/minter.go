@@ -210,6 +210,14 @@ func New(resolver KeyResolver, keygen crypto.KeyGenerator, floors FloorStore, op
 
 var _ signing.SuccessionMinter = (*Minter)(nil)
 
+// SetPredecessorResolver replaces the minter's predecessor key resolver. The
+// signer-attachment wrapper (ee/succession/signerwiring) uses it to bind the
+// signer's own key custody as the resolver at attach time (INT-02), so a minter
+// built for attachment resolves predecessor handles against keys the signer holds.
+// A bare minter built with an explicit resolver keeps it. Call before serving; not
+// safe for concurrent use with MintSuccessor.
+func (m *Minter) SetPredecessorResolver(r KeyResolver) { m.resolver = r }
+
 // MintSuccessor verifies the request inside the signer, generates the successor
 // key inside the boundary, forms the PCAS-04 commitment, dual-signs it with the
 // predecessor and successor keys, durably advances the epoch floor, and returns
