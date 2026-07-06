@@ -78,6 +78,7 @@ type AuthVerifier interface {
 type Minter struct {
 	resolver    KeyResolver
 	keygen      crypto.KeyGenerator
+	succStore   signing.SuccessorKeyStore // optional; when set (INT-03) successors persist in the signer keystore under a per-epoch handle instead of being ephemeral
 	floors      FloorStore
 	policy      PolicyVerifier // optional
 	auth        AuthVerifier   // optional
@@ -218,6 +219,13 @@ var _ signing.SuccessionMinter = (*Minter)(nil)
 // safe for concurrent use with MintSuccessor.
 func (m *Minter) SetPredecessorResolver(r KeyResolver) { m.resolver = r }
 
+// SetSuccessorKeyStore makes the minter generate successor keys through the signer's
+// key custody (INT-03), so each successor persists in the signer keystore under its
+// per-epoch handle (KeyHandle(identity, epoch)) instead of being generated
+// ephemerally. The signer-attachment wrapper sets it at attach time. Call before
+// serving; not safe for concurrent use with MintSuccessor.
+func (m *Minter) SetSuccessorKeyStore(s signing.SuccessorKeyStore) { m.succStore = s }
+
 // MintSuccessor verifies the request inside the signer, generates the successor
 // key inside the boundary, forms the PCAS-04 commitment, dual-signs it with the
 // predecessor and successor keys, durably advances the epoch floor, and returns
@@ -300,7 +308,16 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	}
 
 	// Generate the successor key INSIDE the boundary, only after all checks pass.
-	succ, err := m.keygen.GenerateKey(req.TargetAlgorithm)
+	// When the signer injects a successor key store (production), the key is PERSISTED
+	// in the signer keystore under the deterministic per-epoch handle so it survives,
+	// the identity can use it, and it becomes the next predecessor (INT-03). Otherwise
+	// (library/test use) it is generated ephemerally by the injected keygen.
+	var succ crypto.Signer
+	if m.succStore != nil {
+		succ, err = m.succStore.GenerateSuccessorKey(succession.KeyHandle(req.IdentityID, epoch), req.TargetAlgorithm)
+	} else {
+		succ, err = m.keygen.GenerateKey(req.TargetAlgorithm)
+	}
 	if err != nil {
 		return signing.MintResult{}, fmt.Errorf("%w: %v", ErrKeygen, err)
 	}

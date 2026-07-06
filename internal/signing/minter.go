@@ -5,6 +5,7 @@ package signing
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -115,18 +116,32 @@ type PredecessorResolver interface {
 	ResolvePredecessor(handle string) (crypto.Signer, error)
 }
 
-// resolverAwareMinter is implemented by a succession minter that wants the signer's
-// own key custody injected as its predecessor resolver. Core defines only this
-// seam; the edition minter opts in, so core never imports ee/ and the minter never
-// needs a standalone key store.
-type resolverAwareMinter interface {
-	UsePredecessorResolver(PredecessorResolver)
+// SuccessorKeyStore generates a successor key INSIDE the signer keystore under a
+// chosen handle, so the key persists (the identity uses it and it becomes the next
+// predecessor) and never leaves the signer (INT-03).
+type SuccessorKeyStore interface {
+	GenerateSuccessorKey(handle string, alg crypto.Algorithm) (crypto.Signer, error)
+}
+
+// SignerCustody is the signer's key-custody surface bound into the attached
+// succession minter at attach time: resolving predecessor handles and generating
+// persisted successor keys. The Server implements it; the edition minter opts in via
+// custodyAwareMinter, so core never imports ee/ and the minter needs no standalone
+// key store.
+type SignerCustody interface {
+	PredecessorResolver
+	SuccessorKeyStore
+}
+
+// custodyAwareMinter is implemented by a succession minter that wants the signer's
+// own key custody injected. Core defines only this seam; the edition minter opts in.
+type custodyAwareMinter interface {
+	UseSignerCustody(SignerCustody)
 }
 
 // ResolvePredecessor returns a message-Signer view of a held key by handle, so the
 // attached succession minter can use it as a predecessor. Private key bytes never
-// leave the signer: signing goes through the in-signer DigestSigner. It implements
-// PredecessorResolver.
+// leave the signer: signing goes through the in-signer DigestSigner.
 func (s *Server) ResolvePredecessor(handle string) (crypto.Signer, error) {
 	held, err := s.lookup(&signerpb.KeyHandle{Id: handle})
 	if err != nil {
@@ -135,14 +150,51 @@ func (s *Server) ResolvePredecessor(handle string) (crypto.Signer, error) {
 	return crypto.SignerFromDigestSigner(held.signer), nil
 }
 
-// bindMinterResolver injects this signer's key custody into the attached minter as
-// its predecessor resolver, if the minter opts into the seam (INT-02). Called once
-// at construction, before serving, so no lock is required.
-func (s *Server) bindMinterResolver() {
+// GenerateSuccessorKey generates a key of alg INSIDE the signer keystore under the
+// given handle and returns a message-Signer view of it. The private key persists in
+// the signer (sealed at rest when a key store is configured) so the identity can use
+// it and it becomes the next predecessor; it never leaves the signer.
+func (s *Server) GenerateSuccessorKey(handle string, alg crypto.Algorithm) (crypto.Signer, error) {
+	if handle == "" {
+		return nil, errors.New("signing: successor handle required")
+	}
+	protoAlg := s.keyspec.ProtoFromAlgorithm(alg)
+	if protoAlg == signerpb.Algorithm_ALGORITHM_UNSPECIFIED {
+		return nil, fmt.Errorf("signing: unsupported successor algorithm %q", alg)
+	}
+	ls, err := s.keyspec.GenerateSigningKeyFromProto(protoAlg)
+	if err != nil {
+		return nil, fmt.Errorf("signing: generate successor key: %w", err)
+	}
+	held := &heldKey{signer: ls}
+	s.mu.Lock()
+	if _, exists := s.keys[handle]; exists {
+		s.mu.Unlock()
+		ls.Destroy()
+		return nil, fmt.Errorf("signing: successor handle %q already exists", handle)
+	}
+	s.keys[handle] = held
+	s.mu.Unlock()
+	if s.store != nil {
+		if err := s.store.Save(handle, ls, keyConstraints{}); err != nil {
+			s.mu.Lock()
+			delete(s.keys, handle)
+			s.mu.Unlock()
+			ls.Destroy()
+			return nil, fmt.Errorf("signing: persist successor key: %w", err)
+		}
+	}
+	return crypto.SignerFromDigestSigner(ls), nil
+}
+
+// bindMinterCustody injects this signer's key custody into the attached minter, if
+// the minter opts into the seam (INT-02/INT-03). Called once at construction, before
+// serving, so no lock is required.
+func (s *Server) bindMinterCustody() {
 	if s.minter == nil {
 		return
 	}
-	if ra, ok := s.minter.(resolverAwareMinter); ok {
-		ra.UsePredecessorResolver(s)
+	if ca, ok := s.minter.(custodyAwareMinter); ok {
+		ca.UseSignerCustody(s)
 	}
 }

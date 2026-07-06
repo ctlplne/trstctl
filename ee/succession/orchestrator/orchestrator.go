@@ -90,6 +90,18 @@ func (o *Orchestrator) RunSuccession(ctx context.Context, tenantID string, req s
 			PublishDestination, res.EncodedRecord, idempotencyKey); err != nil {
 			return fmt.Errorf("enqueue outbox: %w", err)
 		}
+		// Advance the serving high-water in the SAME transaction, monotonically, so the
+		// next succession for this identity resolves its predecessor at the new epoch
+		// (INT-03) and a crash can never leave the record and the high-water disagreeing.
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO identity_algorithm_epoch (tenant_id, identity_id, epoch)
+			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2)
+			 ON CONFLICT (tenant_id, identity_id)
+			 DO UPDATE SET epoch = EXCLUDED.epoch
+			 WHERE identity_algorithm_epoch.epoch < EXCLUDED.epoch`,
+			decoded.Fields.IdentityID, decoded.Fields.Epoch); err != nil {
+			return fmt.Errorf("advance high-water: %w", err)
+		}
 		return nil
 	})
 	if err != nil {

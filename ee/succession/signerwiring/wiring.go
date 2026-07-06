@@ -67,10 +67,13 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 // resolver-aware and keeps whatever resolver it was built with.
 type ProductionMinter struct{ *minter.Minter }
 
-// UsePredecessorResolver binds the signer's key custody as this minter's predecessor
-// resolver. The signer calls it once at construction, before serving.
-func (p *ProductionMinter) UsePredecessorResolver(r signing.PredecessorResolver) {
-	p.Minter.SetPredecessorResolver(predecessorResolverAdapter{r: r})
+// UseSignerCustody binds the signer's key custody into this minter: predecessor
+// handles resolve against keys the signer holds, and successor keys are generated
+// and PERSISTED in the signer keystore under their per-epoch handle (INT-03). The
+// signer calls it once at construction, before serving.
+func (p *ProductionMinter) UseSignerCustody(c signing.SignerCustody) {
+	p.Minter.SetPredecessorResolver(predecessorResolverAdapter{r: c})
+	p.Minter.SetSuccessorKeyStore(c)
 }
 
 // predecessorResolverAdapter adapts the signer's PredecessorResolver to the minter's
