@@ -19,11 +19,13 @@ import (
 	eeprovider "trstctl.com/trstctl/ee/provider"
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eesuccessionapi "trstctl.com/trstctl/ee/succession/api"
+	eesuccessionorch "trstctl.com/trstctl/ee/succession/orchestrator"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/license"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/server"
 )
 
@@ -47,6 +49,42 @@ func appendAPIFactory(existing, add editionseam.LicensedAPIOptionsFactory) editi
 	}
 }
 
+// appendOutboxFactory composes two licensed-outbox factories so multiple gated
+// features can each contribute a handler to the single deps.LicensedOutboxFactory
+// field, order-independently. The composed handler tries each in turn: the first that
+// reports the message handled (or errors) wins. A nil existing factory yields add
+// alone.
+func appendOutboxFactory(existing, add editionseam.LicensedOutboxFactory) editionseam.LicensedOutboxFactory {
+	if existing == nil {
+		return add
+	}
+	return func(d editionseam.LicensedOutboxDeps) (editionseam.LicensedOutboxHandler, error) {
+		a, err := existing(d)
+		if err != nil {
+			return nil, err
+		}
+		b, err := add(d)
+		if err != nil {
+			return nil, err
+		}
+		return chainedOutboxHandler{a, b}, nil
+	}
+}
+
+type chainedOutboxHandler []editionseam.LicensedOutboxHandler
+
+func (c chainedOutboxHandler) DeliverLicensed(ctx context.Context, m orchestrator.Message) (bool, error) {
+	for _, h := range c {
+		if h == nil {
+			continue
+		}
+		if handled, err := h.DeliverLicensed(ctx, m); handled || err != nil {
+			return handled, err
+		}
+	}
+	return false, nil
+}
+
 // attachEE is the single sanctioned open-core seam. S-E0 attaches no features:
 // the table is empty and behavior stays Community. Later cards add exactly one
 // lic.Has(feature) block per gated capability here.
@@ -67,13 +105,19 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		// through the feature-neutral route seam, composing with any other licensed
 		// API routes (e.g. PQC migration) already registered.
 		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eesuccessionapi.NewAPIOptionsFactory())
+		// Register the PCAS succession worker on the server outbox dispatcher (INT-04),
+		// composing with any other licensed outbox handler: a pcas.succession-request
+		// message is drained here and minted over the signer transport, then recorded +
+		// published; pcas.rp-publish is acknowledged. This makes the succession worker a
+		// real production caller — a POST to request-succession now yields a record.
+		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eesuccessionorch.NewLicensedOutboxFactory())
 		if log != nil {
 			log.Info("Enterprise PCAS attached", slog.String("feature", string(license.FeaturePCAS)))
 		}
 	}
 	if lic != nil && lic.Has(license.FeaturePQC) {
 		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eepqcmigration.NewAPIOptionsFactory())
-		deps.LicensedOutboxFactory = eepqcmigration.NewOutboxFactory()
+		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eepqcmigration.NewOutboxFactory())
 		deps.LicensedLeafSigner = eepqc.SignHybridLeafFromCSRWithProfile
 		deps.LicensedCSRInspector = eepqc.InspectHybridCSR
 		if log != nil {

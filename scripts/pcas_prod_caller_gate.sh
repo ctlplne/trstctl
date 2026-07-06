@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.." || exit 2
 CHECKS=$(cat <<'EOF'
 WithSuccessionMinter(	INT-02 (attach minter in signer binary)
 NewProductionMinter(	INT-02 (production minter construction)
-orchestrator.New(	INT-03 (succession worker)
+NewLicensedOutboxFactory(	INT-03/04 (succession worker registered on server outbox)
 retirement.New(	INT-17 (retirement worker)
 recovery.Mint(	INT-18 (recovery API/worker)
 issuer.IssueLeaf(	INT-14 (issuer succession)

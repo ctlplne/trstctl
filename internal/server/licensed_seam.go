@@ -11,4 +11,5 @@ type LicensedAPIOptionsFactory = editionseam.LicensedAPIOptionsFactory
 type LicensedOutboxHandler = editionseam.LicensedOutboxHandler
 type LicensedOutboxDeps = editionseam.LicensedOutboxDeps
 type LicensedOutboxFactory = editionseam.LicensedOutboxFactory
+type SuccessionMinter = editionseam.SuccessionMinter
 type ProtocolLeafIssuer = editionseam.ProtocolLeafIssuer

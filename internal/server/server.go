@@ -1068,6 +1068,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		licensed, err = d.LicensedOutboxFactory(LicensedOutboxDeps{
 			Store: d.Store, Log: d.Log, Idempotency: idem,
 			IssueProtocolLeaf: s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
+			Minter:            s.successionMinter(),
 		})
 		if err != nil {
 			return err
@@ -1081,6 +1082,17 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
 	}
 	return nil
+}
+
+// successionMinter returns the out-of-process signer as a PCAS succession minter for
+// the licensed-outbox seam (INT-04), or nil when no signer is configured — in which
+// case a PCAS handler mints nothing and fails closed. The control plane never obtains
+// key material: minting crosses the signer transport (claims 1/12/49).
+func (s *Server) successionMinter() SuccessionMinter {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
 }
 
 func (s *Server) protocolLeafIssuer(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) ProtocolLeafIssuer {
