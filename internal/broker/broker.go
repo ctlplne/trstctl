@@ -48,10 +48,18 @@ type Config struct {
 // Broker issues and governs AI-agent / NHI identities.
 type Broker struct {
 	cfg Config
+	// issuancePrecondition is the optional, feature-neutral chain-bound issuance
+	// precondition attached via WithIssuancePrecondition (issuanceprecondition.go).
+	// Nil by default: the free single-hop Issue path never consults it, so an
+	// unlicensed / core-only broker behaves exactly as before (INV-A10).
+	issuancePrecondition IssuancePrecondition
 }
 
-// New validates configuration and constructs a Broker.
-func New(cfg Config) (*Broker, error) {
+// New validates configuration and constructs a Broker. Optional BrokerOptions
+// (today only WithIssuancePrecondition) attach the feature-neutral chain-bound
+// issuance seam; with no options the broker is exactly the single-hop broker it was
+// before the seam existed.
+func New(cfg Config, opts ...BrokerOption) (*Broker, error) {
 	if cfg.TenantID == "" {
 		return nil, fmt.Errorf("broker: TenantID required (AN-1)")
 	}
@@ -67,7 +75,13 @@ func New(cfg Config) (*Broker, error) {
 	if cfg.Audit == nil {
 		cfg.Audit = auditsink.Nop{}
 	}
-	return &Broker{cfg: cfg}, nil
+	b := &Broker{cfg: cfg}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(b)
+		}
+	}
+	return b, nil
 }
 
 // IssueRequest requests an agent identity.

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	_ "trstctl.com/trstctl/ee"
+	eeagentdelegation "trstctl.com/trstctl/ee/agentid/delegation"
 	eebilling "trstctl.com/trstctl/ee/billing"
 	eefederation "trstctl.com/trstctl/ee/federation"
 	eegovernance "trstctl.com/trstctl/ee/governance"
@@ -113,6 +114,24 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eesuccessionorch.NewLicensedOutboxFactory())
 		if log != nil {
 			log.Info("Enterprise PCAS attached", slog.String("feature", string(license.FeaturePCAS)))
+		}
+	}
+	if lic != nil && lic.Has(license.FeatureAgentDelegation) {
+		// AN-9 activation point for Agent Identity Lifecycle Enforcement (AGID, HARNESS
+		// §1.6). This one block gates AGID; it attaches the feature-neutral chain-bound
+		// broker issuance precondition (the ee/agentid delegation gate) via the core
+		// broker.WithIssuancePrecondition seam. The broker consults it ONLY on its
+		// chain-bound issuance path; the free single-hop attested-ephemeral badge
+		// (broker.Issue) is never routed through it, so this attach neither gates, moves,
+		// nor degrades the free badge (INV-A10 zero removal). AGID-07a wires a fail-closed
+		// placeholder precondition; AGID-07b replaces NewBrokerHookStub with the real
+		// chain-verifying precondition and consumes deps.BrokerIssuancePrecondition when
+		// it wires the broker. Unlicensed or core-only deployments skip this block, attach
+		// no precondition, and run zero chain-bound issuance while the free badge is
+		// unaffected.
+		deps.BrokerIssuancePrecondition = eeagentdelegation.NewBrokerHookStub()
+		if log != nil {
+			log.Info("Enterprise agent delegation attached", slog.String("feature", string(license.FeatureAgentDelegation)))
 		}
 	}
 	if lic != nil && lic.Has(license.FeaturePQC) {

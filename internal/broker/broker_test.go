@@ -42,7 +42,7 @@ func (m *memRevoker) Revoke(_ context.Context, _, id string) error {
 	return nil
 }
 
-func newBroker(t *testing.T, g *graph.Graph, pg PolicyGate, rev Revoker, rec auditsink.Auditor) *Broker {
+func newBroker(t *testing.T, g *graph.Graph, pg PolicyGate, rev Revoker, rec auditsink.Auditor, opts ...BrokerOption) *Broker {
 	t.Helper()
 	ca, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
@@ -61,7 +61,7 @@ func newBroker(t *testing.T, g *graph.Graph, pg PolicyGate, rev Revoker, rec aud
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := New(Config{TenantID: "t1", Issuer: eph, Policy: pg, Graph: g, Audit: rec, Revoker: rev})
+	b, err := New(Config{TenantID: "t1", Issuer: eph, Policy: pg, Graph: g, Audit: rec, Revoker: rev}, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}

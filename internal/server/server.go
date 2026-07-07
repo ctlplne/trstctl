@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/breakglass"
+	"trstctl.com/trstctl/internal/broker"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
@@ -117,6 +118,15 @@ type Deps struct {
 	// Enterprise governance feature is licensed. Nil keeps compliance evidence
 	// routes unmounted; audit/privacy mechanisms stay core.
 	GovernanceFactory GovernanceFactory
+	// BrokerIssuancePrecondition is supplied only by the tagged EE attach seam when
+	// the Enterprise agent-delegation feature is licensed. It is the feature-neutral
+	// chain-bound issuance precondition attached to the broker via
+	// broker.WithIssuancePrecondition; the broker consults it ONLY on its chain-bound
+	// issuance path. Nil leaves the seam inert, so the free single-hop attested badge
+	// (broker.Issue) is unaffected and Community/core-only deployments run no
+	// chain-bound precondition (INV-A10 zero removal). AGID-07b consumes this when it
+	// wires the broker.
+	BrokerIssuancePrecondition broker.IssuancePrecondition
 	// ProviderHandler is supplied only by the tagged EE attach seam when the Provider
 	// plane is licensed. Nil keeps /provider/* dark with 404 instead of falling
 	// through to the web UI.

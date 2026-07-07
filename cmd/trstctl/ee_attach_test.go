@@ -123,6 +123,30 @@ func TestAttachEEGovernanceRequiresEnterpriseLicense(t *testing.T) {
 	}
 }
 
+func TestAttachEEAgentDelegationRequiresEnterpriseLicense(t *testing.T) {
+	// Feature absent (Community): the FeatureAgentDelegation block is skipped, so no
+	// chain-bound broker issuance precondition is attached. The free single-hop
+	// attested badge is unaffected because it never routes through this precondition
+	// (INV-A10 zero removal): its absence here is exactly the unlicensed steady state.
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, license.Community(), deps); err != nil {
+		t.Fatalf("community attachEE: %v", err)
+	}
+	if deps.BrokerIssuancePrecondition != nil {
+		t.Fatal("community attach must not attach a chain-bound broker issuance precondition")
+	}
+
+	// Feature present (Enterprise): the single lic.Has(FeatureAgentDelegation) block
+	// runs and wires the AGID broker precondition factory.
+	deps = &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, enterpriseLicense(t), deps); err != nil {
+		t.Fatalf("enterprise attachEE: %v", err)
+	}
+	if deps.BrokerIssuancePrecondition == nil {
+		t.Fatal("enterprise agent-delegation feature did not attach the chain-bound broker issuance precondition")
+	}
+}
+
 func enterpriseLicense(t *testing.T) *license.Manager {
 	t.Helper()
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()

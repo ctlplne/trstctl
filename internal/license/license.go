@@ -49,11 +49,17 @@ const (
 	// family). It is the single AN-9 activation point for PCAS; attachEE has
 	// exactly one lic.Has(FeaturePCAS) block.
 	FeaturePCAS Feature = "pcas"
+	// FeatureAgentDelegation gates the Agent Identity Lifecycle Enforcement family
+	// (the ee/agentid delegation-chain broker/gate). It is the single AN-9 activation
+	// point for AGID; attachEE has exactly one lic.Has(FeatureAgentDelegation) block
+	// that attaches the chain-bound broker issuance precondition. The free single-hop
+	// attested-ephemeral badge is never gated by this feature (INV-A10 zero removal).
+	FeatureAgentDelegation Feature = "agent-delegation"
 )
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeaturePCAS},
+	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeaturePCAS, FeatureAgentDelegation},
 	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 
