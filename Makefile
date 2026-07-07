@@ -313,6 +313,10 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 	@pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' )"; \
 	$(GO) test -tags trstctl_core $$pkgs
 
+.PHONY: pcas-caller-gate
+pcas-caller-gate: ## PCAS production-caller gate (INT-23): every shipped mechanism has a non-test caller; deferred ones are honestly still test-only
+	@./scripts/prod_caller_gate.sh
+
 .PHONY: web-lint web-format-check web-check
 web-lint: ## Run frontend ESLint from the repository root (CODE-002)
 	@echo ">> web lint"
