@@ -219,27 +219,42 @@ func (r *Repo) InsertRefusalRecord(ctx context.Context, tenantID string, rr Refu
 // InsertRevocationDirectiveWithJobs inserts a revocation directive together with its
 // per-descendant jobs in a SINGLE RLS-scoped transaction (the transactional-outbox
 // shape INV-A8 requires; AGID-10 drives the job execution). The directive carries
-// the determining watermark. Every row is bound to the caller's tenant.
+// the determining watermark. Every row is bound to the caller's tenant. It opens its
+// own tenant transaction; callers that must also enqueue outbox rows in the SAME
+// transaction (the AGID-10 cascade: directive+jobs ⊕ outbox atomically) use
+// InsertRevocationDirectiveWithJobsTx on a transaction they already hold.
 func (r *Repo) InsertRevocationDirectiveWithJobs(ctx context.Context, tenantID string, dir RevocationDirective, jobs []RevocationJob) error {
 	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO agent_revocation_directives
-			   (tenant_id, directive_id, subject_id, reason, watermark, terminal, seq)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)`,
-			dir.DirectiveID, dir.SubjectID, dir.Reason, int64(dir.Watermark), dir.Terminal, int64(dir.Seq)); err != nil {
-			return fmt.Errorf("agid store: insert revocation directive: %w", err)
-		}
-		for _, j := range jobs {
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO agent_revocation_jobs
-				   (tenant_id, directive_id, idempotency_key, credential_id, follow_on, completion_ref, seq)
-				 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)`,
-				dir.DirectiveID, j.IdempotencyKey, j.CredentialID, j.FollowOn, nilIfEmpty(j.CompletionRef), int64(j.Seq)); err != nil {
-				return fmt.Errorf("agid store: insert revocation job %q: %w", j.IdempotencyKey, err)
-			}
-		}
-		return nil
+		return InsertRevocationDirectiveWithJobsTx(ctx, tx, dir, jobs)
 	})
+}
+
+// InsertRevocationDirectiveWithJobsTx inserts the directive and its per-descendant
+// jobs on the caller's ALREADY-OPEN, RLS-scoped transaction. It is the seam the
+// AGID-10 cascade uses to commit the directive projection AND the per-descendant
+// outbox jobs in ONE database transaction (INV-A8): if the caller's tx also enqueues
+// the outbox rows and a fault occurs between the two, neither commits. tenant_id is
+// bound from the RLS session GUC the caller established with WithTenant, so every row
+// is the caller's tenant. It performs no key operation.
+func InsertRevocationDirectiveWithJobsTx(ctx context.Context, tx pgx.Tx, dir RevocationDirective, jobs []RevocationJob) error {
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO agent_revocation_directives
+		   (tenant_id, directive_id, subject_id, reason, watermark, terminal, seq)
+		 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)`,
+		dir.DirectiveID, dir.SubjectID, dir.Reason, int64(dir.Watermark), dir.Terminal, int64(dir.Seq)); err != nil {
+		return fmt.Errorf("agid store: insert revocation directive: %w", err)
+	}
+	for _, j := range jobs {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO agent_revocation_jobs
+			   (tenant_id, directive_id, idempotency_key, credential_id, follow_on, completion_ref, seq)
+			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)
+			 ON CONFLICT (tenant_id, directive_id, idempotency_key) DO NOTHING`,
+			dir.DirectiveID, j.IdempotencyKey, j.CredentialID, j.FollowOn, nilIfEmpty(j.CompletionRef), int64(j.Seq)); err != nil {
+			return fmt.Errorf("agid store: insert revocation job %q: %w", j.IdempotencyKey, err)
+		}
+	}
+	return nil
 }
 
 // FetchDelegationRecord returns one delegation record by digest, scoped to tenantID
@@ -465,4 +480,178 @@ func nilIfEmpty(b []byte) []byte {
 		return nil
 	}
 	return b
+}
+
+// ---------------------------------------------------------------------------
+// AGID-10 cascade read paths + effect ledger. AGID-02 defined the revocation
+// SCHEMA and the descendant-set read; AGID-10 adds the reads its cascade/executor
+// need (the directive it recorded, the jobs it enqueued) and the durable
+// recorded-effect ledger that makes job execution idempotent (claim 16/21 /
+// INV-A8) with signed per-job completion evidence (INV-A9). These are AGID-10
+// writes/reads over the AGID-02 tables plus agent_revocation_effects (910002).
+// ---------------------------------------------------------------------------
+
+// RevocationEffect is one durable recorded job effect: the target credential, the
+// effect class that was performed, the executor identity, the completion time, and
+// the SIGNED completion-evidence document (evidence body + signature + verifying
+// public key). Exactly one row exists per (directive_id, idempotency_key) once an
+// effect is recorded — the AN-5 idempotency substrate (claim 21). AGID-11's terminal
+// gate reads these as the per-job proof set (INV-A9).
+type RevocationEffect struct {
+	DirectiveID    string
+	IdempotencyKey string
+	CredentialID   string
+	EffectClass    string
+	Executor       string
+	CompletedAt    int64
+	EvidenceBody   []byte
+	EvidenceSig    []byte
+	EvidencePub    []byte
+	Seq            uint64
+}
+
+// FetchRevocationDirective returns the directive recorded for directiveID, scoped to
+// tenantID by RLS. found is false when the caller's tenant has no such directive.
+func (r *Repo) FetchRevocationDirective(ctx context.Context, tenantID, directiveID string) (dir RevocationDirective, found bool, err error) {
+	err = r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var reason string
+		var watermark, seq int64
+		var terminal bool
+		var subject string
+		e := tx.QueryRow(ctx,
+			`SELECT subject_id, reason, watermark, terminal, seq
+			   FROM agent_revocation_directives
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND directive_id = $1`, directiveID).
+			Scan(&subject, &reason, &watermark, &terminal, &seq)
+		if errors.Is(e, pgx.ErrNoRows) {
+			return nil
+		}
+		if e != nil {
+			return fmt.Errorf("agid store: fetch revocation directive: %w", e)
+		}
+		dir = RevocationDirective{
+			DirectiveID: directiveID, SubjectID: subject, Reason: reason,
+			Watermark: uint64(watermark), Terminal: terminal, Seq: uint64(seq),
+		}
+		found = true
+		return nil
+	})
+	return dir, found, err
+}
+
+// FetchRevocationJobs returns every job enqueued under directiveID, ordered by
+// idempotency key for determinism, scoped to tenantID by RLS. It is the read the
+// cascade executor iterates to drive each descendant job.
+func (r *Repo) FetchRevocationJobs(ctx context.Context, tenantID, directiveID string) ([]RevocationJob, error) {
+	var out []RevocationJob
+	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT idempotency_key, credential_id, follow_on, completion_ref, seq
+			   FROM agent_revocation_jobs
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND directive_id = $1
+			  ORDER BY idempotency_key ASC`, directiveID)
+		if err != nil {
+			return fmt.Errorf("agid store: load revocation jobs: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var j RevocationJob
+			var completion []byte
+			var seq int64
+			if err := rows.Scan(&j.IdempotencyKey, &j.CredentialID, &j.FollowOn, &completion, &seq); err != nil {
+				return fmt.Errorf("agid store: scan revocation job: %w", err)
+			}
+			j.DirectiveID = directiveID
+			j.CompletionRef = completion
+			j.Seq = uint64(seq)
+			out = append(out, j)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RecordEffectIfAbsentTx records a job's effect + signed completion evidence on the
+// caller's ALREADY-OPEN, RLS-scoped transaction, ONLY IF no effect for the same
+// (directive_id, idempotency_key) already exists, and reports whether it inserted.
+// This is the at-most-one-recorded-effect-per-key primitive (claim 21): a worker
+// retrying a job at-least-once re-runs this, but the conditional insert collapses a
+// redelivery whose effect already landed to a no-op (recorded=false), so the net
+// effect is exactly-once. It also stamps the job's completion_ref so the AGID-11
+// terminal gate can see the job is evidenced. tenant_id is bound from the RLS GUC.
+func RecordEffectIfAbsentTx(ctx context.Context, tx pgx.Tx, eff RevocationEffect) (recorded bool, err error) {
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO agent_revocation_effects
+		   (tenant_id, directive_id, idempotency_key, credential_id, effect_class,
+		    executor, completed_at, evidence_body, evidence_sig, evidence_pub, seq)
+		 SELECT current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+		 WHERE NOT EXISTS (
+		     SELECT 1 FROM agent_revocation_effects
+		      WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+		        AND directive_id = $1 AND idempotency_key = $2
+		 )`,
+		eff.DirectiveID, eff.IdempotencyKey, eff.CredentialID, eff.EffectClass,
+		eff.Executor, eff.CompletedAt, eff.EvidenceBody, eff.EvidenceSig, eff.EvidencePub, int64(eff.Seq))
+	if err != nil {
+		return false, fmt.Errorf("agid store: record revocation effect: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	// Stamp the job's completion reference (a digest of the evidence body) so the
+	// terminal gate reads the job as evidenced. Same transaction as the effect row.
+	if _, err := tx.Exec(ctx,
+		`UPDATE agent_revocation_jobs
+		    SET completion_ref = $3
+		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+		    AND directive_id = $1 AND idempotency_key = $2`,
+		eff.DirectiveID, eff.IdempotencyKey, nilIfEmpty(eff.EvidenceBody)); err != nil {
+		return false, fmt.Errorf("agid store: stamp job completion ref: %w", err)
+	}
+	return true, nil
+}
+
+// FetchEffect returns the recorded effect for one (directive, idempotency_key),
+// scoped to tenantID by RLS. found is false when no effect has been recorded yet.
+func (r *Repo) FetchEffect(ctx context.Context, tenantID, directiveID, idempotencyKey string) (eff RevocationEffect, found bool, err error) {
+	err = r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var seq, completedAt int64
+		e := tx.QueryRow(ctx,
+			`SELECT credential_id, effect_class, executor, completed_at,
+			        evidence_body, evidence_sig, evidence_pub, seq
+			   FROM agent_revocation_effects
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			    AND directive_id = $1 AND idempotency_key = $2`, directiveID, idempotencyKey).
+			Scan(&eff.CredentialID, &eff.EffectClass, &eff.Executor, &completedAt,
+				&eff.EvidenceBody, &eff.EvidenceSig, &eff.EvidencePub, &seq)
+		if errors.Is(e, pgx.ErrNoRows) {
+			return nil
+		}
+		if e != nil {
+			return fmt.Errorf("agid store: fetch revocation effect: %w", e)
+		}
+		eff.DirectiveID = directiveID
+		eff.IdempotencyKey = idempotencyKey
+		eff.CompletedAt = completedAt
+		eff.Seq = uint64(seq)
+		found = true
+		return nil
+	})
+	return eff, found, err
+}
+
+// CountEffects returns how many effects have been recorded under directiveID, scoped
+// to tenantID by RLS. It is the terminal gate's completeness read: the cascade is
+// evidenced when the effect count equals the job count (AGID-11 consumes this).
+func (r *Repo) CountEffects(ctx context.Context, tenantID, directiveID string) (int, error) {
+	var n int
+	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT count(*) FROM agent_revocation_effects
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND directive_id = $1`, directiveID).Scan(&n)
+	})
+	return n, err
 }
