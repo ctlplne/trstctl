@@ -26,14 +26,25 @@ import (
 // TestSignerDependencyClosure / TestNoHTTPServerLinkedIntoSigner).
 func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir string) []signing.ServerOption {
 	opts = append(opts, signing.WithKeyFactory(eepqc.NewSignerKeyFactory()))
-	// Issuance-precondition gate (AGID-04a). Attached UNCONDITIONALLY in the EE
-	// build: the free single-hop issuance path is never gated -- license/policy
-	// gating is the control plane's job (AGID-07), not the signer's. For 04a this is
-	// a passthrough placeholder that approves and returns an empty binding; AGID-04b
-	// replaces the construction with the real verify-before-keygen verifier behind
-	// the same signing.IssuanceGate interface. The core-only build attaches none, so
-	// the seam stays inert there (INV-A10).
-	opts = append(opts, signing.WithIssuanceGate(delegation.NewPassthroughGate()))
+	// Issuance-precondition gate (AGID-04a seam; AGID-04b verifier). Attached
+	// UNCONDITIONALLY in the EE build: the free single-hop issuance path is never gated
+	// -- license/policy gating is the control plane's job (AGID-07), not the signer's --
+	// and the AGID-04b verifier ENGAGES only when delegation preconditions, attestation,
+	// or an agent-stack subject are present, verifying each hop's signature+validity, the
+	// per-hop narrowing under the AGID-01 partial order, and the attestation (with the
+	// min-class gate) BEFORE any key op, and failing closed with a signed refusal (INV-A1).
+	// The refusal-signing key is generated inside the signer as locked material and never
+	// leaves the boundary. Root anchors, the AGID-02 projection-backed revocation reader,
+	// and the attestation verifier are provisioned by the deployment (AGID-INT-WIRE);
+	// until then a delegated chain fails closed at the root-anchor check rather than being
+	// approved unverified. The core-only build attaches none, so the seam stays inert
+	// there (INV-A10).
+	gate, _, err := delegation.NewSignerGate(delegation.SignerConfig{SignerID: "trstctl-signer"})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: build AGID issuance gate: %v\n", err)
+		os.Exit(1)
+	}
+	opts = append(opts, signing.WithIssuanceGate(gate))
 	if lic != nil && lic.Has(license.FeaturePCAS) {
 		// floorDir (the signer keystore dir) gives a DURABLE, restart-surviving epoch
 		// floor (INT-05); empty (in-memory signer) => interim floor, matching ephemeral

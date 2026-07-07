@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+package delegation
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+// wire.go defines the edition-private decode of the opaque bodies the core AGID-04a
+// seam forwards (signing.IssuancePreconditions.{Preconditions,SubjectRepr,Attestation}).
+// The core never parses these bytes; the gate does, here, fail-closed. A malformed
+// body is a decode error that the gate turns into a signed refusal with NO key op
+// (INV-A1): an attacker who ships garbage over the seam gets a refusal, never a
+// credential.
+//
+// The three bodies are:
+//   - Preconditions: the self-describing delegation chain (each RecordEnvelope
+//     carries its delegator public key DER + the signed Record) plus the designated
+//     authority class the chain head claims (for the min-attestation-class gate).
+//   - SubjectRepr: the agent-stack representation to bind (AGID-03). Optional in the
+//     chain-only fallback (claim 31).
+//   - Attestation: the attestation evidence body (type + blob). Optional in the
+//     chain-only fallback; REQUIRED when a designated authority class demands a
+//     minimum attestation class (claim 10) and in the attestation-gated fallback
+//     (claim 32).
+//
+// Decoding is JSON: deterministic, self-delimiting, and the same encoding the AGID-02
+// ledger events use. The gate treats every field as untrusted input and re-verifies
+// everything cryptographically; JSON is a carriage format only, never a trust
+// boundary.
+
+// RecordEnvelope is one hop of the self-describing chain the caller ships over the
+// seam: the signed delegation Record plus the DER of the delegator public key that
+// signed it. The gate verifies each hop's signature with the CARRIED public key and
+// then verifies that public key chains to a root anchor the signer holds (a caller
+// cannot self-certify by simply attaching a key of their choosing: the root-anchor
+// check is what makes the carried key trustworthy). No private key material is ever
+// carried -- DER is a public SubjectPublicKeyInfo only (AN-8).
+type RecordEnvelope struct {
+	// Record is the signed delegation record for this hop (record.go). Its Signature
+	// field must verify against DelegatorPublicDER.
+	Record Record `json:"record"`
+	// DelegatorPublicDER is the PKIX/DER SubjectPublicKeyInfo of the delegator key
+	// that signed Record. Public material only.
+	DelegatorPublicDER []byte `json:"delegator_public_der"`
+}
+
+// PreconditionsBody is the decoded delegation-precondition body carried opaquely in
+// signing.IssuancePreconditions.Preconditions. Chain is ordered ROOT-FIRST (the
+// root-anchored hop is Chain[0]); the head is the last element. DesignatedClass, when
+// non-empty, names the authority class the chain head is designated as, which the
+// min-attestation-class policy gates (claim 10).
+type PreconditionsBody struct {
+	// Chain is the delegation chain, ordered root-first. Empty in the
+	// attestation-gated fallback (claim 32), where an agent-stack representation +
+	// verified attestation stands alone with no multi-hop chain.
+	Chain []RecordEnvelope `json:"chain,omitempty"`
+	// DesignatedClass names the authority class the head is designated as, keying the
+	// min-attestation-class policy (claim 10). Empty means no class gate applies.
+	DesignatedClass string `json:"designated_class,omitempty"`
+}
+
+// ErrDecodePreconditions is returned when the opaque precondition body cannot be
+// decoded. The gate maps it to a fail-closed refusal (no key op).
+var ErrDecodePreconditions = fmt.Errorf("delegation: cannot decode issuance preconditions body")
+
+// decodePreconditions decodes the opaque precondition body fail-closed. An empty body
+// is a valid (chain-less) body only for the attestation-gated fallback; the caller's
+// downstream verification decides whether that is acceptable, not this decoder.
+func decodePreconditions(b []byte) (PreconditionsBody, error) {
+	if len(b) == 0 {
+		return PreconditionsBody{}, nil
+	}
+	var body PreconditionsBody
+	if err := json.Unmarshal(b, &body); err != nil {
+		return PreconditionsBody{}, fmt.Errorf("%w: %v", ErrDecodePreconditions, err)
+	}
+	return body, nil
+}
