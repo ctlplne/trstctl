@@ -78,6 +78,13 @@ type BindingMaterial struct {
 	AttestationDigest []byte `json:"attestation_digest,omitempty"`
 	ComparatorVersion string `json:"comparator_version"`
 	RootAnchorAuthRef string `json:"root_anchor_auth_ref,omitempty"`
+	// TaskEnvelopeDigest is the canonical digest of the task envelope the chain head
+	// references (AGID-05, claim 2 / INV-A4), bound ALONGSIDE the chain-head digest and
+	// the agent-stack representation (INV-A3 is additive, not replaced). Empty when no
+	// record references a task envelope -- in which case the binding is byte-identical to
+	// AGID-04b (the field is omitempty and appended last in CanonicalBytes, so an
+	// envelope-free binding's canonical bytes and digest are unchanged from 04b).
+	TaskEnvelopeDigest []byte `json:"task_envelope_digest,omitempty"`
 }
 
 // AgentStackDigestOf returns the domain-separated digest of an agent-stack
@@ -93,8 +100,11 @@ func AgentStackDigestOf(reprBytes []byte) []byte {
 
 // NewBindingMaterial assembles the binding material fail-closed: at least one of
 // chainHeadDigest or non-empty reprBytes must be present, else ErrNothingToBind. The
-// agent-stack digest is computed over the opaque representation bytes.
-func NewBindingMaterial(chainHeadDigest, reprBytes []byte, designatedClass string, attestationDigest []byte, rootAnchorAuthRef string) (BindingMaterial, error) {
+// agent-stack digest is computed over the opaque representation bytes. taskEnvelopeDigest
+// is the AGID-05 task-envelope digest bound ALONGSIDE the chain head + agent-stack repr
+// (INV-A3 additive); it is empty when no record references a task envelope, leaving the
+// binding byte-identical to AGID-04b.
+func NewBindingMaterial(chainHeadDigest, reprBytes []byte, designatedClass string, attestationDigest []byte, rootAnchorAuthRef string, taskEnvelopeDigest []byte) (BindingMaterial, error) {
 	if len(chainHeadDigest) == 0 && len(reprBytes) == 0 {
 		return BindingMaterial{}, ErrNothingToBind
 	}
@@ -108,6 +118,9 @@ func NewBindingMaterial(chainHeadDigest, reprBytes []byte, designatedClass strin
 	if len(reprBytes) > 0 {
 		bm.AgentStackRepr = append([]byte(nil), reprBytes...)
 		bm.AgentStackDigest = AgentStackDigestOf(reprBytes)
+	}
+	if len(taskEnvelopeDigest) > 0 {
+		bm.TaskEnvelopeDigest = append([]byte(nil), taskEnvelopeDigest...)
 	}
 	return bm, nil
 }
@@ -132,6 +145,15 @@ func (bm BindingMaterial) CanonicalBytes() ([]byte, error) {
 	writeStr(&b, bm.ComparatorVersion)
 	writeField(&b, "root_anchor_auth_ref")
 	writeStr(&b, bm.RootAnchorAuthRef)
+	// AGID-05: the task-envelope digest is bound alongside the fields above (INV-A3
+	// additive). It is appended LAST and length-prefixed so the encoding stays
+	// unambiguous, and an envelope-free binding contributes only the field tag + a zero
+	// length. This is a v1 binding-format extension: the ComparatorVersion carried in the
+	// binding still pins the exact decision semantics a relying party reproduces, and the
+	// AGID-04b GATE BEHAVIOR (which fields are populated for an envelope-free chain) is
+	// unchanged -- TaskEnvelopeDigest is simply empty there.
+	writeField(&b, "task_envelope_digest")
+	writeBytes(&b, bm.TaskEnvelopeDigest)
 	return b.Bytes(), nil
 }
 

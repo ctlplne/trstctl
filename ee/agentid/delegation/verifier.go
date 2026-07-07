@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"trstctl.com/trstctl/ee/agentid/taskenv"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
 )
@@ -123,6 +124,14 @@ type Config struct {
 	// credential; otherwise the caller's own keyOp mints using bind.MintCredential.
 	IssuingCACertDER []byte
 	IssuingCASigner  crypto.DigestSigner
+	// TaskEnvelopeTrust resolves a task-envelope requester key id to its public key DER
+	// (AGID-05, claim 2). It is the signer-held registry of requester identities to
+	// phishing-resistant keys the gate verifies a referenced task envelope's signature
+	// against. Optional: a gate constructed WITHOUT it behaves exactly as AGID-04b for
+	// envelope-free chains; but a chain whose head REFERENCES a task envelope is refused
+	// fail-closed when this is nil (a referenced envelope must be verifiable). It is
+	// never consulted unless a record references an envelope.
+	TaskEnvelopeTrust taskenv.TrustLookup
 }
 
 // Gate is the real in-signer verify-before-keygen issuance gate (claim 1). It
@@ -264,13 +273,28 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 		reprBytes = req.SubjectRepr
 	}
 
+	// (4) Task envelope (AGID-05, claim 2 / INV-A4): when the chain HEAD references a
+	// task envelope (its verified, signed TaskDigest is set), verify the referenced
+	// envelope's SIGNATURE + EXPIRY here, as a PRECONDITION of the key op and BEFORE the
+	// binding is assembled, and require its canonical digest to equal the head's
+	// reference. On failure this refuses (CheckTaskEnvelope) with no key op. When no
+	// record references an envelope, teres.chainHead is empty and nothing changes: the
+	// AGID-04b behavior is exactly preserved (no regression). teres.chainHead here
+	// carries the VERIFIED ENVELOPE DIGEST to bind (reusing the chainHead field as the
+	// result's digest channel), not a chain digest.
+	teres := g.verifyTaskEnvelope(headTaskDigest(body.Chain), body.Envelope, now)
+	if teres.refused {
+		return teres
+	}
+	taskEnvelopeDigest := teres.chainHead
+
 	// Binding target: at least one of a verified chain head or an agent-stack
 	// representation must be present (claims 31/32 fallbacks each satisfy exactly one).
 	if len(chainHeadDigest) == 0 && len(reprBytes) == 0 {
 		return verifyResult{refused: true, check: CheckBindingTarget, hopIndex: -1, detail: "no chain and no agent-stack representation"}
 	}
 
-	bm, err := NewBindingMaterial(chainHeadDigest, reprBytes, body.DesignatedClass, attestationDigest, rootAuthRef)
+	bm, err := NewBindingMaterial(chainHeadDigest, reprBytes, body.DesignatedClass, attestationDigest, rootAuthRef, taskEnvelopeDigest)
 	if err != nil {
 		return verifyResult{refused: true, check: CheckBindingTarget, hopIndex: -1, detail: err.Error()}
 	}

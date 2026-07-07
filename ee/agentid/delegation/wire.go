@@ -59,6 +59,12 @@ type PreconditionsBody struct {
 	// DesignatedClass names the authority class the head is designated as, keying the
 	// min-attestation-class policy (claim 10). Empty means no class gate applies.
 	DesignatedClass string `json:"designated_class,omitempty"`
+	// Envelope carries the encoded task envelope (ee/agentid/taskenv) the chain head
+	// references via its Record.TaskDigest (AGID-05, claim 2). Optional: present only
+	// when a record references a task envelope. The gate verifies its signature + expiry
+	// as a precondition of the key op and binds its digest into the credential; when
+	// absent and no record references an envelope, the gate behaves exactly as AGID-04b.
+	Envelope []byte `json:"envelope,omitempty"`
 }
 
 // ErrDecodePreconditions is returned when the opaque precondition body cannot be
