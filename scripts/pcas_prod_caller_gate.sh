@@ -16,8 +16,8 @@
 #               wires one, the gate FAILS on it — the forcing function to PROMOTE it to
 #               REQUIRED here and mark its claim DELIVERED in TRACEABILITY-MATRIX-v2.md.
 #
-# Run from the repo root; exit 0 = pass. See docs/ops/pcas-ci-infra-task.md for the
-# INT-20/21 provisioning work that lets the DEFERRED tier be promoted.
+# Run from the repo root; exit 0 = pass. The INT-20/21 wiring work that lets the DEFERRED
+# tier be promoted is specified in the harness design doc (PCAS-WIRING-DESIGN.md).
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
