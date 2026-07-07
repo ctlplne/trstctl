@@ -79,4 +79,21 @@
 // it). No network fetching (the caller supplies the credential and the presented
 // action). No cascade / revocation evidence (AGID-10/11). No carriage ENCODING
 // (AGID-08 provides the encoders; this consumes only the decode side).
+//
+// DEFERRED / EXTERNAL-CONSUMER TIER (AGID-INT-CALL reachability gate). This package
+// is, BY DESIGN, an EXTERNAL relying-party SDK (Go + WASM for third parties). It is
+// consumed OUTSIDE this repository -- by a relying party's own service or a browser
+// WASM bundle -- and therefore legitimately has NO in-repo control-plane caller on
+// the cmd/trstctl attach -> ee/agentid/api -> ee/agentid/orchestrator path. That is
+// not a wiring gap: a control-plane "caller" for an offline third-party verifier
+// would be a contrived, meaningless invocation, so none is invented. This mirrors the
+// PCAS gate's DEFERRED tier (the offline PCAS-07 relying-party verifier is consumed by
+// external relying parties, not driven from the control-plane binary). The
+// AGID-INT-CALL production-caller gate therefore treats ee/agentid/verify (and its
+// ./wasm build) as an ALLOWED EXCEPTION: its reachability is the published SDK and its
+// conformance vectors (ee/agentid/verify/vectors.go, sample.go), not a cmd/trstctl
+// call path. Every OTHER previously test-only AGID mechanism (reach.NewEngine, the
+// cascade/terminal constructors, the ceiling/directive-reader/tool-set constructors)
+// DOES gain a non-test control-plane caller on the attach path; only /verify is
+// deferred, and only because its consumer is external by construction.
 package verify

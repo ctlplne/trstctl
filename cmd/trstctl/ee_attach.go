@@ -9,7 +9,9 @@ import (
 	"log/slog"
 
 	_ "trstctl.com/trstctl/ee"
+	eeagentapi "trstctl.com/trstctl/ee/agentid/api"
 	eeagentbrokerstore "trstctl.com/trstctl/ee/agentid/delegation/brokerstore"
+	eeagentorch "trstctl.com/trstctl/ee/agentid/orchestrator"
 	eebilling "trstctl.com/trstctl/ee/billing"
 	eefederation "trstctl.com/trstctl/ee/federation"
 	eegovernance "trstctl.com/trstctl/ee/governance"
@@ -134,6 +136,22 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		// Unlicensed or core-only deployments skip this block, attach no precondition, and
 		// run zero chain-bound issuance while the free badge is unaffected.
 		deps.BrokerIssuancePrecondition = eeagentbrokerstore.NewFailClosedBrokerPrecondition()
+		// AGID-INT-CALL: attach the AGID external API + the licensed-outbox worker so the two
+		// AGID user journeys are reachable from this control-plane binary and every ee/agentid
+		// mechanism gains a PRODUCTION CALLER (the reachability bar), mirroring the FeaturePCAS
+		// block above. The API (request-issuance / request-revocation + read models) attaches
+		// through the feature-neutral route seam; the worker registers on the outbox dispatcher
+		// (INT-04). A POST to /api/v1/agent-delegation/issuances now enqueues an
+		// agentid.issue-chain-bound message that the worker drains and drives through
+		// reach.NewEngine + broker.IssueChainBound (the "chains of authority" feature); a POST to
+		// /api/v1/agent-delegation/revocations enqueues an agentid.revoke-directive message the
+		// worker drives through revoke.NewCascade -> NewExecutor -> NewTerminalTransition (the
+		// "verifiable kill"). The chain-bound in-signer key op stays fail-closed until
+		// AGID-INT-WIRE provisions the signer gate + anchors, but the call path to every
+		// mechanism now exists. The single-hop broker.Issue path is untouched and ungated
+		// (INV-A10 zero removal); this only adds seams, removes nothing.
+		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eeagentapi.NewAPIOptionsFactory())
+		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eeagentorch.NewLicensedOutboxFactory())
 		if log != nil {
 			log.Info("Enterprise agent delegation attached", slog.String("feature", string(license.FeatureAgentDelegation)))
 		}

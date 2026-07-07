@@ -321,6 +321,47 @@ type terminalEventPayload struct {
 	Aggregate   AggregateEvidence `json:"aggregate"`
 }
 
+// LoadTerminalArtifact loads the SIGNED aggregate evidence artifact recorded for a
+// directive's terminal event, encoded for offline verification (EncodeAggregate), by
+// deterministic replay of the AN-2 log. found=false means the directive has not reached
+// the terminal revoked-with-evidence state yet (no terminal event exists), so its
+// aggregate artifact is not available. It is a PURE READ — no flip, no key op — so the
+// control-plane API surface (ee/agentid/api RevocationEvidence) and operators can serve
+// the published artifact a relying party verifies with VerifyAggregateOffline WITHOUT
+// standing up a TerminalTransition (which requires a signer). It reuses the exact terminal
+// event decode the transition writes, so the served artifact is byte-identical to the one
+// the terminal transition minted.
+func LoadTerminalArtifact(ctx context.Context, log EventLog, tenantID, directiveID string) (encoded []byte, found bool, err error) {
+	if log == nil {
+		return nil, false, fmt.Errorf("revoke: LoadTerminalArtifact requires an event log")
+	}
+	var artifact AggregateEvidence
+	if err := log.Replay(ctx, 1, func(e eventspec.Event) error {
+		if found || e.Type != TypeRevocationTerminal || e.TenantID != tenantID {
+			return nil
+		}
+		var pl terminalEventPayload
+		if err := json.Unmarshal(e.Data, &pl); err != nil {
+			return nil // a malformed/foreign terminal event is skipped, not fatal
+		}
+		if pl.DirectiveID == directiveID {
+			artifact = pl.Aggregate
+			found = true
+		}
+		return nil
+	}); err != nil {
+		return nil, false, fmt.Errorf("revoke: load terminal artifact: %w", err)
+	}
+	if !found {
+		return nil, false, nil
+	}
+	enc, err := EncodeAggregate(artifact)
+	if err != nil {
+		return nil, false, err
+	}
+	return enc, true, nil
+}
+
 // appendTerminalEvent appends the terminal event (with the signed aggregate artifact) to
 // the AN-2 log durable-first. It is appended AFTER the terminal flip commits, so the flag
 // is the idempotency guard and a retried transition re-appends nothing (the flip is
