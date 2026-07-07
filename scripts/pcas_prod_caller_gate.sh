@@ -1,56 +1,95 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LicenseRef-trstctl-EE
 #
-# PCAS production-caller gate (INT-INV-1: "delivered != tested").
+# PCAS production-caller gate (INT-INV-1: "delivered != tested"), finalized at INT-23.
 #
 # The PCAS audit (2026-07-06) found every PCAS mechanism was reachable only from
-# _test.go — built and unit-tested, but never wired into a running binary. This
-# gate fails if a PCAS entry point has no NON-TEST caller, so a mechanism cannot be
-# marked delivered on the strength of a passing unit test alone.
+# _test.go — built and unit-tested, but never wired into a running binary. This gate
+# makes that machine-checkable. It is two-tier and BLOCKING:
 #
-# It is ADVISORY during the PCAS-INT harness (many rows are red until their wiring
-# card lands) and becomes BLOCKING at INT-23. Run from the repo root.
+#   REQUIRED  — on the shipped critical path (mint over the isolated signer, the
+#               request-succession API, the succession outbox worker). Each MUST have a
+#               non-test caller; a regression to test-only fails the gate.
+#   DEFERRED  — real + unit/integration-tested, but the production call-path is blocked on
+#               the Phase-5 real-infra e2e (INT-20: real PostgreSQL + NATS + cross-process
+#               signer + scheduled workers). Each MUST currently be test-only. When INT-20
+#               wires one, the gate FAILS on it — the forcing function to PROMOTE it to
+#               REQUIRED here and mark its claim DELIVERED in TRACEABILITY-MATRIX-v2.md.
+#
+# Run from the repo root; exit 0 = pass. See docs/ops/pcas-ci-infra-task.md for the
+# INT-20/21 provisioning work that lets the DEFERRED tier be promoted.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
-# Qualified call-site patterns that must appear in at least one non-test .go file.
-# Format: "call-pattern<TAB>delivering-card".
-CHECKS=$(cat <<'EOF'
-WithSuccessionMinter(	INT-02 (attach minter in signer binary)
-NewProductionMinter(	INT-02 (production minter construction)
-NewLicensedOutboxFactory(	INT-03/04 (succession worker registered on server outbox)
-retirement.New(	INT-17 (retirement worker)
-recovery.Mint(	INT-18 (recovery API/worker)
-issuer.IssueLeaf(	INT-14 (issuer succession)
-staple.VerifyStapled(	INT-15 (stapling carriage)
-federation.Import(	INT-18 (federation import)
-GenerateKEMKey(	INT-12 (KEM through the signer)
-EOF
-)
+ROOTS=(ee internal cmd)
+
+# count_callers <grep-pattern> <defining-file-substring>
+# Non-test .go references to the pattern, excluding the defining file, generated code,
+# and comment lines.
+count_callers() {
+  local pat="$1" deffile="$2"
+  grep -rnI --include='*.go' -e "$pat" "${ROOTS[@]}" 2>/dev/null \
+    | grep -v '_test\.go:' \
+    | grep -v '\.pb\.go:' \
+    | grep -v "$deffile" \
+    | grep -vE ':[0-9]+:[[:space:]]*(//|\*)' \
+    | wc -l | tr -d ' '
+}
 
 fail=0
-printf '%-26s %-8s %s\n' "ENTRY POINT" "STATUS" "DELIVERING CARD"
-printf '%-26s %-8s %s\n' "----------" "------" "---------------"
-while IFS=$'\t' read -r pat card; do
-  [ -z "${pat:-}" ] && continue
-  # Count CALL sites in the product trees (ee/, cmd/): non-test, non-generated,
-  # excluding `func ` declarations and comment lines so a symbol's own definition
-  # does not count as its own caller. internal/ is excluded so the signer's client
-  # plumbing does not mask a missing worker/consumer.
-  hits=$(grep -rInI --include='*.go' -e "$pat" ee cmd 2>/dev/null \
-           | grep -v '_test\.go:' | grep -v '\.pb\.go:' \
-           | grep -vE ':[0-9]+:[[:space:]]*(//|\*|func )' \
-           | wc -l | tr -d ' ')
-  if [ "$hits" -gt 0 ]; then
-    printf '%-26s %-8s %s\n' "${pat}" "WIRED" "$card"
+echo "== PCAS production-caller gate (INT-23) =="
+echo
+
+# REQUIRED: "pattern|defining-file|label"
+REQUIRED=(
+  'NewProductionMinter(|ee/succession/signerwiring/wiring.go|signer minter attach (→ minter.New)'
+  'eesuccessionapi.NewAPIOptionsFactory(|ee/succession/api/api.go|request-succession API factory'
+  'eesuccessionorch.NewLicensedOutboxFactory(|ee/succession/orchestrator/serverfactory.go|succession outbox worker'
+)
+
+echo "-- REQUIRED (must be wired into a shipped binary) --"
+for entry in "${REQUIRED[@]}"; do
+  IFS='|' read -r pat deffile label <<<"$entry"
+  n=$(count_callers "$pat" "$deffile")
+  if [ "$n" -ge 1 ]; then
+    printf "  PASS  %-40s %s non-test caller(s)\n" "$label" "$n"
   else
-    printf '%-26s %-8s %s\n' "${pat}" "UNWIRED" "$card"
+    printf "  FAIL  %-40s 0 non-test callers (regressed to test-only)\n" "$label"
     fail=1
   fi
-done <<< "$CHECKS"
+done
+echo
+
+# DEFERRED: "pattern|defining-file|reason"
+DEFERRED=(
+  'recovery.Mint(|ee/succession/recovery/recovery.go|recovery mint needs the m-of-n API/worker path (INT-20)'
+  'MintPairedThroughSigner(|ee/succession/kem/signer_mint.go|KEM-through-signer needs the served-signer keystore path (INT-12 deferral)'
+  'monitor.New(|ee/succession/monitor/monitor.go|misissuance monitor needs a scheduled worker over the real ledger (INT-20)'
+  'IssueLeafCertificate(|ee/succession/issuer/x509leaf.go|issuer real-leaf needs the CA issuance path wired (INT-20)'
+  'IssueStapledLeaf(|ee/succession/staple/x509carriage.go|stapled-leaf needs a serving path (INT-20)'
+  'federation.Import(|ee/succession/federation/federation.go|federation import needs the bridge API/worker (INT-20)'
+  'NewMinterConstraint(|ee/succession/delegation/delegation.go|delegation constraint needs wiring into the production minter attach (INT-20)'
+  'SignEpochCheckpoint(|ee/succession/checkpoint.go|checkpoint emitter needs a scheduled worker (INT-19/20)'
+  'BuildPostureReport(|ee/succession/report.go|posture report needs API exposure (INT-19/20)'
+)
+
+echo "-- DEFERRED (real + tested; production wiring blocked on INT-20 real infra) --"
+for entry in "${DEFERRED[@]}"; do
+  IFS='|' read -r pat deffile reason <<<"$entry"
+  n=$(count_callers "$pat" "$deffile")
+  if [ "$n" -eq 0 ]; then
+    printf "  OK    %-32s test-only — %s\n" "${pat%(*}" "$reason"
+  else
+    printf "  FAIL  %-32s now has %s non-test caller(s): PROMOTE to REQUIRED + mark claim DELIVERED\n" "${pat%(*}" "$n"
+    fail=1
+  fi
+done
+echo
 
 if [ "$fail" -ne 0 ]; then
-  echo
-  echo ">> UNWIRED entry points remain (expected during PCAS-INT; BLOCKING at INT-23)."
+  echo "RESULT: FAIL — see above."
+  exit 1
 fi
-exit "$fail"
+echo "RESULT: PASS — every shipped-critical-path mechanism has a non-test caller;"
+echo "        every deferred mechanism is honestly still test-only (tracked for INT-20)."
+exit 0
