@@ -188,3 +188,38 @@ func validateSignRequest(req *signerpb.SignRequest) error {
 	}
 	return nil
 }
+
+// gatedIssueRequestToProto encodes an in-signer IssuancePreconditions + the requested
+// agent-key algorithm for the wire, used by the control-plane client (AGID-INT-WIRE). It
+// carries NO private key material -- every body is opaque bytes. An empty algorithm maps to
+// ALGORITHM_UNSPECIFIED (the signer's key op then picks its default).
+func gatedIssueRequestToProto(req IssuancePreconditions, alg crypto.Algorithm) *signerpb.GatedIssueRequest {
+	return &signerpb.GatedIssueRequest{
+		TenantId:          req.TenantID,
+		TrustAnchorRef:    req.TrustAnchorRef,
+		NotBefore:         req.NotBefore,
+		NotAfter:          req.NotAfter,
+		Preconditions:     req.Preconditions,
+		SubjectRepr:       req.SubjectRepr,
+		Attestation:       req.Attestation,
+		AttestationMethod: req.AttestationMethod,
+		Algorithm:         algorithmToProto(alg),
+	}
+}
+
+// issuanceDecisionFromProto decodes a wire GatedIssueResponse for the client
+// (AGID-INT-WIRE). It carries only public material: the approval flag, the signed refusal
+// on a refusal, and, on approval, the opaque binding material + the issued credential
+// public DER + opaque encoded record. No private key is present to decode.
+func issuanceDecisionFromProto(resp *signerpb.GatedIssueResponse) IssuanceDecision {
+	if resp == nil {
+		return IssuanceDecision{}
+	}
+	return IssuanceDecision{
+		Approved:            resp.GetApproved(),
+		RefusalRecord:       resp.GetRefusalRecord(),
+		BindingMaterial:     resp.GetBindingMaterial(),
+		CredentialPublicDER: resp.GetCredentialPublicDer(),
+		EncodedRecord:       resp.GetEncodedRecord(),
+	}
+}

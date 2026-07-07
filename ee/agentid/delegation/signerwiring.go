@@ -90,3 +90,17 @@ func NewSignerGate(cfg SignerConfig) (*Gate, crypto.PublicKey, error) {
 	}
 	return gate, refusalSigner.Public(), nil
 }
+
+// NewSignerIssuanceKeyOp builds the in-signer after-approval issuance KEY OP for
+// attachment via signing.WithIssuanceKeyOp (AGID-INT-WIRE). It is the second half of the
+// gated-issuance mint the signer drives over the transport: NewSignerGate verifies the
+// chain/attestation BEFORE any key op, and THIS key op generates the agent credential key
+// inside the signer's custody and certifies it under the signer-held issuing CA on an
+// approved decision (INV-A1). It reuses the SignerConfig's SignerID (for the bootstrap
+// issuing-CA common name); when the deployment provisions a durable issuing CA it is
+// supplied here, otherwise the key op bootstraps a signer-internal CA inside the boundary.
+// Attached beside NewSignerGate in cmd/trstctl-signer ee_attach so the gate and the key op
+// are wired together.
+func NewSignerIssuanceKeyOp(cfg SignerConfig) *IssuanceKeyOp {
+	return NewIssuanceKeyOp(IssuanceKeyOpConfig{SignerID: cfg.SignerID})
+}

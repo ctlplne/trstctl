@@ -45,6 +45,16 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 		os.Exit(1)
 	}
 	opts = append(opts, signing.WithIssuanceGate(gate))
+
+	// The after-approval issuance KEY OP (AGID-INT-WIRE): the second half of the gated
+	// mint. On an APPROVED decision from the gate above, it generates the agent credential
+	// key INSIDE the signer and certifies it under the signer-held issuing CA, returning
+	// only public material (INV-A1: the gate approves; this key op is the signer's mint).
+	// Attached UNCONDITIONALLY in the EE build beside the gate: the free single-hop path is
+	// approved by the gate with an empty binding and this key op mints it, while every gated
+	// (delegated/attested) issuance is verified before this runs. The core-only build
+	// attaches none, so GatedIssue fails closed with UNIMPLEMENTED there (INV-A10).
+	opts = append(opts, signing.WithIssuanceKeyOp(delegation.NewSignerIssuanceKeyOp(delegation.SignerConfig{SignerID: "trstctl-signer"})))
 	if lic != nil && lic.Has(license.FeaturePCAS) {
 		// floorDir (the signer keystore dir) gives a DURABLE, restart-surviving epoch
 		// floor (INT-05); empty (in-memory signer) => interim floor, matching ephemeral

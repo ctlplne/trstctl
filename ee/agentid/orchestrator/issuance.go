@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
+	"trstctl.com/trstctl/internal/signing"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -79,13 +80,20 @@ type issuanceWorker struct {
 	// recorder persists the issuance binding + AN-6 outbox intent and refuses attestation
 	// replays (claim 9 / INV-A6).
 	recorder *brokerstore.Recorder
+	// signerGate is the AGID-04 in-signer gate the chain-bound precondition consults,
+	// driven over the out-of-process signer transport (AGID-INT-WIRE): the control-plane
+	// adapter that calls the signer's GatedIssue RPC so the chain/attestation is verified
+	// INSIDE the isolated AN-4 signer before any key op and the credential is minted there.
+	// Nil when no signer is configured, in which case the precondition fails closed
+	// (brokerstore.ErrNoSignerGate) and mints nothing (INV-A1).
+	signerGate signing.IssuanceGate
 }
 
 // newIssuanceWorker constructs the issuance worker and, in doing so, every previously
 // test-only reachability/agent-stack constructor gains a non-test caller:
 // reach.NewEngine, reach.NewCeilingPolicy, delegation.NewToolRegistry,
 // agentstack.NewToolManifest/NewRegisteredToolSet, and revoke.NewDirectiveRevocationReader.
-func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, policyEngine *policy.Engine) *issuanceWorker {
+func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, policyEngine *policy.Engine, signerGate signing.IssuanceGate) *issuanceWorker {
 	// The production reachability engine over the tenant credential graph built under RLS
 	// (StoreGraphSource). The watermark binds the verdict's freshness to a real ledger
 	// position; the AGID-02 projection watermark is provisioned in AGID-INT-WIRE, so until
@@ -121,6 +129,7 @@ func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, policyEngine
 		revocationReader: revocationReader,
 		policyEngine:     policyEngine,
 		recorder:         brokerstore.New(core),
+		signerGate:       signerGate,
 	}
 }
 
@@ -265,9 +274,12 @@ func (w *issuanceWorker) driveChainBoundIssuance(ctx context.Context, tenantID s
 	})
 
 	precondition := brokerstore.NewBrokerPrecondition(brokerstore.Config{
-		// Gate stays nil until AGID-INT-WIRE provisions the out-of-process signer's AGID-04
-		// gate + root anchors: fail-closed (ErrNoSignerGate), never an unverified mint.
-		Gate:     nil,
+		// The AGID-04 in-signer gate, driven over the out-of-process signer transport
+		// (AGID-INT-WIRE): w.signerGate calls the signer's GatedIssue RPC, so the
+		// chain/attestation is verified INSIDE the isolated AN-4 signer BEFORE any key op and
+		// the credential is minted there (INV-A1). When no signer is configured w.signerGate
+		// is nil, so the precondition fails closed (ErrNoSignerGate) and mints nothing.
+		Gate:     w.signerGate,
 		Policy:   w.policyEngine,
 		Resolver: resolver,
 		Recorder: w.recorder,

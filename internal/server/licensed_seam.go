@@ -12,4 +12,5 @@ type LicensedOutboxHandler = editionseam.LicensedOutboxHandler
 type LicensedOutboxDeps = editionseam.LicensedOutboxDeps
 type LicensedOutboxFactory = editionseam.LicensedOutboxFactory
 type SuccessionMinter = editionseam.SuccessionMinter
+type IssuanceGate = editionseam.IssuanceGate
 type ProtocolLeafIssuer = editionseam.ProtocolLeafIssuer

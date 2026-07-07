@@ -35,6 +35,13 @@ type KeyFactory interface {
 
 type defaultKeyFactory struct{}
 
+// NewDefaultKeyFactory returns the core default key factory (MPL algorithms only). It is
+// the factory NewServer installs when none is supplied via WithKeyFactory. It is exported
+// so a caller that wants to WRAP the default factory (for example to instrument or count
+// key generations while still producing real keys) can delegate to it without importing an
+// unexported type.
+func NewDefaultKeyFactory() KeyFactory { return defaultKeyFactory{} }
+
 func (defaultKeyFactory) GenerateSigningKey(alg crypto.Algorithm) (Key, error) {
 	return crypto.GenerateLockedKey(alg)
 }

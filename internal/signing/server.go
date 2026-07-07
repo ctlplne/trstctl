@@ -49,6 +49,17 @@ type Server struct {
 	// with ErrNoIssuanceGate (core-only build). Guarded by mu, like minter.
 	issuanceGate IssuanceGate
 
+	// issuanceKeyOp, when non-nil, is the attached generic after-approval issuance key op
+	// (WithIssuanceKeyOp). It performs the real key operation INSIDE the boundary on an
+	// APPROVED gated issuance -- generating the agent credential key here and certifying it
+	// under the signer-held issuing CA -- and returns only public material (the credential
+	// public key + the opaque encoded record). The core defines only the seam; the concrete
+	// certify/binding semantics live in an edition implementation and are opaque to core.
+	// nil = the GatedIssue RPC fails closed with UNIMPLEMENTED (core-only build). Guarded by
+	// mu, like minter/issuanceGate. INV-A1 holds by construction: gatedIssue runs this ONLY
+	// after the gate approved.
+	issuanceKeyOp IssuanceKeyOp
+
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
 	// (RED-003). The signer uses it as verifier material; production token minting
@@ -97,6 +108,7 @@ func NewServer(opts ...ServerOption) *Server {
 		o(s)
 	}
 	s.bindMinterCustody()
+	s.bindIssuanceKeyOpCustody()
 	return s
 }
 
@@ -117,6 +129,7 @@ func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error)
 	}
 	s.keys = keys
 	s.bindMinterCustody()
+	s.bindIssuanceKeyOpCustody()
 	return s, nil
 }
 

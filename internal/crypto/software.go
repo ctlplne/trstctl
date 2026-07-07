@@ -113,6 +113,23 @@ func Digest(h Hash, data []byte) ([]byte, error) {
 // without moving key material (INT-02).
 func SignerFromDigestSigner(d DigestSigner) Signer { return digestBackedSigner{d: d} }
 
+// DigestSignerFrom recovers the underlying DigestSigner from a message Signer produced by
+// SignerFromDigestSigner. It is the inverse view: a caller that holds a message Signer over
+// a signer-held key (for example a succession-custody or issuance-custody key returned as a
+// crypto.Signer) but needs to drive a DIGEST-signing operation (X.509 CSR / certificate
+// signing, which sign a pre-computed TBS digest) recovers the digest-signing view WITHOUT
+// re-hashing. It returns (signer, true) when s is a digest-backed message Signer, or
+// (nil, false) otherwise. The private key never leaves the backend; this is a thin view.
+func DigestSignerFrom(s Signer) (DigestSigner, bool) {
+	if d, ok := s.(digestBackedSigner); ok {
+		return d.d, true
+	}
+	if d, ok := s.(DigestSigner); ok {
+		return d, true
+	}
+	return nil, false
+}
+
 type digestBackedSigner struct{ d DigestSigner }
 
 func (s digestBackedSigner) Public() PublicKey    { return s.d.Public() }

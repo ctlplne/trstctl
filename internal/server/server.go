@@ -1079,6 +1079,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			Store: d.Store, Log: d.Log, Idempotency: idem,
 			IssueProtocolLeaf: s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
 			Minter:            s.successionMinter(),
+			IssuanceGate:      s.issuanceGate(),
 		})
 		if err != nil {
 			return err
@@ -1099,6 +1100,19 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 // case a PCAS handler mints nothing and fails closed. The control plane never obtains
 // key material: minting crosses the signer transport (claims 1/12/49).
 func (s *Server) successionMinter() SuccessionMinter {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+// issuanceGate returns the out-of-process signer as an AGID chain-bound issuance gate for
+// the licensed-outbox seam (AGID-INT-WIRE), or nil when no signer is configured — in which
+// case the AGID chain-bound path fails closed (brokerstore.ErrNoSignerGate) and mints
+// nothing. The control plane never obtains key material: the gated issuance crosses the
+// signer transport (the signer verifies the chain and mints inside the boundary; only
+// public material returns).
+func (s *Server) issuanceGate() IssuanceGate {
 	if s.signer == nil {
 		return nil
 	}

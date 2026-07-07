@@ -165,7 +165,15 @@ type Config struct {
 	// RE-INVOKES its VerifyIssuancePreconditions on every chain-bound request (and every
 	// renewal) BEFORE any key op (INV-A1). Nil ⇒ every chain-bound request is refused
 	// (ErrNoSignerGate), fail-closed.
-	Gate *delegation.Gate
+	//
+	// It is the generic signing.IssuanceGate interface, NOT the concrete *delegation.Gate,
+	// so the SAME precondition drives EITHER an in-process gate (a *delegation.Gate, when
+	// the signer is co-resident, as tests use) OR a REMOTE gate over the signer transport
+	// (a control-plane adapter that calls the signer's GatedIssue RPC — the AGID-INT-WIRE
+	// production path, so the chain/attestation is verified inside the isolated AN-4 signer
+	// and the credential is minted there, with only public material returned). Both satisfy
+	// signing.IssuanceGate; the precondition neither knows nor cares which it holds.
+	Gate signing.IssuanceGate
 	// Policy is the S10.1 decision gate (claim 14). Nil ⇒ every chain-bound request is
 	// refused (ErrNoPolicyGate), fail-closed.
 	Policy PolicyEvaluator

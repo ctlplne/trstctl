@@ -76,6 +76,24 @@ func (c *Client) MintSuccessor(ctx context.Context, req MintRequest) (MintResult
 	return mintResultFromProto(resp), nil
 }
 
+// GatedIssue asks the isolated signer to drive a gated agent-credential issuance over the
+// authenticated transport (AGID-INT-WIRE). The request carries no private key material --
+// the delegation chain / attestation / agent-stack representation are opaque bytes the
+// signer's attached issuance gate re-verifies BEFORE any key op (INV-A1); alg is the
+// agent-key algorithm to generate INSIDE the signer on approval. The response carries only
+// public material: the approval flag, the signed refusal on a refusal, and, on approval,
+// the opaque binding material + the issued credential public key + the opaque encoded
+// record. This method makes *Client a remote issuance driver: the control-plane process
+// requests a chain-bound issuance without ever obtaining private key material -- it can
+// request, but cannot forge.
+func (c *Client) GatedIssue(ctx context.Context, req IssuancePreconditions, alg crypto.Algorithm) (IssuanceDecision, error) {
+	resp, err := c.svc.GatedIssue(ctx, gatedIssueRequestToProto(req, alg))
+	if err != nil {
+		return IssuanceDecision{}, err
+	}
+	return issuanceDecisionFromProto(resp), nil
+}
+
 // DialReady connects to a signer at socketPath and waits up to timeout for it to
 // report SERVING. The control plane uses it to attach to an externally deployed
 // signer (R3.2 external mode), rather than supervising a child.

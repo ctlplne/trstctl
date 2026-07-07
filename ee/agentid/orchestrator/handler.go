@@ -51,7 +51,14 @@ func newHandler(d editionseam.LicensedOutboxDeps, signer crypto.Signer) (*handle
 		return nil, fmt.Errorf("agentid outbox: build policy engine: %w", err)
 	}
 
-	issue := newIssuanceWorker(d.Store, repo, policyEngine)
+	// The AGID-04 in-signer gate driven over the out-of-process signer transport
+	// (AGID-INT-WIRE): the control-plane adapter that calls the signer's GatedIssue RPC.
+	// Nil when no signer is configured (d.IssuanceGate nil) => the chain-bound precondition
+	// fails closed (brokerstore.ErrNoSignerGate) and mints nothing. The agent-credential key
+	// algorithm the signer generates inside the boundary is ECDSA P-256 (the control-plane
+	// norm; the signer's key op picks its own default if left empty).
+	signerGate := NewSignerIssuanceGate(d.IssuanceGate, crypto.ECDSAP256)
+	issue := newIssuanceWorker(d.Store, repo, policyEngine, signerGate)
 	cascade, err := newCascadeWorker(d.Store, repo, d.Log, outbox, signer)
 	if err != nil {
 		return nil, err

@@ -44,6 +44,21 @@ service SignerService {
   // control plane requests a succession without ever obtaining private key
   // material (claims 1/12/49): the control plane can request, but cannot forge.
   rpc MintSuccessor(MintSuccessorRequest) returns (MintSuccessorResponse);
+
+  // GatedIssue drives a gated agent-credential issuance INSIDE the signer over the
+  // transport (AGID-INT-WIRE core). It mirrors MintSuccessor: the request carries only
+  // the opaque issuance preconditions (a self-describing delegation chain / attestation /
+  // agent-stack representation as opaque bytes) and non-secret scalars; the isolated
+  // signer runs the attached issuance gate (WithIssuanceGate) which verifies the chain +
+  // attestation BEFORE any key op (INV-A1), then, on approval, the attached issuance
+  // key-op generates the agent key INSIDE the signer and certifies it under the
+  // signer-held issuing CA. Only PUBLIC material crosses back: the issued credential's
+  // public key + the opaque encoded issuance/refusal record. No private key ever leaves
+  // the boundary. An issuance key-op must be attached (WithIssuanceKeyOp) or the signer
+  // fails closed with UNIMPLEMENTED. This is the wire path by which the control plane
+  // requests a chain-bound issuance without ever obtaining private key material: it can
+  // request, but cannot forge.
+  rpc GatedIssue(GatedIssueRequest) returns (GatedIssueResponse);
 }
 
 // Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
@@ -210,4 +225,58 @@ message MintSuccessorResponse {
   Algorithm successor_algorithm = 2;
   bytes successor_public_key = 3; // PKIX/DER (SubjectPublicKeyInfo)
   bytes encoded_record = 4;       // opaque dual-signed succession record
+}
+
+// GatedIssueRequest mirrors internal/signing.IssuancePreconditions (AGID-04a seam). It
+// carries NO private key material: the delegation chain, attestation evidence, and
+// agent-stack representation are opaque bytes the isolated signer's attached issuance gate
+// re-verifies cryptographically before any key op, and the scalars are non-secret asserted
+// context. The signer never parses the opaque bodies; it forwards them to the gate, whose
+// meaning the attached edition defines.
+message GatedIssueRequest {
+  // tenant_id scopes the request to a tenant (AN-1).
+  string tenant_id = 1;
+  // trust_anchor_ref is the asserted trust-anchor reference the caller claims this
+  // issuance derives from (an opaque subject handle). The gate resolves and checks it.
+  string trust_anchor_ref = 2;
+  // not_before / not_after are the asserted validity bounds (Unix seconds) for the
+  // credential to be issued. The gate decides whether they are acceptable.
+  int64 not_before = 3;
+  int64 not_after = 4;
+  // preconditions is the opaque precondition body (the serialized delegation chain +
+  // designated class + task envelope + reachability verdict). Opaque to the signer core.
+  bytes preconditions = 5;
+  // subject_repr is the opaque agent-stack representation to bind into the issued
+  // credential. Opaque to the signer core.
+  bytes subject_repr = 6;
+  // attestation is the opaque attestation evidence accompanying the request;
+  // attestation_method names the method that produced it. Both opaque to the signer core.
+  bytes attestation = 7;
+  string attestation_method = 8;
+  // algorithm is the agent-credential key algorithm to generate INSIDE the signer on an
+  // approved issuance (the key never leaves the boundary; only its certified public form
+  // returns). Unspecified means the issuance key-op picks its default.
+  Algorithm algorithm = 9;
+}
+
+// GatedIssueResponse mirrors internal/signing.IssuanceDecision. It carries ONLY non-secret
+// material: whether the issuance was approved, the opaque signed refusal record on a
+// refusal, and — on approval — the opaque binding material, the issued credential's public
+// DER, and the opaque encoded issuance record. No private key crosses the boundary.
+message GatedIssueResponse {
+  // approved is true only when the gate approved and the key op minted a credential. When
+  // false, refusal_record carries the signer's signed refusal and no key op was performed.
+  bool approved = 1;
+  // refusal_record is the opaque signed refusal artifact the gate produced on a refusal
+  // (Approved=false). Empty on an approval.
+  bytes refusal_record = 2;
+  // binding_material is the opaque binding the gate bound into the credential (for example
+  // the chain-digest + agent-stack commitment). Empty on a refusal.
+  bytes binding_material = 3;
+  // credential_public_der is the DER (PKIX SubjectPublicKeyInfo) of the issued credential
+  // — the certified agent credential's public form. Public material only; empty on refusal.
+  bytes credential_public_der = 4;
+  // encoded_record is the opaque encoded issuance record the key op produced (for example
+  // the issued certificate DER carrying the binding extension). Empty on a refusal.
+  bytes encoded_record = 5;
 }

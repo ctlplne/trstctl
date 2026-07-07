@@ -194,11 +194,14 @@ var Inventory = []Constructor{
 
 	// ---- orchestrator (licensed-outbox worker: the production caller) ------------
 	{Pkg: "ee/agentid/orchestrator", Name: "NewLicensedOutboxFactory", File: "ee/agentid/orchestrator/orchestrator.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (FeatureAgentDelegation outbox attach)"},
+	{Pkg: "ee/agentid/orchestrator", Name: "NewSignerIssuanceGate", File: "ee/agentid/orchestrator/signergate.go", Tier: TierRequired, SeededVia: "orchestrator issuance worker (control-plane signer GatedIssue adapter, AGID-INT-WIRE)"},
 
 	// ---- delegation (AGID-01/03/04): registry, binding, signer gate, verifier ----
 	{Pkg: "ee/agentid/delegation", Name: "NewToolRegistry", File: "ee/agentid/delegation/authority.go", Tier: TierRequired, SeededVia: "orchestrator issuance worker (tool canonicalization)"},
 	{Pkg: "ee/agentid/delegation", Name: "NewBindingMaterial", File: "ee/agentid/delegation/bind.go", Tier: TierRequired, SeededVia: "delegation verifier (credential binding on the gate path)"},
 	{Pkg: "ee/agentid/delegation", Name: "NewSignerGate", File: "ee/agentid/delegation/signerwiring.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach (WithIssuanceGate)"},
+	{Pkg: "ee/agentid/delegation", Name: "NewSignerIssuanceKeyOp", File: "ee/agentid/delegation/signerwiring.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach (WithIssuanceKeyOp)"},
+	{Pkg: "ee/agentid/delegation", Name: "NewIssuanceKeyOp", File: "ee/agentid/delegation/issuancekeyop.go", Tier: TierRequired, SeededVia: "delegation.NewSignerIssuanceKeyOp (builds the AGID-INT-WIRE in-signer issuance key op)"},
 	{Pkg: "ee/agentid/delegation", Name: "NewGate", File: "ee/agentid/delegation/verifier.go", Tier: TierRequired, SeededVia: "delegation.NewSignerGate (builds the AGID-04b verifier gate)"},
 	{Pkg: "ee/agentid/delegation", Name: "NewTrustStore", File: "ee/agentid/delegation/verifier.go", Tier: TierRequired, SeededVia: "delegation.NewSignerGate (builds the root-anchor trust store)"},
 
