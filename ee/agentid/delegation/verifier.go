@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"trstctl.com/trstctl/ee/agentid/reach"
 	"trstctl.com/trstctl/ee/agentid/taskenv"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
@@ -132,6 +133,31 @@ type Config struct {
 	// fail-closed when this is nil (a referenced envelope must be verifiable). It is
 	// never consulted unless a record references an envelope.
 	TaskEnvelopeTrust taskenv.TrustLookup
+	// ReachabilityTrust resolves a reachability-verdict signer key id to its public key
+	// DER (AGID-06, claims 5/6). It is the signer-held registry of the reachability
+	// engine's verdict-signing identities the gate verifies a presented reachability
+	// verdict's signature against. Setting it (non-nil) ENABLES the reachability
+	// precondition: a chain-bearing request must then carry a valid signed verdict for the
+	// FINAL record's authority (an absent/unsigned/tampered/stale/Exceeded verdict is
+	// refused fail-closed, no key op). A gate with this nil behaves exactly as AGID-05
+	// (the reachability precondition is inert) UNLESS RequireReachability is set. It is the
+	// out-of-signer verdict signer's public key, so graph computation stays OUT of the
+	// signer (the signer trusts the signature, not a live graph).
+	ReachabilityTrust reach.VerdictTrustLookup
+	// ReachabilityWatermark is the signer's freshness policy for a reachability verdict's
+	// graph watermark (AGID-06, claim 6). Optional: when nil, any non-empty watermark is
+	// accepted (verification is still invariant to graph changes after the watermark,
+	// because the signer trusts the signed digest). Production supplies a real staleness
+	// policy (e.g. the verdict watermark must match/track the tenant's current graph
+	// watermark). It is consulted only when a reachability verdict is verified.
+	ReachabilityWatermark reach.WatermarkPolicy
+	// RequireReachability forces the reachability precondition ON even when
+	// ReachabilityTrust is nil: a chain-bearing request with reachability required but no
+	// way to verify a verdict is refused fail-closed. It exists so an operator can assert
+	// "no issuance without a reachability bound" independently of whether a trust lookup is
+	// wired, closing an accidental-misconfiguration gap. Default false preserves AGID-05
+	// behavior.
+	RequireReachability bool
 }
 
 // Gate is the real in-signer verify-before-keygen issuance gate (claim 1). It
@@ -287,6 +313,22 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 		return teres
 	}
 	taskEnvelopeDigest := teres.chainHead
+
+	// (5) Reachability bound (AGID-06, claims 5/6 / INV-A5): when the reachability
+	// precondition is engaged (a verdict is carried, or the gate REQUIRES reachability and
+	// a chain is present), verify the SIGNED reachability verdict as a PRECONDITION of the
+	// key op and BEFORE the binding is assembled. The verdict is bound to the FINAL
+	// record's authority: the gate re-derives the head authority digest and requires the
+	// verdict's SubjectDigest to equal it, checks the verdict signature + watermark, and
+	// honors the ceiling determination. On failure this refuses (CheckReachability) with no
+	// key op — an absent/unsigned/tampered/stale/Exceeded verdict is a ceiling violation.
+	// The graph is an input to this REFUSAL GATE only: nothing is bound into the credential
+	// from reachability (no regression to the binding; §6.3 — not a detection product).
+	// When reachability is not engaged (no verdict and not required), this is inert and the
+	// gate behaves exactly as AGID-05.
+	if rres := g.verifyReachability(req.TenantID, body, now); rres.refused {
+		return rres
+	}
 
 	// Binding target: at least one of a verified chain head or an agent-stack
 	// representation must be present (claims 31/32 fallbacks each satisfy exactly one).

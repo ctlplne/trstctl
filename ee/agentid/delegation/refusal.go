@@ -39,6 +39,7 @@ const (
 	CheckAttestation   = "attestation"           // attestation evidence missing/invalid/below class
 	CheckAgentStack    = "agent_stack"           // agent-stack representation invalid
 	CheckBindingTarget = "binding_target_absent" // neither a chain nor an agent-stack repr to bind
+	CheckReachability  = "reachability"          // reachability verdict absent/invalid/stale or a ceiling exceeded
 )
 
 // ErrRefusalArtifact is returned when a refusal artifact does not verify.

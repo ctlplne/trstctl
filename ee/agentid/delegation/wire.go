@@ -65,6 +65,16 @@ type PreconditionsBody struct {
 	// as a precondition of the key op and binds its digest into the credential; when
 	// absent and no record references an envelope, the gate behaves exactly as AGID-04b.
 	Envelope []byte `json:"envelope,omitempty"`
+	// ReachabilityVerdict carries the encoded signed reachability verdict (ee/agentid/reach)
+	// the reachability engine produced OUTSIDE the signer (AGID-06, claims 5/6 / INV-A5).
+	// Optional in carriage, but fail-closed in effect: the gate verifies the verdict's
+	// signature + watermark + ceiling determination as a PRECONDITION of the key op, bound
+	// to the FINAL record's authority. When the gate has reachability enforcement enabled
+	// (Config.ReachabilityTrust set or Config.RequireReachability) and a chain is present,
+	// an ABSENT/unsigned/tampered/stale/Exceeded verdict is treated as a ceiling violation
+	// (no key op). When reachability is not enabled, this is inert and the gate behaves
+	// exactly as AGID-05 (no regression).
+	ReachabilityVerdict []byte `json:"reachability_verdict,omitempty"`
 }
 
 // ErrDecodePreconditions is returned when the opaque precondition body cannot be
