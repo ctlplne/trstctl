@@ -655,3 +655,181 @@ func (r *Repo) CountEffects(ctx context.Context, tenantID, directiveID string) (
 	})
 	return n, err
 }
+
+// ---------------------------------------------------------------------------
+// AGID-11 terminal-transition + incomplete-jobs + refuse-while-active read paths.
+// AGID-02 defined the revocation SCHEMA and AGID-10 the effect ledger; AGID-11 adds
+// (1) the idempotent terminal flip (marks the directive revoked-with-evidence and
+// stamps terminal_at when every job is evidenced — INV-A9), (2) the incomplete-jobs
+// projection query (jobs with no recorded effect — claim 22), and (3) the tiny reads
+// the CONTROL-PLANE directive-backed revocation reader consults so the in-signer gate
+// refuses issuance/renewal whose chain includes a subject under an active directive
+// (claim 20). The reader lives in ee/agentid/revoke (NOT the signer-linked delegation
+// package), so the signer closure links no SQL; it calls these reads over the AGID-02
+// tables. All queries constrain tenant_id fail-closed (AN-1).
+// ---------------------------------------------------------------------------
+
+// DirectiveTiming carries the two timestamps the interval monitor (claim 23) needs:
+// CreatedAt is when the directive row was recorded (the transition start reference),
+// and TerminalAt is when the terminal revoked-with-evidence state was reached (0/NULL
+// until it is). Both are Unix seconds. Terminal reports whether the directive has
+// reached the terminal state at all.
+type DirectiveTiming struct {
+	DirectiveID string
+	CreatedAt   int64
+	TerminalAt  int64
+	Terminal    bool
+}
+
+// MarkDirectiveTerminalTx flips the directive to the terminal revoked-with-evidence
+// state on the caller's ALREADY-OPEN, RLS-scoped transaction and stamps terminal_at
+// with terminalAt (Unix seconds), ONLY IF the directive is not already terminal, and
+// reports whether it made the transition. It is idempotent: a second call after the
+// flip landed is a no-op (transitioned=false), so a replay/retry of the terminal pass
+// never re-stamps a different terminal_at or re-appends a duplicate transition. The
+// caller (AGID-11 terminal.go) verifies every enqueued and follow-on job is evidenced
+// BEFORE calling this, and appends the terminal ledger event + aggregate artifact in
+// the same durable-first sequence (INV-A9). tenant_id is bound from the RLS GUC.
+func MarkDirectiveTerminalTx(ctx context.Context, tx pgx.Tx, directiveID string, terminalAt int64) (transitioned bool, err error) {
+	tag, err := tx.Exec(ctx,
+		`UPDATE agent_revocation_directives
+		    SET terminal = true, terminal_at = $2
+		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+		    AND directive_id = $1 AND terminal = false`,
+		directiveID, terminalAt)
+	if err != nil {
+		return false, fmt.Errorf("agid store: mark directive terminal: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// FetchDirectiveTiming returns the directive's transition timing (created_at,
+// terminal_at, terminal), scoped to tenantID by RLS. found is false when the caller's
+// tenant has no such directive. The interval monitor reads this to decide whether the
+// observed completion interval (terminal_at - created_at) exceeded the policy interval.
+func (r *Repo) FetchDirectiveTiming(ctx context.Context, tenantID, directiveID string) (t DirectiveTiming, found bool, err error) {
+	err = r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var createdAt int64
+		var terminalAt *int64
+		var terminal bool
+		e := tx.QueryRow(ctx,
+			`SELECT extract(epoch FROM created_at)::bigint, terminal_at, terminal
+			   FROM agent_revocation_directives
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND directive_id = $1`, directiveID).
+			Scan(&createdAt, &terminalAt, &terminal)
+		if errors.Is(e, pgx.ErrNoRows) {
+			return nil
+		}
+		if e != nil {
+			return fmt.Errorf("agid store: fetch directive timing: %w", e)
+		}
+		t = DirectiveTiming{DirectiveID: directiveID, CreatedAt: createdAt, Terminal: terminal}
+		if terminalAt != nil {
+			t.TerminalAt = *terminalAt
+		}
+		found = true
+		return nil
+	})
+	return t, found, err
+}
+
+// IncompleteJobs returns the jobs enqueued under directiveID for which NO signed
+// completion effect has been recorded yet — the "did the kill finish?" projection
+// query (claim 22). A job is incomplete iff it has no row in agent_revocation_effects
+// for its (directive_id, idempotency_key). Ordered by idempotency key for
+// determinism, scoped to tenantID by RLS. An empty result means every job is
+// evidenced (the cascade is complete and eligible for the terminal transition).
+func (r *Repo) IncompleteJobs(ctx context.Context, tenantID, directiveID string) ([]RevocationJob, error) {
+	var out []RevocationJob
+	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT j.idempotency_key, j.credential_id, j.follow_on, j.completion_ref, j.seq
+			   FROM agent_revocation_jobs j
+			  WHERE j.tenant_id = current_setting('trstctl.tenant_id')::uuid
+			    AND j.directive_id = $1
+			    AND NOT EXISTS (
+			        SELECT 1 FROM agent_revocation_effects e
+			         WHERE e.tenant_id = current_setting('trstctl.tenant_id')::uuid
+			           AND e.directive_id = j.directive_id
+			           AND e.idempotency_key = j.idempotency_key
+			    )
+			  ORDER BY j.idempotency_key ASC`, directiveID)
+		if err != nil {
+			return fmt.Errorf("agid store: load incomplete jobs: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var j RevocationJob
+			var completion []byte
+			var seq int64
+			if err := rows.Scan(&j.IdempotencyKey, &j.CredentialID, &j.FollowOn, &completion, &seq); err != nil {
+				return fmt.Errorf("agid store: scan incomplete job: %w", err)
+			}
+			j.DirectiveID = directiveID
+			j.CompletionRef = completion
+			j.Seq = uint64(seq)
+			out = append(out, j)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RecordDigestUnderActiveDirective reports whether the delegation record identified by
+// recordDigest names (as delegator or delegate) a subject against which a NON-TERMINAL
+// (active) revocation directive exists, scoped to tenantID by RLS. It is the single
+// read the CONTROL-PLANE directive-backed revocation reader (ee/agentid/revoke
+// refuse_active.go) consults per hop so the in-signer gate refuses issuance/renewal
+// whose chain includes such a subject while the directive is active (claim 20).
+//
+// A directive is "active" while it has NOT reached the terminal revoked-with-evidence
+// state (terminal = false): the cascade over already-issued credentials + future
+// issuance/renewal is in force. Once the directive is terminal, its cascade has fully
+// evidenced and the pre-issuance refusal for that subject lifts (a fresh, unrelated
+// chain is not force-refused forever). This read performs no key operation and no
+// mutation; it lives entirely in the control plane, so the signer never links SQL —
+// the gate holds only the RevocationReader interface (AN-4).
+func (r *Repo) RecordDigestUnderActiveDirective(ctx context.Context, tenantID string, recordDigest []byte) (bool, error) {
+	var active bool
+	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			     SELECT 1
+			       FROM agent_delegation_records r
+			       JOIN agent_revocation_directives d
+			         ON d.tenant_id = r.tenant_id
+			        AND d.subject_id IN (r.delegator_id, r.delegate_id)
+			        AND d.terminal = false
+			      WHERE r.tenant_id = current_setting('trstctl.tenant_id')::uuid
+			        AND r.record_digest = $1
+			 )`, recordDigest).Scan(&active)
+	})
+	if err != nil {
+		return false, fmt.Errorf("agid store: active-directive read: %w", err)
+	}
+	return active, nil
+}
+
+// SubjectHasActiveDirective reports whether subjectID has a NON-TERMINAL (active)
+// revocation directive, scoped to tenantID by RLS. It is the by-subject companion to
+// RecordDigestUnderActiveDirective, used by the directive-backed reader when a caller
+// resolves a chain to its subjects directly (and by tests). A directive is active
+// while terminal = false (see RecordDigestUnderActiveDirective).
+func (r *Repo) SubjectHasActiveDirective(ctx context.Context, tenantID, subjectID string) (bool, error) {
+	var active bool
+	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			     SELECT 1 FROM agent_revocation_directives
+			      WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			        AND subject_id = $1 AND terminal = false
+			 )`, subjectID).Scan(&active)
+	})
+	if err != nil {
+		return false, fmt.Errorf("agid store: subject active-directive read: %w", err)
+	}
+	return active, nil
+}

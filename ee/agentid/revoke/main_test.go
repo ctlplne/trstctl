@@ -256,6 +256,75 @@ func (h *harness) withTenantTx(t *testing.T, tenant string, fn func(pgx.Tx) erro
 	return h.core.WithTenant(context.Background(), tenant, fn)
 }
 
+// terminal builds a terminal-transition engine over the harness substrates with a fixed
+// clock (deterministic terminal_at) and the harness evidence signer as the aggregate
+// signer. terminalAt fixes the terminal_at timestamp so interval tests are deterministic.
+func (h *harness) terminal(t *testing.T, terminalAt int64) *revoke.TerminalTransition {
+	t.Helper()
+	tt, err := revoke.NewTerminalTransition(h.repo, h.core, h.log, h.signer,
+		revoke.WithTerminalClock(func() int64 { return terminalAt }))
+	if err != nil {
+		t.Fatalf("NewTerminalTransition: %v", err)
+	}
+	return tt
+}
+
+// intervalMonitor builds an interval monitor over the harness substrates with the given
+// policy interval (seconds) and a fixed clock (deterministic elapsed time for a
+// still-draining directive).
+func (h *harness) intervalMonitor(t *testing.T, intervalSecs, now int64) *revoke.IntervalMonitor {
+	t.Helper()
+	m, err := revoke.NewIntervalMonitor(h.repo, h.log, intervalSecs,
+		revoke.WithIntervalClock(func() int64 { return now }))
+	if err != nil {
+		t.Fatalf("NewIntervalMonitor: %v", err)
+	}
+	return m
+}
+
+// enqueueAndDrain enqueues a directive for subject in tenant and drains the outbox to the
+// executor until every job records signed completion evidence, returning the directive
+// result. It is the "run the whole cascade to completion" helper the terminal tests use.
+func (h *harness) enqueueAndDrain(t *testing.T, tenant, subject string, reason revoke.ReasonClass) revoke.DirectiveResult {
+	t.Helper()
+	c := h.cascade(t)
+	ex := h.executor(t)
+	res, err := c.EnqueueDirective(context.Background(), revoke.Directive{TenantID: tenant, Subject: subject, Reason: reason})
+	if err != nil {
+		t.Fatalf("EnqueueDirective: %v", err)
+	}
+	drainOutbox(t, h.outbox, ex, 16)
+	return res
+}
+
+// countEvents counts events of the given type for tenant in the live log (used to assert
+// distinct terminal / interval-exceeded events were appended exactly once).
+func (h *harness) countEvents(t *testing.T, tenant, eventType string) int {
+	t.Helper()
+	n := 0
+	err := h.log.Replay(context.Background(), 1, func(e eventspec.Event) error {
+		if e.Type == eventType && e.TenantID == tenant {
+			n++
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("replay counting %s: %v", eventType, err)
+	}
+	return n
+}
+
+// orchMsg builds an orchestrator.Message the executor consumes, matching what the
+// dispatcher hands a claimed revocation-job entry (used to execute a single job directly).
+func orchMsg(tenant, idempotencyKey string, payload []byte) orchestrator.Message {
+	return orchestrator.Message{
+		TenantID:       tenant,
+		Destination:    revoke.DestinationRevocationJob,
+		IdempotencyKey: idempotencyKey,
+		Payload:        payload,
+	}
+}
+
 // ---- tiny std-free string helpers (kept local so the harness imports stay minimal) ----
 
 func containsAlreadyExists(s string) bool { return contains(s, "already exists") }
