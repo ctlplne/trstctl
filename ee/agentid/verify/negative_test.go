@@ -153,8 +153,8 @@ func TestRefuse_ReprDigestMismatch(t *testing.T) {
 	// Approve the REAL repr's digest, but present a credential whose AgentStackDigest
 	// is the approved one while AgentStackRepr is the swapped bytes.
 	bv := carriage.BoundValues{
-		AgentStackDigest:  crypto.SHA256Sum(realRepr), // approved digest
-		AgentStackRepr:    swappedRepr,                // but mismatched repr bytes
+		AgentStackDigest:  reprDigest(realRepr), // approved digest
+		AgentStackRepr:    swappedRepr,          // but mismatched repr bytes
 		DesignatedClass:   class,
 		ComparatorVersion: "v1",
 	}
@@ -179,14 +179,14 @@ func TestRefuse_MalformedRepr(t *testing.T) {
 	// garbage -- so the digest check passes but decodeBoundRepr fails.
 	garbage := []byte("not-a-canonical-representation")
 	bv := carriage.BoundValues{
-		AgentStackDigest:  crypto.SHA256Sum(garbage),
+		AgentStackDigest:  reprDigest(garbage),
 		AgentStackRepr:    garbage,
 		DesignatedClass:   class,
 		ComparatorVersion: "v1",
 	}
 	// Approve that digest so we get past the approved-set gate to the decode.
 	policy := NewLocalPolicy().
-		ApproveAgentStack(crypto.SHA256Sum(garbage)).
+		ApproveAgentStack(reprDigest(garbage)).
 		PermitClass(class).GrantOperations(class, op).WithToolManifest(tools...)
 	cred, root := tokenCred(t, bv, testNow-60, testNow+60)
 	if _, err := Verify(cred, root, policy, action, clk); !errors.Is(err, ErrMalformedRepr) {

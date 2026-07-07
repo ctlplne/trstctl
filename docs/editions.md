@@ -66,6 +66,8 @@ Community by default unless a signed license explicitly grants it as an extra.
 | `ha_support` | Enterprise | Scale: served enterprise support posture, SLA target catalog, 24x7 production tier, and professional-services packages. |
 | `byok` | Enterprise | Assurance: bring-your-own-key / external custody operations. |
 | `governance` | Enterprise | Governance: advanced approvals, policy, and audit controls. |
+| `pcas` | Enterprise | Proof-carrying algorithm succession. |
+| `agent-delegation` | Enterprise | Chain-bound AI agent identity lifecycle enforcement. |
 | `provider_plane` | Provider | Managed-provider control plane features. |
 | `metering` | Provider | Provider usage metering. |
 | `white_label` | Provider | Provider branding controls. |

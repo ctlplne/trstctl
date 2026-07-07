@@ -3,9 +3,12 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 
+	"trstctl.com/trstctl/ee/agentid/delegation"
 	agidstore "trstctl.com/trstctl/ee/agentid/delegation/store"
+	"trstctl.com/trstctl/ee/agentid/reach"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
@@ -50,6 +53,10 @@ func newHandler(d editionseam.LicensedOutboxDeps, signer crypto.Signer) (*handle
 	if err != nil {
 		return nil, fmt.Errorf("agentid outbox: build policy engine: %w", err)
 	}
+	verdictSigner, verdictKey, err := provisionReachabilityVerdictSigner(d.SignerKeyStoreDir)
+	if err != nil {
+		return nil, err
+	}
 
 	// The AGID-04 in-signer gate driven over the out-of-process signer transport
 	// (AGID-INT-WIRE): the control-plane adapter that calls the signer's GatedIssue RPC.
@@ -58,7 +65,7 @@ func newHandler(d editionseam.LicensedOutboxDeps, signer crypto.Signer) (*handle
 	// algorithm the signer generates inside the boundary is ECDSA P-256 (the control-plane
 	// norm; the signer's key op picks its own default if left empty).
 	signerGate := NewSignerIssuanceGate(d.IssuanceGate, crypto.ECDSAP256)
-	issue := newIssuanceWorker(d.Store, repo, policyEngine, signerGate)
+	issue := newIssuanceWorker(d.Store, repo, d.Log, policyEngine, signerGate, verdictSigner, verdictKey)
 	cascade, err := newCascadeWorker(d.Store, repo, d.Log, outbox, signer)
 	if err != nil {
 		return nil, err
@@ -70,4 +77,21 @@ func newHandler(d editionseam.LicensedOutboxDeps, signer crypto.Signer) (*handle
 		issue:   issue,
 		cascade: cascade,
 	}, nil
+}
+
+const defaultReachabilityVerdictKeyID = "agentid-reach-verdict"
+
+func provisionReachabilityVerdictSigner(floorDir string) (crypto.Signer, reach.VerdictKeyRef, error) {
+	verdictSigner, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		return nil, reach.VerdictKeyRef{}, fmt.Errorf("agentid outbox: generate reachability verdict signer: %w", err)
+	}
+	key := reach.VerdictKeyRef{ID: defaultReachabilityVerdictKeyID, Algorithm: string(verdictSigner.Algorithm())}
+	if floorDir != "" {
+		store := delegation.NewDurableReachabilityTrustStore(floorDir)
+		if err := store.PutVerdictSigner(context.Background(), key.ID, verdictSigner.Public().DER); err != nil {
+			return nil, reach.VerdictKeyRef{}, fmt.Errorf("agentid outbox: provision reachability verdict key: %w", err)
+		}
+	}
+	return verdictSigner, key, nil
 }

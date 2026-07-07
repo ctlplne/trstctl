@@ -92,10 +92,13 @@ func FoldEdges(seq []eventspec.Event, watermark uint64) (EdgeSet, error) {
 				delegate:   v.DelegateID,
 			}
 		case IssuanceRecordedV1:
-			if len(v.CredentialDigest) == 0 {
+			cred := v.CredentialID
+			if cred == "" {
+				cred = hexKey(v.CredentialDigest)
+			}
+			if cred == "" {
 				continue
 			}
-			cred := hexKey(v.CredentialDigest)
 			es.chainHead[cred] = hexKey(v.ChainDigest)
 			es.credSubject[cred] = v.SubjectID
 		default:

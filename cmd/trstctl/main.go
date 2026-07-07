@@ -201,7 +201,7 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 		return true, nil
 	}
 	if flags.migrateStatus {
-		pending, err := server.MigrateStatus(ctx, cfg)
+		pending, err := server.MigrateStatusWithExtraMigrations(ctx, cfg, extraMigrationSources())
 		if err != nil {
 			return true, fmt.Errorf("migrate-status: %w", err)
 		}
@@ -216,7 +216,7 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 		return true, nil
 	}
 	if flags.migrate {
-		n, err := server.RunMigrate(ctx, cfg)
+		n, err := server.RunMigrateWithExtraMigrations(ctx, cfg, extraMigrationSources())
 		if err != nil {
 			return true, fmt.Errorf("migrate: %w", err)
 		}
@@ -248,7 +248,7 @@ func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(stri
 	_, _ = fmt.Fprintf(stderr, "starting %s\n", buildinfo.String("trstctl"))
 	_, _ = io.WriteString(stderr, configSummary(cfg))
 	_, _ = fmt.Fprintf(stderr, "crypto.fips: %s\n", fipsStatus.Summary())
-	if err := server.Run(ctx, cfg, attachEE); err != nil {
+	if err := server.RunWithExtraMigrations(ctx, cfg, extraMigrationSources(), attachEE); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stderr, "trstctl stopped cleanly")

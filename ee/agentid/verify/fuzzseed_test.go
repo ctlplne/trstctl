@@ -59,7 +59,7 @@ func seedRepr(f *testing.F) []byte {
 
 func seedReprDigest(f *testing.F) []byte {
 	f.Helper()
-	return crypto.SHA256Sum(seedRepr(f))
+	return reprDigest(seedRepr(f))
 }
 
 // seedIssuer builds a fixed issuer + JWKS shared by the token seeds.
@@ -99,7 +99,7 @@ func buildValidTokenSeed(f *testing.F) []byte {
 	}
 	repr := seedRepr(f)
 	bv := carriage.BoundValues{
-		AgentStackDigest:  crypto.SHA256Sum(repr),
+		AgentStackDigest:  reprDigest(repr),
 		AgentStackRepr:    repr,
 		DesignatedClass:   "reader",
 		ComparatorVersion: "v1",

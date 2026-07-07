@@ -242,10 +242,14 @@ type BrokerPrecondition struct {
 	cfg Config
 }
 
-// Compile-time assertion that the real precondition satisfies the core seam, so the
-// attach line in cmd/trstctl/ee_attach.go type-checks and it drops in behind the same
-// interface the AGID-07a placeholder implemented.
-var _ broker.IssuancePrecondition = (*BrokerPrecondition)(nil)
+// Compile-time assertions that the real precondition satisfies both core seams: the base
+// precondition for in-process tests and the optional public-result seam for the production
+// signer transport, where GatedIssue mints inside the isolated signer and returns public
+// credential material.
+var (
+	_ broker.IssuancePrecondition           = (*BrokerPrecondition)(nil)
+	_ broker.IssuancePreconditionWithResult = (*BrokerPrecondition)(nil)
+)
 
 // NewFailClosedBrokerPrecondition builds the REAL chain-bound precondition in its
 // fail-closed default form (all dependencies nil), for the AGID activation block in
@@ -284,57 +288,92 @@ func NewBrokerPrecondition(cfg Config) *BrokerPrecondition {
 // refusal returns a non-nil error and the broker mints nothing. It performs no key
 // operation.
 func (p *BrokerPrecondition) CheckIssuancePrecondition(ctx context.Context, view broker.IssuanceView) error {
-	return p.evaluate(ctx, view, false)
+	_, err := p.evaluate(ctx, view, false)
+	return err
+}
+
+// CheckIssuancePreconditionResult runs the same gauntlet as CheckIssuancePrecondition and
+// returns a public credential result when the configured gate is the production signer
+// transport (GatedIssue), because that RPC verifies and mints inside the AN-4 signer. When
+// the configured gate is an in-process verifier that approves without minting, the result is
+// empty and the core broker falls back to its ordinary local issuer after the approval.
+func (p *BrokerPrecondition) CheckIssuancePreconditionResult(ctx context.Context, view broker.IssuanceView) (broker.IssuancePreconditionResult, error) {
+	result, err := p.evaluate(ctx, view, false)
+	if err != nil {
+		return broker.IssuancePreconditionResult{}, err
+	}
+	if len(result.decision.EncodedRecord) == 0 {
+		return broker.IssuancePreconditionResult{}, nil
+	}
+	return broker.IssuancePreconditionResult{
+		CredentialID: result.credentialID,
+		Subject:      view.AgentID,
+		CertDER:      append([]byte(nil), result.decision.EncodedRecord...),
+		NotAfter:     result.notAfter,
+	}, nil
 }
 
 // evaluate is the shared gauntlet for both issuance and renewal (CheckRenewalPrecondition
 // calls it with renewal=true, which is identical here in effect — a renewal re-invokes the
 // SAME policy + in-signer verification before any key op, claim 8 — the flag exists only to
 // tag the audit trail and to document that no step is skipped on renewal).
-func (p *BrokerPrecondition) evaluate(ctx context.Context, view broker.IssuanceView, renewal bool) error {
+func (p *BrokerPrecondition) evaluate(ctx context.Context, view broker.IssuanceView, renewal bool) (evaluationResult, error) {
 	// Resolve the edition-private chain-bound context. Fail closed if none staged.
 	if p.cfg.Resolver == nil {
-		return ErrNoRequestContext
+		return evaluationResult{}, ErrNoRequestContext
 	}
 	req, ok, err := p.cfg.Resolver.Resolve(ctx, view)
 	if err != nil {
-		return fmt.Errorf("brokerstore: resolve chain-bound request: %w", err)
+		return evaluationResult{}, fmt.Errorf("brokerstore: resolve chain-bound request: %w", err)
 	}
 	if !ok {
-		return ErrNoRequestContext
+		return evaluationResult{}, ErrNoRequestContext
 	}
 
 	// (1) Policy gate (claim 14): a DENY performs NO key op and emits an audit event with
 	// the denial reason. This runs FIRST so a denied request never reaches the signer or a
 	// key op.
 	if err := p.checkPolicy(ctx, view, req); err != nil {
-		return err
+		return evaluationResult{}, err
 	}
 
-	// (2) In-signer verification (AGID-04, claim 1 / INV-A1): re-invoke the AGID-04 gate
-	// over the resolved chain + attestation BEFORE any key op. A non-approving decision
-	// refuses. On a renewal this is the SAME full verification (claim 8) — nothing is
-	// trusted from a prior issuance.
-	decision, err := p.verifyInSigner(ctx, view.TenantID, req)
+	// (2) Sub-hour TTL ceiling (claims 7/26 / INV-A7): derive the exact validity window
+	// before the signer RPC so the in-signer key op certifies only this bounded lifetime.
+	// No revocation status is queried — validity is determinable from the credential alone.
+	now := p.cfg.Clock()
+	ttl, err := delegation.SubHourCeiling(req.Chain, now, req.RequestedTTL)
 	if err != nil {
-		return err
+		return evaluationResult{}, err
 	}
 
-	// (3) Sub-hour TTL ceiling (claims 7/26 / INV-A7): the lifetime is the minimum
-	// validity along the chain, clamped strictly sub-hour. No revocation status is
-	// queried — validity is determinable from the credential alone.
-	if _, err := delegation.SubHourCeiling(req.Chain, p.cfg.Clock(), req.RequestedTTL); err != nil {
-		return err
+	// (3) In-signer verification + signer-held key op (AGID-04, claim 1 / INV-A1):
+	// re-invoke the AGID-04 gate over the resolved chain + attestation, carrying the exact
+	// sub-hour validity bounds. A non-approving decision refuses. On a renewal this is the
+	// SAME full verification (claim 8) — nothing is trusted from a prior issuance.
+	decision, err := p.verifyInSigner(ctx, view.TenantID, req, now.Unix(), now.Add(ttl).Unix())
+	if err != nil {
+		return evaluationResult{}, err
 	}
 
 	// (4)+(5) Attestation binding + replay refusal (claim 9 / INV-A6) under the
 	// idempotency key (claim 15 / AN-5): record the verified attestation bound to the
 	// issuance it justifies; a replay is refused; a retried request collapses to one
 	// issuance event.
-	if err := p.recordBinding(ctx, view, req, decision, renewal); err != nil {
-		return err
+	binding, err := p.recordBinding(ctx, view, req, decision, renewal, now, ttl)
+	if err != nil {
+		return evaluationResult{}, err
 	}
-	return nil
+	return evaluationResult{
+		decision:     decision,
+		credentialID: binding.CredentialID,
+		notAfter:     time.Unix(binding.NotAfter, 0).UTC(),
+	}, nil
+}
+
+type evaluationResult struct {
+	decision     signing.IssuanceDecision
+	credentialID string
+	notAfter     time.Time
 }
 
 // checkPolicy evaluates the S10.1 policy gate and, on a deny, emits the AN-2 audit event
@@ -357,6 +396,7 @@ func (p *BrokerPrecondition) checkPolicy(ctx context.Context, view broker.Issuan
 	dec, err := p.cfg.Policy.Evaluate(ctx, policy.Input{
 		Action:   policy.ActionIssue,
 		TenantID: view.TenantID,
+		Profile:  "agent-delegation",
 		Subject:  view.AgentID,
 		Attrs:    attrs,
 	})
@@ -378,7 +418,7 @@ func (p *BrokerPrecondition) checkPolicy(ctx context.Context, view broker.Issuan
 // refused) is turned into ErrSignerRefused with no key op (INV-A1). It NEVER performs a
 // key op: it only consults the gate, exactly as the signer's gatedIssue consults it
 // before the keyOp.
-func (p *BrokerPrecondition) verifyInSigner(ctx context.Context, tenantID string, req ChainBoundRequest) (signing.IssuanceDecision, error) {
+func (p *BrokerPrecondition) verifyInSigner(ctx context.Context, tenantID string, req ChainBoundRequest, notBefore, notAfter int64) (signing.IssuanceDecision, error) {
 	if p.cfg.Gate == nil {
 		return signing.IssuanceDecision{}, ErrNoSignerGate
 	}
@@ -394,6 +434,8 @@ func (p *BrokerPrecondition) verifyInSigner(ctx context.Context, tenantID string
 	gateReq := signing.IssuancePreconditions{
 		TenantID:          tenantID,
 		TrustAnchorRef:    req.TrustAnchorRef,
+		NotBefore:         notBefore,
+		NotAfter:          notAfter,
 		Preconditions:     preBytes,
 		SubjectRepr:       req.SubjectRepr,
 		Attestation:       req.Attestation,
@@ -417,27 +459,23 @@ func (p *BrokerPrecondition) verifyInSigner(ctx context.Context, tenantID string
 // different key) is refused by the durable unique index (delegation.ErrAttestationReplay).
 // The credential id is derived from the approved binding material so the binding row keys
 // to the credential the broker will mint.
-func (p *BrokerPrecondition) recordBinding(ctx context.Context, view broker.IssuanceView, req ChainBoundRequest, decision signing.IssuanceDecision, renewal bool) error {
+func (p *BrokerPrecondition) recordBinding(ctx context.Context, view broker.IssuanceView, req ChainBoundRequest, decision signing.IssuanceDecision, renewal bool, now time.Time, ttl time.Duration) (delegation.IssuanceBinding, error) {
 	if p.cfg.Recorder == nil {
-		return delegation.ErrNoBindingStore
+		return delegation.IssuanceBinding{}, delegation.ErrNoBindingStore
 	}
 	bm, err := delegation.DecodeBindingMaterial(decision.BindingMaterial)
 	if err != nil {
-		return fmt.Errorf("brokerstore: decode approved binding material: %w", err)
+		return delegation.IssuanceBinding{}, fmt.Errorf("brokerstore: decode approved binding material: %w", err)
 	}
 	chainDigest, err := bm.Digest()
 	if err != nil {
-		return fmt.Errorf("brokerstore: binding digest: %w", err)
-	}
-	now := p.cfg.Clock()
-	ttl, err := delegation.SubHourCeiling(req.Chain, now, req.RequestedTTL)
-	if err != nil {
-		return err
+		return delegation.IssuanceBinding{}, fmt.Errorf("brokerstore: binding digest: %w", err)
 	}
 	binding := delegation.IssuanceBinding{
 		TenantID:           view.TenantID,
 		IdempotencyKey:     view.IdempotencyKey,
 		CredentialID:       credentialIDFor(view, chainDigest, renewal),
+		CredentialDER:      append([]byte(nil), decision.EncodedRecord...),
 		SubjectID:          view.AgentID,
 		ChainHeadDigest:    bm.ChainHeadDigest,
 		ChainDigest:        chainDigest,
@@ -447,6 +485,7 @@ func (p *BrokerPrecondition) recordBinding(ctx context.Context, view broker.Issu
 		AttestationClass:   req.DesignatedClass,
 		NotBefore:          now.Unix(),
 		NotAfter:           now.Add(ttl).Unix(),
+		Chain:              append([]delegation.RecordEnvelope(nil), req.Chain...),
 	}
 	// Under the idempotency key: a retried request replays the recorded result without
 	// re-inserting, so exactly one issuance event exists per key (claim 15 / AN-5). The
@@ -458,7 +497,10 @@ func (p *BrokerPrecondition) recordBinding(ctx context.Context, view broker.Issu
 		}
 		return []byte(binding.CredentialID), nil
 	})
-	return err
+	if err != nil {
+		return delegation.IssuanceBinding{}, err
+	}
+	return binding, nil
 }
 
 // credentialIDFor derives a stable credential id for the binding row from the tenant,

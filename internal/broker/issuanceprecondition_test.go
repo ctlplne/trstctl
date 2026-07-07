@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
@@ -27,6 +28,29 @@ func (p *recordingPrecondition) CheckIssuancePrecondition(_ context.Context, v I
 	p.calls++
 	p.views = append(p.views, v)
 	return p.err
+}
+
+type resultPrecondition struct {
+	calls int
+	err   error
+}
+
+func (p *resultPrecondition) CheckIssuancePrecondition(_ context.Context, v IssuanceView) error {
+	p.calls++
+	return p.err
+}
+
+func (p *resultPrecondition) CheckIssuancePreconditionResult(_ context.Context, v IssuanceView) (IssuancePreconditionResult, error) {
+	p.calls++
+	if p.err != nil {
+		return IssuancePreconditionResult{}, p.err
+	}
+	return IssuancePreconditionResult{
+		CredentialID: "signer:credential:1",
+		Subject:      "spiffe://example.org/agent/" + v.AgentID,
+		CertDER:      []byte("signer-public-credential"),
+		NotAfter:     time.Unix(1_760_000_600, 0),
+	}, nil
 }
 
 // TestZeroRemoval_SingleHopIssuanceIntact is the AGID-12 canonical zero-removal
@@ -183,5 +207,40 @@ func TestIssuancePrecondition_ConsultedOnlyOnChainBoundPath(t *testing.T) {
 		PublicKeyDER: wl3.Public().DER, IdempotencyKey: "c3-single",
 	}); err != nil {
 		t.Fatalf("single-hop Issue must remain free even when the chain-bound path fails closed: %v", err)
+	}
+}
+
+// TestIssuancePrecondition_ResultRecordsSignerMint proves the optional result seam records
+// a public credential returned by an external signer instead of invoking the broker's local
+// issuer. The deliberately forged local attestation payload would fail if the broker fell
+// through to Issue.
+func TestIssuancePrecondition_ResultRecordsSignerMint(t *testing.T) {
+	ctx := context.Background()
+	g := graph.New()
+	rec := &auditsink.Recorder{}
+	pre := &resultPrecondition{}
+	b := newBroker(t, g, gate{allow: true}, &memRevoker{}, rec, WithIssuancePrecondition(pre))
+
+	id, err := b.IssueChainBound(ctx, IssueRequest{
+		AgentID:        "chain-signer-agent",
+		Method:         "stub",
+		Payload:        []byte("forged-local-attestation"),
+		Scopes:         []string{"read:files"},
+		IdempotencyKey: "signer-result-1",
+	})
+	if err != nil {
+		t.Fatalf("IssueChainBound with signer result failed: %v", err)
+	}
+	if pre.calls != 1 {
+		t.Fatalf("result precondition calls = %d, want 1", pre.calls)
+	}
+	if id.CredentialID != "signer:credential:1" || string(id.CertDER) != "signer-public-credential" {
+		t.Fatalf("broker did not record the signer result: %+v", id)
+	}
+	if rec.Count("agent.identity.issued") != 1 {
+		t.Fatalf("signer-result issuance audited %d times, want 1", rec.Count("agent.identity.issued"))
+	}
+	if _, ok := g.Node(id.CredentialID); !ok {
+		t.Fatalf("signer-result credential %q was not recorded in the graph", id.CredentialID)
 	}
 }

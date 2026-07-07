@@ -19,7 +19,9 @@
 package brokerstore
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -28,14 +30,21 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"trstctl.com/trstctl/ee/agentid/delegation"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/eventspec"
 	corestore "trstctl.com/trstctl/internal/store"
 )
+
+type eventAppender interface {
+	Append(context.Context, eventspec.Event) (eventspec.Event, error)
+}
 
 // Recorder persists chain-bound issuance bindings and refuses replays over the core
 // store + AN-6 outbox. Construct it with New over the core store; a Recorder with a nil
 // store is fail-closed (every persist refuses with delegation.ErrNoBindingStore).
 type Recorder struct {
 	core  *corestore.Store
+	log   eventAppender
 	clock func() time.Time
 }
 
@@ -57,6 +66,16 @@ func (r *Recorder) WithClock(clock func() time.Time) *Recorder {
 	if clock != nil {
 		r.clock = clock
 	}
+	return r
+}
+
+// WithEventLog attaches the AN-2 log the recorder appends issuance/delegation facts to
+// after the RLS read-model transaction commits. The database writes are idempotent, so if
+// an append succeeds but the worker dies before acknowledging the outbox message, redelivery
+// may append duplicate facts; the AGID projection fold collapses those duplicates by
+// digest/credential id.
+func (r *Recorder) WithEventLog(log eventAppender) *Recorder {
+	r.log = log
 	return r
 }
 
@@ -83,19 +102,37 @@ func (r *Recorder) RecordIssuanceBinding(ctx context.Context, b delegation.Issua
 	if b.CredentialID == "" {
 		return fmt.Errorf("brokerstore: RecordIssuanceBinding requires a credential id")
 	}
+	records, err := projectedChainRecords(b)
+	if err != nil {
+		return err
+	}
 	verifiedAt := r.clock().Unix()
-	err := r.core.WithTenant(ctx, b.TenantID, func(tx pgx.Tx) error {
+	err = r.core.WithTenant(ctx, b.TenantID, func(tx pgx.Tx) error {
+		for _, rec := range records {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO agent_delegation_records
+				   (tenant_id, record_digest, parent_digest, root_anchor, delegator_id, delegate_id,
+				    depth_remaining, not_before, not_after, encoded, seq)
+				 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, 0)
+				 ON CONFLICT (tenant_id, record_digest) DO NOTHING`,
+				rec.digest, nilIfEmptyBytes(rec.parentDigest), rec.rootAnchor, rec.delegatorID, rec.delegateID,
+				int64(rec.depthRemaining), rec.notBefore, rec.notAfter, rec.encoded); err != nil {
+				return fmt.Errorf("record delegation record: %w", err)
+			}
+		}
+
 		// Issuance registry row (INV-A3): binds the verified chain + agent-stack + the
 		// attestation reference. The tenant_id column is bound from the RLS session
 		// setting so the row is always the caller's tenant.
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO agent_issuances
 			   (tenant_id, credential_id, subject_id, chain_head_digest, chain_digest, agent_stack_digest,
-			    task_envelope_digest, not_before, not_after, attestation_ref, seq)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, 0)`,
+			    task_envelope_digest, not_before, not_after, attestation_ref, credential_der, seq)
+			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0)
+			 ON CONFLICT (tenant_id, credential_id) DO NOTHING`,
 			b.CredentialID, b.SubjectID, notNilBytes(b.ChainHeadDigest), notNilBytes(b.ChainDigest),
 			notNilBytes(b.AgentStackDigest), nilIfEmptyBytes(b.TaskEnvelopeDigest),
-			b.NotBefore, b.NotAfter, nilIfEmptyBytes(b.EvidenceDigest)); err != nil {
+			b.NotBefore, b.NotAfter, nilIfEmptyBytes(b.EvidenceDigest), nilIfEmptyBytes(b.CredentialDER)); err != nil {
 			return fmt.Errorf("record issuance: %w", err)
 		}
 
@@ -104,15 +141,8 @@ func (r *Recorder) RecordIssuanceBinding(ctx context.Context, b delegation.Issua
 		// presenting the same evidence violates it, and we surface ErrAttestationReplay.
 		if len(b.EvidenceDigest) > 0 {
 			bindingID := "attbind:" + b.CredentialID
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO agent_attestation_bindings
-				   (tenant_id, binding_id, credential_id, evidence_digest, attestation_class, verified_at, seq)
-				 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, 0)`,
-				bindingID, b.CredentialID, b.EvidenceDigest, b.AttestationClass, verifiedAt); err != nil {
-				if isUniqueViolation(err) {
-					return delegation.ErrAttestationReplay
-				}
-				return fmt.Errorf("record attestation binding: %w", err)
+			if err := insertAttestationBinding(ctx, tx, bindingID, b, verifiedAt); err != nil {
+				return err
 			}
 		}
 
@@ -120,7 +150,13 @@ func (r *Recorder) RecordIssuanceBinding(ctx context.Context, b delegation.Issua
 		// idempotency key is carried so at-least-once delivery is exactly-once downstream.
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3)`,
+			 SELECT current_setting('trstctl.tenant_id')::uuid, $1, $2, $3
+			  WHERE NOT EXISTS (
+			        SELECT 1 FROM outbox
+			         WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			           AND destination = $1
+			           AND idempotency_key = $3
+			  )`,
 			delegation.AttestationBindingDestination, notNilBytes(b.ChainDigest), b.IdempotencyKey); err != nil {
 			return fmt.Errorf("enqueue attestation-binding outbox: %w", err)
 		}
@@ -132,7 +168,124 @@ func (r *Recorder) RecordIssuanceBinding(ctx context.Context, b delegation.Issua
 		}
 		return fmt.Errorf("brokerstore: record issuance binding: %w", err)
 	}
+	if r.log != nil {
+		if err := r.appendLedgerFacts(ctx, b, records); err != nil {
+			return fmt.Errorf("brokerstore: append issuance ledger facts: %w", err)
+		}
+	}
 	return nil
+}
+
+type projectedChainRecord struct {
+	digest         []byte
+	parentDigest   []byte
+	rootAnchor     bool
+	delegatorID    string
+	delegateID     string
+	depthRemaining uint32
+	notBefore      int64
+	notAfter       int64
+	encoded        []byte
+	event          delegation.DelegationRecordedV1
+}
+
+func projectedChainRecords(b delegation.IssuanceBinding) ([]projectedChainRecord, error) {
+	if len(b.Chain) == 0 {
+		return nil, nil
+	}
+	records := make([]projectedChainRecord, 0, len(b.Chain))
+	var head []byte
+	for _, env := range b.Chain {
+		digest, err := env.Record.Digest(nil)
+		if err != nil {
+			return nil, fmt.Errorf("brokerstore: digest delegation record: %w", err)
+		}
+		encoded, err := json.Marshal(env)
+		if err != nil {
+			return nil, fmt.Errorf("brokerstore: encode delegation record: %w", err)
+		}
+		head = digest
+		rec := projectedChainRecord{
+			digest:         append([]byte(nil), digest...),
+			parentDigest:   append([]byte(nil), env.Record.ParentDigest...),
+			rootAnchor:     env.Record.RootAnchor,
+			delegatorID:    env.Record.DelegatorID,
+			delegateID:     env.Record.DelegateID,
+			depthRemaining: env.Record.DepthRemaining,
+			notBefore:      env.Record.Validity.NotBefore,
+			notAfter:       env.Record.Validity.NotAfter,
+			encoded:        encoded,
+			event: delegation.DelegationRecordedV1{
+				TenantID:       b.TenantID,
+				RecordDigest:   append([]byte(nil), digest...),
+				DelegatorID:    env.Record.DelegatorID,
+				DelegateID:     env.Record.DelegateID,
+				ParentDigest:   append([]byte(nil), env.Record.ParentDigest...),
+				RootAnchor:     env.Record.RootAnchor,
+				DepthRemaining: env.Record.DepthRemaining,
+			},
+		}
+		records = append(records, rec)
+	}
+	if len(b.ChainHeadDigest) > 0 && !bytes.Equal(head, b.ChainHeadDigest) {
+		return nil, fmt.Errorf("brokerstore: verified chain head digest does not match projected chain")
+	}
+	return records, nil
+}
+
+func insertAttestationBinding(ctx context.Context, tx pgx.Tx, bindingID string, b delegation.IssuanceBinding, verifiedAt int64) error {
+	var existingCredential string
+	err := tx.QueryRow(ctx,
+		`SELECT credential_id
+		   FROM agent_attestation_bindings
+		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+		    AND evidence_digest = $1`,
+		b.EvidenceDigest).Scan(&existingCredential)
+	if err == nil {
+		if existingCredential == b.CredentialID {
+			return nil
+		}
+		return delegation.ErrAttestationReplay
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("load attestation binding: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO agent_attestation_bindings
+		   (tenant_id, binding_id, credential_id, evidence_digest, attestation_class, verified_at, seq)
+		 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, 0)
+		 ON CONFLICT (tenant_id, binding_id) DO NOTHING`,
+		bindingID, b.CredentialID, b.EvidenceDigest, b.AttestationClass, verifiedAt); err != nil {
+		if isUniqueViolation(err) {
+			return delegation.ErrAttestationReplay
+		}
+		return fmt.Errorf("record attestation binding: %w", err)
+	}
+	return nil
+}
+
+func (r *Recorder) appendLedgerFacts(ctx context.Context, b delegation.IssuanceBinding, records []projectedChainRecord) error {
+	for _, rec := range records {
+		ev, err := delegation.Encode(rec.event)
+		if err != nil {
+			return err
+		}
+		if _, err := r.log.Append(ctx, ev); err != nil {
+			return err
+		}
+	}
+	issuance, err := delegation.Encode(delegation.IssuanceRecordedV1{
+		TenantID:         b.TenantID,
+		CredentialID:     b.CredentialID,
+		CredentialDigest: crypto.SHA256Sum([]byte(b.CredentialID)),
+		SubjectID:        b.SubjectID,
+		ChainDigest:      append([]byte(nil), b.ChainHeadDigest...),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = r.log.Append(ctx, issuance)
+	return err
 }
 
 // isUniqueViolation reports whether err is a PostgreSQL unique-constraint violation

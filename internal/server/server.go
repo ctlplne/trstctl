@@ -90,6 +90,11 @@ type Deps struct {
 	Signer            SignerProvider            // may be nil → issuance is unavailable (fail closed)
 	SignAuthorizer    *crypto.SignAuthorizer    // test/eval token provider; production should use SignTokenProvider
 	SignTokenProvider signing.SignTokenProvider // independent approval-token source for dual-control signer handles
+	// SignerKeyStoreDir is the local signer provisioning/keystore directory when
+	// the deployment has one. Licensed APIs may use it through generic, file-based
+	// provisioning seams; external signer deployments can leave it empty or point it
+	// at their operator-managed shared directory.
+	SignerKeyStoreDir string
 	// ManagedKeyFactory is supplied only by the tagged EE attach seam when the
 	// Enterprise BYOK feature is licensed and configured. Nil leaves the
 	// /api/v1/managed-keys/* surface unmounted, so Community receives 404.
@@ -834,7 +839,9 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		)
 	}
 	if d.LicensedAPIOptionsFactory != nil {
-		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{Store: d.Store, Log: d.Log, Outbox: s.outbox})
+		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{
+			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
+		})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1078,6 +1085,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		licensed, err = d.LicensedOutboxFactory(LicensedOutboxDeps{
 			Store: d.Store, Log: d.Log, Idempotency: idem,
 			IssueProtocolLeaf: s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
+			SignerKeyStoreDir: d.SignerKeyStoreDir,
 			Minter:            s.successionMinter(),
 			IssuanceGate:      s.issuanceGate(),
 		})

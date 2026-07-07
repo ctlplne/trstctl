@@ -100,7 +100,8 @@ See **[Enrollment protocols](features/enrollment-protocols.md)**.
 
 ## Workload identity
 
-See **[Workload identity](features/workload-identity.md)**.
+See **[Workload identity](features/workload-identity.md)** and
+**[Agent delegation](features/agent-delegation.md)**.
 
 | ID | Feature |
 |----|---------|
@@ -109,6 +110,9 @@ See **[Workload identity](features/workload-identity.md)**.
 | F30 | Workload attestation chain |
 | F59 | Non-human identity lifecycle management |
 | F61 | AI-agent / NHI identity broker |
+
+Licensed AGID chain-bound agent credentials are documented in
+[Agent delegation](features/agent-delegation.md).
 
 ## SSH
 

@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"trstctl.com/trstctl/ee/agentid/delegation"
+	"trstctl.com/trstctl/ee/agentid/reach"
 	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/ee/succession/signerwiring"
 	"trstctl.com/trstctl/internal/license"
@@ -26,6 +27,14 @@ import (
 // TestSignerDependencyClosure / TestNoHTTPServerLinkedIntoSigner).
 func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir string) []signing.ServerOption {
 	opts = append(opts, signing.WithKeyFactory(eepqc.NewSignerKeyFactory()))
+	var anchorSource delegation.RootAnchorSource
+	var reachabilityTrust reach.VerdictTrustLookup
+	var attestor delegation.AttestationVerifier
+	if floorDir != "" {
+		anchorSource = delegation.NewDurableAnchorStore(floorDir)
+		reachabilityTrust = delegation.NewDurableReachabilityTrustStore(floorDir).TrustLookup
+		attestor = delegation.NewDurableAttestationTrustStore(floorDir)
+	}
 	// Issuance-precondition gate (AGID-04a seam; AGID-04b verifier). Attached
 	// UNCONDITIONALLY in the EE build: the free single-hop issuance path is never gated
 	// -- license/policy gating is the control plane's job (AGID-07), not the signer's --
@@ -39,7 +48,13 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 	// until then a delegated chain fails closed at the root-anchor check rather than being
 	// approved unverified. The core-only build attaches none, so the seam stays inert
 	// there (INV-A10).
-	gate, _, err := delegation.NewSignerGate(delegation.SignerConfig{SignerID: "trstctl-signer"})
+	gate, _, err := delegation.NewSignerGate(delegation.SignerConfig{
+		SignerID:            "trstctl-signer",
+		AnchorSource:        anchorSource,
+		Attestor:            attestor,
+		ReachabilityTrust:   reachabilityTrust,
+		RequireReachability: reachabilityTrust != nil,
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: build AGID issuance gate: %v\n", err)
 		os.Exit(1)

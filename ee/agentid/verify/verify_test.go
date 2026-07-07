@@ -150,7 +150,7 @@ func jwksJSON(t *testing.T, pub crypto.PublicKey, kid string) []byte {
 // repr bytes (so the verifier's defense-in-depth digest check passes).
 func fullBinding(repr []byte, class string, taskEnvDigest []byte) carriage.BoundValues {
 	return carriage.BoundValues{
-		AgentStackDigest:   crypto.SHA256Sum(repr),
+		AgentStackDigest:   reprDigest(repr),
 		AgentStackRepr:     repr,
 		DesignatedClass:    class,
 		ComparatorVersion:  "v1",
@@ -162,7 +162,7 @@ func fullBinding(repr []byte, class string, taskEnvDigest []byte) carriage.Bound
 // class + operation, and carries the tool manifest.
 func approvePolicy(repr []byte, class, op string, tools []string) LocalPolicy {
 	return NewLocalPolicy().
-		ApproveAgentStack(crypto.SHA256Sum(repr)).
+		ApproveAgentStack(reprDigest(repr)).
 		PermitClass(class).
 		GrantOperations(class, op).
 		WithToolManifest(tools...)

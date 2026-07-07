@@ -8,12 +8,14 @@ import (
 	"testing"
 
 	agidapi "trstctl.com/trstctl/ee/agentid/api"
+	"trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/internal/authz"
 )
 
-// TestRoutes_Surface asserts the AGID REST surface: the two mutating journey routes and
-// the three read routes exist with the expected methods, success codes, mutation flags,
-// and permissions. This locks the contract the cmd/trstctl attach exposes (the
+// TestRoutes_Surface asserts the AGID REST surface: the root-anchor provisioning routes,
+// the two mutating journey routes, and the three read routes exist with the expected
+// methods, success codes, mutation flags, and permissions. This locks the contract the
+// cmd/trstctl attach exposes (the
 // reachability entry points for the two AGID user journeys) without a datastore.
 func TestRoutes_Surface(t *testing.T) {
 	routes := agidapi.Routes(nil)
@@ -41,8 +43,11 @@ func TestRoutes_Surface(t *testing.T) {
 		success  string
 		perm     authz.Permission
 	}{
+		{"POST /api/v1/agent-delegation/root-anchors", true, "200", authz.AgentsWrite},
+		{"GET /api/v1/agent-delegation/root-anchors", false, "200", authz.AgentsRead},
 		{"POST /api/v1/agent-delegation/issuances", true, "202", authz.AgentsWrite},
 		{"POST /api/v1/agent-delegation/revocations", true, "202", authz.AgentsWrite},
+		{"GET /api/v1/agent-delegation/credential", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/chain", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/revocations/incomplete-jobs", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/revocations/evidence", false, "200", authz.AgentsRead},
@@ -67,7 +72,7 @@ func TestRoutes_Surface(t *testing.T) {
 	}
 }
 
-// TestOpenAPI_Surface asserts the AGID OpenAPI 3.1 document renders, carries the five AGID
+// TestOpenAPI_Surface asserts the AGID OpenAPI 3.1 document renders, carries the AGID
 // paths, and documents the Idempotency-Key header on every mutation (AN-5), mirroring the
 // PCAS golden test's sanity checks. It does not pin a checked-in golden (kept lean), but it
 // enforces the contract the release conformance gate depends on.
@@ -85,8 +90,10 @@ func TestOpenAPI_Surface(t *testing.T) {
 	}
 	paths, _ := doc["paths"].(map[string]any)
 	for _, p := range []string{
+		"/api/v1/agent-delegation/root-anchors",
 		"/api/v1/agent-delegation/issuances",
 		"/api/v1/agent-delegation/revocations",
+		"/api/v1/agent-delegation/credential",
 		"/api/v1/agent-delegation/chain",
 		"/api/v1/agent-delegation/revocations/incomplete-jobs",
 		"/api/v1/agent-delegation/revocations/evidence",
@@ -135,6 +142,14 @@ func TestService_NilBackedReadsAreSafe(t *testing.T) {
 		t.Errorf("FetchChain on nil store = %+v, want empty", chain)
 	}
 
+	cred, err := svc.FetchCredential(ctx, "t", "cred:1")
+	if err != nil {
+		t.Fatalf("FetchCredential: %v", err)
+	}
+	if cred.Found || len(cred.CredentialDER) != 0 {
+		t.Errorf("FetchCredential on nil store = %+v, want empty", cred)
+	}
+
 	inc, err := svc.IncompleteJobs(ctx, "t", "dir:1")
 	if err != nil {
 		t.Fatalf("IncompleteJobs: %v", err)
@@ -151,6 +166,14 @@ func TestService_NilBackedReadsAreSafe(t *testing.T) {
 		t.Errorf("RevocationEvidence on nil store = %+v, want empty", ev)
 	}
 
+	roots, err := svc.ListRootAnchors(ctx, "t")
+	if err != nil {
+		t.Fatalf("ListRootAnchors: %v", err)
+	}
+	if roots.Count != 0 || len(roots.Anchors) != 0 {
+		t.Errorf("ListRootAnchors on nil store = %+v, want empty", roots)
+	}
+
 	iss, err := svc.IssueChainBound(ctx, "t", agidapi.IssueChainBoundRequest{AgentID: "a"})
 	if err != nil {
 		t.Fatalf("IssueChainBound: %v", err)
@@ -165,6 +188,32 @@ func TestService_NilBackedReadsAreSafe(t *testing.T) {
 	}
 	if rev.DirectiveID == "" || rev.Status != "queued" {
 		t.Errorf("Revoke ack = %+v, want a queued directive id", rev)
+	}
+}
+
+func TestService_RegisterRootAnchorProvisionsSignerFloor(t *testing.T) {
+	dir := t.TempDir()
+	provisioner := delegation.NewDurableAnchorStore(dir)
+	svc := agidapi.NewServiceWithRootAnchorProvisioner(nil, nil, nil, provisioner)
+	publicDER := []byte{1, 2, 3, 4}
+
+	resp, err := svc.RegisterRootAnchor(context.Background(), "tenant-1", agidapi.RootAnchorRequest{
+		KeyID:     "root-key",
+		PublicPEM: string(delegation.EncodeRootAnchorPEM(publicDER)),
+		AuthRef:   "webauthn:credential-1",
+	})
+	if err != nil {
+		t.Fatalf("RegisterRootAnchor: %v", err)
+	}
+	if !resp.Provisioned {
+		t.Fatalf("RegisterRootAnchor response = %+v, want provisioned", resp)
+	}
+	anchor, err := provisioner.GetRootAnchor("tenant-1", "root-key")
+	if err != nil {
+		t.Fatalf("GetRootAnchor: %v", err)
+	}
+	if string(anchor.PublicDER) != string(publicDER) || anchor.AuthRef != "webauthn:credential-1" {
+		t.Fatalf("provisioned anchor = %+v, want DER %v and auth ref", anchor, publicDER)
 	}
 }
 

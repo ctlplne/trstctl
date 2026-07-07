@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/ee/agentid/agentstack"
+	"trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -21,7 +22,7 @@ import (
 //   - toolManifestDigest(tools) == agentstack.ToolManifest{tools}.Digest()
 //   - decodeBoundRepr(rep.CanonicalBytes()) recovers the SAME digests agentstack
 //     bound (system-prompt digest, tool-manifest digest, model block)
-//   - reprDigest(rep.CanonicalBytes()) == rep.Digest()
+//   - reprDigest(rep.CanonicalBytes()) == delegation.AgentStackDigestOf(rep.CanonicalBytes())
 
 // TestDifferential_ToolManifestDigestMatchesAgentstack proves the tool-manifest
 // digest this package recomputes equals the one agentstack produces, for several
@@ -46,7 +47,8 @@ func TestDifferential_ToolManifestDigestMatchesAgentstack(t *testing.T) {
 
 // TestDifferential_ReprDecodeMatchesAgentstack builds a real agentstack
 // Representation, takes its canonical bytes, and proves decodeBoundRepr recovers
-// the exact bound digests + model block, and that reprDigest equals rep.Digest.
+// the exact bound digests + model block, and that reprDigest equals the AGID-04
+// signer-bound digest helper.
 func TestDifferential_ReprDecodeMatchesAgentstack(t *testing.T) {
 	tools := []string{"read-object", "list-bucket"}
 
@@ -110,11 +112,10 @@ func assertReprMatches(t *testing.T, rep agentstack.Representation, tools []stri
 			t.Fatalf("weights digest mismatch")
 		}
 	}
-	// reprDigest == rep.Digest (the value AGID-04 binds as AgentStackDigest).
-	wantDig, err := rep.Digest()
-	if err != nil {
-		t.Fatalf("rep.Digest: %v", err)
-	}
+	// reprDigest == delegation.AgentStackDigestOf (the value AGID-04 binds as
+	// AgentStackDigest). The runtime verifier mirrors this helper locally to keep its
+	// dependency surface lean.
+	wantDig := delegation.AgentStackDigestOf(cb)
 	if !bytes.Equal(reprDigest(cb), wantDig) {
 		t.Fatalf("reprDigest mismatch\n got=%x\nwant=%x", reprDigest(cb), wantDig)
 	}

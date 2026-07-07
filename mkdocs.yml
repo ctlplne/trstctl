@@ -58,6 +58,7 @@ nav:
       - ACME & DNS validation: features/acme-and-dns.md
       - Enrollment protocols: features/enrollment-protocols.md
       - Workload identity: features/workload-identity.md
+      - Agent delegation: features/agent-delegation.md
       - SSH: features/ssh.md
       - Lifecycle & PQC: features/lifecycle-and-pqc.md
       - Deployment connectors: features/deployment-connectors.md

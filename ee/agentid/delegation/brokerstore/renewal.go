@@ -35,5 +35,6 @@ import (
 // edition control plane stages the renewal's chain/attestation via the RequestResolver
 // keyed by the view's idempotency key, exactly as for a first issuance.
 func (p *BrokerPrecondition) CheckRenewalPrecondition(ctx context.Context, view broker.IssuanceView) error {
-	return p.evaluate(ctx, view, true)
+	_, err := p.evaluate(ctx, view, true)
+	return err
 }

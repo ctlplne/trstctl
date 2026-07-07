@@ -4,7 +4,6 @@ package delegation
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"sync"
@@ -243,13 +242,17 @@ func (op *IssuanceKeyOp) bootstrapCACommonName() string {
 // the binding keeps the same (subject, chain) mapping to the same handle so a retried
 // issuance reuses the key rather than proliferating handles.
 func (op *IssuanceKeyOp) agentKeyHandle(req signing.IssuancePreconditions, bm BindingMaterial) string {
-	h := sha256.New()
-	h.Write([]byte("agid/agentid/agent-key-handle/v1"))
-	h.Write([]byte(req.TenantID))
-	h.Write([]byte(req.TrustAnchorRef))
-	h.Write(bm.ChainHeadDigest)
-	h.Write(bm.AgentStackDigest)
-	return "agid-agent:" + hex.EncodeToString(h.Sum(nil)[:16])
+	var b []byte
+	b = append(b, "agid/agentid/agent-key-handle/v1"...)
+	b = append(b, req.TenantID...)
+	b = append(b, 0)
+	b = append(b, req.TrustAnchorRef...)
+	b = append(b, 0)
+	b = append(b, bm.ChainHeadDigest...)
+	b = append(b, 0)
+	b = append(b, bm.AgentStackDigest...)
+	sum := crypto.SHA256Sum(b)
+	return "agid-agent:" + hex.EncodeToString(sum[:16])
 }
 
 // digestSignerOf recovers the DIGEST-signing view of the custody's message-Signer so the

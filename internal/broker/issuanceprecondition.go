@@ -5,6 +5,7 @@ package broker
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // issuanceprecondition.go is the broker's generic, feature-neutral issuance-
@@ -51,6 +52,39 @@ type IssuanceView struct {
 // (precondition first, mint only on approval).
 type IssuancePrecondition interface {
 	CheckIssuancePrecondition(ctx context.Context, view IssuanceView) error
+}
+
+// IssuancePreconditionResult is an optional public result returned by a precondition that
+// drives the key operation outside the broker, for example over an isolated signer
+// transport. It is still feature-neutral: the core sees only public credential material
+// and records it using the same graph/audit path as the ordinary issuer. Private key
+// material must never be present here.
+type IssuancePreconditionResult struct {
+	// CredentialID is the stable id to record for the public credential.
+	CredentialID string
+	// Subject is the public credential subject.
+	Subject string
+	// CertDER is the opaque public credential/certificate record returned by the external
+	// signer. It carries no private key material.
+	CertDER []byte
+	// NotAfter is the public credential expiry.
+	NotAfter time.Time
+}
+
+// Issued reports whether the precondition returned a usable public credential result. A
+// result with no public credential bytes is treated as a pure precondition approval and
+// falls back to the broker's ordinary issuer, preserving older in-process preconditions.
+func (r IssuancePreconditionResult) Issued() bool {
+	return len(r.CertDER) > 0
+}
+
+// IssuancePreconditionWithResult is the optional extension for preconditions that already
+// drove a public credential mint before returning. Broker.IssueChainBound consults it
+// first when present; an empty result preserves the original behavior (precondition first,
+// then broker issuer).
+type IssuancePreconditionWithResult interface {
+	IssuancePrecondition
+	CheckIssuancePreconditionResult(ctx context.Context, view IssuanceView) (IssuancePreconditionResult, error)
 }
 
 // IssuancePreconditionFunc adapts a bare function to IssuancePrecondition, so an
@@ -117,6 +151,21 @@ func (b *Broker) IssueChainBound(ctx context.Context, req IssueRequest) (AgentId
 	p := b.issuancePrecondition
 	if p == nil {
 		return AgentIdentity{}, ErrNoIssuancePrecondition
+	}
+	if withResult, ok := p.(IssuancePreconditionWithResult); ok {
+		result, err := withResult.CheckIssuancePreconditionResult(ctx, b.viewFor(req))
+		if err != nil {
+			return AgentIdentity{}, err
+		}
+		if result.Issued() {
+			return b.recordIssuedIdentity(ctx, req, issuedIdentityMaterial{
+				Subject:      result.Subject,
+				CredentialID: result.CredentialID,
+				CertDER:      result.CertDER,
+				NotAfter:     result.NotAfter,
+			}), nil
+		}
+		return b.Issue(ctx, req)
 	}
 	if err := p.CheckIssuancePrecondition(ctx, b.viewFor(req)); err != nil {
 		return AgentIdentity{}, err

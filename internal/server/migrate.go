@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/store"
@@ -26,6 +27,13 @@ func requireExternalPostgres(cfg *config.Config) error {
 // applying anything. It backs `trstctl --migrate-status`, the pre-migration
 // check an operator runs before taking a backup and upgrading.
 func MigrateStatus(ctx context.Context, cfg *config.Config) ([]string, error) {
+	return MigrateStatusWithExtraMigrations(ctx, cfg, nil)
+}
+
+// MigrateStatusWithExtraMigrations is the explicit migration dry-run path with
+// optional extension migration sources. The core binary passes none; tagged
+// edition binaries pass their fs.FS bundles so the operator sees the real plan.
+func MigrateStatusWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrations []fs.FS) ([]string, error) {
 	if err := requireExternalPostgres(cfg); err != nil {
 		return nil, err
 	}
@@ -34,6 +42,7 @@ func MigrateStatus(ctx context.Context, cfg *config.Config) ([]string, error) {
 		return nil, fmt.Errorf("open store: %w", err)
 	}
 	defer st.Close()
+	registerExtraMigrations(st, extraMigrations)
 	return st.PendingMigrations(ctx)
 }
 
@@ -42,6 +51,12 @@ func MigrateStatus(ctx context.Context, cfg *config.Config) ([]string, error) {
 // `trstctl --migrate`, the deliberate, post-backup migration step used when
 // automatic migration is disabled (TRSTCTL_MIGRATE_AUTO=false).
 func RunMigrate(ctx context.Context, cfg *config.Config) (int, error) {
+	return RunMigrateWithExtraMigrations(ctx, cfg, nil)
+}
+
+// RunMigrateWithExtraMigrations applies core plus optional extension migrations
+// through the same feature-neutral store seam the boot path uses.
+func RunMigrateWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrations []fs.FS) (int, error) {
 	if err := requireExternalPostgres(cfg); err != nil {
 		return 0, err
 	}
@@ -50,6 +65,7 @@ func RunMigrate(ctx context.Context, cfg *config.Config) (int, error) {
 		return 0, fmt.Errorf("open store: %w", err)
 	}
 	defer st.Close()
+	registerExtraMigrations(st, extraMigrations)
 
 	pending, err := st.PendingMigrations(ctx)
 	if err != nil {

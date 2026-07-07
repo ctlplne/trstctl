@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/internal/broker"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // precondition_test.go covers the AGID-07b chain-bound precondition paths that need NO
@@ -279,6 +280,67 @@ func TestPolicyGate_DenyNoKeyOpAuditReason(t *testing.T) {
 	}
 	if ev.tenantID != "t1" {
 		t.Fatalf("audit event tenant = %q, want t1 (AN-1/AN-2)", ev.tenantID)
+	}
+}
+
+type signerResultGate struct {
+	req signing.IssuancePreconditions
+}
+
+func (g *signerResultGate) VerifyIssuancePreconditions(_ context.Context, req signing.IssuancePreconditions) (signing.IssuanceDecision, error) {
+	g.req = req
+	bm, err := delegation.NewBindingMaterial([]byte("chain-head"), req.SubjectRepr, "agent", []byte("attestation"), "auth-ref", nil)
+	if err != nil {
+		return signing.IssuanceDecision{}, err
+	}
+	encoded, err := bm.Encode()
+	if err != nil {
+		return signing.IssuanceDecision{}, err
+	}
+	return signing.IssuanceDecision{
+		Approved:        true,
+		BindingMaterial: encoded,
+		EncodedRecord:   []byte("signer-cert-der"),
+	}, nil
+}
+
+// TestSignerResultCarriesSubHourValidityAndCredential proves the production signer
+// transport shape: the precondition derives the exact sub-hour validity before calling the
+// signer, passes that window into the gate/key-op request, records the binding, and returns
+// the signer's public credential result to the core broker.
+func TestSignerResultCarriesSubHourValidityAndCredential(t *testing.T) {
+	now := time.Unix(1_760_000_000, 0)
+	clock := func() time.Time { return now }
+	gate := &signerResultGate{}
+	rec := newCountingRecorder()
+	pre := NewBrokerPrecondition(Config{
+		Gate:     gate,
+		Policy:   &fakePolicy{allow: true},
+		Resolver: staticResolver{req: ChainBoundRequest{SubjectRepr: []byte("agent-stack"), RequestedTTL: 20 * time.Minute, TrustAnchorRef: "root-key"}, found: true},
+		Recorder: rec,
+		Clock:    clock,
+	})
+
+	result, err := pre.CheckIssuancePreconditionResult(context.Background(), broker.IssuanceView{
+		TenantID: "t1", AgentID: "agent-1", IdempotencyKey: "k-signer-result", AttestationMethod: "tpm",
+	})
+	if err != nil {
+		t.Fatalf("CheckIssuancePreconditionResult: %v", err)
+	}
+	if string(result.CertDER) != "signer-cert-der" {
+		t.Fatalf("signer result cert = %q", result.CertDER)
+	}
+	if !result.NotAfter.Equal(now.Add(20 * time.Minute)) {
+		t.Fatalf("result NotAfter = %s, want %s", result.NotAfter, now.Add(20*time.Minute))
+	}
+	if gate.req.NotBefore != now.Unix() || gate.req.NotAfter != now.Add(20*time.Minute).Unix() {
+		t.Fatalf("signer validity window = %d..%d, want %d..%d", gate.req.NotBefore, gate.req.NotAfter, now.Unix(), now.Add(20*time.Minute).Unix())
+	}
+	if rec.count() != 1 {
+		t.Fatalf("recorded %d bindings, want 1", rec.count())
+	}
+	if rec.last().CredentialID != result.CredentialID {
+		t.Fatalf("recorded credential id %q != result %q", rec.last().CredentialID, result.CredentialID)
 	}
 }
 

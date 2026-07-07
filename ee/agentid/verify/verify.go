@@ -258,11 +258,24 @@ func enforceAuthority(boundClass, op string, policy LocalPolicy) error {
 	return nil
 }
 
-// reprDigest recomputes the agent-stack representation digest from its opaque
-// canonical bytes, exactly as agentstack.Representation.Digest() does: the SHA-256
-// of the canonical bytes through internal/crypto (AN-3). It lets the verifier
-// confirm the opaque bytes match the separately-bound AgentStackDigest.
-func reprDigest(repr []byte) []byte { return crypto.SHA256Sum(repr) }
+// reprDigest recomputes the AGID signer-bound agent-stack representation digest from
+// its opaque canonical bytes, mirroring delegation.AgentStackDigestOf without importing
+// the signer-linked package into the RP verifier. The domain tag and length framing are
+// part of the AGID-04 binding semantics, so the RP compares against the exact digest the
+// signer embedded in the credential.
+func reprDigest(repr []byte) []byte {
+	var b []byte
+	b = append(b, "agid/agentid/agent-stack-repr/v1"...)
+	b = appendVerifyU64(b, uint64(len(repr)))
+	b = append(b, repr...)
+	return crypto.SHA256Sum(b)
+}
+
+func appendVerifyU64(b []byte, v uint64) []byte {
+	return append(b,
+		byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32),
+		byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+}
 
 // normOp normalizes an operation identifier (trim + lowercase) for comparison,
 // matching the tool-id normalization discipline.

@@ -23,9 +23,10 @@ type LicensedAPIOptionsFactory func(LicensedAPIOptionsDeps) ([]api.Option, error
 type LicensedOutboxFactory func(LicensedOutboxDeps) (LicensedOutboxHandler, error)
 
 type LicensedAPIOptionsDeps struct {
-	Store  *store.Store
-	Log    *events.Log
-	Outbox *orchestrator.Outbox
+	Store             *store.Store
+	Log               *events.Log
+	Outbox            *orchestrator.Outbox
+	SignerKeyStoreDir string
 }
 
 type ProtocolLeafIssuer func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte) ([]byte, error)
@@ -63,6 +64,10 @@ type LicensedOutboxDeps struct {
 	Log               *events.Log
 	Idempotency       *orchestrator.Idempotency
 	IssueProtocolLeaf ProtocolLeafIssuer
+	// SignerKeyStoreDir is the shared signer provisioning floor. Licensed handlers may
+	// write public, non-secret trust material here for the isolated signer to read without
+	// linking SQL, NATS, or HTTP.
+	SignerKeyStoreDir string
 	// Minter is the out-of-process signer as a succession minter (INT-04); nil when no
 	// signer is configured. A PCAS licensed-outbox handler uses it to mint on a
 	// pcas.succession-request message.

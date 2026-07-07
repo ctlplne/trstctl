@@ -4,6 +4,7 @@ package verify
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
@@ -12,16 +13,15 @@ import (
 )
 
 // agentstack_repr.go recovers the bound agent-stack DIGESTS from the OPAQUE
-// canonical representation bytes the carriage forms transport (BoundValues.
-// AgentStackRepr). Those bytes are exactly ee/agentid/agentstack.Representation.
-// CanonicalBytes(); the AGID-08 carriage package deliberately carries them opaque
-// so the relying-party verifier stays dependency-light -- in particular it need
-// NOT import ee/agentid/agentstack, which pulls internal/attest (and, natively,
-// database/sql) and would bloat the WASM build. This file therefore re-derives
-// only what a relying party needs -- the system-prompt digest, the tool-manifest
-// digest, and the model block -- with a tiny, allocation-BOUNDED, panic-FREE
-// decoder that MIRRORS the AGID-03 canonical framing byte-for-byte (same domain
-// prefix, same field tags, same length-prefixed fixed-width big-endian layout).
+// representation bytes the carriage forms transport (BoundValues.AgentStackRepr).
+// It accepts both ee/agentid/agentstack.Representation.CanonicalBytes() and the deployed
+// JSON representation shape the signer gate minimally validates. The AGID-08 carriage
+// package deliberately carries those bytes opaque so the relying-party verifier stays
+// dependency-light -- in particular it need NOT import ee/agentid/agentstack, which pulls
+// internal/attest (and, natively, database/sql) and would bloat the WASM build. This file
+// therefore re-derives only what a relying party needs -- the system-prompt digest, the
+// tool-manifest digest, and the model block -- with tiny, allocation-BOUNDED, panic-FREE
+// decoders.
 //
 // It is an UNTRUSTED-INPUT surface (the repr bytes arrive inside a caller-supplied
 // credential, before the signature is trusted), so every read is bounds-checked
@@ -76,16 +76,15 @@ type boundRepr struct {
 	Runtime            string
 }
 
-// decodeBoundRepr decodes the opaque canonical representation bytes into the
-// bound digests. It is fail-closed and never panics on hostile input; any
-// structural error yields ErrMalformedRepr and a zero value. It intentionally
-// stops after the fields a relying party needs are consumed and then REQUIRES the
-// buffer to end (no trailing bytes), so it accepts exactly the AGID-03 canonical
-// encoding and nothing looser.
+// decodeBoundRepr decodes opaque representation bytes into the bound digests. It is
+// fail-closed and never panics on hostile input; any structural error yields
+// ErrMalformedRepr and a zero value. The canonical decoder requires exact framing and no
+// trailing bytes; the JSON decoder requires the deployed representation fields and model
+// form to be complete.
 func decodeBoundRepr(repr []byte) (boundRepr, error) {
 	d := &reprDecoder{buf: repr}
 	if !d.expectPrefix(reprCanonicalPrefix) {
-		return boundRepr{}, ErrMalformedRepr
+		return decodeJSONBoundRepr(repr)
 	}
 	var r boundRepr
 
@@ -172,6 +171,50 @@ func decodeBoundRepr(repr []byte) (boundRepr, error) {
 	if len(r.SystemPromptDigest) == 0 || len(r.ToolManifestDigest) == 0 {
 		// A representation missing a component digest is not well-formed (AGID-03
 		// Validate would reject it); fail closed.
+		return boundRepr{}, ErrMalformedRepr
+	}
+	return r, nil
+}
+
+func decodeJSONBoundRepr(repr []byte) (boundRepr, error) {
+	var jr struct {
+		SystemPromptDigest []byte `json:"system_prompt_digest"`
+		ToolManifestDigest []byte `json:"tool_manifest_digest"`
+		Model              struct {
+			Form            uint8  `json:"form"`
+			WeightsDigest   []byte `json:"weights_digest,omitempty"`
+			ProviderModelID string `json:"provider_model_id,omitempty"`
+			ModelVersion    string `json:"model_version,omitempty"`
+		} `json:"model"`
+		Orchestrator string `json:"orchestrator,omitempty"`
+		Runtime      string `json:"runtime,omitempty"`
+	}
+	if err := json.Unmarshal(repr, &jr); err != nil {
+		return boundRepr{}, ErrMalformedRepr
+	}
+	r := boundRepr{
+		SystemPromptDigest: append([]byte(nil), jr.SystemPromptDigest...),
+		ToolManifestDigest: append([]byte(nil), jr.ToolManifestDigest...),
+		ModelForm:          jr.Model.Form,
+		ModelWeightsDigest: append([]byte(nil), jr.Model.WeightsDigest...),
+		ModelProviderID:    jr.Model.ProviderModelID,
+		ModelVersion:       jr.Model.ModelVersion,
+		Orchestrator:       jr.Orchestrator,
+		Runtime:            jr.Runtime,
+	}
+	if len(r.SystemPromptDigest) == 0 || len(r.ToolManifestDigest) == 0 {
+		return boundRepr{}, ErrMalformedRepr
+	}
+	switch r.ModelForm {
+	case modelFormWeightsDigest:
+		if len(r.ModelWeightsDigest) == 0 || r.ModelProviderID != "" || r.ModelVersion != "" {
+			return boundRepr{}, ErrMalformedRepr
+		}
+	case modelFormProviderID:
+		if len(r.ModelWeightsDigest) != 0 || r.ModelProviderID == "" || r.ModelVersion == "" {
+			return boundRepr{}, ErrMalformedRepr
+		}
+	default:
 		return boundRepr{}, ErrMalformedRepr
 	}
 	return r, nil

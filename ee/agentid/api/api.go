@@ -34,6 +34,7 @@ import (
 	"net/http"
 	"time"
 
+	"trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/editionseam"
@@ -116,6 +117,21 @@ type ChainResponse struct {
 	Count        int      `json:"count"`
 }
 
+// CredentialResponse is the public issued credential read model. CredentialDER is the
+// signer-minted public certificate/credential bytes a caller presents to relying parties;
+// the digest fields let clients correlate it with the delegation chain and agent stack.
+type CredentialResponse struct {
+	CredentialID     string `json:"credential_id"`
+	SubjectID        string `json:"subject_id,omitempty"`
+	CredentialDER    []byte `json:"credential_der,omitempty"`
+	ChainHeadDigest  []byte `json:"chain_head_digest,omitempty"`
+	ChainDigest      []byte `json:"chain_digest,omitempty"`
+	AgentStackDigest []byte `json:"agent_stack_digest,omitempty"`
+	NotBefore        int64  `json:"not_before,omitempty"`
+	NotAfter         int64  `json:"not_after,omitempty"`
+	Found            bool   `json:"found"`
+}
+
 // IncompleteJob is one still-open descendant job of a directive (AGID-11 IncompleteJobs):
 // its credential id and whether it is a follow-on job. An operator polls this to watch a
 // verifiable kill drain to completion.
@@ -146,9 +162,39 @@ type RevocationEvidenceResponse struct {
 	Artifact        []byte   `json:"artifact,omitempty"`
 }
 
+// RootAnchorRequest registers or updates one tenant-scoped AGID root anchor. public_der
+// is base64 in JSON (Go's []byte encoding); public_pem is accepted as the operator-friendly
+// form. Exactly one public-key form is required. auth_ref is non-secret phishing-resistant
+// enrollment evidence (for example a FIDO2 credential id or hardware-token reference).
+type RootAnchorRequest struct {
+	KeyID     string `json:"key_id"`
+	PublicDER []byte `json:"public_der,omitempty"`
+	PublicPEM string `json:"public_pem,omitempty"`
+	AuthRef   string `json:"auth_ref"`
+}
+
+// RootAnchorResponse is the public read model for one registered root anchor.
+type RootAnchorResponse struct {
+	KeyID       string    `json:"key_id"`
+	PublicDER   []byte    `json:"public_der,omitempty"`
+	AuthRef     string    `json:"auth_ref"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	Provisioned bool      `json:"provisioned"`
+}
+
+// RootAnchorsResponse lists a tenant's registered root anchors.
+type RootAnchorsResponse struct {
+	Anchors []RootAnchorResponse `json:"anchors"`
+	Count   int                  `json:"count"`
+}
+
 // Service is the AGID API backend. The concrete implementation is store/log/outbox
 // backed (service.go); handlers depend only on this interface (the PCAS pattern).
 type Service interface {
+	// RegisterRootAnchor persists and provisions a tenant-scoped delegation root anchor.
+	RegisterRootAnchor(ctx context.Context, tenantID string, req RootAnchorRequest) (RootAnchorResponse, error)
+	// ListRootAnchors returns the caller tenant's registered delegation root anchors.
+	ListRootAnchors(ctx context.Context, tenantID string) (RootAnchorsResponse, error)
 	// IssueChainBound stages a chain-bound issuance as an idempotent outbox job
 	// (agentid.issue-chain-bound) for the orchestrator to drive.
 	IssueChainBound(ctx context.Context, tenantID string, req IssueChainBoundRequest) (IssueChainBoundResponse, error)
@@ -157,6 +203,8 @@ type Service interface {
 	Revoke(ctx context.Context, tenantID string, req RevokeRequest) (RevokeResponse, error)
 	// FetchChain returns an issued credential's delegation chain (offline-verifiable).
 	FetchChain(ctx context.Context, tenantID, credentialID string) (ChainResponse, error)
+	// FetchCredential returns the public signer-minted credential bytes.
+	FetchCredential(ctx context.Context, tenantID, credentialID string) (CredentialResponse, error)
 	// IncompleteJobs returns a directive's still-open descendant jobs (AGID-11).
 	IncompleteJobs(ctx context.Context, tenantID, directiveID string) (IncompleteJobsResponse, error)
 	// RevocationEvidence returns a directive's aggregate revocation-evidence artifact and
@@ -170,7 +218,11 @@ type Service interface {
 // NewAPIOptionsFactory.
 func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
-		svc := NewService(d.Store, d.Log, d.Outbox)
+		var provisioner RootAnchorProvisioner
+		if d.SignerKeyStoreDir != "" {
+			provisioner = delegation.NewDurableAnchorStore(d.SignerKeyStoreDir)
+		}
+		svc := NewServiceWithRootAnchorProvisioner(d.Store, d.Log, d.Outbox, provisioner)
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),
 			api.WithLicensedSchemas(schemas()),
@@ -184,6 +236,19 @@ func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 // served routes against a test Service (the PCAS pattern).
 func Routes(svc Service) []api.LicensedRoute {
 	return []api.LicensedRoute{
+		{
+			Method: "POST", Path: "/api/v1/agent-delegation/root-anchors", OperationID: "registerAgentDelegationRootAnchor",
+			Summary:       "Register a tenant-scoped AGID delegation root anchor (idempotent)",
+			Handler:       func(a *api.API) http.HandlerFunc { return registerRootAnchorHandler(a, svc) },
+			RequestSchema: "AGIDRootAnchorRequest", ResponseSchema: "AGIDRootAnchor",
+			SuccessCode: "200", Mutation: true, Permission: authz.AgentsWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/agent-delegation/root-anchors", OperationID: "listAgentDelegationRootAnchors",
+			Summary:        "List tenant-scoped AGID delegation root anchors",
+			Handler:        func(a *api.API) http.HandlerFunc { return listRootAnchorsHandler(a, svc) },
+			ResponseSchema: "AGIDRootAnchors", SuccessCode: "200", Permission: authz.AgentsRead,
+		},
 		{
 			Method: "POST", Path: "/api/v1/agent-delegation/issuances", OperationID: "issueChainBoundCredential",
 			Summary:       "Issue a chain-bound agent credential (idempotent)",
@@ -208,6 +273,13 @@ func Routes(svc Service) []api.LicensedRoute {
 			ResponseSchema: "AGIDDelegationChain", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 		{
+			Method: "GET", Path: "/api/v1/agent-delegation/credential", OperationID: "getAgentDelegationCredential",
+			Summary:        "Fetch a signer-minted AGID credential for offline relying-party presentation",
+			Handler:        func(a *api.API) http.HandlerFunc { return credentialHandler(a, svc) },
+			Query:          []api.RouteParam{{Name: "credential_id", Type: "string", Description: "stable issued-credential identifier"}},
+			ResponseSchema: "AGIDCredential", SuccessCode: "200", Permission: authz.AgentsRead,
+		},
+		{
 			Method: "GET", Path: "/api/v1/agent-delegation/revocations/incomplete-jobs", OperationID: "getRevocationIncompleteJobs",
 			Summary:        "Fetch a revocation directive's still-open descendant jobs (AGID-11 incomplete-jobs query)",
 			Handler:        func(a *api.API) http.HandlerFunc { return incompleteJobsHandler(a, svc) },
@@ -221,6 +293,60 @@ func Routes(svc Service) []api.LicensedRoute {
 			Query:          []api.RouteParam{{Name: "directive_id", Type: "string", Description: "revocation directive id"}},
 			ResponseSchema: "AGIDRevocationEvidence", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
+	}
+}
+
+// registerRootAnchorHandler persists and provisions one tenant-scoped root anchor. It is a
+// mutation because it writes both the RLS store and, when configured, the signer's durable
+// local anchor floor; api.Mutate supplies the AN-5 idempotency envelope.
+func registerRootAnchorHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idempotencyKey := r.Header.Get("Idempotency-Key")
+		a.Mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+			var req RootAnchorRequest
+			if err := api.DecodeJSON(r, &req); err != nil {
+				return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+			}
+			if req.KeyID == "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "key_id is required")
+			}
+			if req.AuthRef == "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "auth_ref is required")
+			}
+			if len(req.PublicDER) == 0 && req.PublicPEM == "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "public_der or public_pem is required")
+			}
+			if len(req.PublicDER) != 0 && req.PublicPEM != "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "provide only one of public_der or public_pem")
+			}
+			start := time.Now()
+			var opErr error
+			defer func() { a.ObserveFeature("agentid", "register-root-anchor", start, opErr) }()
+			resp, err := svc.RegisterRootAnchor(ctx, tenantID, req)
+			if err != nil {
+				opErr = err
+				return 0, nil, err
+			}
+			return http.StatusOK, resp, nil
+		})
+	}
+}
+
+func listRootAnchorsHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		start := time.Now()
+		resp, err := svc.ListRootAnchors(r.Context(), tenantID)
+		a.ObserveFeature("agentid", "root-anchors", start, err)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "failed to list root anchors")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 
@@ -309,6 +435,29 @@ func chainHandler(a *api.API, svc Service) http.HandlerFunc {
 	}
 }
 
+func credentialHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		credentialID := r.URL.Query().Get("credential_id")
+		if credentialID == "" {
+			writeProblem(w, http.StatusBadRequest, "credential_id query parameter is required")
+			return
+		}
+		start := time.Now()
+		resp, err := svc.FetchCredential(r.Context(), tenantID, credentialID)
+		a.ObserveFeature("agentid", "credential", start, err)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "failed to fetch credential")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
 func incompleteJobsHandler(a *api.API, svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tenantID, ok := a.Tenant(r)
@@ -381,6 +530,29 @@ func writeProblem(w http.ResponseWriter, status int, detail string) {
 
 func schemas() map[string]*api.Schema {
 	return map[string]*api.Schema{
+		"AGIDRootAnchorRequest": api.ObjectSchema(map[string]*api.Schema{
+			"key_id":     api.StringSchema(),
+			"public_der": api.StringSchema(), // base64-encoded PKIX SubjectPublicKeyInfo DER
+			"public_pem": api.StringSchema(),
+			"auth_ref":   api.StringSchema(),
+		}, "key_id", "auth_ref"),
+		"AGIDRootAnchor": api.ObjectSchema(map[string]*api.Schema{
+			"key_id":      api.StringSchema(),
+			"public_der":  api.StringSchema(), // base64-encoded PKIX SubjectPublicKeyInfo DER
+			"auth_ref":    api.StringSchema(),
+			"created_at":  api.TimestampSchema(),
+			"provisioned": api.BooleanSchema(),
+		}, "key_id", "auth_ref"),
+		"AGIDRootAnchors": api.ObjectSchema(map[string]*api.Schema{
+			"anchors": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
+				"key_id":      api.StringSchema(),
+				"public_der":  api.StringSchema(),
+				"auth_ref":    api.StringSchema(),
+				"created_at":  api.TimestampSchema(),
+				"provisioned": api.BooleanSchema(),
+			}, "key_id", "auth_ref")),
+			"count": api.IntegerSchema(),
+		}, "anchors", "count"),
 		"AGIDIssuanceRequest": api.ObjectSchema(map[string]*api.Schema{
 			"agent_id":           api.StringSchema(),
 			"trust_anchor_ref":   api.StringSchema(),
@@ -418,6 +590,17 @@ func schemas() map[string]*api.Schema {
 			"records":       api.ArraySchema(api.StringSchema()), // base64-encoded opaque records
 			"count":         api.IntegerSchema(),
 		}, "credential_id", "records", "count"),
+		"AGIDCredential": api.ObjectSchema(map[string]*api.Schema{
+			"credential_id":      api.StringSchema(),
+			"subject_id":         api.StringSchema(),
+			"credential_der":     api.StringSchema(), // base64-encoded public credential DER
+			"chain_head_digest":  api.StringSchema(),
+			"chain_digest":       api.StringSchema(),
+			"agent_stack_digest": api.StringSchema(),
+			"not_before":         api.IntegerSchema(),
+			"not_after":          api.IntegerSchema(),
+			"found":              api.BooleanSchema(),
+		}, "credential_id", "found"),
 		"AGIDIncompleteJobs": api.ObjectSchema(map[string]*api.Schema{
 			"directive_id": api.StringSchema(),
 			"jobs": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{

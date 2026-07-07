@@ -100,6 +100,65 @@ func singleAnchorChain(t *testing.T, reg *ToolRegistry, tenantID, authRef string
 	return bc.envelopes, anchors, bc
 }
 
+func TestSignerGate_UsesDurableAnchorSourceDynamically(t *testing.T) {
+	const tenantID = "tenant-durable"
+	reg := (*ToolRegistry)(nil)
+	envs, anchors, _ := singleAnchorChain(t, reg, tenantID, "fido2:root-authenticator")
+	store := NewDurableAnchorStore(t.TempDir())
+	gate, _, err := NewSignerGate(SignerConfig{
+		SignerID:     "test-signer",
+		AnchorSource: store,
+		Revocations:  NeverRevoked{},
+	})
+	if err != nil {
+		t.Fatalf("NewSignerGate: %v", err)
+	}
+	pre, err := encodePreconditionsForTest(PreconditionsBody{Chain: envs})
+	if err != nil {
+		t.Fatalf("encode preconditions: %v", err)
+	}
+	req := signing.IssuancePreconditions{TenantID: tenantID, TrustAnchorRef: "leaf", Preconditions: pre}
+
+	emptyDecision, err := gate.VerifyIssuancePreconditions(backgroundCtx(), req)
+	if err != nil {
+		t.Fatalf("gate with empty durable source returned hard error: %v", err)
+	}
+	if emptyDecision.Approved {
+		t.Fatal("gate approved before the durable root anchor was provisioned")
+	}
+	art := decodeRefusalForTest(t, emptyDecision.RefusalRecord)
+	if art.FailedCheck != CheckRootAnchor {
+		t.Fatalf("empty durable source failed_check = %q, want %q", art.FailedCheck, CheckRootAnchor)
+	}
+
+	if err := store.PutRootAnchor(backgroundCtx(), tenantID, "root-key", anchors["root-key"]); err != nil {
+		t.Fatalf("PutRootAnchor: %v", err)
+	}
+	approvedDecision, err := gate.VerifyIssuancePreconditions(backgroundCtx(), req)
+	if err != nil {
+		t.Fatalf("gate after durable root provision returned hard error: %v", err)
+	}
+	if !approvedDecision.Approved {
+		t.Fatalf("gate did not approve after durable root provision; refusal=%s", string(approvedDecision.RefusalRecord))
+	}
+
+	restartedGate, _, err := NewSignerGate(SignerConfig{
+		SignerID:     "test-signer",
+		AnchorSource: NewDurableAnchorStore(store.floorDir),
+		Revocations:  NeverRevoked{},
+	})
+	if err != nil {
+		t.Fatalf("NewSignerGate after restart: %v", err)
+	}
+	restartedDecision, err := restartedGate.VerifyIssuancePreconditions(backgroundCtx(), req)
+	if err != nil {
+		t.Fatalf("restarted gate returned hard error: %v", err)
+	}
+	if !restartedDecision.Approved {
+		t.Fatalf("restarted gate did not load durable root; refusal=%s", string(restartedDecision.RefusalRecord))
+	}
+}
+
 // TestIssue_VerifiesChainBeforeKeyOp proves INV-A1: with an instrumented fake keystore
 // recording call order, the gate verifies the whole chain and approves BEFORE any key op,
 // and exactly one key op runs, strictly after the gate consult. It also asserts a refused

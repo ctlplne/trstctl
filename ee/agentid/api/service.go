@@ -5,11 +5,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/ee/agentid/delegation"
 	agidstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -33,6 +35,13 @@ const (
 	RevocationDirectiveDestination = "agentid.revoke-directive"
 )
 
+// RootAnchorProvisioner mirrors the signer's durable local root-anchor floor. The
+// delegation.DurableAnchorStore satisfies it. It is an interface so tests can prove the
+// API writes the signer's provisioning path without linking the API to process control.
+type RootAnchorProvisioner interface {
+	PutRootAnchor(ctx context.Context, tenantID, keyID string, anchor delegation.RootAnchor) error
+}
+
 // service is the store/log/outbox-backed AGID API Service. IssueChainBound and Revoke
 // enqueue an idempotent outbox job through the core outbox (the AGID mechanisms run
 // asynchronously in the orchestrator worker); the read routes read the RLS-scoped AGID-02
@@ -44,6 +53,8 @@ type service struct {
 	repo   *agidstore.Repo
 	log    *events.Log
 	outbox *orchestrator.Outbox
+
+	anchorProvisioner RootAnchorProvisioner
 }
 
 // NewService builds the store/log/outbox-backed AGID API Service. It is exported so the
@@ -57,7 +68,96 @@ func NewService(store *corestore.Store, log *events.Log, outbox *orchestrator.Ou
 	return s
 }
 
+// NewServiceWithRootAnchorProvisioner builds the AGID API service with an optional signer
+// root-anchor provisioner. Production supplies a DurableAnchorStore rooted at the signer
+// keystore/floor directory, so a root anchor registered in the control plane is also
+// visible to the out-of-process signer after restart.
+func NewServiceWithRootAnchorProvisioner(store *corestore.Store, log *events.Log, outbox *orchestrator.Outbox, provisioner RootAnchorProvisioner) Service {
+	svc := NewService(store, log, outbox)
+	if s, ok := svc.(*service); ok {
+		s.anchorProvisioner = provisioner
+	}
+	return svc
+}
+
 var _ Service = (*service)(nil)
+
+// RegisterRootAnchor persists one tenant root anchor in the RLS store and mirrors it into
+// the signer's durable local anchor floor when that floor is configured. Both writes are
+// idempotent upserts, so replaying the API idempotency key returns the same public result
+// and retrying after a transient provisioning error is safe.
+func (s *service) RegisterRootAnchor(ctx context.Context, tenantID string, req RootAnchorRequest) (RootAnchorResponse, error) {
+	if len(req.PublicDER) != 0 && req.PublicPEM != "" {
+		return RootAnchorResponse{}, errors.New("agentid api: provide only one of public_der or public_pem")
+	}
+	publicDER := append([]byte(nil), req.PublicDER...)
+	if req.PublicPEM != "" {
+		decoded, err := delegation.DecodeRootAnchorPEM([]byte(req.PublicPEM))
+		if err != nil {
+			return RootAnchorResponse{}, err
+		}
+		publicDER = decoded
+	}
+	if req.KeyID == "" {
+		return RootAnchorResponse{}, errors.New("agentid api: key_id is required")
+	}
+	if len(publicDER) == 0 {
+		return RootAnchorResponse{}, errors.New("agentid api: root-anchor public key is required")
+	}
+	if req.AuthRef == "" {
+		return RootAnchorResponse{}, errors.New("agentid api: auth_ref is required")
+	}
+	row := agidstore.RootAnchor{
+		KeyID:     req.KeyID,
+		PublicDER: publicDER,
+		AuthRef:   req.AuthRef,
+	}
+	if s.repo != nil {
+		if err := s.repo.RegisterRootAnchor(ctx, tenantID, row); err != nil {
+			return RootAnchorResponse{}, err
+		}
+	}
+	provisioned := false
+	if s.anchorProvisioner != nil {
+		if err := s.anchorProvisioner.PutRootAnchor(ctx, tenantID, req.KeyID, delegation.RootAnchor{
+			PublicDER: publicDER,
+			AuthRef:   req.AuthRef,
+		}); err != nil {
+			return RootAnchorResponse{}, err
+		}
+		provisioned = true
+	}
+	return RootAnchorResponse{
+		KeyID:       req.KeyID,
+		PublicDER:   publicDER,
+		AuthRef:     req.AuthRef,
+		Provisioned: provisioned,
+	}, nil
+}
+
+// ListRootAnchors returns the tenant's registered root anchors. When no store is wired
+// (for example an unlicensed/core-only shape in tests), it fails soft with an empty list.
+func (s *service) ListRootAnchors(ctx context.Context, tenantID string) (RootAnchorsResponse, error) {
+	resp := RootAnchorsResponse{Anchors: []RootAnchorResponse{}}
+	if s.repo == nil {
+		return resp, nil
+	}
+	anchors, err := s.repo.ListRootAnchors(ctx, tenantID)
+	if err != nil {
+		return RootAnchorsResponse{}, err
+	}
+	for _, a := range anchors {
+		resp.Anchors = append(resp.Anchors, RootAnchorResponse{
+			KeyID:       a.KeyID,
+			PublicDER:   append([]byte(nil), a.PublicDER...),
+			AuthRef:     a.AuthRef,
+			CreatedAt:   a.CreatedAt,
+			Provisioned: s.anchorProvisioner != nil,
+		})
+	}
+	resp.Count = len(resp.Anchors)
+	return resp, nil
+}
 
 // issuanceJob is the durable outbox payload the orchestrator's issuance worker drains. It
 // carries the issuance id plus the opaque bodies the mechanisms re-verify; no key material
@@ -157,6 +257,50 @@ func (s *service) FetchChain(ctx context.Context, tenantID, credentialID string)
 	}
 	resp.Count = len(resp.Records)
 	return resp, nil
+}
+
+// FetchCredential returns the signer-minted public credential bytes for an issued AGID
+// credential. It is RLS-scoped and serves only public material; private key bytes never
+// leave the isolated signer.
+func (s *service) FetchCredential(ctx context.Context, tenantID, credentialID string) (CredentialResponse, error) {
+	resp := CredentialResponse{CredentialID: credentialID}
+	if s.store == nil {
+		return resp, nil
+	}
+	err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var (
+			subjectID        string
+			credentialDER    []byte
+			chainHeadDigest  []byte
+			chainDigest      []byte
+			agentStackDigest []byte
+			notBefore        int64
+			notAfter         int64
+		)
+		err := tx.QueryRow(ctx,
+			`SELECT subject_id, credential_der, chain_head_digest, chain_digest,
+			        agent_stack_digest, not_before, not_after
+			   FROM agent_issuances
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			    AND credential_id = $1`,
+			credentialID).Scan(&subjectID, &credentialDER, &chainHeadDigest, &chainDigest, &agentStackDigest, &notBefore, &notAfter)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("agentid api: fetch credential: %w", err)
+		}
+		resp.SubjectID = subjectID
+		resp.CredentialDER = append([]byte(nil), credentialDER...)
+		resp.ChainHeadDigest = append([]byte(nil), chainHeadDigest...)
+		resp.ChainDigest = append([]byte(nil), chainDigest...)
+		resp.AgentStackDigest = append([]byte(nil), agentStackDigest...)
+		resp.NotBefore = notBefore
+		resp.NotAfter = notAfter
+		resp.Found = true
+		return nil
+	})
+	return resp, err
 }
 
 // IncompleteJobs returns a directive's still-open descendant jobs (AGID-11

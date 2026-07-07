@@ -140,22 +140,52 @@ func (b *Broker) Issue(ctx context.Context, req IssueRequest) (AgentIdentity, er
 	if err != nil {
 		return AgentIdentity{}, err
 	}
+	return b.recordIssuedIdentity(ctx, req, issuedIdentityMaterial{
+		Subject:      res.Subject,
+		CredentialID: res.CredentialID,
+		CertDER:      res.CertDER,
+		NotAfter:     res.NotAfter,
+		Attestation:  res.Attestation,
+	}), nil
+}
+
+type issuedIdentityMaterial struct {
+	Subject      string
+	CredentialID string
+	CertDER      []byte
+	NotAfter     time.Time
+	Attestation  attest.Attestation
+}
+
+func (b *Broker) recordIssuedIdentity(ctx context.Context, req IssueRequest, mat issuedIdentityMaterial) AgentIdentity {
+	if mat.Subject == "" {
+		mat.Subject = req.AgentID
+	}
+	if mat.CredentialID == "" {
+		mat.CredentialID = req.IdempotencyKey
+	}
 	nodeID := agentNodeID(req.AgentID)
 	b.cfg.Graph.AddNode(graph.Node{
 		ID: nodeID, Kind: graph.KindWorkload, Name: req.AgentID,
 		Attrs: map[string]string{"tenant_id": b.cfg.TenantID, "kind": "ai-agent", "scopes": strings.Join(req.Scopes, ",")},
 	})
 	b.cfg.Graph.AddNode(graph.Node{
-		ID: res.CredentialID, Kind: graph.KindCredential, Name: res.Subject,
+		ID: mat.CredentialID, Kind: graph.KindCredential, Name: mat.Subject,
 		Attrs: map[string]string{"tenant_id": b.cfg.TenantID},
 	})
-	b.cfg.Graph.AddEdge(graph.Edge{From: nodeID, To: res.CredentialID, Type: graph.EdgeOwns})
+	b.cfg.Graph.AddEdge(graph.Edge{From: nodeID, To: mat.CredentialID, Type: graph.EdgeOwns})
 	_ = auditsink.Emit(ctx, b.cfg.Audit, nil, "agent.identity.issued", b.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"agent_id":%q,"credential_id":%q,"subject":%q}`, req.AgentID, res.CredentialID, res.Subject)))
+		[]byte(fmt.Sprintf(`{"agent_id":%q,"credential_id":%q,"subject":%q}`, req.AgentID, mat.CredentialID, mat.Subject)))
 	return AgentIdentity{
-		AgentID: req.AgentID, NodeID: nodeID, Subject: res.Subject,
-		CredentialID: res.CredentialID, CertDER: res.CertDER, Scopes: req.Scopes, NotAfter: res.NotAfter, Attestation: res.Attestation,
-	}, nil
+		AgentID:      req.AgentID,
+		NodeID:       nodeID,
+		Subject:      mat.Subject,
+		CredentialID: mat.CredentialID,
+		CertDER:      mat.CertDER,
+		Scopes:       req.Scopes,
+		NotAfter:     mat.NotAfter,
+		Attestation:  mat.Attestation,
+	}
 }
 
 // Revoke revokes every credential the agent owns in one action and audits it.

@@ -178,6 +178,61 @@ func TestRLS_DelegationTreeCrossTenantDenied(t *testing.T) {
 	}
 }
 
+func TestRootAnchor_RegisterAndList_RLS(t *testing.T) {
+	repo := newRepoOn(t, "agid_root_anchor_rls")
+	ctx := context.Background()
+
+	aAnchor := agidstore.RootAnchor{
+		KeyID:     "root-key",
+		PublicDER: []byte{0x30, 0x01, 0xa1},
+		AuthRef:   "webauthn:tenant-a:root",
+	}
+	if err := repo.RegisterRootAnchor(ctx, tenantA, aAnchor); err != nil {
+		t.Fatalf("register tenantA anchor: %v", err)
+	}
+	gotA, err := repo.ListRootAnchors(ctx, tenantA)
+	if err != nil {
+		t.Fatalf("list tenantA anchors: %v", err)
+	}
+	if len(gotA) != 1 {
+		t.Fatalf("tenantA anchors = %d, want 1", len(gotA))
+	}
+	if gotA[0].KeyID != aAnchor.KeyID || string(gotA[0].PublicDER) != string(aAnchor.PublicDER) || gotA[0].AuthRef != aAnchor.AuthRef {
+		t.Fatalf("tenantA anchor = %+v, want %+v", gotA[0], aAnchor)
+	}
+
+	gotB, err := repo.ListRootAnchors(ctx, tenantB)
+	if err != nil {
+		t.Fatalf("list tenantB anchors: %v", err)
+	}
+	if len(gotB) != 0 {
+		t.Fatalf("tenantB saw tenantA anchors: %+v", gotB)
+	}
+
+	bAnchor := agidstore.RootAnchor{
+		KeyID:     "root-key",
+		PublicDER: []byte{0x30, 0x01, 0xb2},
+		AuthRef:   "webauthn:tenant-b:root",
+	}
+	if err := repo.RegisterRootAnchor(ctx, tenantB, bAnchor); err != nil {
+		t.Fatalf("register tenantB anchor with same key id: %v", err)
+	}
+	gotA, err = repo.ListRootAnchors(ctx, tenantA)
+	if err != nil {
+		t.Fatalf("re-list tenantA anchors: %v", err)
+	}
+	if len(gotA) != 1 || gotA[0].AuthRef != aAnchor.AuthRef {
+		t.Fatalf("tenantB write changed tenantA root anchor: %+v", gotA)
+	}
+	gotB, err = repo.ListRootAnchors(ctx, tenantB)
+	if err != nil {
+		t.Fatalf("re-list tenantB anchors: %v", err)
+	}
+	if len(gotB) != 1 || gotB[0].AuthRef != bAnchor.AuthRef || string(gotB[0].PublicDER) != string(bAnchor.PublicDER) {
+		t.Fatalf("tenantB anchor = %+v, want %+v", gotB, bAnchor)
+	}
+}
+
 // TestChain_OrderedAndGapless: FetchChain returns the delegation records for a
 // credential ordered ROOT-TO-LEAF and complete, even when the records were inserted
 // out of order; a chain with a missing parent is ErrChainBroken (never a silent

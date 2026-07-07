@@ -59,14 +59,24 @@ type RootAnchor struct {
 	AuthRef string
 }
 
-// TrustStore holds the signer's root anchors, keyed by the delegator key id the root
-// hop's Record.DelegatorKey.ID names. The gate is CONSTRUCTED with a TrustStore; a
-// caller cannot inject their own anchor. A root hop whose delegator key id is absent
-// from the store, or whose signature does not verify against the stored public key, is
-// refused (the root-anchor check) -- this is what makes a self-describing chain
-// trustworthy despite carrying its own keys.
+// RootAnchorSource is an optional dynamic source for signer-held root anchors.
+// The durable file store implements it so anchors registered by the control
+// plane become visible to the next issuance without SQL/NATS in the signer.
+type RootAnchorSource interface {
+	Anchor(tenantID, keyID string) (RootAnchor, bool)
+}
+
+// TrustStore holds the signer's root anchors. Static global anchors are keyed by
+// delegator key id for older tests and single-tenant fixtures. Tenant anchors are
+// keyed by tenant id then key id. An optional dynamic source can resolve anchors
+// from the signer's durable local provisioning directory. The gate is constructed
+// with a TrustStore; a caller cannot inject its own anchor. A root hop whose key
+// id is absent, or whose signature does not verify against the stored public key,
+// is refused (the root-anchor check).
 type TrustStore struct {
-	anchors map[string]RootAnchor
+	anchors       map[string]RootAnchor
+	tenantAnchors map[string]map[string]RootAnchor
+	source        RootAnchorSource
 }
 
 // NewTrustStore builds a trust store from a map of delegator-key-id -> root anchor.
@@ -78,6 +88,40 @@ func NewTrustStore(anchors map[string]RootAnchor) *TrustStore {
 	return &TrustStore{anchors: m}
 }
 
+// NewTenantTrustStore builds a trust store from tenant-scoped anchors. The input
+// is copied so later caller mutation cannot alter signer trust.
+func NewTenantTrustStore(anchors map[string]map[string]RootAnchor) *TrustStore {
+	t := &TrustStore{tenantAnchors: map[string]map[string]RootAnchor{}}
+	for tenantID, perTenant := range anchors {
+		if perTenant == nil {
+			continue
+		}
+		copied := make(map[string]RootAnchor, len(perTenant))
+		for keyID, anchor := range perTenant {
+			copied[keyID] = anchor
+		}
+		t.tenantAnchors[tenantID] = copied
+	}
+	return t
+}
+
+// WithSource returns a copy of the trust store that also consults source after
+// static tenant/global anchors. Passing nil keeps the store unchanged.
+func (t *TrustStore) WithSource(source RootAnchorSource) *TrustStore {
+	if t == nil {
+		return &TrustStore{source: source}
+	}
+	out := &TrustStore{
+		anchors:       t.anchors,
+		tenantAnchors: t.tenantAnchors,
+		source:        source,
+	}
+	if source == nil {
+		out.source = t.source
+	}
+	return out
+}
+
 // Anchor returns the root anchor for a delegator key id and whether it is trusted.
 func (t *TrustStore) Anchor(keyID string) (RootAnchor, bool) {
 	if t == nil {
@@ -85,6 +129,25 @@ func (t *TrustStore) Anchor(keyID string) (RootAnchor, bool) {
 	}
 	a, ok := t.anchors[keyID]
 	return a, ok
+}
+
+// AnchorForTenant returns a tenant-scoped root anchor, falling back to global
+// static anchors for existing single-tenant tests and fixtures.
+func (t *TrustStore) AnchorForTenant(tenantID, keyID string) (RootAnchor, bool) {
+	if t == nil {
+		return RootAnchor{}, false
+	}
+	if perTenant := t.tenantAnchors[tenantID]; perTenant != nil {
+		if a, ok := perTenant[keyID]; ok {
+			return a, true
+		}
+	}
+	if t.source != nil {
+		if a, ok := t.source.Anchor(tenantID, keyID); ok {
+			return a, true
+		}
+	}
+	return t.Anchor(keyID)
 }
 
 // Config constructs the gate with its dependencies so it is testable with software
@@ -388,7 +451,7 @@ func (g *Gate) verifyChain(tenantID string, chain []RecordEnvelope, now time.Tim
 		// trustworthy -- an attacker who attaches their own key to a self-anchored
 		// record still fails here because their key is not in the store.
 		if i == 0 {
-			anchor, ok := g.cfg.Roots.Anchor(rec.DelegatorKey.ID)
+			anchor, ok := g.cfg.Roots.AnchorForTenant(tenantID, rec.DelegatorKey.ID)
 			if !ok {
 				return refusal(CheckRootAnchor, 0, "root delegator key id is not a held anchor")
 			}

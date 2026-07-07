@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/ee/agentid/revoke"
 	"trstctl.com/trstctl/internal/broker"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/signing"
@@ -42,16 +43,13 @@ import (
 //     delegation.NewToolRegistry), and the directive-backed revocation reader
 //     (revoke.NewDirectiveRevocationReader), and calls IssueChainBound.
 //
-// FAIL-CLOSED (AGID-INT-WIRE). The AGID-04 delegation Gate lives in the out-of-process
-// signer and is provisioned with root trust anchors by AGID-INT-WIRE; a CA-backed
-// ephemeral issuer likewise. Until then the precondition's Gate is nil, so IssueChainBound
-// refuses with brokerstore.ErrNoSignerGate and mints NOTHING (INV-A1): an operator who
-// licenses AGID before the substrate is wired gets a refusal, never an unverified
-// chain-bound credential. The reachability engine, ceiling policy, tool sets, and
-// directive reader are nonetheless all constructed and CALLED here, so the entire call
-// path to each mechanism exists and is reachability-analyzable; the reachability verdict is
-// computed for real against the live tenant graph. The free single-hop badge (broker.Issue)
-// is never touched — this worker only ever calls IssueChainBound (INV-A10).
+// INT-WIRE behavior. With a configured out-of-process signer, IssueChainBound mints over
+// the signer's GatedIssue RPC: the precondition computes a signed reachability verdict,
+// the signer verifies the chain/verdict inside the boundary, and the signer returns public
+// credential material for the broker to record. If no signer is configured, or if the
+// signer cannot verify the root anchor / verdict key / request, the path fails closed with
+// no local fallback mint (INV-A1). The free single-hop badge (broker.Issue) is never
+// touched — this worker only ever calls IssueChainBound (INV-A10).
 
 // issuanceWorker drives chain-bound issuances. It holds the live store/log/outbox/repo and
 // the pieces the mechanisms need; per-request state (the staged chain/attestation) is
@@ -69,10 +67,10 @@ type issuanceWorker struct {
 	// manifest is compared against (AGID-03). Constructed here (NewRegisteredToolSet
 	// caller); a real deployment provisions the concrete set in AGID-INT-WIRE.
 	registeredTools agentstack.RegisteredToolSet
-	// revocationReader is the directive-backed per-hop non-revocation reader (claim 20)
-	// the in-signer gate consults; constructed here (NewDirectiveRevocationReader caller)
-	// and handed to the gate config in AGID-INT-WIRE. Holding it here gives it a non-test
-	// caller now and documents where the gate binds it.
+	// revocationReader is the directive-backed control-plane non-revocation reader (claim
+	// 20). It refuses active directives before the signer is called; the signer remains
+	// datastore-free and can later consume a signed non-revocation attestation as defense in
+	// depth.
 	revocationReader *revoke.DirectiveRevocationReader
 	// policyEngine is the S10.1 decision gate the chain-bound precondition consults
 	// (claim 14). The conservative BaseModule (deny-by-default) is the safe default.
@@ -87,18 +85,23 @@ type issuanceWorker struct {
 	// Nil when no signer is configured, in which case the precondition fails closed
 	// (brokerstore.ErrNoSignerGate) and mints nothing (INV-A1).
 	signerGate signing.IssuanceGate
+	// verdictSigner is the stable control-plane key used to sign reachability verdicts
+	// outside the signer. Its public key is provisioned to the signer floor at handler
+	// construction; only this signer handle stays in the control plane.
+	verdictSigner crypto.Signer
+	verdictKey    reach.VerdictKeyRef
 }
 
 // newIssuanceWorker constructs the issuance worker and, in doing so, every previously
 // test-only reachability/agent-stack constructor gains a non-test caller:
 // reach.NewEngine, reach.NewCeilingPolicy, delegation.NewToolRegistry,
 // agentstack.NewToolManifest/NewRegisteredToolSet, and revoke.NewDirectiveRevocationReader.
-func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, policyEngine *policy.Engine, signerGate signing.IssuanceGate) *issuanceWorker {
+func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, log *events.Log, policyEngine *policy.Engine, signerGate signing.IssuanceGate, verdictSigner crypto.Signer, verdictKey reach.VerdictKeyRef) *issuanceWorker {
 	// The production reachability engine over the tenant credential graph built under RLS
 	// (StoreGraphSource). The watermark binds the verdict's freshness to a real ledger
-	// position; the AGID-02 projection watermark is provisioned in AGID-INT-WIRE, so until
-	// then the source falls back to its opaque per-tenant token (acceptable for the
-	// reachability computation; the signer's freshness enforcement is INT-WIRE).
+	// position. StoreGraphSource supplies the live tenant graph watermark token; the signer
+	// verifies that the verdict carries a non-empty watermark and can be given a stricter
+	// signer-held freshness policy later without changing the wire shape.
 	engine := reachengine.NewEngine(reachengine.StoreGraphSource{Store: core})
 
 	// A fail-closed ceiling policy: a requester class with no explicit ceiling is refused
@@ -114,9 +117,9 @@ func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, policyEngine
 	toolRegistry := delegation.NewToolRegistry(map[string]string{})
 	registeredTools := agentstack.NewRegisteredToolSet()
 
-	// The directive-backed per-hop non-revocation reader (claim 20). It reads the AGID-02
-	// projection under a background context; a request context is bound in AGID-INT-WIRE
-	// when the gate consults it inline.
+	// The directive-backed non-revocation reader (claim 20). It reads the AGID-02
+	// projection under a background context and refuses active directives before the
+	// signer transport is called.
 	revocationReader := revoke.NewDirectiveRevocationReader(repo, context.Background())
 
 	return &issuanceWorker{
@@ -128,8 +131,10 @@ func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, policyEngine
 		registeredTools:  registeredTools,
 		revocationReader: revocationReader,
 		policyEngine:     policyEngine,
-		recorder:         brokerstore.New(core),
+		recorder:         brokerstore.New(core).WithEventLog(log),
 		signerGate:       signerGate,
+		verdictSigner:    verdictSigner,
+		verdictKey:       verdictKey,
 	}
 }
 
@@ -234,20 +239,16 @@ func (w *issuanceWorker) deliver(ctx context.Context, m coreorch.Message) error 
 // no resource values are supplied the reachable set is empty (the closure has no start
 // nodes), which the ceiling policy evaluates against the class ceiling fail-closed.
 func (w *issuanceWorker) computeReachabilityVerdict(ctx context.Context, tenantID string, s stagedIssuance, preBody delegation.PreconditionsBody) ([]byte, error) {
-	// A control-plane software signer (AN-3) for the verdict. The verdict is produced and
-	// signed OUTSIDE the isolated AN-4 signer (AGID-06 / INV-A5) and verified INSIDE it.
-	verdictSigner, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
-	if err != nil {
-		return nil, fmt.Errorf("generate verdict signer: %w", err)
+	if w.verdictSigner == nil {
+		return nil, fmt.Errorf("no reachability verdict signer provisioned")
 	}
 	req := reachengine.AuthorityRequest{
 		TenantID:       tenantID,
 		ResourceValues: append([]string(nil), s.ResourceValues...),
 	}
 	class := s.DesignatedClass
-	subjectDigest := headRecordDigest(preBody, w.toolRegistry)
-	key := reach.VerdictKeyRef{ID: "agentid-reach-verdict", Algorithm: string(verdictSigner.Algorithm())}
-	v, err := w.engine.ProduceVerdict(ctx, req, class, w.policy, subjectDigest, time.Now().Unix(), key, verdictSigner)
+	subjectDigest := headAuthorityDigest(preBody, w.toolRegistry)
+	v, err := w.engine.ProduceVerdict(ctx, req, class, w.policy, subjectDigest, time.Now().Unix(), w.verdictKey, w.verdictSigner)
 	if err != nil {
 		return nil, err
 	}
@@ -256,12 +257,10 @@ func (w *issuanceWorker) computeReachabilityVerdict(ctx context.Context, tenantI
 
 // driveChainBoundIssuance constructs the broker precondition (with the resolver that
 // serves the staged context by issuance id) and the broker, and calls IssueChainBound.
-// This is the production caller for the chain-bound path. The precondition's Gate is nil
-// (the AGID-04 in-signer boundary is provisioned by AGID-INT-WIRE), so the call refuses
-// fail-closed with brokerstore.ErrNoSignerGate rather than minting; the call PATH to every
-// mechanism nonetheless exists and is reachability-analyzable, which is the AGID-INT-CALL
-// bar. A refusal for the documented not-yet-wired reason is not a delivery failure: the
-// job is acknowledged so the outbox does not spin retrying a deterministic refusal.
+// This is the production caller for the chain-bound path. With a signer transport,
+// w.signerGate drives GatedIssue in the isolated signer and the precondition returns the
+// public credential result. Without a signer transport, the call refuses fail-closed with
+// brokerstore.ErrNoSignerGate rather than minting locally.
 func (w *issuanceWorker) driveChainBoundIssuance(ctx context.Context, tenantID string, s stagedIssuance, staged brokerstore.ChainBoundRequest) error {
 	// The resolver serves the staged chain-bound context for the matching issuance view
 	// (keyed by the issuance id the API used as the idempotency key). A non-matching view
@@ -302,10 +301,10 @@ func (w *issuanceWorker) driveChainBoundIssuance(ctx context.Context, tenantID s
 	})
 	if err != nil {
 		if isDeferredRefusal(err) {
-			// The chain-bound path is reachable and ran the precondition; it refused for
-			// the documented not-yet-wired substrate reason (INV-A1 fail-closed). Ack the
-			// job so the outbox does not retry a deterministic refusal; AGID-INT-WIRE
-			// provisions the gate and the same path then mints.
+			// The chain-bound path is installed but lacks the signer transport or request
+			// context required to mint. Ack the deterministic wiring refusal so the outbox
+			// does not spin; cryptographic verification refusals with a configured signer
+			// still surface as errors for the caller/operator path to observe.
 			return nil
 		}
 		return fmt.Errorf("agentid issuance worker: chain-bound issuance: %w", err)
@@ -352,9 +351,9 @@ func decodeChain(b []byte) (delegation.PreconditionsBody, error) {
 	return body, nil
 }
 
-// headRecordDigest returns the digest of the chain head record's authority (the subject
-// the reachability verdict binds to), or nil for a chain-less body. It uses the tool
-// registry so the digest matches the canonicalization the gate uses.
+// headRecordDigest returns the digest of the chain head record itself, or nil for a
+// chain-less body. Revocation uses this digest because directives target delegation
+// records, not only authority values.
 func headRecordDigest(body delegation.PreconditionsBody, reg *delegation.ToolRegistry) []byte {
 	if len(body.Chain) == 0 {
 		return nil
@@ -367,11 +366,25 @@ func headRecordDigest(body delegation.PreconditionsBody, reg *delegation.ToolReg
 	return d
 }
 
-// isDeferredRefusal reports whether err is one of the documented fail-closed refusals that
-// arise only because the AGID-INT-WIRE substrate (the in-signer gate, provisioned anchors)
-// is not yet provisioned — as opposed to a genuine verification failure or a transport
-// fault. These are acknowledged (the path is reachable and ran; the refusal is expected
-// pre-INT-WIRE), so the outbox does not spin retrying a deterministic refusal.
+// headAuthorityDigest returns the digest of the chain head record's authority (the subject
+// the reachability verdict binds to), or nil for a chain-less body. It uses the tool
+// registry so the digest matches the canonicalization the signer gate uses.
+func headAuthorityDigest(body delegation.PreconditionsBody, reg *delegation.ToolRegistry) []byte {
+	if len(body.Chain) == 0 {
+		return nil
+	}
+	head := body.Chain[len(body.Chain)-1]
+	d, err := delegation.CanonicalDigest(head.Record.Authority, reg)
+	if err != nil {
+		return nil
+	}
+	return d
+}
+
+// isDeferredRefusal reports whether err is one of the deterministic wiring refusals that
+// arise when a deployment has enabled the API without a signer transport or request
+// context. These are acknowledged so the outbox does not spin retrying an absent
+// dependency. Cryptographic verification failures are not treated as deferred wiring.
 func isDeferredRefusal(err error) bool {
 	switch {
 	case errors.Is(err, brokerstore.ErrNoSignerGate),
@@ -384,10 +397,11 @@ func isDeferredRefusal(err error) bool {
 }
 
 // buildFailClosedBroker constructs a core broker with the chain-bound issuance
-// precondition attached. It is intentionally minimal: the ephemeral issuer is CA-backed in
-// AGID-INT-WIRE, so here the broker is built for the chain-bound PATH (the precondition
-// fails closed before any mint), never to actually mint a free badge. The single-hop
-// broker.Issue path is unchanged and never consults the precondition (INV-A10).
+// precondition attached. The broker's local issuer remains fail-closed because the
+// chain-bound production path expects the precondition to return the public signer-minted
+// result. If that result is absent, the fallback issuer refuses rather than minting
+// locally. The single-hop broker.Issue path served by internal/server is unchanged and
+// never consults this precondition (INV-A10).
 func buildFailClosedBroker(tenantID string, pol broker.PolicyGate, precondition broker.IssuancePrecondition) (*broker.Broker, error) {
 	return broker.New(broker.Config{
 		TenantID: tenantID,

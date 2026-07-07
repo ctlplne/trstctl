@@ -63,6 +63,7 @@ func (DelegationRecordedV1) isDelegationPayload() {}
 // IssuanceRecordedV1 records issuance of an agent credential bound to a chain digest.
 type IssuanceRecordedV1 struct {
 	TenantID         string `json:"tenant_id"`
+	CredentialID     string `json:"credential_id,omitempty"`
 	CredentialDigest []byte `json:"credential_digest,omitempty"`
 	SubjectID        string `json:"subject_id"`
 	ChainDigest      []byte `json:"chain_digest,omitempty"`

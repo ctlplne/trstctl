@@ -3,6 +3,7 @@
 package delegation
 
 import (
+	"trstctl.com/trstctl/ee/agentid/reach"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -32,6 +33,14 @@ type SignerConfig struct {
 	// Anchors are the root-anchor trust store entries, keyed by delegator key id. Empty
 	// until root-anchor provisioning lands (AGID-INT-WIRE).
 	Anchors map[string]RootAnchor
+	// TenantAnchors are root anchors keyed by tenant id, then delegator key id.
+	// This is the production-safe shape because two tenants may use the same key
+	// id for different root principals.
+	TenantAnchors map[string]map[string]RootAnchor
+	// AnchorSource is an optional dynamic signer-local source, such as the durable
+	// file-backed provisioning store. It is consulted after static tenant anchors
+	// and before global single-tenant anchors.
+	AnchorSource RootAnchorSource
 	// Revocations is the AGID-02 projection-backed non-revocation reader. When nil, a
 	// fail-closed reader is used that reports nothing revoked ONLY because there is no
 	// chain to revoke on the free path; a real reader is required before delegated
@@ -44,6 +53,15 @@ type SignerConfig struct {
 	MinClass MinClassPolicy
 	// Tools resolves tool aliases for the comparator.
 	Tools *ToolRegistry
+	// ReachabilityTrust resolves trusted control-plane reachability-verdict signer public
+	// keys. Production supplies a signer-local durable source rooted at the signer
+	// keystore directory so the signer verifies verdicts without SQL/NATS/HTTP.
+	ReachabilityTrust reach.VerdictTrustLookup
+	// ReachabilityWatermark bounds accepted graph watermarks. Nil accepts any non-empty
+	// watermark; production may replace it with a stricter signer-held policy.
+	ReachabilityWatermark reach.WatermarkPolicy
+	// RequireReachability forces chain-bearing requests to carry a verdict.
+	RequireReachability bool
 	// RefusalAlgorithm is the algorithm for the in-signer refusal-signing key. Defaults
 	// to ECDSA-P256.
 	RefusalAlgorithm crypto.Algorithm
@@ -75,14 +93,28 @@ func NewSignerGate(cfg SignerConfig) (*Gate, crypto.PublicKey, error) {
 		revocations = NeverRevoked{}
 	}
 
+	roots := NewTrustStore(cfg.Anchors)
+	if len(cfg.TenantAnchors) > 0 {
+		roots = NewTenantTrustStore(cfg.TenantAnchors)
+		if len(cfg.Anchors) > 0 {
+			roots.anchors = NewTrustStore(cfg.Anchors).anchors
+		}
+	}
+	if cfg.AnchorSource != nil {
+		roots = roots.WithSource(cfg.AnchorSource)
+	}
+
 	gate, err := NewGate(Config{
-		SignerID:      cfg.SignerID,
-		Roots:         NewTrustStore(cfg.Anchors),
-		RefusalSigner: refusalSigner,
-		Revocations:   revocations,
-		Attestor:      cfg.Attestor,
-		MinClass:      cfg.MinClass,
-		Tools:         cfg.Tools,
+		SignerID:              cfg.SignerID,
+		Roots:                 roots,
+		RefusalSigner:         refusalSigner,
+		Revocations:           revocations,
+		Attestor:              cfg.Attestor,
+		MinClass:              cfg.MinClass,
+		Tools:                 cfg.Tools,
+		ReachabilityTrust:     cfg.ReachabilityTrust,
+		ReachabilityWatermark: cfg.ReachabilityWatermark,
+		RequireReachability:   cfg.RequireReachability,
 	})
 	if err != nil {
 		locked.Destroy()

@@ -73,6 +73,10 @@ type IssuanceBinding struct {
 	IdempotencyKey string
 	// CredentialID is the issued credential's identifier (the mint result's id).
 	CredentialID string
+	// CredentialDER is the public issued credential/certificate bytes returned by the
+	// isolated signer. It is public material only and lets the control plane serve the
+	// credential a relying party verifies offline; no private key material crosses.
+	CredentialDER []byte
 	// SubjectID is the agent subject the credential was issued for.
 	SubjectID string
 	// ChainHeadDigest is the verified leaf record digest (chain head); ChainDigest is
@@ -95,6 +99,11 @@ type IssuanceBinding struct {
 	// NotBefore/NotAfter are the credential validity window (Unix seconds) to persist.
 	NotBefore int64
 	NotAfter  int64
+	// Chain is the verified public delegation chain that justified this issuance, ordered
+	// root-first. The control-plane recorder projects it into the tenant read model and
+	// ledger after the signer has approved it, so GET chain and cascade revocation operate
+	// on the same verified facts. Public DER/signatures only; no private key material.
+	Chain []RecordEnvelope
 }
 
 // IssuanceBindingRecorder records one chain-bound issuance's binding durably and refuses

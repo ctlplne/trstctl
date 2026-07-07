@@ -22,5 +22,5 @@ func OpenMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return openMigratedStore(ctx, cfg, logger)
+	return openMigratedStore(ctx, cfg, logger, nil)
 }

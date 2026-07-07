@@ -28,15 +28,13 @@
 //     downstream plane's concern; here it is a successful no-op so the outbox row marks
 //     delivered, mirroring PCAS's pcas.rp-publish ack).
 //
-// FAIL-CLOSED substrate (AGID-INT-WIRE boundary). Where a REAL dependency is an
-// AGID-INT-WIRE concern — the out-of-process signer's delegation Gate (the AGID-04
-// verify-before-keygen boundary), provisioned root trust anchors, a CA-backed ephemeral
-// issuer — this worker keeps the documented fail-closed default: it still CONSTRUCTS every
-// mechanism and CALLS each one so the path is reachable (RTA), but a chain-bound issuance
-// refuses (no provisioned in-signer gate ⇒ brokerstore.ErrNoSignerGate) rather than
-// minting an unverified credential (INV-A1). The reachability, cascade, executor, terminal,
-// and evidence mechanisms run for real against the live store/log/outbox the deps provide;
-// only the final in-signer key op is deferred.
+// INT-WIRE substrate. When the server has an out-of-process signer, this worker drives
+// chain-bound issuance over that signer through GatedIssue: the control plane computes and
+// signs a reachability verdict, the signer verifies the verdict and delegation chain
+// inside the AN-4 boundary, then the signer mints and returns only public material. When
+// the signer or its durable trust floor is absent, the same path fails closed rather than
+// issuing an unverified credential. The reachability, cascade, executor, terminal, and
+// evidence mechanisms all run for real against the live store/log/outbox the deps provide.
 //
 // It reuses the MPL core store, its RLS-scoped transaction, the core event log, and the
 // core outbox table; it forks none of them (AN-6). It holds no issuance key material; the

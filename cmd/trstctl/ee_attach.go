@@ -6,11 +6,13 @@ package main
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 
 	_ "trstctl.com/trstctl/ee"
 	eeagentapi "trstctl.com/trstctl/ee/agentid/api"
 	eeagentbrokerstore "trstctl.com/trstctl/ee/agentid/delegation/brokerstore"
+	eeagentstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 	eeagentorch "trstctl.com/trstctl/ee/agentid/orchestrator"
 	eebilling "trstctl.com/trstctl/ee/billing"
 	eefederation "trstctl.com/trstctl/ee/federation"
@@ -23,6 +25,7 @@ import (
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eesuccessionapi "trstctl.com/trstctl/ee/succession/api"
 	eesuccessionorch "trstctl.com/trstctl/ee/succession/orchestrator"
+	eesuccessionstore "trstctl.com/trstctl/ee/succession/store"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
@@ -31,6 +34,16 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/server"
 )
+
+// extraMigrationSources returns edition migration bundles for the full binary.
+// They still apply through the feature-neutral core store seam; the core-only
+// twin returns nil and links no ee/ packages.
+func extraMigrationSources() []fs.FS {
+	return []fs.FS{
+		eesuccessionstore.MigrationsFS(),
+		eeagentstore.MigrationsFS(),
+	}
+}
 
 // appendAPIFactory composes two licensed-API-options factories so multiple gated
 // features can each contribute routes to the single deps.LicensedAPIOptionsFactory

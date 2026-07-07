@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"trstctl.com/trstctl/ee/agentid/revoke"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // service_revocation.go serves the AGID-11 aggregate revocation-evidence read model. It
@@ -43,6 +44,15 @@ func (s *service) RevocationEvidence(ctx context.Context, tenantID, directiveID 
 		return RevocationEvidenceResponse{}, err
 	}
 	resp.JobCount = len(jobs)
+	for _, j := range jobs {
+		eff, found, err := s.repo.FetchEffect(ctx, tenantID, directiveID, j.IdempotencyKey)
+		if err != nil {
+			return RevocationEvidenceResponse{}, err
+		}
+		if found && len(eff.EvidenceBody) != 0 {
+			resp.EvidenceDigests = append(resp.EvidenceDigests, crypto.SHA256Sum(eff.EvidenceBody))
+		}
+	}
 	incomplete, err := s.repo.IncompleteJobs(ctx, tenantID, directiveID)
 	if err != nil {
 		return RevocationEvidenceResponse{}, err

@@ -54,7 +54,7 @@ func BuildAndVerifySample() (SampleResult, bool) {
 	// how the verifier recovers them.
 	tools := []string{"read-object", "list-bucket"}
 	repr := sampleRepr(tools)
-	reprDig := crypto.SHA256Sum(repr)
+	reprDig := reprDigest(repr)
 
 	bv := carriage.BoundValues{
 		AgentStackDigest:  reprDig,

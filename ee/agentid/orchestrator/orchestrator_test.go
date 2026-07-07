@@ -3,10 +3,12 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
 	agidapi "trstctl.com/trstctl/ee/agentid/api"
+	"trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/ee/agentid/revoke"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 )
@@ -54,5 +56,38 @@ func TestDeliverLicensed_DownstreamAck(t *testing.T) {
 	}
 	if !handled {
 		t.Fatalf("handled = false for the downstream-plane ack, want true")
+	}
+}
+
+func TestReachabilitySubjectDigestMatchesSignerAuthorityDigest(t *testing.T) {
+	auth := delegation.Authority{
+		Scopes: []string{"read"},
+		Tools:  []string{"search"},
+		Spend:  delegation.Budget{Amount: 10, Currency: "usd"},
+		Rate:   delegation.Rate{Limit: 5, Per: "minute"},
+		Depth:  1,
+	}
+	body := delegation.PreconditionsBody{Chain: []delegation.RecordEnvelope{{Record: delegation.Record{Authority: auth}}}}
+	got := headAuthorityDigest(body, nil)
+	want, err := delegation.CanonicalDigest(auth, nil)
+	if err != nil {
+		t.Fatalf("CanonicalDigest: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("reachability subject digest must be the final authority digest the signer verifies")
+	}
+}
+
+func TestRevocationHeadDigestUsesRecordDigest(t *testing.T) {
+	auth := delegation.Authority{Scopes: []string{"read"}, Depth: 1}
+	rec := delegation.Record{TenantID: "t1", DelegatorID: "root", DelegateID: "leaf", Authority: auth, RootAnchor: true}
+	body := delegation.PreconditionsBody{Chain: []delegation.RecordEnvelope{{Record: rec}}}
+	got := headRecordDigest(body, nil)
+	want, err := rec.Digest(nil)
+	if err != nil {
+		t.Fatalf("record digest: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("revocation pre-check must use the final delegation record digest")
 	}
 }

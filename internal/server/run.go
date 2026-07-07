@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -55,6 +56,14 @@ type EditionAttach func(context.Context, *config.Config, *slog.Logger, *license.
 // close the event log and datastore). It is the production composition the
 // trstctl binary calls.
 func Run(ctx context.Context, cfg *config.Config, attachers ...EditionAttach) error {
+	return RunWithExtraMigrations(ctx, cfg, nil, attachers...)
+}
+
+// RunWithExtraMigrations is the production composition with optional extension
+// migration sources registered before the store migrates. It is feature-neutral:
+// the core-only binary passes none, while a tagged edition binary may pass its
+// own fs.FS migration bundles without importing edition code into core.
+func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrations []fs.FS, attachers ...EditionAttach) error {
 	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "trstctl"}, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
@@ -71,7 +80,7 @@ func Run(ctx context.Context, cfg *config.Config, attachers ...EditionAttach) er
 		return err
 	}
 
-	st, stopPG, err := openMigratedStore(ctx, cfg, logger)
+	st, stopPG, err := openMigratedStore(ctx, cfg, logger, extraMigrations)
 	if err != nil {
 		return err
 	}
@@ -144,7 +153,7 @@ func Run(ctx context.Context, cfg *config.Config, attachers ...EditionAttach) er
 	return serveRuntime(ctx, cfg, srv, logger, stopBackground)
 }
 
-func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*store.Store, func() error, error) {
+func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Logger, extraMigrations []fs.FS) (*store.Store, func() error, error) {
 	dsn, stopPG, err := openDatastore(cfg.Postgres, logger)
 	if err != nil {
 		return nil, nil, err
@@ -156,6 +165,7 @@ func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 		}
 		return nil, nil, fmt.Errorf("open store: %w", err)
 	}
+	registerExtraMigrations(st, extraMigrations)
 	pending, err := st.PendingMigrations(ctx)
 	if err != nil {
 		st.Close()
@@ -182,6 +192,14 @@ func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 		return nil, nil, fmt.Errorf("migrate: %w", err)
 	}
 	return st, stopPG, nil
+}
+
+func registerExtraMigrations(st *store.Store, sources []fs.FS) {
+	for _, src := range sources {
+		if src != nil {
+			st.WithExtraMigrations(src)
+		}
+	}
 }
 
 type runSecrets struct {
@@ -362,6 +380,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	}
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
+		SignerKeyStoreDir:         cfg.Signer.KeyStoreDir,
 		EgressGuard:               egressGuard,
 		ServiceNowBindings:        serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),

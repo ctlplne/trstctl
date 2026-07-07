@@ -12,12 +12,11 @@ import (
 
 // signergate.go is the CONTROL-PLANE client adapter that turns the out-of-process signer
 // into an AGID-04 in-signer gate the brokerstore chain-bound precondition consults
-// (AGID-INT-WIRE). It is the last mile: before this, the precondition's Gate was nil, so
-// broker.IssueChainBound fail-closed with brokerstore.ErrNoSignerGate and minted nothing.
-// With this adapter attached, the precondition RE-INVOKES VerifyIssuancePreconditions over
-// the resolved chain + attestation by calling the signer's GatedIssue RPC over the existing
-// authenticated transport — so the chain/attestation is verified INSIDE the isolated AN-4
-// signer BEFORE any key op, and the credential is MINTED there, with only public material
+// (AGID-INT-WIRE). With this adapter attached, the precondition RE-INVOKES
+// VerifyIssuancePreconditions over the resolved chain + attestation by calling the
+// signer's GatedIssue RPC over the existing authenticated transport — so the chain,
+// attestation, and reachability verdict are verified INSIDE the isolated AN-4 signer
+// BEFORE any key op, and the credential is MINTED there, with only public material
 // returned. The control plane requests but cannot forge: no private key crosses the
 // boundary.
 //

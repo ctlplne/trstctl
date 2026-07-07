@@ -75,6 +75,7 @@ var agidTables = []string{
 	"agent_refusal_records",
 	"agent_revocation_directives",
 	"agent_revocation_jobs",
+	"agent_root_anchors",
 }
 
 func regclass(t *testing.T, s *corestore.Store, table string) *string {

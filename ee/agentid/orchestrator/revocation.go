@@ -36,9 +36,8 @@ import (
 // Every constructor here is on the live substrate: the cascade, executor, terminal, and
 // interval monitor all run for real against the store/log/outbox the deps provide and the
 // control-plane evidence signer (AN-3). This is the mechanism half of the AGID-INT-CALL
-// bar — unlike the issuance path (whose final in-signer key op is deferred to
-// AGID-INT-WIRE), the revocation path has no isolated-signer dependency, so it executes
-// end-to-end here.
+// bar. The revocation path has no isolated-signer dependency, so it executes end-to-end
+// here while issuance crosses the signer through GatedIssue.
 
 // cascadeWorker drives revocations. It holds the constructed cascade, executor, terminal
 // transition, and interval monitor plus the live store/log/repo they run against.
