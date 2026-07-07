@@ -1,24 +1,29 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package reach
+package engine_test
 
 import (
 	"context"
 	"testing"
 
+	"trstctl.com/trstctl/ee/agentid/reach"
+	"trstctl.com/trstctl/ee/agentid/reach/engine"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
 )
 
-// reach_test_helpers_test.go holds the shared test scaffolding for the reachability
+// reach_test_helpers_test.go holds the shared test scaffolding for the reachability engine
 // package: an in-memory GraphSource, a fixture credential graph with labeled assets, and a
-// software verdict signer + trust lookup. No datastore is stood up here (the RLS test that
-// needs one has its own embedded-Postgres TestMain); these helpers keep the engine/verdict/
+// software verdict signer + trust lookup. It lives with the engine tests (as an external
+// engine_test package) because it drives the engine (which needs internal/graph); the
+// crypto-only reach package's own verdict/ceiling/verify tests import both reach and this
+// engine subpackage. No datastore is stood up here (the RLS test that needs one has its own
+// embedded-Postgres TestMain under reach/reachpg); these helpers keep the engine/verdict/
 // verify unit and property tests fast and deterministic.
 
-// staticGraphSource is an in-memory GraphSource: it returns a fixed graph and watermark for
-// a tenant, so the engine can be driven without a datastore. It lets a test mutate the
-// graph or bump the watermark to assert cache/freshness behavior.
+// staticGraphSource is an in-memory engine.GraphSource: it returns a fixed graph and
+// watermark for a tenant, so the engine can be driven without a datastore. It lets a test
+// mutate the graph or bump the watermark to assert cache/freshness behavior.
 type staticGraphSource struct {
 	byTenant map[string]*graph.Graph
 	wmByTen  map[string]string
@@ -98,12 +103,12 @@ func newVerdictSigner(t *testing.T, keyID string) verdictSigner {
 }
 
 // keyRef is the verdict key reference for this signer.
-func (v verdictSigner) keyRef() VerdictKeyRef {
-	return VerdictKeyRef{ID: v.keyID, Algorithm: string(crypto.ECDSAP256)}
+func (v verdictSigner) keyRef() reach.VerdictKeyRef {
+	return reach.VerdictKeyRef{ID: v.keyID, Algorithm: string(crypto.ECDSAP256)}
 }
 
-// trust returns a VerdictTrustLookup that trusts exactly this signer's key id.
-func (v verdictSigner) trust() VerdictTrustLookup {
+// trust returns a reach.VerdictTrustLookup that trusts exactly this signer's key id.
+func (v verdictSigner) trust() reach.VerdictTrustLookup {
 	return func(id string) ([]byte, bool) {
 		if id == v.keyID {
 			return v.pubDER, true
@@ -114,8 +119,8 @@ func (v verdictSigner) trust() VerdictTrustLookup {
 
 // paymentsRequest is the standard authority request the tests use: it fronts the payments
 // service (whose closure reaches the confidential db and the restricted vault) for tenant t.
-func paymentsRequest(tenantID string) AuthorityRequest {
-	return AuthorityRequest{TenantID: tenantID, ResourceValues: []string{"svc-payments"}}
+func paymentsRequest(tenantID string) engine.AuthorityRequest {
+	return engine.AuthorityRequest{TenantID: tenantID, ResourceValues: []string{"svc-payments"}}
 }
 
 // nodeWithSensitivity builds a resource node carrying a sensitivity label, for cache tests.

@@ -28,7 +28,9 @@ import (
 // attestation, and task envelope do; the gate treats it as untrusted input and
 // re-verifies it inside the boundary. The reachability model + pure verification live in
 // ee/agentid/reach, which imports only internal/crypto (so the isolated signer stays
-// datastore-free and graph-free on the verify path, AN-4).
+// datastore-free and graph-free on the verify path, AN-4); the graph-walking engine that
+// PRODUCES a verdict lives in the ee/agentid/reach/engine subpackage (which pulls
+// internal/graph + internal/store) and is NOT on the signer path.
 //
 // Engagement (fail-closed, no regression):
 //   - A verdict IS carried ⇒ verify it (regardless of config): a caller who ships a verdict

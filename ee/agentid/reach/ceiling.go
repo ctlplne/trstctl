@@ -274,7 +274,7 @@ func subsetDigest(tenantID, tag string, nodes []ReachedNode) []byte {
 			sub.MaxSensitivity = n.Sensitivity
 		}
 	}
-	sub.PresentLabels = distinctLabels(sub.Nodes)
+	sub.PresentLabels = DistinctLabels(sub.Nodes)
 	// Domain-separate by tag so a sensitivity-subset and a label-subset of the same nodes
 	// yield distinct digests.
 	var b []byte

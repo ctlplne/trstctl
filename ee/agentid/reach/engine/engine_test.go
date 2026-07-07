@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package reach
+package engine_test
 
 import (
 	"bytes"
 	"context"
 	"testing"
+
+	"trstctl.com/trstctl/ee/agentid/reach"
+	"trstctl.com/trstctl/ee/agentid/reach/engine"
 )
 
 // TestEngine_ResolveComputesBoundedReachableSet checks the engine resolves the requested
@@ -16,7 +19,7 @@ func TestEngine_ResolveComputesBoundedReachableSet(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	src := newStaticGraphSource()
 	src.set(tenant, fixtureGraph(), "wm-1")
-	e := NewEngine(src)
+	e := engine.NewEngine(src)
 
 	set, wm, err := e.Resolve(context.Background(), paymentsRequest(tenant))
 	if err != nil {
@@ -37,7 +40,7 @@ func TestEngine_ResolveComputesBoundedReachableSet(t *testing.T) {
 		}
 	}
 	// The most sensitive reachable asset is the restricted secrets-vault.
-	if set.MaxSensitivity != SensitivityRestricted {
+	if set.MaxSensitivity != reach.SensitivityRestricted {
 		t.Errorf("MaxSensitivity = %s, want restricted", set.MaxSensitivity)
 	}
 	if set.TenantSpan != 1 {
@@ -56,16 +59,16 @@ func TestEngine_StartNodeUnknownIsDropped(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	src := newStaticGraphSource()
 	src.set(tenant, fixtureGraph(), "wm-1")
-	e := NewEngine(src)
+	e := engine.NewEngine(src)
 
-	set, _, err := e.Resolve(context.Background(), AuthorityRequest{TenantID: tenant, ResourceValues: []string{"does-not-exist"}})
+	set, _, err := e.Resolve(context.Background(), engine.AuthorityRequest{TenantID: tenant, ResourceValues: []string{"does-not-exist"}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
 	if set.Cardinality != 0 || set.TenantSpan != 0 {
 		t.Fatalf("empty request: cardinality=%d span=%d, want 0/0", set.Cardinality, set.TenantSpan)
 	}
-	if set.MaxSensitivity != SensitivityUnknown {
+	if set.MaxSensitivity != reach.SensitivityUnknown {
 		t.Fatalf("empty set MaxSensitivity = %s, want unknown", set.MaxSensitivity)
 	}
 }
@@ -77,7 +80,7 @@ func TestEngine_DepthBoundLimitsClosure(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	src := newStaticGraphSource()
 	src.set(tenant, fixtureGraph(), "wm-1")
-	e := NewEngine(src, WithMaxDepth(1))
+	e := engine.NewEngine(src, engine.WithMaxDepth(1))
 
 	set, _, err := e.Resolve(context.Background(), paymentsRequest(tenant))
 	if err != nil {
@@ -98,7 +101,7 @@ func TestReachableSetDigest_DeterministicForFixedWatermark(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	src := newStaticGraphSource()
 	src.set(tenant, fixtureGraph(), "wm-1")
-	e := NewEngine(src)
+	e := engine.NewEngine(src)
 
 	setA, _, err := e.Resolve(context.Background(), paymentsRequest(tenant))
 	if err != nil {
@@ -114,7 +117,7 @@ func TestReachableSetDigest_DeterministicForFixedWatermark(t *testing.T) {
 
 	// Order-independence: shuffle the node slice and recompute; the canonical encoding
 	// sorts, so the digest is unchanged.
-	shuffled := ReachableSet{TenantID: setA.TenantID, Cardinality: setA.Cardinality, MaxSensitivity: setA.MaxSensitivity, TenantSpan: setA.TenantSpan, PresentLabels: setA.PresentLabels}
+	shuffled := reach.ReachableSet{TenantID: setA.TenantID, Cardinality: setA.Cardinality, MaxSensitivity: setA.MaxSensitivity, TenantSpan: setA.TenantSpan, PresentLabels: setA.PresentLabels}
 	for i := len(setA.Nodes) - 1; i >= 0; i-- {
 		shuffled.Nodes = append(shuffled.Nodes, setA.Nodes[i])
 	}
@@ -132,7 +135,7 @@ func TestEngine_WatermarkCacheReusesGeneration(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	src := newStaticGraphSource()
 	src.set(tenant, fixtureGraph(), "wm-1")
-	e := NewEngine(src)
+	e := engine.NewEngine(src)
 
 	set1, wm1, err := e.Resolve(context.Background(), paymentsRequest(tenant))
 	if err != nil {
@@ -175,7 +178,7 @@ func TestEngine_WatermarkCacheReusesGeneration(t *testing.T) {
 
 // ---- small helpers ----
 
-func ids(s ReachableSet) []string {
+func ids(s reach.ReachableSet) []string {
 	out := make([]string, len(s.Nodes))
 	for i, n := range s.Nodes {
 		out[i] = n.ID

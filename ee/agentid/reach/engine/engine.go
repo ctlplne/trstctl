@@ -1,52 +1,51 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package reach is the AGID pre-issuance reachability bound (patent claims 5/6/25,
-// INV-A5). BEFORE the isolated signer performs a private-key operation, it must verify a
-// SIGNED REACHABILITY VERDICT as a precondition; the verdict is produced OUTSIDE the
-// signer by a reachability engine that resolves the requested authority of the FINAL
-// delegation record against the read-only core credential graph (internal/graph),
-// computes the bounded-depth reachable set (services accepting this authority, the assets
-// they front, and the transitive closure), and classifies it (cardinality, sensitivity,
-// tenant span). The signer trusts the verdict's SIGNATURE + WATERMARK, never a live graph
-// query, so graph computation stays out of the custody boundary (claim 6). A reachable
-// set exceeding a policy ceiling yields a refusal, so the signer refuses the key op
-// (claim 5).
+// Package engine is the OUTSIDE-the-signer half of the AGID pre-issuance reachability
+// bound (patent claims 5/6/25, INV-A5): the reachability engine that resolves the
+// requested authority of the FINAL delegation record against the read-only core
+// credential graph (internal/graph), computes the bounded-depth reachable set (services
+// accepting this authority, the assets they front, and the transitive closure), and
+// classifies it (cardinality, sensitivity, tenant span), then emits a SIGNED REACHABILITY
+// VERDICT the isolated signer verifies as a precondition.
 //
-// Scope discipline (card §6.3): the graph is an INPUT TO A REFUSAL GATE at key custody,
-// never a detection product. This package adds no alerting, scoring, path-visualization,
-// or dashboard surface; it consumes internal/graph read-only and NEVER mutates or extends
-// it, and stands up no persisted graph store (the tenant graph is built on demand and
-// cached per tenant keyed by a freshness watermark — the r2 G2 decision). The guarantee
-// is refusal-on-computation as of the watermark, NOT omniscient runtime containment
-// (HARNESS.md §1.5 note (c)).
+// This package is deliberately split OUT of package ee/agentid/reach so the graph/store
+// dependency stays OUT of the signer's dependency closure (AN-4). Package reach holds the
+// crypto-only verdict/ceiling/verify surface the signer-linked delegation gate uses and
+// imports ONLY internal/crypto; the graph computation (which pulls internal/graph +
+// internal/store, and transitively database/sql, pgx, NATS, and net/http) lives HERE, in a
+// package NOTHING on the signer path imports. The shared reachable-set / verdict / ceiling
+// types live in package reach and are referenced from here qualified (reach.ReachableSet,
+// reach.Verdict, reach.Ceiling, ...), so both this engine and the in-signer verify path
+// agree on the wire types without the signer ever linking a datastore.
 //
-// Boundaries this package holds to:
+// Boundaries this package holds to (unchanged from the AGID-06 design):
 //   - AN-1: every graph read runs under store.WithTenant for the record's tenant, so a
 //     reachability computation NEVER spans tenants (the core graph is in-memory/
 //     per-process; reusing a process-wide live graph for a mint decision would be a
 //     cross-tenant hazard, so we never do — each build is tenant-scoped).
-//   - AN-3: all hashing and signature verification route through internal/crypto; no
-//     crypto/* is imported here.
+//   - AN-3: all hashing and signature verification route through internal/crypto (via the
+//     reach package's helpers); no crypto/* is imported here.
+//   - Scope discipline (card §6.3): the graph is an INPUT TO A REFUSAL GATE at key custody,
+//     never a detection product. This package adds no alerting, scoring, path-visualization,
+//     or dashboard surface; it consumes internal/graph read-only and NEVER mutates or
+//     extends it, and stands up no persisted graph store (the tenant graph is built on
+//     demand and cached per tenant keyed by a freshness watermark). The guarantee is
+//     refusal-on-computation as of the watermark, NOT omniscient runtime containment.
 //   - EE fence (§1.6): proprietary Enterprise/Provider material behind ee/; core never
-//     imports it, and it imports nothing that would drag a datastore into the isolated
-//     signer's verify path (verify.go depends only on internal/crypto).
-package reach
+//     imports it, and package reach (the signer-linked half) imports nothing that would
+//     drag a datastore into the isolated signer's verify path.
+package engine
 
 import (
 	"context"
-	"encoding/binary"
 	"sort"
 	"strings"
 
+	"trstctl.com/trstctl/ee/agentid/reach"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/store"
 )
-
-// reachPrefix domain-separates every canonical encoding this package hashes (a reachable
-// set, a verdict) from every other hashed structure in the repo. It is part of the v1
-// canonical semantics.
-const reachPrefix = "agid/reach/v1"
 
 // DefaultMaxDepth bounds the transitive closure the engine walks from each authority
 // start node. The card requires a BOUNDED-depth closure: an unbounded walk over a large
@@ -60,102 +59,31 @@ const DefaultMaxDepth = 8
 // so the walk is always bounded (fail-closed against an accidental huge/negative depth).
 const maxDepthCeiling = 32
 
-// Sensitivity is an ordered asset-sensitivity class derived from graph node labels. The
-// order is total (Public < Internal < Confidential < Restricted) so a ceiling can bound
-// the MAXIMUM sensitivity a reachable set may contain. Higher is more sensitive.
-type Sensitivity int
-
-// Sensitivity classes, least to most sensitive. SensitivityUnknown sorts as the least
-// sensitive so an unlabeled asset never spuriously trips a sensitivity ceiling; a caller
-// that wants to treat unlabeled assets as sensitive sets a low ceiling and labels its
-// assets.
-const (
-	SensitivityUnknown      Sensitivity = iota // no recognized sensitivity label
-	SensitivityPublic                          // "public"
-	SensitivityInternal                        // "internal"
-	SensitivityConfidential                    // "confidential"
-	SensitivityRestricted                      // "restricted" / "secret" (most sensitive)
-)
-
-// String renders a sensitivity for refusal detail (non-secret, human-meaningful).
-func (s Sensitivity) String() string {
-	switch s {
-	case SensitivityPublic:
-		return "public"
-	case SensitivityInternal:
-		return "internal"
-	case SensitivityConfidential:
-		return "confidential"
-	case SensitivityRestricted:
-		return "restricted"
-	default:
-		return "unknown"
-	}
-}
-
 // sensitivityAttrKeys are the node-attribute keys the engine reads an asset's sensitivity
 // label from, in order of preference. The core graph carries free-form Attrs (build.go);
 // a deployment target or resource may be labeled with any of these. Reading a LABEL (not
 // re-deriving sensitivity) keeps the engine a consumer of the graph, not a scorer.
 var sensitivityAttrKeys = []string{"sensitivity", "data_class", "classification", "label"}
 
-// classifySensitivity maps a graph node's labels to a Sensitivity. It reads the first
+// classifySensitivity maps a graph node's labels to a reach.Sensitivity. It reads the first
 // recognized label key and normalizes the value; an unrecognized or absent label is
-// SensitivityUnknown. It is deterministic and side-effect-free.
-func classifySensitivity(n graph.Node) Sensitivity {
+// reach.SensitivityUnknown. It is deterministic and side-effect-free.
+func classifySensitivity(n graph.Node) reach.Sensitivity {
 	for _, k := range sensitivityAttrKeys {
 		if v, ok := n.Attrs[k]; ok {
 			switch normLabel(v) {
 			case "public", "open":
-				return SensitivityPublic
+				return reach.SensitivityPublic
 			case "internal":
-				return SensitivityInternal
+				return reach.SensitivityInternal
 			case "confidential", "sensitive", "pii":
-				return SensitivityConfidential
+				return reach.SensitivityConfidential
 			case "restricted", "secret", "top-secret", "topsecret", "regulated":
-				return SensitivityRestricted
+				return reach.SensitivityRestricted
 			}
 		}
 	}
-	return SensitivityUnknown
-}
-
-// ReachedNode is one node in a reachable set: its stable graph id, kind, a stable label
-// set (the asset labels that classify it), and its derived sensitivity. Only NON-SECRET,
-// stable fields are retained so the reachable-set digest is reproducible and no secret is
-// carried into a verdict.
-type ReachedNode struct {
-	ID          string      `json:"id"`
-	Kind        string      `json:"kind"`
-	Labels      []string    `json:"labels,omitempty"` // sorted "key=value" asset labels
-	Sensitivity Sensitivity `json:"sensitivity"`
-}
-
-// ReachableSet is the resolved consequence of a delegation record's authority: the set of
-// graph nodes forward-reachable (within the bounded depth) from the services that accept
-// the requested authority, with cardinality, the maximum sensitivity encountered, the
-// prohibited labels present, and the tenant span. It is the object the verdict binds a
-// DIGEST of (claim 6); the verdict never carries the set itself into the signer.
-type ReachableSet struct {
-	// TenantID is the single tenant this set was computed for (AN-1: a set never spans
-	// tenants; the engine builds one tenant graph under WithTenant).
-	TenantID string `json:"tenant_id"`
-	// Nodes is the reachable node set in canonical (id-sorted) order.
-	Nodes []ReachedNode `json:"nodes"`
-	// Cardinality is len(Nodes), materialized so a ceiling can bound it without walking
-	// the slice and so it survives in a decoded verdict for diagnostics.
-	Cardinality int `json:"cardinality"`
-	// MaxSensitivity is the greatest Sensitivity across Nodes (SensitivityUnknown for an
-	// empty set).
-	MaxSensitivity Sensitivity `json:"max_sensitivity"`
-	// TenantSpan is the number of distinct tenants the set touches. Under the AN-1 build
-	// discipline this is 1 for a non-empty set and 0 for an empty set; it is modeled
-	// explicitly so a tenant-span ceiling is a first-class dimension the verdict binds.
-	TenantSpan int `json:"tenant_span"`
-	// PresentLabels is the sorted set of DISTINCT asset labels ("key=value") present on
-	// reachable nodes, so a prohibited-label ceiling can be evaluated against the verdict
-	// alone (the signer never sees the graph).
-	PresentLabels []string `json:"present_labels,omitempty"`
+	return reach.SensitivityUnknown
 }
 
 // classifyLabelAttrKeys are the attribute keys whose values are treated as ASSET LABELS
@@ -183,7 +111,7 @@ func nodeLabels(n graph.Node) []string {
 // graph.Build(ctx, st, tenantID) so the engine can be driven with a real core store in
 // production and a small in-memory graph in tests without standing up a datastore in the
 // test's hot path. Production wiring supplies StoreGraphSource, which runs the build under
-// store.WithTenant (AN-1); a test can supply a StaticGraphSource returning a fixture
+// store.WithTenant (AN-1); a test can supply a static GraphSource returning a fixture
 // graph for a tenant.
 //
 // The watermark returned alongside the graph is the freshness token the verdict binds:
@@ -261,7 +189,8 @@ type Engine struct {
 	maxDepth int
 	// cache is the per-tenant, watermark-keyed graph cache. It is intentionally simple:
 	// one entry per tenant (the latest watermark seen). A build at a new watermark
-	// replaces the tenant's entry. It is guarded by mu.
+	// replaces the tenant's entry. It is guarded by nothing here (single-goroutine use per
+	// the AGID-06 design; a concurrent caller wraps its own synchronization).
 	cache map[string]cachedGraph
 }
 
@@ -351,13 +280,13 @@ func (e *Engine) srcWatermark(ctx context.Context, tenantID string) (*graph.Grap
 
 // Resolve computes the reachable set for a request against the tenant graph, returning the
 // set and the graph watermark it was computed at. It does NOT sign anything (that is
-// Verdict). Determinism: for a fixed graph generation (watermark) the returned set — and
-// therefore its digest — is identical across calls (acceptance criterion 3), because the
-// closure walk and the canonical ordering are deterministic.
-func (e *Engine) Resolve(ctx context.Context, req AuthorityRequest) (ReachableSet, string, error) {
+// ProduceVerdict). Determinism: for a fixed graph generation (watermark) the returned
+// set — and therefore its digest — is identical across calls (acceptance criterion 3),
+// because the closure walk and the canonical ordering are deterministic.
+func (e *Engine) Resolve(ctx context.Context, req AuthorityRequest) (reach.ReachableSet, string, error) {
 	g, wm, err := e.graphForTenant(ctx, req.TenantID)
 	if err != nil {
-		return ReachableSet{}, "", err
+		return reach.ReachableSet{}, "", err
 	}
 	set := e.resolveOn(g, req)
 	return set, wm, nil
@@ -366,7 +295,7 @@ func (e *Engine) Resolve(ctx context.Context, req AuthorityRequest) (ReachableSe
 // resolveOn computes the reachable set against an already-built graph. Split out so tests
 // can drive resolution over a fixture graph directly and so Resolve stays a thin
 // build-then-resolve.
-func (e *Engine) resolveOn(g *graph.Graph, req AuthorityRequest) ReachableSet {
+func (e *Engine) resolveOn(g *graph.Graph, req AuthorityRequest) reach.ReachableSet {
 	starts := startNodes(g, req)
 
 	// Bounded-depth transitive closure from every start node, unioned. The walk follows
@@ -379,9 +308,9 @@ func (e *Engine) resolveOn(g *graph.Graph, req AuthorityRequest) ReachableSet {
 		}
 	}
 
-	set := ReachableSet{TenantID: req.TenantID}
+	set := reach.ReachableSet{TenantID: req.TenantID}
 	for _, n := range reached {
-		rn := ReachedNode{
+		rn := reach.ReachedNode{
 			ID:          n.ID,
 			Kind:        string(n.Kind),
 			Labels:      nodeLabels(n),
@@ -394,7 +323,7 @@ func (e *Engine) resolveOn(g *graph.Graph, req AuthorityRequest) ReachableSet {
 	}
 	sort.Slice(set.Nodes, func(i, j int) bool { return set.Nodes[i].ID < set.Nodes[j].ID })
 	set.Cardinality = len(set.Nodes)
-	set.PresentLabels = distinctLabels(set.Nodes)
+	set.PresentLabels = reach.DistinctLabels(set.Nodes)
 	if set.Cardinality > 0 {
 		// AN-1: one tenant graph per build, so a non-empty set touches exactly one tenant.
 		set.TenantSpan = 1
@@ -462,22 +391,6 @@ func boundedReachable(g *graph.Graph, start string, maxDepth int) []graph.Node {
 	return out
 }
 
-// distinctLabels returns the sorted union of the label sets across nodes.
-func distinctLabels(nodes []ReachedNode) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, n := range nodes {
-		for _, l := range n.Labels {
-			if !seen[l] {
-				seen[l] = true
-				out = append(out, l)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
 // resourceNodeID maps a resource-selector value to the core graph's resource node id. The
 // core builder keys resource nodes as "res:"+location (build.go resourceID); mirroring
 // that mapping here (rather than importing an unexported helper) lets the engine seed the
@@ -491,76 +404,32 @@ func resourceNodeID(value string) string {
 	return "res:" + v
 }
 
-// Digest returns the canonical, byte-stable SHA-256 of the reachable set, routed through
-// internal/crypto (AN-3). It is the value the verdict binds (claim 6) and is deterministic
-// for a fixed graph watermark (acceptance criterion 3): the encoding is length-prefixed,
-// fixed-endian, and iterates canonically-ordered node/label sets, so the same set yields
-// identical bytes across runs, machines, and architectures. It carries NO secret (only
-// stable ids, kinds, labels, and the derived sensitivity).
-func (rs ReachableSet) Digest() []byte {
-	return crypto.SHA256Sum(rs.canonicalBytes())
-}
-
-// canonicalBytes is the deterministic serialization of the reachable set the digest is
-// taken over. It mirrors the length-prefixed, sorted-set discipline of
-// taskenv/envelope.go and delegation/record.go so the digest is reproducible.
-func (rs ReachableSet) canonicalBytes() []byte {
-	var b []byte
-	b = appendStr(b, reachPrefix)
-	b = appendStr(b, "reachable-set")
-	b = appendStr(b, rs.TenantID)
-	b = appendU64(b, uint64(rs.Cardinality))
-	b = appendU64(b, uint64(rs.MaxSensitivity))
-	b = appendU64(b, uint64(rs.TenantSpan))
-	// nodes, sorted by id so the digest is a pure function of the set's CONTENT, not the
-	// slice order it happens to be built in (defensive: Resolve already id-sorts, but a
-	// caller assembling a set by hand still gets an order-independent digest).
-	nodes := append([]ReachedNode(nil), rs.Nodes...)
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })
-	b = appendU64(b, uint64(len(nodes)))
-	for _, n := range nodes {
-		b = appendStr(b, n.ID)
-		b = appendStr(b, n.Kind)
-		b = appendU64(b, uint64(n.Sensitivity))
-		labels := append([]string(nil), n.Labels...)
-		sort.Strings(labels)
-		b = appendU64(b, uint64(len(labels)))
-		for _, l := range labels {
-			b = appendStr(b, l)
-		}
+// ProduceVerdict is the engine's end-to-end OUTSIDE-the-signer path (claims 5/6): resolve
+// the reachable set for a request, evaluate it against the requester class's ceiling, and
+// return a SIGNED verdict binding the reachable-set digest, the ceiling determination, and
+// the graph watermark. class selects the ceiling; a class with no configured ceiling is a
+// fail-closed refusal determination (Exceeded with a named cardinality violation carrying
+// the whole-set digest), so a verdict is ALWAYS produced (the signer then refuses on the
+// Exceeded determination) rather than silently allowing an unbounded reach.
+//
+// subjectDigest binds the verdict to the exact authority it was computed for (the
+// final-record authority digest); the signer requires it to match. issuedAt/key/signer
+// come from the engine's signing context. It performs NO issuance key operation and mints
+// nothing. The fail-closed ceiling determination and the verdict assembly live in package
+// reach (crypto-only) so the signer's verify path shares the exact same semantics without
+// linking a datastore.
+func (e *Engine) ProduceVerdict(ctx context.Context, req AuthorityRequest, class string, policy *reach.CeilingPolicy, subjectDigest []byte, issuedAt int64, key reach.VerdictKeyRef, signer crypto.Signer) (reach.Verdict, error) {
+	set, wm, err := e.Resolve(ctx, req)
+	if err != nil {
+		return reach.Verdict{}, err
 	}
-	// present labels (sorted union), bound so a decoded verdict's prohibited-label
-	// determination is over the same committed bytes.
-	pl := append([]string(nil), rs.PresentLabels...)
-	sort.Strings(pl)
-	b = appendU64(b, uint64(len(pl)))
-	for _, l := range pl {
-		b = appendStr(b, l)
-	}
-	return b
-}
-
-// ---- canonical writer helpers (length-prefixed, fixed big-endian; mirrors taskenv /
-// delegation so the encodings share their discipline). ----
-
-func appendStr(b []byte, s string) []byte {
-	b = appendU64(b, uint64(len(s)))
-	return append(b, s...)
-}
-
-func appendU64(b []byte, v uint64) []byte {
-	var x [8]byte
-	binary.BigEndian.PutUint64(x[:], v)
-	return append(b, x[:]...)
+	det := reach.DetermineOrFailClosed(set, class, policy)
+	v := reach.NewVerdict(set, det, wm, subjectDigest, issuedAt, key)
+	return v.Sign(signer)
 }
 
 // normLabel normalizes a label/sensitivity value: trim surrounding whitespace and
 // lowercase, matching the scope/tool normalization discipline elsewhere so labels compare
-// by meaning, not spelling.
+// by meaning, not spelling. A local copy of package reach's normalization keeps this
+// package's classification independent of an exported helper.
 func normLabel(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
-
-// sha256Of routes a byte slice through the internal/crypto SHA-256 boundary (AN-3). It is
-// the single hashing helper the non-verdict files in this package use so no file here
-// imports crypto/sha256 directly; ceiling.go's offending-subset digests and any other
-// intra-package hashing go through it.
-func sha256Of(b []byte) []byte { return crypto.SHA256Sum(b) }

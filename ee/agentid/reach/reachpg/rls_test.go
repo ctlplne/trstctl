@@ -13,7 +13,7 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
-	"trstctl.com/trstctl/ee/agentid/reach"
+	"trstctl.com/trstctl/ee/agentid/reach/engine"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -136,7 +136,7 @@ func TestRLS_ReachabilityGraphReadIsTenantScoped(t *testing.T) {
 		t.Fatalf("UpsertTenant(B): %v", err)
 	}
 
-	src := reach.StoreGraphSource{Store: s} // nil Watermark ⇒ opaque per-tenant token
+	src := engine.StoreGraphSource{Store: s} // nil Watermark ⇒ opaque per-tenant token
 
 	// Tenant A's graph is populated (its seeded inventory produced nodes).
 	gA, wmA, err := src.GraphForTenant(ctx, tenantA)
@@ -163,8 +163,8 @@ func TestRLS_ReachabilityGraphReadIsTenantScoped(t *testing.T) {
 
 	// Drive the full engine for tenant B too: resolving any authority for B yields an empty
 	// reachable set (nothing is reachable in an empty tenant graph), never A's assets.
-	e := reach.NewEngine(src)
-	set, _, err := e.Resolve(ctx, reach.AuthorityRequest{TenantID: tenantB, ResourceValues: []string{"target-1111"}})
+	e := engine.NewEngine(src)
+	set, _, err := e.Resolve(ctx, engine.AuthorityRequest{TenantID: tenantB, ResourceValues: []string{"target-1111"}})
 	if err != nil {
 		t.Fatalf("engine Resolve(B): %v", err)
 	}
