@@ -42,6 +42,13 @@ type Server struct {
 	// (core-only build).
 	minter SuccessionMinter
 
+	// issuanceGate, when non-nil, is the attached generic issuance-precondition
+	// extension (WithIssuanceGate). The core defines only the seam; the concrete
+	// precondition semantics live in an edition implementation and are opaque to
+	// core. nil = the signer gates no issuance and the gatedIssue path fails closed
+	// with ErrNoIssuanceGate (core-only build). Guarded by mu, like minter.
+	issuanceGate IssuanceGate
+
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
 	// (RED-003). The signer uses it as verifier material; production token minting

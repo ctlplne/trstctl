@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"trstctl.com/trstctl/ee/agentid/delegation"
 	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/ee/succession/signerwiring"
 	"trstctl.com/trstctl/internal/license"
@@ -25,6 +26,14 @@ import (
 // TestSignerDependencyClosure / TestNoHTTPServerLinkedIntoSigner).
 func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir string) []signing.ServerOption {
 	opts = append(opts, signing.WithKeyFactory(eepqc.NewSignerKeyFactory()))
+	// Issuance-precondition gate (AGID-04a). Attached UNCONDITIONALLY in the EE
+	// build: the free single-hop issuance path is never gated -- license/policy
+	// gating is the control plane's job (AGID-07), not the signer's. For 04a this is
+	// a passthrough placeholder that approves and returns an empty binding; AGID-04b
+	// replaces the construction with the real verify-before-keygen verifier behind
+	// the same signing.IssuanceGate interface. The core-only build attaches none, so
+	// the seam stays inert there (INV-A10).
+	opts = append(opts, signing.WithIssuanceGate(delegation.NewPassthroughGate()))
 	if lic != nil && lic.Has(license.FeaturePCAS) {
 		// floorDir (the signer keystore dir) gives a DURABLE, restart-surviving epoch
 		// floor (INT-05); empty (in-memory signer) => interim floor, matching ephemeral
