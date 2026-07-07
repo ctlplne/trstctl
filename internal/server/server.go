@@ -1159,6 +1159,10 @@ func (s *Server) configureAgentBrokerSurface(d Deps) error {
 		Config: d.AgentBroker, Store: d.Store, Log: d.Log, Orch: s.orch,
 		CASigner: s.caSigner, CACertDER: s.caCertDER, CAID: IssuingCAID(),
 		Audit: brokerAuditor(d.Log),
+		// Feature-neutral: forward the chain-bound issuance precondition the EE attach
+		// seam may have set. Nil in Community / core-only, leaving the broker's
+		// chain-bound seam inert and the free single-hop badge unaffected (INV-A10).
+		IssuancePrecondition: d.BrokerIssuancePrecondition,
 	})
 	if err != nil {
 		return err

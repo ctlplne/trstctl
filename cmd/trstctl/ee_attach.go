@@ -9,7 +9,7 @@ import (
 	"log/slog"
 
 	_ "trstctl.com/trstctl/ee"
-	eeagentdelegation "trstctl.com/trstctl/ee/agentid/delegation"
+	eeagentbrokerstore "trstctl.com/trstctl/ee/agentid/delegation/brokerstore"
 	eebilling "trstctl.com/trstctl/ee/billing"
 	eefederation "trstctl.com/trstctl/ee/federation"
 	eegovernance "trstctl.com/trstctl/ee/governance"
@@ -123,13 +123,17 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		// broker.WithIssuancePrecondition seam. The broker consults it ONLY on its
 		// chain-bound issuance path; the free single-hop attested-ephemeral badge
 		// (broker.Issue) is never routed through it, so this attach neither gates, moves,
-		// nor degrades the free badge (INV-A10 zero removal). AGID-07a wires a fail-closed
-		// placeholder precondition; AGID-07b replaces NewBrokerHookStub with the real
-		// chain-verifying precondition and consumes deps.BrokerIssuancePrecondition when
-		// it wires the broker. Unlicensed or core-only deployments skip this block, attach
-		// no precondition, and run zero chain-bound issuance while the free badge is
-		// unaffected.
-		deps.BrokerIssuancePrecondition = eeagentdelegation.NewBrokerHookStub()
+		// nor degrades the free badge (INV-A10 zero removal). This attaches the REAL
+		// AGID-07b chain-verifying precondition (brokerstore.BrokerPrecondition) in its
+		// fail-closed default form: it consults the AGID-04 in-signer gate, the S10.1
+		// policy gate, the sub-hour TTL ceiling, and the attestation-replay defense before
+		// any key op — but until AGID-INT-WIRE provisions those dependencies it refuses
+		// every chain-bound request (never an unverified chain-bound credential, INV-A1).
+		// deps.BrokerIssuancePrecondition is consumed by the feature-neutral broker
+		// construction (internal/server), which passes it via broker.WithIssuancePrecondition.
+		// Unlicensed or core-only deployments skip this block, attach no precondition, and
+		// run zero chain-bound issuance while the free badge is unaffected.
+		deps.BrokerIssuancePrecondition = eeagentbrokerstore.NewFailClosedBrokerPrecondition()
 		if log != nil {
 			log.Info("Enterprise agent delegation attached", slog.String("feature", string(license.FeatureAgentDelegation)))
 		}

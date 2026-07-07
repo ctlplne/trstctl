@@ -94,3 +94,20 @@ func decodePreconditions(b []byte) (PreconditionsBody, error) {
 	}
 	return body, nil
 }
+
+// EncodePreconditionsBody encodes a precondition body to the opaque JSON carriage the
+// AGID-04a seam forwards (signing.IssuancePreconditions.Preconditions). It is the
+// control-plane inverse of decodePreconditions: the AGID-07b broker precondition (in the
+// control-plane brokerstore package) uses it to hand the resolved chain to the AGID-04
+// gate over the same seam the in-process signer path uses, so the broker's consult and the
+// signer's own gatedIssue verify byte-identical bodies. It is EXPORTED because the
+// precondition lives in a separate package (brokerstore, kept out of the signer's
+// datastore-free closure). An empty chain, class, envelope, and verdict yield a nil body,
+// matching decodePreconditions' empty-body handling (a nil body decodes to the zero body).
+func EncodePreconditionsBody(body PreconditionsBody) ([]byte, error) {
+	if len(body.Chain) == 0 && body.DesignatedClass == "" &&
+		len(body.Envelope) == 0 && len(body.ReachabilityVerdict) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(body)
+}

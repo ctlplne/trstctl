@@ -61,18 +61,27 @@ type agentBrokerService struct {
 	caSigner    crypto.DigestSigner
 	caCertDER   []byte
 	caID        string
+	// issuancePrecondition is the feature-neutral chain-bound issuance precondition
+	// supplied only by the tagged EE attach seam (Deps.BrokerIssuancePrecondition). It
+	// is passed to broker.New via broker.WithIssuancePrecondition so the broker consults
+	// it ONLY on its chain-bound issuance path (broker.IssueChainBound). Nil in
+	// Community / core-only builds, leaving the seam inert and the free single-hop badge
+	// (broker.Issue) unaffected (INV-A10 zero removal). The core names only the generic
+	// seam type; what the precondition verifies lives entirely in the edition.
+	issuancePrecondition broker.IssuancePrecondition
 }
 
 type agentBrokerDeps struct {
-	Config    AgentBrokerConfig
-	Store     *store.Store
-	Log       *events.Log
-	Orch      *orchestrator.Orchestrator
-	CASigner  crypto.DigestSigner
-	CACertDER []byte
-	CAID      string
-	Audit     auditsink.Auditor
-	Policy    *policy.Engine
+	Config               AgentBrokerConfig
+	Store                *store.Store
+	Log                  *events.Log
+	Orch                 *orchestrator.Orchestrator
+	CASigner             crypto.DigestSigner
+	CACertDER            []byte
+	CAID                 string
+	Audit                auditsink.Auditor
+	Policy               *policy.Engine
+	IssuancePrecondition broker.IssuancePrecondition
 }
 
 func newAgentBrokerService(d agentBrokerDeps) (*agentBrokerService, error) {
@@ -136,6 +145,10 @@ func newAgentBrokerService(d agentBrokerDeps) (*agentBrokerService, error) {
 		caSigner:    d.CASigner,
 		caCertDER:   append([]byte(nil), d.CACertDER...),
 		caID:        d.CAID,
+		// Feature-neutral: nil unless the EE attach seam supplied a precondition. It is
+		// consulted only on the chain-bound path, so a nil value leaves the free badge
+		// unchanged (INV-A10).
+		issuancePrecondition: d.IssuancePrecondition,
 	}, nil
 }
 
@@ -195,13 +208,18 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 	if err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
+	// Attach the feature-neutral chain-bound issuance precondition when the EE seam
+	// supplied one. WithIssuancePrecondition(nil) is a no-op, so Community / core-only
+	// builds construct the exact single-hop broker they did before, and the served path
+	// below (which calls b.Issue, the free single-hop path) never consults the
+	// precondition regardless — only broker.IssueChainBound does (INV-A10 zero removal).
 	b, err := broker.New(broker.Config{
 		TenantID: tenantID,
 		Issuer:   issuer,
 		Policy:   s.policy,
 		Graph:    bGraph,
 		Audit:    s.audit,
-	})
+	}, broker.WithIssuancePrecondition(s.issuancePrecondition))
 	if err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
