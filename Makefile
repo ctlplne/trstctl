@@ -290,6 +290,12 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
 	@bash scripts/ci/check-actions-pinned_selftest.sh >/dev/null
 	@bash scripts/ci/check-actions-pinned.sh .
+	@# AGID-INT-CALL production-caller FLOOR: every ee/agentid mechanism has a non-test
+	@# caller (the DEFERRED ee/agentid/verify RP SDK excepted). This is the lexical,
+	@# always-runnable tier; the whole-program RTA strong check is CI-only (-tags agidrta).
+	@# ee/... is outside GO_PACKAGES (the core Go gates skip ee/), so the floor is invoked
+	@# explicitly here, mirroring how pcas-caller-gate guards the PCAS family.
+	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate
 
 .PHONY: editions-gate
 editions-gate: ## Prove the open-core one-way valve and core-only build
@@ -316,6 +322,14 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 .PHONY: pcas-caller-gate
 pcas-caller-gate: ## PCAS production-caller gate (INT-23): every shipped mechanism has a non-test caller; deferred ones are honestly still test-only
 	@./scripts/pcas_prod_caller_gate.sh
+
+.PHONY: agid-caller-gate agid-caller-gate-strong
+agid-caller-gate: ## AGID-INT-CALL production-caller FLOOR: every ee/agentid mechanism has a non-test caller; the ee/agentid/verify RP SDK is the DEFERRED exception
+	@echo ">> agid-caller-gate (AGID-INT-CALL floor + seam: every ee/agentid constructor has a non-test caller rooted at the ee_attach seam)"
+	@$(GO) test ./ee/agentid/intgate/... -count=1
+agid-caller-gate-strong: ## AGID-INT-CALL STRONG check (CI): RTA call graph from cmd/* main.main (no -tags trstctl_core) proves every ee/agentid constructor is reachable
+	@echo ">> agid-caller-gate-strong (AGID-INT-CALL RTA reachability; whole-program load, CI-only)"
+	@$(GO) test -tags agidrta ./ee/agentid/intgate/... -count=1
 
 .PHONY: web-lint web-format-check web-check
 web-lint: ## Run frontend ESLint from the repository root (CODE-002)
