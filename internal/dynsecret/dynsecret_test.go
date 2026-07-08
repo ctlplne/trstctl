@@ -4,12 +4,14 @@ package dynsecret
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/dependents"
 )
 
 // stubBackend tracks created and revoked refs to assert engine behaviour.
@@ -102,6 +104,66 @@ func TestIssueIdempotentNoDuplicateCredential(t *testing.T) {
 	}
 	if b.n != 1 {
 		t.Errorf("backend credential generated %d times, want 1 (AN-5)", b.n)
+	}
+}
+
+func TestIssueRecordsLeasedSecretDependent(t *testing.T) {
+	b := newStubBackend()
+	var records []dependents.Record
+	e, _ := New(Config{
+		TenantID:  "t1",
+		Providers: []Provider{stubProvider{b}},
+		Queue:     NewMemoryQueue(),
+		Dependent: dependents.RecorderFunc(func(_ context.Context, rec dependents.Record) error {
+			records = append(records, rec)
+			return nil
+		}),
+	})
+	ctx := context.Background()
+	lease, _, err := e.Issue(ctx, "stub", "db-read", time.Minute, "lease-dependent")
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("dependent records = %d, want 1", len(records))
+	}
+	got := records[0]
+	if got.TenantID != "t1" || got.ProtectedByKeyID != "stub" || got.Kind != dependents.KindLeasedSecret || got.DependentID != lease.ID {
+		t.Fatalf("dependent record = %+v, lease=%+v", got, lease)
+	}
+	if got.Metadata["role"] != "db-read" || got.Metadata["backend_ref"] != lease.BackendRef {
+		t.Fatalf("dependent metadata = %+v, lease=%+v", got.Metadata, lease)
+	}
+
+	if _, _, err := e.Issue(ctx, "stub", "db-read", time.Minute, "lease-dependent"); err != nil {
+		t.Fatalf("Issue replay: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("idempotent replay recorded %d dependents, want 1", len(records))
+	}
+}
+
+func TestIssueDependentRecorderFailureRevokesGeneratedCredential(t *testing.T) {
+	b := newStubBackend()
+	e, _ := New(Config{
+		TenantID:  "t1",
+		Providers: []Provider{stubProvider{b}},
+		Queue:     NewMemoryQueue(),
+		Dependent: dependents.RecorderFunc(func(context.Context, dependents.Record) error {
+			return errors.New("registration unavailable")
+		}),
+	})
+	ctx := context.Background()
+	if _, _, err := e.Issue(ctx, "stub", "db-read", time.Minute, "lease-dependent"); err == nil {
+		t.Fatal("Issue succeeded despite dependent recorder failure")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.n != 1 {
+		t.Fatalf("generated credentials = %d, want 1", b.n)
+	}
+	if !b.revoked["user-1"] {
+		t.Fatalf("generated credential was not revoked after recorder failure: revoked=%v", b.revoked)
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/dependents"
 )
 
 // GenerateRequest asks a provider for a scoped backend credential.
@@ -97,6 +98,7 @@ type Config struct {
 	Audit     auditsink.Auditor
 	Clock     func() time.Time
 	Gate      func(ctx context.Context, provider, role string) (bool, string) // optional policy gate
+	Dependent dependents.Recorder
 }
 
 // Engine runs the dynamic-secret lease lifecycle.
@@ -159,6 +161,12 @@ func (e *Engine) Issue(ctx context.Context, provider, role string, ttl time.Dura
 	}
 	now := e.cfg.Clock()
 	lease := Lease{ID: leaseID, TenantID: e.cfg.TenantID, Provider: provider, Role: role, BackendRef: cred.BackendRef, State: LeaseActive, IssuedAt: now, ExpiresAt: now.Add(ttl)}
+	if err := e.recordDependent(ctx, lease); err != nil {
+		if revokeErr := p.Revoke(ctx, cred.BackendRef); revokeErr != nil {
+			return Lease{}, nil, fmt.Errorf("dynsecret: record dependent: %w; cleanup revoke: %v", err, revokeErr)
+		}
+		return Lease{}, nil, err
+	}
 	e.mu.Lock()
 	e.leases[leaseID] = lease
 	if idempotencyKey != "" {
@@ -167,6 +175,25 @@ func (e *Engine) Issue(ctx context.Context, provider, role string, ttl time.Dura
 	e.mu.Unlock()
 	e.audit(ctx, "dynsecret.lease.issued", lease)
 	return lease, cred.Secret, nil
+}
+
+func (e *Engine) recordDependent(ctx context.Context, lease Lease) error {
+	if e.cfg.Dependent == nil {
+		return nil
+	}
+	return e.cfg.Dependent.RecordDependent(ctx, dependents.Record{
+		TenantID:         lease.TenantID,
+		ProtectedByKeyID: lease.Provider,
+		Kind:             dependents.KindLeasedSecret,
+		DependentID:      lease.ID,
+		IdempotencyKey:   lease.ID,
+		Source:           "dynsecret.issue",
+		Metadata: map[string]string{
+			"provider":    lease.Provider,
+			"role":        lease.Role,
+			"backend_ref": lease.BackendRef,
+		},
+	})
 }
 
 // Renew extends a lease's expiry.

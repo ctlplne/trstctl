@@ -37,6 +37,8 @@ GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAG
 GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...
 GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...
 GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
+PERFGATE_PACKAGE := ./scripts/perf/cmd/perfgate
+PERFGATE_IMPORT := $(MODULE)/scripts/perf/cmd/perfgate
 PCAS_E2E_RUN ?= TestINT20_FullStackPCASUserJourneys|TestINT20_PCASWASMParity_NoSkip|TestINT21_PCASOpsSLOBackpressureAndCrash
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
@@ -55,6 +57,8 @@ WEB_NPM ?= npm --prefix web
 # (*.pb.go) is excluded from the measurement.
 COVERAGE_MIN ?= 70
 COVERPROFILE := cover.out
+COVERPROFILE_MAIN := $(COVERPROFILE).main
+COVERPROFILE_PERFGATE := $(COVERPROFILE).perfgate
 AUDIT_OUTPUTS ?= ../trustctl-audit/outputs
 
 # Minimum coverage (percent) for the assembled control plane's core lifecycle
@@ -121,7 +125,11 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> go test (race + merged first-party coverage)"
-	@$(GO) test -race -count=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE) $(GO_PACKAGES)
+	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(PERFGATE_IMPORT)$$' )"; \
+	$(GO) test -race -count=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
+	@echo ">> go test live perf gate (serial)"
+	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_PERFGATE) $(PERFGATE_PACKAGE)
+	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_PERFGATE); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
 	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \
@@ -323,8 +331,10 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 		exit 1; \
 	fi
 	@echo ">> trstctl_core tests over non-ee packages"
-	@pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' )"; \
+	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(PERFGATE_IMPORT)$$' )"; \
 	$(GO) test -tags trstctl_core $$pkgs
+	@echo ">> trstctl_core live perf gate (serial)"
+	@$(GO) test -tags trstctl_core -p=1 $(PERFGATE_PACKAGE)
 
 .PHONY: pcas-caller-gate
 pcas-caller-gate: ## PCAS production-caller gate (INT-23): every delivered mechanism has a non-test caller

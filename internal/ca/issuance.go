@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/dependents"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
@@ -32,6 +33,7 @@ type IssuanceService struct {
 
 	outboxAuthorityID string
 	drainOutbox       func(context.Context) error
+	dependentRecorder dependents.Recorder
 }
 
 // Option configures an IssuanceService.
@@ -49,6 +51,13 @@ func WithOutboxIssueWorker(authorityID string, drain func(context.Context) error
 		s.outboxAuthorityID = authorityID
 		s.drainOutbox = drain
 	}
+}
+
+// WithDependentRecorder registers a feature-neutral observer for credentials
+// minted by this issuance path. Edition code can attach an implementation through
+// the tagged attach seam without making MPL core import the edition package.
+func WithDependentRecorder(rec dependents.Recorder) Option {
+	return func(s *IssuanceService) { s.dependentRecorder = rec }
 }
 
 // NewIssuanceService wires an issuance service over a CA and the platform's
@@ -93,6 +102,10 @@ func externalIssueResultKey(idempotencyKey string) string {
 // recovery retries.
 func IssueRecordIdempotencyKey(idempotencyKey string) string {
 	return idempotencyKey + ":ca.issue"
+}
+
+func dependentRecordIdempotencyKey(idempotencyKey string) string {
+	return idempotencyKey + ":ca.issue.dependent"
 }
 
 func newExternalIssuePayload(authorityID string, req IssueRequest) ExternalIssuePayload {
@@ -170,6 +183,9 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	if err := json.Unmarshal(raw, &cert); err != nil {
 		return Certificate{}, err
 	}
+	if err := s.recordDependentOnce(ctx, req, idempotencyKey, cert); err != nil {
+		return Certificate{}, err
+	}
 	return cert, nil
 }
 
@@ -228,7 +244,7 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 	if req.ProviderIdempotencyKey == "" {
 		req.ProviderIdempotencyKey = ProviderIdempotencyKey(m.IdempotencyKey)
 	}
-	_, err := s.idem.Do(ctx, m.TenantID, externalIssueResultKey(m.IdempotencyKey), func(ctx context.Context) ([]byte, error) {
+	raw, err := s.idem.Do(ctx, m.TenantID, externalIssueResultKey(m.IdempotencyKey), func(ctx context.Context) ([]byte, error) {
 		cert, err := s.ca.Issue(ctx, req)
 		if err != nil {
 			return nil, err
@@ -238,7 +254,14 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 		}
 		return json.Marshal(cert)
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	var cert Certificate
+	if err := json.Unmarshal(raw, &cert); err != nil {
+		return err
+	}
+	return s.recordDependentOnce(ctx, req, m.IdempotencyKey, cert)
 }
 
 // enforceProfile resolves the request's bound profile (if any) and validates the
@@ -358,5 +381,44 @@ func (s *IssuanceService) record(ctx context.Context, tenantID, key string, cert
 			Payload:        payload,
 		})
 		return err
+	})
+}
+
+func (s *IssuanceService) recordDependentOnce(ctx context.Context, req IssueRequest, idempotencyKey string, cert Certificate) error {
+	if s.dependentRecorder == nil {
+		return nil
+	}
+	_, err := s.idem.Do(ctx, req.TenantID, dependentRecordIdempotencyKey(idempotencyKey), func(ctx context.Context) ([]byte, error) {
+		if err := s.recordDependent(ctx, req, idempotencyKey, cert); err != nil {
+			return nil, err
+		}
+		return []byte(`{"recorded":true}`), nil
+	})
+	return err
+}
+
+func (s *IssuanceService) recordDependent(ctx context.Context, req IssueRequest, idempotencyKey string, cert Certificate) error {
+	keyID := s.outboxAuthorityID
+	if keyID == "" && s.ca != nil {
+		keyID = s.ca.Name()
+	}
+	if keyID == "" {
+		keyID = cert.Issuer
+	}
+	dependentID := cert.Serial
+	if dependentID == "" && len(cert.CertificatePEM) > 0 {
+		dependentID = crypto.SHA256Hex(cert.CertificatePEM)
+	}
+	return s.dependentRecorder.RecordDependent(ctx, dependents.Record{
+		TenantID:         req.TenantID,
+		ProtectedByKeyID: keyID,
+		Kind:             dependents.KindCredential,
+		DependentID:      dependentID,
+		IdempotencyKey:   idempotencyKey,
+		Source:           "ca.issue",
+		Metadata: map[string]string{
+			"issuer": cert.Issuer,
+			"serial": cert.Serial,
+		},
 	})
 }
