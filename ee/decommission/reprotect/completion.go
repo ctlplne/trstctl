@@ -26,6 +26,11 @@ type CompletionResult struct {
 	Event    depstate.ReprotectionCompletedV1
 }
 
+type CompletionEvidence struct {
+	SuccessorKeyID         string
+	CredentialSupersession *depstate.CredentialSupersessionV1
+}
+
 // CompletionRecorder records at most one completion event for a job idempotency
 // key and dependent identity pair.
 type CompletionRecorder struct {
@@ -39,21 +44,32 @@ func NewCompletionRecorder(sink CompletionEventSink) *CompletionRecorder {
 }
 
 func (r *CompletionRecorder) RecordCompletion(ctx context.Context, job Job, successorKeyID string) (CompletionResult, error) {
+	return r.RecordCompletionEvidence(ctx, job, CompletionEvidence{SuccessorKeyID: successorKeyID})
+}
+
+func (r *CompletionRecorder) RecordCompletionEvidence(ctx context.Context, job Job, evidence CompletionEvidence) (CompletionResult, error) {
 	if r == nil || r.sink == nil {
 		return CompletionResult{}, ErrNilCompletionSink
 	}
 	if err := validateJob(job); err != nil {
 		return CompletionResult{}, err
 	}
-	if strings.TrimSpace(successorKeyID) == "" {
+	if strings.TrimSpace(evidence.SuccessorKeyID) == "" {
 		return CompletionResult{}, fmt.Errorf("%w: successor_key_id is required", ErrInvalidState)
+	}
+	if err := validateCompletionEvidence(job, evidence); err != nil {
+		return CompletionResult{}, err
 	}
 	event := depstate.ReprotectionCompletedV1{
 		TenantID:       job.TenantID,
 		KeyID:          job.KeyID,
 		JobID:          job.ID,
 		Dependent:      job.Dependent,
-		SuccessorKeyID: successorKeyID,
+		SuccessorKeyID: evidence.SuccessorKeyID,
+	}
+	if evidence.CredentialSupersession != nil {
+		supersession := *evidence.CredentialSupersession
+		event.CredentialSupersession = &supersession
 	}
 	key := completionKey(job)
 	r.mu.Lock()
@@ -66,6 +82,26 @@ func (r *CompletionRecorder) RecordCompletion(ctx context.Context, job Job, succ
 	}
 	r.seen[key] = struct{}{}
 	return CompletionResult{Recorded: true, Event: event}, nil
+}
+
+func validateCompletionEvidence(job Job, evidence CompletionEvidence) error {
+	link := evidence.CredentialSupersession
+	if link == nil {
+		return nil
+	}
+	if job.Kind != JobKindReIssue || job.Dependent.Class != depstate.DependentCredential {
+		return fmt.Errorf("%w: credential supersession evidence requires a credential reissue job", ErrInvalidState)
+	}
+	if strings.TrimSpace(link.OldCredentialID) == "" || strings.TrimSpace(link.NewCredentialID) == "" {
+		return fmt.Errorf("%w: old and new credential ids are required", ErrInvalidState)
+	}
+	if link.OldCredentialID != job.Dependent.ID {
+		return fmt.Errorf("%w: supersession old credential %s does not match dependent %s", ErrInvalidState, link.OldCredentialID, job.Dependent.ID)
+	}
+	if link.NewCredentialID == link.OldCredentialID {
+		return fmt.Errorf("%w: supersession credential ids must differ", ErrInvalidState)
+	}
+	return nil
 }
 
 func completionKey(job Job) string {

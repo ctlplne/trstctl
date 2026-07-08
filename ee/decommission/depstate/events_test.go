@@ -14,7 +14,15 @@ func TestDepState_EventPayloadRoundTrip(t *testing.T) {
 		DependencyRegisteredV1{TenantID: "tenant-a", KeyID: "key-a", Dependent: Dependent{Class: DependentCiphertext, ID: "ct-1"}, Origin: RegistrationOriginIssued},
 		DependencyReleasedV1{TenantID: "tenant-a", KeyID: "key-a", Dependent: Dependent{Class: DependentWrappedKey, ID: "wrapped-1"}, Reason: "expired"},
 		DependencyErasureDesignatedV1{TenantID: "tenant-a", KeyID: "key-a", Dependent: Dependent{Class: DependentDataSet, ID: "dataset-1"}, DesignationRef: "erase-1"},
-		ReprotectionCompletedV1{TenantID: "tenant-a", KeyID: "key-a", JobID: "job-1", Dependent: Dependent{Class: DependentCredential, ID: "cred-1"}, SuccessorKeyID: "key-b"},
+		ReprotectionCompletedV1{
+			TenantID: "tenant-a", KeyID: "key-a", JobID: "job-1",
+			Dependent:      Dependent{Class: DependentCredential, ID: "cred-1"},
+			SuccessorKeyID: "key-b",
+			CredentialSupersession: &CredentialSupersessionV1{
+				OldCredentialID: "cred-1",
+				NewCredentialID: "cred-2",
+			},
+		},
 		RevocationCompletedV1{TenantID: "tenant-a", KeyID: "key-a", JobID: "job-lease-1", Dependent: Dependent{Class: DependentLeasedSecret, ID: "lease-1"}, Destination: "vault/db"},
 	}
 

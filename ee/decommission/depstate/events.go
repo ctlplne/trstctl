@@ -76,14 +76,20 @@ type DependencyErasureDesignatedV1 struct {
 func (DependencyErasureDesignatedV1) isDepStatePayload() {}
 
 type ReprotectionCompletedV1 struct {
-	TenantID       string    `json:"tenant_id"`
-	KeyID          string    `json:"key_id"`
-	JobID          string    `json:"job_id"`
-	Dependent      Dependent `json:"dependent"`
-	SuccessorKeyID string    `json:"successor_key_id,omitempty"`
+	TenantID               string                    `json:"tenant_id"`
+	KeyID                  string                    `json:"key_id"`
+	JobID                  string                    `json:"job_id"`
+	Dependent              Dependent                 `json:"dependent"`
+	SuccessorKeyID         string                    `json:"successor_key_id,omitempty"`
+	CredentialSupersession *CredentialSupersessionV1 `json:"credential_supersession,omitempty"`
 }
 
 func (ReprotectionCompletedV1) isDepStatePayload() {}
+
+type CredentialSupersessionV1 struct {
+	OldCredentialID string `json:"old_credential_id"`
+	NewCredentialID string `json:"new_credential_id"`
+}
 
 type RevocationCompletedV1 struct {
 	TenantID    string    `json:"tenant_id"`
