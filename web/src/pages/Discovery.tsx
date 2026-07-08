@@ -520,11 +520,17 @@ function isStructuredSourceKind(kind: SourceKind): kind is StructuredSourceKind 
 }
 
 function initialStructuredRows(): Record<StructuredSourceKind, StructuredRow[]> {
-  return Object.fromEntries(structuredSourceKinds.map((kind) => [kind, [emptyStructuredRow(structuredSourceConfigs[kind])]])) as Record<StructuredSourceKind, StructuredRow[]>;
+  return Object.fromEntries(structuredSourceKinds.map((kind) => [kind, [emptyStructuredRow(structuredSourceConfigs[kind])]])) as Record<
+    StructuredSourceKind,
+    StructuredRow[]
+  >;
 }
 
 function initialStructuredTemplates(): Record<StructuredSourceKind, string> {
-  return Object.fromEntries(structuredSourceKinds.map((kind) => [kind, structuredSourceConfigs[kind].templates[0]?.id ?? ""])) as Record<StructuredSourceKind, string>;
+  return Object.fromEntries(structuredSourceKinds.map((kind) => [kind, structuredSourceConfigs[kind].templates[0]?.id ?? ""])) as Record<
+    StructuredSourceKind,
+    string
+  >;
 }
 
 function initialStructuredJSONImports(): Record<StructuredSourceKind, string> {
@@ -591,7 +597,9 @@ export function Discovery() {
     else setShadowPosture(null);
     if (findingResult.status === "fulfilled") setFindings(findingResult.value.items ?? []);
     else setFindings([]);
-    const rejected = [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult].find((result) => result.status === "rejected");
+    const rejected = [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult].find(
+      (result) => result.status === "rejected",
+    );
     if (rejected?.status === "rejected") setNotice(noticeForError(rejected.reason, "Could not load discovery records"));
     setLoading(false);
   }
@@ -663,8 +671,8 @@ export function Discovery() {
         sourceKind === "network"
           ? { targets: parseTargets(targets) }
           : isStructuredSourceKind(sourceKind)
-          ? buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind])
-          : {};
+            ? buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind])
+            : {};
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
       setTargets("");
@@ -794,195 +802,213 @@ export function Discovery() {
 
       {tab === "sources" && (
         <div {...tabPanelProps("discovery", "sources")} className="grid gap-6">
-        <form aria-labelledby="source-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSource}>
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <h2 id="source-form-heading" className="text-title font-semibold">
-              Source
-            </h2>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
-            <label className="grid gap-1 text-sm font-medium">
-              Name
-              <input id="discovery-source-name" ref={sourceNameRef} className="ui-input" value={sourceName} onChange={(event) => setSourceName(event.target.value)} required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              Kind
-              <select className="ui-input" value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)}>
-                {sourceKinds.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {sourceKindLabels[kind]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {sourceKind === "network" && (
-            <label className="grid gap-1 text-sm font-medium">
-              Targets
-              <textarea
-                className="ui-input min-h-24 font-mono text-xs"
-                value={targets}
-                onChange={(event) => setTargets(event.target.value)}
-                placeholder="10.0.0.10:443"
-                required
+          <form aria-labelledby="source-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSource}>
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <h2 id="source-form-heading" className="text-title font-semibold">
+                Source
+              </h2>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
+              <label className="grid gap-1 text-sm font-medium">
+                Name
+                <input
+                  id="discovery-source-name"
+                  ref={sourceNameRef}
+                  className="ui-input"
+                  value={sourceName}
+                  onChange={(event) => setSourceName(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Kind
+                <select className="ui-input" value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)}>
+                  {sourceKinds.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {sourceKindLabels[kind]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {sourceKind === "network" && (
+              <label className="grid gap-1 text-sm font-medium">
+                Targets
+                <textarea
+                  className="ui-input min-h-24 font-mono text-xs"
+                  value={targets}
+                  onChange={(event) => setTargets(event.target.value)}
+                  placeholder="10.0.0.10:443"
+                  required
+                />
+              </label>
+            )}
+            {isStructuredSourceKind(sourceKind) && (
+              <StructuredSourceForm
+                key={sourceKind}
+                kind={sourceKind}
+                rows={structuredRows[sourceKind]}
+                selectedTemplate={structuredTemplates[sourceKind]}
+                jsonImport={structuredJSONImports[sourceKind]}
+                jsonImportOpen={openJSONImportKind === sourceKind}
+                onRowsChange={(rows) => setStructuredRows((current) => ({ ...current, [sourceKind]: rows }))}
+                onTemplateChange={(template) => setStructuredTemplates((current) => ({ ...current, [sourceKind]: template }))}
+                onJSONImportChange={(value) => setStructuredJSONImports((current) => ({ ...current, [sourceKind]: value }))}
+                onToggleJSONImport={() => setOpenJSONImportKind((current) => (current === sourceKind ? null : sourceKind))}
               />
-            </label>
-          )}
-          {isStructuredSourceKind(sourceKind) && (
-            <StructuredSourceForm
-              key={sourceKind}
-              kind={sourceKind}
-              rows={structuredRows[sourceKind]}
-              selectedTemplate={structuredTemplates[sourceKind]}
-              jsonImport={structuredJSONImports[sourceKind]}
-              jsonImportOpen={openJSONImportKind === sourceKind}
-              onRowsChange={(rows) => setStructuredRows((current) => ({ ...current, [sourceKind]: rows }))}
-              onTemplateChange={(template) => setStructuredTemplates((current) => ({ ...current, [sourceKind]: template }))}
-              onJSONImportChange={(value) => setStructuredJSONImports((current) => ({ ...current, [sourceKind]: value }))}
-              onToggleJSONImport={() => setOpenJSONImportKind((current) => (current === sourceKind ? null : sourceKind))}
-            />
-          )}
-          <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Create source
-          </Button>
-        </form>
+            )}
+            <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Create source
+            </Button>
+          </form>
         </div>
       )}
 
       {tab === "schedules" && (
         <div {...tabPanelProps("discovery", "schedules")} className="grid gap-6">
-        <form aria-labelledby="schedule-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSchedule}>
-          <div className="flex items-center gap-2">
-            <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <h2 id="schedule-form-heading" className="text-title font-semibold">
-              Schedule
-            </h2>
-          </div>
-          <label className="grid gap-1 text-sm font-medium">
-            Source
-            <select className="ui-input" value={scheduleSourceID} onChange={(event) => setScheduleSourceID(event.target.value)} required>
-              {sources.length === 0 && <option value="">No source</option>}
-              {sources.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            Name
-            <input id="discovery-schedule-name" ref={scheduleNameRef} className="ui-input" value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} required />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            Interval seconds
-            <input
-              className="ui-input"
-              type="number"
-              min={60}
-              step={60}
-              value={scheduleInterval}
-              onChange={(event) => setScheduleInterval(Number(event.target.value))}
-              required
-            />
-          </label>
-          <Button type="submit" className="justify-self-start" disabled={busy === "schedule" || sources.length === 0}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Create schedule
-          </Button>
-        </form>
+          <form aria-labelledby="schedule-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSchedule}>
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <h2 id="schedule-form-heading" className="text-title font-semibold">
+                Schedule
+              </h2>
+            </div>
+            <label className="grid gap-1 text-sm font-medium">
+              Source
+              <select className="ui-input" value={scheduleSourceID} onChange={(event) => setScheduleSourceID(event.target.value)} required>
+                {sources.length === 0 && <option value="">No source</option>}
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Name
+              <input
+                id="discovery-schedule-name"
+                ref={scheduleNameRef}
+                className="ui-input"
+                value={scheduleName}
+                onChange={(event) => setScheduleName(event.target.value)}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Interval seconds
+              <input
+                className="ui-input"
+                type="number"
+                min={60}
+                step={60}
+                value={scheduleInterval}
+                onChange={(event) => setScheduleInterval(Number(event.target.value))}
+                required
+              />
+            </label>
+            <Button type="submit" className="justify-self-start" disabled={busy === "schedule" || sources.length === 0}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Create schedule
+            </Button>
+          </form>
         </div>
       )}
 
       {tab === "sources" && (
-      <section aria-labelledby="sources-heading" className="grid gap-3 border-y border-border py-4">
-        <h2 id="sources-heading" className="text-title font-semibold">
-          Sources
-        </h2>
-        {!loading && sources.length === 0 ? (
-          <EmptyState
-            icon={<Search className="h-5 w-5" aria-hidden="true" />}
-            title="No discovery sources"
-            primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
-            secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
-          >
-            Add a network, cloud, CT log, NHI, OAuth, service-account, behavior, compromise, or agent source before discovery runs can be queued.
-          </EmptyState>
-        ) : (
-          <SourceTable sources={sources} busy={busy} onStart={startRun} />
-        )}
-      </section>
+        <section aria-labelledby="sources-heading" className="grid gap-3 border-y border-border py-4">
+          <h2 id="sources-heading" className="text-title font-semibold">
+            Sources
+          </h2>
+          {!loading && sources.length === 0 ? (
+            <EmptyState
+              icon={<Search className="h-5 w-5" aria-hidden="true" />}
+              title="No discovery sources"
+              primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+              secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
+            >
+              Add a network, cloud, CT log, NHI, OAuth, service-account, behavior, compromise, or agent source before discovery runs can be queued.
+            </EmptyState>
+          ) : (
+            <SourceTable sources={sources} busy={busy} onStart={startRun} />
+          )}
+        </section>
       )}
 
       {tab === "schedules" && (
-      <section aria-labelledby="schedules-heading" className="grid gap-3 border-y border-border py-4">
-        <h2 id="schedules-heading" className="text-title font-semibold">
-          Schedules
-        </h2>
-        {!loading && schedules.length === 0 ? (
-          <EmptyState
-            icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
-            title="No discovery schedules"
-            primaryAction={{ label: sources.length > 0 ? "Create schedule" : "Create source first", onClick: sources.length > 0 ? focusScheduleForm : focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
-            secondaryAction={{ label: "Refresh records", onClick: () => void load(), icon: <RefreshCw className="h-4 w-4" /> }}
-          >
-            Schedule a recurring scan once a source exists, or refresh to pick up work created by another operator.
-          </EmptyState>
-        ) : (
-          <ScheduleTable schedules={schedules} sourceByID={sourceByID} />
-        )}
-      </section>
+        <section aria-labelledby="schedules-heading" className="grid gap-3 border-y border-border py-4">
+          <h2 id="schedules-heading" className="text-title font-semibold">
+            Schedules
+          </h2>
+          {!loading && schedules.length === 0 ? (
+            <EmptyState
+              icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
+              title="No discovery schedules"
+              primaryAction={{
+                label: sources.length > 0 ? "Create schedule" : "Create source first",
+                onClick: sources.length > 0 ? focusScheduleForm : focusSourceForm,
+                icon: <Plus className="h-4 w-4" />,
+              }}
+              secondaryAction={{ label: "Refresh records", onClick: () => void load(), icon: <RefreshCw className="h-4 w-4" /> }}
+            >
+              Schedule a recurring scan once a source exists, or refresh to pick up work created by another operator.
+            </EmptyState>
+          ) : (
+            <ScheduleTable schedules={schedules} sourceByID={sourceByID} />
+          )}
+        </section>
       )}
 
       {tab === "runs" && (
-      <section {...tabPanelProps("discovery", "runs")} aria-labelledby="runs-heading" className="grid gap-3 border-y border-border py-4">
-        <h2 id="runs-heading" className="text-title font-semibold">
-          Runs
-        </h2>
-        {!loading && runs.length === 0 ? (
-          <EmptyState
-            icon={<Play className="h-5 w-5" aria-hidden="true" />}
-            title="No discovery runs"
-            primaryAction={{ label: "Create source to run", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
-            secondaryAction={{ label: "View certificates", to: "/certificates", icon: <Search className="h-4 w-4" /> }}
-          >
-            Runs appear here after a source is created and a tenant-scoped scan is queued.
-          </EmptyState>
-        ) : (
-          <RunTable runs={runs} sourceByID={sourceByID} />
-        )}
-      </section>
+        <section {...tabPanelProps("discovery", "runs")} aria-labelledby="runs-heading" className="grid gap-3 border-y border-border py-4">
+          <h2 id="runs-heading" className="text-title font-semibold">
+            Runs
+          </h2>
+          {!loading && runs.length === 0 ? (
+            <EmptyState
+              icon={<Play className="h-5 w-5" aria-hidden="true" />}
+              title="No discovery runs"
+              primaryAction={{ label: "Create source to run", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+              secondaryAction={{ label: "View certificates", to: "/certificates", icon: <Search className="h-4 w-4" /> }}
+            >
+              Runs appear here after a source is created and a tenant-scoped scan is queued.
+            </EmptyState>
+          ) : (
+            <RunTable runs={runs} sourceByID={sourceByID} />
+          )}
+        </section>
       )}
 
       {tab === "findings" && (
-      <section {...tabPanelProps("discovery", "findings")} aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
-        <h2 id="findings-heading" className="text-title font-semibold">
-          Findings
-        </h2>
-        {!loading && findings.length === 0 ? (
-          <EmptyState
-            icon={<Search className="h-5 w-5" aria-hidden="true" />}
-            title="No discovery findings"
-            primaryAction={{ label: "Create discovery source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
-            secondaryAction={{ label: "Open posture", to: "/posture", icon: <Search className="h-4 w-4" /> }}
-          >
-            Findings populate after discovery observes certificates, secrets, SSH trust, or drift.
-          </EmptyState>
-        ) : (
-          <FindingTable
-            findings={filteredFindings}
-            allFindings={findings}
-            sourceByID={sourceByID}
-            filters={findingFilters}
-            facetOptions={findingFacetOptions}
-            onFilterChange={setFindingFilter}
-            onFiltersRestore={restoreFindingFilters}
-            onFindingUpdated={replaceFinding}
-            onNotice={setNotice}
-          />
-        )}
-      </section>
+        <section {...tabPanelProps("discovery", "findings")} aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
+          <h2 id="findings-heading" className="text-title font-semibold">
+            Findings
+          </h2>
+          {!loading && findings.length === 0 ? (
+            <EmptyState
+              icon={<Search className="h-5 w-5" aria-hidden="true" />}
+              title="No discovery findings"
+              primaryAction={{ label: "Create discovery source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+              secondaryAction={{ label: "Open posture", to: "/posture", icon: <Search className="h-4 w-4" /> }}
+            >
+              Findings populate after discovery observes certificates, secrets, SSH trust, or drift.
+            </EmptyState>
+          ) : (
+            <FindingTable
+              findings={filteredFindings}
+              allFindings={findings}
+              sourceByID={sourceByID}
+              filters={findingFilters}
+              facetOptions={findingFacetOptions}
+              onFilterChange={setFindingFilter}
+              onFiltersRestore={restoreFindingFilters}
+              onFindingUpdated={replaceFinding}
+              onNotice={setNotice}
+            />
+          )}
+        </section>
       )}
     </section>
   );
@@ -1060,7 +1086,12 @@ function StructuredSourceForm({
           CSV upload
           <span className="relative">
             <Upload className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <input type="file" accept=".csv,text/csv" className="ui-input file:mr-3 file:rounded-control file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:font-medium ps-9" onChange={handleCSVUpload} />
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="ui-input file:mr-3 file:rounded-control file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:font-medium ps-9"
+              onChange={handleCSVUpload}
+            />
           </span>
         </label>
       </div>
@@ -1079,11 +1110,24 @@ function StructuredSourceForm({
             </legend>
             <div className="grid gap-3 md:grid-cols-2">
               {config.fields.map((field) => (
-                <StructuredSourceField key={field.key} kind={kind} field={field} rowIndex={rowIndex} value={row[field.key]} onChange={(value) => updateRow(rowIndex, field.key, value)} />
+                <StructuredSourceField
+                  key={field.key}
+                  kind={kind}
+                  field={field}
+                  rowIndex={rowIndex}
+                  value={row[field.key]}
+                  onChange={(value) => updateRow(rowIndex, field.key, value)}
+                />
               ))}
             </div>
             {rows.length > 1 && (
-              <Button type="button" variant="ghost" size="sm" className="justify-self-start" onClick={() => onRowsChange(rows.filter((_, index) => index !== rowIndex))}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="justify-self-start"
+                onClick={() => onRowsChange(rows.filter((_, index) => index !== rowIndex))}
+              >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
                 Remove row
               </Button>
@@ -1130,7 +1174,13 @@ function StructuredSourceField({
   if (field.inputKind === "checkbox") {
     return (
       <label className="flex items-center gap-2 self-end text-sm font-medium" htmlFor={id}>
-        <input id={id} type="checkbox" className="h-4 w-4 rounded border-border" checked={value === true} onChange={(event) => onChange(event.target.checked)} />
+        <input
+          id={id}
+          type="checkbox"
+          className="h-4 w-4 rounded border-border"
+          checked={value === true}
+          onChange={(event) => onChange(event.target.checked)}
+        />
         {field.fieldName}
       </label>
     );
@@ -1220,7 +1270,9 @@ function ShadowPosturePanel({ posture }: { posture: NHIShadowPosture | null }) {
                     <td>{finding.kind}</td>
                     <td>{finding.surface || "-"}</td>
                     <td>
-                      <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${severityTone(finding.severity)}`}>{finding.severity}</span>
+                      <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${severityTone(finding.severity)}`}>
+                        {finding.severity}
+                      </span>
                     </td>
                     <td className="max-w-[26rem] text-sm">{finding.recommendation}</td>
                   </tr>
@@ -1307,7 +1359,9 @@ function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: Discovery
         <div>
           <StatusBadge vocabulary="lifecycle" value={source.scheduled ? "active" : "queued"} />
           <div className="mt-1 text-xs text-muted-foreground">
-            {source.scheduled ? formatInterval(source.monitoring_interval_seconds, t("discovery.monitoring.unscheduled")) : t("discovery.monitoring.unscheduled")}
+            {source.scheduled
+              ? formatInterval(source.monitoring_interval_seconds, t("discovery.monitoring.unscheduled"))
+              : t("discovery.monitoring.unscheduled")}
           </div>
         </div>
       ),
@@ -1577,7 +1631,7 @@ function FindingTable({
   const [team, setTeam] = useState("");
   const [tagText, setTagText] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
-  const selected = selectedID ? allFindings.find((finding) => finding.id === selectedID) ?? null : null;
+  const selected = selectedID ? (allFindings.find((finding) => finding.id === selectedID) ?? null) : null;
 
   function populateFacetInputs(finding: DiscoveryFinding) {
     setOwner(findingOwner(finding));
@@ -1909,11 +1963,19 @@ function FindingTable({
           </div>
 
           {action && (
-            <form className="grid gap-3 border-t border-border pt-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto]" onSubmit={submitAction}>
+            <form
+              className="grid gap-3 border-t border-border pt-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto]"
+              onSubmit={submitAction}
+            >
               {action === "claim" ? (
                 <label className="grid gap-1 text-sm font-medium">
                   {t("discovery.findings.managedIdentity")}
-                  <input className="ui-input" value={managedIdentityID} onChange={(event) => setManagedIdentityID(event.target.value)} placeholder="identity-id" />
+                  <input
+                    className="ui-input"
+                    value={managedIdentityID}
+                    onChange={(event) => setManagedIdentityID(event.target.value)}
+                    placeholder="identity-id"
+                  />
                 </label>
               ) : (
                 <div className="hidden md:block" aria-hidden="true" />
@@ -1961,10 +2023,10 @@ function TriagePill({ status }: { status: FindingTriageStatus }) {
     status === "managed"
       ? "border-status-success/40 bg-status-success/10 text-status-success"
       : status === "dismissed"
-      ? "border-muted-foreground/30 bg-muted text-muted-foreground"
-      : status === "investigating"
-      ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-      : "border-destructive/40 bg-destructive/10 text-destructive";
+        ? "border-muted-foreground/30 bg-muted text-muted-foreground"
+        : status === "investigating"
+          ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
+          : "border-destructive/40 bg-destructive/10 text-destructive";
   return <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${tone}`}>{triageStatusLabel(t, status)}</span>;
 }
 
@@ -2036,7 +2098,10 @@ function findingTeam(finding: DiscoveryFinding): string {
 function findingTags(finding: DiscoveryFinding): string[] {
   const raw = finding.metadata.tags ?? finding.metadata.labels;
   if (Array.isArray(raw)) {
-    return raw.map((value) => (typeof value === "string" ? value.trim() : "")).filter(Boolean).slice(0, 8);
+    return raw
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean)
+      .slice(0, 8);
   }
   if (raw && typeof raw === "object") {
     return Object.entries(raw)
@@ -2216,9 +2281,9 @@ function parseCSV(text: string): string[][] {
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
     const next = text[index + 1];
-    if (char === "\"") {
-      if (quoted && next === "\"") {
-        cell += "\"";
+    if (char === '"') {
+      if (quoted && next === '"') {
+        cell += '"';
         index += 1;
       } else {
         quoted = !quoted;

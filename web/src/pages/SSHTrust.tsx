@@ -311,7 +311,12 @@ export function SSHTrust() {
           </label>
           <label className="grid gap-1 text-sm md:col-span-3">
             Attestation payload base64
-            <textarea className="ui-input min-h-24 font-mono text-xs" value={payloadBase64} onChange={(event) => setPayloadBase64(event.target.value)} required />
+            <textarea
+              className="ui-input min-h-24 font-mono text-xs"
+              value={payloadBase64}
+              onChange={(event) => setPayloadBase64(event.target.value)}
+              required
+            />
           </label>
           <label className="grid gap-1 text-sm md:col-span-3">
             SSH public key
@@ -394,7 +399,11 @@ export function SSHTrust() {
           <button className="ui-button md:col-span-3" type="submit">
             Record host retired
           </button>
-          {retirement && <output className="font-mono text-xs text-muted-foreground md:col-span-3">{retirement.host}:{retirement.status}</output>}
+          {retirement && (
+            <output className="font-mono text-xs text-muted-foreground md:col-span-3">
+              {retirement.host}:{retirement.status}
+            </output>
+          )}
         </form>
       </section>
     </section>

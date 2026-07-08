@@ -17,9 +17,9 @@ vi.mock("@/lib/api", async (orig) => {
 });
 
 beforeEach(() => {
-  apiMock.auditEvents.mockReset().mockResolvedValue([
-    { id: "e1", sequence: 41, tenant_id: "t1", time: "2026-06-20T10:00:00Z", type: "identity.issued", hash: "abc123def456" },
-  ]);
+  apiMock.auditEvents
+    .mockReset()
+    .mockResolvedValue([{ id: "e1", sequence: 41, tenant_id: "t1", time: "2026-06-20T10:00:00Z", type: "identity.issued", hash: "abc123def456" }]);
   apiMock.exportAudit.mockReset().mockResolvedValue({ format: "json", bundle: "BASE64BUNDLE" });
 });
 

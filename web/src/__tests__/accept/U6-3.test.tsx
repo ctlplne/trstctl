@@ -22,7 +22,17 @@ vi.mock("@/lib/api", async (orig) => {
 
 beforeEach(() => {
   apiMock.privacyCatalog.mockReset().mockResolvedValue({
-    items: [{ id: "cat-1", category: "owner-contact", location: "owners table", owner: "platform", purpose: "notifications", retention_class: "P-90d", erasure: "cascade" }],
+    items: [
+      {
+        id: "cat-1",
+        category: "owner-contact",
+        location: "owners table",
+        owner: "platform",
+        purpose: "notifications",
+        retention_class: "P-90d",
+        erasure: "cascade",
+      },
+    ],
   });
   apiMock.privacySubjectErasures.mockReset().mockResolvedValue({ items: [] });
   apiMock.privacyRetentionRuns.mockReset().mockResolvedValue({

@@ -476,7 +476,17 @@ describe("operational console surface", () => {
     ]);
     apiMock.nhiOverPrivilegePosture.mockResolvedValue({
       ...emptyNHIOverPrivilegePosture(),
-      summary: { total_analyzed: 2, overprivileged: 1, critical: 0, high: 1, medium: 0, low: 0, least_privilege_plans: 1, unused_grants: 2, wildcard_grants: 1 },
+      summary: {
+        total_analyzed: 2,
+        overprivileged: 1,
+        critical: 0,
+        high: 1,
+        medium: 0,
+        low: 0,
+        least_privilege_plans: 1,
+        unused_grants: 2,
+        wildcard_grants: 1,
+      },
       findings: [
         {
           inventory_id: "finding/oauth-1",
@@ -521,7 +531,19 @@ describe("operational console surface", () => {
     });
     apiMock.nhiStaticPosture.mockResolvedValue({
       ...emptyNHIStaticPosture(),
-      summary: { total_analyzed: 4, findings: 2, long_lived: 1, static_credentials: 2, no_expiry: 1, rotation_overdue: 2, critical: 1, high: 1, medium: 0, low: 0, recommendations: 2 },
+      summary: {
+        total_analyzed: 4,
+        findings: 2,
+        long_lived: 1,
+        static_credentials: 2,
+        no_expiry: 1,
+        rotation_overdue: 2,
+        critical: 1,
+        high: 1,
+        medium: 0,
+        low: 0,
+        recommendations: 2,
+      },
       findings: [
         {
           inventory_id: "identity/static-1",
@@ -617,7 +639,19 @@ describe("operational console surface", () => {
     });
     apiMock.contextualRiskPriorities.mockResolvedValue({
       ...emptyContextualRiskPriorities(),
-      summary: { total_analyzed: 2, priorities: 2, critical: 1, high: 0, medium: 1, low: 0, high_blast_radius: 1, weak_crypto_context: 1, orphaned: 0, near_expiry: 1, recommendations: 2 },
+      summary: {
+        total_analyzed: 2,
+        priorities: 2,
+        critical: 1,
+        high: 0,
+        medium: 1,
+        low: 0,
+        high_blast_radius: 1,
+        weak_crypto_context: 1,
+        orphaned: 0,
+        near_expiry: 1,
+        recommendations: 2,
+      },
       priorities: [
         {
           rank: 1,
@@ -749,7 +783,19 @@ describe("operational console surface", () => {
     ]);
     apiMock.contextualRiskPriorities.mockResolvedValue({
       ...emptyContextualRiskPriorities(),
-      summary: { total_analyzed: 1, priorities: 1, critical: 1, high: 0, medium: 0, low: 0, high_blast_radius: 1, weak_crypto_context: 0, orphaned: 1, near_expiry: 0, recommendations: 1 },
+      summary: {
+        total_analyzed: 1,
+        priorities: 1,
+        critical: 1,
+        high: 0,
+        medium: 0,
+        low: 0,
+        high_blast_radius: 1,
+        weak_crypto_context: 0,
+        orphaned: 1,
+        near_expiry: 0,
+        recommendations: 1,
+      },
       priorities: [
         {
           rank: 1,
@@ -843,7 +889,19 @@ function emptyNHIStaticPosture() {
     generated_at: "2026-06-29T00:00:00Z",
     coverage: ["managed_identities", "discovery_findings", "long_lived_credentials", "static_credential_detection", "no_expiry_detection", "rotation_age"],
     thresholds: { long_lived_credential_days: 365, rotation_overdue_days: 180, no_expiry_minimum_age_days: 90 },
-    summary: { total_analyzed: 0, findings: 0, long_lived: 0, static_credentials: 0, no_expiry: 0, rotation_overdue: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
+    summary: {
+      total_analyzed: 0,
+      findings: 0,
+      long_lived: 0,
+      static_credentials: 0,
+      no_expiry: 0,
+      rotation_overdue: 0,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      recommendations: 0,
+    },
     findings: [],
   };
 }
@@ -877,7 +935,19 @@ function emptyContextualRiskPriorities() {
     capability: "CAP-POST-05",
     generated_at: "2026-06-29T00:00:00Z",
     coverage: ["credential_risk_scores", "graph_blast_radius", "resource_reachability", "cbom_crypto_context", "owner_and_rotation_context"],
-    summary: { total_analyzed: 0, priorities: 0, critical: 0, high: 0, medium: 0, low: 0, high_blast_radius: 0, weak_crypto_context: 0, orphaned: 0, near_expiry: 0, recommendations: 0 },
+    summary: {
+      total_analyzed: 0,
+      priorities: 0,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      high_blast_radius: 0,
+      weak_crypto_context: 0,
+      orphaned: 0,
+      near_expiry: 0,
+      recommendations: 0,
+    },
     priorities: [],
   };
 }

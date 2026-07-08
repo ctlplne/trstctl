@@ -12,9 +12,11 @@ vi.mock("@/lib/api", async (orig) => {
 });
 
 beforeEach(() => {
-  apiMock.auditEvents.mockReset().mockResolvedValue([
-    { id: "p1", sequence: 7, tenant_id: "t1", time: "2026-06-20T10:00:00Z", type: "policy.decision", hash: "h1", data: { decision: "allow" } },
-  ]);
+  apiMock.auditEvents
+    .mockReset()
+    .mockResolvedValue([
+      { id: "p1", sequence: 7, tenant_id: "t1", time: "2026-06-20T10:00:00Z", type: "policy.decision", hash: "h1", data: { decision: "allow" } },
+    ]);
   apiMock.exportAudit.mockReset().mockResolvedValue({ format: "json", bundle: "B" });
 });
 

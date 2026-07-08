@@ -47,30 +47,28 @@ describe("WIRE-03 Posture CBOM wiring", () => {
     vi.restoreAllMocks();
     apiMock.listCBOMAssets.mockReset();
     apiMock.startCBOMScan.mockReset();
-    apiMock.listCBOMAssets
-      .mockResolvedValueOnce({ items: [], migration_progress: emptyProgress })
-      .mockResolvedValueOnce({
-        migration_progress: scannedProgress,
-        items: [
-          {
-            id: "asset-weak-1",
-            kind: "tls_endpoint",
-            location: "https://legacy.example.com:443",
-            algorithm: "RSA",
-            key_bits: 1024,
-            protocol: "TLS 1.0",
-            cipher: "RC4",
-            library: "openssl-1.0.1",
-            migration_generation: "wave-0",
-            migration_standard: "FIPS 203",
-            migration_target: "ML-KEM hybrid",
-            out_of_policy: true,
-            quantum_vulnerable: true,
-            reasons: ["RSA-1024 below policy floor", "TLS 1.0 is banned"],
-            strength: "weak",
-          },
-        ],
-      });
+    apiMock.listCBOMAssets.mockResolvedValueOnce({ items: [], migration_progress: emptyProgress }).mockResolvedValueOnce({
+      migration_progress: scannedProgress,
+      items: [
+        {
+          id: "asset-weak-1",
+          kind: "tls_endpoint",
+          location: "https://legacy.example.com:443",
+          algorithm: "RSA",
+          key_bits: 1024,
+          protocol: "TLS 1.0",
+          cipher: "RC4",
+          library: "openssl-1.0.1",
+          migration_generation: "wave-0",
+          migration_standard: "FIPS 203",
+          migration_target: "ML-KEM hybrid",
+          out_of_policy: true,
+          quantum_vulnerable: true,
+          reasons: ["RSA-1024 below policy floor", "TLS 1.0 is banned"],
+          strength: "weak",
+        },
+      ],
+    });
     apiMock.startCBOMScan.mockResolvedValue({
       migration_progress: scannedProgress,
       report: {

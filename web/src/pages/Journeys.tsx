@@ -84,10 +84,7 @@ export function Journeys() {
     );
   }
 
-  const shellSteps: CarouselStep[] = useMemo(
-    () => active.steps.map((s) => ({ id: s.id, label: t(s.titleKey), description: t(s.bodyKey) })),
-    [active, t],
-  );
+  const shellSteps: CarouselStep[] = useMemo(() => active.steps.map((s) => ({ id: s.id, label: t(s.titleKey), description: t(s.bodyKey) })), [active, t]);
   const current = active.steps[step];
   const currentDone = current ? stepDone(active, current, detected, marks) : false;
 

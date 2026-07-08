@@ -9,14 +9,14 @@ component there comes from the real implementation.
 
 ## Where things live
 
-| Layer | File |
-| --- | --- |
-| Tokens (colors, type, density, radius, elevation, motion) | `src/index.css` (`:root` + `.dark`) |
-| Tailwind mapping (every token becomes a utility) | `tailwind.config.js` |
-| Primitives | `src/components/ui/` (Button, Card, Skeleton) |
-| Shared components | `src/components/` (PageHeader, PageTabs, StatusBadge, CredentialChip, DataGrid, DetailDrawer, Dialog, EmptyState, StatePrimitives) |
-| Charts | `src/components/charts/` (StatTile, Meter, BucketBar, TimeBar, Stacked, Donut, Sparkline, AreaTrend + tone palette) |
-| Contract tests | `src/__tests__/design_system_foundation.test.tsx` (token presence, WCAG AA pairs, primitive reuse) |
+| Layer                                                     | File                                                                                                                               |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Tokens (colors, type, density, radius, elevation, motion) | `src/index.css` (`:root` + `.dark`)                                                                                                |
+| Tailwind mapping (every token becomes a utility)          | `tailwind.config.js`                                                                                                               |
+| Primitives                                                | `src/components/ui/` (Button, Card, Skeleton)                                                                                      |
+| Shared components                                         | `src/components/` (PageHeader, PageTabs, StatusBadge, CredentialChip, DataGrid, DetailDrawer, Dialog, EmptyState, StatePrimitives) |
+| Charts                                                    | `src/components/charts/` (StatTile, Meter, BucketBar, TimeBar, Stacked, Donut, Sparkline, AreaTrend + tone palette)                |
+| Contract tests                                            | `src/__tests__/design_system_foundation.test.tsx` (token presence, WCAG AA pairs, primitive reuse)                                 |
 
 ## Rules
 

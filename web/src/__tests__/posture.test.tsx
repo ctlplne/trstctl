@@ -174,7 +174,19 @@ describe("posture collector disclosures", () => {
         created_at: "2026-06-20T09:00:00Z",
         updated_at: "2026-06-20T11:00:00Z",
       },
-      run: { id: "run-ct-next", tenant_id: "tenant-1", source_id: "source-ct", status: "queued", dry_run: false, requested_by: "operator", targets: 0, discovered: 0, failed: 0, rejected: 0, created_at: "2026-06-20T11:00:00Z" },
+      run: {
+        id: "run-ct-next",
+        tenant_id: "tenant-1",
+        source_id: "source-ct",
+        status: "queued",
+        dry_run: false,
+        requested_by: "operator",
+        targets: 0,
+        discovered: 0,
+        failed: 0,
+        rejected: 0,
+        created_at: "2026-06-20T11:00:00Z",
+      },
       summary: {
         source_count: 1,
         watched_domain_count: 2,
@@ -343,7 +355,9 @@ describe("posture collector disclosures", () => {
     const row = await screen.findByRole("row", { name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch credential_drift 91 failed/i });
     expect(within(row).getByText("fingerprint mismatch on deployed certificate")).toBeInTheDocument();
     const workflow = screen.getByRole("table", { name: "Drift remediation workflow" });
-    expect(within(workflow).getByRole("row", { name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch Replaced certificate 91 Unmanaged rotate and redeploy/i })).toBeInTheDocument();
+    expect(
+      within(workflow).getByRole("row", { name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch Replaced certificate 91 Unmanaged rotate and redeploy/i }),
+    ).toBeInTheDocument();
 
     await user.click(within(workflow).getByRole("button", { name: "Investigate agent-7:/etc/tls/current.pem" }));
     await waitFor(() =>
@@ -378,8 +392,12 @@ describe("posture collector disclosures", () => {
 
     expect(screen.getByRole("heading", { name: "Crypto-agility readiness" })).toBeInTheDocument();
     const readiness = screen.getByRole("region", { name: "Crypto-agility readiness" });
-    expect(within(readiness).getByRole("row", { name: /legacy mesh edge tls_endpoint RSA-1024 \/ TLS 1\.0 \/ RC4 Out of policy ML-KEM hybrid/i })).toBeInTheDocument();
-    expect(within(readiness).getByRole("row", { name: /https:\/\/edge\.example\.com:443 tls_endpoint ECDSA-256 \/ TLS 1\.3 \/ AES-GCM Ready/i })).toBeInTheDocument();
+    expect(
+      within(readiness).getByRole("row", { name: /legacy mesh edge tls_endpoint RSA-1024 \/ TLS 1\.0 \/ RC4 Out of policy ML-KEM hybrid/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(readiness).getByRole("row", { name: /https:\/\/edge\.example\.com:443 tls_endpoint ECDSA-256 \/ TLS 1\.3 \/ AES-GCM Ready/i }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/fixture/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /run inventory|enable pqc|change algorithm/i })).not.toBeInTheDocument();

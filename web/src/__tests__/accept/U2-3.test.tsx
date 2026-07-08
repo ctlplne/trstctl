@@ -5,8 +5,14 @@ import type { SecretMeta } from "@/lib/api";
 
 describe("U2-3 environment diff", () => {
   it("diffs two secret sets into added, removed, and changed", () => {
-    const left = [{ name: "a", version: 1 }, { name: "b", version: 1 }] as SecretMeta[];
-    const right = [{ name: "b", version: 2 }, { name: "c", version: 1 }] as SecretMeta[];
+    const left = [
+      { name: "a", version: 1 },
+      { name: "b", version: 1 },
+    ] as SecretMeta[];
+    const right = [
+      { name: "b", version: 2 },
+      { name: "c", version: 1 },
+    ] as SecretMeta[];
     const diff = diffSecrets(left, right);
     expect(diff.added).toEqual(["c"]);
     expect(diff.removed).toEqual(["a"]);

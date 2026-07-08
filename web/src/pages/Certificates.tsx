@@ -1170,170 +1170,170 @@ export function Certificates() {
           )}
           {tab === "inventory" && (
             <div {...tabPanelProps("certs", "inventory")}>
-          <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())} className="sticky top-0 z-10 mb-3 shadow-elevation1">
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive-outline"
-              onClick={() => {
-                setBulkError(null);
-                setBulkRevokeOpen(true);
-              }}
-            >
-              Revoke selected ({selectedIds.size})…
-            </Button>
-          </BulkActionBar>
-          <DataGrid
-            ariaLabel="Inventoried certificates"
-            rows={filtered}
-            columns={columns}
-            getRowId={(c) => c.id}
-            selection={{
-              selectedIds,
-              onSelectedIdsChange: setSelectedIds,
-              getRowLabel: (c) => c.subject,
-            }}
-            state={filtered.length === 0 ? "empty" : "ready"}
-            stateTitle="No certificates match your search."
-            showColumnChooser
-            viewStorageKey="certificates-inventory"
-            viewMetadata={{
-              query,
-              expiry,
-              issuer: issuerFilter,
-              profile: profileFilter,
-              team: teamFilter,
-              environment: environmentFilter,
-              limit,
-            }}
-            onViewRestore={restoreCertificateGridView}
-            toolbar={({ columnChooser, savedViews }) => (
-              <DataGridToolbar
-                searchLabel="Search loaded rows"
-                searchPlaceholder="Subject, issuer, serial, fingerprint..."
-                searchValue={query}
-                onSearchChange={setQuery}
-                filters={
-                  <>
-                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-issuer-filter">
-                      Issuer filter
-                      <select
-                        id="cert-issuer-filter"
-                        value={issuerFilter}
-                        onChange={(e) => selectFacet("issuer", e.target.value)}
-                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-                      >
-                        <option value="all">All issuers</option>
-                        {issuerOptions.map((issuer) => (
-                          <option key={issuer} value={issuer}>
-                            {issuer}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-profile-filter">
-                      Profile filter
-                      <select
-                        id="cert-profile-filter"
-                        value={profileFilter}
-                        onChange={(e) => selectFacet("profile", e.target.value)}
-                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-                      >
-                        <option value="all">All profiles</option>
-                        {profileOptions.map((profile) => (
-                          <option key={profile} value={profile}>
-                            {profile}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-team-filter">
-                      Team filter
-                      <select
-                        id="cert-team-filter"
-                        value={teamFilter}
-                        onChange={(e) => selectFacet("team", e.target.value)}
-                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-                      >
-                        <option value="all">All teams</option>
-                        {teamOptions.map((team) => (
-                          <option key={team.value} value={team.value}>
-                            {team.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-environment-filter">
-                      Environment filter
-                      <select
-                        id="cert-environment-filter"
-                        value={environmentFilter}
-                        onChange={(e) => selectFacet("environment", e.target.value)}
-                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-                      >
-                        <option value="all">All environments</option>
-                        {environmentOptions.map((environment) => (
-                          <option key={environment} value={environment}>
-                            {environment}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <fieldset>
-                      <legend className="mb-1 text-sm font-medium">Server expiry filter</legend>
-                      <div className="flex flex-wrap gap-2">
-                        {expiryFilters.map((f) => (
-                          <button
-                            key={f.value}
-                            type="button"
-                            onClick={() => selectExpiry(f.value)}
-                            aria-pressed={expiry === f.value}
-                            className={`min-h-9 rounded-md border px-2.5 text-sm ${
-                              expiry === f.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"
-                            }`}
+              <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())} className="sticky top-0 z-10 mb-3 shadow-elevation1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive-outline"
+                  onClick={() => {
+                    setBulkError(null);
+                    setBulkRevokeOpen(true);
+                  }}
+                >
+                  Revoke selected ({selectedIds.size})…
+                </Button>
+              </BulkActionBar>
+              <DataGrid
+                ariaLabel="Inventoried certificates"
+                rows={filtered}
+                columns={columns}
+                getRowId={(c) => c.id}
+                selection={{
+                  selectedIds,
+                  onSelectedIdsChange: setSelectedIds,
+                  getRowLabel: (c) => c.subject,
+                }}
+                state={filtered.length === 0 ? "empty" : "ready"}
+                stateTitle="No certificates match your search."
+                showColumnChooser
+                viewStorageKey="certificates-inventory"
+                viewMetadata={{
+                  query,
+                  expiry,
+                  issuer: issuerFilter,
+                  profile: profileFilter,
+                  team: teamFilter,
+                  environment: environmentFilter,
+                  limit,
+                }}
+                onViewRestore={restoreCertificateGridView}
+                toolbar={({ columnChooser, savedViews }) => (
+                  <DataGridToolbar
+                    searchLabel="Search loaded rows"
+                    searchPlaceholder="Subject, issuer, serial, fingerprint..."
+                    searchValue={query}
+                    onSearchChange={setQuery}
+                    filters={
+                      <>
+                        <label className="grid gap-1 text-sm font-medium" htmlFor="cert-issuer-filter">
+                          Issuer filter
+                          <select
+                            id="cert-issuer-filter"
+                            value={issuerFilter}
+                            onChange={(e) => selectFacet("issuer", e.target.value)}
+                            className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
                           >
-                            {f.label}
-                          </button>
-                        ))}
-                      </div>
-                    </fieldset>
-                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-limit">
-                      Page size
-                      <select
-                        id="cert-limit"
-                        value={limit}
-                        onChange={(e) => setLimit(Number(e.target.value))}
-                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-                      >
-                        <option value={5}>5</option>
-                        <option value={20}>20</option>
-                        <option value={50}>50</option>
-                      </select>
-                    </label>
-                  </>
-                }
-                savedViews={savedViews}
-                columnChooser={columnChooser}
+                            <option value="all">All issuers</option>
+                            {issuerOptions.map((issuer) => (
+                              <option key={issuer} value={issuer}>
+                                {issuer}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-sm font-medium" htmlFor="cert-profile-filter">
+                          Profile filter
+                          <select
+                            id="cert-profile-filter"
+                            value={profileFilter}
+                            onChange={(e) => selectFacet("profile", e.target.value)}
+                            className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                          >
+                            <option value="all">All profiles</option>
+                            {profileOptions.map((profile) => (
+                              <option key={profile} value={profile}>
+                                {profile}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-sm font-medium" htmlFor="cert-team-filter">
+                          Team filter
+                          <select
+                            id="cert-team-filter"
+                            value={teamFilter}
+                            onChange={(e) => selectFacet("team", e.target.value)}
+                            className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                          >
+                            <option value="all">All teams</option>
+                            {teamOptions.map((team) => (
+                              <option key={team.value} value={team.value}>
+                                {team.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-sm font-medium" htmlFor="cert-environment-filter">
+                          Environment filter
+                          <select
+                            id="cert-environment-filter"
+                            value={environmentFilter}
+                            onChange={(e) => selectFacet("environment", e.target.value)}
+                            className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                          >
+                            <option value="all">All environments</option>
+                            {environmentOptions.map((environment) => (
+                              <option key={environment} value={environment}>
+                                {environment}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <fieldset>
+                          <legend className="mb-1 text-sm font-medium">Server expiry filter</legend>
+                          <div className="flex flex-wrap gap-2">
+                            {expiryFilters.map((f) => (
+                              <button
+                                key={f.value}
+                                type="button"
+                                onClick={() => selectExpiry(f.value)}
+                                aria-pressed={expiry === f.value}
+                                className={`min-h-9 rounded-md border px-2.5 text-sm ${
+                                  expiry === f.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"
+                                }`}
+                              >
+                                {f.label}
+                              </button>
+                            ))}
+                          </div>
+                        </fieldset>
+                        <label className="grid gap-1 text-sm font-medium" htmlFor="cert-limit">
+                          Page size
+                          <select
+                            id="cert-limit"
+                            value={limit}
+                            onChange={(e) => setLimit(Number(e.target.value))}
+                            className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                          >
+                            <option value={5}>5</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                          </select>
+                        </label>
+                      </>
+                    }
+                    savedViews={savedViews}
+                    columnChooser={columnChooser}
+                  />
+                )}
+                onRowOpen={(c) => void openDetail(c)}
+                rowActionLabel={() => "View details"}
               />
-            )}
-            onRowOpen={(c) => void openDetail(c)}
-            rowActionLabel={() => "View details"}
-          />
 
-          <div className="mt-4 flex items-center gap-3">
-            {nextCursor ? (
-              <button
-                type="button"
-                onClick={() => void loadNextPage()}
-                disabled={loadingMore}
-                className="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm disabled:opacity-60"
-              >
-                {loadingMore ? "Loading next page..." : "Load next page"}
-              </button>
-            ) : (
-              <p className="text-sm text-muted-foreground">No more certificate pages.</p>
-            )}
-          </div>
+              <div className="mt-4 flex items-center gap-3">
+                {nextCursor ? (
+                  <button
+                    type="button"
+                    onClick={() => void loadNextPage()}
+                    disabled={loadingMore}
+                    className="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm disabled:opacity-60"
+                  >
+                    {loadingMore ? "Loading next page..." : "Load next page"}
+                  </button>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No more certificate pages.</p>
+                )}
+              </div>
             </div>
           )}
         </>

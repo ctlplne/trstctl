@@ -352,7 +352,7 @@ export const journeys: Journey[] = [
         id: "idempotency",
         titleKey: "journeys.api.idempotency.title",
         bodyKey: "journeys.api.idempotency.body",
-        command: "echo '{\"kind\":\"workload\",\"name\":\"payments\"}' \\\n  | trstctl-cli owners create -f - --idempotency-key my-stable-key",
+        command: 'echo \'{"kind":"workload","name":"payments"}\' \\\n  | trstctl-cli owners create -f - --idempotency-key my-stable-key',
       },
       { id: "graph", titleKey: "journeys.api.graph.title", bodyKey: "journeys.api.graph.body", to: "/graph", command: "trstctl-cli graph nodes" },
     ],

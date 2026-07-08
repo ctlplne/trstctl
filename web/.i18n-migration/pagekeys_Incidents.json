@@ -1,9 +1,9 @@
 {
- "Event-sourced remediation run evidence, including the connector delivery receipt when one was recorded.": "parity.eventSourcedRemediationRunEvidenceIncluding_cec725",
- "No owner remediation actions are queued.": "parity.noOwnerRemediationActionsAreQueued_596b9b",
- "Owner remediation queue": "parity.ownerRemediationQueue_610e16",
- "Playbook run history unavailable": "parity.playbookRunHistoryUnavailable_8452d8",
- "Playbook runs": "parity.playbookRuns_da379d",
- "Recorded playbook runs with their connector delivery receipts, and the owner remediation queue snapshot.": "parity.recordedPlaybookRunsWithTheirConnector_bffffe",
- "Remediation evidence": "parity.remediationEvidence_5174c6"
+  "Event-sourced remediation run evidence, including the connector delivery receipt when one was recorded.": "parity.eventSourcedRemediationRunEvidenceIncluding_cec725",
+  "No owner remediation actions are queued.": "parity.noOwnerRemediationActionsAreQueued_596b9b",
+  "Owner remediation queue": "parity.ownerRemediationQueue_610e16",
+  "Playbook run history unavailable": "parity.playbookRunHistoryUnavailable_8452d8",
+  "Playbook runs": "parity.playbookRuns_da379d",
+  "Recorded playbook runs with their connector delivery receipts, and the owner remediation queue snapshot.": "parity.recordedPlaybookRunsWithTheirConnector_bffffe",
+  "Remediation evidence": "parity.remediationEvidence_5174c6"
 }

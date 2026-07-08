@@ -61,50 +61,52 @@ function RequireAuth({ children }: { children: ReactElement }) {
  * inside a MemoryRouter. */
 export function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route
-        element={
-          <RequireAuth>
-            <AppShell />
-          </RequireAuth>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="certificates" element={<Certificates />} />
-        <Route path="identities" element={<Identities />} />
-        <Route path="owners" element={<Owners />} />
-        <Route path="agents" element={<Agents />} />
-        <Route path="discovery" element={<Discovery />} />
-        <Route path="profiles" element={<Profiles />} />
-        <Route path="request" element={<RequestCredential />} />
-        <Route path="ca-hierarchy" element={<CAHierarchy />} />
-        <Route path="workloads" element={<Workloads />} />
-        <Route path="protocols" element={<Protocols />} />
-        <Route path="ssh" element={<SSHTrust />} />
-        <Route path="codesign" element={<CodeSigning />} />
-        <Route path="secrets" element={<Secrets />} />
-        <Route path="connectors" element={<Connectors />} />
-        <Route path="policy" element={<Policy />} />
-        <Route path="risk" element={<Risk />} />
-        <Route path="incidents" element={<Incidents />} />
-        <Route path="approvals" element={<Approvals />} />
-        <Route path="operations" element={<Operations />} />
-        <Route path="notifications" element={<Notifications />} />
-        <Route path="posture" element={<Posture />} />
-        <Route path="graph" element={<Graph />} />
-        <Route path="audit" element={<Audit />} />
-        <Route path="privacy" element={<Privacy />} />
-        <Route path="integrate" element={<Integrate />} />
-        <Route path="integrate/api" element={<ApiExplorer />} />
-        <Route path="assistant" element={<Assistant />} />
-        <Route path="wizard" element={<Wizard />} />
-        <Route path="platform" element={<Platform />} />
-        <Route path="styleguide" element={<Styleguide />} />
-        <Route path="journeys" element={<Journeys />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ToastProvider>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          element={
+            <RequireAuth>
+              <AppShell />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="certificates" element={<Certificates />} />
+          <Route path="identities" element={<Identities />} />
+          <Route path="owners" element={<Owners />} />
+          <Route path="agents" element={<Agents />} />
+          <Route path="discovery" element={<Discovery />} />
+          <Route path="profiles" element={<Profiles />} />
+          <Route path="request" element={<RequestCredential />} />
+          <Route path="ca-hierarchy" element={<CAHierarchy />} />
+          <Route path="workloads" element={<Workloads />} />
+          <Route path="protocols" element={<Protocols />} />
+          <Route path="ssh" element={<SSHTrust />} />
+          <Route path="codesign" element={<CodeSigning />} />
+          <Route path="secrets" element={<Secrets />} />
+          <Route path="connectors" element={<Connectors />} />
+          <Route path="policy" element={<Policy />} />
+          <Route path="risk" element={<Risk />} />
+          <Route path="incidents" element={<Incidents />} />
+          <Route path="approvals" element={<Approvals />} />
+          <Route path="operations" element={<Operations />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="posture" element={<Posture />} />
+          <Route path="graph" element={<Graph />} />
+          <Route path="audit" element={<Audit />} />
+          <Route path="privacy" element={<Privacy />} />
+          <Route path="integrate" element={<Integrate />} />
+          <Route path="integrate/api" element={<ApiExplorer />} />
+          <Route path="assistant" element={<Assistant />} />
+          <Route path="wizard" element={<Wizard />} />
+          <Route path="platform" element={<Platform />} />
+          <Route path="styleguide" element={<Styleguide />} />
+          <Route path="journeys" element={<Journeys />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ToastProvider>
   );
 }
 
@@ -123,11 +125,9 @@ export function App() {
     <ThemeProvider>
       <AuthProvider>
         <SessionI18nProvider>
-          <ToastProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </ToastProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
         </SessionI18nProvider>
       </AuthProvider>
     </ThemeProvider>

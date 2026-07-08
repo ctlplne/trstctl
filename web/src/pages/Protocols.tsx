@@ -234,9 +234,7 @@ export function Protocols() {
   }
 
   function handleSCEPPolicyDeleted(policy: MDMSCEPPolicy) {
-    setMDMSCEPStatus((current) =>
-      current ? { ...current, policies: current.policies.filter((candidate) => candidate.id !== policy.id) } : current,
-    );
+    setMDMSCEPStatus((current) => (current ? { ...current, policies: current.policies.filter((candidate) => candidate.id !== policy.id) } : current));
     setSCEPDeletePolicy(null);
     toast({ kind: "success", title: t("parity.scepPolicyDeleted_45064c"), description: policy.name });
   }
@@ -410,7 +408,9 @@ export function Protocols() {
                         </li>
                       ))}
                     </ul>
-                    {(provider.secret_fields ?? []).length === 0 && <p className="mt-2 text-caption text-muted-foreground">{t("protocols.dns01.noRawSecretFields")}</p>}
+                    {(provider.secret_fields ?? []).length === 0 && (
+                      <p className="mt-2 text-caption text-muted-foreground">{t("protocols.dns01.noRawSecretFields")}</p>
+                    )}
                   </td>
                   <td>
                     <ul className="grid gap-1">
@@ -483,10 +483,22 @@ export function Protocols() {
                     </td>
                     <td>
                       <div className="flex flex-wrap gap-2">
-                        <Button type="button" size="sm" variant="outline" onClick={() => setDNSPreflightConfig(config)} aria-label={`Preflight check ${config.name}`}>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDNSPreflightConfig(config)}
+                          aria-label={`Preflight check ${config.name}`}
+                        >
                           {t("parity.preflightCheck_4a464a")}
                         </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => setDNSEditConfig(config)} aria-label={`Edit DNS-01 config ${config.name}`}>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDNSEditConfig(config)}
+                          aria-label={`Edit DNS-01 config ${config.name}`}
+                        >
                           {t("parity.edit_530164")}
                         </Button>
                         <Button
@@ -538,11 +550,7 @@ export function Protocols() {
                       <td>
                         <p className="font-medium">{policy.name}</p>
                         <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.id}</p>
-                        <ProtocolServedBadge
-                          served={policy.enabled}
-                          servedLabel={t("protocols.mdm.enabled")}
-                          offLabel={t("protocols.mdm.disabled")}
-                        />
+                        <ProtocolServedBadge served={policy.enabled} servedLabel={t("protocols.mdm.enabled")} offLabel={t("protocols.mdm.disabled")} />
                       </td>
                       <td className="font-mono text-xs">{policy.provider}</td>
                       <td>
@@ -568,10 +576,22 @@ export function Protocols() {
                       </td>
                       <td>
                         <div className="flex flex-wrap gap-2">
-                          <Button type="button" size="sm" variant="outline" onClick={() => setSCEPEditPolicy(policy)} aria-label={`Edit SCEP policy ${policy.name}`}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSCEPEditPolicy(policy)}
+                            aria-label={`Edit SCEP policy ${policy.name}`}
+                          >
                             {t("parity.edit_530164")}
                           </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => setSCEPRotatePolicy(policy)} aria-label={`Rotate challenge for ${policy.name}`}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSCEPRotatePolicy(policy)}
+                            aria-label={`Rotate challenge for ${policy.name}`}
+                          >
                             {t("parity.rotateChallenge_99fc02")}
                           </Button>
                           <Button
@@ -753,15 +773,7 @@ function parseOptionalJSONRecord(value: string, label: string): Record<string, u
   return parsed as Record<string, unknown>;
 }
 
-function MDMSCEPPolicyEditDialog({
-  onClose,
-  onSaved,
-  policy,
-}: {
-  policy: MDMSCEPPolicy;
-  onClose: () => void;
-  onSaved: (updated: MDMSCEPPolicy) => void;
-}) {
+function MDMSCEPPolicyEditDialog({ onClose, onSaved, policy }: { policy: MDMSCEPPolicy; onClose: () => void; onSaved: (updated: MDMSCEPPolicy) => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState(policy.name);
   const [provider, setProvider] = useState<MDMSCEPPolicyRequest["provider"]>(policy.provider === "jamf" ? "jamf" : "intune");
@@ -994,15 +1006,7 @@ function MDMSCEPRotateChallengeDialog({
   );
 }
 
-function MDMSCEPPolicyDeleteDialog({
-  onClose,
-  onDeleted,
-  policy,
-}: {
-  policy: MDMSCEPPolicy;
-  onClose: () => void;
-  onDeleted: (policy: MDMSCEPPolicy) => void;
-}) {
+function MDMSCEPPolicyDeleteDialog({ onClose, onDeleted, policy }: { policy: MDMSCEPPolicy; onClose: () => void; onDeleted: (policy: MDMSCEPPolicy) => void }) {
   const { t } = useTranslation();
   const [confirmName, setConfirmName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1057,14 +1061,7 @@ function MDMSCEPPolicyDeleteDialog({
         placeholder={policy.name}
       />
       <div className="mt-3 flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="destructive"
-          loading={busy}
-          disabled={confirmName.trim() !== policy.name}
-          onClick={() => void confirmDelete()}
-        >
+        <Button type="button" size="sm" variant="destructive" loading={busy} disabled={confirmName.trim() !== policy.name} onClick={() => void confirmDelete()}>
           {t("parity.yesDeletePolicy_30ce34")}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
@@ -1342,14 +1339,7 @@ function DNS01ConfigDeleteDialog({
         placeholder={config.name}
       />
       <div className="mt-3 flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="destructive"
-          loading={busy}
-          disabled={confirmName.trim() !== config.name}
-          onClick={() => void confirmDelete()}
-        >
+        <Button type="button" size="sm" variant="destructive" loading={busy} disabled={confirmName.trim() !== config.name} onClick={() => void confirmDelete()}>
           {t("parity.yesDeleteConfig_bd6fac")}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
@@ -1410,9 +1400,7 @@ function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01ProviderCo
           <h2 id={titleId} className="truncate text-title font-semibold">
             DNS-01 preflight: {config.name}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("parity.validatesDelegationTxtPropagationCaaPolicy_1ceb4c")}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("parity.validatesDelegationTxtPropagationCaaPolicy_1ceb4c")}</p>
         </div>
         <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closePreflightDialog_97a0fb")}>
           <X className="h-4 w-4" aria-hidden="true" />
@@ -1489,7 +1477,9 @@ function DNS01PreflightResultPanel({ result }: { result: ACMEDNS01Preflight }) {
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge value={result.ready ? "ready" : "not-ready"} tone={result.ready ? "success" : "critical"} label={result.ready ? "Ready" : "Not ready"} />
         <span className="font-medium">{result.domain}</span>
-        {result.wildcard && <span className="rounded-control border border-border px-2 py-0.5 text-caption text-muted-foreground">{t("parity.wildcard_08654e")}</span>}
+        {result.wildcard && (
+          <span className="rounded-control border border-border px-2 py-0.5 text-caption text-muted-foreground">{t("parity.wildcard_08654e")}</span>
+        )}
       </div>
       <dl className="grid gap-3 sm:grid-cols-2">
         <div>

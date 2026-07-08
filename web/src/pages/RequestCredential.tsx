@@ -272,7 +272,11 @@ export function RequestCredential() {
                       <div className="flex items-center justify-between gap-3">
                         <dt className="text-caption text-muted-foreground">Status</dt>
                         <dd>
-                          <StatusBadge vocabulary="lifecycle" value={selectedProfile.active === false ? "retired" : "issued"} label={selectedProfile.active === false ? "inactive" : "active"} />
+                          <StatusBadge
+                            vocabulary="lifecycle"
+                            value={selectedProfile.active === false ? "retired" : "issued"}
+                            label={selectedProfile.active === false ? "inactive" : "active"}
+                          />
                         </dd>
                       </div>
                     </dl>

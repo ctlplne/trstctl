@@ -120,7 +120,9 @@ describe("SIMP-04 identities declutter", () => {
 
     expect(screen.queryByText("Issuance guardrails")).not.toBeInTheDocument();
     expect(screen.queryByText("Revocation publication")).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/public OCSP|CRL responders|Responder paths|Live propagation health|request-only principal cannot self-issue/i);
+    expect(document.body.textContent).not.toMatch(
+      /public OCSP|CRL responders|Responder paths|Live propagation health|request-only principal cannot self-issue/i,
+    );
   });
 
   it("removes guardrail and revocation endpoint prose from the Identities module", () => {

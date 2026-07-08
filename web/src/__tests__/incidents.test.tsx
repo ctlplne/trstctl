@@ -272,7 +272,14 @@ const responseDispatch = {
     { id: "splunk", provider: "splunk", destination: "response.splunk", status: "queued", outbox_id: 71, idempotency_key: "response-event-1:splunk" },
     { id: "jira", provider: "jira", destination: "response.jira", status: "queued", outbox_id: 72, idempotency_key: "response-event-1:jira" },
     { id: "slack", provider: "slack", destination: "notification.response", status: "queued", outbox_id: 73, idempotency_key: "response-event-1:slack" },
-    { id: "servicenow", provider: "servicenow", destination: "itsm.servicenow", status: "queued", outbox_id: 74, idempotency_key: "response-event-1:servicenow" },
+    {
+      id: "servicenow",
+      provider: "servicenow",
+      destination: "itsm.servicenow",
+      status: "queued",
+      outbox_id: 74,
+      idempotency_key: "response-event-1:servicenow",
+    },
   ],
 };
 
@@ -281,7 +288,9 @@ describe("incident response served execution surface", () => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
     apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [execution] });
     apiMock.executeIncident.mockReset().mockResolvedValue(execution);
-    apiMock.remediationPlaybooks.mockReset().mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-20T12:00:00Z", items: playbooks });
+    apiMock.remediationPlaybooks
+      .mockReset()
+      .mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-20T12:00:00Z", items: playbooks });
     apiMock.remediationPlaybookRuns.mockReset().mockResolvedValue({ items: [playbookRun] });
     apiMock.runRemediationPlaybook.mockReset().mockResolvedValue(playbookRun);
     apiMock.ownerRemediationActions.mockReset().mockResolvedValue({

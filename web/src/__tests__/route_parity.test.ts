@@ -103,7 +103,8 @@ const cover004FeatureIds = [
   "F79",
 ] as const;
 
-const partialUiEvidencePattern = /\b(?:observe|basic|passive|thin|disclosure)\s*:|\b(?:api\/cli(?:\s+served)?|cli\/api|hand-?off|handoff|fixture|unavailable state|backend-gap|gap disclosure)\b/i;
+const partialUiEvidencePattern =
+  /\b(?:observe|basic|passive|thin|disclosure)\s*:|\b(?:api\/cli(?:\s+served)?|cli\/api|hand-?off|handoff|fixture|unavailable state|backend-gap|gap disclosure)\b/i;
 
 function servedFeatureMap(): FeatureMapBacklog {
   for (const candidate of ["internal/featureparity/feature-map-backlog.json", "../internal/featureparity/feature-map-backlog.json"]) {

@@ -8,7 +8,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     api: {
       ...actual.api,
-      graphBlastRadius: vi.fn(async () => ({ node: { id: "n1", kind: "ca", name: "Root CA" }, affected: [{ id: "a1", kind: "x509", name: "leaf.example" }], by_kind: {} })),
+      graphBlastRadius: vi.fn(async () => ({
+        node: { id: "n1", kind: "ca", name: "Root CA" },
+        affected: [{ id: "a1", kind: "x509", name: "leaf.example" }],
+        by_kind: {},
+      })),
     },
   };
 });

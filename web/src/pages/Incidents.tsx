@@ -457,7 +457,8 @@ export function Incidents() {
         setFleetEvidence(evidence);
         return;
       }
-      const input = kind === "rollback" ? { reason: "operator rollback", rollback_ref: "restore previous credential bindings" } : { reason: `operator ${kind}` };
+      const input =
+        kind === "rollback" ? { reason: "operator rollback", rollback_ref: "restore previous credential bindings" } : { reason: `operator ${kind}` };
       const updated =
         kind === "pause"
           ? await api.pauseFleetReissuance(run.id, input)
@@ -603,9 +604,7 @@ export function Incidents() {
           <h2 id="playbooks-heading" className="text-title font-semibold">
             {t("incidents.playbooks.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {t("incidents.playbooks.description")}
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("incidents.playbooks.description")}</p>
         </div>
         <div className="grid gap-2 md:grid-cols-3">
           {playbooks.map((item) => (
@@ -719,9 +718,7 @@ export function Incidents() {
             <h2 id="owner-remediation-heading" className="text-title font-semibold">
               {t("incidents.ownerRemediation.heading")}
             </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {t("incidents.ownerRemediation.description")}
-            </p>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("incidents.ownerRemediation.description")}</p>
           </div>
           {ownerRemediation && (
             <p className="text-sm text-muted-foreground">
@@ -824,9 +821,7 @@ export function Incidents() {
           <h2 id="response-integrations-heading" className="text-title font-semibold">
             {t("incidents.response.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {t("incidents.response.description")}
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("incidents.response.description")}</p>
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={dispatchResponseIntegrations}>
           <label className="grid gap-1 text-sm font-medium">
@@ -843,9 +838,7 @@ export function Incidents() {
             <select
               className="ui-input"
               value={responseForm.severity}
-              onChange={(event) =>
-                setResponseForm({ ...responseForm, severity: event.target.value as ResponseIntegrationForm["severity"] })
-              }
+              onChange={(event) => setResponseForm({ ...responseForm, severity: event.target.value as ResponseIntegrationForm["severity"] })}
             >
               <option value="critical">{t("incidents.response.severityCritical")}</option>
               <option value="warning">{t("incidents.response.severityWarning")}</option>
@@ -1037,7 +1030,11 @@ export function Incidents() {
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Category
-            <input className="ui-input" value={ticketForm.category ?? ""} onChange={(event) => setTicketForm({ ...ticketForm, category: event.target.value })} />
+            <input
+              className="ui-input"
+              value={ticketForm.category ?? ""}
+              onChange={(event) => setTicketForm({ ...ticketForm, category: event.target.value })}
+            />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Urgency
@@ -1115,9 +1112,7 @@ export function Incidents() {
             <h2 id="remediation-evidence-heading" className="text-title font-semibold">
               {t("parity.remediationEvidence_5174c6")}
             </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {t("parity.recordedPlaybookRunsWithTheirConnector_bffffe")}
-            </p>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("parity.recordedPlaybookRunsWithTheirConnector_bffffe")}</p>
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
             {evidenceRuns && (
@@ -1174,26 +1169,16 @@ export function Incidents() {
               min={1}
               max={100}
               value={fleetForm.batch_size ?? ""}
-              onChange={(event) =>
-                setFleetForm({ ...fleetForm, batch_size: event.target.value === "" ? undefined : Number(event.target.value) || undefined })
-              }
+              onChange={(event) => setFleetForm({ ...fleetForm, batch_size: event.target.value === "" ? undefined : Number(event.target.value) || undefined })}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             What happened
-            <input
-              className="ui-input"
-              value={fleetForm.reason ?? ""}
-              onChange={(event) => setFleetForm({ ...fleetForm, reason: event.target.value })}
-            />
+            <input className="ui-input" value={fleetForm.reason ?? ""} onChange={(event) => setFleetForm({ ...fleetForm, reason: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Delivery method
-            <input
-              className="ui-input"
-              value={fleetForm.connector ?? ""}
-              onChange={(event) => setFleetForm({ ...fleetForm, connector: event.target.value })}
-            />
+            <input className="ui-input" value={fleetForm.connector ?? ""} onChange={(event) => setFleetForm({ ...fleetForm, connector: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Deployment target
@@ -1263,9 +1248,7 @@ export function Incidents() {
           <h2 id="incident-help-heading" className="text-title font-semibold">
             Incident response help
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Keep emergency issuance guidance close by without mixing it into the execution form.
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Keep emergency issuance guidance close by without mixing it into the execution form.</p>
         </div>
         <div>
           <Button type="button" variant="outline" onClick={() => setShowBreakGlassHelp(true)}>
@@ -1797,9 +1780,7 @@ function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue })
               )}
               {item.reason && <p className="text-xs text-muted-foreground">Reason: {item.reason}</p>}
               {item.rollback_ref && <p className="break-all font-mono text-xs text-muted-foreground">rollback: {item.rollback_ref}</p>}
-              {item.evidence_refs.length > 0 && (
-                <p className="break-all font-mono text-xs text-muted-foreground">evidence: {item.evidence_refs.join(", ")}</p>
-              )}
+              {item.evidence_refs.length > 0 && <p className="break-all font-mono text-xs text-muted-foreground">evidence: {item.evidence_refs.join(", ")}</p>}
               {item.remediation_run_id && <p className="break-all font-mono text-xs text-muted-foreground">run: {item.remediation_run_id}</p>}
             </li>
           ))}

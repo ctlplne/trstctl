@@ -710,10 +710,7 @@ describe("discovery control-plane surface", () => {
       kind: "nhi_behavior",
       config: {
         business_hours: { start_hour: 8, end_hour: 18 },
-        events: [
-          expect.objectContaining({ principal: "payments-api", baseline: true }),
-          expect.objectContaining({ principal: "payments-api", geo: "DE" }),
-        ],
+        events: [expect.objectContaining({ principal: "payments-api", baseline: true }), expect.objectContaining({ principal: "payments-api", geo: "DE" })],
       },
     });
   });

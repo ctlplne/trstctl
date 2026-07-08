@@ -38,7 +38,12 @@ export function CodeSigning() {
       const result =
         mode === "key"
           ? await api.signCode({ artifact_type: artifactType, digest: digest.trim(), key_id: keyId.trim() })
-          : await api.signCodeKeyless({ artifact_type: artifactType, digest: digest.trim(), identity_method: identityMethod, identity_payload: identityPayload.trim() });
+          : await api.signCodeKeyless({
+              artifact_type: artifactType,
+              digest: digest.trim(),
+              identity_method: identityMethod,
+              identity_payload: identityPayload.trim(),
+            });
       setSignature(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -72,26 +77,52 @@ export function CodeSigning() {
           <div className="grid gap-3 md:grid-cols-2">
             <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-type">
               Artifact type
-              <input id="codesign-type" value={artifactType} onChange={(e) => setArtifactType(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm" />
+              <input
+                id="codesign-type"
+                value={artifactType}
+                onChange={(e) => setArtifactType(e.target.value)}
+                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-digest">
               Artifact digest
-              <input id="codesign-digest" value={digest} onChange={(e) => setDigest(e.target.value)} placeholder="sha256:…" className="rounded-md border border-border bg-background px-3 py-2 font-mono text-xs" />
+              <input
+                id="codesign-digest"
+                value={digest}
+                onChange={(e) => setDigest(e.target.value)}
+                placeholder="sha256:…"
+                className="rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+              />
             </label>
             {mode === "key" ? (
               <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-keyid">
                 Managed key id
-                <input id="codesign-keyid" value={keyId} onChange={(e) => setKeyId(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                <input
+                  id="codesign-keyid"
+                  value={keyId}
+                  onChange={(e) => setKeyId(e.target.value)}
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
               </label>
             ) : (
               <>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-id-method">
                   Identity method
-                  <input id="codesign-id-method" value={identityMethod} onChange={(e) => setIdentityMethod(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                  <input
+                    id="codesign-id-method"
+                    value={identityMethod}
+                    onChange={(e) => setIdentityMethod(e.target.value)}
+                    className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
                 </label>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-id-payload">
                   Identity payload
-                  <input id="codesign-id-payload" value={identityPayload} onChange={(e) => setIdentityPayload(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                  <input
+                    id="codesign-id-payload"
+                    value={identityPayload}
+                    onChange={(e) => setIdentityPayload(e.target.value)}
+                    className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
                 </label>
               </>
             )}

@@ -56,10 +56,24 @@ describe("SIMP-02 lean protocol setup", () => {
       checked_at: "2026-06-26T14:30:00Z",
       items: [
         { protocol: "acme", endpoint: "/directory", enabled: true, served: true, status_code: 200, detail: "ACME directory responded." },
-        { protocol: "est", endpoint: "/.well-known/est/cacerts", enabled: true, served: true, status_code: 200, detail: "EST CA-certs responder returned a chain." },
+        {
+          protocol: "est",
+          endpoint: "/.well-known/est/cacerts",
+          enabled: true,
+          served: true,
+          status_code: 200,
+          detail: "EST CA-certs responder returned a chain.",
+        },
         { protocol: "scep", endpoint: "/scep?operation=GetCACaps", enabled: false, served: false, status_code: 404, detail: "SCEP responder is not mounted." },
         { protocol: "cmp", endpoint: "/cmp", enabled: true, served: true, status_code: 405, detail: "CMP route is mounted and expects a PKIMessage request." },
-        { protocol: "spiffe", endpoint: "unix:///tmp/trstctl-spiffe-workload.sock", enabled: true, served: true, status_code: 0, detail: "Workload API socket configured." },
+        {
+          protocol: "spiffe",
+          endpoint: "unix:///tmp/trstctl-spiffe-workload.sock",
+          enabled: true,
+          served: true,
+          status_code: 0,
+          detail: "Workload API socket configured.",
+        },
         { protocol: "ssh", endpoint: "/ssh/ca", enabled: true, served: true, status_code: 200, detail: "SSH CA public-key endpoint responded." },
         { protocol: "tsa", endpoint: "/tsa", enabled: true, served: true, status_code: 405, detail: "TSA route is mounted and expects a timestamp request." },
       ],
@@ -101,7 +115,15 @@ describe("SIMP-02 lean protocol setup", () => {
     for (const name of ["ACME", "EST", "SCEP", "CMP", "SPIFFE", "SSH CA", "TSA"]) {
       expect(screen.getAllByText(name).length).toBeGreaterThan(0);
     }
-    for (const endpoint of ["/directory", "/.well-known/est/cacerts", "/scep?operation=GetCACaps", "/cmp", "unix:///tmp/trstctl-spiffe-workload.sock", "/ssh/ca", "/tsa"]) {
+    for (const endpoint of [
+      "/directory",
+      "/.well-known/est/cacerts",
+      "/scep?operation=GetCACaps",
+      "/cmp",
+      "unix:///tmp/trstctl-spiffe-workload.sock",
+      "/ssh/ca",
+      "/tsa",
+    ]) {
       expect(screen.getAllByText(endpoint).length).toBeGreaterThan(0);
     }
 

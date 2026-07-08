@@ -75,8 +75,24 @@ describe("C10-5 dashboard trend charts", () => {
     apiMock.risk.mockResolvedValue([]);
     apiMock.rotationRuns.mockResolvedValue({
       items: [
-        { id: "run-1", tenant_id: "t1", identity_id: "id-1", status: "succeeded", trigger: "scheduler", created_at: "2026-06-08T00:00:00Z", updated_at: "2026-06-08T00:02:00Z" },
-        { id: "run-2", tenant_id: "t1", identity_id: "id-2", status: "failed", trigger: "expiry-window", created_at: "2026-06-09T00:00:00Z", updated_at: "2026-06-09T00:02:00Z" },
+        {
+          id: "run-1",
+          tenant_id: "t1",
+          identity_id: "id-1",
+          status: "succeeded",
+          trigger: "scheduler",
+          created_at: "2026-06-08T00:00:00Z",
+          updated_at: "2026-06-08T00:02:00Z",
+        },
+        {
+          id: "run-2",
+          tenant_id: "t1",
+          identity_id: "id-2",
+          status: "failed",
+          trigger: "expiry-window",
+          created_at: "2026-06-09T00:00:00Z",
+          updated_at: "2026-06-09T00:02:00Z",
+        },
       ],
     });
   });

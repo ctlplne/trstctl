@@ -36,32 +36,71 @@ export function TransitConsole() {
   }
 
   const encrypt = () =>
-    run("encrypt", () => api.encryptTransit({ key: key.trim(), plaintext: b64encode(plaintext) }), (result) => {
-      setCiphertext(result.ciphertext);
-      setRevealed(null);
-    });
-  const decrypt = () => run("decrypt", () => api.decryptTransit({ key: key.trim(), ciphertext: ciphertext.trim() }), (result) => setRevealed(b64decode(result.plaintext)));
-  const computeHmac = () => run("hmac", () => api.hmacTransit({ key: key.trim(), data: b64encode(plaintext) }), (result) => setHmac(result.hmac));
+    run(
+      "encrypt",
+      () => api.encryptTransit({ key: key.trim(), plaintext: b64encode(plaintext) }),
+      (result) => {
+        setCiphertext(result.ciphertext);
+        setRevealed(null);
+      },
+    );
+  const decrypt = () =>
+    run(
+      "decrypt",
+      () => api.decryptTransit({ key: key.trim(), ciphertext: ciphertext.trim() }),
+      (result) => setRevealed(b64decode(result.plaintext)),
+    );
+  const computeHmac = () =>
+    run(
+      "hmac",
+      () => api.hmacTransit({ key: key.trim(), data: b64encode(plaintext) }),
+      (result) => setHmac(result.hmac),
+    );
 
   return (
     <SectionCard title="Transit encryption" description="encryption-as-a-service: encrypt, decrypt, HMAC — plaintext stays in your browser">
       <div className="grid gap-3">
         <label className="grid gap-1 text-body">
           <span className="font-medium">Key name</span>
-          <input value={key} onChange={(event) => setKey(event.target.value)} className="rounded-control border border-border bg-background px-3 py-2" placeholder="transit-key-1" />
+          <input
+            value={key}
+            onChange={(event) => setKey(event.target.value)}
+            className="rounded-control border border-border bg-background px-3 py-2"
+            placeholder="transit-key-1"
+          />
         </label>
         <label className="grid gap-1 text-body">
           <span className="font-medium">Plaintext</span>
-          <textarea value={plaintext} onChange={(event) => setPlaintext(event.target.value)} rows={2} className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption" />
+          <textarea
+            value={plaintext}
+            onChange={(event) => setPlaintext(event.target.value)}
+            rows={2}
+            className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
+          />
         </label>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void encrypt()} disabled={busy !== null} className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60">
+          <button
+            type="button"
+            onClick={() => void encrypt()}
+            disabled={busy !== null}
+            className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
+          >
             Encrypt
           </button>
-          <button type="button" onClick={() => void decrypt()} disabled={busy !== null || !ciphertext} className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60">
+          <button
+            type="button"
+            onClick={() => void decrypt()}
+            disabled={busy !== null || !ciphertext}
+            className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
+          >
             Decrypt
           </button>
-          <button type="button" onClick={() => void computeHmac()} disabled={busy !== null} className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60">
+          <button
+            type="button"
+            onClick={() => void computeHmac()}
+            disabled={busy !== null}
+            className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
+          >
             HMAC
           </button>
         </div>

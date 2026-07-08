@@ -1441,9 +1441,11 @@ export const api: Api = {
   updateOwner: (id, input) => mutate<Owner>("PUT", `/api/v1/owners/${encodeURIComponent(id)}`, input),
   deleteOwner: (id) => mutate<void>("DELETE", `/api/v1/owners/${encodeURIComponent(id)}`),
   platformDistribution: () => req<PlatformDistributionStatus>("/api/v1/platform/distribution"),
-  privacyArchiveAttestations: (options) => req<PrivacyArchiveErasureAttestationList>(`/api/v1/privacy/archive-erasure-attestations${pageQueryString(options, options?.subjectRef, "subject_ref")}`),
+  privacyArchiveAttestations: (options) =>
+    req<PrivacyArchiveErasureAttestationList>(`/api/v1/privacy/archive-erasure-attestations${pageQueryString(options, options?.subjectRef, "subject_ref")}`),
   recordPrivacyArchiveAttestation: (input) => mutate<PrivacyArchiveErasureAttestation>("POST", "/api/v1/privacy/archive-erasure-attestations", input),
-  remediationOwnerActions: (ownerId) => req<OwnerRemediationQueue>(`/api/v1/remediation/owner-actions${ownerId ? `?owner_id=${encodeURIComponent(ownerId)}` : ""}`),
+  remediationOwnerActions: (ownerId) =>
+    req<OwnerRemediationQueue>(`/api/v1/remediation/owner-actions${ownerId ? `?owner_id=${encodeURIComponent(ownerId)}` : ""}`),
   runSecretRotation: (input) => mutate<SecretRotation>("POST", "/api/v1/secrets/rotations", input),
   createSecretRotationSchedule: (input) => mutate<SecretRotationSchedule>("POST", "/api/v1/secrets/rotation-schedules", input),
   secretRotationSchedules: (options) => req<SecretRotationScheduleList>(`/api/v1/secrets/rotation-schedules${pageQueryString(options)}`),

@@ -119,7 +119,14 @@ export function BucketBar({ data, ariaLabel, height = 160, className }: { data: 
         return (
           <g key={datum.label}>
             <rect x={x} y={chartHeight - barHeight} width={barWidth} height={barHeight} rx={4} style={{ fill: toneColor(datum.tone ?? "neutral") }} />
-            <text x={x + barWidth / 2} y={chartHeight - barHeight - 6} textAnchor="middle" fontSize={11} className="tabular-nums" style={{ fill: "hsl(var(--foreground))" }}>
+            <text
+              x={x + barWidth / 2}
+              y={chartHeight - barHeight - 6}
+              textAnchor="middle"
+              fontSize={11}
+              className="tabular-nums"
+              style={{ fill: "hsl(var(--foreground))" }}
+            >
               {datum.value}
             </text>
             <text x={x + barWidth / 2} y={height - 8} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--muted-foreground))" }}>
@@ -159,15 +166,7 @@ export function TimeBarChart({
     <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${width} ${height}`} width="100%" height={height} className={className}>
       <title>{ariaLabel}</title>
       {[0.25, 0.5, 0.75].map((line) => (
-        <line
-          key={line}
-          x1={padX}
-          x2={width - padX}
-          y1={top + line * chartHeight}
-          y2={top + line * chartHeight}
-          stroke="hsl(var(--border))"
-          strokeWidth="1"
-        />
+        <line key={line} x1={padX} x2={width - padX} y1={top + line * chartHeight} y2={top + line * chartHeight} stroke="hsl(var(--border))" strokeWidth="1" />
       ))}
       {data.map((datum, index) => {
         const barHeight = Math.round((datum.value / max) * chartHeight);
@@ -178,7 +177,14 @@ export function TimeBarChart({
             <rect x={x} y={y} width={barWidth} height={barHeight} rx={4} style={{ fill: toneColor(datum.tone ?? tone) }}>
               <title>{`${datum.label}: ${datum.value}`}</title>
             </rect>
-            <text x={x + barWidth / 2} y={Math.max(12, y - 6)} textAnchor="middle" fontSize={11} className="tabular-nums" style={{ fill: "hsl(var(--foreground))" }}>
+            <text
+              x={x + barWidth / 2}
+              y={Math.max(12, y - 6)}
+              textAnchor="middle"
+              fontSize={11}
+              className="tabular-nums"
+              style={{ fill: "hsl(var(--foreground))" }}
+            >
               {datum.value}
             </text>
             <text x={x + barWidth / 2} y={height - 8} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--muted-foreground))" }}>
@@ -217,15 +223,7 @@ export function StackedTimeBarChart({
     <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${width} ${height}`} width="100%" height={height} className={className}>
       <title>{ariaLabel}</title>
       {[0.25, 0.5, 0.75].map((line) => (
-        <line
-          key={line}
-          x1={padX}
-          x2={width - padX}
-          y1={top + line * chartHeight}
-          y2={top + line * chartHeight}
-          stroke="hsl(var(--border))"
-          strokeWidth="1"
-        />
+        <line key={line} x1={padX} x2={width - padX} y1={top + line * chartHeight} y2={top + line * chartHeight} stroke="hsl(var(--border))" strokeWidth="1" />
       ))}
       {data.map((datum, index) => {
         const x = padX + index * step + (step - barWidth) / 2;

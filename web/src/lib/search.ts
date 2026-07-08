@@ -138,7 +138,9 @@ export async function searchInventory(query: string, client: SearchClient = api)
             source: "secrets" as const,
             load: async () => {
               const page = await client.secretPage!({ limit: 25 });
-              return (page.items ?? []).filter((secret) => matches(trimmed, [secret.name, secret.version, secret.created_at, secret.updated_at])).map(secretResult);
+              return (page.items ?? [])
+                .filter((secret) => matches(trimmed, [secret.name, secret.version, secret.created_at, secret.updated_at]))
+                .map(secretResult);
             },
           },
         ]
@@ -147,7 +149,8 @@ export async function searchInventory(query: string, client: SearchClient = api)
       ? [
           {
             source: "agents" as const,
-            load: async () => (await client.agents!()).filter((agent) => matches(trimmed, [agent.name, agent.id, agent.status, agent.version])).map(agentResult),
+            load: async () =>
+              (await client.agents!()).filter((agent) => matches(trimmed, [agent.name, agent.id, agent.status, agent.version])).map(agentResult),
           },
         ]
       : []),

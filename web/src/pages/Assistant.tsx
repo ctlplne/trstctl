@@ -92,9 +92,7 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
       <div className="mb-3 flex flex-wrap items-center gap-2 text-caption font-medium">
         {tool && <span className="rounded-control border border-border px-2 py-1">Tool: {tool}</span>}
         <span className="rounded-control border border-border px-2 py-1">
-          <HelpTerm title="Grounded means the answer cites tenant evidence returned by the API.">
-            {answer.grounded ? "Grounded" : "No cited evidence"}
-          </HelpTerm>
+          <HelpTerm title="Grounded means the answer cites tenant evidence returned by the API.">{answer.grounded ? "Grounded" : "No cited evidence"}</HelpTerm>
         </span>
         <span className="rounded-control border border-border px-2 py-1">
           <HelpTerm title="Sufficient means the cited evidence is enough to answer without guessing.">
@@ -204,9 +202,7 @@ function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: stri
           <dd>25 cited records</dd>
         </div>
       </dl>
-      <p className="mt-2 text-muted-foreground">
-        Tenant/RBAC filtering is applied below this request; a prompt cannot ask for another tenant.
-      </p>
+      <p className="mt-2 text-muted-foreground">Tenant/RBAC filtering is applied below this request; a prompt cannot ask for another tenant.</p>
     </section>
   );
 }
@@ -405,9 +401,7 @@ export function Assistant() {
                     <label key={surface.value} className="inline-flex items-center gap-2 text-body">
                       <input type="checkbox" checked={surfaces.includes(surface.value)} onChange={() => toggleSurface(surface.value)} />
                       {surface.value === "cbom" ? (
-                        <HelpTerm title="Cryptographic Bill of Materials: an inventory of algorithms, key sizes, protocols, and crypto posture.">
-                          CBOM
-                        </HelpTerm>
+                        <HelpTerm title="Cryptographic Bill of Materials: an inventory of algorithms, key sizes, protocols, and crypto posture.">CBOM</HelpTerm>
                       ) : (
                         surface.label
                       )}

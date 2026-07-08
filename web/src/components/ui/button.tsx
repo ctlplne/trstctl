@@ -13,14 +13,12 @@ const buttonVariants = cva(
       variant: {
         default:
           "bg-primary text-primary-foreground shadow-elevation1 hover:brightness-105 active:brightness-95 motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0",
-        secondary:
-          "border border-border bg-foreground/[0.03] text-foreground hover:border-brand-accent/60 hover:text-brand-accent",
+        secondary: "border border-border bg-foreground/[0.03] text-foreground hover:border-brand-accent/60 hover:text-brand-accent",
         outline: "border border-border bg-background hover:border-brand-accent/40 hover:bg-muted/60",
         ghost: "hover:bg-foreground/[0.05]",
         destructive:
           "bg-destructive text-destructive-foreground shadow-elevation1 hover:brightness-105 active:brightness-95 motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0",
-        "destructive-outline":
-          "border border-destructive/50 bg-background text-destructive hover:border-destructive hover:bg-destructive/10",
+        "destructive-outline": "border border-destructive/50 bg-background text-destructive hover:border-destructive hover:bg-destructive/10",
       },
       size: {
         default: "h-9 px-4 py-2",
@@ -37,23 +35,12 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, Va
   loading?: boolean;
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, loading = false, disabled, children, ...props }, ref) => (
-    <button
-      ref={ref}
-      className={cn(buttonVariants({ variant, size }), className)}
-      aria-busy={loading || undefined}
-      disabled={disabled || loading}
-      {...props}
-    >
-      {loading && (
-        <span
-          aria-hidden="true"
-          className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-current border-t-transparent opacity-80 motion-safe:animate-spin"
-        />
-      )}
-      {children}
-    </button>
-  ),
-);
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, loading = false, disabled, children, ...props }, ref) => (
+  <button ref={ref} className={cn(buttonVariants({ variant, size }), className)} aria-busy={loading || undefined} disabled={disabled || loading} {...props}>
+    {loading && (
+      <span aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-current border-t-transparent opacity-80 motion-safe:animate-spin" />
+    )}
+    {children}
+  </button>
+));
 Button.displayName = "Button";

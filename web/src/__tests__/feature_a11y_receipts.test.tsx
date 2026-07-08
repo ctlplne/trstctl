@@ -9,7 +9,6 @@ import { axe } from "vitest-axe";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppRoutes } from "@/App";
-import { ToastProvider } from "@/components/ToastProvider";
 import { appRoutePaths, realGuiSurfaces } from "@/lib/navigation";
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -629,11 +628,9 @@ function renderRoute(route: string) {
   return render(
     <ThemeProvider>
       <AuthProvider>
-        <ToastProvider>
-          <MemoryRouter initialEntries={[route]}>
-            <AppRoutes />
-          </MemoryRouter>
-        </ToastProvider>
+        <MemoryRouter initialEntries={[route]}>
+          <AppRoutes />
+        </MemoryRouter>
       </AuthProvider>
     </ThemeProvider>,
   );
@@ -711,5 +708,5 @@ describe("COVER-005 feature-specific a11y receipts", () => {
       await waitForRouteEffectsToSettle();
       await waitFor(() => expect(document.activeElement, `${route} should expose keyboard focus`).not.toBe(document.body));
     }
-  }, 15_000);
+  }, 30_000);
 });

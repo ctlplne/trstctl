@@ -1,5 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
-import { Building2, CheckCircle2, Cloud, Copy, FileKey2, Globe2, Home, KeyRound, LockKeyhole, Plus, RefreshCw, Server, ShieldCheck, X, XCircle } from "lucide-react";
+import {
+  Building2,
+  CheckCircle2,
+  Cloud,
+  Copy,
+  FileKey2,
+  Globe2,
+  Home,
+  KeyRound,
+  LockKeyhole,
+  Plus,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+  X,
+  XCircle,
+} from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -259,11 +275,7 @@ export function CAHierarchy() {
     setKeyError(null);
     try {
       const next =
-        action === "rotate"
-          ? await api.rotateManagedKey(keyId)
-          : action === "revoke"
-            ? await api.revokeManagedKey(keyId)
-            : await api.zeroizeManagedKey(keyId);
+        action === "rotate" ? await api.rotateManagedKey(keyId) : action === "revoke" ? await api.revokeManagedKey(keyId) : await api.zeroizeManagedKey(keyId);
       setManagedKey(next);
     } catch (err) {
       setKeyError(errorText(err, `Could not ${action} managed key`));
@@ -635,7 +647,9 @@ export function CAHierarchy() {
             Add a local authority or upstream CA before certificates can be issued from constrained profiles.
           </EmptyState>
         )}
-        {!loading && !notice && sortedIssuers.length > 0 && <IssuerTable issuers={sortedIssuers} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />}
+        {!loading && !notice && sortedIssuers.length > 0 && (
+          <IssuerTable issuers={sortedIssuers} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />
+        )}
       </section>
 
       <section aria-labelledby="ceremony-heading" className="grid gap-3 border-y border-border py-4">
@@ -705,7 +719,8 @@ export function CAHierarchy() {
               Managed key custody
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody actions by key id.
+              AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody
+              actions by key id.
             </p>
           </div>
         </div>
@@ -717,11 +732,7 @@ export function CAHierarchy() {
         </div>
         {keyError && <ErrorState title="Managed-key action failed">{keyError}</ErrorState>}
         {managedKey ? (
-          <ManagedKeyPanel
-            managedKey={managedKey}
-            busy={keyBusy}
-            onAction={(action, keyId) => void runManagedKeyAction(action, keyId)}
-          />
+          <ManagedKeyPanel managedKey={managedKey} busy={keyBusy} onAction={(action, keyId) => void runManagedKeyAction(action, keyId)} />
         ) : (
           <EmptyState title="No managed key loaded">Generate a managed key to inspect its public metadata and lifecycle state.</EmptyState>
         )}
@@ -741,7 +752,12 @@ export function CAHierarchy() {
       )}
 
       {createAuthorityKind && (
-        <CreateAuthorityDialog kind={createAuthorityKind} parents={authorityParents} onClose={() => setCreateAuthorityKind(null)} onCreated={handleAuthorityCreated} />
+        <CreateAuthorityDialog
+          kind={createAuthorityKind}
+          parents={authorityParents}
+          onClose={() => setCreateAuthorityKind(null)}
+          onCreated={handleAuthorityCreated}
+        />
       )}
       {leafTarget && <IssueLeafDialog authority={leafTarget} onClose={() => setLeafTarget(null)} />}
       {signTarget && <SignIntermediateCSRDialog authority={signTarget} onClose={() => setSignTarget(null)} />}
@@ -764,9 +780,7 @@ function CADiscoveryInventoryPanel({ inventory }: { inventory: CADiscovery | nul
             <h2 id="ca-discovery-heading" className="text-title font-semibold">
               {t("caHierarchy.discovery.heading")}
             </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {t("caHierarchy.discovery.description")}
-            </p>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.discovery.description")}</p>
           </div>
         </div>
         <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
@@ -797,7 +811,9 @@ function CADiscoveryInventoryPanel({ inventory }: { inventory: CADiscovery | nul
                     <div className="font-medium">{item.name}</div>
                     <div className="font-mono text-xs text-muted-foreground">{item.source_id}</div>
                   </td>
-                  <td className="px-3 py-2 align-top">{item.scope === "public" ? t("caHierarchy.discovery.scopePublic") : t("caHierarchy.discovery.scopePrivate")}</td>
+                  <td className="px-3 py-2 align-top">
+                    {item.scope === "public" ? t("caHierarchy.discovery.scopePublic") : t("caHierarchy.discovery.scopePrivate")}
+                  </td>
                   <td className="px-3 py-2 align-top">{caDiscoverySourceLabel(item.source, t)}</td>
                   <td className="px-3 py-2 align-top">
                     {item.status}
@@ -868,7 +884,12 @@ function ExternalCAIssuancePanel({
             </Button>
           </div>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <LabeledSelect id="external-ca-issue-ca" label={t("caHierarchy.externalIssue.caLabel")} value={form.caID} onChange={(value) => onChange({ caID: value })}>
+            <LabeledSelect
+              id="external-ca-issue-ca"
+              label={t("caHierarchy.externalIssue.caLabel")}
+              value={form.caID}
+              onChange={(value) => onChange({ caID: value })}
+            >
               <option value="">{t("caHierarchy.externalIssue.caPlaceholder")}</option>
               {externalCAs.map((item) => (
                 <option key={item.id} value={item.source_id}>
@@ -876,10 +897,35 @@ function ExternalCAIssuancePanel({
                 </option>
               ))}
             </LabeledSelect>
-            <LabeledInput id="external-ca-common-name" label={t("caHierarchy.externalIssue.commonNameLabel")} value={form.commonName} required onChange={(value) => onChange({ commonName: value })} />
-            <LabeledInput id="external-ca-dns-names" label={t("caHierarchy.externalIssue.dnsNamesLabel")} value={form.dnsNames} required onChange={(value) => onChange({ dnsNames: value })} placeholder={t("caHierarchy.externalIssue.dnsNamesPlaceholder")} />
-            <LabeledInput id="external-ca-profile-name" label={t("caHierarchy.externalIssue.profileLabel")} value={form.profileName} onChange={(value) => onChange({ profileName: value })} placeholder={t("caHierarchy.externalIssue.profilePlaceholder")} />
-            <LabeledInput id="external-ca-ttl-days" label={t("caHierarchy.externalIssue.ttlLabel")} value={form.ttlDays} type="number" onChange={(value) => onChange({ ttlDays: value })} />
+            <LabeledInput
+              id="external-ca-common-name"
+              label={t("caHierarchy.externalIssue.commonNameLabel")}
+              value={form.commonName}
+              required
+              onChange={(value) => onChange({ commonName: value })}
+            />
+            <LabeledInput
+              id="external-ca-dns-names"
+              label={t("caHierarchy.externalIssue.dnsNamesLabel")}
+              value={form.dnsNames}
+              required
+              onChange={(value) => onChange({ dnsNames: value })}
+              placeholder={t("caHierarchy.externalIssue.dnsNamesPlaceholder")}
+            />
+            <LabeledInput
+              id="external-ca-profile-name"
+              label={t("caHierarchy.externalIssue.profileLabel")}
+              value={form.profileName}
+              onChange={(value) => onChange({ profileName: value })}
+              placeholder={t("caHierarchy.externalIssue.profilePlaceholder")}
+            />
+            <LabeledInput
+              id="external-ca-ttl-days"
+              label={t("caHierarchy.externalIssue.ttlLabel")}
+              value={form.ttlDays}
+              type="number"
+              onChange={(value) => onChange({ ttlDays: value })}
+            />
             <LabeledTextarea
               id="external-ca-csr-pem"
               label={t("caHierarchy.externalIssue.csrLabel")}
@@ -898,7 +944,11 @@ function ExternalCAIssuancePanel({
               <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <KeyValue
                   label={t("caHierarchy.externalIssue.stateLabel")}
-                  value={result.state === "outbox-pending" ? t("caHierarchy.externalIssue.state.outboxPending") : t("caHierarchy.externalIssue.state.externalCAIssued")}
+                  value={
+                    result.state === "outbox-pending"
+                      ? t("caHierarchy.externalIssue.state.outboxPending")
+                      : t("caHierarchy.externalIssue.state.externalCAIssued")
+                  }
                 />
                 <KeyValue label={t("caHierarchy.externalIssue.caLabel")} value={result.caID} mono />
                 <KeyValue label={t("caHierarchy.externalIssue.pathLabel")} value={result.path} mono />
@@ -1034,7 +1084,9 @@ function CARekeyPanel({
   onTTLChange: (value: string) => void;
 }) {
   const { t } = useTranslation();
-  const authorities = (inventory?.items ?? []).filter((item) => item.source === "ca_hierarchy" && item.managed && item.issuance_path && item.status === "active");
+  const authorities = (inventory?.items ?? []).filter(
+    (item) => item.source === "ca_hierarchy" && item.managed && item.issuance_path && item.status === "active",
+  );
   const readyToStart = authorityID.trim() !== "";
   const readyToRekey = readyToStart && ceremonyID.trim() !== "";
 
@@ -1181,9 +1233,7 @@ function ExistingCAImportWorkflow({
           <h2 id="existing-ca-import-heading" className="text-title font-semibold">
             {t("caHierarchy.existing.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {t("caHierarchy.existing.description")}
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.existing.description")}</p>
         </div>
       </div>
       {error && <ErrorState title={t("caHierarchy.existing.errorTitle")}>{error}</ErrorState>}
@@ -1354,7 +1404,13 @@ function OfflineRootWorkflow({
                 placeholder={t("caHierarchy.offline.placeholderCertificate")}
               />
             </div>
-            <LabeledInput id="offline-root-ceremony-id" label={t("caHierarchy.offline.rootCeremonyID")} value={rootCeremonyID} onChange={onRootCeremonyIDChange} placeholder={t("caHierarchy.offline.placeholderCeremonyID")} />
+            <LabeledInput
+              id="offline-root-ceremony-id"
+              label={t("caHierarchy.offline.rootCeremonyID")}
+              value={rootCeremonyID}
+              onChange={onRootCeremonyIDChange}
+              placeholder={t("caHierarchy.offline.placeholderCeremonyID")}
+            />
             {root && (
               <dl className="grid gap-3 sm:grid-cols-2">
                 <KeyValue label={t("caHierarchy.offline.commonName")} value={root.common_name} />
@@ -1400,7 +1456,13 @@ function OfflineRootWorkflow({
               form={intermediateForm}
               onChange={onIntermediateFormChange}
             />
-            <LabeledInput id="offline-intermediate-ceremony-id" label={t("caHierarchy.offline.intermediateCeremonyID")} value={intermediateCeremonyID} onChange={onIntermediateCeremonyIDChange} placeholder={t("caHierarchy.offline.placeholderCeremonyID")} />
+            <LabeledInput
+              id="offline-intermediate-ceremony-id"
+              label={t("caHierarchy.offline.intermediateCeremonyID")}
+              value={intermediateCeremonyID}
+              onChange={onIntermediateCeremonyIDChange}
+              placeholder={t("caHierarchy.offline.placeholderCeremonyID")}
+            />
             {offlineCSR && (
               <div className="grid gap-2">
                 <label className="text-sm font-medium" htmlFor="offline-intermediate-csr">
@@ -1459,10 +1521,36 @@ function OfflineSpecFields({
   const { t } = useTranslation();
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <LabeledInput id={commonNameId} label={t("caHierarchy.offline.commonName")} value={form.commonName} required onChange={(value) => onChange({ commonName: value })} />
-      <LabeledInput id={dnsDomainsId} label={t("caHierarchy.offline.permittedDNSDomains")} value={form.dnsDomains} onChange={(value) => onChange({ dnsDomains: value })} placeholder={t("caHierarchy.offline.placeholderDNSDomain")} />
-      <LabeledInput id={maxPathLenId} label={t("caHierarchy.offline.maxPathLen")} value={form.maxPathLen} required type="number" onChange={(value) => onChange({ maxPathLen: value })} />
-      <LabeledInput id={ttlDaysId} label={t("caHierarchy.offline.ttlDays")} value={form.ttlDays} required type="number" onChange={(value) => onChange({ ttlDays: value })} />
+      <LabeledInput
+        id={commonNameId}
+        label={t("caHierarchy.offline.commonName")}
+        value={form.commonName}
+        required
+        onChange={(value) => onChange({ commonName: value })}
+      />
+      <LabeledInput
+        id={dnsDomainsId}
+        label={t("caHierarchy.offline.permittedDNSDomains")}
+        value={form.dnsDomains}
+        onChange={(value) => onChange({ dnsDomains: value })}
+        placeholder={t("caHierarchy.offline.placeholderDNSDomain")}
+      />
+      <LabeledInput
+        id={maxPathLenId}
+        label={t("caHierarchy.offline.maxPathLen")}
+        value={form.maxPathLen}
+        required
+        type="number"
+        onChange={(value) => onChange({ maxPathLen: value })}
+      />
+      <LabeledInput
+        id={ttlDaysId}
+        label={t("caHierarchy.offline.ttlDays")}
+        value={form.ttlDays}
+        required
+        type="number"
+        onChange={(value) => onChange({ ttlDays: value })}
+      />
     </div>
   );
 }
@@ -1490,7 +1578,13 @@ function CeremonyPanel({
           <p className="mt-1 font-mono text-xs">{ceremony.id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" disabled={busy || complete} onClick={() => onApprove(ceremony.id)} aria-label={`Approve ceremony ${ceremony.id}`}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || complete}
+            onClick={() => onApprove(ceremony.id)}
+            aria-label={`Approve ceremony ${ceremony.id}`}
+          >
             Approve
           </Button>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => onView(ceremony.id)} aria-label={`View ceremony ${ceremony.id}`}>
@@ -1588,7 +1682,13 @@ function ServedAuthoritiesPanel({
             <Button type="button" size="sm" variant="outline" onClick={() => onIssueLeaf(authority)} aria-label={`Issue leaf from ${authority.common_name}`}>
               {t("parity.issueLeaf_f1c3ee")}
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => onSignCSR(authority)} aria-label={`Sign intermediate CSR with ${authority.common_name}`}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onSignCSR(authority)}
+              aria-label={`Sign intermediate CSR with ${authority.common_name}`}
+            >
               {t("parity.signIntermediateCsr_cf1361")}
             </Button>
           </div>
@@ -1606,9 +1706,7 @@ function ServedAuthoritiesPanel({
           <h2 id="served-authorities-heading" className="text-title font-semibold">
             {t("parity.servedAuthorities_52df47")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {t("parity.signerBackedRootsAndIntermediatesThis_957f38")}
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("parity.signerBackedRootsAndIntermediatesThis_957f38")}</p>
         </div>
       </div>
       <DataGrid
@@ -2143,61 +2241,61 @@ function CreateIssuerDialog({
       overlayClassName="absolute inset-0 bg-black/55"
       panelClassName="relative max-h-[min(42rem,calc(100vh-2rem))] w-full max-w-3xl overflow-hidden rounded-panel border border-border bg-card shadow-elevation2"
     >
-        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <h2 id={titleId} className="truncate text-title font-semibold">
-              Configure {type.name} issuer
-            </h2>
-            <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
-              {type.internal ? "Local signing authority" : "External CA integration"}
-            </p>
-          </div>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close issuer form">
-            <X className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </header>
-        <form className="grid max-h-[calc(100vh-8rem)] overflow-y-auto" onSubmit={submit}>
-          <div className="grid gap-5 p-5">
-            {error && <ErrorState title="Issuer create failed">{error}</ErrorState>}
-            <div className="grid gap-4 md:grid-cols-2">
-              <LabeledInput inputRef={nameInputRef} id="issuer-name" label="Issuer name" value={name} required onChange={setName} placeholder="Production ACME" />
-              <div className="grid gap-2">
-                <label className="text-sm font-medium" htmlFor="issuer-kind">
-                  Issuer kind
-                </label>
-                <input
-                  id="issuer-kind"
-                  value="x509_ca"
-                  readOnly
-                  className="h-10 rounded-control border border-border bg-muted/40 px-3 text-sm text-muted-foreground"
-                />
-              </div>
-            </div>
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="truncate text-title font-semibold">
+            Configure {type.name} issuer
+          </h2>
+          <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+            {type.internal ? "Local signing authority" : "External CA integration"}
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close issuer form">
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+      <form className="grid max-h-[calc(100vh-8rem)] overflow-y-auto" onSubmit={submit}>
+        <div className="grid gap-5 p-5">
+          {error && <ErrorState title="Issuer create failed">{error}</ErrorState>}
+          <div className="grid gap-4 md:grid-cols-2">
+            <LabeledInput inputRef={nameInputRef} id="issuer-name" label="Issuer name" value={name} required onChange={setName} placeholder="Production ACME" />
             <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="issuer-chain">
-                CA chain PEM
+              <label className="text-sm font-medium" htmlFor="issuer-kind">
+                Issuer kind
               </label>
-              <textarea
-                id="issuer-chain"
-                required
-                rows={5}
-                value={chainPEM}
-                onChange={(event) => setChainPEM(event.target.value)}
-                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
-                placeholder="-----BEGIN CERTIFICATE-----"
+              <input
+                id="issuer-kind"
+                value="x509_ca"
+                readOnly
+                className="h-10 rounded-control border border-border bg-muted/40 px-3 text-sm text-muted-foreground"
               />
             </div>
-            <IssuerConfigForm fields={type.configFields} values={config} onChange={(key, value) => setConfig((current) => ({ ...current, [key]: value }))} />
           </div>
-          <footer className="flex flex-wrap justify-end gap-2 border-t border-border px-5 py-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy || name.trim() === "" || chainPEM.trim() === ""}>
-              Create issuer
-            </Button>
-          </footer>
-        </form>
+          <div className="grid gap-2">
+            <label className="text-sm font-medium" htmlFor="issuer-chain">
+              CA chain PEM
+            </label>
+            <textarea
+              id="issuer-chain"
+              required
+              rows={5}
+              value={chainPEM}
+              onChange={(event) => setChainPEM(event.target.value)}
+              className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+              placeholder="-----BEGIN CERTIFICATE-----"
+            />
+          </div>
+          <IssuerConfigForm fields={type.configFields} values={config} onChange={(key, value) => setConfig((current) => ({ ...current, [key]: value }))} />
+        </div>
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-border px-5 py-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={busy || name.trim() === "" || chainPEM.trim() === ""}>
+            Create issuer
+          </Button>
+        </footer>
+      </form>
     </Dialog>
   );
 }
@@ -2360,7 +2458,16 @@ function ProbeBanner({ onDismiss, probe }: { probe: ProbeState; onDismiss: () =>
   return (
     <div className="ui-panel flex items-start justify-between gap-3 p-comfortable text-sm" role="status">
       <div className="flex min-w-0 items-start gap-2">
-        <Icon className={pending ? "mt-0.5 h-4 w-4 shrink-0 animate-spin text-muted-foreground" : passed ? "mt-0.5 h-4 w-4 shrink-0 text-emerald-600" : "mt-0.5 h-4 w-4 shrink-0 text-destructive"} aria-hidden="true" />
+        <Icon
+          className={
+            pending
+              ? "mt-0.5 h-4 w-4 shrink-0 animate-spin text-muted-foreground"
+              : passed
+                ? "mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
+                : "mt-0.5 h-4 w-4 shrink-0 text-destructive"
+          }
+          aria-hidden="true"
+        />
         <p className="min-w-0 break-words font-medium">{`${probe.issuerName}: ${probe.message}`}</p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
@@ -2389,13 +2496,34 @@ function ManagedKeyPanel({
           <p className="mt-1 font-mono text-xs">{managedKey.key_id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onAction("rotate", managedKey.key_id)} aria-label={`Rotate key ${managedKey.key_id}`}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onAction("rotate", managedKey.key_id)}
+            aria-label={`Rotate key ${managedKey.key_id}`}
+          >
             Rotate
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onAction("revoke", managedKey.key_id)} aria-label={`Revoke key ${managedKey.key_id}`}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onAction("revoke", managedKey.key_id)}
+            aria-label={`Revoke key ${managedKey.key_id}`}
+          >
             Revoke
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onAction("zeroize", managedKey.key_id)} aria-label={`Zeroize key ${managedKey.key_id}`}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onAction("zeroize", managedKey.key_id)}
+            aria-label={`Zeroize key ${managedKey.key_id}`}
+          >
             Zeroize
           </Button>
         </div>
@@ -2420,15 +2548,7 @@ function KeyValue({ label, mono = false, value }: { label: string; mono?: boolea
   );
 }
 
-function IssuerTable({
-  issuers,
-  onTestConnection,
-  probe,
-}: {
-  issuers: Issuer[];
-  probe: ProbeState | null;
-  onTestConnection: (issuer: Issuer) => void;
-}) {
+function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; probe: ProbeState | null; onTestConnection: (issuer: Issuer) => void }) {
   return (
     <div className="ui-panel overflow-x-auto">
       <table className="ui-table min-w-[60rem]">

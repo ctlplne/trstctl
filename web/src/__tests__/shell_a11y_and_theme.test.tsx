@@ -52,6 +52,18 @@ function renderShell(initialEntries = ["/"]) {
               <Route path="identities" element={<h1>Identities</h1>} />
               <Route path="platform" element={<Platform />} />
               <Route path="secrets" element={<h1>Secrets</h1>} />
+              <Route
+                path="custom-tools"
+                element={
+                  <form>
+                    <h1>Custom Tools</h1>
+                    <label>
+                      Route search
+                      <input type="search" />
+                    </label>
+                  </form>
+                }
+              />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -498,6 +510,17 @@ describe("app shell accessibility and theme", () => {
     expect(within(overlay).getByText("Close open overlay")).toBeInTheDocument();
   });
 
+  it("uses fallback route titles while ignoring shortcut keys typed in editable fields", async () => {
+    const user = userEvent.setup();
+    renderShell(["/custom-tools"]);
+    await screen.findByText("u@example.test");
+
+    await waitFor(() => expect(document.title).toBe("Custom Tools · trstctl"));
+
+    await user.type(screen.getByRole("searchbox", { name: "Route search" }), "?");
+    expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+  });
+
   it("exposes grouped non-certificate navigation domains", async () => {
     renderShell();
     await screen.findByText("u@example.test");
@@ -511,6 +534,34 @@ describe("app shell accessibility and theme", () => {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
     expect(within(nav).queryByRole("link", { name: /Coverage roadmap|RBAC/i })).not.toBeInTheDocument();
+  });
+
+  it("persists manual nav-group collapse and restore choices", async () => {
+    const user = userEvent.setup();
+    renderShell();
+    await screen.findByText("u@example.test");
+
+    const nav = screen.getByRole("navigation", { name: /Primary/i });
+    const group = within(nav).getByRole("button", { name: "Issue & renew" });
+    expect(group).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(group);
+    expect(group).toHaveAttribute("aria-expanded", "false");
+    expect(localStorage.getItem("trstctl-nav-collapsed")).toContain("nav.group.issuanceCas");
+
+    await user.click(group);
+    expect(group).toHaveAttribute("aria-expanded", "true");
+    expect(localStorage.getItem("trstctl-nav-collapsed")).toBe("[]");
+  });
+
+  it("reopens a stored-collapsed nav group when deep-linking to one of its routes", async () => {
+    localStorage.setItem("trstctl-nav-collapsed", JSON.stringify(["nav.group.issuanceCas"]));
+    renderShell(["/certificates"]);
+    await screen.findByText("u@example.test");
+
+    const nav = screen.getByRole("navigation", { name: /Primary/i });
+    await waitFor(() => expect(within(nav).getByRole("button", { name: "Issue & renew" })).toHaveAttribute("aria-expanded", "true"));
+    expect(localStorage.getItem("trstctl-nav-collapsed")).toBe("[]");
   });
 
   it("exposes task worklists without internal nav metadata", async () => {

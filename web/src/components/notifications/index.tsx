@@ -27,13 +27,26 @@ function daysUntil(value?: string): number {
 export function deriveAlerts(risks: CredentialRisk[], certs: Certificate[]): AlertItem[] {
   const alerts: AlertItem[] = [];
   for (const risk of risks) {
-    if (risk.score >= 90) alerts.push({ id: `risk-${risk.credential_id}`, severity: "critical", title: `Critical risk: ${risk.subject}`, detail: `composite score ${Math.round(risk.score)}` });
-    else if (risk.score >= 70) alerts.push({ id: `risk-${risk.credential_id}`, severity: "high", title: `High risk: ${risk.subject}`, detail: `composite score ${Math.round(risk.score)}` });
+    if (risk.score >= 90)
+      alerts.push({
+        id: `risk-${risk.credential_id}`,
+        severity: "critical",
+        title: `Critical risk: ${risk.subject}`,
+        detail: `composite score ${Math.round(risk.score)}`,
+      });
+    else if (risk.score >= 70)
+      alerts.push({
+        id: `risk-${risk.credential_id}`,
+        severity: "high",
+        title: `High risk: ${risk.subject}`,
+        detail: `composite score ${Math.round(risk.score)}`,
+      });
   }
   for (const cert of certs) {
     const days = daysUntil(cert.not_after);
     if (days <= 7) alerts.push({ id: `cert-${cert.id}`, severity: "critical", title: `Expiring now: ${cert.subject}`, detail: `${days} day(s) to expiry` });
-    else if (days <= 30) alerts.push({ id: `cert-${cert.id}`, severity: "warning", title: `Expiring soon: ${cert.subject}`, detail: `${days} day(s) to expiry` });
+    else if (days <= 30)
+      alerts.push({ id: `cert-${cert.id}`, severity: "warning", title: `Expiring soon: ${cert.subject}`, detail: `${days} day(s) to expiry` });
   }
   return alerts.sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
 }

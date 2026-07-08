@@ -429,13 +429,7 @@ export function AppShell() {
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {!isDesktop && (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label={t("shell.openCommandPalette")}
-              onClick={() => setCommandPaletteOpen(true)}
-            >
+            <Button type="button" size="icon" variant="ghost" aria-label={t("shell.openCommandPalette")} onClick={() => setCommandPaletteOpen(true)}>
               <Search className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}

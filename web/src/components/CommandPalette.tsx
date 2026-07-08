@@ -107,9 +107,10 @@ function matchesAction(command: ActionCommand, query: string): boolean {
 function useDebouncedValue<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
+    if (Object.is(debounced, value)) return;
     const timer = window.setTimeout(() => setDebounced(value), ms);
     return () => window.clearTimeout(timer);
-  }, [ms, value]);
+  }, [debounced, ms, value]);
   return debounced;
 }
 
@@ -167,7 +168,10 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
     () => commands.filter((command) => matchesRoute(command, query)).sort((left, right) => routeScore(left, query) - routeScore(right, query)),
     [commands, query],
   );
-  const filteredActions = useMemo(() => actions.filter((command) => hasAnyPermission(user, command.permissionAny) && matchesAction(command, query)), [actions, query, user]);
+  const filteredActions = useMemo(
+    () => actions.filter((command) => hasAnyPermission(user, command.permissionAny) && matchesAction(command, query)),
+    [actions, query, user],
+  );
   const choices: Array<ActionCommand | RouteCommand | GlobalSearchResult> = [...filteredActions, ...filteredRoutes, ...search.results];
   const titleId = "command-palette-title";
   const descriptionId = "command-palette-description";
@@ -206,66 +210,66 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
       initialFocusRef={inputRef}
       panelClassName="absolute left-1/2 top-16 flex w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-panel border border-border bg-background shadow-elevation3"
     >
-        <div className="flex items-start justify-between gap-3 border-b border-border p-comfortable">
-          <div>
-            <h2 id={titleId} className="text-heading font-semibold">
-              {t("command.title")}
-            </h2>
-            <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
-              {t("command.description")}
-            </p>
-          </div>
-          <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-            <X className="h-4 w-4" aria-hidden="true" />
-            <span>{t("command.close")}</span>
-          </Button>
+      <div className="flex items-start justify-between gap-3 border-b border-border p-comfortable">
+        <div>
+          <h2 id={titleId} className="text-heading font-semibold">
+            {t("command.title")}
+          </h2>
+          <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+            {t("command.description")}
+          </p>
         </div>
-        <div className="border-b border-border p-comfortable">
-          <label className="relative block">
-            <Search aria-hidden="true" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              ref={inputRef}
-              type="search"
-              aria-label={t("command.searchLabel")}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={onInputKeyDown}
-              placeholder={t("command.searchPlaceholder")}
-              className="h-10 w-full rounded-md border border-border bg-background ps-9 pe-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          {search.unavailableSources.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{t("command.sourcesUnavailable")}</p>}
-        </div>
-        <div className="max-h-[24rem] overflow-y-auto p-2">
-          {search.loading && <p className="px-3 py-2 text-sm text-muted-foreground">{t("command.searchingInventory")}</p>}
-          {filteredActions.length > 0 && (
-            <PaletteSection title="Actions">
-              {filteredActions.map((command) => (
-                <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => void activate(command)} />
-              ))}
-            </PaletteSection>
-          )}
-          {filteredRoutes.length > 0 && (
-            <PaletteSection title={t("command.routes")}>
-              {filteredRoutes.map((command) => (
-                <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => activate(command)} />
-              ))}
-            </PaletteSection>
-          )}
-          {search.results.length > 0 && (
-            <PaletteSection title={t("command.inventory")}>
-              {search.results.map((result) => (
-                <PaletteButton
-                  key={result.id}
-                  label={result.label}
-                  description={`${kindLabel(result.kind, t)} · ${result.description}`}
-                  onClick={() => activate(result)}
-                />
-              ))}
-            </PaletteSection>
-          )}
-          {!search.loading && choices.length === 0 && <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("command.noResults")}</p>}
-        </div>
+        <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+          <X className="h-4 w-4" aria-hidden="true" />
+          <span>{t("command.close")}</span>
+        </Button>
+      </div>
+      <div className="border-b border-border p-comfortable">
+        <label className="relative block">
+          <Search aria-hidden="true" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            type="search"
+            aria-label={t("command.searchLabel")}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={onInputKeyDown}
+            placeholder={t("command.searchPlaceholder")}
+            className="h-10 w-full rounded-md border border-border bg-background ps-9 pe-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </label>
+        {search.unavailableSources.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{t("command.sourcesUnavailable")}</p>}
+      </div>
+      <div className="max-h-[24rem] overflow-y-auto p-2">
+        {search.loading && <p className="px-3 py-2 text-sm text-muted-foreground">{t("command.searchingInventory")}</p>}
+        {filteredActions.length > 0 && (
+          <PaletteSection title="Actions">
+            {filteredActions.map((command) => (
+              <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => void activate(command)} />
+            ))}
+          </PaletteSection>
+        )}
+        {filteredRoutes.length > 0 && (
+          <PaletteSection title={t("command.routes")}>
+            {filteredRoutes.map((command) => (
+              <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => activate(command)} />
+            ))}
+          </PaletteSection>
+        )}
+        {search.results.length > 0 && (
+          <PaletteSection title={t("command.inventory")}>
+            {search.results.map((result) => (
+              <PaletteButton
+                key={result.id}
+                label={result.label}
+                description={`${kindLabel(result.kind, t)} · ${result.description}`}
+                onClick={() => activate(result)}
+              />
+            ))}
+          </PaletteSection>
+        )}
+        {!search.loading && choices.length === 0 && <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("command.noResults")}</p>}
+      </div>
     </Dialog>
   );
 }

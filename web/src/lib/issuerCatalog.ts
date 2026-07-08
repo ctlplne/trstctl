@@ -81,7 +81,13 @@ export const issuerTypes: IssuerTypeConfig[] = [
     configFields: [
       { key: "api_key", label: "DigiCert API Key", type: "password", sensitive: true, required: true },
       { key: "org_id", label: "Organization ID", placeholder: "12345", required: true },
-      { key: "product_type", label: "Product Type", type: "select", options: ["ssl_basic", "ssl_plus", "ssl_wildcard", "ssl_ev_basic"], defaultValue: "ssl_basic" },
+      {
+        key: "product_type",
+        label: "Product Type",
+        type: "select",
+        options: ["ssl_basic", "ssl_plus", "ssl_wildcard", "ssl_ev_basic"],
+        defaultValue: "ssl_basic",
+      },
     ],
   },
   {
@@ -118,7 +124,13 @@ export const issuerTypes: IssuerTypeConfig[] = [
     configFields: [
       { key: "region", label: "AWS Region", placeholder: "us-east-1", required: true },
       { key: "ca_arn", label: "CA ARN", placeholder: "arn:aws:acm-pca:...", required: true },
-      { key: "signing_algorithm", label: "Signing Algorithm", type: "select", options: ["SHA256WITHRSA", "SHA384WITHRSA", "SHA256WITHECDSA"], defaultValue: "SHA256WITHRSA" },
+      {
+        key: "signing_algorithm",
+        label: "Signing Algorithm",
+        type: "select",
+        options: ["SHA256WITHRSA", "SHA384WITHRSA", "SHA256WITHECDSA"],
+        defaultValue: "SHA256WITHRSA",
+      },
     ],
   },
   {

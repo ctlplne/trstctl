@@ -160,7 +160,10 @@ export function ReadinessSimulator({ certificates, autoRenewing }: { certificate
             type="button"
             aria-pressed={cap === value}
             onClick={() => setCap(value)}
-            className={cn("min-h-9 rounded-control border px-3 text-body", cap === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background")}
+            className={cn(
+              "min-h-9 rounded-control border px-3 text-body",
+              cap === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background",
+            )}
           >
             {value}-day
           </button>

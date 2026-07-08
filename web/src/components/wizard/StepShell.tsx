@@ -48,14 +48,13 @@ export function StepShell({
   }, [currentIndex, nextDisabled, onNext, onPrevious]);
 
   return (
-    <section
-      aria-label="Onboarding carousel"
-      className="ui-panel overflow-hidden"
-    >
+    <section aria-label="Onboarding carousel" className="ui-panel overflow-hidden">
       <div className="border-b border-border p-comfortable">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-caption font-medium uppercase text-muted-foreground">Step {currentIndex + 1} of {steps.length}</p>
+            <p className="text-caption font-medium uppercase text-muted-foreground">
+              Step {currentIndex + 1} of {steps.length}
+            </p>
             <h2 className="mt-1 text-title font-semibold">{currentStep?.label}</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{currentStep?.description}</p>
           </div>

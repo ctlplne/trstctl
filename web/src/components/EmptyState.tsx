@@ -41,7 +41,9 @@ export function EmptyState({
         className,
       )}
     >
-      {icon ? <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-control border border-border bg-muted/60 text-brand-accent">{icon}</div> : null}
+      {icon ? (
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-control border border-border bg-muted/60 text-brand-accent">{icon}</div>
+      ) : null}
       <h2 className="mb-1 text-lg font-semibold">{title}</h2>
       {children && <p className="mx-auto mb-5 max-w-md text-sm text-muted-foreground">{children}</p>}
       {(primary || secondaryAction) && (

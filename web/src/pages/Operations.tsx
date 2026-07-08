@@ -81,7 +81,11 @@ export function Operations() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [rotations, deliveries, identities] = await Promise.all([api.rotationRuns({ limit: 50 }), api.connectorDeliveries({ limit: 50 }), api.identities()]);
+      const [rotations, deliveries, identities] = await Promise.all([
+        api.rotationRuns({ limit: 50 }),
+        api.connectorDeliveries({ limit: 50 }),
+        api.identities(),
+      ]);
       setRows([
         ...rotations.items.map(rotationOperationRow),
         ...deliveries.items.map(deliveryOperationRow),
@@ -330,35 +334,35 @@ function RejectDialog({
       overlayClassName="absolute inset-0 bg-black/55"
       panelClassName="relative w-full max-w-md rounded-panel border border-border bg-card shadow-elevation2"
     >
-        <header className="border-b border-border px-5 py-4">
-          <h2 id={titleId} className="text-title font-semibold">
-            {title}
-          </h2>
-          <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
-            Record why this approval request is being rejected.
-          </p>
-        </header>
-        <form className="grid gap-4 p-5" onSubmit={submit}>
-          <label className="grid gap-2 text-sm font-medium">
-            Reason
-            <textarea
-              ref={reasonRef}
-              required
-              rows={4}
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
-            />
-          </label>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy || reason.trim() === ""}>
-              Reject request
-            </Button>
-          </div>
-        </form>
+      <header className="border-b border-border px-5 py-4">
+        <h2 id={titleId} className="text-title font-semibold">
+          {title}
+        </h2>
+        <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+          Record why this approval request is being rejected.
+        </p>
+      </header>
+      <form className="grid gap-4 p-5" onSubmit={submit}>
+        <label className="grid gap-2 text-sm font-medium">
+          Reason
+          <textarea
+            ref={reasonRef}
+            required
+            rows={4}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={busy || reason.trim() === ""}>
+            Reject request
+          </Button>
+        </div>
+      </form>
     </Dialog>
   );
 }
@@ -368,7 +372,16 @@ function OperationNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () 
   return (
     <div className="ui-panel flex items-start justify-between gap-3 p-comfortable text-sm" role="status">
       <div className="flex min-w-0 items-start gap-2">
-        <Icon className={notice.kind === "success" ? "mt-0.5 h-4 w-4 shrink-0 text-emerald-600" : notice.kind === "warning" ? "mt-0.5 h-4 w-4 shrink-0 text-status-warning" : "mt-0.5 h-4 w-4 shrink-0 text-destructive"} aria-hidden="true" />
+        <Icon
+          className={
+            notice.kind === "success"
+              ? "mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
+              : notice.kind === "warning"
+                ? "mt-0.5 h-4 w-4 shrink-0 text-status-warning"
+                : "mt-0.5 h-4 w-4 shrink-0 text-destructive"
+          }
+          aria-hidden="true"
+        />
         <p className="min-w-0 break-words font-medium">{notice.message}</p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
@@ -482,9 +495,7 @@ function RotationRunsSection() {
     if (!nextCursor) return;
     setLoadingMore(true);
     try {
-      const page = await api.rotationRuns(
-        identityFilter ? { limit: 20, cursor: nextCursor, identityId: identityFilter } : { limit: 20, cursor: nextCursor },
-      );
+      const page = await api.rotationRuns(identityFilter ? { limit: 20, cursor: nextCursor, identityId: identityFilter } : { limit: 20, cursor: nextCursor });
       setRuns((current) => [...current, ...(page.items ?? [])]);
       setNextCursor(page.next_cursor);
     } catch (err) {
@@ -555,13 +566,7 @@ function RotationRunsSection() {
         getRowId={(row) => row.id}
         state={gridState}
         stateTitle={gridState === "error" ? "Rotation runs unavailable" : gridState === "empty" ? "No rotation runs" : undefined}
-        stateMessage={
-          gridState === "error"
-            ? loadError
-            : gridState === "empty"
-              ? "No lifecycle rotation run has been recorded for this scope yet."
-              : undefined
-        }
+        stateMessage={gridState === "error" ? loadError : gridState === "empty" ? "No lifecycle rotation run has been recorded for this scope yet." : undefined}
         onRowOpen={(row) => setDetail(row)}
         pagination={
           nextCursor ? (

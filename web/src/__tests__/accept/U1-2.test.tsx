@@ -5,7 +5,14 @@ import type { Certificate, RotationRun } from "@/lib/api";
 
 const DAY = 86_400_000;
 function cert(partial: Partial<Certificate>): Certificate {
-  return { id: "x", subject: "x", status: "active", fingerprint: "fp", not_after: new Date(Date.now() + 100 * DAY).toISOString(), ...partial } as unknown as Certificate;
+  return {
+    id: "x",
+    subject: "x",
+    status: "active",
+    fingerprint: "fp",
+    not_after: new Date(Date.now() + 100 * DAY).toISOString(),
+    ...partial,
+  } as unknown as Certificate;
 }
 
 describe("U1-2 47-day renewal readiness panel", () => {

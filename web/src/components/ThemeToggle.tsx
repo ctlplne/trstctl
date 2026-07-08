@@ -12,13 +12,7 @@ export function ThemeToggle() {
   const current = resolved === "dark" ? "Dark" : "Light";
   const nextLabel = next === "dark" ? "Dark" : "Light";
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(next)}
-      aria-label={`Theme: ${current}. Switch to ${nextLabel}.`}
-      title={`Theme: ${current}`}
-    >
+    <Button variant="ghost" size="icon" onClick={() => setTheme(next)} aria-label={`Theme: ${current}. Switch to ${nextLabel}.`} title={`Theme: ${current}`}>
       <Icon aria-hidden="true" className="h-4 w-4" />
     </Button>
   );

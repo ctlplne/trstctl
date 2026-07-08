@@ -9,15 +9,7 @@ import { api, type GraphNode, type GraphImpact } from "@/lib/api";
  * whole page shares one selection and one analysis — picked credentials get
  * painted on the map and detailed in the analysis rail, not in a second,
  * disconnected result list. */
-export function BlastRadiusExplorer({
-  nodes,
-  selectedId,
-  onAnalyze,
-}: {
-  nodes: GraphNode[];
-  selectedId?: string;
-  onAnalyze?: (id: string) => void;
-}) {
+export function BlastRadiusExplorer({ nodes, selectedId, onAnalyze }: { nodes: GraphNode[]; selectedId?: string; onAnalyze?: (id: string) => void }) {
   const { t } = useTranslation();
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [localSelected, setLocalSelected] = useState<string>("");
@@ -45,7 +37,11 @@ export function BlastRadiusExplorer({
     <SectionCard title="Blast radius explorer" description="pick a credential and see everything that breaks if it is compromised">
       <label className="grid gap-1 text-body">
         <span className="font-medium">Credential</span>
-        <select value={selected} onChange={(event) => void explore(event.target.value)} className="min-h-9 rounded-control border border-border bg-background px-2 text-body">
+        <select
+          value={selected}
+          onChange={(event) => void explore(event.target.value)}
+          className="min-h-9 rounded-control border border-border bg-background px-2 text-body"
+        >
           <option value="">Select a node…</option>
           {nodes.map((node) => (
             <option key={node.id} value={node.id}>

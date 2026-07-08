@@ -736,14 +736,7 @@ export function Identities() {
           </label>
           {bulkError && <p className="mt-3 text-sm font-medium text-risk-critical">{bulkError}</p>}
           <div className="mt-3 flex gap-2">
-            <Button
-              ref={bulkConfirmRef}
-              type="button"
-              size="sm"
-              variant="destructive"
-              loading={bulkBusy}
-              onClick={() => void runBulkRevoke()}
-            >
+            <Button ref={bulkConfirmRef} type="button" size="sm" variant="destructive" loading={bulkBusy} onClick={() => void runBulkRevoke()}>
               Confirm bulk revoke
             </Button>
             <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setBulkConfirmOpen(false)}>

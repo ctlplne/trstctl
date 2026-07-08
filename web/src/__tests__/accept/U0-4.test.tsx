@@ -3,7 +3,18 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { axe } from "vitest-axe";
 
 const sample = [
-  { credential_id: "c1", subject: "svc-a", kind: "x509", score: 92, exposure: 3, privilege: 3, sensitivity: 3, owner_active: true, expires_at: null, components: {} },
+  {
+    credential_id: "c1",
+    subject: "svc-a",
+    kind: "x509",
+    score: 92,
+    exposure: 3,
+    privilege: 3,
+    sensitivity: 3,
+    owner_active: true,
+    expires_at: null,
+    components: {},
+  },
 ];
 
 vi.mock("@/lib/api", async (importOriginal) => {

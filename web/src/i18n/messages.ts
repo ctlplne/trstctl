@@ -64,6 +64,26 @@ export const messages = {
     defaultMessage: "Renewal readiness",
     description: "Certificates page tab: renewal readiness panels and deployment receipts.",
   },
+  "pqc.readiness.aria": {
+    defaultMessage: "PQC migration readiness",
+    description: "Accessible label for the post-quantum migration progress meter.",
+  },
+  "pqc.readiness.migrated": {
+    defaultMessage: "{percent}% migrated",
+    description: "Post-quantum migration percentage shown under the progress meter.",
+  },
+  "pqc.readiness.totalAssets": {
+    defaultMessage: "Total assets",
+    description: "Metric label for total CBOM assets in the post-quantum readiness summary.",
+  },
+  "pqc.readiness.quantumVulnerable": {
+    defaultMessage: "Quantum-vulnerable assets",
+    description: "Metric label for CBOM assets that still need post-quantum migration.",
+  },
+  "pqc.readiness.readyAssets": {
+    defaultMessage: "PQC-ready assets",
+    description: "Metric label for CBOM assets already post-quantum ready.",
+  },
   "certificates.ct.launch": {
     defaultMessage: "Submit to CT",
     description: "Button that opens the Certificate Transparency submission dialog.",
@@ -197,7 +217,8 @@ export const messages = {
     description: "Eyebrow above the Journeys page title.",
   },
   "journeys.description": {
-    defaultMessage: "The documented operator journeys as live checklists: every step is one click to the right place, and finished steps check themselves off from served data.",
+    defaultMessage:
+      "The documented operator journeys as live checklists: every step is one click to the right place, and finished steps check themselves off from live tenant data.",
     description: "Journeys page description.",
   },
   "journeys.listLabel": {
@@ -281,7 +302,7 @@ export const messages = {
     description: "CA-migration journey step 1 title.",
   },
   "journeys.mig.source.body": {
-    defaultMessage: "Create a network source covering the hosts and ranges your old CA served.",
+    defaultMessage: "Create a network source covering the hosts and ranges your old CA issued for.",
     description: "CA-migration journey step 1 body.",
   },
   "journeys.mig.scan.title": {
@@ -5885,7 +5906,8 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.cryptoAgilityMeansTheSystemCan_20c325": {
-    defaultMessage: "Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only state.",
+    defaultMessage:
+      "Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only state.",
     description: "CLI-parity console flow copy.",
   },
   "parity.cryptographicShred_caafb7": {
@@ -6261,7 +6283,8 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.rotateAProviderBackedCredentialBy_ec7a8f": {
-    defaultMessage: "Rotate a provider-backed credential by reference. If a phase fails, the run rolls back to the old reference and the result below reports the exact outcome. No secret values pass through this form.",
+    defaultMessage:
+      "Rotate a provider-backed credential by reference. If a phase fails, the run rolls back to the old reference and the result below reports the exact outcome. No secret values pass through this form.",
     description: "CLI-parity console flow copy.",
   },
   "parity.rotateChallenge_99fc02": {
@@ -6269,7 +6292,8 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.rotationMintsFreshChallengeMaterialAnd_0aec47": {
-    defaultMessage: "Rotation mints fresh challenge material and records rotation evidence — the rotation version increments and the rotation timestamp is persisted for audit. Profiles distributing the previous challenge stop validating for new enrollments.",
+    defaultMessage:
+      "Rotation mints fresh challenge material and records rotation evidence — the rotation version increments and the rotation timestamp is persisted for audit. Profiles distributing the previous challenge stop validating for new enrollments.",
     description: "CLI-parity console flow copy.",
   },
   "parity.rotationRuns_5ec15c": {
@@ -6357,7 +6381,7 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.servedAuthorities_52df47": {
-    defaultMessage: "Served authorities",
+    defaultMessage: "Available authorities",
     description: "CLI-parity console flow copy.",
   },
   "parity.sessionOpened_368838": {
@@ -6377,7 +6401,8 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.signerBackedRootsAndIntermediatesThis_957f38": {
-    defaultMessage: "Signer-backed roots and intermediates this control plane serves. Open a row for the certificate PEM, issue a leaf from an authority, or sign an externally generated intermediate CSR.",
+    defaultMessage:
+      "Signer-backed roots and intermediates this control plane serves. Open a row for the certificate PEM, issue a leaf from an authority, or sign an externally generated intermediate CSR.",
     description: "CLI-parity console flow copy.",
   },
   "parity.specJson_e57c5c": {
@@ -6425,7 +6450,8 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.theCbomScannerInventoriesAlgorithmsKey_777219": {
-    defaultMessage: "The CBOM scanner inventories algorithms, key sizes, TLS versions, and weak crypto posture. The policy floor is RSA-2048, EC-256, and TLS 1.2, while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.",
+    defaultMessage:
+      "The CBOM scanner inventories algorithms, key sizes, TLS versions, and weak crypto posture. The policy floor is RSA-2048, EC-256, and TLS 1.2, while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.",
     description: "CLI-parity console flow copy.",
   },
   "parity.theProviderWasRolledBackCleanly_3c888a": {
@@ -6433,7 +6459,7 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.theServedContractRequiresASpec_bf854f": {
-    defaultMessage: "The served contract requires a spec (common_name, path length, TTL) for intermediate issuance.",
+    defaultMessage: "Intermediate issuance requires a spec (common_name, path length, TTL).",
     description: "CLI-parity console flow copy.",
   },
   "parity.tpmQuote_f72300": {
@@ -6624,7 +6650,8 @@ const esESCatalog = {
   "certificates.ingest.ownerUnassigned": "Sin propietario (asignar más tarde)",
   "nav.item.journeys": "Recorridos",
   "journeys.eyebrow": "Rutas guiadas",
-  "journeys.description": "Los recorridos documentados del operador como listas vivas: cada paso lleva con un clic al lugar correcto y los pasos terminados se marcan solos a partir de datos servidos.",
+  "journeys.description":
+    "Los recorridos documentados del operador como listas vivas: cada paso lleva con un clic al lugar correcto y los pasos terminados se marcan solos a partir de datos servidos.",
   "journeys.listLabel": "Recorridos disponibles",
   "journeys.progress": "{done} de {total} pasos completados",
   "journeys.open": "Llévame allí",
@@ -6673,7 +6700,8 @@ const esESCatalog = {
   "journeys.fleet.title": "Automatizar TLS de la flota",
   "journeys.fleet.description": "Las máquinas se inscriben y renuevan solas mediante ACME con prueba DNS-01: ningún humano custodia certificados.",
   "journeys.fleet.protocols.title": "Inspeccionar la superficie ACME",
-  "journeys.fleet.protocols.body": "La página Protocolos muestra el directorio ACME, la vinculación de tenant, las puertas de perfil y el estado del respondedor.",
+  "journeys.fleet.protocols.body":
+    "La página Protocolos muestra el directorio ACME, la vinculación de tenant, las puertas de perfil y el estado del respondedor.",
   "journeys.fleet.dns.title": "Delegar la validación DNS-01",
   "journeys.fleet.dns.body": "Apunte _acme-challenge a la zona de validación mediante CNAME; las configuraciones DNS-01 y la verificación previa viven aquí.",
   "journeys.fleet.certbot.title": "Apuntar un cliente ACME al directorio",
@@ -6701,9 +6729,11 @@ const esESCatalog = {
   "journeys.devices.enroll.title": "Inscribirse con un CSR",
   "journeys.devices.enroll.body": "Envíe el CSR del dispositivo a simpleenroll; reinscriba antes de expirar con el mismo flujo.",
   "journeys.devices.bootstrap.title": "Controlar clientes limitados y MDM",
-  "journeys.devices.bootstrap.body": "Los clientes IoT diminutos usan tokens de arranque de un solo uso; los teléfonos MDM se controlan con políticas de desafío SCEP.",
+  "journeys.devices.bootstrap.body":
+    "Los clientes IoT diminutos usan tokens de arranque de un solo uso; los teléfonos MDM se controlan con políticas de desafío SCEP.",
   "journeys.sec.title": "Gestionar secretos",
-  "journeys.sec.description": "Un almacén cifrado con versionado, credenciales de corta vida, comparticiones de un solo uso, escaneo y sincronización a la nube.",
+  "journeys.sec.description":
+    "Un almacén cifrado con versionado, credenciales de corta vida, comparticiones de un solo uso, escaneo y sincronización a la nube.",
   "journeys.sec.enable.title": "Habilitar la superficie de secretos",
   "journeys.sec.enable.body": "Los secretos fallan cerrados hasta que la superficie está habilitada y existe un archivo de clave de cifrado de claves.",
   "journeys.sec.store.title": "Trabajar el almacén nativo",
@@ -6778,7 +6808,8 @@ const esESCatalog = {
   "journeys.api.graph.body": "El mismo grafo que dibuja la consola es consultable: nodos, aristas, radio de impacto y alcanzabilidad.",
   "request.wizard.nextReview": "Siguiente: revisar",
   "request.wizard.ownerHint": "Prellenado con el principal de su sesión.",
-  "identities.decommission.description": "Retire o revoque identidades en respuesta a bajas de RR. HH., terminaciones de proveedores o ventanas de inactividad.",
+  "identities.decommission.description":
+    "Retire o revoque identidades en respuesta a bajas de RR. HH., terminaciones de proveedores o ventanas de inactividad.",
   "state.permissionDenied": "Permiso denegado",
   "grid.state.loading": "Cargando filas...",
   "grid.state.error": "No se pudieron cargar las filas",
@@ -8087,10 +8118,12 @@ const esESCatalog = {
   "parity.brokerEvidenceForThisJustIn_44ca48": "Evidencia intermediada de esta sesión de acceso puntual, incluidos registros de atestación y auditoría.",
   "parity.builtInGuarantees_21db16": "Garantías integradas",
   "parity.caaIssuerDomainOptional_8c2f53": "Dominio emisor CAA (opcional)",
-  "parity.captureEvidenceOfHowABackup_f00d4e": "Registra la evidencia de cómo una copia de seguridad o un archivo de auditoría firmado respetó el borrado de un sujeto.",
+  "parity.captureEvidenceOfHowABackup_f00d4e":
+    "Registra la evidencia de cómo una copia de seguridad o un archivo de auditoría firmado respetó el borrado de un sujeto.",
   "parity.ceremonyDetail_9cb326": "Detalle de ceremonia",
   "parity.ceremonyId_6f8ee6": "ID de ceremonia",
-  "parity.certifiesAnExternallyHeldIntermediateKey_d95cc4": "Certifica una clave intermedia externa bajo esta autoridad mediante una ceremonia aprobada por quórum.",
+  "parity.certifiesAnExternallyHeldIntermediateKey_d95cc4":
+    "Certifica una clave intermedia externa bajo esta autoridad mediante una ceremonia aprobada por quórum.",
   "parity.challengeDomainOptional_d7bed2": "Dominio de desafío (opcional)",
   "parity.challengeMode_1c8fbd": "Modo de desafío",
   "parity.challengeRecord_320513": "Registro de desafío",
@@ -8115,14 +8148,16 @@ const esESCatalog = {
   "parity.createRootCa_94fb33": "Crear CA raíz",
   "parity.createRotationSchedule_6a80bd": "Crear programación de rotación",
   "parity.credentialReferencesJsonOptional_faddae": "JSON de referencias de credenciales (opcional)",
-  "parity.cryptoAgilityMeansTheSystemCan_20c325": "La cripto-agilidad significa que el sistema puede ver algoritmos débiles, rechazar opciones no permitidas y planificar rotaciones seguras sin adivinar desde el estado del navegador.",
+  "parity.cryptoAgilityMeansTheSystemCan_20c325":
+    "La cripto-agilidad significa que el sistema puede ver algoritmos débiles, rechazar opciones no permitidas y planificar rotaciones seguras sin adivinar desde el estado del navegador.",
   "parity.cryptographicShred_caafb7": "triturado criptográfico",
   "parity.csrPem_c5931f": "CSR en PEM",
   "parity.delegationTargetOptional_8439dd": "Destino de delegación (opcional)",
   "parity.deleteOwner_b5f9bd": "Eliminar propietario",
   "parity.delete_f6fdbe": "Eliminar",
   "parity.deleted_b639f5": "eliminado",
-  "parity.deletingAnOwnerRemovesTheAccountability_cdfad5": "Eliminar un propietario borra el registro de responsabilidad de sus credenciales. Esto no se puede deshacer.",
+  "parity.deletingAnOwnerRemovesTheAccountability_cdfad5":
+    "Eliminar un propietario borra el registro de responsabilidad de sus credenciales. Esto no se puede deshacer.",
   "parity.details_dc3dec": "Detalles",
   "parity.distributionPosture_10c8b4": "Postura de distribución",
   "parity.dns01ConfigUpdateFailed_86ad97": "Error al actualizar la configuración DNS-01",
@@ -8134,7 +8169,8 @@ const esESCatalog = {
   "parity.emailOptional_5c10b5": "Correo electrónico (opcional)",
   "parity.ephemeralCredentialApprovals_9a4b68": "Aprobaciones de credenciales efímeras",
   "parity.ephemeralCredentialRequestFailed_12be63": "Error en la solicitud de credencial efímera",
-  "parity.eventSourcedRemediationRunEvidenceIncluding_cec725": "Evidencia de ejecución de remediación basada en eventos, incluido el recibo de entrega del conector cuando se registró.",
+  "parity.eventSourcedRemediationRunEvidenceIncluding_cec725":
+    "Evidencia de ejecución de remediación basada en eventos, incluido el recibo de entrega del conector cuando se registró.",
   "parity.evidenceReferencesOnePerLine_2bb536": "Referencias de evidencia (una por línea)",
   "parity.expectedAudienceOptional_51c8b7": "Audiencia esperada (opcional)",
   "parity.expectedTxtValueOptional_c4e94f": "Valor TXT esperado (opcional)",
@@ -8143,8 +8179,10 @@ const esESCatalog = {
   "parity.filterRotationRuns_e652a6": "Filtrar ejecuciones de rotación",
   "parity.fingerprintOptional_b6cd87": "Huella digital (opcional)",
   "parity.firstRunOptional_7ecf76": "Primera ejecución (opcional)",
-  "parity.fullConnectorDeliveryReceiptEvidenceIncluding_080df5": "Evidencia completa del recibo de entrega del conector, incluida la referencia de reversión y el motivo del fallo.",
-  "parity.fullLifecycleRotationRunRecordIncluding_02687f": "Registro completo de la ejecución de rotación del ciclo de vida, incluidas huellas, referencia de reversión y evidencia de errores.",
+  "parity.fullConnectorDeliveryReceiptEvidenceIncluding_080df5":
+    "Evidencia completa del recibo de entrega del conector, incluida la referencia de reversión y el motivo del fallo.",
+  "parity.fullLifecycleRotationRunRecordIncluding_02687f":
+    "Registro completo de la ejecución de rotación del ciclo de vida, incluidas huellas, referencia de reversión y evidencia de errores.",
   "parity.heldUntil_8cc7d7": "Retenido hasta",
   "parity.hmacDynamic_cb11c5": "hmac-dynamic",
   "parity.iUnderstandThisRevocationCannotBe_92d164": "Entiendo que esta revocación no se puede deshacer.",
@@ -8199,8 +8237,10 @@ const esESCatalog = {
   "parity.providerDefault_f75bf4": "Predeterminado del proveedor",
   "parity.publicKeyPem_10749e": "Clave pública (PEM)",
   "parity.quorumApprovedCeremonyId_df8e12": "id de ceremonia aprobada por quórum",
-  "parity.recordedPlaybookRunsWithTheirConnector_bffffe": "Ejecuciones de playbook registradas con sus recibos de entrega del conector y una instantánea de la cola de remediación de propietarios.",
-  "parity.recurringRollbackSafeRotationsRunBy_06c343": "Rotaciones recurrentes con reversión segura ejecutadas por el programador. «Ejecutar vencidas» ejecuta cada programación habilitada cuya próxima ejecución ya está vencida.",
+  "parity.recordedPlaybookRunsWithTheirConnector_bffffe":
+    "Ejecuciones de playbook registradas con sus recibos de entrega del conector y una instantánea de la cola de remediación de propietarios.",
+  "parity.recurringRollbackSafeRotationsRunBy_06c343":
+    "Rotaciones recurrentes con reversión segura ejecutadas por el programador. «Ejecutar vencidas» ejecuta cada programación habilitada cuya próxima ejecución ya está vencida.",
   "parity.remediationEvidence_5174c6": "Evidencia de remediación",
   "parity.remoteKeyOptional_b6dff8": "Clave remota (opcional)",
   "parity.req7c2f9a_03dd4e": "req-7c2f9a",
@@ -8209,9 +8249,11 @@ const esESCatalog = {
   "parity.revokeCertificate_338ad7": "Revocar certificado",
   "parity.rollbackSafeRotationFailed_5f1a57": "Error en la rotación con reversión segura",
   "parity.rollbackSafeRotation_267d4a": "Rotación con reversión segura",
-  "parity.rotateAProviderBackedCredentialBy_ec7a8f": "Rota una credencial respaldada por un proveedor mediante referencia. Si una fase falla, la ejecución revierte a la referencia anterior y el resultado a continuación informa el resultado exacto. Ningún valor secreto pasa por este formulario.",
+  "parity.rotateAProviderBackedCredentialBy_ec7a8f":
+    "Rota una credencial respaldada por un proveedor mediante referencia. Si una fase falla, la ejecución revierte a la referencia anterior y el resultado a continuación informa el resultado exacto. Ningún valor secreto pasa por este formulario.",
   "parity.rotateChallenge_99fc02": "Rotar desafío",
-  "parity.rotationMintsFreshChallengeMaterialAnd_0aec47": "La rotación genera material de desafío nuevo y registra evidencia de rotación: la versión de rotación se incrementa y la marca de tiempo se conserva para auditoría. Los perfiles que distribuyen el desafío anterior dejan de validar nuevas inscripciones.",
+  "parity.rotationMintsFreshChallengeMaterialAnd_0aec47":
+    "La rotación genera material de desafío nuevo y registra evidencia de rotación: la versión de rotación se incrementa y la marca de tiempo se conserva para auditoría. Los perfiles que distribuyen el desafío anterior dejan de validar nuevas inscripciones.",
   "parity.rotationRuns_5ec15c": "Ejecuciones de rotación",
   "parity.routing_7d15dd": "Enrutamiento",
   "parity.runDueRotationsFailed_b9c511": "Error al ejecutar rotaciones vencidas",
@@ -8233,12 +8275,13 @@ const esESCatalog = {
   "parity.selectParentAuthority_76a0a6": "Seleccionar autoridad principal",
   "parity.selectedMethod_9ad9ca": "Opción seleccionada",
   "parity.serialOptional_e59169": "Número de serie (opcional)",
-  "parity.servedAuthorities_52df47": "Autoridades servidas",
+  "parity.servedAuthorities_52df47": "Autoridades disponibles",
   "parity.sessionOpened_368838": "Sesión abierta.",
   "parity.signIntermediateCsr_cf1361": "Firmar CSR intermedia…",
   "parity.signIntermediateCsr_e1f90b": "Firmar CSR intermedia",
   "parity.signedAuditArchive_753384": "archivo de auditoría firmado",
-  "parity.signerBackedRootsAndIntermediatesThis_957f38": "Raíces e intermedias respaldadas por el firmante que sirve este plano de control. Abra una fila para ver el PEM del certificado, emitir una hoja desde una autoridad o firmar una CSR intermedia generada externamente.",
+  "parity.signerBackedRootsAndIntermediatesThis_957f38":
+    "Raíces e intermedias respaldadas por el firmante que sirve este plano de control. Abra una fila para ver el PEM del certificado, emitir una hoja desde una autoridad o firmar una CSR intermedia generada externamente.",
   "parity.specJson_e57c5c": "JSON de especificación",
   "parity.sshPrincipal_8d0a6c": "Entidad SSH",
   "parity.ssh_e8b9f6": "ssh",
@@ -8250,9 +8293,15 @@ const esESCatalog = {
   "parity.targetId_00960a": "ID de destino",
   "parity.targetName_f2f724": "Nombre del destino",
   "parity.targetType_a45f80": "Tipo de destino",
-  "parity.theCbomScannerInventoriesAlgorithmsKey_777219": "El escáner CBOM inventaría algoritmos, tamaños de clave, versiones de TLS y posturas criptográficas débiles. El mínimo de política es RSA-2048, EC-256 y TLS 1.2, mientras que 3DES/DES/RC4/NULL/EXPORT/MD5 están prohibidos.",
+  "parity.theCbomScannerInventoriesAlgorithmsKey_777219":
+    "El escáner CBOM inventaría algoritmos, tamaños de clave, versiones de TLS y posturas criptográficas débiles. El mínimo de política es RSA-2048, EC-256 y TLS 1.2, mientras que 3DES/DES/RC4/NULL/EXPORT/MD5 están prohibidos.",
   "parity.theProviderWasRolledBackCleanly_3c888a": "El proveedor se revirtió limpiamente a",
-  "parity.theServedContractRequiresASpec_bf854f": "El contrato servido requiere una especificación (common_name, longitud de ruta, TTL) para la emisión intermedia.",
+  "pqc.readiness.aria": "Preparación para migración PQC",
+  "pqc.readiness.migrated": "{percent}% migrado",
+  "pqc.readiness.totalAssets": "Activos totales",
+  "pqc.readiness.quantumVulnerable": "Activos vulnerables a computación cuántica",
+  "pqc.readiness.readyAssets": "Activos listos para PQC",
+  "parity.theServedContractRequiresASpec_bf854f": "La emisión intermedia requiere una especificación (common_name, longitud de ruta, TTL).",
   "parity.tpmQuote_f72300": "tpm-quote",
   "parity.trustAnchorReferencesJsonOptional_f5ea80": "JSON de referencias de anclas de confianza (opcional)",
   "parity.ttlSecondsOptional_68f1c5": "Segundos de TTL (opcional)",
@@ -8260,8 +8309,10 @@ const esESCatalog = {
   "parity.typePolicyNameToConfirm_fc5738": "Escriba el nombre de la política para confirmar",
   "parity.typeTargetNameToConfirm_aedaad": "Escriba el nombre del destino para confirmar",
   "parity.typeTheExactOwnerName_1205b0": "Escriba el nombre exacto del propietario",
-  "parity.updateTheConnectorTargetNameConnector_1dafe2": "Actualice el nombre del destino del conector, el conector y el JSON de configuración, luego guarde para aplicar el cambio.",
-  "parity.validatesDelegationTxtPropagationCaaPolicy_1ceb4c": "Valida la delegación, la propagación TXT, la política CAA y la selección de la opción de desafío de un dominio antes de emitir una orden ACME.",
+  "parity.updateTheConnectorTargetNameConnector_1dafe2":
+    "Actualice el nombre del destino del conector, el conector y el JSON de configuración, luego guarde para aplicar el cambio.",
+  "parity.validatesDelegationTxtPropagationCaaPolicy_1ceb4c":
+    "Valida la delegación, la propagación TXT, la política CAA y la selección de la opción de desafío de un dominio antes de emitir una orden ACME.",
   "parity.view_69bd4e": "Ver",
   "parity.wildcard_08654e": "comodín",
   "parity.yesDeleteConfig_bd6fac": "Sí, eliminar configuración",

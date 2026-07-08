@@ -13,7 +13,9 @@ vi.mock("@/lib/api", async (orig) => {
 
 beforeEach(() => {
   apiMock.signCode.mockReset().mockResolvedValue({ algorithm: "ECDSA-P256", artifact_type: "container", key_id: "key-1", public_key_der: "BASE64DER" });
-  apiMock.signCodeKeyless.mockReset().mockResolvedValue({ algorithm: "ECDSA-P256", artifact_type: "container", fulcio_issuer: "https://oauth2.example", public_key_der: "BASE64DER" });
+  apiMock.signCodeKeyless
+    .mockReset()
+    .mockResolvedValue({ algorithm: "ECDSA-P256", artifact_type: "container", fulcio_issuer: "https://oauth2.example", public_key_der: "BASE64DER" });
 });
 
 describe("code signing console", () => {

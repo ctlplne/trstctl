@@ -16,12 +16,7 @@ function findRepoRoot(startDir = process.cwd()) {
 
 function unwrapExpression(expression) {
   let current = expression;
-  while (
-    ts.isAsExpression(current) ||
-    ts.isTypeAssertionExpression(current) ||
-    ts.isParenthesizedExpression(current) ||
-    ts.isSatisfiesExpression(current)
-  ) {
+  while (ts.isAsExpression(current) || ts.isTypeAssertionExpression(current) || ts.isParenthesizedExpression(current) || ts.isSatisfiesExpression(current)) {
     current = current.expression;
   }
   return current;
@@ -61,15 +56,7 @@ function normalizeRoute(route) {
   return clean.length > 1 ? clean.replace(/\/+$/, "") : clean;
 }
 
-const ignoredRoutePrefixes = [
-  "/api",
-  "/auth",
-  "/mcp",
-  "/metrics",
-  "/healthz",
-  "/readyz",
-  "/.well-known",
-];
+const ignoredRoutePrefixes = ["/api", "/auth", "/mcp", "/metrics", "/healthz", "/readyz", "/.well-known"];
 
 function isServedAppRouteCandidate(route) {
   if (!route.startsWith("/")) return false;

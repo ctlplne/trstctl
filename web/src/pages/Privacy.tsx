@@ -266,11 +266,7 @@ export function Privacy() {
 
   return (
     <section aria-labelledby="privacy-heading" className="grid gap-6">
-      <PageHeader
-        titleId="privacy-heading"
-        title={t("privacy.title")}
-        description={t("privacy.description")}
-      />
+      <PageHeader titleId="privacy-heading" title={t("privacy.title")} description={t("privacy.description")} />
 
       {loading ? (
         <LoadingState>{t("privacy.loading")}</LoadingState>
@@ -418,9 +414,7 @@ export function Privacy() {
                     <select
                       className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                       value={recordForm.action}
-                      onChange={(event) =>
-                        setRecordForm({ ...recordForm, action: event.target.value as PrivacyArchiveErasureAttestationRequest["action"] })
-                      }
+                      onChange={(event) => setRecordForm({ ...recordForm, action: event.target.value as PrivacyArchiveErasureAttestationRequest["action"] })}
                     >
                       <option value="deleted">{t("parity.deleted_b639f5")}</option>
                       <option value="legal_hold">{t("parity.legalHold_644327")}</option>
@@ -543,9 +537,7 @@ export function Privacy() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-caption text-muted-foreground">
-                  {t("privacy.export.summary", { count: countTotal(subjectExport.counts) })}
-                </p>
+                <p className="text-caption text-muted-foreground">{t("privacy.export.summary", { count: countTotal(subjectExport.counts) })}</p>
               </div>
             ) : null}
           </SectionCard>

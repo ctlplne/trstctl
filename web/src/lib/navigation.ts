@@ -266,7 +266,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/protocols"],
     component: "Protocols",
     kind: "operate",
-    evidence: "ACME directory/account/order/challenge register, tenant-binding and profile gates, DNS-01 provider/config tables, live responder status, and client setup snippets",
+    evidence:
+      "ACME directory/account/order/challenge register, tenant-binding and profile gates, DNS-01 provider/config tables, live responder status, and client setup snippets",
   },
   {
     featureId: "F6",
@@ -280,7 +281,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/connectors", "/operations", "/notifications"],
     component: "Connectors",
     kind: "observe",
-    evidence: "native and plugin connector registry, capability grants, delivery receipts, operations queue, notification triage, reachability, and rollback posture",
+    evidence:
+      "native and plugin connector registry, capability grants, delivery receipts, operations queue, notification triage, reachability, and rollback posture",
   },
   {
     featureId: "F8",
@@ -348,28 +350,32 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/protocols"],
     component: "Protocols",
     kind: "operate",
-    evidence: "EST CA-certs/simpleenroll register, tenant-binding and auth gates, profile guidance, live responder status, enrollment diagnostics, and client setup snippets",
+    evidence:
+      "EST CA-certs/simpleenroll register, tenant-binding and auth gates, profile guidance, live responder status, enrollment diagnostics, and client setup snippets",
   },
   {
     featureId: "F23",
     routes: ["/protocols"],
     component: "Protocols",
     kind: "operate",
-    evidence: "SCEP CA-discovery/enrollment register, RA and challenge policy status, MDM policy telemetry, CMS diagnostics, live responder status, and client setup snippets",
+    evidence:
+      "SCEP CA-discovery/enrollment register, RA and challenge policy status, MDM policy telemetry, CMS diagnostics, live responder status, and client setup snippets",
   },
   {
     featureId: "F24",
     routes: ["/protocols"],
     component: "Protocols",
     kind: "operate",
-    evidence: "SPIFFE Workload API trust-domain/socket requirements, selector guidance, X.509-SVID and JWT-SVID support, live responder status, and client snippets",
+    evidence:
+      "SPIFFE Workload API trust-domain/socket requirements, selector guidance, X.509-SVID and JWT-SVID support, live responder status, and client snippets",
   },
   {
     featureId: "F25",
     routes: ["/workloads"],
     component: "Workloads",
     kind: "operate",
-    evidence: "dynamic and ephemeral credential issuance with provider role, TTL policy, lease metadata, renew and revoke controls, expiry state, and copy-once credential handling",
+    evidence:
+      "dynamic and ephemeral credential issuance with provider role, TTL policy, lease metadata, renew and revoke controls, expiry state, and copy-once credential handling",
   },
   {
     featureId: "F26",
@@ -489,7 +495,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/ssh"],
     component: "SSHTrust",
     kind: "operate",
-    evidence: "explicit-confirmation SSH trust rollout with target hosts, validation command, reload health command, rollback plan, status recording, and host retirement controls",
+    evidence:
+      "explicit-confirmation SSH trust rollout with target hosts, validation command, reload health command, rollback plan, status recording, and host retirement controls",
   },
   {
     featureId: "F45",
@@ -532,7 +539,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/protocols"],
     component: "Protocols",
     kind: "operate",
-    evidence: "TSA timestamp workflow with endpoint and certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance",
+    evidence:
+      "TSA timestamp workflow with endpoint and certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance",
   },
   {
     featureId: "F52",
@@ -554,7 +562,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/protocols"],
     component: "Protocols",
     kind: "operate",
-    evidence: "CMP enrollment register with tenant-binding requirements, RA transport and profile gates, live responder status, enrollment diagnostics, and OpenSSL client guidance",
+    evidence:
+      "CMP enrollment register with tenant-binding requirements, RA transport and profile gates, live responder status, enrollment diagnostics, and OpenSSL client guidance",
   },
   {
     featureId: "F56",
@@ -576,7 +585,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/workloads"],
     component: "Workloads",
     kind: "operate",
-    evidence: "attestation policy administration with TPM, AWS, GCP, Azure, Kubernetes, and GitHub methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata",
+    evidence:
+      "attestation policy administration with TPM, AWS, GCP, Azure, Kubernetes, and GitHub methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata",
   },
   { featureId: "F58", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "machine login exchange through secrets login" },
   { featureId: "F60", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "one-time share create/redeem" },
@@ -585,7 +595,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/workloads"],
     component: "Workloads",
     kind: "operate",
-    evidence: "AI-agent broker identity issuance with attestation payload, public key, allowed scopes, TTL, issued credential metadata, and audit-safe result handling",
+    evidence:
+      "AI-agent broker identity issuance with attestation payload, public key, allowed scopes, TTL, issued credential metadata, and audit-safe result handling",
   },
   {
     featureId: "F62",
@@ -601,7 +612,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/secrets"],
     component: "Secrets",
     kind: "operate",
-    evidence: "dynamic secret lease issue/renew/revoke controls with backend provider, role, TTL, lease status, backend error handling, and reveal-once generated credential panel",
+    evidence:
+      "dynamic secret lease issue/renew/revoke controls with backend provider, role, TTL, lease status, backend error handling, and reveal-once generated credential panel",
   },
   {
     featureId: "F66",
@@ -616,7 +628,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/secrets"],
     component: "Secrets",
     kind: "operate",
-    evidence: "secret sync target catalog, configured mapping form, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts",
+    evidence:
+      "secret sync target catalog, configured mapping form, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts",
   },
   {
     featureId: "F69",
@@ -654,7 +667,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/assistant"],
     component: "Assistant",
     kind: "operate",
-    evidence: "AI model adapter runtime diagnostics with enabled state, model mode/name, endpoint host, egress mode, personal-data egress policy, redaction boundary, residual-secret refusal gate, and last load error",
+    evidence:
+      "AI model adapter runtime diagnostics with enabled state, model mode/name, endpoint host, egress mode, personal-data egress policy, redaction boundary, residual-secret refusal gate, and last load error",
   },
   { featureId: "F77", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded RCA with citations and runtime status" },
   { featureId: "F78", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "read-only MCP tools and runtime status" },

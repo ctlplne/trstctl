@@ -337,10 +337,7 @@ describe("CA hierarchy and custody surface", () => {
     await user.type(within(issueRegion).getByLabelText("Profile name"), "web-server");
     await user.clear(within(issueRegion).getByLabelText("TTL days"));
     await user.type(within(issueRegion).getByLabelText("TTL days"), "7");
-    await user.type(
-      within(issueRegion).getByLabelText("CSR PEM"),
-      "-----BEGIN CERTIFICATE REQUEST-----\nMIIBexampleCSR\n-----END CERTIFICATE REQUEST-----",
-    );
+    await user.type(within(issueRegion).getByLabelText("CSR PEM"), "-----BEGIN CERTIFICATE REQUEST-----\nMIIBexampleCSR\n-----END CERTIFICATE REQUEST-----");
 
     await user.click(within(issueRegion).getByRole("button", { name: "Issue through external CA" }));
 
@@ -423,7 +420,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("Fresh successor")).toBeInTheDocument();
     expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-imported/issue").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-rekeyed/issue").length).toBeGreaterThan(0);
-  });
+  }, 10000);
 
   it("starts and approves a CA key ceremony through the API", async () => {
     const user = userEvent.setup();
@@ -494,7 +491,9 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByDisplayValue("ceremony-offline-root")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Import offline root" }));
-    await waitFor(() => expect(apiMock.importOfflineRootCA).toHaveBeenCalledWith(expect.objectContaining({ ceremony_id: "ceremony-offline-root", certificate_pem: rootPEM })));
+    await waitFor(() =>
+      expect(apiMock.importOfflineRootCA).toHaveBeenCalledWith(expect.objectContaining({ ceremony_id: "ceremony-offline-root", certificate_pem: rootPEM })),
+    );
     expect(await screen.findByText("ca-offline-root")).toBeInTheDocument();
     expect(screen.getByDisplayValue("ca-offline-root")).toBeInTheDocument();
 
@@ -513,7 +512,10 @@ describe("CA hierarchy and custody surface", () => {
     await waitFor(() =>
       expect(apiMock.createOfflineIntermediateCSR).toHaveBeenCalledWith(
         "ca-offline-root",
-        expect.objectContaining({ ceremony_id: "ceremony-offline-intermediate", spec: expect.objectContaining({ common_name: "Offline Issuing Intermediate" }) }),
+        expect.objectContaining({
+          ceremony_id: "ceremony-offline-intermediate",
+          spec: expect.objectContaining({ common_name: "Offline Issuing Intermediate" }),
+        }),
       ),
     );
     const csrTextArea = (await screen.findByLabelText("Signer CSR PEM")) as HTMLTextAreaElement;

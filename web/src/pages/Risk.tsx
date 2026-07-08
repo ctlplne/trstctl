@@ -411,9 +411,7 @@ function ContextualRiskPanel({ priorities, loading, error }: { priorities: Conte
           <UnavailableState title={t("risk.contextual.unavailableTitle")}>{error}</UnavailableState>
         </div>
       )}
-      {!loading && !error && priorities && topPriorities.length === 0 && (
-        <p className="mt-3 text-sm text-muted-foreground">{t("risk.contextual.empty")}</p>
-      )}
+      {!loading && !error && priorities && topPriorities.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.contextual.empty")}</p>}
       {!loading && !error && topPriorities.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
@@ -431,7 +429,9 @@ function ContextualRiskPanel({ priorities, loading, error }: { priorities: Conte
                 <tr key={priority.credential_id}>
                   <td>
                     <p className="font-medium">{priority.subject}</p>
-                    <p className="text-caption text-muted-foreground">#{priority.rank} · {priority.credential_id}</p>
+                    <p className="text-caption text-muted-foreground">
+                      #{priority.rank} · {priority.credential_id}
+                    </p>
                   </td>
                   <td>
                     <div className="flex flex-wrap items-center gap-2">
@@ -487,7 +487,12 @@ function NHIPolicyCompliancePanel({ posture, loading, error }: { posture: NHIPol
             </p>
           )}
         </div>
-        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"} />}
+        {posture && (
+          <StatusBadge
+            vocabulary="risk"
+            value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"}
+          />
+        )}
       </div>
 
       {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiPolicy.loading")}</p>}
@@ -496,9 +501,7 @@ function NHIPolicyCompliancePanel({ posture, loading, error }: { posture: NHIPol
           <UnavailableState title={t("risk.nhiPolicy.unavailableTitle")}>{error}</UnavailableState>
         </div>
       )}
-      {!loading && !error && posture && topFindings.length === 0 && (
-        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiPolicy.empty")}</p>
-      )}
+      {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiPolicy.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="ui-table min-w-[62rem]">
@@ -564,7 +567,12 @@ function NHIStaticPanel({ posture, loading, error }: { posture: NHIStaticPosture
             </p>
           )}
         </div>
-        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"} />}
+        {posture && (
+          <StatusBadge
+            vocabulary="risk"
+            value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"}
+          />
+        )}
       </div>
 
       {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStatic.loading")}</p>}
@@ -573,9 +581,7 @@ function NHIStaticPanel({ posture, loading, error }: { posture: NHIStaticPosture
           <UnavailableState title={t("risk.nhiStatic.unavailableTitle")}>{error}</UnavailableState>
         </div>
       )}
-      {!loading && !error && posture && topFindings.length === 0 && (
-        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStatic.empty")}</p>
-      )}
+      {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStatic.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="ui-table min-w-[56rem]">
@@ -643,7 +649,12 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
             </p>
           )}
         </div>
-        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"} />}
+        {posture && (
+          <StatusBadge
+            vocabulary="risk"
+            value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"}
+          />
+        )}
       </div>
 
       {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiExposure.loading")}</p>}
@@ -652,9 +663,7 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
           <UnavailableState title={t("risk.nhiExposure.unavailableTitle")}>{error}</UnavailableState>
         </div>
       )}
-      {!loading && !error && posture && topFindings.length === 0 && (
-        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiExposure.empty")}</p>
-      )}
+      {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiExposure.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="ui-table min-w-[62rem]">
@@ -721,7 +730,12 @@ function NHIStalePanel({ posture, loading, error }: { posture: NHIStalePosture |
             </p>
           )}
         </div>
-        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"} />}
+        {posture && (
+          <StatusBadge
+            vocabulary="risk"
+            value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"}
+          />
+        )}
       </div>
 
       {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStale.loading")}</p>}
@@ -730,9 +744,7 @@ function NHIStalePanel({ posture, loading, error }: { posture: NHIStalePosture |
           <UnavailableState title={t("risk.nhiStale.unavailableTitle")}>{error}</UnavailableState>
         </div>
       )}
-      {!loading && !error && posture && topFindings.length === 0 && (
-        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStale.empty")}</p>
-      )}
+      {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStale.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="ui-table min-w-[56rem]">
@@ -806,9 +818,7 @@ function NHIOverPrivilegePanel({ posture, loading, error }: { posture: NHIOverPr
           <UnavailableState title={t("risk.nhiOverprivilege.unavailableTitle")}>{error}</UnavailableState>
         </div>
       )}
-      {!loading && !error && posture && topFindings.length === 0 && (
-        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiOverprivilege.empty")}</p>
-      )}
+      {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiOverprivilege.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="ui-table min-w-[56rem]">

@@ -542,6 +542,7 @@ func (st *int20Stack) runWorkersOnce(t *testing.T, pcas config.PCAS) {
 func runWorkerUntilIdle(t *testing.T, w server.BackgroundWorker) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	errc := make(chan error, 1)
 	go func() { errc <- w.Run(ctx) }()
 	timer := time.NewTimer(250 * time.Millisecond)

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { PQCReadinessSummary } from "@/components/pqc";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
@@ -259,8 +260,8 @@ export function Posture() {
               Certificate Transparency monitoring
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              CT monitoring watches public logs for certificates your tenant did not request. The discovery worker polls configured logs, records
-              tenant-scoped findings, and dispatches unexpected-issuance alerts through the notification outbox.
+              CT monitoring watches public logs for certificates your tenant did not request. The discovery worker polls configured logs, records tenant-scoped
+              findings, and dispatches unexpected-issuance alerts through the notification outbox.
             </p>
           </div>
         </div>
@@ -345,8 +346,8 @@ export function Posture() {
               Drift detection
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Drift detection compares what trstctl intended to deploy with what the worker can verify from a configured watched credential path.
-              Deleted, replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.
+              Drift detection compares what trstctl intended to deploy with what the worker can verify from a configured watched credential path. Deleted,
+              replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.
             </p>
           </div>
         </div>
@@ -409,13 +410,11 @@ export function Posture() {
           {cbomError ? <p className="text-sm font-medium text-destructive">{cbomError}</p> : null}
         </form>
 
-        <dl className="grid gap-3 md:grid-cols-5">
+        <dl className="grid gap-3 md:grid-cols-2">
           <Metric label="Total assets" value={String(cbomProgress.total_assets)} />
           <Metric label="Out of policy" value={`${cbomProgress.out_of_policy_assets} out of policy`} />
-          <Metric label="Quantum vulnerable" value={String(cbomProgress.quantum_vulnerable_assets)} />
-          <Metric label="Future-ready" value={String(cbomProgress.post_quantum_ready_assets)} />
-          <Metric label="Migration posture" value={`${cbomProgress.percent_migrated}% ready`} />
         </dl>
+        <PQCReadinessSummary progress={cbomProgress} />
 
         {lastCBOMScan ? (
           <dl className="grid gap-3 rounded-panel border border-border p-comfortable text-sm md:grid-cols-6">
@@ -470,7 +469,8 @@ export function Posture() {
               Crypto-agility readiness
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only state.
+              Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only
+              state.
             </p>
           </div>
         </div>

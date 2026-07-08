@@ -4,7 +4,16 @@ import { RenewalHistory } from "@/components/certs";
 import type { RotationRun } from "@/lib/api";
 
 function run(partial: Partial<RotationRun>): RotationRun {
-  return { id: "r", identity_id: "i", status: "succeeded", trigger: "ari", created_at: "2026-01-01", updated_at: "", tenant_id: "t", ...partial } as unknown as RotationRun;
+  return {
+    id: "r",
+    identity_id: "i",
+    status: "succeeded",
+    trigger: "ari",
+    created_at: "2026-01-01",
+    updated_at: "",
+    tenant_id: "t",
+    ...partial,
+  } as unknown as RotationRun;
 }
 
 describe("U1-5 certificate detail renewal history", () => {

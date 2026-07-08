@@ -156,8 +156,7 @@ describe("protocol surface", () => {
     });
     apiMock.mdmSCEPStatus.mockResolvedValue({
       runtime_gate: "served_scep_intune_validator_policy_driven",
-      runtime_note:
-        "The SCEP endpoint resolves enabled MDM SCEP policy trust_anchor_refs from the served secret store at challenge-validation time.",
+      runtime_note: "The SCEP endpoint resolves enabled MDM SCEP policy trust_anchor_refs from the served secret store at challenge-validation time.",
       telemetry: {
         allowed: 7,
         denied: 2,

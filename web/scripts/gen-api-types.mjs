@@ -48,11 +48,10 @@ function tsType(schema) {
       return "number";
     case "boolean":
       return "boolean";
-    case "array":
-      {
-        const item = tsType(schema.items);
-        return item.includes(" | ") ? `(${item})[]` : `${item}[]`;
-      }
+    case "array": {
+      const item = tsType(schema.items);
+      return item.includes(" | ") ? `(${item})[]` : `${item}[]`;
+    }
     case "object":
       if (schema.properties && Object.keys(schema.properties).length > 0) {
         return inlineObject(schema);

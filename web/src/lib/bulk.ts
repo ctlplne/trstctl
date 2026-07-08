@@ -41,8 +41,5 @@ export function useBulkSelection(): BulkSelection {
   const selectAll = useCallback((ids: readonly string[]) => setSelected(new Set(ids)), []);
   const clear = useCallback(() => setSelected(new Set()), []);
   const isSelected = useCallback((id: string) => selected.has(id), [selected]);
-  return useMemo(
-    () => ({ selected, count: selected.size, isSelected, toggle, selectAll, clear }),
-    [selected, isSelected, toggle, selectAll, clear],
-  );
+  return useMemo(() => ({ selected, count: selected.size, isSelected, toggle, selectAll, clear }), [selected, isSelected, toggle, selectAll, clear]);
 }

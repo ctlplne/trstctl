@@ -20,7 +20,7 @@ interface BuilderFields {
   allowedDnsSuffixes: string;
 }
 
-const keyAlgorithms = ["ECDSA", "RSA", "Ed25519"] as const;
+const keyAlgorithms = ["ECDSA", "RSA", "Ed25519", "Hybrid-ML-DSA-44-ECDSA-P256", "ML-DSA-65", "SLH-DSA-SHA2-128s"] as const;
 const extendedKeyUsages = ["serverAuth", "clientAuth"] as const;
 const enrollmentProtocols = ["api", "acme", "est", "scep", "cmp"] as const;
 
@@ -148,13 +148,7 @@ export function Profiles() {
       )}
 
       {items && items.length > 0 && (
-        <DataGrid
-          ariaLabel="Certificate profile versions"
-          rows={profileGroups}
-          columns={profileColumns}
-          getRowId={(group) => group.name}
-          state="ready"
-        />
+        <DataGrid ariaLabel="Certificate profile versions" rows={profileGroups} columns={profileColumns} getRowId={(group) => group.name} state="ready" />
       )}
 
       {detailLoading && <LoadingState>Loading profile version...</LoadingState>}
@@ -260,9 +254,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
           <h2 id="profile-preview-heading" className="text-sm font-semibold">
             Spec preview
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            This JSON is sent to the profile workflow. The backend remains the source of truth.
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">This JSON is sent to the profile workflow. The backend remains the source of truth.</p>
           <pre data-testid="profile-spec-preview" className="mt-3 max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
             {mode === "guided" ? formatSpec(builderSpec) : specText}
           </pre>

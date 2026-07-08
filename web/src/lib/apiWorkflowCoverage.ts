@@ -52,8 +52,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/ca",
     kind: "console-flow",
     workflow: "Signer-backed intermediate CA creation",
-    rationale:
-      "The CA Hierarchy page creates signer-backed intermediates through a ceremony-gated dialog with parent selection and validated spec input.",
+    rationale: "The CA Hierarchy page creates signer-backed intermediates through a ceremony-gated dialog with parent selection and validated spec input.",
   },
   {
     path: "/api/v1/ca/authorities/roots",
@@ -61,8 +60,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/ca",
     kind: "console-flow",
     workflow: "Signer-backed root CA creation",
-    rationale:
-      "The CA Hierarchy page creates signer-backed roots through a ceremony-gated dialog binding the quorum-approved ceremony id to the create call.",
+    rationale: "The CA Hierarchy page creates signer-backed roots through a ceremony-gated dialog binding the quorum-approved ceremony id to the create call.",
   },
   {
     path: "/api/v1/ca/authorities/{id}/intermediates/csr",
@@ -70,8 +68,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/ca",
     kind: "console-flow",
     workflow: "Issue intermediate CA from CSR",
-    rationale:
-      "Each served authority row offers a sign-intermediate-CSR dialog with ceremony id, CSR validation, and an in-dialog issued-certificate result.",
+    rationale: "Each served authority row offers a sign-intermediate-CSR dialog with ceremony id, CSR validation, and an in-dialog issued-certificate result.",
   },
   {
     path: "/api/v1/ca/authorities/{id}/issue",
@@ -79,8 +76,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/ca",
     kind: "console-flow",
     workflow: "Issue leaf certificate from CA authority",
-    rationale:
-      "Each served authority row offers an issue-leaf dialog with CSR validation and TTL, returning serial, expiry, and PEM with a copy affordance.",
+    rationale: "Each served authority row offers an issue-leaf dialog with CSR validation and TTL, returning serial, expiry, and PEM with a copy affordance.",
   },
   {
     path: "/api/v1/ca/authorities/{id}/rekey",
@@ -97,8 +93,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/ca",
     kind: "console-flow",
     workflow: "CA ceremony detail lookup",
-    rationale:
-      "Ceremony rows on the CA Hierarchy page open a detail dialog showing approval progress against threshold, status, purpose, and opener.",
+    rationale: "Ceremony rows on the CA Hierarchy page open a detail dialog showing approval progress against threshold, status, purpose, and opener.",
   },
   {
     path: "/api/v1/certificates/bulk-revoke",
@@ -148,8 +143,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/runops",
     kind: "console-flow",
     workflow: "Outbox circuit breaker diagnostics",
-    rationale:
-      "The Connectors page shows outbox destination circuit state beside delivery receipts with tone-coded status and failure detail.",
+    rationale: "The Connectors page shows outbox destination circuit state beside delivery receipts with tone-coded status and failure detail.",
   },
   {
     path: "/api/v1/connectors/targets/{id}",
@@ -182,8 +176,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/secrets",
     kind: "console-flow",
     workflow: "Ephemeral credential approval",
-    rationale:
-      "The Approvals page has an ephemeral-credential approval card that issues a pending request by id and reports approver and quorum progress.",
+    rationale: "The Approvals page has an ephemeral-credential approval card that issues a pending request by id and reports approver and quorum progress.",
   },
   {
     path: "/api/v1/external-cas/{id}/issue",
@@ -199,8 +192,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/identities",
     kind: "console-flow",
     workflow: "Transactional identity bulk revoke",
-    rationale:
-      "The Identities bulk action now sends one transactional bulk-revoke request with reason selection and a server-computed result summary.",
+    rationale: "The Identities bulk action now sends one transactional bulk-revoke request with reason selection and a server-computed result summary.",
   },
   {
     path: "/api/v1/identities/{id}",
@@ -241,8 +233,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/lifecycle",
     kind: "console-flow",
     workflow: "Rotation run detail lookup",
-    rationale:
-      "Rotation run rows on the Operations page open a detail dialog with fingerprints, trigger, rollback reference, and failure detail.",
+    rationale: "Rotation run rows on the Operations page open a detail dialog with fingerprints, trigger, rollback reference, and failure detail.",
   },
   {
     path: "/api/v1/notifications/{id}",
@@ -258,8 +249,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/owners",
     kind: "console-flow",
     workflow: "Owner detail/update/delete",
-    rationale:
-      "The Owners page has per-row edit and delete actions with a pre-filled form dialog and a typed-name destructive confirmation.",
+    rationale: "The Owners page has per-row edit and delete actions with a pre-filled form dialog and a typed-name destructive confirmation.",
   },
   {
     path: "/api/v1/privacy/subject-exports",
@@ -283,8 +273,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/secrets",
     kind: "console-flow",
     workflow: "Rollback-safe secret rotation",
-    rationale:
-      "The Secrets rotation section runs rollback-safe rotations inline and renders phase, rollback outcome, and the old-to-new reference handoff.",
+    rationale: "The Secrets rotation section runs rollback-safe rotations inline and renders phase, rollback outcome, and the old-to-new reference handoff.",
   },
   {
     path: "/api/v1/secrets/scans/repositories",
@@ -308,8 +297,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/secrets",
     kind: "console-flow",
     workflow: "Scheduled secret rotation management",
-    rationale:
-      "The Secrets rotation section lists zero-downtime rotation schedules and creates new schedules through a validated dialog.",
+    rationale: "The Secrets rotation section lists zero-downtime rotation schedules and creates new schedules through a validated dialog.",
   },
   {
     path: "/api/v1/secrets/rotation-schedules/run-due",
@@ -317,8 +305,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/secrets",
     kind: "console-flow",
     workflow: "Run due secret rotations",
-    rationale:
-      "The Secrets rotation section runs all due schedules on demand and reports how many rotations ran with per-run outcomes.",
+    rationale: "The Secrets rotation section runs all due schedules on demand and reports how many rotations ran with per-run outcomes.",
   },
   {
     path: "/api/v1/privacy/archive-erasure-attestations",
@@ -326,8 +313,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/privacy",
     kind: "console-flow",
     workflow: "Archive erasure evidence",
-    rationale:
-      "The Privacy page lists backup and archive erasure attestations with subject filtering and records new attestations through a guided dialog.",
+    rationale: "The Privacy page lists backup and archive erasure attestations with subject filtering and records new attestations through a guided dialog.",
   },
   {
     path: "/api/v1/remediation/owner-actions",
@@ -335,8 +321,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/incidents",
     kind: "console-flow",
     workflow: "Owner remediation queue",
-    rationale:
-      "The Incidents remediation evidence section renders the owner-driven self-remediation queue with severity, scope, and rollback references.",
+    rationale: "The Incidents remediation evidence section renders the owner-driven self-remediation queue with severity, scope, and rollback references.",
   },
   {
     path: "/api/v1/platform/distribution",
@@ -344,8 +329,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/platform",
     kind: "console-flow",
     workflow: "Distribution posture disclosure",
-    rationale:
-      "The Platform page shows the run-anywhere distribution posture: production mode, lineage, run modes, host archives, and air-gap readiness.",
+    rationale: "The Platform page shows the run-anywhere distribution posture: production mode, lineage, run modes, host archives, and air-gap readiness.",
   },
   {
     path: "/api/v1/acme/dns-01/preflight",
@@ -353,8 +337,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/protocols",
     kind: "console-flow",
     workflow: "DNS-01 preflight validation",
-    rationale:
-      "Each DNS-01 provider config row offers a preflight dialog validating propagation, CNAME, CAA, method, and wildcard policy before enrollment.",
+    rationale: "Each DNS-01 provider config row offers a preflight dialog validating propagation, CNAME, CAA, method, and wildcard policy before enrollment.",
   },
   {
     path: "/api/v1/acme/dns-01/provider-configs/{id}",
@@ -362,8 +345,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/protocols",
     kind: "console-flow",
     workflow: "DNS-01 provider config administration",
-    rationale:
-      "DNS-01 provider config rows on the Protocols page support pre-filled edit and typed-name delete dialogs over the served config record.",
+    rationale: "DNS-01 provider config rows on the Protocols page support pre-filled edit and typed-name delete dialogs over the served config record.",
   },
   {
     path: "/api/v1/mdm/scep/policies/{id}",
@@ -371,8 +353,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/protocols",
     kind: "console-flow",
     workflow: "SCEP policy administration",
-    rationale:
-      "SCEP policy rows on the Protocols page support pre-filled edit and typed-name delete dialogs covering the full policy request surface.",
+    rationale: "SCEP policy rows on the Protocols page support pre-filled edit and typed-name delete dialogs covering the full policy request surface.",
   },
   {
     path: "/api/v1/mdm/scep/policies/{id}/rotate-challenge",
@@ -380,7 +361,6 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/protocols",
     kind: "console-flow",
     workflow: "SCEP challenge rotation evidence",
-    rationale:
-      "SCEP policy rows offer a rotate-challenge action that records rotation evidence and surfaces the new rotation version.",
+    rationale: "SCEP policy rows offer a rotate-challenge action that records rotation evidence and surfaces the new rotation version.",
   },
 ] as const satisfies readonly ApiWorkflowCoverage[];

@@ -109,8 +109,8 @@ export function Dashboard() {
           primaryAction={{ label: "Set up trstctl", to: "/wizard", icon: <Rocket className="h-4 w-4" aria-hidden="true" /> }}
           secondaryAction={{ label: "Explore the console", onClick: () => setDismissed(true) }}
         >
-          This tenant has no credentials yet. The four-step setup connects an issuer, issues your first
-          certificate, and enrolls an agent — about five minutes. Prefer to look around first? Explore the console.
+          This tenant has no credentials yet. The four-step setup connects an issuer, issues your first certificate, and enrolls an agent — about five minutes.
+          Prefer to look around first? Explore the console.
         </EmptyState>
       </section>
     );

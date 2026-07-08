@@ -1,11 +1,11 @@
 {
- "Delete": "parity.delete_f6fdbe",
- "Delete owner": "parity.deleteOwner_b5f9bd",
- "Deleting an owner removes the accountability record for its credentials. This cannot be undone.": "parity.deletingAnOwnerRemovesTheAccountability_cdfad5",
- "Edit": "parity.edit_530164",
- "Email (optional)": "parity.emailOptional_5c10b5",
- "Owner deleted": "parity.ownerDeleted_079d61",
- "Owner updated": "parity.ownerUpdated_07b92f",
- "Save owner": "parity.saveOwner_b67638",
- "Type the exact owner name": "parity.typeTheExactOwnerName_1205b0"
+  "Delete": "parity.delete_f6fdbe",
+  "Delete owner": "parity.deleteOwner_b5f9bd",
+  "Deleting an owner removes the accountability record for its credentials. This cannot be undone.": "parity.deletingAnOwnerRemovesTheAccountability_cdfad5",
+  "Edit": "parity.edit_530164",
+  "Email (optional)": "parity.emailOptional_5c10b5",
+  "Owner deleted": "parity.ownerDeleted_079d61",
+  "Owner updated": "parity.ownerUpdated_07b92f",
+  "Save owner": "parity.saveOwner_b67638",
+  "Type the exact owner name": "parity.typeTheExactOwnerName_1205b0"
 }

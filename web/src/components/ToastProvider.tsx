@@ -73,7 +73,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 <p className="text-sm font-medium text-foreground">{record.title}</p>
                 {record.description && <p className="mt-1 text-sm text-muted-foreground">{record.description}</p>}
               </div>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => remove(record.id)} aria-label="Dismiss notification">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={() => remove(record.id)}
+                aria-label="Dismiss notification"
+              >
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </li>

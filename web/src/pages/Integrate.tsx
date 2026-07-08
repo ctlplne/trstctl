@@ -22,9 +22,9 @@ const sdks = [
 ];
 
 const iac = [
-  { name: "Terraform provider", reference: "terraform { required_providers { trstctl = { source = \"trstctl/trstctl\" } } }" },
+  { name: "Terraform provider", reference: 'terraform { required_providers { trstctl = { source = "trstctl/trstctl" } } }' },
   { name: "cert-manager issuer", reference: "kind: ClusterIssuer  # external-issuer: trstctl-acme" },
-  { name: "SPIRE upstream authority", reference: "UpstreamAuthority \"trstctl\" { ... }" },
+  { name: "SPIRE upstream authority", reference: 'UpstreamAuthority "trstctl" { ... }' },
 ];
 
 type ManifestType = "profile" | "discovery-source" | "routing-policy" | "install-values";
@@ -145,7 +145,10 @@ export function Integrate() {
     [manifestType, policies, profiles, selectedPolicy, selectedProfile, selectedSource, sources],
   );
   const parsedManifest = useMemo(() => parseManifest(manifestText), [manifestText]);
-  const driftRows = useMemo(() => (liveManifest && parsedManifest.value ? diffManifests(liveManifest, parsedManifest.value) : []), [liveManifest, parsedManifest.value]);
+  const driftRows = useMemo(
+    () => (liveManifest && parsedManifest.value ? diffManifests(liveManifest, parsedManifest.value) : []),
+    [liveManifest, parsedManifest.value],
+  );
   const driftCount = driftRows.filter((row) => row.status === "Drift").length;
   const exportHref = useMemo(() => `data:application/json;charset=utf-8,${encodeURIComponent(manifestText)}`, [manifestText]);
 
@@ -257,7 +260,11 @@ export function Integrate() {
             {manifestType !== "install-values" && (
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{t("integrate.gitops.liveObject")}</span>
-                <select className="ui-input" value={selectedObjectID(manifestType, profileID, sourceID, policyID)} onChange={(event) => updateSelectedObject(manifestType, event.target.value, setProfileID, setSourceID, setPolicyID)}>
+                <select
+                  className="ui-input"
+                  value={selectedObjectID(manifestType, profileID, sourceID, policyID)}
+                  onChange={(event) => updateSelectedObject(manifestType, event.target.value, setProfileID, setSourceID, setPolicyID)}
+                >
                   {objectOptions(manifestType, profiles, sources, policies).map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -416,7 +423,12 @@ function updateSelectedObject(
   if (type === "routing-policy") setPolicyID(id);
 }
 
-function objectOptions(type: ManifestType, profiles: Profile[], sources: DiscoverySource[], policies: NotificationRoutingPolicy[]): Array<{ value: string; label: string }> {
+function objectOptions(
+  type: ManifestType,
+  profiles: Profile[],
+  sources: DiscoverySource[],
+  policies: NotificationRoutingPolicy[],
+): Array<{ value: string; label: string }> {
   if (type === "profile") return profiles.map((profile) => ({ value: profile.id, label: `${profile.name} v${profile.version}` }));
   if (type === "discovery-source") return sources.map((source) => ({ value: source.id, label: `${source.name} (${source.kind})` }));
   if (type === "routing-policy") return policies.map((policy) => ({ value: policy.id, label: policy.name }));

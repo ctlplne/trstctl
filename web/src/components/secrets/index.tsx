@@ -81,9 +81,19 @@ export function ReferenceResolver() {
       <div className="flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-body">
           <span className="font-medium">Secret name</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="prod/db/url" className="rounded-control border border-border bg-background px-3 py-2" />
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="prod/db/url"
+            className="rounded-control border border-border bg-background px-3 py-2"
+          />
         </label>
-        <button type="button" onClick={() => void resolve()} disabled={busy || !name.trim()} className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60">
+        <button
+          type="button"
+          onClick={() => void resolve()}
+          disabled={busy || !name.trim()}
+          className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
+        >
           Resolve references
         </button>
       </div>
@@ -134,15 +144,27 @@ export function EnvDiffPanel({ secrets }: { secrets: SecretMeta[] }) {
   return (
     <SectionCard title="Environment diff" description="spot missing or changed secrets across two folders at a glance">
       <div className="mb-3 flex flex-wrap gap-2">
-        <select aria-label="Left environment" value={leftPath} onChange={(event) => setLeftPath(event.target.value)} className="min-h-9 rounded-control border border-border bg-background px-2 text-body">
+        <select
+          aria-label="Left environment"
+          value={leftPath}
+          onChange={(event) => setLeftPath(event.target.value)}
+          className="min-h-9 rounded-control border border-border bg-background px-2 text-body"
+        >
           {folders.map((folder) => (
             <option key={folder.path} value={folder.path}>
               {folder.path === "/" ? "(root)" : folder.path}
             </option>
           ))}
         </select>
-        <span aria-hidden="true" className="self-center text-muted-foreground">→</span>
-        <select aria-label="Right environment" value={rightPath} onChange={(event) => setRightPath(event.target.value)} className="min-h-9 rounded-control border border-border bg-background px-2 text-body">
+        <span aria-hidden="true" className="self-center text-muted-foreground">
+          →
+        </span>
+        <select
+          aria-label="Right environment"
+          value={rightPath}
+          onChange={(event) => setRightPath(event.target.value)}
+          className="min-h-9 rounded-control border border-border bg-background px-2 text-body"
+        >
           {folders.map((folder) => (
             <option key={folder.path} value={folder.path}>
               {folder.path === "/" ? "(root)" : folder.path}
@@ -152,13 +174,19 @@ export function EnvDiffPanel({ secrets }: { secrets: SecretMeta[] }) {
       </div>
       <div className="grid gap-1 font-mono text-caption">
         {diff.added.map((name) => (
-          <p key={`a-${name}`} className="text-status-success">+ {name}</p>
+          <p key={`a-${name}`} className="text-status-success">
+            + {name}
+          </p>
         ))}
         {diff.removed.map((name) => (
-          <p key={`r-${name}`} className="text-risk-critical">- {name}</p>
+          <p key={`r-${name}`} className="text-risk-critical">
+            - {name}
+          </p>
         ))}
         {diff.changed.map((name) => (
-          <p key={`c-${name}`} className="text-status-warning">~ {name}</p>
+          <p key={`c-${name}`} className="text-status-warning">
+            ~ {name}
+          </p>
         ))}
         {same ? <p className="text-muted-foreground">These environments are identical.</p> : null}
       </div>
@@ -205,13 +233,27 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
           </AttentionRow>
         ))}
       </AttentionList>
-      {revealed ? <p className="mt-2 break-all font-mono text-caption">v{revealed.version}: {revealed.value}</p> : null}
+      {revealed ? (
+        <p className="mt-2 break-all font-mono text-caption">
+          v{revealed.version}: {revealed.value}
+        </p>
+      ) : null}
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-body">
           <span className="font-medium">Recover to (timestamp)</span>
-          <input value={at} onChange={(event) => setAt(event.target.value)} placeholder="2026-01-01T00:00:00Z" className="rounded-control border border-border bg-background px-3 py-2" />
+          <input
+            value={at}
+            onChange={(event) => setAt(event.target.value)}
+            placeholder="2026-01-01T00:00:00Z"
+            className="rounded-control border border-border bg-background px-3 py-2"
+          />
         </label>
-        <button type="button" onClick={() => void recover()} disabled={!at.trim()} className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60">
+        <button
+          type="button"
+          onClick={() => void recover()}
+          disabled={!at.trim()}
+          className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
+        >
           Recover
         </button>
       </div>
@@ -261,19 +303,39 @@ export function SecretImport({ onImported }: { onImported?: (names: string[]) =>
       <div className="grid gap-2">
         <label className="grid gap-1 text-body">
           <span className="font-medium">Folder prefix</span>
-          <input value={prefix} onChange={(event) => setPrefix(event.target.value)} placeholder="prod/imported" className="rounded-control border border-border bg-background px-3 py-2" />
+          <input
+            value={prefix}
+            onChange={(event) => setPrefix(event.target.value)}
+            placeholder="prod/imported"
+            className="rounded-control border border-border bg-background px-3 py-2"
+          />
         </label>
         <label className="grid gap-1 text-body">
           <span className="font-medium">Key=value pairs</span>
-          <textarea value={text} onChange={(event) => setText(event.target.value)} rows={3} placeholder={"DB_URL=postgres://...\nAPI_KEY=..."} className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption" />
+          <textarea
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            rows={3}
+            placeholder={"DB_URL=postgres://...\nAPI_KEY=..."}
+            className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
+          />
         </label>
         <div>
-          <button type="button" onClick={() => void submit()} disabled={!text.trim()} className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60">
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!text.trim()}
+            className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
+          >
             Import
           </button>
         </div>
       </div>
-      {imported ? <p className="mt-2 text-caption text-status-success">Imported {imported.length} secrets: {imported.join(", ")}</p> : null}
+      {imported ? (
+        <p className="mt-2 text-caption text-status-success">
+          Imported {imported.length} secrets: {imported.join(", ")}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="mt-2 text-caption text-risk-critical">
           {error}

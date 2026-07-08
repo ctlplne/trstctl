@@ -142,10 +142,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
   }
 
   function edgeAppearance(edge: GraphEdge): { stroke: string; strokeWidth: number; opacity: number } {
-    const inImpact =
-      impactActive &&
-      (impactIds!.has(edge.from) || edge.from === focusId) &&
-      (impactIds!.has(edge.to) || edge.to === focusId);
+    const inImpact = impactActive && (impactIds!.has(edge.from) || edge.from === focusId) && (impactIds!.has(edge.to) || edge.to === focusId);
     if (impactActive) {
       if (inImpact) return { stroke: "hsl(var(--risk-critical) / 0.8)", strokeWidth: 2.4, opacity: 1 };
       return { stroke: "hsl(var(--muted-foreground) / 0.55)", strokeWidth: 1.5, opacity: 0.15 };
@@ -206,13 +203,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
               const midY = (from.y + to.y) / 2;
               return (
                 <g key={`${edge.from}-${edge.type}-${edge.to}`} data-testid="graph-edge" data-edge-type={edge.type} opacity={appearance.opacity}>
-                  <path
-                    d={edgePath(from, to)}
-                    fill="none"
-                    stroke={appearance.stroke}
-                    strokeWidth={appearance.strokeWidth}
-                    markerEnd="url(#graph-arrow)"
-                  />
+                  <path d={edgePath(from, to)} fill="none" stroke={appearance.stroke} strokeWidth={appearance.strokeWidth} markerEnd="url(#graph-arrow)" />
                   {labelled && (
                     <text x={midX} y={midY - 6} textAnchor="middle" className="fill-muted-foreground text-[10px]">
                       {graphEdgeTypeLabel(edge.type)}
@@ -246,7 +237,14 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
                   {isFocus && (
                     <circle cx={node.x} cy={node.y} r={24} fill="none" stroke="hsl(var(--risk-critical) / 0.6)" strokeWidth={1.5} strokeDasharray="4 3" />
                   )}
-                  <circle cx={node.x} cy={node.y} r={selected ? 19 : 16} fill={style.fill} stroke={stroke} strokeWidth={selected || affected || isFocus ? 3 : 2} />
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={selected ? 19 : 16}
+                    fill={style.fill}
+                    stroke={stroke}
+                    strokeWidth={selected || affected || isFocus ? 3 : 2}
+                  />
                   <text x={node.x} y={node.y + 3.5} textAnchor="middle" className="pointer-events-none fill-foreground text-[10px] font-semibold">
                     {nodeInitial(node)}
                   </text>
