@@ -32,6 +32,9 @@ type Config struct {
 	// AttestSigner, when set, countersigns every minted record with the signer's
 	// attestation key. INT-11 makes attestation mandatory with a frozen vector.
 	AttestSigner crypto.Signer
+	// Delegation, when set, enforces delegated-authority scope floors inside the
+	// signer before successor key generation.
+	Delegation minter.DelegationConstraint
 }
 
 // NewProductionMinter builds a fully-gated succession minter for attachment to the
@@ -68,6 +71,9 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 	}
 	if cfg.AttestSigner != nil {
 		opts = append(opts, minter.WithAttestation(cfg.AttestSigner, cfg.SignerID))
+	}
+	if cfg.Delegation != nil {
+		opts = append(opts, minter.WithDelegation(cfg.Delegation))
 	}
 	m, err := minter.New(unboundResolver{}, keygen, floors, opts...)
 	if err != nil {

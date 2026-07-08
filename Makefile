@@ -37,6 +37,7 @@ GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAG
 GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...
 GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...
 GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
+PCAS_E2E_RUN ?= TestINT20_FullStackPCASUserJourneys|TestINT20_PCASWASMParity_NoSkip|TestINT21_PCASOpsSLOBackpressureAndCrash
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
 ACTIONLINT_VERSION ?= v1.7.7
@@ -294,7 +295,13 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@# caller (the DEFERRED ee/agentid/verify RP SDK excepted). This is the lexical,
 	@# always-runnable tier; the whole-program RTA strong check is CI-only (-tags agidrta).
 	@# ee/... is outside GO_PACKAGES (the core Go gates skip ee/), so the floor is invoked
-	@# explicitly here, mirroring how pcas-caller-gate guards the PCAS family.
+	@# explicitly here. PCAS gets the same always-runnable caller/no-skip floors; its
+	@# heavyweight real-infra e2e runs through pcas-release-gate in CI/release.
+	@if [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
+		echo "!! WARNING: PCAS caller/no-skip gates NOT run by lint-partial; run 'make pcas-release-gate' for the full PCAS release gate."; \
+	else \
+		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) pcas-caller-gate pcas-no-skip-gate; \
+	fi
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate
 
 .PHONY: editions-gate
@@ -320,8 +327,20 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 	$(GO) test -tags trstctl_core $$pkgs
 
 .PHONY: pcas-caller-gate
-pcas-caller-gate: ## PCAS production-caller gate (INT-23): every shipped mechanism has a non-test caller; deferred ones are honestly still test-only
+pcas-caller-gate: ## PCAS production-caller gate (INT-23): every delivered mechanism has a non-test caller
 	@./scripts/pcas_prod_caller_gate.sh
+
+.PHONY: pcas-no-skip-gate no-skip-gate
+pcas-no-skip-gate: ## PCAS no-skip gate (INT-20): release-gate tests must not call t.Skip
+	@./scripts/pcas_no_skip_gate.sh
+
+no-skip-gate: pcas-no-skip-gate
+
+.PHONY: pcas-e2e-gate pcas-release-gate
+pcas-e2e-gate: ## PCAS full-stack e2e gate (INT-20): real PG + JetStream + signer subprocess + WASM parity
+	@$(GO) test ./ee/succession/conformance -run '$(PCAS_E2E_RUN)' -count=1 -timeout=10m
+
+pcas-release-gate: pcas-caller-gate pcas-no-skip-gate pcas-e2e-gate ## PCAS release gate (INT-23)
 
 .PHONY: agid-caller-gate agid-caller-gate-strong
 agid-caller-gate: ## AGID-INT-CALL production-caller FLOOR: every ee/agentid mechanism has a non-test caller; the ee/agentid/verify RP SDK is the DEFERRED exception

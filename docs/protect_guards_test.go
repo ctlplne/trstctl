@@ -1908,7 +1908,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 
 	eventsGo := read(t, "../internal/events/events.go")
 	for _, want := range []string{
-		"const DefaultSchemaVersion = 1",
+		"const DefaultSchemaVersion = eventspec.DefaultSchemaVersion",
 		"SchemaVersion int",
 		"`json:\"v,omitempty\"`",
 		"e.SchemaVersion = DefaultSchemaVersion",
@@ -2804,8 +2804,6 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	eventsGo := read(t, "../internal/events/events.go")
 	for _, want := range []string{
-		"type Event struct",
-		"TenantID string",
 		"SchemaVersion int",
 		"Storage:     jetstream.FileStorage",
 		"Replicas:    replicas",
@@ -2819,6 +2817,15 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	} {
 		if !strings.Contains(eventsGo, want) {
 			t.Errorf("SPINE-101: events.go no longer contains %q; durable event-log proof weakened", want)
+		}
+	}
+	eventSpecGo := read(t, "../internal/eventspec/eventspec.go")
+	for _, want := range []string{
+		"type Event struct",
+		"TenantID string",
+	} {
+		if !strings.Contains(eventSpecGo, want) {
+			t.Errorf("SPINE-101: eventspec.go no longer contains %q; durable event envelope proof weakened", want)
 		}
 	}
 	for _, forbidden := range []string{"MaxAge:", "MaxMsgs:", "MaxBytes:"} {

@@ -103,6 +103,7 @@ type Config struct {
 	Plugins                   Plugins       `json:"plugins"`
 	HA                        HA            `json:"ha"`
 	Federation                Federation    `json:"federation"`
+	PCAS                      PCAS          `json:"pcas"`
 	AI                        AI            `json:"ai"`
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
@@ -240,6 +241,71 @@ type FederationPeer struct {
 	ID      string `json:"id,omitempty"`
 	Region  string `json:"region,omitempty"`
 	NATSURL string `json:"nats_url,omitempty"`
+}
+
+// PCAS configures production wiring for patent-covered credential algorithm
+// succession mechanisms. It is off by default and is enabled by the EE attach
+// seam only when the licensed feature is present.
+type PCAS struct {
+	Delegation  PCASDelegation  `json:"delegation"`
+	Recovery    PCASRecovery    `json:"recovery"`
+	Federation  PCASFederation  `json:"federation"`
+	KEM         PCASKEM         `json:"kem"`
+	Checkpoints PCASCheckpoints `json:"checkpoints"`
+	Monitors    PCASMonitors    `json:"monitors"`
+	Retirement  PCASRetirement  `json:"retirement"`
+	Issuer      PCASIssuer      `json:"issuer"`
+	Staple      PCASStaple      `json:"staple"`
+}
+
+type PCASDelegation struct {
+	Enabled         bool   `json:"enabled,omitempty"`
+	RefreshInterval string `json:"refresh_interval,omitempty"`
+	SignerStoreDir  string `json:"signer_store_dir,omitempty"`
+}
+
+type PCASRecovery struct {
+	Enabled           bool   `json:"enabled,omitempty"`
+	OutboxTopic       string `json:"outbox_topic,omitempty"`
+	WorkerConcurrency int    `json:"worker_concurrency,omitempty"`
+}
+
+type PCASFederation struct {
+	Enabled           bool   `json:"enabled,omitempty"`
+	OutboxTopic       string `json:"outbox_topic,omitempty"`
+	WorkerConcurrency int    `json:"worker_concurrency,omitempty"`
+}
+
+type PCASKEM struct {
+	Enabled           bool   `json:"enabled,omitempty"`
+	OutboxTopic       string `json:"outbox_topic,omitempty"`
+	WorkerConcurrency int    `json:"worker_concurrency,omitempty"`
+}
+
+type PCASCheckpoints struct {
+	Enabled          bool   `json:"enabled,omitempty"`
+	Interval         string `json:"interval,omitempty"`
+	SigningKeyHandle string `json:"signing_key_handle,omitempty"`
+	SigningAlgorithm string `json:"signing_algorithm,omitempty"`
+}
+
+type PCASMonitors struct {
+	Enabled  bool   `json:"enabled,omitempty"`
+	Interval string `json:"interval,omitempty"`
+}
+
+type PCASRetirement struct {
+	Enabled        bool   `json:"enabled,omitempty"`
+	Interval       string `json:"interval,omitempty"`
+	ValidityWindow string `json:"validity_window,omitempty"`
+}
+
+type PCASIssuer struct {
+	Enabled bool `json:"enabled,omitempty"`
+}
+
+type PCASStaple struct {
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 func (f Federation) IntervalDuration() (time.Duration, error) {
@@ -1603,6 +1669,17 @@ func Default() *Config {
 			CertFile:              "data/ca/issuing-ca.crt",
 			CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
 		},
+		PCAS: PCAS{
+			Delegation:  PCASDelegation{Enabled: false, RefreshInterval: "30s", SignerStoreDir: "data/signer/pcas"},
+			Recovery:    PCASRecovery{Enabled: false, OutboxTopic: "pcas.recovery-request", WorkerConcurrency: 1},
+			Federation:  PCASFederation{Enabled: false, OutboxTopic: "pcas.federation-import", WorkerConcurrency: 1},
+			KEM:         PCASKEM{Enabled: false, OutboxTopic: "pcas.kem-rewrap", WorkerConcurrency: 1},
+			Checkpoints: PCASCheckpoints{Enabled: false, Interval: "1m", SigningKeyHandle: "pcas-checkpoint-signer", SigningAlgorithm: string(crypto.ECDSAP256)},
+			Monitors:    PCASMonitors{Enabled: false, Interval: "1m"},
+			Retirement:  PCASRetirement{Enabled: false, Interval: "1m", ValidityWindow: "24h"},
+			Issuer:      PCASIssuer{Enabled: false},
+			Staple:      PCASStaple{Enabled: false},
+		},
 		// Served issuance protocols (EXC-WIRE-02). Enrollment protocols are opt-in
 		// until explicitly tenant-bound. That keeps a fresh binary from exposing
 		// public enrollment routes that later fail or mint into a blank tenant (AN-1).
@@ -1806,6 +1883,33 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	if peer.ID != "" || peer.Region != "" || peer.NATSURL != "" {
 		c.Federation.Peers = []FederationPeer{peer}
 	}
+	applyPCASEnv(getenv, &c.PCAS)
+}
+
+func applyPCASEnv(getenv func(string) string, p *PCAS) {
+	setBool(getenv, "TRSTCTL_PCAS_DELEGATION_ENABLED", &p.Delegation.Enabled)
+	setString(getenv, "TRSTCTL_PCAS_DELEGATION_REFRESH_INTERVAL", &p.Delegation.RefreshInterval)
+	setString(getenv, "TRSTCTL_PCAS_DELEGATION_SIGNER_STORE_DIR", &p.Delegation.SignerStoreDir)
+	setBool(getenv, "TRSTCTL_PCAS_RECOVERY_ENABLED", &p.Recovery.Enabled)
+	setString(getenv, "TRSTCTL_PCAS_RECOVERY_OUTBOX_TOPIC", &p.Recovery.OutboxTopic)
+	setInt(getenv, "TRSTCTL_PCAS_RECOVERY_WORKER_CONCURRENCY", &p.Recovery.WorkerConcurrency)
+	setBool(getenv, "TRSTCTL_PCAS_FEDERATION_ENABLED", &p.Federation.Enabled)
+	setString(getenv, "TRSTCTL_PCAS_FEDERATION_OUTBOX_TOPIC", &p.Federation.OutboxTopic)
+	setInt(getenv, "TRSTCTL_PCAS_FEDERATION_WORKER_CONCURRENCY", &p.Federation.WorkerConcurrency)
+	setBool(getenv, "TRSTCTL_PCAS_KEM_ENABLED", &p.KEM.Enabled)
+	setString(getenv, "TRSTCTL_PCAS_KEM_OUTBOX_TOPIC", &p.KEM.OutboxTopic)
+	setInt(getenv, "TRSTCTL_PCAS_KEM_WORKER_CONCURRENCY", &p.KEM.WorkerConcurrency)
+	setBool(getenv, "TRSTCTL_PCAS_CHECKPOINTS_ENABLED", &p.Checkpoints.Enabled)
+	setString(getenv, "TRSTCTL_PCAS_CHECKPOINTS_INTERVAL", &p.Checkpoints.Interval)
+	setString(getenv, "TRSTCTL_PCAS_CHECKPOINTS_SIGNING_KEY_HANDLE", &p.Checkpoints.SigningKeyHandle)
+	setString(getenv, "TRSTCTL_PCAS_CHECKPOINTS_SIGNING_ALGORITHM", &p.Checkpoints.SigningAlgorithm)
+	setBool(getenv, "TRSTCTL_PCAS_MONITORS_ENABLED", &p.Monitors.Enabled)
+	setString(getenv, "TRSTCTL_PCAS_MONITORS_INTERVAL", &p.Monitors.Interval)
+	setBool(getenv, "TRSTCTL_PCAS_RETIREMENT_ENABLED", &p.Retirement.Enabled)
+	setString(getenv, "TRSTCTL_PCAS_RETIREMENT_INTERVAL", &p.Retirement.Interval)
+	setString(getenv, "TRSTCTL_PCAS_RETIREMENT_VALIDITY_WINDOW", &p.Retirement.ValidityWindow)
+	setBool(getenv, "TRSTCTL_PCAS_ISSUER_ENABLED", &p.Issuer.Enabled)
+	setBool(getenv, "TRSTCTL_PCAS_STAPLE_ENABLED", &p.Staple.Enabled)
 }
 
 func applyManagedKeysEnv(getenv func(string) string, m *ManagedKeys) {
@@ -2160,6 +2264,7 @@ func (c *Config) Validate() error {
 		validateGovernanceConfig,
 		validateHAConfig,
 		validateFederationConfig,
+		validatePCASConfig,
 	} {
 		errs = append(errs, validate(c)...)
 	}
@@ -2957,6 +3062,63 @@ func validateFederationConfig(c *Config) []error {
 	} {
 		if d.val <= 0 {
 			errs = append(errs, fmt.Errorf("federation.%s must be positive", d.name))
+		}
+	}
+	return errs
+}
+
+func validatePCASConfig(c *Config) []error {
+	var errs []error
+	parsePositive := func(name, value string, enabled bool) {
+		if strings.TrimSpace(value) == "" {
+			if enabled {
+				errs = append(errs, fmt.Errorf("%s is required when enabled", name))
+			}
+			return
+		}
+		d, err := time.ParseDuration(value)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s %q is invalid: %w", name, value, err))
+			return
+		}
+		if d <= 0 {
+			errs = append(errs, fmt.Errorf("%s must be positive", name))
+		}
+	}
+	parsePositive("pcas.delegation.refresh_interval", c.PCAS.Delegation.RefreshInterval, c.PCAS.Delegation.Enabled)
+	parsePositive("pcas.checkpoints.interval", c.PCAS.Checkpoints.Interval, c.PCAS.Checkpoints.Enabled)
+	parsePositive("pcas.monitors.interval", c.PCAS.Monitors.Interval, c.PCAS.Monitors.Enabled)
+	parsePositive("pcas.retirement.interval", c.PCAS.Retirement.Interval, c.PCAS.Retirement.Enabled)
+	parsePositive("pcas.retirement.validity_window", c.PCAS.Retirement.ValidityWindow, c.PCAS.Retirement.Enabled)
+	if c.PCAS.Delegation.Enabled && strings.TrimSpace(c.PCAS.Delegation.SignerStoreDir) == "" {
+		errs = append(errs, errors.New("pcas.delegation.signer_store_dir is required when pcas.delegation.enabled is true"))
+	}
+	if c.PCAS.Checkpoints.Enabled {
+		if strings.TrimSpace(c.PCAS.Checkpoints.SigningKeyHandle) == "" {
+			errs = append(errs, errors.New("pcas.checkpoints.signing_key_handle is required when pcas.checkpoints.enabled is true"))
+		}
+		if strings.TrimSpace(c.PCAS.Checkpoints.SigningAlgorithm) == "" {
+			errs = append(errs, errors.New("pcas.checkpoints.signing_algorithm is required when pcas.checkpoints.enabled is true"))
+		}
+	}
+	for _, worker := range []struct {
+		enabled     bool
+		topic       string
+		concurrency int
+		name        string
+	}{
+		{c.PCAS.Recovery.Enabled, c.PCAS.Recovery.OutboxTopic, c.PCAS.Recovery.WorkerConcurrency, "pcas.recovery"},
+		{c.PCAS.Federation.Enabled, c.PCAS.Federation.OutboxTopic, c.PCAS.Federation.WorkerConcurrency, "pcas.federation"},
+		{c.PCAS.KEM.Enabled, c.PCAS.KEM.OutboxTopic, c.PCAS.KEM.WorkerConcurrency, "pcas.kem"},
+	} {
+		if !worker.enabled {
+			continue
+		}
+		if strings.TrimSpace(worker.topic) == "" {
+			errs = append(errs, fmt.Errorf("%s.outbox_topic is required when enabled", worker.name))
+		}
+		if worker.concurrency <= 0 {
+			errs = append(errs, fmt.Errorf("%s.worker_concurrency must be positive when enabled", worker.name))
 		}
 	}
 	return errs

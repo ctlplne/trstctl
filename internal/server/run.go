@@ -315,6 +315,9 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 		"--kek", cfg.Secrets.KEKFile,
 		"--auth-secret", cfg.Signer.AuthSecretFile,
 	}
+	if cfg.License.File != "" {
+		args = append(args, "--license", cfg.License.File)
+	}
 	if cfg.Signer.AllowInsecureDevNonLinux {
 		args = append(args, "--allow-insecure-dev-nonlinux")
 	}
@@ -666,11 +669,71 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),
+			startRuntimeWorker(workCtx, srv.RunLicensedBackgroundWorkers),
 		}
 		<-workCtx.Done()
 		for _, worker := range workers {
 			worker.Stop()
 		}
+	}
+}
+
+func (s *Server) RunLicensedBackgroundWorkers(ctx context.Context) {
+	if len(s.licensedBackgroundWorkers) == 0 {
+		<-ctx.Done()
+		return
+	}
+	workers := make([]runtimeWorker, 0, len(s.licensedBackgroundWorkers))
+	for _, worker := range s.licensedBackgroundWorkers {
+		w := worker
+		workers = append(workers, startRuntimeWorker(ctx, func(workerCtx context.Context) {
+			for workerCtx.Err() == nil {
+				start := time.Now()
+				err := w.Run(workerCtx)
+				if workerCtx.Err() != nil {
+					return
+				}
+				s.observeLicensedBackgroundWorker(w.Name(), start, err)
+				if err != nil && s.logger != nil {
+					s.logger.Error("licensed background worker stopped; restarting",
+						slog.String("worker", w.Name()), slog.String("error", err.Error()))
+				}
+				select {
+				case <-workerCtx.Done():
+					return
+				case <-time.After(time.Second):
+				}
+			}
+		}))
+	}
+	<-ctx.Done()
+	for _, worker := range workers {
+		worker.Stop()
+	}
+}
+
+func (s *Server) observeLicensedBackgroundWorker(name string, start time.Time, err error) {
+	feature, action, ok := licensedWorkerTelemetry(name)
+	if !ok || s.featureMetrics == nil {
+		return
+	}
+	outcome := observ.OutcomeSuccess
+	if err != nil {
+		outcome = observ.OutcomeError
+	}
+	s.featureMetrics.Observe(feature, action, outcome, time.Since(start).Seconds())
+}
+
+func licensedWorkerTelemetry(name string) (feature, action string, ok bool) {
+	switch name {
+	case "pcas.checkpoints":
+		return "pcas_checkpoint", "worker", true
+	case "pcas.misissuance":
+		return "pcas_monitor", "worker", true
+	case "pcas.retirement":
+		return "pcas_retirement", "worker", true
+	default:
+		return "", "", false
 	}
 }
 
@@ -726,6 +789,9 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 	}
 	if srv.apiAISurfaceServed() {
 		logger.Info("served AI/RCA/NL-query/MCP surface mounted (read-only, tenant-scoped)")
+	}
+	for _, worker := range srv.licensedBackgroundWorkers {
+		logger.Info("licensed background worker mounted", slog.String("worker", worker.Name()))
 	}
 }
 

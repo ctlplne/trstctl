@@ -27,6 +27,7 @@ type LicensedAPIOptionsDeps struct {
 	Log               *events.Log
 	Outbox            *orchestrator.Outbox
 	SignerKeyStoreDir string
+	KEMCustody        KEMCustody
 }
 
 type ProtocolLeafIssuer func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte) ([]byte, error)
@@ -51,12 +52,22 @@ type IssuanceGate interface {
 	GatedIssue(ctx context.Context, req signing.IssuancePreconditions, alg crypto.Algorithm) (signing.IssuanceDecision, error)
 }
 
+type KEMCustody interface {
+	SignerForHandle(ctx context.Context, handle string) (*signing.RemoteSigner, error)
+	SignerForHandleWithPurpose(ctx context.Context, handle string, purpose signing.KeyPurpose) (*signing.RemoteSigner, error)
+	GenerateKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string) (*signing.RemoteSigner, error)
+	GenerateSuccessorKEM(ctx context.Context, handle string, alg signing.KEMAlgorithm) (signing.KEMPublicKey, error)
+	Decapsulate(ctx context.Context, handle string, ciphertext []byte) ([]byte, error)
+	ZeroizeKey(ctx context.Context, handle string) error
+}
+
 // Compile-time proof the out-of-process signer client satisfies both licensed-outbox
 // signer seams, so internal/server can wire *signing.Client into LicensedOutboxDeps.Minter
 // and LicensedOutboxDeps.IssuanceGate directly (a signature drift is a build error).
 var (
 	_ SuccessionMinter = (*signing.Client)(nil)
 	_ IssuanceGate     = (*signing.Client)(nil)
+	_ KEMCustody       = (*signing.Client)(nil)
 )
 
 type LicensedOutboxDeps struct {
@@ -64,6 +75,10 @@ type LicensedOutboxDeps struct {
 	Log               *events.Log
 	Idempotency       *orchestrator.Idempotency
 	IssueProtocolLeaf ProtocolLeafIssuer
+	// FeatureObserver records low-cardinality feature/action/outcome/duration signals
+	// on served licensed outbox hot paths. Labels must be closed, non-tenant, and
+	// non-secret so the shared metrics endpoint never leaks AN-1/AN-8 material.
+	FeatureObserver func(feature, action, outcome string, seconds float64)
 	// SignerKeyStoreDir is the shared signer provisioning floor. Licensed handlers may
 	// write public, non-secret trust material here for the isolated signer to read without
 	// linking SQL, NATS, or HTTP.
@@ -77,6 +92,10 @@ type LicensedOutboxDeps struct {
 	// uses it to drive a REAL gated issuance over the signer transport on an
 	// agentid.issue-chain-bound message, so the control plane requests but cannot forge.
 	IssuanceGate IssuanceGate
+	// KEMCustody is the out-of-process signer as PCAS encapsulation-key custody: it
+	// generates the private key inside the signer, decapsulates only through the
+	// signer RPC, and zeroizes on retirement. nil means KEM re-wrap fails closed.
+	KEMCustody KEMCustody
 }
 
 type LicensedOutboxHandler interface {

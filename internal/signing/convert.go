@@ -114,6 +114,7 @@ func mintRequestFromProto(req *signerpb.MintSuccessorRequest) (MintRequest, erro
 		Authorization:            req.GetAuthorization(),
 		BreakGlass:               req.GetBreakGlass(),
 		Attestation:              req.GetAttestation(),
+		DelegationScope:          req.GetDelegationScope(),
 		NotBefore:                req.GetNotBefore(),
 		NotAfter:                 req.GetNotAfter(),
 	}, nil
@@ -145,6 +146,7 @@ func mintRequestToProto(req MintRequest) *signerpb.MintSuccessorRequest {
 		Authorization:            req.Authorization,
 		BreakGlass:               req.BreakGlass,
 		Attestation:              req.Attestation,
+		DelegationScope:          req.DelegationScope,
 		NotBefore:                req.NotBefore,
 		NotAfter:                 req.NotAfter,
 	}

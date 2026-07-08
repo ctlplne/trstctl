@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -159,7 +160,9 @@ func serveProductionSigner(t *testing.T) *signing.Client {
 	sock := filepath.Join(dir, "s.sock")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go func() { _ = signing.ServeServer(ctx, sock, svc) }()
+	go func() {
+		_ = signing.ServeServerWithOptions(ctx, sock, svc, signing.ServeOptions{AllowInsecureDevNonLinux: runtime.GOOS != "linux"})
+	}()
 
 	client, err := signing.Dial(sock)
 	if err != nil {

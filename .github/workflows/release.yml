@@ -68,6 +68,9 @@ jobs:
       - name: Test (race + coverage floors against the tagged ref)
         run: make test
 
+      - name: PCAS release gate
+        run: make pcas-release-gate
+
   required-checks:
     name: required checks / live CI preflight
     runs-on: ubuntu-latest

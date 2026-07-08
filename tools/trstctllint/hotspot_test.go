@@ -233,6 +233,14 @@ func servedSurfaceSizeAllowlist() map[string]servedSurfaceSizeAllowlistEntry {
 			owner:     "ENGHEALTH/web",
 			rationale: "Discovery page pre-dates this secrets-surface remediation and remains tracked by the served-surface budget.",
 		},
+		"web/src/pages/CAHierarchy.tsx": {
+			owner:     "ENGHEALTH/web",
+			rationale: "CA hierarchy workflow remains a single served page while the authority-table and leaf-issuance split is tracked separately.",
+		},
+		"web/src/pages/Secrets.tsx": {
+			owner:     "ENGHEALTH/web",
+			rationale: "Secrets workflow remains a single served page while store, engines, scan, and sync panels are split by follow-up remediation.",
+		},
 	}
 }
 

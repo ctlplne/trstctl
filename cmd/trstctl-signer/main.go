@@ -108,19 +108,24 @@ func main() {
 		defer authz.Destroy()
 		opts = append(opts, signing.WithAuthorizer(authz))
 	}
-	opts = appendEEOptions(opts, lic, *keystore)
-
 	// With a key store, persist keys sealed at rest so a restart preserves the
 	// issuing CA instead of silently rotating it (R3.2). Without one, keys are
 	// in-memory only.
 	var srv *signing.Server
+	var wrapper seal.KeyWrapper
+	cleanup := func() {}
 	if *keystore != "" {
-		wrapper, cleanup, err := signerKeystoreWrapper(*kekFile, *kmsProvider, *kmsKeyRef, *kmsWrapCommand, *kmsTimeout)
+		var err error
+		wrapper, cleanup, err = signerKeystoreWrapper(*kekFile, *kmsProvider, *kmsKeyRef, *kmsWrapCommand, *kmsTimeout)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trstctl-signer: configure key store wrapper: %v\n", err)
 			os.Exit(1)
 		}
-		defer cleanup()
+	}
+	defer cleanup()
+	opts = appendEEOptions(opts, lic, *keystore, wrapper)
+	if *keystore != "" {
+		var err error
 		srv, err = signing.NewPersistentServer(signing.NewKeyStore(*keystore, wrapper), opts...)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trstctl-signer: open key store: %v\n", err)

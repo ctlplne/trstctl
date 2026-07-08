@@ -24,6 +24,7 @@ import (
 	eeprovider "trstctl.com/trstctl/ee/provider"
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eesuccessionapi "trstctl.com/trstctl/ee/succession/api"
+	eesuccessionbackground "trstctl.com/trstctl/ee/succession/background"
 	eesuccessionorch "trstctl.com/trstctl/ee/succession/orchestrator"
 	eesuccessionstore "trstctl.com/trstctl/ee/succession/store"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
@@ -127,6 +128,9 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		// published; pcas.rp-publish is acknowledged. This makes the succession worker a
 		// real production caller — a POST to request-succession now yields a record.
 		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eesuccessionorch.NewLicensedOutboxFactory())
+		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, eesuccessionbackground.NewWorkers(eesuccessionbackground.Options{
+			Store: deps.Store, Log: deps.Log, Signer: deps.Signer, PCAS: attachConfig(cfg).PCAS,
+		})...)
 		if log != nil {
 			log.Info("Enterprise PCAS attached", slog.String("feature", string(license.FeaturePCAS)))
 		}

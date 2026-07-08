@@ -107,6 +107,12 @@ jobs:
       - name: Lint
         run: make lint
 
+      # PCAS INT-20/23: prove every delivered PCAS mechanism has a production
+      # caller and the flagship e2e runs over real PostgreSQL, embedded
+      # NATS/JetStream, a cross-process signer, and WASM RP parity.
+      - name: PCAS release gate
+        run: make pcas-release-gate
+
       - name: Editions gate
         run: make editions-gate
 

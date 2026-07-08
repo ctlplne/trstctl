@@ -6,7 +6,7 @@
 # t.Skip, so the full-stack conformance/e2e path (INT-20) cannot silently degrade
 # to in-memory when real PostgreSQL / NATS / WASM are absent.
 #
-# ADVISORY until INT-20 provisions the gate infra in CI; BLOCKING thereafter.
+# BLOCKING: INT-20/23 require real gate tests to fail, not skip, when infra is missing.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 

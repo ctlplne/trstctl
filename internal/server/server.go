@@ -82,6 +82,14 @@ type FederationCheckpointStore interface {
 // spine. Nil means no Enterprise HA/federation worker is mounted.
 type FederationFactory func(context.Context, *events.Log, *projections.Projector, FederationCheckpointStore, *slog.Logger) (FederationWorker, error)
 
+// BackgroundWorker is a licensed background loop mounted through the tagged EE
+// attach seam. Core owns only lifecycle and supervision; the implementation lives
+// outside core.
+type BackgroundWorker interface {
+	Name() string
+	Run(context.Context) error
+}
+
 // Deps are the wired dependencies of the serving control plane. Tests inject an
 // embedded store/log and an in-process signer; production wires the real ones.
 type Deps struct {
@@ -147,6 +155,7 @@ type Deps struct {
 	EnablePCAS                bool                 // Enterprise PCAS: proof-carrying algorithm succession (ee/succession); the succession API/orchestrator wiring keys off this
 	LicensedAPIOptionsFactory LicensedAPIOptionsFactory
 	LicensedOutboxFactory     LicensedOutboxFactory
+	LicensedBackgroundWorkers []BackgroundWorker
 	LicensedLeafSigner        LicensedLeafSigner
 	LicensedCSRInspector      LicensedCSRInspector
 	SignTimeout               time.Duration // per-issuance signer deadline (slow → fail closed)
@@ -557,7 +566,8 @@ type Server struct {
 	// notifications is the served notification dispatcher. It fans notification.*
 	// outbox rows to operator-configured channels; nil preserves the prior no-channel
 	// behavior for notification rows while still letting producers enqueue intents.
-	notifications *notify.Dispatcher
+	notifications             *notify.Dispatcher
+	licensedBackgroundWorkers []BackgroundWorker
 
 	logger     *slog.Logger
 	registry   *observ.Registry
@@ -678,18 +688,19 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		}
 	}
 	s := &Server{
-		store:                d.Store,
-		log:                  d.Log,
-		signer:               d.Signer,
-		signAuthz:            signProvider,
-		signTO:               d.SignTimeout,
-		obHandler:            d.OutboxHandler,
-		leafProfile:          d.LeafProfile,
-		licensedLeafSigner:   d.LicensedLeafSigner,
-		licensedCSRInspector: d.LicensedCSRInspector,
-		registry:             observ.NewRegistry(),
-		egress:               d.EgressGuard,
-		telemetry:            d.TelemetryReporter,
+		store:                     d.Store,
+		log:                       d.Log,
+		signer:                    d.Signer,
+		signAuthz:                 signProvider,
+		signTO:                    d.SignTimeout,
+		obHandler:                 d.OutboxHandler,
+		leafProfile:               d.LeafProfile,
+		licensedLeafSigner:        d.LicensedLeafSigner,
+		licensedCSRInspector:      d.LicensedCSRInspector,
+		licensedBackgroundWorkers: d.LicensedBackgroundWorkers,
+		registry:                  observ.NewRegistry(),
+		egress:                    d.EgressGuard,
+		telemetry:                 d.TelemetryReporter,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",
@@ -841,6 +852,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.LicensedAPIOptionsFactory != nil {
 		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
+			KEMCustody: s.kemCustody(),
 		})
 		if err != nil {
 			return nil, nil, err
@@ -1085,9 +1097,11 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		licensed, err = d.LicensedOutboxFactory(LicensedOutboxDeps{
 			Store: d.Store, Log: d.Log, Idempotency: idem,
 			IssueProtocolLeaf: s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
+			FeatureObserver:   s.featureObserver(),
 			SignerKeyStoreDir: d.SignerKeyStoreDir,
 			Minter:            s.successionMinter(),
 			IssuanceGate:      s.issuanceGate(),
+			KEMCustody:        s.kemCustody(),
 		})
 		if err != nil {
 			return err
@@ -1101,6 +1115,13 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
 	}
 	return nil
+}
+
+func (s *Server) featureObserver() func(feature, action, outcome string, seconds float64) {
+	if s.featureMetrics == nil {
+		return nil
+	}
+	return s.featureMetrics.Hook()
 }
 
 // successionMinter returns the out-of-process signer as a PCAS succession minter for
@@ -1121,6 +1142,13 @@ func (s *Server) successionMinter() SuccessionMinter {
 // signer transport (the signer verifies the chain and mints inside the boundary; only
 // public material returns).
 func (s *Server) issuanceGate() IssuanceGate {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+func (s *Server) kemCustody() KEMCustody {
 	if s.signer == nil {
 		return nil
 	}

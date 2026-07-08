@@ -51,6 +51,626 @@
           "signature"
         ]
       },
+      "PCASAsyncRequest": {
+        "type": "object",
+        "properties": {
+          "identity_id": {
+            "type": "string"
+          },
+          "queued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "status",
+          "queued_at"
+        ]
+      },
+      "PCASCheckpoint": {
+        "type": "object",
+        "properties": {
+          "checkpoint": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "log_root": {
+            "type": "string"
+          },
+          "log_tree_size": {
+            "type": "integer"
+          },
+          "signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "epoch",
+          "signature"
+        ]
+      },
+      "PCASDelegationFloorRequest": {
+        "type": "object",
+        "properties": {
+          "epoch_floor": {
+            "type": "integer"
+          },
+          "scope_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope_id",
+          "epoch_floor"
+        ]
+      },
+      "PCASDelegationScope": {
+        "type": "object",
+        "properties": {
+          "epoch_floor": {
+            "type": "integer"
+          },
+          "parent_scope_id": {
+            "type": "string"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "scope_id",
+          "epoch_floor",
+          "status"
+        ]
+      },
+      "PCASDelegationScopeRequest": {
+        "type": "object",
+        "properties": {
+          "epoch_floor": {
+            "type": "integer"
+          },
+          "parent_scope_id": {
+            "type": "string"
+          },
+          "scope_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope_id"
+        ]
+      },
+      "PCASFederationImportRequest": {
+        "type": "object",
+        "properties": {
+          "foreign_chain": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "foreign_deployment_id": {
+            "type": "string"
+          },
+          "foreign_genesis": {
+            "type": "string"
+          },
+          "foreign_trust_root_der": {
+            "type": "string"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "local_authority_handle": {
+            "type": "string"
+          },
+          "local_base_epoch": {
+            "type": "integer"
+          },
+          "local_deployment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "foreign_deployment_id",
+          "local_deployment_id",
+          "local_authority_handle",
+          "identity_id",
+          "foreign_trust_root_der",
+          "foreign_genesis"
+        ]
+      },
+      "PCASIssueLeafRequest": {
+        "type": "object",
+        "properties": {
+          "csr_der": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "rotation_version": {
+            "type": "integer"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issuer_id",
+          "csr_der"
+        ]
+      },
+      "PCASIssueStapledLeafRequest": {
+        "type": "object",
+        "properties": {
+          "checkpoint_identity_id": {
+            "type": "string"
+          },
+          "csr_der": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issuer_id",
+          "csr_der"
+        ]
+      },
+      "PCASIssuedLeaf": {
+        "type": "object",
+        "properties": {
+          "cert_der": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "rotation_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issuer_id",
+          "identity_id",
+          "epoch",
+          "cert_der",
+          "issued_at"
+        ]
+      },
+      "PCASIssuerAuthority": {
+        "type": "object",
+        "properties": {
+          "ca_key_handle": {
+            "type": "string"
+          },
+          "current_epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "issuer_id",
+          "identity_id",
+          "status"
+        ]
+      },
+      "PCASIssuerAuthorityRequest": {
+        "type": "object",
+        "properties": {
+          "ca_cert_der": {
+            "type": "string"
+          },
+          "ca_key_handle": {
+            "type": "string"
+          },
+          "current_epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer_id",
+          "identity_id",
+          "ca_key_handle",
+          "ca_cert_der"
+        ]
+      },
+      "PCASKEMRewrapRequest": {
+        "type": "object",
+        "properties": {
+          "identity_id": {
+            "type": "string"
+          },
+          "kem_algorithm": {
+            "type": "string"
+          },
+          "predecessor_epoch": {
+            "type": "integer"
+          },
+          "predecessor_handle": {
+            "type": "string"
+          },
+          "signing_algorithm": {
+            "type": "string"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "successor_kem_handle": {
+            "type": "string"
+          },
+          "successor_sign_handle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "predecessor_handle",
+          "successor_sign_handle",
+          "successor_kem_handle",
+          "signing_algorithm",
+          "kem_algorithm"
+        ]
+      },
+      "PCASMisissuanceList": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "detected_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "epoch": {
+                  "type": "integer"
+                },
+                "identity_id": {
+                  "type": "string"
+                },
+                "proof": {
+                  "type": "string"
+                },
+                "record_a_digest": {
+                  "type": "string"
+                },
+                "record_b_digest": {
+                  "type": "string"
+                },
+                "signer_a": {
+                  "type": "string"
+                },
+                "signer_b": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "identity_id",
+                "epoch",
+                "record_a_digest",
+                "record_b_digest"
+              ]
+            }
+          }
+        },
+        "required": [
+          "findings",
+          "count"
+        ]
+      },
+      "PCASPostureReport": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "introducing_record_digest": {
+            "type": "string"
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reporter_public_der": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "tenant_id",
+          "algorithm",
+          "epoch",
+          "signature"
+        ]
+      },
+      "PCASRecoveryPolicy": {
+        "type": "object",
+        "properties": {
+          "identity_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "identity_id",
+          "status"
+        ]
+      },
+      "PCASRecoveryPolicyRequest": {
+        "type": "object",
+        "properties": {
+          "identity_id": {
+            "type": "string"
+          },
+          "roster": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "integer"
+          },
+          "trust_root_der": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "threshold",
+          "roster"
+        ]
+      },
+      "PCASRecoveryRequest": {
+        "type": "object",
+        "properties": {
+          "authorization": {
+            "type": "string"
+          },
+          "deployment_scope": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "predecessor_algorithm": {
+            "type": "string"
+          },
+          "predecessor_epoch": {
+            "type": "integer"
+          },
+          "predecessor_public_der": {
+            "type": "string"
+          },
+          "successor_handle": {
+            "type": "string"
+          },
+          "target_algorithm": {
+            "type": "string"
+          },
+          "trust_root_der": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "target_algorithm",
+          "successor_handle",
+          "epoch",
+          "trust_root_der",
+          "authorization"
+        ]
+      },
+      "PCASRetirementPolicy": {
+        "type": "object",
+        "properties": {
+          "identity_id": {
+            "type": "string"
+          },
+          "predecessor_epoch": {
+            "type": "integer"
+          },
+          "predecessor_handle": {
+            "type": "string"
+          },
+          "rewrap_complete": {
+            "type": "boolean"
+          },
+          "roster": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validity_window_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "identity_id",
+          "predecessor_epoch",
+          "threshold",
+          "status"
+        ]
+      },
+      "PCASRetirementPolicyRequest": {
+        "type": "object",
+        "properties": {
+          "identity_id": {
+            "type": "string"
+          },
+          "predecessor_epoch": {
+            "type": "integer"
+          },
+          "predecessor_handle": {
+            "type": "string"
+          },
+          "roster": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "integer"
+          },
+          "validity_window_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "identity_id",
+          "predecessor_epoch",
+          "threshold",
+          "roster"
+        ]
+      },
+      "PCASRewrapStatus": {
+        "type": "object",
+        "properties": {
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "completed_stages": {
+                  "type": "integer"
+                },
+                "job_id": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "total_stages": {
+                  "type": "integer"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "job_id",
+                "stage",
+                "status"
+              ]
+            }
+          },
+          "predecessor_epoch": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "identity_id",
+          "jobs",
+          "complete",
+          "checked_at"
+        ]
+      },
       "PCASSuccessionAck": {
         "type": "object",
         "properties": {
@@ -106,6 +726,9 @@
         "type": "object",
         "properties": {
           "credential_type": {
+            "type": "string"
+          },
+          "delegation_scope": {
             "type": "string"
           },
           "deployment_scope": {
@@ -188,6 +811,443 @@
           }
         },
         "summary": "Fetch an identity's succession chain for offline relying-party verification"
+      }
+    },
+    "/api/v1/pcas/checkpoints": {
+      "get": {
+        "operationId": "getPCASCheckpoint",
+        "parameters": [
+          {
+            "description": "stable identity identifier",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Fetch the latest signed PCAS epoch checkpoint for an identity"
+      }
+    },
+    "/api/v1/pcas/delegation/floors": {
+      "post": {
+        "operationId": "raisePCASDelegationFloor",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASDelegationFloorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Raise a signer-enforced PCAS delegation epoch floor"
+      }
+    },
+    "/api/v1/pcas/delegation/scopes": {
+      "post": {
+        "operationId": "configurePCASDelegationScope",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASDelegationScopeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Configure a signer-enforced PCAS delegation scope"
+      }
+    },
+    "/api/v1/pcas/federation/imports": {
+      "post": {
+        "operationId": "requestPCASFederationImport",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASFederationImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "success"
+          }
+        },
+        "summary": "Queue a PCAS federation bridge import"
+      }
+    },
+    "/api/v1/pcas/issuers": {
+      "post": {
+        "operationId": "registerPCASIssuerAuthority",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASIssuerAuthorityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Register an issuer authority's current PCAS epoch"
+      }
+    },
+    "/api/v1/pcas/issuers/leaf": {
+      "post": {
+        "operationId": "issuePCASIssuerLeaf",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASIssueLeafRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "success"
+          }
+        },
+        "summary": "Issue a real X.509 leaf carrying the issuer PCAS epoch tuple"
+      }
+    },
+    "/api/v1/pcas/kem/rewraps": {
+      "post": {
+        "operationId": "requestPCASKEMRewrap",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASKEMRewrapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "success"
+          }
+        },
+        "summary": "Queue a signer-custodied PCAS KEM re-wrap"
+      }
+    },
+    "/api/v1/pcas/misissuance": {
+      "get": {
+        "operationId": "listPCASMisissuance",
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "List signer-detected PCAS misissuance findings"
+      }
+    },
+    "/api/v1/pcas/posture": {
+      "get": {
+        "operationId": "getPCASPostureReport",
+        "parameters": [
+          {
+            "description": "stable identity identifier",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Fetch a signed standalone PCAS posture report for an identity"
+      }
+    },
+    "/api/v1/pcas/recovery/policies": {
+      "post": {
+        "operationId": "configurePCASRecoveryPolicy",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASRecoveryPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Configure a threshold recovery policy for an identity"
+      }
+    },
+    "/api/v1/pcas/recovery/requests": {
+      "post": {
+        "operationId": "requestPCASRecovery",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASRecoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "success"
+          }
+        },
+        "summary": "Queue a threshold-authenticated PCAS recovery mint"
+      }
+    },
+    "/api/v1/pcas/retirement": {
+      "get": {
+        "operationId": "getPCASRetirementStatus",
+        "parameters": [
+          {
+            "description": "stable identity identifier",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "predecessor epoch being retired",
+            "in": "query",
+            "name": "predecessor_epoch",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Fetch PCAS retirement status for an identity epoch"
+      }
+    },
+    "/api/v1/pcas/retirement/policies": {
+      "post": {
+        "operationId": "configurePCASRetirementPolicy",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASRetirementPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Configure the RP acknowledgement quorum for PCAS retirement"
+      }
+    },
+    "/api/v1/pcas/rewrap": {
+      "get": {
+        "operationId": "getPCASRewrapStatus",
+        "parameters": [
+          {
+            "description": "stable identity identifier",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "predecessor epoch; 0 returns all stages",
+            "in": "query",
+            "name": "predecessor_epoch",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Fetch PCAS KEM re-wrap status for an identity"
+      }
+    },
+    "/api/v1/pcas/staple/leaf": {
+      "post": {
+        "operationId": "issuePCASStapledLeaf",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASIssueStapledLeafRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "success"
+          }
+        },
+        "summary": "Issue a real X.509 leaf carrying a PCAS succession attachment"
       }
     },
     "/api/v1/pcas/successions": {

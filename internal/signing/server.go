@@ -60,6 +60,11 @@ type Server struct {
 	// after the gate approved.
 	issuanceKeyOp IssuanceKeyOp
 
+	// kemCustody, when non-nil, is the attached KEM private-key custody surface for
+	// PCAS re-wrap. KEM keys are deliberately separate from signing keys: Sign cannot
+	// address them, and the only private-key operation exposed is Decapsulate.
+	kemCustody KEMCustody
+
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
 	// (RED-003). The signer uses it as verifier material; production token minting
@@ -302,6 +307,9 @@ func (s *Server) Shutdown() {
 	for id, held := range s.keys {
 		held.signer.Destroy()
 		delete(s.keys, id)
+	}
+	if s.kemCustody != nil {
+		s.kemCustody.DestroyAll()
 	}
 }
 

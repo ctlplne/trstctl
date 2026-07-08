@@ -64,6 +64,20 @@ var FeatureTelemetryManifest = []FeatureSignal{
 	{FeatureID: "F6", Feature: "deployment", Actions: []string{"deploy", "renew"}},
 	{FeatureID: "F2", Feature: "discovery", Actions: []string{"start_run"}},
 	{FeatureID: "F1", Feature: "inventory", Actions: []string{"ingest"}},
+	// PCAS is Enterprise-mounted through the tagged edition seam, but the metric
+	// contract is core-owned: the binary exposes these same low-cardinality labels
+	// whether the operation begins at HTTP, outbox delivery, or a leader worker.
+	{FeatureID: "PCAS", Feature: "pcas_succession", Actions: []string{"request", "chain", "ack", "mint", "publish"}},
+	{FeatureID: "PCAS", Feature: "pcas_delegation", Actions: []string{"scope", "floor"}},
+	{FeatureID: "PCAS", Feature: "pcas_recovery", Actions: []string{"policy", "request", "mint"}},
+	{FeatureID: "PCAS", Feature: "pcas_federation", Actions: []string{"import"}},
+	{FeatureID: "PCAS", Feature: "pcas_kem", Actions: []string{"rewrap", "rewrap_status"}},
+	{FeatureID: "PCAS", Feature: "pcas_issuer", Actions: []string{"register", "issue_leaf"}},
+	{FeatureID: "PCAS", Feature: "pcas_staple", Actions: []string{"issue_leaf"}},
+	{FeatureID: "PCAS", Feature: "pcas_retirement", Actions: []string{"policy", "status", "worker"}},
+	{FeatureID: "PCAS", Feature: "pcas_checkpoint", Actions: []string{"get", "worker"}},
+	{FeatureID: "PCAS", Feature: "pcas_posture", Actions: []string{"get"}},
+	{FeatureID: "PCAS", Feature: "pcas_monitor", Actions: []string{"misissuance", "worker"}},
 	// The signer is a separate HTTP-less process (AN-4); its up/restart signals are
 	// published via SignerMetrics on this same registry. It is listed here so the
 	// manifest is the single place an operator reads "which features have signals",

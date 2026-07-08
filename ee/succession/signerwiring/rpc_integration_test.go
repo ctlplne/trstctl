@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -180,7 +181,9 @@ func serveSigner(t *testing.T, svc *signing.Server) *signing.Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	errc := make(chan error, 1)
-	go func() { errc <- signing.ServeServer(ctx, sock, svc) }()
+	go func() {
+		errc <- signing.ServeServerWithOptions(ctx, sock, svc, signing.ServeOptions{AllowInsecureDevNonLinux: runtime.GOOS != "linux"})
+	}()
 
 	client, err := signing.Dial(sock)
 	if err != nil {

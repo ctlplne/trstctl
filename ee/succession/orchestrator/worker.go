@@ -22,6 +22,12 @@ import (
 // consumes it.
 const RequestDestination = "pcas.succession-request"
 
+const (
+	RecoveryRequestDestination  = "pcas.recovery-request"
+	FederationImportDestination = "pcas.federation-import"
+	KEMRewrapDestination        = "pcas.kem-rewrap"
+)
+
 // SuccessionRequestWorker is the outbox handler for pcas.succession-request messages
 // (INT-03). It turns a queued request into a real minted, recorded, published
 // succession: it resolves the identity's current algorithm-epoch and its per-epoch
@@ -47,6 +53,7 @@ type requestPayload struct {
 	TargetAlgorithm string `json:"target_algorithm"`
 	PolicyRef       string `json:"policy_ref"`
 	DeploymentScope string `json:"deployment_scope"`
+	DelegationScope string `json:"delegation_scope"`
 }
 
 // Deliver implements the core outbox Handler (internal/orchestrator.Handler) for
@@ -84,6 +91,7 @@ func (w *SuccessionRequestWorker) Handle(ctx context.Context, tenantID string, p
 		AssertedPredecessorEpoch: epoch,
 		TargetAlgorithm:          crypto.Algorithm(p.TargetAlgorithm),
 		PolicyRef:                p.PolicyRef,
+		DelegationScope:          p.DelegationScope,
 	}
 
 	// Idempotency: the request id renders at-least-once delivery exactly-once. Fall

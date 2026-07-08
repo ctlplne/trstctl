@@ -45,6 +45,23 @@ service SignerService {
   // material (claims 1/12/49): the control plane can request, but cannot forge.
   rpc MintSuccessor(MintSuccessorRequest) returns (MintSuccessorResponse);
 
+  // GenerateSuccessorKEM creates a KEM private key inside the signer and returns
+  // only the encapsulation public key. The KEM private key is not a signing key:
+  // it is held in a signer-side KEM custody store and can be used only through the
+  // KEM-specific RPCs below.
+  rpc GenerateSuccessorKEM(GenerateSuccessorKEMRequest) returns (GenerateSuccessorKEMResponse);
+
+  // Decapsulate derives a shared secret from a signer-held KEM private key and a
+  // ciphertext. The private key never leaves the signer. The returned shared
+  // secret is byte-native secret material for immediate re-wrap use and callers
+  // must wipe it after use.
+  rpc Decapsulate(DecapsulateRequest) returns (DecapsulateResponse);
+
+  // ZeroizeKey removes a key from signer custody. It applies to KEM custody first
+  // and then falls through to signing-key custody, so retirement can destroy either
+  // class through one PCAS RPC.
+  rpc ZeroizeKey(ZeroizeKeyRequest) returns (ZeroizeKeyResponse);
+
   // GatedIssue drives a gated agent-credential issuance INSIDE the signer over the
   // transport (AGID-INT-WIRE core). It mirrors MintSuccessor: the request carries only
   // the opaque issuance preconditions (a self-describing delegation chain / attestation /
@@ -215,6 +232,7 @@ message MintSuccessorRequest {
   bytes attestation = 11;    // successor-custodian attestation evidence (optional)
   int64 not_before = 12;
   int64 not_after = 13;
+  string delegation_scope = 14; // delegated-authority scope id bound into the PCAS commitment
 }
 
 // MintSuccessorResponse mirrors internal/signing.MintResult (INT-01). It carries
@@ -226,6 +244,32 @@ message MintSuccessorResponse {
   bytes successor_public_key = 3; // PKIX/DER (SubjectPublicKeyInfo)
   bytes encoded_record = 4;       // opaque dual-signed succession record
 }
+
+message GenerateSuccessorKEMRequest {
+  string handle = 1;
+  Algorithm algorithm = 2;
+}
+
+message GenerateSuccessorKEMResponse {
+  string handle = 1;
+  Algorithm algorithm = 2;
+  bytes public_key = 3;
+}
+
+message DecapsulateRequest {
+  string handle = 1;
+  bytes ciphertext = 2;
+}
+
+message DecapsulateResponse {
+  bytes shared_secret = 1;
+}
+
+message ZeroizeKeyRequest {
+  string handle = 1;
+}
+
+message ZeroizeKeyResponse {}
 
 // GatedIssueRequest mirrors internal/signing.IssuancePreconditions (AGID-04a seam). It
 // carries NO private key material: the delegation chain, attestation evidence, and

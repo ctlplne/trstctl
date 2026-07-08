@@ -37,6 +37,9 @@ const (
 var testDSN string
 
 func TestMain(m *testing.M) {
+	if os.Getenv("PCAS_API_SKIP_PG") == "1" {
+		os.Exit(m.Run())
+	}
 	dir, err := os.MkdirTemp("", "trstctl-pcas-api-pg")
 	if err != nil {
 		panic(err)
@@ -106,6 +109,66 @@ func (f *fakeService) RecordAck(_ context.Context, _ string, req succapi.AckRequ
 	defer f.mu.Unlock()
 	f.lastAck = req
 	return succapi.AckResponse{AckID: "ack-1", IdentityID: req.IdentityID, Epoch: req.Epoch, RelyingParty: req.RelyingParty, RecordedAt: time.Now()}, nil
+}
+
+func (f *fakeService) ConfigureDelegationScope(_ context.Context, _ string, req succapi.DelegationScopeRequest) (succapi.DelegationScopeResponse, error) {
+	return succapi.DelegationScopeResponse{ScopeID: req.ScopeID, ParentScopeID: req.ParentScopeID, EpochFloor: req.EpochFloor, Status: "configured", UpdatedAt: time.Now()}, nil
+}
+
+func (f *fakeService) RaiseDelegationFloor(_ context.Context, _ string, req succapi.DelegationFloorRequest) (succapi.DelegationScopeResponse, error) {
+	return succapi.DelegationScopeResponse{ScopeID: req.ScopeID, EpochFloor: req.EpochFloor, Status: "raised", UpdatedAt: time.Now()}, nil
+}
+
+func (f *fakeService) ConfigureRecoveryPolicy(_ context.Context, _ string, req succapi.RecoveryPolicyRequest) (succapi.RecoveryPolicyResponse, error) {
+	return succapi.RecoveryPolicyResponse{IdentityID: req.IdentityID, Status: "configured", UpdatedAt: time.Now()}, nil
+}
+
+func (f *fakeService) RequestRecovery(_ context.Context, _ string, req succapi.RecoveryRequest) (succapi.AsyncRequestResponse, error) {
+	return succapi.AsyncRequestResponse{RequestID: "recovery-1", Status: "queued", QueuedAt: time.Now(), IdentityID: req.IdentityID}, nil
+}
+
+func (f *fakeService) RequestFederationImport(_ context.Context, _ string, req succapi.FederationImportRequest) (succapi.AsyncRequestResponse, error) {
+	return succapi.AsyncRequestResponse{RequestID: "federation-1", Status: "queued", QueuedAt: time.Now(), Target: req.ForeignDeploymentID, IdentityID: req.IdentityID}, nil
+}
+
+func (f *fakeService) RequestKEMRewrap(_ context.Context, _ string, req succapi.KEMRewrapRequest) (succapi.AsyncRequestResponse, error) {
+	return succapi.AsyncRequestResponse{RequestID: "kem-1", Status: "queued", QueuedAt: time.Now(), IdentityID: req.IdentityID}, nil
+}
+
+func (f *fakeService) RegisterIssuerAuthority(_ context.Context, _ string, req succapi.IssuerAuthorityRequest) (succapi.IssuerAuthorityResponse, error) {
+	return succapi.IssuerAuthorityResponse{IssuerID: req.IssuerID, IdentityID: req.IdentityID, CurrentEpoch: req.CurrentEpoch, CAKeyHandle: req.CAKeyHandle, Status: "registered", UpdatedAt: time.Now()}, nil
+}
+
+func (f *fakeService) IssueIssuerLeaf(_ context.Context, _ string, req succapi.IssueLeafRequest) (succapi.IssueLeafResponse, error) {
+	return succapi.IssueLeafResponse{IssuerID: req.IssuerID, IdentityID: identity, Epoch: 1, RotationVersion: req.RotationVersion, CertDER: []byte("cert"), IssuedAt: time.Now()}, nil
+}
+
+func (f *fakeService) IssueStapledLeaf(_ context.Context, _ string, req succapi.IssueStapledLeafRequest) (succapi.IssueLeafResponse, error) {
+	return succapi.IssueLeafResponse{IssuerID: req.IssuerID, IdentityID: identity, Epoch: 1, CertDER: []byte("cert"), IssuedAt: time.Now()}, nil
+}
+
+func (f *fakeService) RewrapStatus(_ context.Context, _ string, identityID string, predecessorEpoch uint64) (succapi.RewrapStatusResponse, error) {
+	return succapi.RewrapStatusResponse{IdentityID: identityID, PredecessorEpoch: predecessorEpoch, Jobs: []succapi.RewrapJobState{}, Complete: true, CheckedAt: time.Now()}, nil
+}
+
+func (f *fakeService) ConfigureRetirementPolicy(_ context.Context, _ string, req succapi.RetirementPolicyRequest) (succapi.RetirementPolicyResponse, error) {
+	return succapi.RetirementPolicyResponse{IdentityID: req.IdentityID, PredecessorEpoch: req.PredecessorEpoch, Threshold: req.Threshold, Roster: req.Roster, Status: "active", UpdatedAt: time.Now()}, nil
+}
+
+func (f *fakeService) RetirementStatus(_ context.Context, _ string, identityID string, predecessorEpoch uint64) (succapi.RetirementPolicyResponse, bool, error) {
+	return succapi.RetirementPolicyResponse{IdentityID: identityID, PredecessorEpoch: predecessorEpoch, Threshold: 1, Status: "active", UpdatedAt: time.Now(), RewrapComplete: true}, true, nil
+}
+
+func (f *fakeService) LatestCheckpoint(_ context.Context, _, identityID string) (succapi.CheckpointResponse, bool, error) {
+	return succapi.CheckpointResponse{IdentityID: identityID, Epoch: 1, IssuedAt: time.Now()}, true, nil
+}
+
+func (f *fakeService) PostureReport(_ context.Context, _, identityID string) (succapi.PostureReportResponse, bool, error) {
+	return succapi.PostureReportResponse{IdentityID: identityID, TenantID: tenantA, Algorithm: "ECDSA-P256", Epoch: 1, Signature: []byte("sig"), IssuedAt: time.Now()}, true, nil
+}
+
+func (f *fakeService) ListMisissuance(context.Context, string) (succapi.MisissuanceListResponse, error) {
+	return succapi.MisissuanceListResponse{Findings: []succapi.MisissuanceResponse{}, Count: 0}, nil
 }
 
 var pcasRole = authz.Role{Name: "pcas-operator", Permissions: []authz.Permission{authz.CertsWrite, authz.CertsRead}}
