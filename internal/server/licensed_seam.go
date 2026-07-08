@@ -15,3 +15,4 @@ type SuccessionMinter = editionseam.SuccessionMinter
 type IssuanceGate = editionseam.IssuanceGate
 type KEMCustody = editionseam.KEMCustody
 type ProtocolLeafIssuer = editionseam.ProtocolLeafIssuer
+type AdmissionHook = editionseam.AdmissionHook

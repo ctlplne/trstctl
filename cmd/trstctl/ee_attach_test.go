@@ -147,6 +147,39 @@ func TestAttachEEAgentDelegationRequiresEnterpriseLicense(t *testing.T) {
 	}
 }
 
+func TestAttachEEReconcileRequiresEnterpriseLicense(t *testing.T) {
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, license.Community(), deps); err != nil {
+		t.Fatalf("community attachEE: %v", err)
+	}
+	if hasBackgroundWorker(deps, "xrec.rounds") {
+		t.Fatal("community attach must not mount XREC round scheduler")
+	}
+	if len(deps.LicensedProjectionOptions) != 0 {
+		t.Fatal("community attach must not register XREC drift projections")
+	}
+
+	deps = &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, enterpriseLicense(t), deps); err != nil {
+		t.Fatalf("enterprise attachEE: %v", err)
+	}
+	if !hasBackgroundWorker(deps, "xrec.rounds") {
+		t.Fatal("enterprise reconcile feature did not mount the XREC round scheduler")
+	}
+	if len(deps.LicensedProjectionOptions) == 0 {
+		t.Fatal("enterprise reconcile feature did not register the XREC drift projection")
+	}
+}
+
+func hasBackgroundWorker(deps *server.Deps, name string) bool {
+	for _, worker := range deps.LicensedBackgroundWorkers {
+		if worker != nil && worker.Name() == name {
+			return true
+		}
+	}
+	return false
+}
+
 func enterpriseLicense(t *testing.T) *license.Manager {
 	t.Helper()
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()

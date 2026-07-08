@@ -11,9 +11,12 @@ import (
 	agiddelegation "trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/ee/agentid/reach"
 	eepqc "trstctl.com/trstctl/ee/pqc"
+	xrecdigest "trstctl.com/trstctl/ee/reconcile/digest"
+	xrecplan "trstctl.com/trstctl/ee/reconcile/plan"
 	pcasdelegation "trstctl.com/trstctl/ee/succession/delegation"
 	"trstctl.com/trstctl/ee/succession/kemcustody"
 	"trstctl.com/trstctl/ee/succession/signerwiring"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/signing"
@@ -63,6 +66,31 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 		os.Exit(1)
 	}
 	opts = append(opts, signing.WithIssuanceGate(gate))
+
+	xrecSigner, err := xrecdigest.NewArtifactSigner(xrecdigest.ArtifactSignerConfig{SignerID: "trstctl-signer"})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: build XREC artifact signer: %v\n", err)
+		os.Exit(1)
+	}
+	opts = append(opts, signing.WithArtifactSigner(xrecSigner))
+	xrecPlanKeys, err := xrecplan.LoadTrustedPlanKeys(floorDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: load XREC plan trust: %v\n", err)
+		os.Exit(1)
+	}
+	xrecPlanGate, err := xrecplan.NewOperationGate(xrecplan.GateConfig{
+		TrustedPlanKeys: xrecPlanKeys,
+		TrustedWitnessKeys: map[string]crypto.PublicKey{
+			xrecSigner.WitnessKeyID(): xrecSigner.WitnessPublic(),
+		},
+		ArtifactSigner: xrecSigner,
+		SignerID:       "trstctl-signer",
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: build XREC operation gate: %v\n", err)
+		os.Exit(1)
+	}
+	opts = append(opts, signing.WithOperationGate(xrecPlanGate))
 
 	// The after-approval issuance KEY OP (AGID-INT-WIRE): the second half of the gated
 	// mint. On an APPROVED decision from the gate above, it generates the agent credential

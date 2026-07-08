@@ -33,6 +33,8 @@ const (
 	SignerService_GenerateKey_FullMethodName          = "/trstctl.signing.v1.SignerService/GenerateKey"
 	SignerService_GetPublicKey_FullMethodName         = "/trstctl.signing.v1.SignerService/GetPublicKey"
 	SignerService_Sign_FullMethodName                 = "/trstctl.signing.v1.SignerService/Sign"
+	SignerService_SignArtifact_FullMethodName         = "/trstctl.signing.v1.SignerService/SignArtifact"
+	SignerService_VerifyOperation_FullMethodName      = "/trstctl.signing.v1.SignerService/VerifyOperation"
 	SignerService_DestroyKey_FullMethodName           = "/trstctl.signing.v1.SignerService/DestroyKey"
 	SignerService_Health_FullMethodName               = "/trstctl.signing.v1.SignerService/Health"
 	SignerService_MintSuccessor_FullMethodName        = "/trstctl.signing.v1.SignerService/MintSuccessor"
@@ -60,6 +62,17 @@ type SignerServiceClient interface {
 	GetPublicKey(ctx context.Context, in *GetPublicKeyRequest, opts ...grpc.CallOption) (*GetPublicKeyResponse, error)
 	// Sign produces a signature over a message using the keyed handle.
 	Sign(ctx context.Context, in *SignRequest, opts ...grpc.CallOption) (*SignResponse, error)
+	// SignArtifact asks an attached edition-neutral artifact signer to sign a
+	// canonical artifact body inside this isolated signer process. Core treats the
+	// artifact body as opaque bytes and names only generic routing metadata; the
+	// concrete artifact semantics live in the attached edition implementation.
+	SignArtifact(ctx context.Context, in *SignArtifactRequest, opts ...grpc.CallOption) (*SignArtifactResponse, error)
+	// VerifyOperation asks an attached edition-neutral operation gate to verify an
+	// opaque public operation request inside the signer. Core names only generic
+	// routing metadata and opaque evidence/precondition bytes; the attached
+	// edition implementation owns the semantics and may return an opaque signed
+	// refusal record. No private key material crosses this RPC.
+	VerifyOperation(ctx context.Context, in *OperationRequest, opts ...grpc.CallOption) (*OperationResponse, error)
 	// DestroyKey zeroizes and forgets a key handle. It is idempotent.
 	DestroyKey(ctx context.Context, in *DestroyKeyRequest, opts ...grpc.CallOption) (*DestroyKeyResponse, error)
 	// Health reports liveness and readiness. It returns no secret material.
@@ -135,6 +148,26 @@ func (c *signerServiceClient) Sign(ctx context.Context, in *SignRequest, opts ..
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SignResponse)
 	err := c.cc.Invoke(ctx, SignerService_Sign_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) SignArtifact(ctx context.Context, in *SignArtifactRequest, opts ...grpc.CallOption) (*SignArtifactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignArtifactResponse)
+	err := c.cc.Invoke(ctx, SignerService_SignArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) VerifyOperation(ctx context.Context, in *OperationRequest, opts ...grpc.CallOption) (*OperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OperationResponse)
+	err := c.cc.Invoke(ctx, SignerService_VerifyOperation_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +262,17 @@ type SignerServiceServer interface {
 	GetPublicKey(context.Context, *GetPublicKeyRequest) (*GetPublicKeyResponse, error)
 	// Sign produces a signature over a message using the keyed handle.
 	Sign(context.Context, *SignRequest) (*SignResponse, error)
+	// SignArtifact asks an attached edition-neutral artifact signer to sign a
+	// canonical artifact body inside this isolated signer process. Core treats the
+	// artifact body as opaque bytes and names only generic routing metadata; the
+	// concrete artifact semantics live in the attached edition implementation.
+	SignArtifact(context.Context, *SignArtifactRequest) (*SignArtifactResponse, error)
+	// VerifyOperation asks an attached edition-neutral operation gate to verify an
+	// opaque public operation request inside the signer. Core names only generic
+	// routing metadata and opaque evidence/precondition bytes; the attached
+	// edition implementation owns the semantics and may return an opaque signed
+	// refusal record. No private key material crosses this RPC.
+	VerifyOperation(context.Context, *OperationRequest) (*OperationResponse, error)
 	// DestroyKey zeroizes and forgets a key handle. It is idempotent.
 	DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error)
 	// Health reports liveness and readiness. It returns no secret material.
@@ -288,6 +332,12 @@ func (UnimplementedSignerServiceServer) GetPublicKey(context.Context, *GetPublic
 }
 func (UnimplementedSignerServiceServer) Sign(context.Context, *SignRequest) (*SignResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Sign not implemented")
+}
+func (UnimplementedSignerServiceServer) SignArtifact(context.Context, *SignArtifactRequest) (*SignArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignArtifact not implemented")
+}
+func (UnimplementedSignerServiceServer) VerifyOperation(context.Context, *OperationRequest) (*OperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyOperation not implemented")
 }
 func (UnimplementedSignerServiceServer) DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DestroyKey not implemented")
@@ -381,6 +431,42 @@ func _SignerService_Sign_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SignerServiceServer).Sign(ctx, req.(*SignRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_SignArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).SignArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_SignArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).SignArtifact(ctx, req.(*SignArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_VerifyOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).VerifyOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_VerifyOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).VerifyOperation(ctx, req.(*OperationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -529,6 +615,14 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Sign",
 			Handler:    _SignerService_Sign_Handler,
+		},
+		{
+			MethodName: "SignArtifact",
+			Handler:    _SignerService_SignArtifact_Handler,
+		},
+		{
+			MethodName: "VerifyOperation",
+			Handler:    _SignerService_VerifyOperation_Handler,
 		},
 		{
 			MethodName: "DestroyKey",

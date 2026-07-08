@@ -334,7 +334,7 @@ func (x HealthResponse_Status) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HealthResponse_Status.Descriptor instead.
 func (HealthResponse_Status) EnumDescriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{10, 0}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{14, 0}
 }
 
 // KeyHandle is an opaque, unguessable reference to a private key held by the
@@ -759,6 +759,316 @@ func (x *SignResponse) GetSignature() []byte {
 	return nil
 }
 
+type SignArtifactRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind is an edition-neutral routing name such as "state-digest". Core does
+	// not interpret the artifact beyond validating that it is present.
+	Kind        string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	TenantId    string `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	AuthorityId string `protobuf:"bytes,3,opt,name=authority_id,json=authorityId,proto3" json:"authority_id,omitempty"`
+	// key_id lets the attached signer select a stable artifact-signing key when
+	// it supports more than one. Empty lets the attached signer choose a default.
+	KeyId string `protobuf:"bytes,4,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	// payload is the canonical artifact body to sign. It is metadata/evidence, not
+	// private key material.
+	Payload       []byte `protobuf:"bytes,5,opt,name=payload,proto3" json:"payload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignArtifactRequest) Reset() {
+	*x = SignArtifactRequest{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignArtifactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignArtifactRequest) ProtoMessage() {}
+
+func (x *SignArtifactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignArtifactRequest.ProtoReflect.Descriptor instead.
+func (*SignArtifactRequest) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SignArtifactRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SignArtifactRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *SignArtifactRequest) GetAuthorityId() string {
+	if x != nil {
+		return x.AuthorityId
+	}
+	return ""
+}
+
+func (x *SignArtifactRequest) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+func (x *SignArtifactRequest) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+type SignArtifactResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	Algorithm     Algorithm              `protobuf:"varint,2,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	PublicKey     []byte                 `protobuf:"bytes,3,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	Signature     []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignArtifactResponse) Reset() {
+	*x = SignArtifactResponse{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignArtifactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignArtifactResponse) ProtoMessage() {}
+
+func (x *SignArtifactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignArtifactResponse.ProtoReflect.Descriptor instead.
+func (*SignArtifactResponse) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SignArtifactResponse) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+func (x *SignArtifactResponse) GetAlgorithm() Algorithm {
+	if x != nil {
+		return x.Algorithm
+	}
+	return Algorithm_ALGORITHM_UNSPECIFIED
+}
+
+func (x *SignArtifactResponse) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *SignArtifactResponse) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+type OperationRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	TenantId       string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	Operation      string                 `protobuf:"bytes,2,opt,name=operation,proto3" json:"operation,omitempty"`
+	SubjectRef     string                 `protobuf:"bytes,3,opt,name=subject_ref,json=subjectRef,proto3" json:"subject_ref,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	Preconditions  []byte                 `protobuf:"bytes,5,opt,name=preconditions,proto3" json:"preconditions,omitempty"`
+	Evidence       []byte                 `protobuf:"bytes,6,opt,name=evidence,proto3" json:"evidence,omitempty"`
+	Context        []byte                 `protobuf:"bytes,7,opt,name=context,proto3" json:"context,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *OperationRequest) Reset() {
+	*x = OperationRequest{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OperationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OperationRequest) ProtoMessage() {}
+
+func (x *OperationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OperationRequest.ProtoReflect.Descriptor instead.
+func (*OperationRequest) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *OperationRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *OperationRequest) GetOperation() string {
+	if x != nil {
+		return x.Operation
+	}
+	return ""
+}
+
+func (x *OperationRequest) GetSubjectRef() string {
+	if x != nil {
+		return x.SubjectRef
+	}
+	return ""
+}
+
+func (x *OperationRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *OperationRequest) GetPreconditions() []byte {
+	if x != nil {
+		return x.Preconditions
+	}
+	return nil
+}
+
+func (x *OperationRequest) GetEvidence() []byte {
+	if x != nil {
+		return x.Evidence
+	}
+	return nil
+}
+
+func (x *OperationRequest) GetContext() []byte {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+type OperationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Approved      bool                   `protobuf:"varint,1,opt,name=approved,proto3" json:"approved,omitempty"`
+	RefusalRecord []byte                 `protobuf:"bytes,2,opt,name=refusal_record,json=refusalRecord,proto3" json:"refusal_record,omitempty"`
+	Authorization []byte                 `protobuf:"bytes,3,opt,name=authorization,proto3" json:"authorization,omitempty"`
+	Evidence      []byte                 `protobuf:"bytes,4,opt,name=evidence,proto3" json:"evidence,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OperationResponse) Reset() {
+	*x = OperationResponse{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OperationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OperationResponse) ProtoMessage() {}
+
+func (x *OperationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OperationResponse.ProtoReflect.Descriptor instead.
+func (*OperationResponse) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *OperationResponse) GetApproved() bool {
+	if x != nil {
+		return x.Approved
+	}
+	return false
+}
+
+func (x *OperationResponse) GetRefusalRecord() []byte {
+	if x != nil {
+		return x.RefusalRecord
+	}
+	return nil
+}
+
+func (x *OperationResponse) GetAuthorization() []byte {
+	if x != nil {
+		return x.Authorization
+	}
+	return nil
+}
+
+func (x *OperationResponse) GetEvidence() []byte {
+	if x != nil {
+		return x.Evidence
+	}
+	return nil
+}
+
 type DestroyKeyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Handle        *KeyHandle             `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
@@ -768,7 +1078,7 @@ type DestroyKeyRequest struct {
 
 func (x *DestroyKeyRequest) Reset() {
 	*x = DestroyKeyRequest{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[7]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -780,7 +1090,7 @@ func (x *DestroyKeyRequest) String() string {
 func (*DestroyKeyRequest) ProtoMessage() {}
 
 func (x *DestroyKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[7]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -793,7 +1103,7 @@ func (x *DestroyKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestroyKeyRequest.ProtoReflect.Descriptor instead.
 func (*DestroyKeyRequest) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{7}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DestroyKeyRequest) GetHandle() *KeyHandle {
@@ -811,7 +1121,7 @@ type DestroyKeyResponse struct {
 
 func (x *DestroyKeyResponse) Reset() {
 	*x = DestroyKeyResponse{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[8]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -823,7 +1133,7 @@ func (x *DestroyKeyResponse) String() string {
 func (*DestroyKeyResponse) ProtoMessage() {}
 
 func (x *DestroyKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[8]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -836,7 +1146,7 @@ func (x *DestroyKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestroyKeyResponse.ProtoReflect.Descriptor instead.
 func (*DestroyKeyResponse) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{8}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{12}
 }
 
 type HealthRequest struct {
@@ -847,7 +1157,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[9]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -859,7 +1169,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[9]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -872,7 +1182,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{9}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{13}
 }
 
 type HealthResponse struct {
@@ -884,7 +1194,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[10]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -896,7 +1206,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[10]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -909,7 +1219,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{10}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *HealthResponse) GetStatus() HealthResponse_Status {
@@ -947,7 +1257,7 @@ type MintSuccessorRequest struct {
 
 func (x *MintSuccessorRequest) Reset() {
 	*x = MintSuccessorRequest{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[11]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -959,7 +1269,7 @@ func (x *MintSuccessorRequest) String() string {
 func (*MintSuccessorRequest) ProtoMessage() {}
 
 func (x *MintSuccessorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[11]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -972,7 +1282,7 @@ func (x *MintSuccessorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MintSuccessorRequest.ProtoReflect.Descriptor instead.
 func (*MintSuccessorRequest) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{11}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MintSuccessorRequest) GetIdentityId() string {
@@ -1088,7 +1398,7 @@ type MintSuccessorResponse struct {
 
 func (x *MintSuccessorResponse) Reset() {
 	*x = MintSuccessorResponse{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[12]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1100,7 +1410,7 @@ func (x *MintSuccessorResponse) String() string {
 func (*MintSuccessorResponse) ProtoMessage() {}
 
 func (x *MintSuccessorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[12]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1113,7 +1423,7 @@ func (x *MintSuccessorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MintSuccessorResponse.ProtoReflect.Descriptor instead.
 func (*MintSuccessorResponse) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{12}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MintSuccessorResponse) GetEpoch() uint64 {
@@ -1154,7 +1464,7 @@ type GenerateSuccessorKEMRequest struct {
 
 func (x *GenerateSuccessorKEMRequest) Reset() {
 	*x = GenerateSuccessorKEMRequest{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[13]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1166,7 +1476,7 @@ func (x *GenerateSuccessorKEMRequest) String() string {
 func (*GenerateSuccessorKEMRequest) ProtoMessage() {}
 
 func (x *GenerateSuccessorKEMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[13]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1179,7 +1489,7 @@ func (x *GenerateSuccessorKEMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateSuccessorKEMRequest.ProtoReflect.Descriptor instead.
 func (*GenerateSuccessorKEMRequest) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{13}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GenerateSuccessorKEMRequest) GetHandle() string {
@@ -1207,7 +1517,7 @@ type GenerateSuccessorKEMResponse struct {
 
 func (x *GenerateSuccessorKEMResponse) Reset() {
 	*x = GenerateSuccessorKEMResponse{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[14]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1219,7 +1529,7 @@ func (x *GenerateSuccessorKEMResponse) String() string {
 func (*GenerateSuccessorKEMResponse) ProtoMessage() {}
 
 func (x *GenerateSuccessorKEMResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[14]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1232,7 +1542,7 @@ func (x *GenerateSuccessorKEMResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateSuccessorKEMResponse.ProtoReflect.Descriptor instead.
 func (*GenerateSuccessorKEMResponse) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{14}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GenerateSuccessorKEMResponse) GetHandle() string {
@@ -1266,7 +1576,7 @@ type DecapsulateRequest struct {
 
 func (x *DecapsulateRequest) Reset() {
 	*x = DecapsulateRequest{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[15]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1278,7 +1588,7 @@ func (x *DecapsulateRequest) String() string {
 func (*DecapsulateRequest) ProtoMessage() {}
 
 func (x *DecapsulateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[15]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1291,7 +1601,7 @@ func (x *DecapsulateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecapsulateRequest.ProtoReflect.Descriptor instead.
 func (*DecapsulateRequest) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{15}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DecapsulateRequest) GetHandle() string {
@@ -1317,7 +1627,7 @@ type DecapsulateResponse struct {
 
 func (x *DecapsulateResponse) Reset() {
 	*x = DecapsulateResponse{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[16]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1329,7 +1639,7 @@ func (x *DecapsulateResponse) String() string {
 func (*DecapsulateResponse) ProtoMessage() {}
 
 func (x *DecapsulateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[16]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1342,7 +1652,7 @@ func (x *DecapsulateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecapsulateResponse.ProtoReflect.Descriptor instead.
 func (*DecapsulateResponse) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{16}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *DecapsulateResponse) GetSharedSecret() []byte {
@@ -1361,7 +1671,7 @@ type ZeroizeKeyRequest struct {
 
 func (x *ZeroizeKeyRequest) Reset() {
 	*x = ZeroizeKeyRequest{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[17]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1373,7 +1683,7 @@ func (x *ZeroizeKeyRequest) String() string {
 func (*ZeroizeKeyRequest) ProtoMessage() {}
 
 func (x *ZeroizeKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[17]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1386,7 +1696,7 @@ func (x *ZeroizeKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ZeroizeKeyRequest.ProtoReflect.Descriptor instead.
 func (*ZeroizeKeyRequest) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{17}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ZeroizeKeyRequest) GetHandle() string {
@@ -1404,7 +1714,7 @@ type ZeroizeKeyResponse struct {
 
 func (x *ZeroizeKeyResponse) Reset() {
 	*x = ZeroizeKeyResponse{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[18]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1416,7 +1726,7 @@ func (x *ZeroizeKeyResponse) String() string {
 func (*ZeroizeKeyResponse) ProtoMessage() {}
 
 func (x *ZeroizeKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[18]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1429,7 +1739,7 @@ func (x *ZeroizeKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ZeroizeKeyResponse.ProtoReflect.Descriptor instead.
 func (*ZeroizeKeyResponse) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{18}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{22}
 }
 
 // GatedIssueRequest mirrors internal/signing.IssuancePreconditions (AGID-04a seam). It
@@ -1469,7 +1779,7 @@ type GatedIssueRequest struct {
 
 func (x *GatedIssueRequest) Reset() {
 	*x = GatedIssueRequest{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[19]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1481,7 +1791,7 @@ func (x *GatedIssueRequest) String() string {
 func (*GatedIssueRequest) ProtoMessage() {}
 
 func (x *GatedIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[19]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1494,7 +1804,7 @@ func (x *GatedIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatedIssueRequest.ProtoReflect.Descriptor instead.
 func (*GatedIssueRequest) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{19}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GatedIssueRequest) GetTenantId() string {
@@ -1587,7 +1897,7 @@ type GatedIssueResponse struct {
 
 func (x *GatedIssueResponse) Reset() {
 	*x = GatedIssueResponse{}
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[20]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1599,7 +1909,7 @@ func (x *GatedIssueResponse) String() string {
 func (*GatedIssueResponse) ProtoMessage() {}
 
 func (x *GatedIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_signing_proto_signer_proto_msgTypes[20]
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1612,7 +1922,7 @@ func (x *GatedIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatedIssueResponse.ProtoReflect.Descriptor instead.
 func (*GatedIssueResponse) Descriptor() ([]byte, []int) {
-	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{20}
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GatedIssueResponse) GetApproved() bool {
@@ -1682,7 +1992,33 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\apurpose\x18\x05 \x01(\x0e2\x1e.trstctl.signing.v1.KeyPurposeR\apurpose\x12/\n" +
 	"\x13authorization_token\x18\x06 \x01(\fR\x12authorizationToken\",\n" +
 	"\fSignResponse\x12\x1c\n" +
-	"\tsignature\x18\x01 \x01(\fR\tsignature\"J\n" +
+	"\tsignature\x18\x01 \x01(\fR\tsignature\"\x9a\x01\n" +
+	"\x13SignArtifactRequest\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12!\n" +
+	"\fauthority_id\x18\x03 \x01(\tR\vauthorityId\x12\x15\n" +
+	"\x06key_id\x18\x04 \x01(\tR\x05keyId\x12\x18\n" +
+	"\apayload\x18\x05 \x01(\fR\apayload\"\xa7\x01\n" +
+	"\x14SignArtifactResponse\x12\x15\n" +
+	"\x06key_id\x18\x01 \x01(\tR\x05keyId\x12;\n" +
+	"\talgorithm\x18\x02 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\talgorithm\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x03 \x01(\fR\tpublicKey\x12\x1c\n" +
+	"\tsignature\x18\x04 \x01(\fR\tsignature\"\xf3\x01\n" +
+	"\x10OperationRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1c\n" +
+	"\toperation\x18\x02 \x01(\tR\toperation\x12\x1f\n" +
+	"\vsubject_ref\x18\x03 \x01(\tR\n" +
+	"subjectRef\x12'\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12$\n" +
+	"\rpreconditions\x18\x05 \x01(\fR\rpreconditions\x12\x1a\n" +
+	"\bevidence\x18\x06 \x01(\fR\bevidence\x12\x18\n" +
+	"\acontext\x18\a \x01(\fR\acontext\"\x98\x01\n" +
+	"\x11OperationResponse\x12\x1a\n" +
+	"\bapproved\x18\x01 \x01(\bR\bapproved\x12%\n" +
+	"\x0erefusal_record\x18\x02 \x01(\fR\rrefusalRecord\x12$\n" +
+	"\rauthorization\x18\x03 \x01(\fR\rauthorization\x12\x1a\n" +
+	"\bevidence\x18\x04 \x01(\fR\bevidence\"J\n" +
 	"\x11DestroyKeyRequest\x125\n" +
 	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\"\x14\n" +
 	"\x12DestroyKeyResponse\"\x0f\n" +
@@ -1787,11 +2123,13 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x14KEY_PURPOSE_LEAF_TLS\x10\x02\x12\x18\n" +
 	"\x14KEY_PURPOSE_SSH_CERT\x10\x03\x12\x19\n" +
 	"\x15KEY_PURPOSE_CODE_SIGN\x10\x04\x12\x17\n" +
-	"\x13KEY_PURPOSE_GENERIC\x10\x052\xc6\a\n" +
+	"\x13KEY_PURPOSE_GENERIC\x10\x052\x89\t\n" +
 	"\rSignerService\x12^\n" +
 	"\vGenerateKey\x12&.trstctl.signing.v1.GenerateKeyRequest\x1a'.trstctl.signing.v1.GenerateKeyResponse\x12a\n" +
 	"\fGetPublicKey\x12'.trstctl.signing.v1.GetPublicKeyRequest\x1a(.trstctl.signing.v1.GetPublicKeyResponse\x12I\n" +
-	"\x04Sign\x12\x1f.trstctl.signing.v1.SignRequest\x1a .trstctl.signing.v1.SignResponse\x12[\n" +
+	"\x04Sign\x12\x1f.trstctl.signing.v1.SignRequest\x1a .trstctl.signing.v1.SignResponse\x12a\n" +
+	"\fSignArtifact\x12'.trstctl.signing.v1.SignArtifactRequest\x1a(.trstctl.signing.v1.SignArtifactResponse\x12^\n" +
+	"\x0fVerifyOperation\x12$.trstctl.signing.v1.OperationRequest\x1a%.trstctl.signing.v1.OperationResponse\x12[\n" +
 	"\n" +
 	"DestroyKey\x12%.trstctl.signing.v1.DestroyKeyRequest\x1a&.trstctl.signing.v1.DestroyKeyResponse\x12O\n" +
 	"\x06Health\x12!.trstctl.signing.v1.HealthRequest\x1a\".trstctl.signing.v1.HealthResponse\x12d\n" +
@@ -1816,7 +2154,7 @@ func file_internal_signing_proto_signer_proto_rawDescGZIP() []byte {
 }
 
 var file_internal_signing_proto_signer_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_internal_signing_proto_signer_proto_goTypes = []any{
 	(Algorithm)(0),                       // 0: trstctl.signing.v1.Algorithm
 	(Hash)(0),                            // 1: trstctl.signing.v1.Hash
@@ -1830,20 +2168,24 @@ var file_internal_signing_proto_signer_proto_goTypes = []any{
 	(*GetPublicKeyResponse)(nil),         // 9: trstctl.signing.v1.GetPublicKeyResponse
 	(*SignRequest)(nil),                  // 10: trstctl.signing.v1.SignRequest
 	(*SignResponse)(nil),                 // 11: trstctl.signing.v1.SignResponse
-	(*DestroyKeyRequest)(nil),            // 12: trstctl.signing.v1.DestroyKeyRequest
-	(*DestroyKeyResponse)(nil),           // 13: trstctl.signing.v1.DestroyKeyResponse
-	(*HealthRequest)(nil),                // 14: trstctl.signing.v1.HealthRequest
-	(*HealthResponse)(nil),               // 15: trstctl.signing.v1.HealthResponse
-	(*MintSuccessorRequest)(nil),         // 16: trstctl.signing.v1.MintSuccessorRequest
-	(*MintSuccessorResponse)(nil),        // 17: trstctl.signing.v1.MintSuccessorResponse
-	(*GenerateSuccessorKEMRequest)(nil),  // 18: trstctl.signing.v1.GenerateSuccessorKEMRequest
-	(*GenerateSuccessorKEMResponse)(nil), // 19: trstctl.signing.v1.GenerateSuccessorKEMResponse
-	(*DecapsulateRequest)(nil),           // 20: trstctl.signing.v1.DecapsulateRequest
-	(*DecapsulateResponse)(nil),          // 21: trstctl.signing.v1.DecapsulateResponse
-	(*ZeroizeKeyRequest)(nil),            // 22: trstctl.signing.v1.ZeroizeKeyRequest
-	(*ZeroizeKeyResponse)(nil),           // 23: trstctl.signing.v1.ZeroizeKeyResponse
-	(*GatedIssueRequest)(nil),            // 24: trstctl.signing.v1.GatedIssueRequest
-	(*GatedIssueResponse)(nil),           // 25: trstctl.signing.v1.GatedIssueResponse
+	(*SignArtifactRequest)(nil),          // 12: trstctl.signing.v1.SignArtifactRequest
+	(*SignArtifactResponse)(nil),         // 13: trstctl.signing.v1.SignArtifactResponse
+	(*OperationRequest)(nil),             // 14: trstctl.signing.v1.OperationRequest
+	(*OperationResponse)(nil),            // 15: trstctl.signing.v1.OperationResponse
+	(*DestroyKeyRequest)(nil),            // 16: trstctl.signing.v1.DestroyKeyRequest
+	(*DestroyKeyResponse)(nil),           // 17: trstctl.signing.v1.DestroyKeyResponse
+	(*HealthRequest)(nil),                // 18: trstctl.signing.v1.HealthRequest
+	(*HealthResponse)(nil),               // 19: trstctl.signing.v1.HealthResponse
+	(*MintSuccessorRequest)(nil),         // 20: trstctl.signing.v1.MintSuccessorRequest
+	(*MintSuccessorResponse)(nil),        // 21: trstctl.signing.v1.MintSuccessorResponse
+	(*GenerateSuccessorKEMRequest)(nil),  // 22: trstctl.signing.v1.GenerateSuccessorKEMRequest
+	(*GenerateSuccessorKEMResponse)(nil), // 23: trstctl.signing.v1.GenerateSuccessorKEMResponse
+	(*DecapsulateRequest)(nil),           // 24: trstctl.signing.v1.DecapsulateRequest
+	(*DecapsulateResponse)(nil),          // 25: trstctl.signing.v1.DecapsulateResponse
+	(*ZeroizeKeyRequest)(nil),            // 26: trstctl.signing.v1.ZeroizeKeyRequest
+	(*ZeroizeKeyResponse)(nil),           // 27: trstctl.signing.v1.ZeroizeKeyResponse
+	(*GatedIssueRequest)(nil),            // 28: trstctl.signing.v1.GatedIssueRequest
+	(*GatedIssueResponse)(nil),           // 29: trstctl.signing.v1.GatedIssueResponse
 }
 var file_internal_signing_proto_signer_proto_depIdxs = []int32{
 	0,  // 0: trstctl.signing.v1.GenerateKeyRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
@@ -1857,38 +2199,43 @@ var file_internal_signing_proto_signer_proto_depIdxs = []int32{
 	1,  // 8: trstctl.signing.v1.SignRequest.hash:type_name -> trstctl.signing.v1.Hash
 	2,  // 9: trstctl.signing.v1.SignRequest.rsa_padding:type_name -> trstctl.signing.v1.RSAPadding
 	3,  // 10: trstctl.signing.v1.SignRequest.purpose:type_name -> trstctl.signing.v1.KeyPurpose
-	5,  // 11: trstctl.signing.v1.DestroyKeyRequest.handle:type_name -> trstctl.signing.v1.KeyHandle
-	4,  // 12: trstctl.signing.v1.HealthResponse.status:type_name -> trstctl.signing.v1.HealthResponse.Status
-	0,  // 13: trstctl.signing.v1.MintSuccessorRequest.target_algorithm:type_name -> trstctl.signing.v1.Algorithm
-	0,  // 14: trstctl.signing.v1.MintSuccessorResponse.successor_algorithm:type_name -> trstctl.signing.v1.Algorithm
-	0,  // 15: trstctl.signing.v1.GenerateSuccessorKEMRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
-	0,  // 16: trstctl.signing.v1.GenerateSuccessorKEMResponse.algorithm:type_name -> trstctl.signing.v1.Algorithm
-	0,  // 17: trstctl.signing.v1.GatedIssueRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
-	6,  // 18: trstctl.signing.v1.SignerService.GenerateKey:input_type -> trstctl.signing.v1.GenerateKeyRequest
-	8,  // 19: trstctl.signing.v1.SignerService.GetPublicKey:input_type -> trstctl.signing.v1.GetPublicKeyRequest
-	10, // 20: trstctl.signing.v1.SignerService.Sign:input_type -> trstctl.signing.v1.SignRequest
-	12, // 21: trstctl.signing.v1.SignerService.DestroyKey:input_type -> trstctl.signing.v1.DestroyKeyRequest
-	14, // 22: trstctl.signing.v1.SignerService.Health:input_type -> trstctl.signing.v1.HealthRequest
-	16, // 23: trstctl.signing.v1.SignerService.MintSuccessor:input_type -> trstctl.signing.v1.MintSuccessorRequest
-	18, // 24: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:input_type -> trstctl.signing.v1.GenerateSuccessorKEMRequest
-	20, // 25: trstctl.signing.v1.SignerService.Decapsulate:input_type -> trstctl.signing.v1.DecapsulateRequest
-	22, // 26: trstctl.signing.v1.SignerService.ZeroizeKey:input_type -> trstctl.signing.v1.ZeroizeKeyRequest
-	24, // 27: trstctl.signing.v1.SignerService.GatedIssue:input_type -> trstctl.signing.v1.GatedIssueRequest
-	7,  // 28: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
-	9,  // 29: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
-	11, // 30: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
-	13, // 31: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
-	15, // 32: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
-	17, // 33: trstctl.signing.v1.SignerService.MintSuccessor:output_type -> trstctl.signing.v1.MintSuccessorResponse
-	19, // 34: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:output_type -> trstctl.signing.v1.GenerateSuccessorKEMResponse
-	21, // 35: trstctl.signing.v1.SignerService.Decapsulate:output_type -> trstctl.signing.v1.DecapsulateResponse
-	23, // 36: trstctl.signing.v1.SignerService.ZeroizeKey:output_type -> trstctl.signing.v1.ZeroizeKeyResponse
-	25, // 37: trstctl.signing.v1.SignerService.GatedIssue:output_type -> trstctl.signing.v1.GatedIssueResponse
-	28, // [28:38] is the sub-list for method output_type
-	18, // [18:28] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	0,  // 11: trstctl.signing.v1.SignArtifactResponse.algorithm:type_name -> trstctl.signing.v1.Algorithm
+	5,  // 12: trstctl.signing.v1.DestroyKeyRequest.handle:type_name -> trstctl.signing.v1.KeyHandle
+	4,  // 13: trstctl.signing.v1.HealthResponse.status:type_name -> trstctl.signing.v1.HealthResponse.Status
+	0,  // 14: trstctl.signing.v1.MintSuccessorRequest.target_algorithm:type_name -> trstctl.signing.v1.Algorithm
+	0,  // 15: trstctl.signing.v1.MintSuccessorResponse.successor_algorithm:type_name -> trstctl.signing.v1.Algorithm
+	0,  // 16: trstctl.signing.v1.GenerateSuccessorKEMRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
+	0,  // 17: trstctl.signing.v1.GenerateSuccessorKEMResponse.algorithm:type_name -> trstctl.signing.v1.Algorithm
+	0,  // 18: trstctl.signing.v1.GatedIssueRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
+	6,  // 19: trstctl.signing.v1.SignerService.GenerateKey:input_type -> trstctl.signing.v1.GenerateKeyRequest
+	8,  // 20: trstctl.signing.v1.SignerService.GetPublicKey:input_type -> trstctl.signing.v1.GetPublicKeyRequest
+	10, // 21: trstctl.signing.v1.SignerService.Sign:input_type -> trstctl.signing.v1.SignRequest
+	12, // 22: trstctl.signing.v1.SignerService.SignArtifact:input_type -> trstctl.signing.v1.SignArtifactRequest
+	14, // 23: trstctl.signing.v1.SignerService.VerifyOperation:input_type -> trstctl.signing.v1.OperationRequest
+	16, // 24: trstctl.signing.v1.SignerService.DestroyKey:input_type -> trstctl.signing.v1.DestroyKeyRequest
+	18, // 25: trstctl.signing.v1.SignerService.Health:input_type -> trstctl.signing.v1.HealthRequest
+	20, // 26: trstctl.signing.v1.SignerService.MintSuccessor:input_type -> trstctl.signing.v1.MintSuccessorRequest
+	22, // 27: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:input_type -> trstctl.signing.v1.GenerateSuccessorKEMRequest
+	24, // 28: trstctl.signing.v1.SignerService.Decapsulate:input_type -> trstctl.signing.v1.DecapsulateRequest
+	26, // 29: trstctl.signing.v1.SignerService.ZeroizeKey:input_type -> trstctl.signing.v1.ZeroizeKeyRequest
+	28, // 30: trstctl.signing.v1.SignerService.GatedIssue:input_type -> trstctl.signing.v1.GatedIssueRequest
+	7,  // 31: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
+	9,  // 32: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
+	11, // 33: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
+	13, // 34: trstctl.signing.v1.SignerService.SignArtifact:output_type -> trstctl.signing.v1.SignArtifactResponse
+	15, // 35: trstctl.signing.v1.SignerService.VerifyOperation:output_type -> trstctl.signing.v1.OperationResponse
+	17, // 36: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
+	19, // 37: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
+	21, // 38: trstctl.signing.v1.SignerService.MintSuccessor:output_type -> trstctl.signing.v1.MintSuccessorResponse
+	23, // 39: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:output_type -> trstctl.signing.v1.GenerateSuccessorKEMResponse
+	25, // 40: trstctl.signing.v1.SignerService.Decapsulate:output_type -> trstctl.signing.v1.DecapsulateResponse
+	27, // 41: trstctl.signing.v1.SignerService.ZeroizeKey:output_type -> trstctl.signing.v1.ZeroizeKeyResponse
+	29, // 42: trstctl.signing.v1.SignerService.GatedIssue:output_type -> trstctl.signing.v1.GatedIssueResponse
+	31, // [31:43] is the sub-list for method output_type
+	19, // [19:31] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_internal_signing_proto_signer_proto_init() }
@@ -1902,7 +2249,7 @@ func file_internal_signing_proto_signer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_signing_proto_signer_proto_rawDesc), len(file_internal_signing_proto_signer_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   21,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

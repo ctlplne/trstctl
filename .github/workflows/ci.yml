@@ -123,6 +123,21 @@ jobs:
       - name: AGID production-caller gate (strong / RTA)
         run: make agid-caller-gate-strong
 
+      # XREC-INT-CALL STRONG check: same delivered-not-test-only proof for the
+      # cross-plane reconciliation family. The lexical floor runs inside `make lint`.
+      - name: XREC production-caller gate (strong / RTA)
+        run: make xrec-caller-gate-strong
+
+      # XREC-INT-WIRE: run the real-substrate integration suite over PostgreSQL/RLS,
+      # embedded file-backed NATS/JetStream, the outbox, and the real signer process.
+      - name: XREC wire integration gate
+        run: make xrec-wire-gate
+
+      # XREC-13: published vectors, differential verifier agreement, decode fuzz
+      # smoke, edition/zero-removal assertions, and the three-plane offline-chain e2e.
+      - name: XREC release gate
+        run: make xrec-release-gate
+
       # Verify the CI gates' own logic (the critical-package coverage evaluator
       # and the base-image digest-pinning guard) so a regression in a gate is
       # caught here rather than silently weakening the build (SF.1).

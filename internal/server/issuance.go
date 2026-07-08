@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -76,6 +77,7 @@ type issuanceDispatcher struct {
 	idem          *orchestrator.Idempotency
 	outbox        *orchestrator.Outbox
 	store         *store.Store
+	admission     editionseam.AdmissionHook
 
 	// log is the event log used to emit the profile-gated issuance decision
 	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the
@@ -247,6 +249,9 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
 		}
+		if err := d.admitIssuance(ctx, m, p, ident, "issue"); err != nil {
+			return nil, err
+		}
 		material, err := d.mintServedLeafMaterial(ctx, m.TenantID, ident.OwnerID, ident.Name, []string{ident.Name})
 		if err != nil {
 			return nil, err
@@ -273,6 +278,55 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		return err
 	}
 	return d.ensureTenantCRL(ctx, m.TenantID)
+}
+
+func (d *issuanceDispatcher) admitIssuance(ctx context.Context, m orchestrator.Message, p transitionTrigger, ident store.Identity, operation string) error {
+	if d.admission == nil {
+		return nil
+	}
+	req := editionseam.AdmissionRequest{
+		TenantID:        m.TenantID,
+		Operation:       operation,
+		IdentityID:      p.IdentityID,
+		IdempotencyKey:  m.IdempotencyKey,
+		Reason:          p.Reason,
+		ObservedInputs:  observedStateInputs(ident.Attributes),
+		ObservedSummary: string(ident.Kind),
+	}
+	decision, err := d.admission.Admit(ctx, req)
+	if err != nil {
+		return fmt.Errorf("server: issuance admission: %w", err)
+	}
+	if decision.Allowed {
+		return nil
+	}
+	reason := strings.TrimSpace(decision.Reason)
+	if reason == "" {
+		reason = "operation refused by admission policy"
+	}
+	return fmt.Errorf("server: issuance admission refused: %s", reason)
+}
+
+type observedStateAttributes struct {
+	ObservedInputs []editionseam.ObservedStateInput `json:"observed_state_inputs"`
+}
+
+func observedStateInputs(raw json.RawMessage) []editionseam.ObservedStateInput {
+	if len(raw) == 0 {
+		return nil
+	}
+	var attrs observedStateAttributes
+	if err := json.Unmarshal(raw, &attrs); err != nil {
+		return []editionseam.ObservedStateInput{{Source: "identity.attributes"}}
+	}
+	out := make([]editionseam.ObservedStateInput, 0, len(attrs.ObservedInputs))
+	for _, input := range attrs.ObservedInputs {
+		input.AuthorityID = strings.TrimSpace(input.AuthorityID)
+		input.RecordKey = strings.TrimSpace(input.RecordKey)
+		input.Source = strings.TrimSpace(input.Source)
+		out = append(out, input)
+	}
+	return out
 }
 
 func (d *issuanceDispatcher) completeRecoveredRenewal(ctx context.Context, tenantID, identityID, reason string) error {
@@ -423,6 +477,10 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
+		}
+		if err := d.admitIssuance(ctx, m, p, ident, "renew"); err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, err
 		}
 		certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
 		if err != nil {

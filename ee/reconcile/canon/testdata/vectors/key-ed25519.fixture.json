@@ -1,0 +1,13 @@
+{
+  "_spdx": "LicenseRef-trstctl-EE",
+  "shape": "key",
+  "tenant_id": "tenant-a",
+  "logical_id": "kms/prod/signing",
+  "algorithm": "EdDSA",
+  "status": "active",
+  "authority_id": "aws-kms",
+  "native_id": "key/1234",
+  "not_before": "2026-07-08T12:00:00Z",
+  "not_after": "2026-07-09T12:00:00Z",
+  "purpose": "signing"
+}

@@ -91,6 +91,137 @@ func paddingToProto(p crypto.RSAPadding) signerpb.RSAPadding {
 	return signerpb.RSAPadding_RSA_PADDING_PKCS1V15
 }
 
+func artifactSignRequestFromProto(req *signerpb.SignArtifactRequest) (ArtifactSignRequest, error) {
+	if req == nil {
+		return ArtifactSignRequest{}, status.Error(codes.InvalidArgument, "nil artifact sign request")
+	}
+	if req.GetKind() == "" {
+		return ArtifactSignRequest{}, status.Error(codes.InvalidArgument, "missing artifact kind")
+	}
+	if req.GetTenantId() == "" {
+		return ArtifactSignRequest{}, status.Error(codes.InvalidArgument, "missing tenant id")
+	}
+	if req.GetAuthorityId() == "" {
+		return ArtifactSignRequest{}, status.Error(codes.InvalidArgument, "missing authority id")
+	}
+	if len(req.GetPayload()) == 0 {
+		return ArtifactSignRequest{}, status.Error(codes.InvalidArgument, "missing artifact payload")
+	}
+	payload := append([]byte(nil), req.GetPayload()...)
+	return ArtifactSignRequest{
+		Kind:        req.GetKind(),
+		TenantID:    req.GetTenantId(),
+		AuthorityID: req.GetAuthorityId(),
+		KeyID:       req.GetKeyId(),
+		Payload:     payload,
+	}, nil
+}
+
+func artifactSignatureToProto(res ArtifactSignature) (*signerpb.SignArtifactResponse, error) {
+	if res.KeyID == "" {
+		return nil, status.Error(codes.Internal, "artifact signer returned empty key id")
+	}
+	if len(res.PublicKeyDER) == 0 {
+		return nil, status.Error(codes.Internal, "artifact signer returned empty public key")
+	}
+	if len(res.Signature) == 0 {
+		return nil, status.Error(codes.Internal, "artifact signer returned empty signature")
+	}
+	alg := algorithmToProto(res.Algorithm)
+	if alg == signerpb.Algorithm_ALGORITHM_UNSPECIFIED {
+		return nil, status.Error(codes.Internal, "artifact signer returned unsupported algorithm")
+	}
+	return &signerpb.SignArtifactResponse{
+		KeyId:     res.KeyID,
+		Algorithm: alg,
+		PublicKey: append([]byte(nil), res.PublicKeyDER...),
+		Signature: append([]byte(nil), res.Signature...),
+	}, nil
+}
+
+func artifactSignRequestToProto(req ArtifactSignRequest) *signerpb.SignArtifactRequest {
+	return &signerpb.SignArtifactRequest{
+		Kind:        req.Kind,
+		TenantId:    req.TenantID,
+		AuthorityId: req.AuthorityID,
+		KeyId:       req.KeyID,
+		Payload:     append([]byte(nil), req.Payload...),
+	}
+}
+
+func artifactSignatureFromProto(resp *signerpb.SignArtifactResponse) (ArtifactSignature, error) {
+	if resp == nil {
+		return ArtifactSignature{}, status.Error(codes.InvalidArgument, "nil artifact sign response")
+	}
+	alg, err := algorithmFromProto(resp.GetAlgorithm())
+	if err != nil {
+		return ArtifactSignature{}, err
+	}
+	return ArtifactSignature{
+		KeyID:        resp.GetKeyId(),
+		Algorithm:    alg,
+		PublicKeyDER: append([]byte(nil), resp.GetPublicKey()...),
+		Signature:    append([]byte(nil), resp.GetSignature()...),
+	}, nil
+}
+
+func operationRequestFromProto(req *signerpb.OperationRequest) (OperationRequest, error) {
+	if req == nil {
+		return OperationRequest{}, status.Error(codes.InvalidArgument, "nil operation request")
+	}
+	if req.GetTenantId() == "" {
+		return OperationRequest{}, status.Error(codes.InvalidArgument, "missing tenant id")
+	}
+	if req.GetOperation() == "" {
+		return OperationRequest{}, status.Error(codes.InvalidArgument, "missing operation")
+	}
+	if len(req.GetPreconditions()) == 0 {
+		return OperationRequest{}, status.Error(codes.InvalidArgument, "missing operation preconditions")
+	}
+	return OperationRequest{
+		TenantID:       req.GetTenantId(),
+		Operation:      req.GetOperation(),
+		SubjectRef:     req.GetSubjectRef(),
+		IdempotencyKey: req.GetIdempotencyKey(),
+		Preconditions:  append([]byte(nil), req.GetPreconditions()...),
+		Evidence:       append([]byte(nil), req.GetEvidence()...),
+		Context:        append([]byte(nil), req.GetContext()...),
+	}, nil
+}
+
+func operationDecisionToProto(dec OperationDecision) *signerpb.OperationResponse {
+	return &signerpb.OperationResponse{
+		Approved:      dec.Approved,
+		RefusalRecord: append([]byte(nil), dec.RefusalRecord...),
+		Authorization: append([]byte(nil), dec.Authorization...),
+		Evidence:      append([]byte(nil), dec.Evidence...),
+	}
+}
+
+func operationRequestToProto(req OperationRequest) *signerpb.OperationRequest {
+	return &signerpb.OperationRequest{
+		TenantId:       req.TenantID,
+		Operation:      req.Operation,
+		SubjectRef:     req.SubjectRef,
+		IdempotencyKey: req.IdempotencyKey,
+		Preconditions:  append([]byte(nil), req.Preconditions...),
+		Evidence:       append([]byte(nil), req.Evidence...),
+		Context:        append([]byte(nil), req.Context...),
+	}
+}
+
+func operationDecisionFromProto(resp *signerpb.OperationResponse) OperationDecision {
+	if resp == nil {
+		return OperationDecision{}
+	}
+	return OperationDecision{
+		Approved:      resp.GetApproved(),
+		RefusalRecord: append([]byte(nil), resp.GetRefusalRecord()...),
+		Authorization: append([]byte(nil), resp.GetAuthorization()...),
+		Evidence:      append([]byte(nil), resp.GetEvidence()...),
+	}
+}
+
 // mintRequestFromProto decodes a wire MintSuccessorRequest into the in-signer
 // MintRequest (INT-01). It never carries private key material — the predecessor is
 // a handle only.

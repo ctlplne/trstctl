@@ -55,11 +55,16 @@ const (
 	// that attaches the chain-bound broker issuance precondition. The free single-hop
 	// attested-ephemeral badge is never gated by this feature (INV-A10 zero removal).
 	FeatureAgentDelegation Feature = "agent-delegation"
+	// FeatureReconcile gates XREC cross-plane trust reconciliation. It is the single
+	// AN-9 activation point for XREC control-plane scheduling; attachEE has exactly
+	// one lic.Has(FeatureReconcile) block that mounts the EE round scheduler and later
+	// cards extend that block instead of scattering checks.
+	FeatureReconcile Feature = "reconcile"
 )
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeaturePCAS, FeatureAgentDelegation},
+	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeaturePCAS, FeatureAgentDelegation, FeatureReconcile},
 	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 

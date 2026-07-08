@@ -4,11 +4,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 module='trstctl.com/trstctl'
-# Tagged attach seams: the only core files permitted to import ee/. Each must
-# carry //go:build !trstctl_core so the core-only build links zero ee/ packages.
-# The signer-side seam (cmd/trstctl-signer/ee_attach.go) follows the FeaturePQC
-# precedent and is the home for signing.WithSuccessionMinter(...) et al.
-allowlist='cmd/trstctl/ee_attach.go cmd/trstctl-signer/ee_attach.go'
+# Tagged attach seams: the only command-entry files permitted to import ee/. Each
+# must carry //go:build !trstctl_core so core-only builds link zero ee/ packages.
+# The signer-side seam follows the FeaturePQC precedent and is the home for
+# signing.WithSuccessionMinter(...) et al.; the agent-side seam serves the PCAS
+# workload co-sign endpoint from the shipped agent binary without moving PCAS into
+# MPL core.
+allowlist='cmd/trstctl/ee_attach.go cmd/trstctl-signer/ee_attach.go cmd/trstctl-agent/cosign_attach.go'
 # Files that mention ee/ import paths only inside string-literal *fixtures*
 # (test data written into a temp tree at runtime), not as real imports of the
 # file's own package. The AST-level licenseboundary analyzer in tools/trstctllint
@@ -110,7 +112,8 @@ if [ -n "${violations}" ]; then
   echo "${violations}" >&2
   echo "" >&2
   echo "Core may never import ee/. The only exceptions are the tagged attach seams" >&2
-  echo "(cmd/trstctl/ee_attach.go, cmd/trstctl-signer/ee_attach.go), each of which" >&2
+  echo "(cmd/trstctl/ee_attach.go, cmd/trstctl-signer/ee_attach.go, and" >&2
+  echo "cmd/trstctl-agent/cosign_attach.go), each of which" >&2
   echo "must carry //go:build !trstctl_core." >&2
   exit 1
 fi

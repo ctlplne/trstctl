@@ -1,0 +1,1 @@
+{"algorithm":"ed25519","attributes":{"purpose":"signing"},"provenance":{"authority_id":"aws-kms","native_id":"key/1234"},"record_key":{"record_type":"key","stable_id":"kms/prod/signing","tenant_id":"tenant-a"},"record_type":"key","spec_version":"xrec.canon/v1","status":"active","tenant_id":"tenant-a","validity":{"not_after":1783598400,"not_before":1783512000}}

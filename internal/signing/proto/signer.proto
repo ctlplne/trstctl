@@ -29,6 +29,19 @@ service SignerService {
   // Sign produces a signature over a message using the keyed handle.
   rpc Sign(SignRequest) returns (SignResponse);
 
+  // SignArtifact asks an attached edition-neutral artifact signer to sign a
+  // canonical artifact body inside this isolated signer process. Core treats the
+  // artifact body as opaque bytes and names only generic routing metadata; the
+  // concrete artifact semantics live in the attached edition implementation.
+  rpc SignArtifact(SignArtifactRequest) returns (SignArtifactResponse);
+
+  // VerifyOperation asks an attached edition-neutral operation gate to verify an
+  // opaque public operation request inside the signer. Core names only generic
+  // routing metadata and opaque evidence/precondition bytes; the attached
+  // edition implementation owns the semantics and may return an opaque signed
+  // refusal record. No private key material crosses this RPC.
+  rpc VerifyOperation(OperationRequest) returns (OperationResponse);
+
   // DestroyKey zeroizes and forgets a key handle. It is idempotent.
   rpc DestroyKey(DestroyKeyRequest) returns (DestroyKeyResponse);
 
@@ -192,6 +205,44 @@ message SignRequest {
 
 message SignResponse {
   bytes signature = 1;
+}
+
+message SignArtifactRequest {
+  // kind is an edition-neutral routing name such as "state-digest". Core does
+  // not interpret the artifact beyond validating that it is present.
+  string kind = 1;
+  string tenant_id = 2;
+  string authority_id = 3;
+  // key_id lets the attached signer select a stable artifact-signing key when
+  // it supports more than one. Empty lets the attached signer choose a default.
+  string key_id = 4;
+  // payload is the canonical artifact body to sign. It is metadata/evidence, not
+  // private key material.
+  bytes payload = 5;
+}
+
+message SignArtifactResponse {
+  string key_id = 1;
+  Algorithm algorithm = 2;
+  bytes public_key = 3;
+  bytes signature = 4;
+}
+
+message OperationRequest {
+  string tenant_id = 1;
+  string operation = 2;
+  string subject_ref = 3;
+  string idempotency_key = 4;
+  bytes preconditions = 5;
+  bytes evidence = 6;
+  bytes context = 7;
+}
+
+message OperationResponse {
+  bool approved = 1;
+  bytes refusal_record = 2;
+  bytes authorization = 3;
+  bytes evidence = 4;
 }
 
 message DestroyKeyRequest {

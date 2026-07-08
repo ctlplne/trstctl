@@ -1,0 +1,57 @@
+{
+  "_spdx": "LicenseRef-trstctl-EE",
+  "id": "xrec-verify-presence-divergence-v1",
+  "tenant_id": "tenant-a",
+  "round_id": "round-verify-vector-1",
+  "spec_version": "xrec.canon/v1",
+  "generated_at": 1800000100,
+  "planes": [
+    {
+      "authority_id": "vault",
+      "watermark_position": "vault-100",
+      "watermark_observed_at": 1800000000,
+      "records": [
+        {
+          "stable_id": "a",
+          "label": "shared-a"
+        },
+        {
+          "stable_id": "b",
+          "label": "vault-only"
+        },
+        {
+          "stable_id": "c",
+          "label": "shared-c"
+        }
+      ]
+    },
+    {
+      "authority_id": "kms",
+      "watermark_position": "kms-100",
+      "watermark_observed_at": 1800000000,
+      "records": [
+        {
+          "stable_id": "a",
+          "label": "shared-a"
+        },
+        {
+          "stable_id": "c",
+          "label": "shared-c"
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "verifier_authority": "kms",
+    "require_countersign_from": "kms",
+    "now": 1800000200,
+    "freshness_bound_seconds": 3600
+  },
+  "expected": {
+    "determination_count": 1,
+    "class": "presence",
+    "present_authority": "vault",
+    "stable_id": "b",
+    "record_type": "key"
+  }
+}

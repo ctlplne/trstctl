@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -1101,11 +1102,51 @@ type identityTransition struct {
 // read model is always a projection of the log; nothing writes the served
 // domain read model except through here.
 type Projector struct {
-	store *store.Store
+	store            *store.Store
+	eventProjections []EventProjection
+}
+
+// Option customizes the generic projector without coupling MPL core to any
+// edition package.
+type Option func(*Projector)
+
+// EventProjection is a feature-neutral registration seam for derived projections
+// that consume the AN-2 event stream but own their own materialization. Edition
+// packages can register one through the tagged attach path; core only calls the
+// interface and does not know the projection's domain.
+type EventProjection interface {
+	Name() string
+	Reset(context.Context) error
+	Apply(context.Context, eventspec.Event) error
+}
+
+// WatermarkedEventProjection lets the generic projector skip at-least-once tail
+// duplicates that were already covered by a full replay during boot.
+type WatermarkedEventProjection interface {
+	ReplayWatermark() uint64
+}
+
+// WithEventProjection registers an additional event-stream projection. Nil
+// projections are ignored so callers can assemble optional licensed components
+// without branching in core.
+func WithEventProjection(proj EventProjection) Option {
+	return func(p *Projector) {
+		if proj != nil {
+			p.eventProjections = append(p.eventProjections, proj)
+		}
+	}
 }
 
 // New returns a Projector that writes into s.
-func New(s *store.Store) *Projector { return &Projector{store: s} }
+func New(s *store.Store, opts ...Option) *Projector {
+	p := &Projector{store: s}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(p)
+		}
+	}
+	return p
+}
 
 type tenantRegistered struct {
 	Name string `json:"name"`
@@ -1188,6 +1229,13 @@ type PAMSessionExpired struct {
 // transaction. It is exported so the command side can project an event live,
 // right after appending it, using the same logic a rebuild uses.
 func (p *Projector) Apply(ctx context.Context, e events.Event) error {
+	if err := p.applyCore(ctx, e); err != nil {
+		return err
+	}
+	return p.applyEventProjections(ctx, e)
+}
+
+func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 	if e.Type == EventTenantRegistered {
 		if err := ValidateSchemaVersion(e); err != nil {
 			return err
@@ -1226,6 +1274,53 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 	// Domain entity events apply under the tenant's RLS context.
 	return p.store.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
 		return p.ApplyTx(ctx, tx, e)
+	})
+}
+
+func (p *Projector) applyEventProjections(ctx context.Context, e events.Event) error {
+	for _, proj := range p.eventProjections {
+		if proj == nil {
+			continue
+		}
+		if watermarked, ok := proj.(WatermarkedEventProjection); ok && e.Sequence != 0 && e.Sequence <= watermarked.ReplayWatermark() {
+			continue
+		}
+		if err := proj.Apply(ctx, e); err != nil {
+			return fmt.Errorf("projections: apply extension %s seq %d: %w", proj.Name(), e.Sequence, err)
+		}
+	}
+	return nil
+}
+
+func (p *Projector) resetEventProjections(ctx context.Context) error {
+	for _, proj := range p.eventProjections {
+		if proj == nil {
+			continue
+		}
+		if err := proj.Reset(ctx); err != nil {
+			return fmt.Errorf("projections: reset extension %s: %w", proj.Name(), err)
+		}
+	}
+	return nil
+}
+
+func (p *Projector) rebuildEventProjections(ctx context.Context, log *events.Log) error {
+	if len(p.eventProjections) == 0 {
+		return nil
+	}
+	if err := p.resetEventProjections(ctx); err != nil {
+		return err
+	}
+	return log.Replay(ctx, 0, func(e events.Event) error {
+		for _, proj := range p.eventProjections {
+			if proj == nil {
+				continue
+			}
+			if err := proj.Apply(ctx, e); err != nil {
+				return fmt.Errorf("projections: replay extension %s seq %d: %w", proj.Name(), e.Sequence, err)
+			}
+		}
+		return nil
 	})
 }
 
@@ -2490,6 +2585,9 @@ func decode(e events.Event, v any) error {
 // from sequence 0; ProjectCatchUp is the bounded boot path. Project remains for
 // tests and for an explicit "apply everything from scratch" caller.
 func (p *Projector) Project(ctx context.Context, log *events.Log) error {
+	if err := p.resetEventProjections(ctx); err != nil {
+		return err
+	}
 	return log.Replay(ctx, 0, func(e events.Event) error {
 		return p.Apply(ctx, e)
 	})
@@ -2510,6 +2608,9 @@ func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 // stays the source of truth (AN-2); an explicit Rebuild still re-derives from
 // sequence 0 and resets the checkpoint.
 func (p *Projector) ProjectCatchUp(ctx context.Context, log *events.Log) error {
+	if err := p.rebuildEventProjections(ctx, log); err != nil {
+		return err
+	}
 	// Serialize the catch-up across replicas under the projection advisory lock
 	// (RESIL-004): N replicas booting at once each run this, and without
 	// coordination they would replay into the same read-model tables concurrently.
@@ -2524,7 +2625,7 @@ func (p *Projector) ProjectCatchUp(ctx context.Context, log *events.Log) error {
 		var last uint64
 		sinceCheckpoint := 0
 		if err := log.Replay(ctx, from+1, func(e events.Event) error {
-			if err := p.Apply(ctx, e); err != nil {
+			if err := p.applyCore(ctx, e); err != nil {
 				return err
 			}
 			last = e.Sequence
@@ -2575,6 +2676,9 @@ func (p *Projector) AdvanceCheckpoint(ctx context.Context, seq uint64) error {
 // trusted system operation.
 func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
 	return p.store.RebuildReadModelTx(ctx, func(tx pgx.Tx) error {
+		if err := p.resetEventProjections(ctx); err != nil {
+			return err
+		}
 		// A full rebuild re-derives from sequence 0, so the projection checkpoint
 		// (SPINE-007) is reset to 0 in the SAME transaction as the truncate+replay.
 		// This keeps the watermark consistent with the rebuilt read model: a crash
@@ -2586,6 +2690,9 @@ func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
 		var last uint64
 		if err := log.Replay(ctx, 0, func(e events.Event) error {
 			if err := p.applyForRebuild(ctx, tx, e); err != nil {
+				return err
+			}
+			if err := p.applyEventProjections(ctx, e); err != nil {
 				return err
 			}
 			last = e.Sequence

@@ -1,0 +1,16 @@
+{
+  "_spdx": "LicenseRef-trstctl-EE",
+  "shape": "x509_certificate",
+  "tenant_id": "tenant-a",
+  "issuer_name_der_hex": "3003310161",
+  "serial_hex": "00:AA:10",
+  "algorithm": "RSA_2048",
+  "status": "enabled",
+  "authority_id": "vault-prod",
+  "native_id": "pki/cert/AA10",
+  "not_before": "2026-07-08T12:02:04Z",
+  "not_after": "2026-08-08T12:02:04Z",
+  "subject_dn": " CN=Svc , O=Example ",
+  "san_uri": "SPIFFE://Example.COM/ns/prod/../prod/sa/api",
+  "critical": true
+}

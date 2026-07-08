@@ -302,7 +302,7 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	else \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) pcas-caller-gate pcas-no-skip-gate; \
 	fi
-	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate
+	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate xrec-caller-gate
 
 .PHONY: editions-gate
 editions-gate: ## Prove the open-core one-way valve and core-only build
@@ -349,6 +349,25 @@ agid-caller-gate: ## AGID-INT-CALL production-caller FLOOR: every ee/agentid mec
 agid-caller-gate-strong: ## AGID-INT-CALL STRONG check (CI): RTA call graph from cmd/* main.main (no -tags trstctl_core) proves every ee/agentid constructor is reachable
 	@echo ">> agid-caller-gate-strong (AGID-INT-CALL RTA reachability; whole-program load, CI-only)"
 	@$(GO) test -tags agidrta ./ee/agentid/intgate/... -count=1
+
+.PHONY: xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate
+xrec-caller-gate: ## XREC-INT-CALL production-caller FLOOR: every ee/reconcile constructor has a seam-rooted non-test caller
+	@echo ">> xrec-caller-gate (XREC-INT-CALL floor + seam: every ee/reconcile constructor has a non-test caller rooted at the ee_attach seam)"
+	@$(GO) test ./ee/reconcile/intgate/... -count=1
+xrec-caller-gate-strong: ## XREC-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl and cmd/trstctl-signer proves every XREC constructor is reachable
+	@echo ">> xrec-caller-gate-strong (XREC-INT-CALL RTA reachability; whole-program load, CI-only)"
+	@$(GO) test -tags xrecrta ./ee/reconcile/intgate/... -count=1
+xrec-wire-gate: ## XREC-INT-WIRE real-infra gate: PostgreSQL/RLS + embedded NATS + real signer + restart replay
+	@echo ">> xrec-wire-gate (XREC-INT-WIRE real PG/RLS + embedded NATS + cmd/trstctl-signer)"
+	@$(GO) test -tags integration ./ee/reconcile/intwire/... -count=1 -timeout=10m
+xrec-release-gate: ## XREC-13 release gate: conformance vectors + differential + fuzz decode smoke + edition/zero-removal + e2e
+	@echo ">> xrec-release-gate (XREC-13 conformance, differential, fuzz decode smoke, edition/zero-removal, and real-substrate e2e)"
+	@$(GO) test -tags integration ./ee/reconcile/conformance/... -count=1 -timeout=10m
+
+.PHONY: security-review
+security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate ## Security-focused local review for signer, remediation, connectors, and XREC delivery paths
+	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC package tests)"
+	@$(GO) test ./internal/signing ./internal/server ./internal/orchestrator ./internal/connector/... ./ee/reconcile/... -count=1
 
 .PHONY: web-lint web-format-check web-check
 web-lint: ## Run frontend ESLint from the repository root (CODE-002)

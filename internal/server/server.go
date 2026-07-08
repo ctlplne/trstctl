@@ -140,6 +140,11 @@ type Deps struct {
 	// chain-bound precondition (INV-A10 zero removal). AGID-07b consumes this when it
 	// wires the broker.
 	BrokerIssuancePrecondition broker.IssuancePrecondition
+	// IssuanceAdmission is a feature-neutral pre-mint policy seam for served issuance
+	// and renewal side effects. Nil leaves core behavior unchanged; tagged edition
+	// attach code may supply a hook that admits or refuses only operations whose
+	// observed-state inputs match its policy.
+	IssuanceAdmission AdmissionHook
 	// ProviderHandler is supplied only by the tagged EE attach seam when the Provider
 	// plane is licensed. Nil keeps /provider/* dark with 404 instead of falling
 	// through to the web UI.
@@ -156,6 +161,7 @@ type Deps struct {
 	LicensedAPIOptionsFactory LicensedAPIOptionsFactory
 	LicensedOutboxFactory     LicensedOutboxFactory
 	LicensedBackgroundWorkers []BackgroundWorker
+	LicensedProjectionOptions []projections.Option
 	LicensedLeafSigner        LicensedLeafSigner
 	LicensedCSRInspector      LicensedCSRInspector
 	SignTimeout               time.Duration // per-issuance signer deadline (slow → fail closed)
@@ -746,13 +752,12 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 }
 
 func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, error) {
-	proj := projections.New(d.Store)
-	if restored, err := proj.RestoreFromSnapshot(ctx, d.Log); err != nil {
+	proj := projections.New(d.Store, d.LicensedProjectionOptions...)
+	if _, err := proj.RestoreFromSnapshot(ctx, d.Log); err != nil {
 		return nil, fmt.Errorf("server: restore read model from snapshot: %w", err)
-	} else if !restored {
-		if err := proj.ProjectCatchUp(ctx, d.Log); err != nil {
-			return nil, fmt.Errorf("server: project event log: %w", err)
-		}
+	}
+	if err := proj.ProjectCatchUp(ctx, d.Log); err != nil {
+		return nil, fmt.Errorf("server: project event log: %w", err)
 	}
 	return proj, nil
 }
@@ -1110,9 +1115,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
 	}
 	return nil
 }

@@ -22,6 +22,8 @@ import (
 	eepqc "trstctl.com/trstctl/ee/pqc"
 	eepqcmigration "trstctl.com/trstctl/ee/pqcmigration"
 	eeprovider "trstctl.com/trstctl/ee/provider"
+	eereconcile "trstctl.com/trstctl/ee/reconcile"
+	eereconcileplanremediation "trstctl.com/trstctl/ee/reconcile/plan/remediation"
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eesuccessionapi "trstctl.com/trstctl/ee/succession/api"
 	eesuccessionbackground "trstctl.com/trstctl/ee/succession/background"
@@ -43,6 +45,7 @@ func extraMigrationSources() []fs.FS {
 	return []fs.FS{
 		eesuccessionstore.MigrationsFS(),
 		eeagentstore.MigrationsFS(),
+		eereconcileplanremediation.MigrationsFS(),
 	}
 }
 
@@ -107,10 +110,7 @@ func (c chainedOutboxHandler) DeliverLicensed(ctx context.Context, m orchestrato
 // lic.Has(feature) block per gated capability here.
 func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
 	if lic != nil && lic.Has(license.FeatureRemediation) {
-		deps.EnableRemediation = true
-		if log != nil {
-			log.Info("Enterprise remediation attached", slog.String("feature", string(license.FeatureRemediation)))
-		}
+		attachRemediation(log, deps)
 	}
 	if lic != nil && lic.Has(license.FeaturePCAS) {
 		// AN-9 activation point for Proof-Carrying Algorithm Succession (HARNESS
@@ -173,6 +173,11 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 			log.Info("Enterprise agent delegation attached", slog.String("feature", string(license.FeatureAgentDelegation)))
 		}
 	}
+	if lic != nil && lic.Has(license.FeatureReconcile) {
+		if err := attachReconcile(log, deps); err != nil {
+			return err
+		}
+	}
 	if lic != nil && lic.Has(license.FeaturePQC) {
 		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eepqcmigration.NewAPIOptionsFactory())
 		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eepqcmigration.NewOutboxFactory())
@@ -183,17 +188,8 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureHASupport) {
-		fedCfg := config.Federation{}
-		if cfg != nil {
-			fedCfg = cfg.Federation
-		}
-		factory, err := eefederation.FactoryFromConfig(ctx, fedCfg)
-		if err != nil {
+		if err := attachFederation(ctx, cfg, log, deps); err != nil {
 			return err
-		}
-		deps.FederationFactory = factory
-		if factory != nil && log != nil {
-			log.Info("Enterprise HA support attached", slog.String("feature", string(license.FeatureHASupport)))
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureBYOK) {
@@ -240,6 +236,56 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		if log != nil {
 			log.Info("Provider white-label branding attached", slog.String("feature", string(license.FeatureWhiteLabel)))
 		}
+	}
+	return nil
+}
+
+func attachRemediation(log *slog.Logger, deps *server.Deps) {
+	deps.EnableRemediation = true
+	if log != nil {
+		log.Info("Enterprise remediation attached", slog.String("feature", string(license.FeatureRemediation)))
+	}
+}
+
+func attachFederation(ctx context.Context, cfg *config.Config, log *slog.Logger, deps *server.Deps) error {
+	fedCfg := config.Federation{}
+	if cfg != nil {
+		fedCfg = cfg.Federation
+	}
+	resolved, err := eefederation.ConfigFromConfig(ctx, fedCfg)
+	if err != nil {
+		return err
+	}
+	var factory server.FederationFactory
+	if resolved.Enabled {
+		factory = eefederation.NewFactory(resolved)
+	}
+	deps.FederationFactory = factory
+	if factory != nil && log != nil {
+		log.Info("Enterprise HA support attached", slog.String("feature", string(license.FeatureHASupport)))
+	}
+	return nil
+}
+
+func attachReconcile(log *slog.Logger, deps *server.Deps) error {
+	// AN-9 activation point for XREC. This helper is called only by the single
+	// FeatureReconcile block in attachEE; later XREC cards extend it instead of
+	// scattering license checks. Community and core-only builds schedule zero XREC rounds.
+	runtime, err := eereconcile.NewRuntime(eereconcile.RuntimeConfig{
+		Store:  deps.Store,
+		Log:    deps.Log,
+		Signer: deps.Signer,
+	})
+	if err != nil {
+		return err
+	}
+	deps.IssuanceAdmission = runtime.IssuanceAdmission
+	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, runtime.ProjectionOptions...)
+	deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, runtime.BackgroundWorkers...)
+	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, runtime.RemediationOutboxFactory)
+	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, runtime.QuarantineOutboxFactory)
+	if log != nil {
+		log.Info("Enterprise XREC reconciliation attached", slog.String("feature", string(license.FeatureReconcile)))
 	}
 	return nil
 }

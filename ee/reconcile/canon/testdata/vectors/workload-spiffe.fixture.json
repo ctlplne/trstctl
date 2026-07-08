@@ -1,0 +1,14 @@
+{
+  "_spdx": "LicenseRef-trstctl-EE",
+  "shape": "workload_identity",
+  "tenant_id": "tenant-a",
+  "spiffe_id": "SPIFFE://Example.COM/ns/prod/../prod/sa/api",
+  "algorithm": "EdDSA",
+  "status": "ACTIVE",
+  "authority_id": "spire-prod",
+  "native_id": "entry/api",
+  "not_before": "2026-07-08T12:00:00Z",
+  "not_after": "2026-07-08T12:04:59Z",
+  "selector_count": 3,
+  "trust_domain": "Example.COM"
+}

@@ -5,6 +5,7 @@ package signing
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"sync"
 
 	"google.golang.org/grpc/codes"
@@ -64,6 +65,16 @@ type Server struct {
 	// PCAS re-wrap. KEM keys are deliberately separate from signing keys: Sign cannot
 	// address them, and the only private-key operation exposed is Decapsulate.
 	kemCustody KEMCustody
+
+	// artifactSigner, when non-nil, signs opaque artifact payloads inside the
+	// isolated signer. The core defines only this generic surface; concrete
+	// artifact semantics live in an edition implementation.
+	artifactSigner ArtifactSigner
+
+	// operationGate, when non-nil, verifies opaque public operation evidence inside
+	// the signer before a caller-provided key operation may run. Core owns only the
+	// ordering and transport seam; edition code owns the semantics.
+	operationGate OperationGate
 
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
@@ -264,6 +275,41 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 	return &signerpb.SignResponse{Signature: sig}, nil
 }
 
+// SignArtifact signs an opaque artifact through the attached signer-side
+// extension. It fails closed in core-only builds where no extension is attached.
+func (s *Server) SignArtifact(ctx context.Context, req *signerpb.SignArtifactRequest) (*signerpb.SignArtifactResponse, error) {
+	areq, err := artifactSignRequestFromProto(req)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.signArtifact(ctx, areq)
+	if err != nil {
+		if errors.Is(err, ErrNoArtifactSigner) {
+			return nil, status.Error(codes.Unimplemented, err.Error())
+		}
+		return nil, status.Errorf(codes.FailedPrecondition, "sign artifact: %v", err)
+	}
+	return artifactSignatureToProto(res)
+}
+
+// VerifyOperation verifies an opaque public operation request through the
+// attached signer-side gate. It fails closed in core-only builds where no gate is
+// attached.
+func (s *Server) VerifyOperation(ctx context.Context, req *signerpb.OperationRequest) (*signerpb.OperationResponse, error) {
+	oreq, err := operationRequestFromProto(req)
+	if err != nil {
+		return nil, err
+	}
+	decision, err := s.verifyOperation(ctx, oreq)
+	if err != nil {
+		if errors.Is(err, ErrNoOperationGate) {
+			return nil, status.Error(codes.Unimplemented, err.Error())
+		}
+		return nil, status.Errorf(codes.FailedPrecondition, "verify operation: %v", err)
+	}
+	return operationDecisionToProto(decision), nil
+}
+
 // DestroyKey zeroizes and forgets a handle. It is idempotent.
 func (s *Server) DestroyKey(_ context.Context, req *signerpb.DestroyKeyRequest) (*signerpb.DestroyKeyResponse, error) {
 	h := req.GetHandle()
@@ -310,6 +356,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.kemCustody != nil {
 		s.kemCustody.DestroyAll()
+	}
+	if destroyer, ok := s.artifactSigner.(interface{ Destroy() }); ok {
+		destroyer.Destroy()
 	}
 }
 
