@@ -60,11 +60,16 @@ const (
 	// one lic.Has(FeatureReconcile) block that mounts the EE round scheduler and later
 	// cards extend that block instead of scattering checks.
 	FeatureReconcile Feature = "reconcile"
+	// FeatureVerifiableDecommission gates VDEC verifiable decommissioning. It is the
+	// single AN-9 activation point for the ee/decommission family; attachEE has exactly
+	// one lic.Has(FeatureVerifiableDecommission) block, and later VDEC cards extend that
+	// block rather than scattering tier checks.
+	FeatureVerifiableDecommission Feature = "vdec"
 )
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeaturePCAS, FeatureAgentDelegation, FeatureReconcile},
+	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeaturePCAS, FeatureAgentDelegation, FeatureReconcile, FeatureVerifiableDecommission},
 	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 

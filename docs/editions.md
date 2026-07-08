@@ -69,6 +69,7 @@ Community by default unless a signed license explicitly grants it as an extra.
 | `pcas` | Enterprise | Proof-carrying algorithm succession. |
 | `agent-delegation` | Enterprise | Chain-bound AI agent identity lifecycle enforcement. |
 | `reconcile` | Enterprise | Cross-plane trust reconciliation rounds and evidence machinery. |
+| `vdec` | Enterprise | Verifiable decommissioning dependency-state re-protection and destruction proof machinery. |
 | `provider_plane` | Provider | Managed-provider control plane features. |
 | `metering` | Provider | Provider usage metering. |
 | `white_label` | Provider | Provider branding controls. |

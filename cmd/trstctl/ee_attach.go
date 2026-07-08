@@ -15,6 +15,7 @@ import (
 	eeagentstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 	eeagentorch "trstctl.com/trstctl/ee/agentid/orchestrator"
 	eebilling "trstctl.com/trstctl/ee/billing"
+	eedecommissionreprotect "trstctl.com/trstctl/ee/decommission/reprotect"
 	eefederation "trstctl.com/trstctl/ee/federation"
 	eegovernance "trstctl.com/trstctl/ee/governance"
 	eekmip "trstctl.com/trstctl/ee/kmip"
@@ -178,6 +179,9 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 			return err
 		}
 	}
+	if lic != nil && lic.Has(license.FeatureVerifiableDecommission) {
+		attachVerifiableDecommission(log, deps)
+	}
 	if lic != nil && lic.Has(license.FeaturePQC) {
 		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eepqcmigration.NewAPIOptionsFactory())
 		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eepqcmigration.NewOutboxFactory())
@@ -244,6 +248,16 @@ func attachRemediation(log *slog.Logger, deps *server.Deps) {
 	deps.EnableRemediation = true
 	if log != nil {
 		log.Info("Enterprise remediation attached", slog.String("feature", string(license.FeatureRemediation)))
+	}
+}
+
+func attachVerifiableDecommission(log *slog.Logger, deps *server.Deps) {
+	// AN-9 activation point for VDEC. This one helper is called by the single
+	// lic.Has(FeatureVerifiableDecommission) block; later cards extend it instead of
+	// scattering license checks. Free blunt-destroy / zeroize stays outside this path.
+	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eedecommissionreprotect.NewLicensedOutboxFactory())
+	if log != nil {
+		log.Info("Enterprise VDEC attached", slog.String("feature", string(license.FeatureVerifiableDecommission)))
 	}
 }
 

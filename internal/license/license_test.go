@@ -162,6 +162,7 @@ func TestCommunityAndLoad(t *testing.T) {
 	assertFeatureRow(t, info, FeatureBYOK, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureGovernance, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureReconcile, TierEnterprise, false, ModeOff)
+	assertFeatureRow(t, info, FeatureVerifiableDecommission, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureProviderPlane, TierProvider, false, ModeOff)
 	assertFeatureRow(t, info, FeatureMetering, TierProvider, false, ModeOff)
 	assertFeatureRow(t, info, FeatureWhiteLabel, TierProvider, false, ModeOff)
@@ -238,6 +239,7 @@ func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	assertFeatureRow(t, community, FeatureBYOK, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, community, FeatureGovernance, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, community, FeatureReconcile, TierEnterprise, false, ModeOff)
+	assertFeatureRow(t, community, FeatureVerifiableDecommission, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, community, FeatureProviderPlane, TierProvider, false, ModeOff)
 	assertFeatureRow(t, community, FeatureMetering, TierProvider, false, ModeOff)
 	assertFeatureRow(t, community, FeatureWhiteLabel, TierProvider, false, ModeOff)
@@ -252,6 +254,7 @@ func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	assertFeatureRow(t, active, FeatureBYOK, TierEnterprise, true, ModeEnabled)
 	assertFeatureRow(t, active, FeatureGovernance, TierEnterprise, true, ModeEnabled)
 	assertFeatureRow(t, active, FeatureReconcile, TierEnterprise, true, ModeEnabled)
+	assertFeatureRow(t, active, FeatureVerifiableDecommission, TierEnterprise, true, ModeEnabled)
 	assertFeatureRow(t, active, FeatureProviderPlane, TierProvider, false, ModeOff)
 	assertFeatureRow(t, active, FeatureMetering, TierProvider, false, ModeOff)
 	assertFeatureRow(t, active, FeatureWhiteLabel, TierProvider, false, ModeOff)
@@ -263,6 +266,33 @@ func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	assertFeatureRow(t, provider, FeatureWhiteLabel, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, provider, FeatureSiloedIsolation, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, provider, FeatureRemediation, TierEnterprise, false, ModeOff)
+}
+
+func TestVerifiableDecommissionFeatureIsEnterpriseOnly(t *testing.T) {
+	if FeatureVerifiableDecommission != Feature("vdec") {
+		t.Fatalf("FeatureVerifiableDecommission = %q, want vdec", FeatureVerifiableDecommission)
+	}
+	count := 0
+	for _, f := range AllFeatures() {
+		if f == FeatureVerifiableDecommission {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("FeatureVerifiableDecommission table entries = %d, want 1", count)
+	}
+	if tier := FeatureTier(FeatureVerifiableDecommission); tier != TierEnterprise {
+		t.Fatalf("FeatureTier(FeatureVerifiableDecommission) = %s, want %s", tier, TierEnterprise)
+	}
+
+	assertFeatureRow(t, Community().Info(), FeatureVerifiableDecommission, TierEnterprise, false, ModeOff)
+
+	priv, pub := testKeypair(t)
+	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+	enterprise := managerAt(t, testClaims(TierEnterprise, expires), priv, pub, expires.Add(-time.Hour)).Info()
+	assertFeatureRow(t, enterprise, FeatureVerifiableDecommission, TierEnterprise, true, ModeEnabled)
+	provider := managerAt(t, testClaims(TierProvider, expires), priv, pub, expires.Add(-time.Hour)).Info()
+	assertFeatureRow(t, provider, FeatureVerifiableDecommission, TierEnterprise, false, ModeOff)
 }
 
 func assertFeatureRow(t *testing.T, info Info, name Feature, tier Tier, licensed bool, mode Mode) {
