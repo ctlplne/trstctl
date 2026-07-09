@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Protocol stub for the isolated signing service (AN-4). This is the wire
 // contract the control plane uses to reach trstctl-signer over a Unix domain
 // socket (single node) or mTLS (across nodes). It is committed as the reviewed
@@ -41,6 +43,13 @@ service SignerService {
   // edition implementation owns the semantics and may return an opaque signed
   // refusal record. No private key material crosses this RPC.
   rpc VerifyOperation(OperationRequest) returns (OperationResponse);
+
+  // GatedDestroy asks an attached edition-neutral destruction gate to verify
+  // opaque public evidence inside the signer before the signer-local key destroy
+  // hook runs. Core names only generic set/evidence/precondition bytes; the
+  // attached edition implementation owns the semantics and may return an opaque
+  // signed refusal record. The free DestroyKey RPC below remains ungated.
+  rpc GatedDestroy(GatedDestroyRequest) returns (GatedDestroyResponse);
 
   // DestroyKey zeroizes and forgets a key handle. It is idempotent.
   rpc DestroyKey(DestroyKeyRequest) returns (DestroyKeyResponse);
@@ -239,6 +248,33 @@ message OperationRequest {
 }
 
 message OperationResponse {
+  bool approved = 1;
+  bytes refusal_record = 2;
+  bytes authorization = 3;
+  bytes evidence = 4;
+}
+
+message GatedDestroyRequest {
+  string tenant_id = 1;
+  KeyHandle handle = 2;
+  // subject_ref is the stable public identifier for the object whose signer-held
+  // handle may be destroyed after verification. Core treats it as opaque.
+  string subject_ref = 3;
+  uint64 asserted_final_epoch = 4;
+  uint64 ledger_position = 5;
+  // required_set and satisfied_set are opaque, generic public set bodies. The
+  // attached gate owns their concrete meaning.
+  bytes required_set = 6;
+  bytes required_set_digest = 7;
+  bytes satisfied_set = 8;
+  bytes satisfaction_evidence = 9;
+  bytes authorization = 10;
+  bytes approvals = 11;
+  bytes audit_chain_head = 12;
+  bytes context = 13;
+}
+
+message GatedDestroyResponse {
   bool approved = 1;
   bytes refusal_record = 2;
   bytes authorization = 3;

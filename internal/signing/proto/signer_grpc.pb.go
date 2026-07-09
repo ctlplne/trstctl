@@ -35,6 +35,7 @@ const (
 	SignerService_Sign_FullMethodName                 = "/trstctl.signing.v1.SignerService/Sign"
 	SignerService_SignArtifact_FullMethodName         = "/trstctl.signing.v1.SignerService/SignArtifact"
 	SignerService_VerifyOperation_FullMethodName      = "/trstctl.signing.v1.SignerService/VerifyOperation"
+	SignerService_GatedDestroy_FullMethodName         = "/trstctl.signing.v1.SignerService/GatedDestroy"
 	SignerService_DestroyKey_FullMethodName           = "/trstctl.signing.v1.SignerService/DestroyKey"
 	SignerService_Health_FullMethodName               = "/trstctl.signing.v1.SignerService/Health"
 	SignerService_MintSuccessor_FullMethodName        = "/trstctl.signing.v1.SignerService/MintSuccessor"
@@ -73,6 +74,12 @@ type SignerServiceClient interface {
 	// edition implementation owns the semantics and may return an opaque signed
 	// refusal record. No private key material crosses this RPC.
 	VerifyOperation(ctx context.Context, in *OperationRequest, opts ...grpc.CallOption) (*OperationResponse, error)
+	// GatedDestroy asks an attached edition-neutral destruction gate to verify
+	// opaque public evidence inside the signer before the signer-local key destroy
+	// hook runs. Core names only generic set/evidence/precondition bytes; the
+	// attached edition implementation owns the semantics and may return an opaque
+	// signed refusal record. The free DestroyKey RPC below remains ungated.
+	GatedDestroy(ctx context.Context, in *GatedDestroyRequest, opts ...grpc.CallOption) (*GatedDestroyResponse, error)
 	// DestroyKey zeroizes and forgets a key handle. It is idempotent.
 	DestroyKey(ctx context.Context, in *DestroyKeyRequest, opts ...grpc.CallOption) (*DestroyKeyResponse, error)
 	// Health reports liveness and readiness. It returns no secret material.
@@ -168,6 +175,16 @@ func (c *signerServiceClient) VerifyOperation(ctx context.Context, in *Operation
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(OperationResponse)
 	err := c.cc.Invoke(ctx, SignerService_VerifyOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) GatedDestroy(ctx context.Context, in *GatedDestroyRequest, opts ...grpc.CallOption) (*GatedDestroyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GatedDestroyResponse)
+	err := c.cc.Invoke(ctx, SignerService_GatedDestroy_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -273,6 +290,12 @@ type SignerServiceServer interface {
 	// edition implementation owns the semantics and may return an opaque signed
 	// refusal record. No private key material crosses this RPC.
 	VerifyOperation(context.Context, *OperationRequest) (*OperationResponse, error)
+	// GatedDestroy asks an attached edition-neutral destruction gate to verify
+	// opaque public evidence inside the signer before the signer-local key destroy
+	// hook runs. Core names only generic set/evidence/precondition bytes; the
+	// attached edition implementation owns the semantics and may return an opaque
+	// signed refusal record. The free DestroyKey RPC below remains ungated.
+	GatedDestroy(context.Context, *GatedDestroyRequest) (*GatedDestroyResponse, error)
 	// DestroyKey zeroizes and forgets a key handle. It is idempotent.
 	DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error)
 	// Health reports liveness and readiness. It returns no secret material.
@@ -338,6 +361,9 @@ func (UnimplementedSignerServiceServer) SignArtifact(context.Context, *SignArtif
 }
 func (UnimplementedSignerServiceServer) VerifyOperation(context.Context, *OperationRequest) (*OperationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifyOperation not implemented")
+}
+func (UnimplementedSignerServiceServer) GatedDestroy(context.Context, *GatedDestroyRequest) (*GatedDestroyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GatedDestroy not implemented")
 }
 func (UnimplementedSignerServiceServer) DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DestroyKey not implemented")
@@ -467,6 +493,24 @@ func _SignerService_VerifyOperation_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SignerServiceServer).VerifyOperation(ctx, req.(*OperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_GatedDestroy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GatedDestroyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).GatedDestroy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_GatedDestroy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).GatedDestroy(ctx, req.(*GatedDestroyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -623,6 +667,10 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyOperation",
 			Handler:    _SignerService_VerifyOperation_Handler,
+		},
+		{
+			MethodName: "GatedDestroy",
+			Handler:    _SignerService_GatedDestroy_Handler,
 		},
 		{
 			MethodName: "DestroyKey",

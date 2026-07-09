@@ -76,6 +76,11 @@ type Server struct {
 	// ordering and transport seam; edition code owns the semantics.
 	operationGate OperationGate
 
+	// gatedDestroyer, when non-nil, verifies opaque destruction preconditions
+	// inside the signer before a caller-provided destroy operation may run. Core
+	// owns only the generic ordering seam; edition code owns the semantics.
+	gatedDestroyer GatedDestroyer
+
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
 	// (RED-003). The signer uses it as verifier material; production token minting
@@ -310,27 +315,56 @@ func (s *Server) VerifyOperation(ctx context.Context, req *signerpb.OperationReq
 	return operationDecisionToProto(decision), nil
 }
 
+// GatedDestroy verifies opaque destruction evidence through the attached
+// signer-side gate, then destroys the signer-local key handle only after the gate
+// approves. It fails closed in core-only builds where no gate is attached. The
+// free DestroyKey RPC below is deliberately separate and remains ungated.
+func (s *Server) GatedDestroy(ctx context.Context, req *signerpb.GatedDestroyRequest) (*signerpb.GatedDestroyResponse, error) {
+	greq, err := gatedDestroyRequestFromProto(req)
+	if err != nil {
+		return nil, err
+	}
+	decision, err := s.gatedDestroy(ctx, greq, s.destroyKeyHandle)
+	if err != nil {
+		if errors.Is(err, ErrNoGatedDestroyer) {
+			return nil, status.Error(codes.Unimplemented, err.Error())
+		}
+		return nil, status.Errorf(codes.FailedPrecondition, "gated destroy: %v", err)
+	}
+	return gatedDestroyDecisionToProto(decision), nil
+}
+
 // DestroyKey zeroizes and forgets a handle. It is idempotent.
-func (s *Server) DestroyKey(_ context.Context, req *signerpb.DestroyKeyRequest) (*signerpb.DestroyKeyResponse, error) {
+func (s *Server) DestroyKey(ctx context.Context, req *signerpb.DestroyKeyRequest) (*signerpb.DestroyKeyResponse, error) {
 	h := req.GetHandle()
 	if h == nil || h.GetId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing key handle")
 	}
+	if err := s.destroyKeyHandle(ctx, h.GetId()); err != nil {
+		return nil, err
+	}
+	return &signerpb.DestroyKeyResponse{}, nil
+}
+
+func (s *Server) destroyKeyHandle(_ context.Context, handle string) error {
+	if handle == "" {
+		return status.Error(codes.InvalidArgument, "missing key handle")
+	}
 	s.mu.Lock()
-	held, ok := s.keys[h.GetId()]
+	held, ok := s.keys[handle]
 	if ok {
-		delete(s.keys, h.GetId())
+		delete(s.keys, handle)
 	}
 	s.mu.Unlock()
 	if ok {
 		held.signer.Destroy()
 		if s.store != nil {
-			if err := s.store.Remove(h.GetId()); err != nil {
-				return nil, status.Errorf(codes.Internal, "remove persisted key: %v", err)
+			if err := s.store.Remove(handle); err != nil {
+				return status.Errorf(codes.Internal, "remove persisted key: %v", err)
 			}
 		}
 	}
-	return &signerpb.DestroyKeyResponse{}, nil
+	return nil
 }
 
 // Health reports whether the server is serving or draining.
@@ -358,6 +392,9 @@ func (s *Server) Shutdown() {
 		s.kemCustody.DestroyAll()
 	}
 	if destroyer, ok := s.artifactSigner.(interface{ Destroy() }); ok {
+		destroyer.Destroy()
+	}
+	if destroyer, ok := s.gatedDestroyer.(interface{ Destroy() }); ok {
 		destroyer.Destroy()
 	}
 }

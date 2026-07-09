@@ -222,6 +222,78 @@ func operationDecisionFromProto(resp *signerpb.OperationResponse) OperationDecis
 	}
 }
 
+func gatedDestroyRequestFromProto(req *signerpb.GatedDestroyRequest) (GatedDestroyRequest, error) {
+	if req == nil {
+		return GatedDestroyRequest{}, status.Error(codes.InvalidArgument, "nil gated destroy request")
+	}
+	if req.GetTenantId() == "" {
+		return GatedDestroyRequest{}, status.Error(codes.InvalidArgument, "missing tenant id")
+	}
+	if req.GetHandle() == nil || req.GetHandle().GetId() == "" {
+		return GatedDestroyRequest{}, status.Error(codes.InvalidArgument, "missing key handle")
+	}
+	if req.GetSubjectRef() == "" {
+		return GatedDestroyRequest{}, status.Error(codes.InvalidArgument, "missing subject ref")
+	}
+	if req.GetLedgerPosition() == 0 {
+		return GatedDestroyRequest{}, status.Error(codes.InvalidArgument, "missing ledger position")
+	}
+	return GatedDestroyRequest{
+		TenantID:             req.GetTenantId(),
+		Handle:               req.GetHandle().GetId(),
+		SubjectRef:           req.GetSubjectRef(),
+		AssertedFinalEpoch:   req.GetAssertedFinalEpoch(),
+		LedgerPosition:       req.GetLedgerPosition(),
+		RequiredSet:          append([]byte(nil), req.GetRequiredSet()...),
+		RequiredSetDigest:    append([]byte(nil), req.GetRequiredSetDigest()...),
+		SatisfiedSet:         append([]byte(nil), req.GetSatisfiedSet()...),
+		SatisfactionEvidence: append([]byte(nil), req.GetSatisfactionEvidence()...),
+		Authorization:        append([]byte(nil), req.GetAuthorization()...),
+		Approvals:            append([]byte(nil), req.GetApprovals()...),
+		AuditChainHead:       append([]byte(nil), req.GetAuditChainHead()...),
+		Context:              append([]byte(nil), req.GetContext()...),
+	}, nil
+}
+
+func gatedDestroyDecisionToProto(dec GatedDestroyDecision) *signerpb.GatedDestroyResponse {
+	return &signerpb.GatedDestroyResponse{
+		Approved:      dec.Approved,
+		RefusalRecord: append([]byte(nil), dec.RefusalRecord...),
+		Authorization: append([]byte(nil), dec.Authorization...),
+		Evidence:      append([]byte(nil), dec.Evidence...),
+	}
+}
+
+func gatedDestroyRequestToProto(req GatedDestroyRequest) *signerpb.GatedDestroyRequest {
+	return &signerpb.GatedDestroyRequest{
+		TenantId:             req.TenantID,
+		Handle:               &signerpb.KeyHandle{Id: req.Handle},
+		SubjectRef:           req.SubjectRef,
+		AssertedFinalEpoch:   req.AssertedFinalEpoch,
+		LedgerPosition:       req.LedgerPosition,
+		RequiredSet:          append([]byte(nil), req.RequiredSet...),
+		RequiredSetDigest:    append([]byte(nil), req.RequiredSetDigest...),
+		SatisfiedSet:         append([]byte(nil), req.SatisfiedSet...),
+		SatisfactionEvidence: append([]byte(nil), req.SatisfactionEvidence...),
+		Authorization:        append([]byte(nil), req.Authorization...),
+		Approvals:            append([]byte(nil), req.Approvals...),
+		AuditChainHead:       append([]byte(nil), req.AuditChainHead...),
+		Context:              append([]byte(nil), req.Context...),
+	}
+}
+
+func gatedDestroyDecisionFromProto(resp *signerpb.GatedDestroyResponse) GatedDestroyDecision {
+	if resp == nil {
+		return GatedDestroyDecision{}
+	}
+	return GatedDestroyDecision{
+		Approved:      resp.GetApproved(),
+		RefusalRecord: append([]byte(nil), resp.GetRefusalRecord()...),
+		Authorization: append([]byte(nil), resp.GetAuthorization()...),
+		Evidence:      append([]byte(nil), resp.GetEvidence()...),
+	}
+}
+
 // mintRequestFromProto decodes a wire MintSuccessorRequest into the in-signer
 // MintRequest (INT-01). It never carries private key material — the predecessor is
 // a handle only.

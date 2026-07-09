@@ -10,6 +10,7 @@ import (
 
 	agiddelegation "trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/ee/agentid/reach"
+	vdecgate "trstctl.com/trstctl/ee/decommission/gate"
 	eepqc "trstctl.com/trstctl/ee/pqc"
 	xrecdigest "trstctl.com/trstctl/ee/reconcile/digest"
 	xrecplan "trstctl.com/trstctl/ee/reconcile/plan"
@@ -91,6 +92,18 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 		os.Exit(1)
 	}
 	opts = append(opts, signing.WithOperationGate(xrecPlanGate))
+
+	refusalSink, err := vdecgate.NewRefusalSink(floorDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: build VDEC refusal sink: %v\n", err)
+		os.Exit(1)
+	}
+	vdecGate, err := vdecgate.New(vdecgate.Config{SignerID: "trstctl-signer", Sink: refusalSink})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: build VDEC gated destruction verifier: %v\n", err)
+		os.Exit(1)
+	}
+	opts = append(opts, signing.WithGatedDestruction(vdecGate))
 
 	// The after-approval issuance KEY OP (AGID-INT-WIRE): the second half of the gated
 	// mint. On an APPROVED decision from the gate above, it generates the agent credential

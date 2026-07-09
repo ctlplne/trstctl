@@ -116,6 +116,17 @@ func (c *Client) VerifyOperation(ctx context.Context, req OperationRequest) (Ope
 	return operationDecisionFromProto(resp), nil
 }
 
+// GatedDestroy asks the isolated signer to verify generic public destruction
+// evidence inside the signer and destroy the signer-held handle only after the
+// attached gate approves. No private key material crosses the transport.
+func (c *Client) GatedDestroy(ctx context.Context, req GatedDestroyRequest) (GatedDestroyDecision, error) {
+	resp, err := c.svc.GatedDestroy(ctx, gatedDestroyRequestToProto(req))
+	if err != nil {
+		return GatedDestroyDecision{}, err
+	}
+	return gatedDestroyDecisionFromProto(resp), nil
+}
+
 // DialReady connects to a signer at socketPath and waits up to timeout for it to
 // report SERVING. The control plane uses it to attach to an externally deployed
 // signer (R3.2 external mode), rather than supervising a child.
