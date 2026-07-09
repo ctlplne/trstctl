@@ -1107,6 +1107,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			Minter:            s.successionMinter(),
 			IssuanceGate:      s.issuanceGate(),
 			KEMCustody:        s.kemCustody(),
+			Transit:           s.transit,
 		})
 		if err != nil {
 			return err

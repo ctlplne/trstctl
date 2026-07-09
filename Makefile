@@ -310,7 +310,7 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	else \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) pcas-caller-gate pcas-no-skip-gate; \
 	fi
-	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate xrec-caller-gate
+	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate xrec-caller-gate vdec-caller-gate
 
 .PHONY: editions-gate
 editions-gate: ## Prove the open-core one-way valve and core-only build
@@ -367,6 +367,14 @@ xrec-caller-gate: ## XREC-INT-CALL production-caller FLOOR: every ee/reconcile c
 xrec-caller-gate-strong: ## XREC-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl and cmd/trstctl-signer proves every XREC constructor is reachable
 	@echo ">> xrec-caller-gate-strong (XREC-INT-CALL RTA reachability; whole-program load, CI-only)"
 	@$(GO) test -tags xrecrta ./ee/reconcile/intgate/... -count=1
+
+.PHONY: vdec-caller-gate vdec-caller-gate-strong
+vdec-caller-gate: ## VDEC-INT-CALL production-caller FLOOR: every ee/decommission constructor has a seam-rooted non-test caller
+	@echo ">> vdec-caller-gate (VDEC-INT-CALL floor + seam: every ee/decommission constructor has a non-test caller rooted at the ee_attach seam)"
+	@$(GO) test ./ee/decommission/intgate/... -count=1
+vdec-caller-gate-strong: ## VDEC-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl and cmd/trstctl-signer proves every VDEC constructor is reachable
+	@echo ">> vdec-caller-gate-strong (VDEC-INT-CALL RTA reachability; whole-program load, CI-only)"
+	@$(GO) test -tags vdecrta ./ee/decommission/intgate/... -count=1
 xrec-wire-gate: ## XREC-INT-WIRE real-infra gate: PostgreSQL/RLS + embedded NATS + real signer + restart replay
 	@echo ">> xrec-wire-gate (XREC-INT-WIRE real PG/RLS + embedded NATS + cmd/trstctl-signer)"
 	@$(GO) test -tags integration ./ee/reconcile/intwire/... -count=1 -timeout=10m

@@ -5,10 +5,10 @@ package aggregate
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
-	"trstctl.com/trstctl/ee/pqcmigration"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -20,7 +20,7 @@ type CampaignRequest struct {
 	CampaignID                        string
 	SuccessionEpochID                 string
 	SupersedingSuccessionRecordDigest []byte
-	SuccessionJobs                    []pqcmigration.SuccessionJob
+	SuccessionJobs                    any
 	ForbiddenSuccessionAuthorityUse   ForbiddenSuccessionAuthorityUseHook
 }
 
@@ -37,8 +37,9 @@ func CampaignBindingFromPQC(req CampaignRequest) (CampaignBinding, error) {
 	if campaignID == "" || epochID == "" || len(req.SupersedingSuccessionRecordDigest) == 0 {
 		return CampaignBinding{}, fmt.Errorf("%w: campaign id, succession epoch id, and consumed succession record digest are required", ErrInvalidRecord)
 	}
-	digests := make([][]byte, 0, len(req.SuccessionJobs))
-	for _, job := range req.SuccessionJobs {
+	jobs := reflect.ValueOf(req.SuccessionJobs)
+	digests := make([][]byte, 0, jobCount(jobs))
+	for _, job := range jobValues(jobs) {
 		raw, err := json.Marshal(job)
 		if err != nil {
 			return CampaignBinding{}, fmt.Errorf("aggregate decommissioning record: encode succession job digest: %w", err)
@@ -52,6 +53,34 @@ func CampaignBindingFromPQC(req CampaignRequest) (CampaignBinding, error) {
 		SupersedingSuccessionRecordDigest: cloneBytes(req.SupersedingSuccessionRecordDigest),
 		SuccessionJobDigests:              clone2D(digests),
 	}, nil
+}
+
+func jobCount(v reflect.Value) int {
+	if !v.IsValid() {
+		return 0
+	}
+	switch v.Kind() {
+	case reflect.Array, reflect.Slice:
+		return v.Len()
+	default:
+		return 1
+	}
+}
+
+func jobValues(v reflect.Value) []any {
+	if !v.IsValid() {
+		return nil
+	}
+	switch v.Kind() {
+	case reflect.Array, reflect.Slice:
+		out := make([]any, 0, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			out = append(out, v.Index(i).Interface())
+		}
+		return out
+	default:
+		return []any{v.Interface()}
+	}
 }
 
 func cloneCampaign(in *CampaignBinding) *CampaignBinding {

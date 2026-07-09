@@ -128,6 +128,11 @@ jobs:
       - name: XREC production-caller gate (strong / RTA)
         run: make xrec-caller-gate-strong
 
+      # VDEC-INT-CALL STRONG check: same delivered-not-test-only proof for the
+      # verifiable decommissioning family. The lexical floor runs inside `make lint`.
+      - name: VDEC production-caller gate (strong / RTA)
+        run: make vdec-caller-gate-strong
+
       # XREC-INT-WIRE: run the real-substrate integration suite over PostgreSQL/RLS,
       # embedded file-backed NATS/JetStream, the outbox, and the real signer process.
       - name: XREC wire integration gate

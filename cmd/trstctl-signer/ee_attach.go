@@ -5,12 +5,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 
 	agiddelegation "trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/ee/agentid/reach"
-	vdecgate "trstctl.com/trstctl/ee/decommission/gate"
+	vdecsigner "trstctl.com/trstctl/ee/decommission/signerwiring"
 	eepqc "trstctl.com/trstctl/ee/pqc"
 	xrecdigest "trstctl.com/trstctl/ee/reconcile/digest"
 	xrecplan "trstctl.com/trstctl/ee/reconcile/plan"
@@ -73,7 +75,6 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 		fmt.Fprintf(os.Stderr, "trstctl-signer: build XREC artifact signer: %v\n", err)
 		os.Exit(1)
 	}
-	opts = append(opts, signing.WithArtifactSigner(xrecSigner))
 	xrecPlanKeys, err := xrecplan.LoadTrustedPlanKeys(floorDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: load XREC plan trust: %v\n", err)
@@ -93,22 +94,13 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 	}
 	opts = append(opts, signing.WithOperationGate(xrecPlanGate))
 
-	refusalSink, err := vdecgate.NewRefusalSink(floorDir)
+	vdecRuntime, err := vdecsigner.NewRuntime(vdecsigner.Config{SignerID: "trstctl-signer", FloorDir: floorDir})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "trstctl-signer: build VDEC refusal sink: %v\n", err)
+		fmt.Fprintf(os.Stderr, "trstctl-signer: build VDEC signer runtime: %v\n", err)
 		os.Exit(1)
 	}
-	vdecQuorumPolicy, err := vdecgate.LoadQuorumPolicy(floorDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "trstctl-signer: load VDEC quorum policy: %v\n", err)
-		os.Exit(1)
-	}
-	vdecGate, err := vdecgate.New(vdecgate.Config{SignerID: "trstctl-signer", Sink: refusalSink, QuorumPolicy: vdecQuorumPolicy})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "trstctl-signer: build VDEC gated destruction verifier: %v\n", err)
-		os.Exit(1)
-	}
-	opts = append(opts, signing.WithGatedDestruction(vdecGate))
+	opts = append(opts, signing.WithGatedDestruction(vdecRuntime))
+	opts = append(opts, signing.WithArtifactSigner(chainedArtifactSigners{xrecSigner, vdecRuntime}))
 
 	// The after-approval issuance KEY OP (AGID-INT-WIRE): the second half of the gated
 	// mint. On an APPROVED decision from the gate above, it generates the agent credential
@@ -152,4 +144,32 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 		opts = append(opts, signing.WithSuccessionMinter(m))
 	}
 	return opts
+}
+
+type chainedArtifactSigners []signing.ArtifactSigner
+
+func (c chainedArtifactSigners) SignArtifact(ctx context.Context, req signing.ArtifactSignRequest) (signing.ArtifactSignature, error) {
+	var errs []error
+	for _, signer := range c {
+		if signer == nil {
+			continue
+		}
+		sig, err := signer.SignArtifact(ctx, req)
+		if err == nil {
+			return sig, nil
+		}
+		errs = append(errs, err)
+	}
+	if len(errs) == 0 {
+		return signing.ArtifactSignature{}, signing.ErrNoArtifactSigner
+	}
+	return signing.ArtifactSignature{}, errors.Join(errs...)
+}
+
+func (c chainedArtifactSigners) Destroy() {
+	for _, signer := range c {
+		if destroyer, ok := signer.(interface{ Destroy() }); ok {
+			destroyer.Destroy()
+		}
+	}
 }

@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/ee/decommission/depstate"
-	"trstctl.com/trstctl/ee/decommission/reprotect"
+	"trstctl.com/trstctl/ee/decommission/jobmodel"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -25,11 +25,11 @@ type SanitizationClaim struct {
 	ClaimDigest    []byte   `json:"claim_digest,omitempty"`
 }
 
-func PlanReprotectionWithErasure(state depstate.KeyState, claims []SanitizationClaim) ([]reprotect.Job, error) {
+func PlanReprotectionWithErasure(state depstate.KeyState, claims []SanitizationClaim) ([]jobmodel.Job, error) {
 	if err := VerifySanitizationClaims(state, claims); err != nil {
 		return nil, err
 	}
-	return reprotect.PlanFromState(state)
+	return jobmodel.PlanFromState(state)
 }
 
 func VerifySanitizationClaims(state depstate.KeyState, claims []SanitizationClaim) error {

@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/transit"
 )
 
 type LicensedLeafSigner func(caCertDER []byte, caSigner crypto.DigestSigner, csrDER []byte, ttl time.Duration, prof crypto.LeafProfile) ([]byte, error)
@@ -96,6 +97,10 @@ type LicensedOutboxDeps struct {
 	// generates the private key inside the signer, decapsulates only through the
 	// signer RPC, and zeroizes on retirement. nil means KEM re-wrap fails closed.
 	KEMCustody KEMCustody
+	// Transit is the core envelope/transit service. Licensed outbox handlers may use
+	// it for public ciphertext re-wrap operations; nil means those operations fail
+	// closed instead of inventing a non-durable substitute.
+	Transit *transit.Service
 }
 
 type LicensedOutboxHandler interface {

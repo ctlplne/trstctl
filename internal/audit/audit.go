@@ -15,31 +15,17 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/auditchain"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/eventledger"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
 )
 
-// Record is one audit entry: a projection of an event for an auditor. Actor is
-// the authenticated caller who performed the mutation (the "who"/"under what
-// authorization"); Hash is the record's position in the tamper-evident chain
-// (R2.1), each linked to its predecessor so any alteration is detectable.
-type Record struct {
-	Sequence uint64 `json:"sequence"`
-	// StreamSequence is the raw event-stream sequence. It is intentionally omitted
-	// from JSON: tenant-facing audit/query APIs expose only the tenant-local
-	// Sequence above, while retention/pruning still needs the operator-only stream
-	// cursor to delete archived events safely.
-	StreamSequence uint64          `json:"-"`
-	ID             string          `json:"id"`
-	Type           string          `json:"type"`
-	TenantID       string          `json:"tenant_id"`
-	Time           time.Time       `json:"time"`
-	Actor          *events.Actor   `json:"actor,omitempty"`
-	Data           json.RawMessage `json:"data,omitempty"`
-	Hash           string          `json:"hash,omitempty"`
-}
+// Record is one audit entry in the tamper-evident chain. The concrete type lives
+// in internal/auditchain so signer-side code can bind audit heads without linking
+// the full event-log-backed audit service.
+type Record = auditchain.Record
 
 // ErrMissingTenant is returned by Search/Export/VerifyChain when the query has an
 // empty TenantID (TENANT-003). The audit log spans every tenant, and the

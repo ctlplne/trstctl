@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/ee/decommission/gate"
-	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auditchain"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -102,7 +102,7 @@ type MintRequest struct {
 	RevocationCompletionDigest  []byte
 	DestructionEvidence         EvidenceBinding
 	AuditSeed                   string
-	AuditRecords                []audit.Record
+	AuditRecords                []auditchain.Record
 	AuditChainHead              string
 	Successors                  []SuccessorKey
 	PolicyRef                   string
@@ -360,8 +360,8 @@ func VerifyEncoded(raw []byte, trust crypto.PublicKey) (SignedRecord, error) {
 	return rec, VerifyRecord(rec, trust)
 }
 
-func SealAuditHead(seed string, records []audit.Record) string {
-	cloned := make([]audit.Record, len(records))
+func SealAuditHead(seed string, records []auditchain.Record) string {
+	cloned := make([]auditchain.Record, len(records))
 	for i, r := range records {
 		cloned[i] = r
 		cloned[i].Data = append([]byte(nil), r.Data...)
@@ -371,7 +371,7 @@ func SealAuditHead(seed string, records []audit.Record) string {
 			cloned[i].Actor = &actor
 		}
 	}
-	return audit.SealFrom(seed, cloned)
+	return auditchain.SealFrom(seed, cloned)
 }
 
 type PublishedVector struct {
