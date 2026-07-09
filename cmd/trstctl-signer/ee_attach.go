@@ -98,7 +98,12 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 		fmt.Fprintf(os.Stderr, "trstctl-signer: build VDEC refusal sink: %v\n", err)
 		os.Exit(1)
 	}
-	vdecGate, err := vdecgate.New(vdecgate.Config{SignerID: "trstctl-signer", Sink: refusalSink})
+	vdecQuorumPolicy, err := vdecgate.LoadQuorumPolicy(floorDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: load VDEC quorum policy: %v\n", err)
+		os.Exit(1)
+	}
+	vdecGate, err := vdecgate.New(vdecgate.Config{SignerID: "trstctl-signer", Sink: refusalSink, QuorumPolicy: vdecQuorumPolicy})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: build VDEC gated destruction verifier: %v\n", err)
 		os.Exit(1)

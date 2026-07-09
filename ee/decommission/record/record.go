@@ -98,6 +98,7 @@ type MintRequest struct {
 	FinalEpoch                  uint64
 	CompletionEventsDigest      []byte
 	RequiredSetDigest           []byte
+	QuorumEvidence              *gate.QuorumEvidence
 	RevocationCompletionDigest  []byte
 	DestructionEvidence         EvidenceBinding
 	AuditSeed                   string
@@ -138,21 +139,22 @@ type SuccessorKey struct {
 }
 
 type Commitment struct {
-	Version                    int               `json:"version"`
-	Domain                     string            `json:"domain"`
-	TenantID                   string            `json:"tenant_id"`
-	StableKeyID                string            `json:"stable_key_id"`
-	FinalEpoch                 uint64            `json:"final_epoch"`
-	CompletionEventsDigest     []byte            `json:"completion_events_digest"`
-	RequiredSetDigest          []byte            `json:"required_set_digest,omitempty"`
-	RevocationCompletionDigest []byte            `json:"revocation_completion_digest,omitempty"`
-	DestructionEvidence        EvidenceBinding   `json:"destruction_evidence"`
-	AuditChainHead             string            `json:"audit_chain_head"`
-	Successors                 []SuccessorKey    `json:"successors,omitempty"`
-	PolicyRef                  string            `json:"policy_ref,omitempty"`
-	PolicyDecisionDigest       []byte            `json:"policy_decision_digest,omitempty"`
-	MintedAtUnix               int64             `json:"minted_at_unix"`
-	Transparency               TransparencyProof `json:"transparency,omitempty"`
+	Version                    int                  `json:"version"`
+	Domain                     string               `json:"domain"`
+	TenantID                   string               `json:"tenant_id"`
+	StableKeyID                string               `json:"stable_key_id"`
+	FinalEpoch                 uint64               `json:"final_epoch"`
+	CompletionEventsDigest     []byte               `json:"completion_events_digest"`
+	RequiredSetDigest          []byte               `json:"required_set_digest,omitempty"`
+	QuorumEvidence             *gate.QuorumEvidence `json:"quorum_evidence,omitempty"`
+	RevocationCompletionDigest []byte               `json:"revocation_completion_digest,omitempty"`
+	DestructionEvidence        EvidenceBinding      `json:"destruction_evidence"`
+	AuditChainHead             string               `json:"audit_chain_head"`
+	Successors                 []SuccessorKey       `json:"successors,omitempty"`
+	PolicyRef                  string               `json:"policy_ref,omitempty"`
+	PolicyDecisionDigest       []byte               `json:"policy_decision_digest,omitempty"`
+	MintedAtUnix               int64                `json:"minted_at_unix"`
+	Transparency               TransparencyProof    `json:"transparency,omitempty"`
 }
 
 type TransparencyProof struct {
@@ -165,14 +167,15 @@ type TransparencyProof struct {
 }
 
 type SignedRecord struct {
-	Version                 int              `json:"version"`
-	Type                    string           `json:"type"`
-	Commitment              Commitment       `json:"commitment"`
-	CommitmentDigest        []byte           `json:"commitment_digest"`
-	SignerID                string           `json:"signer_id"`
-	AttestationAlgorithm    crypto.Algorithm `json:"attestation_algorithm"`
-	AttestationPublicKeyDER []byte           `json:"attestation_public_key_der"`
-	Signature               []byte           `json:"signature"`
+	Version                 int                `json:"version"`
+	Type                    string             `json:"type"`
+	Commitment              Commitment         `json:"commitment"`
+	CommitmentDigest        []byte             `json:"commitment_digest"`
+	SignerID                string             `json:"signer_id"`
+	AttestationAlgorithm    crypto.Algorithm   `json:"attestation_algorithm"`
+	AttestationPublicKeyDER []byte             `json:"attestation_public_key_der"`
+	Signature               []byte             `json:"signature"`
+	Countersignatures       []Countersignature `json:"countersignatures,omitempty"`
 }
 
 func (m *Minter) Mint(ctx context.Context, req MintRequest) (SignedRecord, error) {
@@ -244,6 +247,10 @@ func commitmentFromRequest(req MintRequest, now time.Time) (Commitment, error) {
 	if auditHead == "" {
 		return Commitment{}, fmt.Errorf("%w: audit chain head is required", ErrInvalidRecord)
 	}
+	quorumEvidence, err := normalizeQuorumEvidenceForRequest(req.QuorumEvidence)
+	if err != nil {
+		return Commitment{}, err
+	}
 	return Commitment{
 		Version:                    SchemaV1,
 		Domain:                     commitmentDomain,
@@ -252,6 +259,7 @@ func commitmentFromRequest(req MintRequest, now time.Time) (Commitment, error) {
 		FinalEpoch:                 req.FinalEpoch,
 		CompletionEventsDigest:     cloneBytes(req.CompletionEventsDigest),
 		RequiredSetDigest:          cloneBytes(req.RequiredSetDigest),
+		QuorumEvidence:             quorumEvidence,
 		RevocationCompletionDigest: cloneBytes(req.RevocationCompletionDigest),
 		DestructionEvidence:        ev,
 		AuditChainHead:             auditHead,
@@ -401,6 +409,7 @@ func normalizeRecord(rec SignedRecord) SignedRecord {
 	rec.CommitmentDigest = cloneBytes(rec.CommitmentDigest)
 	rec.AttestationPublicKeyDER = cloneBytes(rec.AttestationPublicKeyDER)
 	rec.Signature = cloneBytes(rec.Signature)
+	rec.Countersignatures = cloneCountersignatures(rec.Countersignatures)
 	return rec
 }
 
@@ -411,6 +420,7 @@ func normalizeCommitment(c Commitment) Commitment {
 	c.StableKeyID = strings.TrimSpace(c.StableKeyID)
 	c.CompletionEventsDigest = cloneBytes(c.CompletionEventsDigest)
 	c.RequiredSetDigest = cloneBytes(c.RequiredSetDigest)
+	c.QuorumEvidence = cloneQuorumEvidence(c.QuorumEvidence)
 	c.RevocationCompletionDigest = cloneBytes(c.RevocationCompletionDigest)
 	c.DestructionEvidence = normalizeEvidence(c.DestructionEvidence)
 	c.AuditChainHead = strings.TrimSpace(c.AuditChainHead)
@@ -431,6 +441,27 @@ func normalizeEvidence(e EvidenceBinding) EvidenceBinding {
 		RecordDigest:       cloneBytes(e.RecordDigest),
 		AttestationClassID: strings.TrimSpace(e.AttestationClassID),
 	}
+}
+
+func normalizeQuorumEvidenceForRequest(in *gate.QuorumEvidence) (*gate.QuorumEvidence, error) {
+	if in == nil {
+		return nil, nil
+	}
+	ev := gate.NormalizeQuorumEvidence(*in)
+	if err := gate.ValidateQuorumEvidence(ev); err != nil {
+		return nil, fmt.Errorf("%w: quorum evidence: %v", ErrInvalidRecord, err)
+	}
+	return cloneQuorumEvidence(&ev), nil
+}
+
+func cloneQuorumEvidence(in *gate.QuorumEvidence) *gate.QuorumEvidence {
+	if in == nil {
+		return nil
+	}
+	ev := gate.NormalizeQuorumEvidence(*in)
+	ev.Approvers = append([]string(nil), ev.Approvers...)
+	ev.ApproverDigest = cloneBytes(ev.ApproverDigest)
+	return &ev
 }
 
 func normalizeSuccessors(in []SuccessorKey) []SuccessorKey {

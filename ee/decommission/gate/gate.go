@@ -39,11 +39,12 @@ type RefusalAppendSink interface {
 
 // Config wires the signer-side VDEC destruction gate.
 type Config struct {
-	SignerID  string
-	KeyID     string
-	Algorithm crypto.Algorithm
-	Sink      RefusalAppendSink
-	Now       func() time.Time
+	SignerID     string
+	KeyID        string
+	Algorithm    crypto.Algorithm
+	Sink         RefusalAppendSink
+	QuorumPolicy QuorumPolicy
+	Now          func() time.Time
 }
 
 // Gate is attached to the isolated signer through signing.WithGatedDestruction.
@@ -54,6 +55,7 @@ type Gate struct {
 	keyID    string
 	key      *crypto.LockedSigner
 	sink     RefusalAppendSink
+	quorum   QuorumPolicy
 	now      func() time.Time
 }
 
@@ -82,7 +84,7 @@ func New(cfg Config) (*Gate, error) {
 	if now == nil {
 		now = time.Now
 	}
-	return &Gate{signerID: signerID, keyID: keyID, key: key, sink: sink, now: now}, nil
+	return &Gate{signerID: signerID, keyID: keyID, key: key, sink: sink, quorum: cloneQuorumPolicy(cfg.QuorumPolicy), now: now}, nil
 }
 
 // VerifyGatedDestroy refuses until the set difference
@@ -135,9 +137,14 @@ func (g *Gate) VerifyGatedDestroy(ctx context.Context, req signing.GatedDestroyR
 	if len(unaccounted) != 0 {
 		return g.refuse(ctx, req, state, unaccounted)
 	}
+	quorumEvidence, err := g.verifyQuorum(req)
+	if err != nil {
+		return signing.GatedDestroyDecision{}, err
+	}
 	return signing.GatedDestroyDecision{
-		Approved: true,
-		Evidence: requiredDigest,
+		Approved:      true,
+		Authorization: quorumEvidence,
+		Evidence:      requiredDigest,
 	}, nil
 }
 
