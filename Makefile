@@ -368,13 +368,20 @@ xrec-caller-gate-strong: ## XREC-INT-CALL STRONG check (CI): RTA call graph from
 	@echo ">> xrec-caller-gate-strong (XREC-INT-CALL RTA reachability; whole-program load, CI-only)"
 	@$(GO) test -tags xrecrta ./ee/reconcile/intgate/... -count=1
 
-.PHONY: vdec-caller-gate vdec-caller-gate-strong
+.PHONY: vdec-caller-gate vdec-caller-gate-strong vdec-wire-gate vdec-release-gate
 vdec-caller-gate: ## VDEC-INT-CALL production-caller FLOOR: every ee/decommission constructor has a seam-rooted non-test caller
 	@echo ">> vdec-caller-gate (VDEC-INT-CALL floor + seam: every ee/decommission constructor has a non-test caller rooted at the ee_attach seam)"
 	@$(GO) test ./ee/decommission/intgate/... -count=1
 vdec-caller-gate-strong: ## VDEC-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl and cmd/trstctl-signer proves every VDEC constructor is reachable
 	@echo ">> vdec-caller-gate-strong (VDEC-INT-CALL RTA reachability; whole-program load, CI-only)"
 	@$(GO) test -tags vdecrta ./ee/decommission/intgate/... -count=1
+vdec-wire-gate: ## VDEC-INT-WIRE real-infra gate: PostgreSQL/RLS + embedded NATS + real signer + restart replay
+	@echo ">> vdec-wire-gate (VDEC-INT-WIRE real PG/RLS + embedded NATS + cmd/trstctl-signer)"
+	@$(GO) test -tags integration ./ee/decommission/intwire/... -count=1 -timeout=10m
+vdec-release-gate: vdec-caller-gate vdec-wire-gate ## VDEC-11 release gate: conformance, vectors, fuzz seeds, traceability, edition/zero-removal, and e2e
+	@echo ">> vdec-release-gate (VDEC-11 conformance, vectors, fuzz seeds, traceability, edition/zero-removal, and real-substrate e2e)"
+	@$(GO) test ./ee/decommission/conformance/... -count=1
+	@$(GO) test -tags integration ./ee/decommission/conformance/... -count=1 -timeout=12m
 xrec-wire-gate: ## XREC-INT-WIRE real-infra gate: PostgreSQL/RLS + embedded NATS + real signer + restart replay
 	@echo ">> xrec-wire-gate (XREC-INT-WIRE real PG/RLS + embedded NATS + cmd/trstctl-signer)"
 	@$(GO) test -tags integration ./ee/reconcile/intwire/... -count=1 -timeout=10m
@@ -383,9 +390,9 @@ xrec-release-gate: ## XREC-13 release gate: conformance vectors + differential +
 	@$(GO) test -tags integration ./ee/reconcile/conformance/... -count=1 -timeout=10m
 
 .PHONY: security-review
-security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate ## Security-focused local review for signer, remediation, connectors, and XREC delivery paths
-	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC package tests)"
-	@$(GO) test ./internal/signing ./internal/server ./internal/orchestrator ./internal/connector/... ./ee/reconcile/... -count=1
+security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate vdec-caller-gate vdec-caller-gate-strong vdec-wire-gate vdec-release-gate ## Security-focused local review for signer, remediation, connectors, XREC, and VDEC delivery paths
+	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC package tests)"
+	@$(GO) test ./internal/signing ./internal/server ./internal/orchestrator ./internal/connector/... ./ee/reconcile/... ./ee/decommission/... -count=1
 
 .PHONY: web-lint web-format-check web-check
 web-lint: ## Run frontend ESLint from the repository root (CODE-002)

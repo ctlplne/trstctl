@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "description": "VDEC r1 destruction record vector: gated destroy after recorded re-protection, release, and erasure evidence",
+  "vector": {
+    "version": 1,
+    "domain": "trstctl/vdec/destruction-record/vector/v1",
+    "name": "vdec-destruction-record-v1",
+    "encoded_record": "eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiZGVzdHJ1Y3Rpb25fcmVjb3JkLm1pbnRlZCIsImNvbW1pdG1lbnQiOnsidmVyc2lvbiI6MSwiZG9tYWluIjoidHJzdGN0bC92ZGVjL2Rlc3RydWN0aW9uLXJlY29yZC9jb21taXRtZW50L3YxIiwidGVuYW50X2lkIjoiNzc3Nzc3NzctNzc3Ny03Nzc3LTc3NzctNzc3Nzc3Nzc3Nzc3Iiwic3RhYmxlX2tleV9pZCI6ImtleTovL3RlbmFudC13aXJlL3Jvb3QtY2EiLCJmaW5hbF9lcG9jaCI6NywiY29tcGxldGlvbl9ldmVudHNfZGlnZXN0IjoiM25rNnU4QUMvblJ1KzRTZG0wR3J0T3lENFFvSDBvbnJqd1lYcUVHRTVNRT0iLCJyZXF1aXJlZF9zZXRfZGlnZXN0IjoiQ0ptRHlUOXhOVDBYVjBndlBTWVZ1dmdRNitGbTdPbDk2Nm5VY3M4ZENGWT0iLCJyZXZvY2F0aW9uX2NvbXBsZXRpb25fZGlnZXN0IjoicVBFWWkvUE4zSzNibFd0NW4rUEtIOS9NV1BLbHhsbGFZVjVnUWczM2lGaz0iLCJkZXN0cnVjdGlvbl9ldmlkZW5jZSI6eyJraW5kIjoiY3VzdG9keV9kZXN0cm95LmhzbV9kZXN0cm95ZWQiLCJkaWdlc3QiOiJibXdmQXMyT0orU1dPQ0E3MUNCVU40dVFUYmZhR2NlaFd1RUtrZnZMQVRVPSIsInJlY29yZF9kaWdlc3QiOiJOejljUVlaeXBwc1VYRGIvc1pqQ3h2b0o2VXZQODA3R0xqTVRsckI5WThZPSIsImF0dGVzdGF0aW9uX2NsYXNzX2lkIjoiY2VydGlmaWVkLWhhcmR3YXJlIn0sImF1ZGl0X2NoYWluX2hlYWQiOiJhdWRpdC1oZWFkLWFmdGVyLXZkZWMtY29uZm9ybWFuY2UtZGVzdHJveSIsInN1Y2Nlc3NvcnMiOlt7ImlkIjoia2V5Oi8vdGVuYW50LXdpcmUvcm9vdC1jYS1zdWNjZXNzb3IiLCJlcG9jaCI6OCwiYWxnb3JpdGhtIjoiRUNEU0EtUDM4NCIsInB1YmxpY19kZXIiOiJNSFl3RUFZSEtvWkl6ajBDQVFZRks0RUVBQ0lEWWdBRVNyTTUvK3ZWYnI2c0VKRnNJNGgxUG9BTkl6cE9NY28wZkc0bW56YjNWekNJU09NSTFjZjRMNldaN1V1d0w2NnI5QTZXR1hvVUxuZW5xTFN5Rnl3NHJBdUE0RmsyMUdrQm8wd2hMWXRzR3hkOXo0OXlaUXFuUEJGRUVzSm9wM1ZZIiwiZGlnZXN0IjoiUlU4ZEpQRStLNzl4RHJkb1VjbTh5K0E0SW9LRjN2dHV4WGc0T0RBZkZ6WT0ifV0sInBvbGljeV9yZWYiOiJwb2xpY3k6Ly92ZGVjL2NvbmZvcm1hbmNlL3Jvb3QtY2EiLCJwb2xpY3lfZGVjaXNpb25fZGlnZXN0IjoiWDVkYTU0R045OEJ2UmpQak41TzNOZFZmQTF3Umw0ZWg2bUE3SUR3Y1FhVT0iLCJtaW50ZWRfYXRfdW5peCI6MTgwMDAwMTEwMCwidHJhbnNwYXJlbmN5Ijp7ImxvZ19pZCI6InZkZWMtY29uZm9ybWFuY2UtdHJhbnNwYXJlbmN5IiwidHJlZV9zaXplIjoyLCJjaGVja3BvaW50X2Vwb2NoIjo3LCJsZWFmX2RpZ2VzdCI6IjhHMWxnSWNTV2F6Y0pSWVNHMCt4ZlpLckw2QWpoS1B5bWV6NFMzRmYxMUU9IiwicHJvb2YiOlsiZXlKMlpYSnphVzl1SWpveExDSmtiMjFoYVc0aU9pSjBjbk4wWTNSc0wzWmtaV012WkdWemRISjFZM1JwYjI0dGNtVmpiM0prTDJsdVkyeDFjMmx2YmkxdWIyUmxMM1l4SWl3aWMybGtaU0k2SW5KcFoyaDBJaXdpWkdsblpYTjBJam9pSzBWUlEyOXhNbUpJUlhWcmIxQkVSbmhvVFdodVYxVTNiWFZDZDBFMU5URTFRak4wVkhKU1UxVllhejBpZlE9PSJdfX0sImNvbW1pdG1lbnRfZGlnZXN0IjoiOEcxbGdJY1NXYXpjSlJZU0cwK3hmWktyTDZBamhLUHltZXo0UzNGZjExRT0iLCJzaWduZXJfaWQiOiJ0ZXN0LXZkZWMtY29uZm9ybWFuY2Utc2lnbmVyIiwiYXR0ZXN0YXRpb25fYWxnb3JpdGhtIjoiRUNEU0EtUDI1NiIsImF0dGVzdGF0aW9uX3B1YmxpY19rZXlfZGVyIjoiTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFOWNyS1NZMzQ0dFlwc3N0RjhpTzh0T0s3L0NaQjd0WEI2YW50My9BQlhER0MxUGcxaWI4VXpSaU5VR2FVRHN4aDNMdUY5QU40WEoya1F6NWEwMlJ2a2c9PSIsInNpZ25hdHVyZSI6Ik1FWUNJUUNQd2R6TXBOUTl4RkQvanNUTGVEencybEt3VWdSa0I0cnpOMU85cDBHdHd3SWhBTlhydFI5dVhnVWlMZlN2YzUwbVd1UkxrOHpzWE1hQkRWUTQwbCtaczU4ZSJ9",
+    "encoded_record_digest": "V+P89QfpzdIGNGjO77fuUtv9Qb43lrkNnNA0Ny3asK8=",
+    "attestation_algorithm": "ECDSA-P256",
+    "attestation_public_key_der": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9crKSY344tYpsstF8iO8tOK7/CZB7tXB6ant3/ABXDGC1Pg1ib8UzRiNUGaUDsxh3LuF9AN4XJ2kQz5a02Rvkg=="
+  },
+  "request": {
+    "record": {
+      "version": 1,
+      "type": "destruction_record.minted",
+      "commitment": {
+        "version": 1,
+        "domain": "trstctl/vdec/destruction-record/commitment/v1",
+        "tenant_id": "77777777-7777-7777-7777-777777777777",
+        "stable_key_id": "key://tenant-wire/root-ca",
+        "final_epoch": 7,
+        "completion_events_digest": "3nk6u8AC/nRu+4Sdm0GrtOyD4QoH0onrjwYXqEGE5ME=",
+        "required_set_digest": "CJmDyT9xNT0XV0gvPSYVuvgQ6+Fm7Ol966nUcs8dCFY=",
+        "revocation_completion_digest": "qPEYi/PN3K3blWt5n+PKH9/MWPKlxllaYV5gQg33iFk=",
+        "destruction_evidence": {
+          "kind": "custody_destroy.hsm_destroyed",
+          "digest": "bmwfAs2OJ+SWOCA71CBUN4uQTbfaGcehWuEKkfvLATU=",
+          "record_digest": "Nz9cQYZyppsUXDb/sZjCxvoJ6UvP807GLjMTlrB9Y8Y=",
+          "attestation_class_id": "certified-hardware"
+        },
+        "audit_chain_head": "audit-head-after-vdec-conformance-destroy",
+        "successors": [
+          {
+            "id": "key://tenant-wire/root-ca-successor",
+            "epoch": 8,
+            "algorithm": "ECDSA-P384",
+            "public_der": "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAESrM5/+vVbr6sEJFsI4h1PoANIzpOMco0fG4mnzb3VzCISOMI1cf4L6WZ7UuwL66r9A6WGXoULnenqLSyFyw4rAuA4Fk21GkBo0whLYtsGxd9z49yZQqnPBFEEsJop3VY",
+            "digest": "RU8dJPE+K79xDrdoUcm8y+A4IoKF3vtuxXg4ODAfFzY="
+          }
+        ],
+        "policy_ref": "policy://vdec/conformance/root-ca",
+        "policy_decision_digest": "X5da54GN98BvRjPjN5O3NdVfA1wRl4eh6mA7IDwcQaU=",
+        "minted_at_unix": 1800001100,
+        "transparency": {
+          "log_id": "vdec-conformance-transparency",
+          "tree_size": 2,
+          "checkpoint_epoch": 7,
+          "leaf_digest": "8G1lgIcSWazcJRYSG0+xfZKrL6AjhKPymez4S3Ff11E=",
+          "proof": [
+            "eyJ2ZXJzaW9uIjoxLCJkb21haW4iOiJ0cnN0Y3RsL3ZkZWMvZGVzdHJ1Y3Rpb24tcmVjb3JkL2luY2x1c2lvbi1ub2RlL3YxIiwic2lkZSI6InJpZ2h0IiwiZGlnZXN0IjoiK0VRQ29xMmJIRXVrb1BERnhoTWhuV1U3bXVCd0E1NTE1QjN0VHJSU1VYaz0ifQ=="
+          ]
+        }
+      },
+      "commitment_digest": "8G1lgIcSWazcJRYSG0+xfZKrL6AjhKPymez4S3Ff11E=",
+      "signer_id": "test-vdec-conformance-signer",
+      "attestation_algorithm": "ECDSA-P256",
+      "attestation_public_key_der": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9crKSY344tYpsstF8iO8tOK7/CZB7tXB6ant3/ABXDGC1Pg1ib8UzRiNUGaUDsxh3LuF9AN4XJ2kQz5a02Rvkg==",
+      "signature": "MEYCIQCPwdzMpNQ9xFD/jsTLeDzw2lKwUgRkB4rzN1O9p0GtwwIhANXrtR9uXgUiLfSvc50mWuRLk8zsXMaBDVQ40l+Zs58e"
+    },
+    "verification_key": {
+      "Algorithm": "ECDSA-P256",
+      "DER": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9crKSY344tYpsstF8iO8tOK7/CZB7tXB6ant3/ABXDGC1Pg1ib8UzRiNUGaUDsxh3LuF9AN4XJ2kQz5a02Rvkg=="
+    },
+    "log_head": {
+      "log_id": "vdec-conformance-transparency",
+      "tree_size": 2,
+      "checkpoint_epoch": 7,
+      "root_digest": "/nyQIwEW6Bq/ZhetxxIQMOUXxPbYWBxV0Yig/XTgdjQ="
+    },
+    "retained": {
+      "stable_key_id": "key://tenant-wire/root-ca",
+      "epoch": 7
+    },
+    "completion": {
+      "registered": [
+        {
+          "class": "ciphertext",
+          "id": "ct-live-1"
+        },
+        {
+          "class": "wrapped_key",
+          "id": "wrapped-dek-1"
+        },
+        {
+          "class": "credential",
+          "id": "cred-retired-1"
+        },
+        {
+          "class": "leased_secret",
+          "id": "lease-db-1"
+        },
+        {
+          "class": "data_set",
+          "id": "dataset-erasure-1"
+        }
+      ],
+      "completed": [
+        {
+          "class": "ciphertext",
+          "id": "ct-live-1"
+        },
+        {
+          "class": "wrapped_key",
+          "id": "wrapped-dek-1"
+        }
+      ],
+      "released": [
+        {
+          "class": "credential",
+          "id": "cred-retired-1"
+        }
+      ],
+      "erased": [
+        {
+          "class": "leased_secret",
+          "id": "lease-db-1"
+        },
+        {
+          "class": "data_set",
+          "id": "dataset-erasure-1"
+        }
+      ]
+    }
+  },
+  "expected_determination": "destroyed_after_recorded_reprotection",
+  "completion": {
+    "registered": [
+      {
+        "class": "ciphertext",
+        "id": "ct-live-1"
+      },
+      {
+        "class": "wrapped_key",
+        "id": "wrapped-dek-1"
+      },
+      {
+        "class": "credential",
+        "id": "cred-retired-1"
+      },
+      {
+        "class": "leased_secret",
+        "id": "lease-db-1"
+      },
+      {
+        "class": "data_set",
+        "id": "dataset-erasure-1"
+      }
+    ],
+    "completed": [
+      {
+        "class": "ciphertext",
+        "id": "ct-live-1"
+      },
+      {
+        "class": "wrapped_key",
+        "id": "wrapped-dek-1"
+      }
+    ],
+    "released": [
+      {
+        "class": "credential",
+        "id": "cred-retired-1"
+      }
+    ],
+    "erased": [
+      {
+        "class": "leased_secret",
+        "id": "lease-db-1"
+      },
+      {
+        "class": "data_set",
+        "id": "dataset-erasure-1"
+      }
+    ]
+  }
+}
