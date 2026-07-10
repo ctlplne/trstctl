@@ -279,8 +279,19 @@ func (k *Keyring) Rewrap(ctx context.Context, name, ciphertext string, aad []byt
 	if err != nil {
 		return "", err
 	}
-	out, err := k.Encrypt(ctx, name, pt, aad)
+	// Move the intermediate plaintext into a locked, non-dumpable buffer (AN-8)
+	// for the duration of the re-encryption, then wipe the heap copy Decrypt
+	// returned. This minimizes the window in which recovered plaintext lives in
+	// ordinary heap memory during a rewrap (VDEC re-protection embodiment;
+	// claim 5). The AEAD open itself allocates internally, so the window is
+	// bounded rather than eliminated at this layer.
+	buf, err := secret.NewFrom(pt)
 	secret.Wipe(pt)
+	if err != nil {
+		return "", err
+	}
+	defer buf.Destroy()
+	out, err := k.Encrypt(ctx, name, buf.Bytes(), aad)
 	if err == nil {
 		k.event(ctx, "transit.rewrap", name)
 	}
