@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/ee/succession/recovery"
 	"trstctl.com/trstctl/ee/succession/retirement"
 	pcasstore "trstctl.com/trstctl/ee/succession/store"
+	"trstctl.com/trstctl/ee/translog"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
@@ -113,16 +114,23 @@ func (w *checkpointWorker) runOnce(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("pcas checkpoint worker: list tenants: %w", err)
 	}
-	logSeq := uint64(0)
-	if w.log != nil {
-		if seq, err := w.log.LastSequence(ctx); err == nil {
-			logSeq = seq
-		}
-	}
 	for _, t := range tenants {
 		records, err := w.repo.ListRecords(ctx, t.TenantID)
 		if err != nil {
 			return err
+		}
+		// Bind the real head of the tenant's append-only transparency log into
+		// every checkpoint minted this round (claim 29). The log is rebuilt
+		// deterministically from the persisted succession ledger (records are
+		// returned in a stable identity,epoch order and, being append-only, are
+		// never removed or reordered), so its Merkle root is a pure function of the
+		// record set: stable across restarts, and divergent only when the record
+		// set diverges. Two checkpoints that disagree on the log head at one tree
+		// size therefore evidence equivocation — which the earlier synthesized
+		// placeholder root could not. (PCAS-audit E-3b.)
+		logHead, err := transparencyHead(records)
+		if err != nil {
+			return fmt.Errorf("pcas checkpoint worker: transparency-log head: %w", err)
 		}
 		for _, rec := range latestByIdentity(records) {
 			fields := recordFields(rec)
@@ -134,8 +142,8 @@ func (w *checkpointWorker) runOnce(ctx context.Context) error {
 				Epoch:           rec.Epoch,
 				Algorithm:       crypto.Algorithm(rec.SuccessorAlg),
 				PublicKeyDER:    rec.SuccessorPub,
-				LogTreeSize:     logSeq,
-				LogRootHash:     crypto.SHA256Sum([]byte(fmt.Sprintf("pcas-log-head:%d:%s:%s:%d", logSeq, t.TenantID, rec.IdentityID, rec.Epoch))),
+				LogTreeSize:     uint64(logHead.TreeSize),
+				LogRootHash:     logHead.RootHash,
 				IssuedAt:        issuedAt.Unix(),
 			}
 			signed, err := succession.SignEpochCheckpoint(crypto.SignerFromDigestSigner(cpSigner), cp)
@@ -501,6 +509,25 @@ func successorForPredecessor(ctx context.Context, repo *pcasstore.Repo, tenantID
 		}
 	}
 	return pcasstore.Record{}, false, nil
+}
+
+// transparencyHead rebuilds a tenant's append-only transparency log from its
+// persisted succession records and returns the log head. The records must be
+// supplied in the stable order the ledger returns them (identity, then epoch);
+// each record's stored canonical encoding is one append-only leaf. The head is a
+// pure, deterministic function of the record set — identical across processes,
+// machines, and restarts for the same records, and different whenever the record
+// set differs — which is what lets two checkpoints' bound heads evidence
+// equivocation (claim 29). The log is unsigned here because it is used only to
+// derive the Merkle root; the checkpoint that carries the root is itself signed.
+func transparencyHead(records []pcasstore.Record) (translog.STH, error) {
+	tlog := translog.New(nil)
+	for _, rec := range records {
+		if _, _, err := tlog.Append(rec.Encoded); err != nil {
+			return translog.STH{}, err
+		}
+	}
+	return tlog.Head()
 }
 
 func recordFields(rec pcasstore.Record) succession.CommitmentFields {
