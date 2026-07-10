@@ -192,9 +192,9 @@ var diffRegistry = map[crypto.Algorithm]uint64{
 	crypto.RSA2048: 1, crypto.RSA3072: 2, crypto.RSA4096: 3,
 	crypto.ECDSAP256: 10, crypto.ECDSAP384: 11, crypto.ECDSAP521: 12, crypto.Ed25519: 20,
 	crypto.Algorithm("ML-DSA-44"): 30, crypto.Algorithm("ML-DSA-65"): 31, crypto.Algorithm("ML-DSA-87"): 32,
-	crypto.Algorithm("SLH-DSA-128s"): 33, crypto.Algorithm("SLH-DSA-128f"): 34,
-	crypto.Algorithm("SLH-DSA-192s"): 35, crypto.Algorithm("SLH-DSA-256s"): 36,
-	crypto.Algorithm("Ed25519+ML-DSA-65"): 40, crypto.Algorithm("ECDSA-P256+ML-DSA-65"): 41,
+	crypto.Algorithm("SLH-DSA-SHA2-128s"): 33, crypto.Algorithm("SLH-DSA-SHA2-128f"): 34,
+	crypto.Algorithm("SLH-DSA-SHA2-192s"): 35, crypto.Algorithm("SLH-DSA-SHA2-256s"): 36,
+	crypto.Algorithm("Hybrid-Ed25519-Dilithium3"): 40, crypto.Algorithm("Hybrid-ML-DSA-44-ECDSA-P256"): 41,
 	crypto.Algorithm("ML-KEM-512"): 50, crypto.Algorithm("ML-KEM-768"): 51, crypto.Algorithm("ML-KEM-1024"): 52,
 }
 

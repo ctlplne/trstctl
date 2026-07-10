@@ -28,16 +28,16 @@ var classByAlg = map[crypto.Algorithm]StrengthClass{
 	crypto.ECDSAP521: StrengthClassical,
 	crypto.Ed25519:   StrengthClassical,
 
-	crypto.Algorithm("ML-DSA-44"):    StrengthPurePQ,
-	crypto.Algorithm("ML-DSA-65"):    StrengthPurePQ,
-	crypto.Algorithm("ML-DSA-87"):    StrengthPurePQ,
-	crypto.Algorithm("SLH-DSA-128s"): StrengthPurePQ,
-	crypto.Algorithm("SLH-DSA-128f"): StrengthPurePQ,
-	crypto.Algorithm("SLH-DSA-192s"): StrengthPurePQ,
-	crypto.Algorithm("SLH-DSA-256s"): StrengthPurePQ,
+	crypto.Algorithm("ML-DSA-44"):         StrengthPurePQ,
+	crypto.Algorithm("ML-DSA-65"):         StrengthPurePQ,
+	crypto.Algorithm("ML-DSA-87"):         StrengthPurePQ,
+	crypto.Algorithm("SLH-DSA-SHA2-128s"): StrengthPurePQ,
+	crypto.Algorithm("SLH-DSA-SHA2-128f"): StrengthPurePQ,
+	crypto.Algorithm("SLH-DSA-SHA2-192s"): StrengthPurePQ,
+	crypto.Algorithm("SLH-DSA-SHA2-256s"): StrengthPurePQ,
 
-	crypto.Algorithm("Ed25519+ML-DSA-65"):    StrengthHybrid,
-	crypto.Algorithm("ECDSA-P256+ML-DSA-65"): StrengthHybrid,
+	crypto.Algorithm("Hybrid-Ed25519-Dilithium3"):   StrengthHybrid,
+	crypto.Algorithm("Hybrid-ML-DSA-44-ECDSA-P256"): StrengthHybrid,
 }
 
 // ClassOf returns the strength class of alg (ClassUnknownStrength if unregistered).

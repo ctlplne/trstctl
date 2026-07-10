@@ -211,7 +211,7 @@ default reason := "denied for test"
 // (the seam whose cutover is gated by PCAS-10).
 func TestSuccessionJobs_HybridToPurePQCSeam(t *testing.T) {
 	jobs, _, err := BuildSuccessionJobs(context.Background(),
-		[]Credential{vulnCred("h1", CredentialX509, "ECDSA-P256+ML-DSA-65")}, StaticDecider{Posture: PostureHybridToPurePQC})
+		[]Credential{vulnCred("h1", CredentialX509, "Hybrid-ML-DSA-44-ECDSA-P256")}, StaticDecider{Posture: PostureHybridToPurePQC})
 	if err != nil {
 		t.Fatal(err)
 	}

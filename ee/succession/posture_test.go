@@ -26,9 +26,9 @@ func TestReplay_DeterministicPosture(t *testing.T) {
 	sink := &MemSink{}
 	seq := []Payload{
 		FindingV1{IdentityID: "spiffe://acme/db", TenantID: "t1", Epoch: 0, Algorithm: "RSA2048", PublicKeyDER: []byte{0x01}},
-		SuccessionV1{IdentityID: "spiffe://acme/db", TenantID: "t1", PredecessorEpoch: 0, Epoch: 1, PredecessorAlgorithm: "RSA2048", SuccessorAlgorithm: "Ed25519+ML-DSA-65", SuccessorPublicKeyDER: []byte{0x02}, AlgorithmClass: ClassHybrid},
-		SuccessionV1{IdentityID: "spiffe://acme/db", TenantID: "t1", PredecessorEpoch: 1, Epoch: 2, PredecessorAlgorithm: "Ed25519+ML-DSA-65", SuccessorAlgorithm: "ML-DSA-65", SuccessorPublicKeyDER: []byte{0x03}, AlgorithmClass: ClassPurePQ},
-		RetirementV1{IdentityID: "spiffe://acme/db", TenantID: "t1", Epoch: 2, RetiredAlg: "Ed25519+ML-DSA-65"},
+		SuccessionV1{IdentityID: "spiffe://acme/db", TenantID: "t1", PredecessorEpoch: 0, Epoch: 1, PredecessorAlgorithm: "RSA2048", SuccessorAlgorithm: "Hybrid-Ed25519-Dilithium3", SuccessorPublicKeyDER: []byte{0x02}, AlgorithmClass: ClassHybrid},
+		SuccessionV1{IdentityID: "spiffe://acme/db", TenantID: "t1", PredecessorEpoch: 1, Epoch: 2, PredecessorAlgorithm: "Hybrid-Ed25519-Dilithium3", SuccessorAlgorithm: "ML-DSA-65", SuccessorPublicKeyDER: []byte{0x03}, AlgorithmClass: ClassPurePQ},
+		RetirementV1{IdentityID: "spiffe://acme/db", TenantID: "t1", Epoch: 2, RetiredAlg: "Hybrid-Ed25519-Dilithium3"},
 		FindingV1{IdentityID: "spiffe://acme/api", TenantID: "t1", Epoch: 0, Algorithm: "P-256", PublicKeyDER: []byte{0x0a}},
 	}
 	for _, p := range seq {

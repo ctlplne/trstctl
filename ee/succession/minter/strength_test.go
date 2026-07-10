@@ -66,7 +66,7 @@ func breakGlassToken(t *testing.T, authority crypto.Signer, req signing.MintRequ
 // refused without break-glass (claim 17 / INV-8).
 func TestMint_RefusesStrengthDowngrade(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
-	for _, predAlg := range []crypto.Algorithm{"ML-DSA-65", "Ed25519+ML-DSA-65"} {
+	for _, predAlg := range []crypto.Algorithm{"ML-DSA-65", "Hybrid-Ed25519-Dilithium3"} {
 		m, err := minter.New(pqPred(t, be, predAlg), be, newMemFloor(), minter.WithStrengthOrdering(nil))
 		if err != nil {
 			t.Fatal(err)

@@ -41,17 +41,21 @@ var algRegistry = map[crypto.Algorithm]uint64{
 	crypto.Ed25519:   20,
 
 	// Post-quantum and hybrid registry identifiers (algorithms implemented in
-	// ee/pqc; classified in algclass.go). Bound here by canonical identifier so
-	// commitments over PQ/hybrid records are well-defined without importing ee/pqc.
-	crypto.Algorithm("ML-DSA-44"):            30,
-	crypto.Algorithm("ML-DSA-65"):            31,
-	crypto.Algorithm("ML-DSA-87"):            32,
-	crypto.Algorithm("SLH-DSA-128s"):         33,
-	crypto.Algorithm("SLH-DSA-128f"):         34,
-	crypto.Algorithm("SLH-DSA-192s"):         35,
-	crypto.Algorithm("SLH-DSA-256s"):         36,
-	crypto.Algorithm("Ed25519+ML-DSA-65"):    40,
-	crypto.Algorithm("ECDSA-P256+ML-DSA-65"): 41,
+	// ee/pqc; classified in algclass.go). The name keys MUST match the canonical
+	// spellings the pqc package actually mints (ee/pqc/algorithms.go), so a real
+	// SLH-DSA or hybrid successor is accepted by registryID rather than rejected as
+	// unknown (PCAS-audit E-3a). The commitment binds the numeric id, never the
+	// name, so these spellings do not change any commitment bytes or frozen golden
+	// vector; they only decide which real successor algorithms mint successfully.
+	crypto.Algorithm("ML-DSA-44"):                   30,
+	crypto.Algorithm("ML-DSA-65"):                   31,
+	crypto.Algorithm("ML-DSA-87"):                   32,
+	crypto.Algorithm("SLH-DSA-SHA2-128s"):           33,
+	crypto.Algorithm("SLH-DSA-SHA2-128f"):           34,
+	crypto.Algorithm("SLH-DSA-SHA2-192s"):           35,
+	crypto.Algorithm("SLH-DSA-SHA2-256s"):           36,
+	crypto.Algorithm("Hybrid-Ed25519-Dilithium3"):   40,
+	crypto.Algorithm("Hybrid-ML-DSA-44-ECDSA-P256"): 41,
 
 	// ML-KEM key-establishment identifiers (confidentiality-key succession, PCAS-14 /
 	// claims 15, 30). Registered so a commitment may name a KEM successor or
