@@ -538,21 +538,20 @@ readable by the pod's `fsGroup`, and all parent directories reject group/world
 writes. Unsafe restored files fail startup instead of silently weakening key
 custody.
 
-## Managed-key custody (AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSMs)
+## Conditional managed-key adapters (AWS, Azure, GCP, and PKCS#11)
 
-The managed-key lifecycle is off by default. When enabled, the control plane exposes
-`/api/v1/managed-keys` for keys whose private material is born in and stays inside an
-external custodian. The served custody providers are AWS KMS, Azure Key Vault /
-Managed HSM, GCP Cloud KMS, and PKCS#11 HSM modules such as SoftHSM, nShield, and
-Luna. AWS KMS uses the official AWS SDK v2 KMS client, with the SDK HTTP client
-option pointed at LocalStack, a VPC endpoint, or regional AWS as configured. Azure
-and GCP use their data-plane KMS APIs over bounded HTTP clients with startup-supplied
-bearer tokens. PKCS#11 uses a cgo-enabled build to open the native module, log in to
-a named token, and generate non-extractable signing keys on the token.
+The managed-key lifecycle is off by default and requires an Enterprise license plus
+startup configuration. The repository contains adapters for AWS KMS, Azure Key Vault
+/ Managed HSM, GCP Cloud KMS, and PKCS#11 modules. These adapters are conditional
+implementation surfaces, not a served-backend claim: the shipped-artifact wiring
+census currently reports zero HSM/KMS backends served. Today the licensed attach seam
+constructs providers in the control-plane process, state is process-local, and calls
+are synchronous. See [Current limitations](limitations.md#ca-key-custody) before
+evaluating this configuration.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables the served managed-key lifecycle. When false, the routes fail closed with `501`. |
+| `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables the conditional managed-key API assembly. When false, the routes fail closed with `501`; enabling it does not make a backend census-served. |
 | `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider: `aws`, `azure-key-vault`, `gcp-kms`, or `pkcs11`. The provider is selected at startup and injected into the control plane; it is not a runtime plugin engine. |
 | `TRSTCTL_MANAGED_KEYS_AWS_REGION` | unset | AWS region for KMS, for example `us-east-1`. Required when enabled. |
 | `TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override, used for LocalStack, VPC endpoints, or partitions. Leave unset for regional AWS KMS. |
@@ -575,7 +574,7 @@ a named token, and generate non-extractable signing keys on the token.
 | `TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN_FILE` | unset | File containing the PKCS#11 user PIN. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
 | `TRSTCTL_MANAGED_KEYS_PKCS11_KEY_LABEL_PREFIX` | `trstctl-pkcs11` | Label prefix for generated token objects. |
 
-Example LocalStack configuration:
+Development-only LocalStack shape (not conformance or shipped-runtime proof):
 
 ```bash
 export TRSTCTL_MANAGED_KEYS_ENABLED=true
@@ -637,11 +636,12 @@ Static no-cgo builds fail closed if `provider: pkcs11` is selected. Build the
 managed-key package with cgo enabled for local HSM custody so the native module can
 be loaded.
 
-After startup, operators with `keys:write` can call `POST /api/v1/managed-keys` to
-generate an HSM/KMS-resident signing key, then rotate, revoke, or zeroize it through the
-matching served routes and `trstctl managed-keys` CLI commands. Requests are
-tenant-scoped, require `Idempotency-Key`, and emit immutable lifecycle events that
-contain key id, version, algorithm, state, and public key only.
+When the licensed attach seam succeeds, operators with `keys:write` can exercise
+`POST /api/v1/managed-keys` and the rotate/revoke/zeroize API and CLI shapes. Requests
+require `Idempotency-Key` and lifecycle events omit private bytes, but current
+process-local lifecycle state and synchronous provider calls leave restart and
+provider-success/commit-failure gaps. Treat the surface as evaluation-only until its
+exact backend census row is `SERVED + REQUIRED`.
 
 ## Signer topology & CA custody
 

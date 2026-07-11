@@ -3,6 +3,9 @@
 package featureparity
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -88,6 +91,106 @@ func TestFeatureFacetCoverage(t *testing.T) {
 			}
 		}
 		checkFacetAlignment(t, item)
+	}
+}
+
+// TestFeatureServedFacetCitesExecutedAcceptanceTest closes the old os.Stat-only
+// loophole. A served row must point to a named Go test in one of its cited test
+// files, and its served facet must cite the repository's `make test` command that
+// CI actually executes. Prose plus an arbitrary existing path is not proof.
+func TestFeatureServedFacetCitesExecutedAcceptanceTest(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+	root, err := repoRoot()
+	if err != nil {
+		t.Fatalf("find repo root: %v", err)
+	}
+	workflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatalf("read CI workflow: %v", err)
+	}
+	makefile, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+	if !strings.Contains(string(workflow), "run: make test") || !strings.Contains(string(makefile), "test: ## Run all tests") {
+		t.Fatal("served acceptance command make test is not executed by CI")
+	}
+
+	testName := regexp.MustCompile(`\b(Test[A-Za-z0-9_]+)\b`)
+	for _, item := range catalog.Items {
+		if item.ServedState != "served" {
+			continue
+		}
+		served := item.FacetEvidence.Served
+		if !containsFeatureFacetString(served.Commands, "make test") {
+			t.Errorf("%s (%s) served facet must cite CI-executed command make test", item.FeatureID, item.Feature)
+		}
+
+		evidence := item.AcceptanceTest + "\n" + strings.Join(item.FacetEvidence.Test.Evidence, "\n")
+		candidates := testName.FindAllString(evidence, -1)
+		proved := false
+		var rejected []string
+		for _, ref := range item.FacetEvidence.Test.Refs {
+			if !strings.HasSuffix(ref, "_test.go") || strings.HasPrefix(ref, "internal/featureparity/") {
+				continue
+			}
+			source, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(ref)))
+			if err != nil {
+				continue
+			}
+			if regexp.MustCompile(`(?m)^//go:build\s+`).Match(source) {
+				rejected = append(rejected, ref+": default make test execution is not proven for build-tagged evidence")
+				continue
+			}
+			packageRoot := strings.Split(filepath.ToSlash(ref), "/")[0]
+			if !strings.Contains(string(makefile), "./"+packageRoot+"/...") {
+				rejected = append(rejected, ref+": package root is outside Makefile GO_PACKAGES")
+				continue
+			}
+			parsed, err := parser.ParseFile(token.NewFileSet(), ref, source, 0)
+			if err != nil {
+				rejected = append(rejected, ref+": cannot parse cited test file")
+				continue
+			}
+			for _, candidate := range candidates {
+				for _, decl := range parsed.Decls {
+					fn, ok := decl.(*ast.FuncDecl)
+					if !ok || fn.Name.Name != candidate || fn.Body == nil {
+						continue
+					}
+					hasSkip := false
+					ast.Inspect(fn.Body, func(node ast.Node) bool {
+						call, ok := node.(*ast.CallExpr)
+						if !ok {
+							return true
+						}
+						sel, ok := call.Fun.(*ast.SelectorExpr)
+						if ok && (sel.Sel.Name == "Skip" || sel.Sel.Name == "Skipf" || sel.Sel.Name == "SkipNow") {
+							hasSkip = true
+						}
+						return true
+					})
+					if hasSkip {
+						rejected = append(rejected, ref+":"+candidate+": acceptance proof can skip")
+						continue
+					}
+					proved = true
+					break
+				}
+				if proved {
+					break
+				}
+			}
+			if proved {
+				break
+			}
+		}
+		if !proved {
+			t.Errorf("%s (%s) served facet has no named, default-built, no-skip acceptance Test function in its non-circular test refs (rejected: %s)", item.FeatureID, item.Feature, strings.Join(rejected, "; "))
+		}
 	}
 }
 

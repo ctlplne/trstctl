@@ -203,24 +203,14 @@ func TestDiscoveryServedControlPlaneAndNetworkScanVsLibraryCollectorsIsHonest(t 
 	}
 }
 
-// ---- TRACE-003: managed-key (BYOK/HSM) lifecycle served; in-process BYOK + m-of-n
-//      still library-only --------------------------------------------------------
+// ---- TRACE-003: managed-key (BYOK/HSM) package path versus DoD-served custody --
 
-// managedKeysServed reports whether the BYOK/HSM managed-key lifecycle is served
-// (CRYPTO-005). The served implementation lives in ee/managedkeys and is wired via
-// the tagged EE attach seam into internal/api + internal/server.
-func managedKeysServed(t *testing.T) bool {
-	t.Helper()
-	return importsAnyOnServedPath(t, `trstctl.com/trstctl/ee/managedkeys"`)
-}
-
-// TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest pins TRACE-003. The
-// HSM/KMS-resident managed-key lifecycle (generate/rotate/revoke/zeroize, dual
-// control) is SERVED. What remains library-tier is the in-process local CA/KEK BYOK
-// verbs and online m-of-n break-glass issuance. The disclosure must reflect the
-// served surface AND keep the residual gap honest.
+// TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest pins TRACE-003 to
+// the repo-native census. Import reachability through the tagged EE attach seam is
+// necessary but not sufficient: each advertised backend also needs production
+// assembly and runtime evidence.
 func TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest(t *testing.T) {
-	low := limLower(t)
+	low := strings.Join(strings.Fields(limLower(t)), " ")
 
 	// Reality anchor (served side): the managed-key routes are registered by the
 	// served API and the service exists.
@@ -239,43 +229,42 @@ func TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest(t *testing.T) {
 		t.Fatalf("internal/crypto/byok no longer exists; the TRACE-003 in-process-BYOK residual disclosure has no code anchor — revisit this reality test: %v", err)
 	}
 
-	if managedKeysServed(t) {
-		// Served: the disclosure must name the served managed-key surface and must
-		// NOT claim the HSM/KMS-resident lifecycle is still unserved.
-		if !strings.Contains(low, "/api/v1/managed-keys") {
-			t.Error("the managed-key lifecycle is served (CRYPTO-005) but limitations.md does not name the served /api/v1/managed-keys surface — TRACE-003")
+	manifest, census := liveDoDCensus(t)
+	inventory, served := 0, 0
+	for _, entry := range manifest.Entries {
+		if entry.Capability != "hsm_kms" || !entry.Inventory {
+			continue
 		}
-		for _, stale := range []string{
-			"the hsm/kms-resident lifecycle is not served",
-			"managed keys are library-only",
-		} {
-			if strings.Contains(low, stale) {
-				t.Errorf("limitations.md still discloses the managed-key lifecycle as unserved (%q) after CRYPTO-005 served it — update the disclosure (TRACE-003)", stale)
+		inventory++
+		if censusEntryClaimable(census.Entries[entry.ID]) {
+			served++
+		}
+	}
+	if inventory != 6 {
+		t.Fatalf("HSM/KMS census inventory=%d, want six advertised backends", inventory)
+	}
+	if served < inventory {
+		for _, marker := range []string{"/api/v1/managed-keys", "zero of six", "control-plane process constructs", "not production-assembled", "m-of-n"} {
+			if !strings.Contains(low, marker) {
+				t.Errorf("limitations.md must disclose the conditional custody residual (missing %q) — TRACE-003", marker)
 			}
 		}
-		// And the residual gap must stay honestly disclosed: the in-process BYOK
-		// verbs and m-of-n break-glass are still library-tier.
-		for _, m := range []string{"in-process", "m-of-n break-glass"} {
-			if !strings.Contains(low, m) {
-				t.Errorf("limitations.md must keep disclosing the still-library-tier custody residual (missing marker %q) — TRACE-003", m)
-			}
+		if strings.Contains(low, "hsm/kms-resident ca private keys are supported") {
+			t.Error("limitations.md claims served HSM/KMS custody while the exact backend census is red — TRACE-003")
 		}
 		return
 	}
-	// Not served (regression): the disclosure must not claim it is served.
-	if strings.Contains(low, "/api/v1/managed-keys") && !strings.Contains(low, "future work") {
-		t.Error("limitations.md names /api/v1/managed-keys as served but no served path imports ee/managedkeys — TRACE-003 regression")
+	if strings.Contains(low, "zero of six") {
+		t.Error("limitations.md keeps stale zero-served HSM/KMS wording after every backend became census-served — TRACE-003")
 	}
 }
 
-// ---- TRACE-004: deployment connectors — native/plugin target mutation served ----
+// ---- TRACE-004: deployment connectors — served spine, native library breadth ----
 
 // TestConnectorDeliveryServedVsLibraryMutationIsHonest pins TRACE-004. The connector
-// catalog and delivery receipts are served, and direct credential-carrying
-// connector.deploy payloads mutate targets through either the native registry or a
-// provenance-verified signed connector plugin. Metadata-only lifecycle receipts remain
-// explicitly unrouted so the docs cannot claim bytes were deployed when no key material
-// is available.
+// catalog, target metadata, outbox intent, receipts, and signed-WASM dispatch are
+// served. The native implementation set remains library-only until buildRunDeps
+// constructs it; a test that injects ConnectorRegistry does not change that fact.
 func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 	low := limLower(t)
 
@@ -290,9 +279,9 @@ func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 	if !strings.Contains(read(t, "../internal/api/connectors_lifecycle.go"), "servedConnectorCatalog") {
 		t.Fatal("internal/api/connectors_lifecycle.go no longer defines servedConnectorCatalog; the TRACE-004 served-catalog disclosure has no code anchor — revisit this reality test")
 	}
-	// Reality anchor (served mutation side): the native registry is on Deps and the
-	// dispatcher records a native delivered receipt when it owns a credential-carrying
-	// connector.deploy payload.
+	// Reality anchor (consumer side): the native registry seam and dispatcher exist.
+	// That is library evidence only; production construction is governed by the DoD
+	// census mapping below.
 	serverBuild := read(t, "../internal/server/server.go")
 	if !strings.Contains(serverBuild, "ConnectorRegistry *connector.Registry") {
 		t.Fatal("server.Deps no longer exposes ConnectorRegistry; the TRACE-004 native served path lost its composition anchor")
@@ -303,22 +292,28 @@ func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 			t.Fatalf("internal/server/issuance.go missing %q; the TRACE-004 native deploy receipt path regressed", marker)
 		}
 	}
-	if !anyTestDeclaresUnder(t, "../internal/server", "TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators") {
-		t.Fatal("TRACE-004 requires the served ACM + Azure KV native connector acceptance test")
-	}
 	// Reality anchor (connector side): the connector implementation bodies still exist.
 	if _, err := os.Stat("../internal/connector"); err != nil {
 		t.Fatalf("internal/connector no longer exists; revisit this TRACE-004 reality test: %v", err)
 	}
 
-	// The served catalog/receipts half must always be stated.
+	connectorState := featureMapServedState{}
+	for _, item := range featureServedStateLedger(t).Items {
+		if item.FeatureID == "F7" {
+			connectorState = item
+			break
+		}
+	}
+	if connectorState.ServedState != "library" || !containsString(connectorState.DoDCapabilities, "connector") {
+		t.Fatalf("F7 native connectors must stay library-only and census-bound, got state=%q capabilities=%v", connectorState.ServedState, connectorState.DoDCapabilities)
+	}
+
+	// The served catalog/receipts half and native library boundary must both be stated.
 	if !strings.Contains(low, "connector.delivery.recorded") {
 		t.Error("limitations.md must disclose that the binary serves the connector catalog and delivery receipts — TRACE-004")
 	}
-	// The served mutation boundary must state both real routes and the honest unrouted
-	// case for lifecycle-only metadata.
-	if !containsAll(low, []string{"deployment connector target mutation", "native `connectorregistry`", "signed wasm connector plugin", "cert_pem", "key_pem", "unrouted"}) {
-		t.Error("limitations.md must disclose native/plugin connector mutation plus the credential-payload and unrouted boundaries — TRACE-004")
+	if !containsAll(low, []string{"deployment connector orchestration", "24 native connector packages", "library-only", "buildrundeps", "signed wasm connector", "cert_pem", "key_pem", "unrouted"}) {
+		t.Error("limitations.md must disclose the served orchestration/signed-WASM spine and native library-only boundary — TRACE-004")
 	}
 	for _, stale := range []string{
 		"actual target mutation is routed only when a provenance-verified signed connector plugin is loaded",
@@ -427,19 +422,14 @@ func TestIncidentAndFleetReissuanceServingStatusIsHonest(t *testing.T) {
 	if !strings.Contains(low, "/api/v1/incidents/fleet-reissuance-runs") {
 		t.Error("limitations.md must disclose the served fleet re-issuance route — TRACE-006")
 	}
-	if !strings.Contains(low, "/api/v1/breakglass/issue") || !strings.Contains(low, "online m-of-n break-glass issuance is served") {
-		t.Error("limitations.md must disclose that online m-of-n break-glass issuance is served at /api/v1/breakglass/issue — TRACE-006")
+	if !strings.Contains(low, "/api/v1/breakglass/issue") || !strings.Contains(low, "not production-assembled") || !strings.Contains(low, "not independent authenticated approvals") {
+		t.Error("limitations.md must disclose the unassembled online break-glass route and its non-independent approval input — TRACE-006")
 	}
 	if !strings.Contains(low, "/api/v1/breakglass/reconcile") || !strings.Contains(low, "breakglass.issued") {
 		t.Error("limitations.md must disclose the served break-glass reconciliation route and audit event — TRACE-006")
 	}
-	for _, oc := range []string{
-		"online m-of-n break-glass issuance is not this surface",
-		"emergency issuance remains the offline operator ceremony",
-	} {
-		if strings.Contains(low, oc) {
-			t.Errorf("limitations.md still carries stale unserved online break-glass copy (%q) — TRACE-006", oc)
-		}
+	if strings.Contains(low, "online m-of-n break-glass issuance is served") {
+		t.Error("limitations.md still claims the unassembled online break-glass route is served — TRACE-006")
 	}
 }
 

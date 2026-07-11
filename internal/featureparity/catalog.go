@@ -14,23 +14,25 @@ type Catalog struct {
 }
 
 type Item struct {
-	FeatureID      string               `json:"feature_id"`
-	Feature        string               `json:"feature"`
-	ServedState    string               `json:"served_state"`
-	GAServedScope  string               `json:"ga_served_scope,omitempty"`
-	GAScopeReason  string               `json:"ga_scope_reason,omitempty"`
-	BackendStatus  string               `json:"backend_status"`
-	CurrentMapping string               `json:"current_frontend_mapping"`
-	TargetMapping  string               `json:"target_gui_mapping"`
-	AcceptanceTest string               `json:"acceptance_test"`
-	SourceDocs     []string             `json:"source_docs"`
-	SourceBackend  []string             `json:"source_backend"`
-	SourceFrontend []string             `json:"source_frontend"`
-	APISurface     []string             `json:"api_surface"`
-	APINA          string               `json:"api_na"`
-	CLISurface     []string             `json:"cli_surface"`
-	CLINA          string               `json:"cli_na"`
-	FacetEvidence  FeatureFacetEvidence `json:"facet_evidence"`
+	FeatureID       string               `json:"feature_id"`
+	Feature         string               `json:"feature"`
+	ServedState     string               `json:"served_state"`
+	GAServedScope   string               `json:"ga_served_scope,omitempty"`
+	GAScopeReason   string               `json:"ga_scope_reason,omitempty"`
+	DoDCapabilities []string             `json:"dod_capabilities,omitempty"`
+	DoDResiduals    map[string]string    `json:"dod_residuals,omitempty"`
+	BackendStatus   string               `json:"backend_status"`
+	CurrentMapping  string               `json:"current_frontend_mapping"`
+	TargetMapping   string               `json:"target_gui_mapping"`
+	AcceptanceTest  string               `json:"acceptance_test"`
+	SourceDocs      []string             `json:"source_docs"`
+	SourceBackend   []string             `json:"source_backend"`
+	SourceFrontend  []string             `json:"source_frontend"`
+	APISurface      []string             `json:"api_surface"`
+	APINA           string               `json:"api_na"`
+	CLISurface      []string             `json:"cli_surface"`
+	CLINA           string               `json:"cli_na"`
+	FacetEvidence   FeatureFacetEvidence `json:"facet_evidence"`
 }
 
 type FeatureFacetEvidence struct {
@@ -50,6 +52,7 @@ type FeatureFacetEvidence struct {
 type FacetCell struct {
 	Evidence []string `json:"evidence,omitempty"`
 	Refs     []string `json:"refs,omitempty"`
+	Commands []string `json:"commands,omitempty"`
 	NA       string   `json:"na,omitempty"`
 }
 

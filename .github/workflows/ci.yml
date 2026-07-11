@@ -157,6 +157,32 @@ jobs:
           bash scripts/ci/profile-zlint_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
 
+  dod-gate:
+    name: definition of done / wiring census
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Run the shipped-binary Definition-of-Done census
+        run: make dod-gate
+
+      - name: Upload wiring census
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wiring-census
+          path: wiring-census.json
+          if-no-files-found: error
+
   captured-soak:
     name: captured soak / leak gate
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

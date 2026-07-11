@@ -14,9 +14,9 @@ unilaterally stand up or rotate a CA.
 > plane; the offline root private key never enters trstctl. Rotation and
 > cross-signing remain split: zero-downtime successor activation is served at
 > `POST /api/v1/ca/authorities/{id}/rotate`, while cross-signing remains an
-> operator procedure. Online m-of-n break-glass
-> issuance is served at `POST /api/v1/breakglass/issue` when the signer-backed
-> break-glass issuer is configured; bundle reconciliation is served separately at
+> operator procedure. Online m-of-n break-glass issuance is not
+> production-assembled; the existing route has no configured issuer and its
+> caller-supplied names are not independent approval artifacts. Bundle reconciliation is served separately at
 > `POST /api/v1/breakglass/reconcile` so operators can verify signed emergency
 > bundles into the audit chain after recovery.
 > The **assembled issuing CA's key is now persisted, sealed at rest** (R3.2): the

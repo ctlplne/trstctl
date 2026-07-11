@@ -109,6 +109,13 @@ var reviewedDefaultClientUses = map[string]map[string]bool{
 }
 
 var reviewedExecUses = map[string]map[string]bool{
+	"tools/dodcensus/main.go": {
+		"Run": true,
+	},
+	"tools/dodcensus/proof/proof.go": {
+		"StartCommand":   true,
+		"StartContainer": true,
+	},
 	"cmd/trstctl-agent/sshtrust.go": {
 		"runCommandLine": true,
 	},

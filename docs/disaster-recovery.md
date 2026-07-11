@@ -305,8 +305,9 @@ up a new CA, re-issue, and distribute the new bundle — see the
 [key-ceremony runbook](runbooks/key-ceremony.md). Helm `externalKMS` is wired for
 signer key-store envelope custody: the chart renders `--kms-*` signer arguments and
 omits the local KEK mount when `externalKMS.enabled=true`. Online m-of-n
-break-glass issuance is served at `POST /api/v1/breakglass/issue` when the
-signer-backed break-glass issuer is configured; recovery reconciliation is served at
+break-glass issuance is not production-assembled: `/api/v1/breakglass/issue` fails
+closed without an issuer and its current caller-supplied names are not independent
+approval artifacts. Recovery reconciliation is served at
 `POST /api/v1/breakglass/reconcile` after operators bring signed emergency bundles
 back to the control plane.
 

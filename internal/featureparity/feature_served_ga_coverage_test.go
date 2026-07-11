@@ -19,6 +19,19 @@ var residualServedStates = map[string]bool{
 	"roadmap":     true,
 }
 
+func requireResidualServedState(t *testing.T, trace string, item Item, want string) {
+	t.Helper()
+	if item.ServedState != want {
+		t.Fatalf("%s: %s must be classified %s, got served_state=%q", trace, item.FeatureID, want, item.ServedState)
+	}
+	if item.GAServedScope != gaServedScopeOut {
+		t.Fatalf("%s: residual %s must be outside the GA served denominator, got ga_served_scope=%q", trace, item.FeatureID, item.GAServedScope)
+	}
+	if !strings.Contains(strings.ToLower(item.GAScopeReason), "residual") {
+		t.Fatalf("%s: residual %s must carry an explicit residual reason, got %q", trace, item.FeatureID, item.GAScopeReason)
+	}
+}
+
 // TestFeatureServedGACoverageCOVER001 locks the COVER-001 acceptance:
 // the GA served denominator must be 100% served. Rows that remain conditional
 // or partial must be explicitly out of GA scope, with a human-readable reason,
@@ -77,11 +90,11 @@ func TestFeatureServedGACoverageCOVER001(t *testing.T) {
 	}
 }
 
-// TestTRACE019ACMERowSplitsServedGAFromRoadmapResidual locks the remediation for
+// TestTRACE019ACMERowRemainsConditionalUntilEnabled locks the remediation for
 // TRACE-019. The served ACME protocol workflow belongs in the GA denominator; the
 // richer ACME admin console remains visible as a roadmap residual and must not be
 // hidden inside a conditional F5 row.
-func TestTRACE019ACMERowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE019ACMERowRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -91,15 +104,7 @@ func TestTRACE019ACMERowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	if !ok {
 		t.Fatal("F5 Built-in ACME server row is missing")
 	}
-	if f5.ServedState != "served" {
-		t.Fatalf("TRACE-019: F5 must be promoted to served after splitting residual scope, got served_state=%q", f5.ServedState)
-	}
-	if f5.GAServedScope != "" && f5.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-019: served F5 must be in the GA denominator, got ga_served_scope=%q", f5.GAServedScope)
-	}
-	if strings.TrimSpace(f5.GAScopeReason) != "" {
-		t.Fatalf("TRACE-019: served F5 must not carry the old residual GA exclusion, got %q", f5.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-019", f5, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f5.BackendStatus,
@@ -141,11 +146,11 @@ func TestTRACE019ACMERowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
-// TestTRACE020ESTRowSplitsServedGAFromRoadmapResidual locks the remediation for
+// TestTRACE020ESTRowRemainsConditionalUntilEnabled locks the remediation for
 // TRACE-020. The served EST protocol workflow belongs in the GA denominator; the
 // richer EST admin console remains visible as a roadmap residual and must not be
 // hidden inside a conditional F22 row.
-func TestTRACE020ESTRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE020ESTRowRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -155,15 +160,7 @@ func TestTRACE020ESTRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	if !ok {
 		t.Fatal("F22 EST server row is missing")
 	}
-	if f22.ServedState != "served" {
-		t.Fatalf("TRACE-020: F22 must be promoted to served after splitting residual scope, got served_state=%q", f22.ServedState)
-	}
-	if f22.GAServedScope != "" && f22.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-020: served F22 must be in the GA denominator, got ga_served_scope=%q", f22.GAServedScope)
-	}
-	if strings.TrimSpace(f22.GAScopeReason) != "" {
-		t.Fatalf("TRACE-020: served F22 must not carry the old residual GA exclusion, got %q", f22.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-020", f22, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f22.BackendStatus,
@@ -205,11 +202,11 @@ func TestTRACE020ESTRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
-// TestTRACE021SCEPRowSplitsServedGAFromRoadmapResidual locks the remediation for
+// TestTRACE021SCEPRowRemainsConditionalUntilEnabled locks the remediation for
 // TRACE-021. The served SCEP protocol workflow belongs in the GA denominator; the
 // richer SCEP admin console remains visible as a roadmap residual and must not be
 // hidden inside a conditional F23 row.
-func TestTRACE021SCEPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE021SCEPRowRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -219,15 +216,7 @@ func TestTRACE021SCEPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	if !ok {
 		t.Fatal("F23 SCEP server row is missing")
 	}
-	if f23.ServedState != "served" {
-		t.Fatalf("TRACE-021: F23 must be promoted to served after splitting residual scope, got served_state=%q", f23.ServedState)
-	}
-	if f23.GAServedScope != "" && f23.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-021: served F23 must be in the GA denominator, got ga_served_scope=%q", f23.GAServedScope)
-	}
-	if strings.TrimSpace(f23.GAScopeReason) != "" {
-		t.Fatalf("TRACE-021: served F23 must not carry the old residual GA exclusion, got %q", f23.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-021", f23, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f23.BackendStatus,
@@ -270,11 +259,11 @@ func TestTRACE021SCEPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
-// TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual locks the remediation for
+// TestTRACE022CMPRowRemainsConditionalUntilEnabled locks the remediation for
 // TRACE-022. The served CMP p10cr workflow belongs in the GA denominator; the
 // richer CMP admin console remains visible as a roadmap residual and must not be
 // hidden inside a conditional F55 row.
-func TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE022CMPRowRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -284,15 +273,7 @@ func TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	if !ok {
 		t.Fatal("F55 CMP server row is missing")
 	}
-	if f55.ServedState != "served" {
-		t.Fatalf("TRACE-022: F55 must be promoted to served after splitting residual scope, got served_state=%q", f55.ServedState)
-	}
-	if f55.GAServedScope != "" && f55.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-022: served F55 must be in the GA denominator, got ga_served_scope=%q", f55.GAServedScope)
-	}
-	if strings.TrimSpace(f55.GAScopeReason) != "" {
-		t.Fatalf("TRACE-022: served F55 must not carry the old residual GA exclusion, got %q", f55.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-022", f55, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f55.BackendStatus,
@@ -336,11 +317,11 @@ func TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
-// TestTRACE023SPIFFERowSplitsServedGAFromRoadmapResidual locks the remediation for
+// TestTRACE023SPIFFERowRemainsConditionalUntilEnabled locks the remediation for
 // TRACE-023. The served SPIFFE Workload API UDS workflow belongs in the GA
 // denominator; the richer SPIFFE admin console remains visible as a roadmap residual
 // and must not be hidden inside a conditional F24 row.
-func TestTRACE023SPIFFERowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE023SPIFFERowRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -350,15 +331,7 @@ func TestTRACE023SPIFFERowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	if !ok {
 		t.Fatal("F24 SPIFFE Workload API row is missing")
 	}
-	if f24.ServedState != "served" {
-		t.Fatalf("TRACE-023: F24 must be promoted to served after splitting residual scope, got served_state=%q", f24.ServedState)
-	}
-	if f24.GAServedScope != "" && f24.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-023: served F24 must be in the GA denominator, got ga_served_scope=%q", f24.GAServedScope)
-	}
-	if strings.TrimSpace(f24.GAScopeReason) != "" {
-		t.Fatalf("TRACE-023: served F24 must not carry the old residual GA exclusion, got %q", f24.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-023", f24, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f24.BackendStatus,
@@ -600,12 +573,12 @@ func TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual(t *testing.T)
 	}
 }
 
-// TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual locks
+// TestTRACE027SSHCertificateAuthorityRemainsConditionalUntilEnabled locks
 // the remediation for TRACE-027. The served SSH CA protocol, API, CLI, and console
 // workflow belongs in the GA denominator; the richer dedicated host-certificate CA
 // console remains visible as a roadmap residual and must not be hidden inside a
 // conditional F43 row.
-func TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE027SSHCertificateAuthorityRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -615,15 +588,7 @@ func TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual(t *
 	if !ok {
 		t.Fatal("F43 SSH certificate authority row is missing")
 	}
-	if f43.ServedState != "served" {
-		t.Fatalf("TRACE-027: F43 must be promoted to served after splitting residual scope, got served_state=%q", f43.ServedState)
-	}
-	if f43.GAServedScope != "" && f43.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-027: served F43 must be in the GA denominator, got ga_served_scope=%q", f43.GAServedScope)
-	}
-	if strings.TrimSpace(f43.GAScopeReason) != "" {
-		t.Fatalf("TRACE-027: served F43 must not carry the old residual GA exclusion, got %q", f43.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-027", f43, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f43.BackendStatus,
@@ -798,12 +763,12 @@ func TestTRACE029AttestedSSHUserCertRowPromotedToServedGA(t *testing.T) {
 	}
 }
 
-// TestTRACE030TSARowPromotedToServedGA locks the remediation for TRACE-030.
+// TestTRACE030TSARowRemainsConditionalUntilEnabled locks TRACE-030.
 // The RFC 3161 /tsa responder belongs in the GA denominator because it is a
 // complete served protocol workflow with stock OpenSSL verification coverage.
 // Any richer dedicated TSA admin console remains visible as a roadmap residual
 // and must not be hidden inside a conditional F51 row.
-func TestTRACE030TSARowPromotedToServedGA(t *testing.T) {
+func TestTRACE030TSARowRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -813,15 +778,7 @@ func TestTRACE030TSARowPromotedToServedGA(t *testing.T) {
 	if !ok {
 		t.Fatal("F51 Timestamping authority row is missing")
 	}
-	if f51.ServedState != "served" {
-		t.Fatalf("TRACE-030: F51 must be promoted to served after the RFC 3161 TSA workflow is served end-to-end, got served_state=%q", f51.ServedState)
-	}
-	if f51.GAServedScope != "" && f51.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-030: served F51 must be in the GA denominator, got ga_served_scope=%q", f51.GAServedScope)
-	}
-	if strings.TrimSpace(f51.GAScopeReason) != "" {
-		t.Fatalf("TRACE-030: served F51 must not carry the old conditional GA exclusion, got %q", f51.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-030", f51, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f51.BackendStatus,
@@ -864,11 +821,11 @@ func TestTRACE030TSARowPromotedToServedGA(t *testing.T) {
 	}
 }
 
-// TestTRACE031NativeSecretStorePromotedToServedGA locks the remediation for
+// TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled locks the remediation for
 // TRACE-031. The native store belongs in the GA denominator once the complete
 // create/list/reveal/rotate/delete plus history and point-in-time recovery
 // workflow is served through API, CLI, and the Secrets UI.
-func TestTRACE031NativeSecretStorePromotedToServedGA(t *testing.T) {
+func TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -878,15 +835,7 @@ func TestTRACE031NativeSecretStorePromotedToServedGA(t *testing.T) {
 	if !ok {
 		t.Fatal("F63 Native secret store row is missing")
 	}
-	if f63.ServedState != "served" {
-		t.Fatalf("TRACE-031: F63 must be promoted to served after the native secret store workflow is served end-to-end, got served_state=%q", f63.ServedState)
-	}
-	if f63.GAServedScope != "" && f63.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-031: served F63 must be in the GA denominator, got ga_served_scope=%q", f63.GAServedScope)
-	}
-	if strings.TrimSpace(f63.GAScopeReason) != "" {
-		t.Fatalf("TRACE-031: served F63 must not carry the old conditional GA exclusion, got %q", f63.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-031", f63, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f63.BackendStatus,
@@ -952,11 +901,11 @@ func TestTRACE031NativeSecretStorePromotedToServedGA(t *testing.T) {
 	}
 }
 
-// TestTRACE032DynamicSecretsPromotedToServedGA locks the remediation for
+// TestTRACE032DynamicSecretsRemainLibraryUntilProvidersAreWired locks the remediation for
 // TRACE-032. The dynamic-secret lease workflow belongs in the GA denominator once
 // issue/read/renew/revoke and leaseworker expiry are served through API, CLI, and
 // the Secrets UI with outbox-backed backend revocation.
-func TestTRACE032DynamicSecretsPromotedToServedGA(t *testing.T) {
+func TestTRACE032DynamicSecretsRemainLibraryUntilProvidersAreWired(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -966,32 +915,22 @@ func TestTRACE032DynamicSecretsPromotedToServedGA(t *testing.T) {
 	if !ok {
 		t.Fatal("F65 Dynamic secrets row is missing")
 	}
-	if f65.ServedState != "served" {
-		t.Fatalf("TRACE-032: F65 must be promoted to served after the dynamic lease workflow is served end-to-end, got served_state=%q", f65.ServedState)
-	}
-	if f65.GAServedScope != "" && f65.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-032: served F65 must be in the GA denominator, got ga_served_scope=%q", f65.GAServedScope)
-	}
-	if strings.TrimSpace(f65.GAScopeReason) != "" {
-		t.Fatalf("TRACE-032: served F65 must not carry the old conditional GA exclusion, got %q", f65.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-032", f65, "library")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f65.BackendStatus,
 		f65.CurrentMapping,
 		strings.Join(f65.SourceBackend, "\n"),
+		strings.Join(f65.APISurface, "\n"),
 		strings.Join(f65.FacetEvidence.Served.Evidence, "\n"),
 	}, "\n"))
 	for _, want := range []string{
-		"/api/v1/secrets/leases",
-		"/api/v1/secrets/leases/{lease_id}/renew",
-		"/api/v1/secrets/leases/{lease_id}/revoke",
-		"issue",
-		"renew",
-		"revoke",
-		"leaseworker",
-		"outbox",
-		"copy-once",
+		"deps.dynamicsecretproviders",
+		"unavailable",
+		"dynamic_secret census",
+		"issuedynamicsecretlease",
+		"renewdynamicsecretlease",
+		"revokedynamicsecretlease",
 	} {
 		if !strings.Contains(servedEvidence, want) {
 			t.Errorf("TRACE-032: F65 served evidence must name %q, got %q", want, servedEvidence)
@@ -1029,18 +968,18 @@ func TestTRACE032DynamicSecretsPromotedToServedGA(t *testing.T) {
 	}
 
 	testEvidence := strings.ToLower(strings.Join(f65.FacetEvidence.Test.Evidence, "\n"))
-	for _, want := range []string{"trace-032", "testserveddynamicsecretleasesissuerenewrevokeandexpire", "issue", "renew", "revoke", "leaseworker", "outbox", "feature parity"} {
+	for _, want := range []string{"inject provider", "test composition", "buildrundeps", "no production provider registry", "required and served"} {
 		if !strings.Contains(testEvidence, want) {
 			t.Errorf("TRACE-032: F65 test evidence must mention %q, got %q", want, testEvidence)
 		}
 	}
 }
 
-// TestTRACE033PKISecretsPromotedToServedGA locks the remediation for TRACE-033.
+// TestTRACE033PKISecretsRemainConditionalUntilEnabled locks TRACE-033.
 // The dynamic PKI secret workflow belongs in the GA denominator once the product
 // serves short-lived certificate + private-key issuance through API, CLI, and the
 // Secrets UI with signer-backed issuance, event evidence, and revocation linkage.
-func TestTRACE033PKISecretsPromotedToServedGA(t *testing.T) {
+func TestTRACE033PKISecretsRemainConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -1050,15 +989,7 @@ func TestTRACE033PKISecretsPromotedToServedGA(t *testing.T) {
 	if !ok {
 		t.Fatal("F67 PKI as a secrets engine row is missing")
 	}
-	if f67.ServedState != "served" {
-		t.Fatalf("TRACE-033: F67 must be promoted to served after the dynamic PKI secret workflow is served end-to-end, got served_state=%q", f67.ServedState)
-	}
-	if f67.GAServedScope != "" && f67.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-033: served F67 must be in the GA denominator, got ga_served_scope=%q", f67.GAServedScope)
-	}
-	if strings.TrimSpace(f67.GAScopeReason) != "" {
-		t.Fatalf("TRACE-033: served F67 must not carry the old conditional GA exclusion, got %q", f67.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-033", f67, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f67.BackendStatus,
@@ -1117,11 +1048,11 @@ func TestTRACE033PKISecretsPromotedToServedGA(t *testing.T) {
 	}
 }
 
-// TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA locks the
+// TestTRACE034SecretSyncPlatformIntegrationsRemainPartial locks the
 // remediation for TRACE-034. The served secret-sync/platform-integration workflow
 // belongs in the GA denominator once API, CLI, Kubernetes operator, workload
 // injection, and unvaulted-secret posture paths are all served and tested.
-func TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA(t *testing.T) {
+func TestTRACE034SecretSyncPlatformIntegrationsRemainPartial(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -1131,15 +1062,7 @@ func TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA(t *testing.T) 
 	if !ok {
 		t.Fatal("F68 Secret sync / platform integrations row is missing")
 	}
-	if f68.ServedState != "served" {
-		t.Fatalf("TRACE-034: F68 must be promoted to served after the secret-sync/platform-integration workflow is served end-to-end, got served_state=%q", f68.ServedState)
-	}
-	if f68.GAServedScope != "" && f68.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-034: served F68 must be in the GA denominator, got ga_served_scope=%q", f68.GAServedScope)
-	}
-	if strings.TrimSpace(f68.GAScopeReason) != "" {
-		t.Fatalf("TRACE-034: served F68 must not carry the old conditional GA exclusion, got %q", f68.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-034", f68, "partial")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f68.BackendStatus,
@@ -1158,11 +1081,7 @@ func TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA(t *testing.T) 
 		"gcp secret manager",
 		"azure key vault",
 		"hashicorp vault kv",
-		"github actions",
-		"gitlab ci",
-		"vercel",
 		"kubernetes",
-		"sealed outbox",
 		"trstctlsecretsync",
 		"trstctlsecretinjection",
 		"redacted leaked_secret",
@@ -1205,14 +1124,11 @@ func TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA(t *testing.T) 
 
 	testEvidence := strings.ToLower(strings.Join(f68.FacetEvidence.Test.Evidence, "\n"))
 	for _, want := range []string{
-		"trace-034",
-		"secrets_sync_served_test",
-		"unvaulted_secret_posture_served_test",
-		"trstctlsecretsync",
-		"trstctlsecretinjection",
-		"idempotent",
-		"no raw/base64 secret-value leakage",
-		"feature parity",
+		"cloud-secret discovery",
+		"kubernetes/workload posture",
+		"inject secretsynctargets",
+		"library behavior only",
+		"required+served secret_sync census",
 	} {
 		if !strings.Contains(testEvidence, want) {
 			t.Errorf("TRACE-034: F68 test evidence must mention %q, got %q", want, testEvidence)
@@ -1227,11 +1143,11 @@ func TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA(t *testing.T) 
 	}
 }
 
-// TestTRACE035SSOOIDCRowSplitsServedGAFromRoadmapResidual locks the
+// TestTRACE035SSOOIDCRowRemainsConditionalUntilConfigured locks the
 // remediation for TRACE-035. The served browser OIDC workflow belongs in the GA
 // denominator; richer provider-specific setup and diagnostics remain visible as a
 // roadmap residual and must not be hidden inside a conditional F13 row.
-func TestTRACE035SSOOIDCRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE035SSOOIDCRowRemainsConditionalUntilConfigured(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -1241,15 +1157,7 @@ func TestTRACE035SSOOIDCRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	if !ok {
 		t.Fatal("F13 SSO/OIDC row is missing")
 	}
-	if f13.ServedState != "served" {
-		t.Fatalf("TRACE-035: F13 must be promoted to served after splitting residual scope, got served_state=%q", f13.ServedState)
-	}
-	if f13.GAServedScope != "" && f13.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-035: served F13 must be in the GA denominator, got ga_served_scope=%q", f13.GAServedScope)
-	}
-	if strings.TrimSpace(f13.GAScopeReason) != "" {
-		t.Fatalf("TRACE-035: served F13 must not carry the old conditional GA exclusion, got %q", f13.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-035", f13, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f13.BackendStatus,
@@ -1314,11 +1222,11 @@ func TestTRACE035SSOOIDCRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
-// TestTRACE036SemanticQueryLayerSplitsServedGAFromRoadmapResidual locks the
+// TestTRACE036SemanticQueryLayerRemainsConditionalUntilEnabled locks the
 // remediation for TRACE-036. The served typed semantic query layer belongs in the
 // GA denominator; richer saved-prompt/model-analysis workflow polish remains visible
 // as a roadmap residual and must not be hidden inside a conditional F75 row.
-func TestTRACE036SemanticQueryLayerSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE036SemanticQueryLayerRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -1328,15 +1236,7 @@ func TestTRACE036SemanticQueryLayerSplitsServedGAFromRoadmapResidual(t *testing.
 	if !ok {
 		t.Fatal("F75 Unified semantic query layer row is missing")
 	}
-	if f75.ServedState != "served" {
-		t.Fatalf("TRACE-036: F75 must be promoted to served after splitting residual scope, got served_state=%q", f75.ServedState)
-	}
-	if f75.GAServedScope != "" && f75.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-036: served F75 must be in the GA denominator, got ga_served_scope=%q", f75.GAServedScope)
-	}
-	if strings.TrimSpace(f75.GAScopeReason) != "" {
-		t.Fatalf("TRACE-036: served F75 must not carry the old conditional GA exclusion, got %q", f75.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-036", f75, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f75.BackendStatus,
@@ -1404,12 +1304,12 @@ func TestTRACE036SemanticQueryLayerSplitsServedGAFromRoadmapResidual(t *testing.
 	}
 }
 
-// TestTRACE037AIModelAdapterSplitsServedGAFromRoadmapResidual locks the
+// TestTRACE037AIModelAdapterRemainsConditionalUntilEnabled locks the
 // remediation for TRACE-037. The optional off/local/cloud model adapter, status
 // route, CLI surface, and Assistant diagnostics belong in the GA denominator; a
 // richer self-service model settings editor remains visible as a roadmap residual
 // and must not be hidden inside a conditional F76 row.
-func TestTRACE037AIModelAdapterSplitsServedGAFromRoadmapResidual(t *testing.T) {
+func TestTRACE037AIModelAdapterRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -1419,15 +1319,7 @@ func TestTRACE037AIModelAdapterSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	if !ok {
 		t.Fatal("F76 Pluggable AI model adapter row is missing")
 	}
-	if f76.ServedState != "served" {
-		t.Fatalf("TRACE-037: F76 must be promoted to served after splitting residual scope, got served_state=%q", f76.ServedState)
-	}
-	if f76.GAServedScope != "" && f76.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-037: served F76 must be in the GA denominator, got ga_served_scope=%q", f76.GAServedScope)
-	}
-	if strings.TrimSpace(f76.GAScopeReason) != "" {
-		t.Fatalf("TRACE-037: served F76 must not carry the old conditional GA exclusion, got %q", f76.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-037", f76, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f76.BackendStatus,
@@ -1499,11 +1391,11 @@ func TestTRACE037AIModelAdapterSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
-// TestTRACE038GroundedRCAPromotesServedGA locks the remediation for TRACE-038.
+// TestTRACE038GroundedRCARemainsConditionalUntilEnabled locks TRACE-038.
 // The grounded RCA / natural-language workflow is served by POST /api/v1/ai/rca,
 // the ai rca CLI command, and the Assistant RCA workspace; richer RCA export/timeline
 // workflow polish remains visible as a roadmap residual instead of excluding F77 from GA.
-func TestTRACE038GroundedRCAPromotesServedGA(t *testing.T) {
+func TestTRACE038GroundedRCARemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -1513,15 +1405,7 @@ func TestTRACE038GroundedRCAPromotesServedGA(t *testing.T) {
 	if !ok {
 		t.Fatal("F77 Grounded RCA and natural-language query row is missing")
 	}
-	if f77.ServedState != "served" {
-		t.Fatalf("TRACE-038: F77 must be promoted to served after the grounded RCA workflow is served end-to-end, got served_state=%q", f77.ServedState)
-	}
-	if f77.GAServedScope != "" && f77.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-038: served F77 must be in the GA denominator, got ga_served_scope=%q", f77.GAServedScope)
-	}
-	if strings.TrimSpace(f77.GAScopeReason) != "" {
-		t.Fatalf("TRACE-038: served F77 must not carry the old conditional GA exclusion, got %q", f77.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-038", f77, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f77.BackendStatus,
@@ -1592,11 +1476,11 @@ func TestTRACE038GroundedRCAPromotesServedGA(t *testing.T) {
 	}
 }
 
-// TestTRACE039MCPServerPromotesServedGA locks the remediation for TRACE-039.
+// TestTRACE039MCPServerRemainsConditionalUntilEnabled locks TRACE-039.
 // The served MCP server workflow belongs in the GA denominator via the MCP routes,
 // CLI commands, and Assistant tool UI; richer external-agent/session-history polish
 // remains visible as a roadmap residual instead of excluding F78 from GA.
-func TestTRACE039MCPServerPromotesServedGA(t *testing.T) {
+func TestTRACE039MCPServerRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -1606,15 +1490,7 @@ func TestTRACE039MCPServerPromotesServedGA(t *testing.T) {
 	if !ok {
 		t.Fatal("F78 trstctl MCP server row is missing")
 	}
-	if f78.ServedState != "served" {
-		t.Fatalf("TRACE-039: F78 must be promoted to served after the MCP workflow is served end-to-end, got served_state=%q", f78.ServedState)
-	}
-	if f78.GAServedScope != "" && f78.GAServedScope != gaServedScopeIn {
-		t.Fatalf("TRACE-039: served F78 must be in the GA denominator, got ga_served_scope=%q", f78.GAServedScope)
-	}
-	if strings.TrimSpace(f78.GAScopeReason) != "" {
-		t.Fatalf("TRACE-039: served F78 must not carry the old conditional GA exclusion, got %q", f78.GAScopeReason)
-	}
+	requireResidualServedState(t, "TRACE-039", f78, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f78.BackendStatus,

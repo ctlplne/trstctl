@@ -80,8 +80,8 @@ architectural guarantees that back those defenses.
   the signer's key store and **preserved across restarts** (R3.2). Helm
   `externalKMS` can wrap the signer key-store DEKs through an operator-supplied
   KMS/HSM adapter instead of mounting the local signer KEK. Online m-of-n
-  break-glass issuance is served at `POST /api/v1/breakglass/issue` when the
-  signer-backed break-glass issuer is configured. Recovery reconciliation of signed
+  break-glass issuance is not production-assembled; the existing issue route lacks
+  independently authenticated approval artifacts. Recovery reconciliation of signed
   break-glass bundles is served at `POST /api/v1/breakglass/reconcile` and records
   `breakglass.issued` audit events ([limitations](../limitations.md),
   [incident response](../runbooks/incident-response.md)).

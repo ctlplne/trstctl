@@ -37,7 +37,10 @@
 *.out
 *.test
 coverage.*
+cover.out.*
 /coverage/
+# Volatile DoD receipt: make dod-gate always emits a fresh timestamped census.
+/wiring-census.json
 
 # Go workspace files (not committed; per-developer)
 go.work

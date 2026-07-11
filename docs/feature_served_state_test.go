@@ -4,10 +4,16 @@ package docs
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/secretsync"
 )
 
 type featureMapLedger struct {
@@ -15,11 +21,83 @@ type featureMapLedger struct {
 }
 
 type featureMapServedState struct {
-	FeatureID              string `json:"feature_id"`
-	Feature                string `json:"feature"`
-	ServedState            string `json:"served_state"`
-	BackendStatus          string `json:"backend_status"`
-	CurrentFrontendMapping string `json:"current_frontend_mapping"`
+	FeatureID              string            `json:"feature_id"`
+	Feature                string            `json:"feature"`
+	ServedState            string            `json:"served_state"`
+	BackendStatus          string            `json:"backend_status"`
+	CurrentFrontendMapping string            `json:"current_frontend_mapping"`
+	DoDCapabilities        []string          `json:"dod_capabilities,omitempty"`
+	DoDResiduals           map[string]string `json:"dod_residuals,omitempty"`
+}
+
+type dodManifest struct {
+	SchemaVersion   int                `json:"schema_version"`
+	ManifestVersion int                `json:"manifest_version"`
+	Entries         []dodManifestEntry `json:"entries"`
+}
+
+type dodManifestEntry struct {
+	ID          string `json:"id"`
+	Capability  string `json:"capability"`
+	Inventory   bool   `json:"inventory"`
+	Enforcement string `json:"enforcement"`
+}
+
+type dodCensus struct {
+	Entries map[string]dodCensusEntry `json:"entries"`
+}
+
+type dodCensusEntry struct {
+	Capability  string `json:"capability"`
+	Status      string `json:"status"`
+	Enforcement string `json:"enforcement"`
+}
+
+func censusEntryClaimable(entry dodCensusEntry) bool {
+	return entry.Status == "served" && entry.Enforcement == "required"
+}
+
+func liveDoDCensus(t *testing.T) (dodManifest, dodCensus) {
+	t.Helper()
+	root := filepath.Clean("..")
+	manifestPath := filepath.Join(root, "tools", "dodcensus", "manifest.json")
+	b, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read repo-native DoD manifest: %v", err)
+	}
+	var manifest dodManifest
+	if err := json.Unmarshal(b, &manifest); err != nil {
+		t.Fatalf("parse repo-native DoD manifest: %v", err)
+	}
+	if manifest.SchemaVersion != 1 || manifest.ManifestVersion != 1 || len(manifest.Entries) == 0 {
+		t.Fatalf("unexpected DoD manifest contract: schema=%d manifest=%d entries=%d", manifest.SchemaVersion, manifest.ManifestVersion, len(manifest.Entries))
+	}
+
+	out := filepath.Join(t.TempDir(), "wiring-census.json")
+	cmd := exec.Command("go", "run", "./tools/dodcensus", "--repo", ".", "--manifest", "tools/dodcensus/manifest.json", "--out", out)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(),
+		"CGO_ENABLED=0",
+		"GOCACHE="+filepath.Join(t.TempDir(), "go-cache"),
+		"GOFLAGS=",
+	)
+	commandOutput, err := cmd.CombinedOutput()
+	var exitErr *exec.ExitError
+	if err != nil && !errors.As(err, &exitErr) {
+		t.Fatalf("execute fresh repo-native DoD census: %v\n%s", err, commandOutput)
+	}
+	b, readErr := os.ReadFile(out)
+	if readErr != nil {
+		t.Fatalf("fresh DoD census did not write %s (command err=%v): %v\n%s", out, err, readErr, commandOutput)
+	}
+	var census dodCensus
+	if err := json.Unmarshal(b, &census); err != nil {
+		t.Fatalf("parse fresh DoD census: %v", err)
+	}
+	if len(census.Entries) != len(manifest.Entries) {
+		t.Fatalf("fresh DoD census entries=%d, manifest entries=%d", len(census.Entries), len(manifest.Entries))
+	}
+	return manifest, census
 }
 
 func featureServedStateLedger(t *testing.T) featureMapLedger {
@@ -79,8 +157,8 @@ func TestFeatureCatalogHasExplicitServedState(t *testing.T) {
 	if counts["served"] == 0 {
 		t.Error("served_state ledger should include at least one served row")
 	}
-	if counts["library"] != 0 {
-		t.Errorf("served_state=library is no longer a GA catalog state; move built-but-unserved rows to roadmap or wire them as served/conditional/partial")
+	if counts["conditional"] == 0 || counts["partial"] == 0 || counts["library"] == 0 {
+		t.Errorf("honest served-state ledger must exercise conditional, partial, and library states, got %#v", counts)
 	}
 
 	for _, item := range byID {
@@ -91,6 +169,265 @@ func TestFeatureCatalogHasExplicitServedState(t *testing.T) {
 		if !strings.Contains(lower, "roadmap-disclosure") && !strings.HasPrefix(lower, "disclosure:") {
 			t.Errorf("%s is %s but current GUI mapping is not an explicit disclosure: %q", item.FeatureID, item.ServedState, item.CurrentFrontendMapping)
 		}
+	}
+}
+
+// TestFeatureServedStateMatchesLiveWiringCensus is the W0 honesty lock. It runs
+// the same repo-native evaluator as make dod-gate into a temporary receipt, then
+// rejects a served feature claim when any capability breadth attached to that
+// feature is still library-only, a stub, or unknown. Reading a previously
+// generated wiring-census.json would let stale output certify a new overclaim, so
+// this test deliberately evaluates the current source tree every time.
+func TestFeatureServedStateMatchesLiveWiringCensus(t *testing.T) {
+	manifest, census := liveDoDCensus(t)
+	manifestCapabilities := map[string]bool{}
+	for _, entry := range manifest.Entries {
+		manifestCapabilities[entry.Capability] = true
+		got, ok := census.Entries[entry.ID]
+		if !ok {
+			t.Errorf("fresh DoD census is missing manifest entry %s", entry.ID)
+			continue
+		}
+		if got.Capability != entry.Capability {
+			t.Errorf("fresh DoD census entry %s capability=%q, manifest=%q", entry.ID, got.Capability, entry.Capability)
+		}
+		if got.Enforcement != entry.Enforcement {
+			t.Errorf("fresh DoD census entry %s enforcement=%q, manifest=%q", entry.ID, got.Enforcement, entry.Enforcement)
+		}
+	}
+
+	mappedCapabilities := map[string]bool{}
+	for _, item := range featureServedStateLedger(t).Items {
+		for _, capability := range item.DoDCapabilities {
+			if !manifestCapabilities[capability] {
+				t.Errorf("%s maps unknown DoD capability %q", item.FeatureID, capability)
+				continue
+			}
+			mappedCapabilities[capability] = true
+			capabilityServed := true
+			for id, entry := range census.Entries {
+				if entry.Capability != capability || censusEntryClaimable(entry) {
+					continue
+				}
+				capabilityServed = false
+				if item.ServedState == "served" {
+					t.Errorf("%s (%s) claims served while fresh DoD census entry %s is status=%s enforcement=%s", item.FeatureID, item.Feature, id, entry.Status, entry.Enforcement)
+				}
+			}
+			residual := strings.TrimSpace(item.DoDResiduals[capability])
+			if !capabilityServed && len(strings.Fields(residual)) < 8 {
+				t.Errorf("%s (%s) must explain the non-served %s census residual, got %q", item.FeatureID, item.Feature, capability, residual)
+			}
+			if capabilityServed && item.ServedState == "library" {
+				t.Errorf("%s (%s) is still library-only after every %s census entry became served; promote its maturity in the wiring commit", item.FeatureID, item.Feature, capability)
+			}
+			if capabilityServed && residual != "" {
+				t.Errorf("%s (%s) keeps stale %s census residual after every entry became served: %q", item.FeatureID, item.Feature, capability, residual)
+			}
+		}
+	}
+	for capability := range manifestCapabilities {
+		if !mappedCapabilities[capability] {
+			t.Errorf("DoD capability %q has no feature-map row, so its census state cannot constrain product claims", capability)
+		}
+	}
+}
+
+// TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals keeps the
+// catalog's single maturity word honest. Conditional rows have a real path that
+// is off until configuration or a license enables it. Partial rows keep a served
+// spine visible while naming missing breadth. Library rows have code but no usable
+// shipped path yet.
+func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T) {
+	want := map[string]string{
+		"F3":  "conditional", // agent_channel.enabled gates the actual agent transport
+		"F4":  "partial",     // built-in issuance is served; external CA breadth is not
+		"F5":  "conditional", // protocols.acme.enabled
+		"F7":  "library",     // advertised native connector set is not constructed
+		"F13": "conditional", // browser SSO needs operator IdP configuration
+		"F16": "partial",     // classical agility is served; PQC residual remains
+		"F22": "conditional", // protocols.est.enabled
+		"F23": "conditional", // protocols.scep.enabled
+		"F24": "conditional", // protocols.spiffe.enabled
+		"F26": "conditional", // Enterprise/config gate plus six-backend runtime residual
+		"F27": "library",     // advertised additional native connectors are not constructed
+		"F29": "partial",     // core channels work; PagerDuty/OpsGenie are not wired
+		"F31": "conditional", // Enterprise remediation gate plus right-size residual
+		"F32": "conditional", // Enterprise remediation license
+		"F34": "partial",     // issuance works; break-glass rotation residual remains
+		"F37": "conditional", // secrets.enable_api
+		"F39": "conditional", // secrets.enable_api
+		"F41": "conditional", // Enterprise HA license plus federation.enabled
+		"F43": "conditional", // protocols.ssh.enabled
+		"F50": "library",     // served route remains a 501 stub
+		"F51": "conditional", // protocols.tsa.enabled
+		"F54": "conditional", // agent_channel.enabled gates embedded-client renewal
+		"F55": "conditional", // protocols.cmp.enabled
+		"F56": "conditional", // live MDM enrollment depends on configured SCEP
+		"F57": "partial",     // licensed PQC spine exists; end-to-end residuals remain
+		"F58": "conditional", // secrets.enable_api
+		"F60": "conditional", // secrets.enable_api
+		"F62": "conditional", // Enterprise governance/evidence-pack license
+		"F63": "conditional", // secrets.enable_api
+		"F64": "partial",     // served SDK spine; Vault/Terraform residuals remain
+		"F65": "library",     // lease route has no production provider registry
+		"F66": "partial",     // transit is served; KMIP residuals/config remain
+		"F67": "conditional", // secrets.enable_api
+		"F68": "partial",     // discovery/Kubernetes spine exists; eight pushers are not wired
+		"F69": "conditional", // ACME plus provider configuration
+		"F70": "conditional",
+		"F71": "conditional",
+		"F72": "conditional",
+		"F73": "conditional",
+		"F74": "conditional",
+		"F75": "conditional", // ai.enable_api
+		"F76": "conditional", // ai.enable_api
+		"F77": "conditional", // ai.enable_api
+		"F78": "conditional", // ai.enable_api
+	}
+	byID := map[string]featureMapServedState{}
+	for _, item := range featureServedStateLedger(t).Items {
+		byID[item.FeatureID] = item
+	}
+	for id, state := range want {
+		if got := byID[id].ServedState; got != state {
+			t.Errorf("%s served_state=%q, want truthful %q", id, got, state)
+		}
+	}
+}
+
+func TestHonestyAuthorityRejectsKnownW0Overclaims(t *testing.T) {
+	limitations := read(t, "limitations.md")
+	normalizedLimitations := strings.Join(strings.Fields(limitations), " ")
+	for _, want := range []string{
+		"F7, F27, F50, and F65 currently use `served_state=library`",
+		"queued receipt is not external-effect evidence.",
+		"zero of six backends served",
+		"not production-assembled",
+		"not independent authenticated approvals",
+		"AN-1/AN-2/AN-4/AN-5/AN-6/AN-8 residuals",
+	} {
+		if !strings.Contains(normalizedLimitations, want) {
+			t.Errorf("limitations.md must keep the W0 honesty disclosure %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		"No current `feature-map-backlog.json` row uses `served_state=library`",
+		"it records an unrouted receipt",
+		"online m-of-n break-glass issuance is served",
+		"HSM/KMS-resident CA private keys are supported through the managed-key custody path",
+	} {
+		if strings.Contains(normalizedLimitations, forbidden) {
+			t.Errorf("limitations.md keeps disproven W0 claim %q", forbidden)
+		}
+	}
+
+	issuance := strings.ToLower(read(t, "features/issuance-and-cas.md"))
+	if strings.Contains(issuance, "localstack-proven") {
+		t.Error("issuance-and-cas.md must not turn an unexecuted LocalStack configuration into acceptance proof")
+	}
+	for _, want := range []string{"zero hsm/kms backends", "not localstack or live-cloud proof", "not the default static release artifact"} {
+		if !strings.Contains(issuance, want) {
+			t.Errorf("issuance-and-cas.md must keep hardware-custody qualification %q", want)
+		}
+	}
+
+	readme := strings.ToLower(strings.Join(strings.Fields(read(t, "../README.md")), " "))
+	for _, want := range []string{"not localstack conformance evidence", "does not make any hsm/kms census row served"} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README demo text must keep LocalStack qualification %q", want)
+		}
+	}
+}
+
+func TestReadmeCapabilitiesSeparateInventoryFromServedBackends(t *testing.T) {
+	manifest, census := liveDoDCensus(t)
+	type count struct{ inventory, served int }
+	counts := map[string]count{}
+	for _, entry := range manifest.Entries {
+		if !entry.Inventory {
+			continue
+		}
+		c := counts[entry.Capability]
+		c.inventory++
+		if censusEntryClaimable(census.Entries[entry.ID]) {
+			c.served++
+		}
+		counts[entry.Capability] = c
+	}
+
+	wantInventory := map[string]int{
+		"connector":      24,
+		"external_ca":    14,
+		"dynamic_secret": 8,
+		"secret_sync":    8,
+		"hsm_kms":        6,
+	}
+	labels := map[string]string{
+		"connector":      "Deployment connectors",
+		"external_ca":    "CA integrations",
+		"dynamic_secret": "Dynamic-secret backends",
+		"secret_sync":    "Secret-sync targets",
+		"hsm_kms":        "HSM/KMS backends",
+	}
+	readme := read(t, "../README.md")
+	for capability, inventory := range wantInventory {
+		got := counts[capability]
+		if got.inventory != inventory {
+			t.Errorf("DoD manifest %s inventory=%d, code-backed advertised inventory=%d", capability, got.inventory, inventory)
+		}
+		marker := labels[capability] + ": **" + strconv.Itoa(inventory) + " inventory / " + strconv.Itoa(got.served) + " served in the shipped binary**"
+		if !strings.Contains(readme, marker) {
+			t.Errorf("README capabilities must show the live inventory/runtime split %q", marker)
+		}
+	}
+
+	for _, stale := range []string{
+		"**7** dynamic-secret backends",
+		"secret sync (**7** targets)",
+	} {
+		if strings.Contains(readme, stale) {
+			t.Errorf("README keeps stale integration count %q; code and DoD manifest have 8", stale)
+		}
+	}
+}
+
+func TestReadmeCapabilityInventoryCountsMatchCode(t *testing.T) {
+	connectorEntries, err := os.ReadDir(filepath.FromSlash("../internal/connector"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	connectors := 0
+	for _, entry := range connectorEntries {
+		if entry.IsDir() && entry.Name() != "example" {
+			connectors++
+		}
+	}
+	if connectors != 24 {
+		t.Fatalf("connector package inventory=%d, want 24", connectors)
+	}
+
+	dynamicSource := read(t, "../internal/dynsecret/providers.go")
+	providerConstructor := regexp.MustCompile(`(?m)^func New(Postgres|MySQL|Mongo|AWSIAM|GCPIAM|AzureEntra|Kubernetes|Redis)Provider\(`)
+	if got := len(providerConstructor.FindAllString(dynamicSource, -1)); got != 8 {
+		t.Fatalf("dynamic-secret implementation inventory=%d, want 8", got)
+	}
+	if got := len(secretsync.ProviderCatalog()); got != 8 {
+		t.Fatalf("secret-sync provider catalog inventory=%d, want 8", got)
+	}
+
+	kmsEntries, err := os.ReadDir(filepath.FromSlash("../internal/kms"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	kms := 0
+	for _, entry := range kmsEntries {
+		if entry.IsDir() {
+			kms++
+		}
+	}
+	if kms != 6 {
+		t.Fatalf("HSM/KMS package inventory=%d, want 6", kms)
 	}
 }
 

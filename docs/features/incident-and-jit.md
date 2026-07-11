@@ -399,8 +399,8 @@ notifications use the [notification integrations](policy-and-governance.md).
   `trstctl incidents response-integrations dispatch`, and `/incidents`;
   ServiceNow / ITSM ticket creation is served through
   `/api/v1/itsm/servicenow/tickets` and the `/incidents` console. JIT issuance is
-  served. Online m-of-n break-glass issuance is served at
-  `/api/v1/breakglass/issue`, and offline-bundle reconciliation is served at
+  served. Online m-of-n break-glass issuance is not production-assembled at
+  `/api/v1/breakglass/issue`; offline-bundle reconciliation is served at
   `/api/v1/breakglass/reconcile`.
 - **Order matters in remediation.** The reissue-before-revoke ordering is deliberate;
   don't shortcut it, or you risk an outage mid-incident.

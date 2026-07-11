@@ -156,6 +156,7 @@ func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 	// regression, parser hardening, and FIPS-capable builds.
 	requiredGates := map[string]string{
 		"build / test / lint":                 "make test + trstctllint must block merge",
+		"definition of done / wiring census":  "compiled + assembled + non-sentinel served capabilities must block merge (DOD-GATE-001)",
 		"chaos (fault injection)":             "make chaos must block merge (RESIL-003)",
 		"fuzz (smoke per-PR, deeper nightly)": "fuzz smoke/nightly parser safety net must block merge (FUZZ-003)",
 		"fips-capable build (GOFIPS140)":      "FIPS-capable build must block merge (PKIGOV-007)",

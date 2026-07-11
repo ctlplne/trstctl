@@ -336,8 +336,9 @@ profile create/list round trip. The proprietary Enterprise/PQC issuance proofs n
 live under `ee/pqc` and `ee/pqcmigration`, so they are not counted as MPL-core
 served evidence.
 
-The managed-key lifecycle is now served for AWS KMS, Azure Key Vault / Managed HSM,
-GCP Cloud KMS, and PKCS#11 HSM custody. When `managed_keys.enabled` is true and
+The managed-key API spine is configuration- and license-gated for AWS KMS, Azure
+Key Vault / Managed HSM, GCP Cloud KMS, and PKCS#11 HSM custody. When
+`managed_keys.enabled` is true and
 `managed_keys.provider` is `aws`, `azure-key-vault`, `gcp-kms`, or `pkcs11`, the
 running control plane exposes:
 
@@ -350,11 +351,12 @@ running control plane exposes:
 The CLI mirrors those verbs under `trstctl managed-keys`. Every request is
 tenant-scoped, idempotent, and recorded as a key-material-free lifecycle event. Rotate,
 revoke, and zeroize require a distinct approval when four-eyes governance is enabled,
-so one operator cannot silently destroy a tenant's signing key. CI proves the served
-path against LocalStack AWS KMS through the official AWS SDK v2 KMS client, proves the
-PKCS#11 path through a served SoftHSM-shaped lifecycle harness, and runs the native
-SoftHSM module conformance test when Docker/cgo are available. The same AWS test runs
-against real AWS KMS when standard `AWS_*` credentials are present.
+so one operator cannot silently destroy a tenant's signing key. Current cloud KMS
+lifecycle tests exercise the provider wire shape with author-controlled HTTP doubles;
+they do not claim emulator or live-cloud acceptance. PKCS#11 has a SoftHSM-shaped
+served harness and a native SoftHSM module conformance test when Docker/cgo are
+available. The DoD wiring/runtime census remains the authority for which backend is
+actually present in a shipped artifact.
 
 The same key-management posture includes the served CAP-KEY-03 FIPS path:
 `GET /api/v1/editions` and the Platform page expose the live FIPS POST booleans,
@@ -410,15 +412,17 @@ external CA registry API, each of which calls the one issuance path with an
 
 ## Pitfalls & limits
 
-- **Private-key custody is your decision.** The in-process CA is the convenient
-  reference path; for production, point the CA at an HSM/KMS backend so the key is
-  never in the control-plane's memory. See [configuration](../configuration.md) for
-  `TRSTCTL_SIGNER_MODE` and CA custody.
-- **Hardware bindings vary in maturity.** AWS KMS, Azure Key Vault HSM, GCP Cloud
-  KMS, and PKCS#11 managed keys are served through the same managed-key API; AWS is
-  LocalStack-proven, Azure/GCP have remote-lifecycle API doubles plus served API
-  acceptance coverage, and PKCS#11 is SoftHSM/cgo-proven. Confirm any vendor module
-  or cloud policy shape you depend on before relying on it ([limitations](../limitations.md)).
+- **Private-key custody is a deployment boundary.** The served CA path uses the
+  separate signer process. HSM/KMS lifecycle adapters exist, but none is currently
+  census-served in the shipped artifact; do not infer production HSM custody from
+  package presence or configuration examples. See [configuration](../configuration.md)
+  for `TRSTCTL_SIGNER_MODE` and the exact residuals.
+- **Hardware bindings are not yet served breadth.** AWS KMS, Azure Key Vault HSM,
+  GCP Cloud KMS, and PKCS#11 lifecycle packages have unit/contract coverage, but the
+  shipped wiring census currently serves zero HSM/KMS backends. Cloud tests use
+  author-controlled HTTP doubles; they are not LocalStack or live-cloud proof.
+  SoftHSM exercises the cgo PKCS#11 package, not the default static release artifact.
+  See the exact residuals in [limitations](../limitations.md).
 - **ARI-driven lifecycle scheduling is for trstctl-issued deployed X.509 identities.**
   Certificates discovered from another CA can still be inventoried and risk-scored, but
   renewing them requires a configured issuer path that can replace that outside

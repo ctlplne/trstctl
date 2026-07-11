@@ -90,6 +90,11 @@ build: ## Build all binaries into ./bin
 		$(GO_BUILD) -o $(BIN_DIR)/$$cmd ./cmd/$$cmd; \
 	done
 
+.PHONY: build-trstctl
+build-trstctl: ## Build the default static control-plane artifact used by the DoD profile
+	@mkdir -p $(BIN_DIR)
+	@$(GO_BUILD) -o $(BIN_DIR)/trstctl ./cmd/trstctl
+
 .PHONY: airgap-bundle
 airgap-bundle: ## Build an offline install bundle (requires VERSION=vX.Y.Z; docker unless TRSTCTL_AIRGAP_SKIP_IMAGES=1)
 	@scripts/airgap-bundle.sh
@@ -150,6 +155,16 @@ coverage-critical: ## Enforce the per-package coverage floor on security-critica
 .PHONY: cover
 cover: test ## Alias for `make test`; writes cover.out and prints per-function coverage
 	@$(GO) tool cover -func=$(COVERPROFILE).nogen | tail -1
+
+DOD_CENSUS_OUT ?= wiring-census.json
+
+.PHONY: dod-gate
+dod-gate: ## Prove every required capability is compiled, production-assembled, and non-sentinel served
+	@echo ">> definition-of-done wiring census (manifest-pinned shipped profiles)"
+	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) test ./tools/dodcensus/... -count=1
+	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) test ./internal/server -run '^TestDODGateProductionAssemblyCanary$$' -count=1
+	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) run ./tools/dodcensus \
+		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)"
 
 # Per-target fuzz budget for the smoke run (FUZZ-003). Short enough for a per-PR
 # CI gate; the nightly job overrides it (e.g. FUZZ_SMOKE_TIME=120s) for depth.

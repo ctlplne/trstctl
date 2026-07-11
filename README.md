@@ -181,19 +181,21 @@ The same lifecycle, for every credential type:
 "Built and tested" means real library code with unit, property, integration, and
 conformance tests. A core slice is **served end to end today**; much of the broader
 surface is **library-complete but not yet wired into the served binary** —
-[Current limitations](docs/limitations.md) is the authority on which is which. Every
-number below is grounded in the repository.
+[Current limitations](docs/limitations.md) is the authority on which is which. The
+served denominators below are checked against the fresh repo-native
+[DoD manifest and gate](tools/dodcensus/manifest.json); `make dod-gate` emits the
+local `wiring-census.json` receipt. Every inventory number is grounded in the repository.
 
 | Area | What's there |
 |---|---|
-| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation, **14** CA integrations |
+| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation. CA integrations: **14 inventory / 0 served in the shipped binary**; their packages are not yet constructed by `buildRunDeps`. |
 | **Enrollment** | EST, SCEP, CMP servers; an embedded/IoT C client; Intune/MDM challenge gating |
 | **Workload identity** | SPIFFE Workload API (X.509 + JWT SVIDs), **6** cloud/hardware attesters, ephemeral issuance, an AI-agent broker |
 | **SSH** | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs |
-| **Secrets** | envelope-encrypted store, **7** dynamic-secret backends, transit + KMIP, PKI-as-a-secrets-engine, rotation, secret sync (**7** targets) |
-| **Deployment** | **24** production connectors (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, cloud cert stores), an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration |
+| **Secrets** | envelope-encrypted store, transit + KMIP, PKI-as-a-secrets-engine, and rotation. Dynamic-secret backends: **8 inventory / 0 served in the shipped binary**. Secret-sync targets: **8 inventory / 0 served in the shipped binary**. |
+| **Deployment** | Deployment connectors: **24 inventory / 0 served in the shipped binary** (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, and cloud cert stores). Target/orchestration APIs and signed WASM dispatch exist, but the native registry is not constructed. Also includes an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration. |
 | **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM crypto posture, Enterprise/PQC migration posture, CT monitoring, drift, risk scoring, the credential graph |
-| **Key protection** | **6** HSM/KMS backends (PKCS#11, TPM 2.0, YubiHSM 2, AWS/Azure/GCP KMS), the isolated signer |
+| **Key protection** | HSM/KMS backends: **6 inventory / 0 served in the shipped binary** until the runtime gate proves each shipped artifact/backend combination. The managed-key surface is configuration/license-gated; the isolated signer remains the default key boundary. |
 | **Crypto-agility** | classical algorithms in the MPL core; Enterprise/PQC algorithms (ML-DSA, ML-KEM, SLH-DSA, hybrid) and the PQC-migration orchestrator live behind the proprietary `ee/` boundary |
 | **Platform** | REST API (OpenAPI 3.1), CLI at full parity, web UI with a first-run wizard, OIDC/SAML/LDAP sign-on, SCIM 2.0 provisioning, RBAC + ABAC, append-only audit, multi-tenancy |
 | **Supply chain** | reproducible builds, cosign-signed images, and an SBOM |
@@ -262,9 +264,10 @@ make lint-partial # explicit local subset when optional lint tools are absent
 ```
 
 For a pre-populated click-through demo, use the demo stack. It starts local SSO,
-PostgreSQL, NATS JetStream, LocalStack KMS, the isolated signer, and a seed job
-that creates owners, certificates, secrets, transit keys, managed keys, and API
-tokens through served APIs.
+PostgreSQL, NATS JetStream, the isolated signer, and a seed job for the currently
+served demo APIs. The stack also includes a LocalStack KMS configuration for
+exploring the conditional managed-key surface. That convenience stack is not
+LocalStack conformance evidence and does not make any HSM/KMS census row served.
 
 ```bash
 docker compose -f deploy/demo/docker-compose.yml up --build

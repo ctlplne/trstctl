@@ -16,8 +16,10 @@ If a capability matters to your evaluation, check this page before relying on it
 
 This matrix is the canonical served-state table for the feature catalog. The docs
 test suite checks every `F*` row below against
-`internal/featureparity/feature-map-backlog.json`, so a capability cannot sit under
-the wrong maturity heading without failing `go test ./docs/...`.
+`internal/featureparity/feature-map-backlog.json` **and runs the repo-native wiring
+census against the current source tree**. A feature cannot claim Served while a
+mapped capability is still library-only, a stub, or unknown; a stale generated JSON
+receipt cannot certify it.
 
 - **Served** means the running binary serves the capability end to end.
 - **Conditional** means the served path exists but depends on configuration,
@@ -35,9 +37,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 |----|---------|--------------|
 | F1 | Certificate inventory | docs/features/discovery-and-inventory.md |
 | F2 | Network discovery | docs/features/discovery-and-inventory.md |
-| F3 | Agent-based discovery | docs/features/discovery-and-inventory.md |
-| F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
-| F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
 | F42 | SSH credential discovery and inventory | docs/features/discovery-and-inventory.md, docs/features/ssh.md |
 | F49 | Agentless cloud certificate discovery | docs/features/discovery-and-inventory.md |
 | F35 | Secret store discovery | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
@@ -46,92 +45,96 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F18 | Drift detection | docs/features/observability-and-risk.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
 | F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
-| F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
 | F48 | Private/enterprise CA hierarchy management | docs/features/issuance-and-cas.md, docs/runbooks/key-ceremony.md |
 | F53 | Certificate profiles and registration-authority model | docs/features/issuance-and-cas.md, docs/guides/profile-authoring.md |
 | F46 | ACME Renewal Information (ARI) | docs/features/issuance-and-cas.md, docs/features/acme-and-dns.md |
+| F47 | X.509 revocation infrastructure | docs/features/issuance-and-cas.md |
+| F25 | Ephemeral credential issuance | docs/features/workload-identity.md |
+| F30 | Workload attestation chain | docs/features/workload-identity.md |
+| F59 | Non-human identity lifecycle management | docs/features/workload-identity.md, docs/features/discovery-and-inventory.md |
+| F61 | AI-agent / NHI identity broker | docs/features/workload-identity.md |
+| F44 | SSH deployment and trust configuration agent | docs/features/ssh.md, docs/design/ssh-trust-rewrite.md |
+| F45 | Attestation-gated short-lived SSH user certs | docs/features/ssh.md |
+| F6 | Lifecycle automation | docs/features/lifecycle-and-pqc.md |
+| F33 | Just-in-time issuance with approval flows | docs/features/incident-and-jit.md |
+| F38 | Ephemeral API key issuance | docs/features/secrets.md |
+| F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
+| F8 | RBAC | docs/features/policy-and-governance.md |
+| F9 | Audit log surfaces | docs/features/policy-and-governance.md, docs/observability.md, docs/configuration.md |
+| F10 | REST API | docs/features/platform-and-api.md |
+| F11 | CLI | docs/features/platform-and-api.md, docs/cli.md |
+| F12 | Web UI | docs/features/platform-and-api.md |
+| F14 | Single-binary distribution | docs/features/platform-and-api.md |
+| F15 | Encrypted control-plane transport | docs/features/platform-and-api.md |
+| F40 | Multi-tenant deployment topology | docs/features/platform-and-api.md |
+| F20 | Plugin SDK with capability sandboxing | docs/features/extensibility-plugins.md |
+| F21 | Credential graph | docs/features/graph-query-ai.md |
+| F79 | Privacy and data-subject controls | docs/features/policy-and-governance.md, docs/privacy-data-catalog.md, docs/web-console.md, docs/configuration.md |
+
+### Conditional
+
+| ID | Feature | Primary docs |
+|----|---------|--------------|
+| F3 | Agent-based discovery | docs/features/discovery-and-inventory.md |
+| F5 | Built-in ACME server | docs/features/acme-and-dns.md |
 | F69 | DNS-01 challenge automation | docs/features/acme-and-dns.md |
 | F70 | DNS-provider plugin framework | docs/features/acme-and-dns.md |
 | F71 | CNAME delegation for validation isolation | docs/features/acme-and-dns.md |
 | F72 | CAA policy enforcement and management | docs/features/acme-and-dns.md |
 | F73 | Multi-method domain-validation policy | docs/features/acme-and-dns.md |
 | F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |
-| F47 | X.509 revocation infrastructure | docs/features/issuance-and-cas.md |
-| F26 | HSM integration | docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, docs/limitations.md |
-| F59 | Non-human identity lifecycle management | docs/features/workload-identity.md, docs/features/discovery-and-inventory.md |
-| F6 | Lifecycle automation | docs/features/lifecycle-and-pqc.md |
-| F16 | Crypto-agility and PQC readiness | docs/features/lifecycle-and-pqc.md |
-| F57 | PQC migration orchestration | docs/features/lifecycle-and-pqc.md |
-| F7 | Deployment connectors initial set | docs/features/deployment-connectors.md |
-| F27 | Additional deployment connectors | docs/features/deployment-connectors.md |
-| F50 | Code-signing service | docs/features/code-signing-and-timestamping.md |
+| F22 | EST server | docs/features/enrollment-protocols.md, docs/guides/est-enrollment.md |
+| F23 | SCEP server | docs/features/enrollment-protocols.md |
+| F55 | CMP server | docs/features/enrollment-protocols.md |
+| F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
+| F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
+| F24 | SPIFFE Workload API | docs/features/workload-identity.md |
+| F43 | SSH certificate authority | docs/features/ssh.md |
 | F51 | Timestamping authority | docs/features/code-signing-and-timestamping.md |
+| F26 | HSM integration | docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, docs/limitations.md |
 | F31 | Credential compromise workflow | docs/features/incident-and-jit.md, docs/features/discovery-and-inventory.md |
 | F32 | Fleet re-issuance for CA compromise | docs/features/incident-and-jit.md |
-| F33 | Just-in-time issuance with approval flows | docs/features/incident-and-jit.md |
-| F34 | Break-glass procedures | docs/features/incident-and-jit.md |
 | F37 | Secret rotation engine | docs/features/secrets.md |
-| F38 | Ephemeral API key issuance | docs/features/secrets.md |
 | F39 | Code/CI secret scanning bridge | docs/features/secrets.md |
 | F63 | Native secret store | docs/features/secrets.md |
-| F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
-| F65 | Dynamic secrets | docs/features/secrets.md |
+| F67 | PKI as a secrets engine | docs/features/secrets.md |
 | F58 | Platform auth-method framework | docs/features/secrets.md |
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
-| F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
-| F67 | PKI as a secrets engine | docs/features/secrets.md |
-| F68 | Secret sync / platform integrations | docs/features/secrets.md |
 | F62 | Cryptographic compliance reporting & posture dashboards | docs/features/policy-and-governance.md, docs/compliance.md |
-| F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
-| F29 | Notification integrations | docs/features/policy-and-governance.md |
-| F8 | RBAC | docs/features/policy-and-governance.md |
-| F9 | Audit log surfaces | docs/features/policy-and-governance.md, docs/observability.md, docs/configuration.md |
-| F10 | REST API | docs/features/platform-and-api.md |
-| F11 | CLI | docs/features/platform-and-api.md, docs/cli.md |
-| F12 | Web UI | docs/features/platform-and-api.md |
 | F13 | SSO/OIDC | docs/features/platform-and-api.md |
-| F14 | Single-binary distribution | docs/features/platform-and-api.md |
-| F15 | Encrypted control-plane transport | docs/features/platform-and-api.md |
-| F40 | Multi-tenant deployment topology | docs/features/platform-and-api.md |
 | F41 | Cross-cluster / multi-region federation | docs/features/platform-and-api.md |
-| F20 | Plugin SDK with capability sandboxing | docs/features/extensibility-plugins.md |
-| F21 | Credential graph | docs/features/graph-query-ai.md |
 | F75 | Unified semantic query layer | docs/features/graph-query-ai.md |
 | F76 | Pluggable AI model adapter | docs/features/graph-query-ai.md |
 | F77 | Grounded RCA and natural-language query | docs/features/graph-query-ai.md |
 | F78 | trstctl MCP server | docs/features/graph-query-ai.md |
-| F79 | Privacy and data-subject controls | docs/features/policy-and-governance.md, docs/privacy-data-catalog.md, docs/web-console.md, docs/configuration.md |
-| F5 | Built-in ACME server | docs/features/acme-and-dns.md |
-| F22 | EST server | docs/features/enrollment-protocols.md, docs/guides/est-enrollment.md |
-| F23 | SCEP server | docs/features/enrollment-protocols.md |
-| F55 | CMP server | docs/features/enrollment-protocols.md |
-| F24 | SPIFFE Workload API | docs/features/workload-identity.md |
-| F25 | Ephemeral credential issuance | docs/features/workload-identity.md |
-| F30 | Workload attestation chain | docs/features/workload-identity.md |
-| F61 | AI-agent / NHI identity broker | docs/features/workload-identity.md |
-| F43 | SSH certificate authority | docs/features/ssh.md |
-| F44 | SSH deployment and trust configuration agent | docs/features/ssh.md, docs/design/ssh-trust-rewrite.md |
-| F45 | Attestation-gated short-lived SSH user certs | docs/features/ssh.md |
-
-### Conditional
-
-| ID | Feature | Primary docs |
-|----|---------|--------------|
 
 ### Partial
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
+| F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
+| F16 | Crypto-agility and PQC readiness | docs/features/lifecycle-and-pqc.md |
+| F57 | PQC migration orchestration | docs/features/lifecycle-and-pqc.md |
+| F34 | Break-glass procedures | docs/features/incident-and-jit.md |
+| F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
+| F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
+| F68 | Secret sync / platform integrations | docs/features/secrets.md |
+| F29 | Notification integrations | docs/features/policy-and-governance.md |
 
 ### Library-only
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
+| F7 | Deployment connectors initial set | docs/features/deployment-connectors.md |
+| F27 | Additional deployment connectors | docs/features/deployment-connectors.md |
+| F50 | Code-signing service | docs/features/code-signing-and-timestamping.md |
+| F65 | Dynamic secrets | docs/features/secrets.md |
 
 ### Roadmap
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
+
 <!-- feature-served-state-matrix:end -->
 
 ## Served by the running binary today
@@ -158,14 +161,17 @@ never live in the API process. What you can do end to end against the running bi
   configured alert window, writes `notification.expiry` outbox work, stamps
   `alerted_at` in the same transaction so one certificate does not spam, and the
   served outbox worker dispatches the alert through operator-wired Slack, Teams,
-  email, PagerDuty, OpsGenie, or webhook channels. The payload and notification inbox
+  email, SMS, SIEM, or webhook channels. PagerDuty and OpsGenie implementations are
+  library-only until the production notification dispatcher constructs them. The payload and notification inbox
   include the certificate owner plus active approver escalation recipients, severity,
   and threshold-day metadata. This is runtime delivery, not a tenant
   channel-management API.
-- **Deployment connector target mutation** for the shipped connector set is served
-  through the outbox when an operator wires a native `ConnectorRegistry` into the
-  running binary, or when a provenance-verified signed WASM connector plugin owns
-  the connector name. Endpoint-binding issue and renewal flows now create
+- **Deployment connector orchestration** serves target metadata, identity binding,
+  outbox intent, receipts, and provenance-verified signed WASM connector dispatch.
+  The 24 native connector packages are **library-only**: `buildRunDeps` does not
+  construct `Deps.ConnectorRegistry`, and there is no operator configuration that
+  can fill an exported field of the internal server package. Endpoint-binding issue
+  and renewal flows create
   credential-bearing `connector.deploy` payloads while the generated key is still in
   memory, then wipe the exported process buffer after the intent is recorded. Those
   payloads carry `cert_pem` and `key_pem`, are delivered at-least-once to the
@@ -173,7 +179,7 @@ never live in the API process. What you can do end to end against the running bi
   returning PEM/key bytes. A later
   metadata-only operator deploy action still records an `unrouted` receipt instead
   of pretending it deployed bytes the control plane no longer has.
-  The shipped connector set is 24 connectors: nginx, Apache, Caddy, Envoy, IIS,
+  The code inventory is 24 native connectors, not 24 served backends: nginx, Apache, Caddy, Envoy, IIS,
   HAProxy, F5, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, Postfix,
   Traefik, AWS ACM, Azure Key Vault, GCP Certificate Manager, Java keystore,
   PostgreSQL, MySQL, RabbitMQ, Elasticsearch, and Tomcat.
@@ -228,9 +234,12 @@ never live in the API process. What you can do end to end against the running bi
   `GET /api/v1/remediation/owner-actions` and
   `POST /api/v1/remediation/owner-actions/{id}/accept`: a bound owner can accept the
   CAP-POST-01 least-privilege recommendation, and trstctl records the same
-  `remediation.playbook_run.recorded` evidence plus `connector.right_size` outbox
-  intent. Provider-specific workers still own the actual external entitlement
-  mutation.
+  `remediation.playbook_run.recorded` evidence plus a `connector.right_size` outbox
+  intent. The shipped dispatcher currently acknowledges that unknown kind without
+  applying an entitlement change or advancing the API-created queued receipt. That
+  queued receipt is not external-effect evidence. Therefore the recommendation and
+  evidence spine is available when licensed, but the advertised entitlement mutation
+  is not served.
   SIEM/SOAR/chat/ITSM response dispatch is served through
   `POST /api/v1/incidents/response-integrations/dispatch`, which records
   `response.integration.dispatched` and queues Splunk HEC, Jira issue, configured Slack
@@ -243,10 +252,11 @@ never live in the API process. What you can do end to end against the running bi
   `POST /api/v1/incidents/fleet-reissuance-runs` with pause/resume/rollback and
   evidence export routes under `/api/v1/incidents/fleet-reissuance-runs/{id}`,
   matching `trstctl incidents fleet-reissuance *` CLI commands, and the `/incidents`
-  console. Online m-of-n break-glass issuance is served at
-  `POST /api/v1/breakglass/issue` when the signer-backed break-glass issuer is
-  configured; it returns a self-verifying bundle only after recording
-  `breakglass.issued`. Break-glass recovery reconciliation is served separately at
+  console. `POST /api/v1/breakglass/issue` exists, but production configuration does
+  not assemble a `BreakglassIssuer`, so the shipped route fails closed. Its current
+  request also supplies approver names in the same caller-controlled payload; those
+  names are not independent authenticated approvals and must not be treated as an
+  m-of-n ceremony. Break-glass recovery reconciliation is served separately at
   `POST /api/v1/breakglass/reconcile`, where signed offline bundles are verified and
   recorded as `breakglass.issued` audit events.
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
@@ -406,10 +416,11 @@ redacted evidence refs rather than the raw subject.
 
 ## Built and tested, but not yet served by the binary
 
-No current `feature-map-backlog.json` row uses `served_state=library`. If a row
-returns to that bucket, it belongs under **Library-only** in the matrix above with
-the same `F*` ID, because "library-only" means library code with real
-unit/integration/conformance tests that is **not yet wired into the served API**.
+F7, F27, F50, and F65 currently use `served_state=library` and appear under
+**Library-only** in the matrix above. These rows have implementation and tests, but
+the production assembly does not yet provide the advertised usable path. They move
+out of this bucket only when their exact wiring-census entries are `SERVED +
+REQUIRED`; package existence or a test-created registry is not enough.
 
 ## Conditional, partial, and residual boundaries
 
@@ -441,10 +452,12 @@ integration work.
   same authority policy, records `ca.authority.rekeyed`, and keeps the stable issue
   URL live. Offline-root re-key and cross-signing remain operator workflows until
   their served routes ship (see the [key-ceremony runbook](runbooks/key-ceremony.md)).
-- **14 CA integrations** are present under the served external-CA registry when the
-  operator configures their credentials/backends: AD CS, AWS PCA, Azure Key Vault,
-  DigiCert, EJBCA, Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo,
-  shell CA, Smallstep, Vault PKI, and Venafi TPP/TLS Protect.
+- **14 CA integrations are code inventory, not served backends.** The built-in CA
+  issuance spine is served, but `buildRunDeps` does not construct
+  `Deps.ExternalCAs`, and the binary has no external-CA credential configuration
+  surface yet. The library packages are AD CS, AWS PCA, Azure Key Vault, DigiCert,
+  EJBCA, Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA,
+  Smallstep, Vault PKI, and Venafi TPP/TLS Protect.
 - **Discovery collectors with residual connector-owned execution**: SSH host-key scanning
   is served through the discovery outbox worker, and on-host SSH/private-key inventory is
   served through the agent mTLS inventory report path. Connector-specific external
@@ -674,16 +687,18 @@ writing a new token file and restarting the control plane so the new hash is loa
     secret store and dynamic PKI secret; it does not implement Vault mount
     management, Vault ACL policy authoring, cubbyhole, response wrapping, Vault
     transit paths, or every Vault/OpenBao secret engine;
-  - **dynamic secrets** (F65) back `POST /api/v1/secrets/leases`,
+  - **dynamic-secret routes exist, but the eight providers are library-only** (F65).
+    `POST /api/v1/secrets/leases`,
     `GET /api/v1/secrets/leases/{lease_id}`,
     `POST /api/v1/secrets/leases/{lease_id}/renew`, and
     `POST /api/v1/secrets/leases/{lease_id}/revoke` — issue returns the backend
     credential once, later reads return metadata only, renew extends an active lease,
-    revoke closes it, and the served leaseworker expires leases through an
-    outbox-backed backend revocation queue. The concrete backend family covers
+    revoke closes it, and the leaseworker can expire leases through an outbox-backed
+    backend revocation queue. In the shipped assembly `Deps.DynamicSecretProviders`
+    is empty, so issuance returns unavailable rather than a credential. The code inventory covers
     `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`, `azure-entra`,
-    `kubernetes`, and `redis`; operators still have to provide the target connection
-    and cloud credentials for the providers they expose;
+    `kubernetes`, and `redis`; there is not yet an operator configuration path that
+    constructs those providers;
   - **secret rotation** (F37) backs `POST /api/v1/secrets/rotations` — the running
     control plane drives the four-phase stage, cutover, verify, retire flow through
     concrete PostgreSQL, MySQL, and AWS IAM rotators, `connector:<target>` secret-sync
@@ -707,16 +722,16 @@ writing a new token file and restarting the control plane so the new hash is loa
   (so state is reconstructable from history); secret values are held in wipeable,
   zeroed memory (never as a string), never logged, and never returned beyond their
   design. The surface is proven end-to-end by acceptance tests.
-- **Secret sync external stores (F68) — served, target-configured, and intentionally
-  fail-closed.**
+- **Secret sync external stores (F68) — partial.**
   The running binary mounts `POST /api/v1/secrets/syncs` and `trstctl-cli secrets syncs
   run`. A request reads one stored secret, writes a sealed tenant-scoped outbox row
-  before any external write, delivers through the configured target pusher, records
-  immutable sync events, and returns metadata only. Native pushers currently cover
+  before any external write, records immutable sync intent, and returns metadata
+  only. `buildRunDeps` does not construct `Deps.SecretSyncTargets`, so the shipped
+  route cannot deliver to a native pusher yet. The code inventory covers
   AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab
   CI/CD variables, Vercel project environment variables, generic CI JSON endpoints, and
-  Kubernetes Secrets. `GET /api/v1/secrets/syncs/targets` shows the built-in catalog
-  and which targets are configured. `GET /api/v1/secrets/cloud-secret-managers` and
+  Kubernetes Secrets. `GET /api/v1/secrets/syncs/targets` shows the built-in catalog,
+  but none are production-configured today. `GET /api/v1/secrets/cloud-secret-managers` and
   `trstctl-cli secrets cloud-secret-managers` show the served CAP-SEC-04 cloud
   secret-manager integration posture: read-only `cloud_secret` discovery for AWS
   Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV, plus
@@ -980,15 +995,13 @@ This is a deliberate, documented trust boundary (not an accident):
     in the signer under its own stable handle, the TSA certificate is persisted at
     `protocols.tsa_cert_file`, and the certificate carries the critical
     `timeStamping` EKU that stock OpenSSL enforces.
-  - the **code-signing service** is served at `POST /api/v1/code-signing/sign` and
-    `POST /api/v1/code-signing/keyless`, with matching CLI commands. It signs artifact
-    digests only, derives the signer principal from the authenticated token/session,
-    requires `keys:write` plus `Idempotency-Key`, records `codesign.*` events, and
-    queues Rekor publication through the `transparency.rekor` outbox destination. The
-    surface is fail-closed until the deployment composition supplies a
-    `CodeSigningConfig` with a key resolver, Fulcio-style attestors, and transparency
-    handler. Responses are trstctl JSON signature receipts; byte-for-byte external
-    cosign bundle encoding remains deployment validation work.
+  - the **code-signing service is library-only**. Routes and matching CLI commands
+    exist for `POST /api/v1/code-signing/sign` and
+    `POST /api/v1/code-signing/keyless`, but `buildRunDeps` does not supply a
+    `CodeSigningConfig`; the shipped handler therefore returns the fail-closed 501
+    sentinel instead of a signature. The library signs digests, records `codesign.*`
+    events, and has a Rekor outbox seam, but that tested seam is not a user-usable
+    binary capability yet.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator
@@ -1236,10 +1249,11 @@ and use the sealed signer key store by default. Helm `externalKMS` is wired for
 signer key-store envelope custody, so regulated deployments can wrap signer
 key-store DEKs through an operator-supplied AWS KMS, GCP KMS, Azure Key Vault, or
 PKCS#11 adapter instead of mounting the local signer KEK. Non-extractable
-HSM/KMS-resident CA private keys are supported through the managed-key custody path.
-Online m-of-n break-glass issuance is served at `POST /api/v1/breakglass/issue`
-when a signer-backed break-glass issuer is configured, and break-glass bundle
-reconciliation is served separately at `POST /api/v1/breakglass/reconcile`.
+HSM/KMS-resident CA-key adapters exist, but none is census-served in the shipped
+artifact. The online `POST /api/v1/breakglass/issue` route is also not
+production-assembled and its caller-supplied approver names are not an independent
+m-of-n proof. Break-glass bundle reconciliation is served separately at
+`POST /api/v1/breakglass/reconcile`.
 Break-glass rotation/cross-sign workflows are still future work. The
 credential-store key-encryption key is a local file by default.
 See the [key-ceremony runbook](runbooks/key-ceremony.md),
@@ -1257,62 +1271,46 @@ same hardening the isolated signer uses). This narrows - but, given Go's runtime
 does not eliminate - the window in which an unprotected key sits in dumpable heap; it
 is complemented process-wide by `RLIMIT_CORE=0` / `PR_SET_DUMPABLE=0`.
 
-**BYOK / HSM key lifecycle.** trstctl provides a full bring-your-own-key / HSM key
-lifecycle behind the single isolated cryptography path (an in-process path for local
-keys and a remote-key-lifecycle path for HSM/KMS-resident keys), covering
-**generate-or-import → rotate → revoke → zeroize** for CA/issuing signing keys and the
-secrets key-encryption key (KEK):
+**BYOK / HSM key lifecycle.** The repository contains lifecycle adapters for AWS
+KMS, Azure Key Vault, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2, plus conditional
+managed-key API and CLI surfaces. The current shipped wiring does **not** satisfy the
+six-backend claim: the wiring census reports zero of six backends served.
 
-- every transition is recorded as an **immutable event** and carries the key's
-  identity, version, and public key — never its private bytes;
-- key material lives only in **locked, zeroizable memory** (wipeable secret buffers),
-  never as a string; on rotate the superseded material is destroyed and on zeroize the
-  buffer is wiped, after which the key can no longer sign or wrap (fail-closed);
-- for an **HSM/KMS-resident** key the private key never enters the control-plane
-  address space at all: rotate mints a successor at the provider, revoke disables
-  the key (the provider refuses further signatures), and zeroize schedules the
-  provider's destruction of the material — the durable custody story.
+When licensed configuration attaches one of the implemented remote providers today,
+the control-plane process constructs and calls that provider directly. Provider
+private bytes remain inside the remote KMS/HSM, but provider operations and
+credentials are not yet isolated behind the separate signer process. Lifecycle
+tracking is process-memory state rather than a replayable tenant/RLS projection, and
+provider calls are synchronous rather than durable outbox work. An API idempotency
+record therefore cannot reconcile every crash window after a provider succeeds but
+before local completion is committed. PKCS#11 also transiently converts its PIN to a
+Go `string`. These are explicit AN-1/AN-2/AN-4/AN-5/AN-6/AN-8 residuals, not custody
+guarantees.
 
-The **HSM/KMS-resident lifecycle is now served end to end**: the running control plane
-exposes `POST /api/v1/managed-keys` (generate) and
-`/api/v1/managed-keys/{rotate,revoke,zeroize}`, with a matching `trstctl managed-keys
-{generate,rotate,revoke,zeroize}` CLI. Each verb is tenant-scoped under per-tenant
-database isolation, idempotent (deduplicated by `Idempotency-Key`), and recorded as
-immutable events; the three **destructive** transitions (rotate/revoke/zeroize) require
-a **distinct-approver dual-control approval** — the same four-eyes machinery the
-issuance gate uses — before the provider is ever called, so no single operator can
-rotate, disable, or destroy a managed key. The surface is served only when a KMS/HSM
-custody backend is configured; otherwise the routes fail closed. Generate returns an
-opaque provider handle, public DER, lifecycle state, and `extractable: false`; it never
-returns private-key bytes, PEM, or provider secrets.
+The conditional handlers at `POST /api/v1/managed-keys` and its rotate, revoke, and
+zeroize companions return opaque handles/public metadata rather than private-key
+bytes. Destructive operations retain their approval checks. Until signer-side provider construction,
+durable operation state, outbox execution, restart reconciliation, and real substrate
+proof land, these routes are conditional implementation surfaces and no HSM/KMS
+backend is advertised as served in the shipped binary.
 
-AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, and PKCS#11 HSM custody are
-wired into that served path through `managed_keys` configuration. The AWS backend
-uses the official AWS SDK v2 KMS client. The acceptance suite starts LocalStack,
-generates a KMS-resident RSA-2048 managed key through the real API, rotates it,
-zeroizes the successor, and revokes a second key; when standard `AWS_*` credentials
-are present, the same test also runs against real AWS KMS. Azure and GCP use their
-cloud KMS data-plane APIs with startup-supplied bearer tokens; provider lifecycle
-tests prove generate/rotate/revoke/zeroize against faithful in-memory HTTP doubles,
-and the served CAP-KEY-02 test drives both providers through the managed-key API
-with opaque Azure key ids and GCP cryptoKeyVersion names. The PKCS#11 backend opens a
-native module in cgo-enabled builds and logs into the configured token. The served
-CAP-KEY-01 test drives generate/rotate/revoke/zeroize through the running API using a
-SoftHSM-shaped PKCS#11 session; the native acceptance initializes a SoftHSM token in
-a container, creates a sensitive non-extractable RSA-2048 signing key on the token,
-signs through the module, and verifies the public key through the same backend
-conformance harness used by software and cloud KMS backends. Static no-cgo builds
-fail closed if `provider: pkcs11` is selected. Startup config remains static and
+AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, and PKCS#11 HSM packages can
+attach through `managed_keys` configuration in the licensed default build. The AWS
+backend uses the official AWS SDK v2 client, while Azure and GCP use their cloud KMS
+data-plane APIs. Current cloud-provider lifecycle tests use author-controlled HTTP
+doubles; this catalog does **not** claim emulator or live-cloud acceptance. PKCS#11
+has native SoftHSM container evidence only in a cgo-enabled build; static no-cgo
+builds fail closed when `provider: pkcs11` is selected. TPM 2.0 and YubiHSM 2 do not
+yet have equivalent shipped-driver wiring. Startup config remains static and
 provider-selected: it does not load runtime crypto plugins or let policy choose
 provider algorithms at request time.
 
 Still **library-tier** (reachable from no served verb yet): the **in-process** key
 lifecycle for the local CA/issuing signing key and the secrets KEK (generate-or-import
 → rotate → revoke → zeroize is implemented and end-to-end tested but not yet exposed as
-its own served route), plus break-glass rotation and cross-signing. Online
-**m-of-n break-glass issuance** is served at `POST /api/v1/breakglass/issue` when
-the signer-backed break-glass issuer is configured, and reconciliation is served at
-`POST /api/v1/breakglass/reconcile`. The signer's at-rest CA key is still sealed under a local
+its own served route), plus online break-glass issuance, break-glass rotation, and
+cross-signing. Reconciliation remains served at `POST /api/v1/breakglass/reconcile`.
+The signer's at-rest CA key is still sealed under a local
 key-encryption file by default. See the
 [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and

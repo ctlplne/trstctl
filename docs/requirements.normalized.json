@@ -28,7 +28,9 @@
       "backend_status": "served",
       "source_docs": [
         "docs/features/discovery-and-inventory.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F2",
@@ -41,7 +43,9 @@
       "backend_status": "served network source/run/finding control plane with outbox-executed TLS scan, certificate recording, continuous monitoring rollup, and CAP-NHI-03 service-account findings",
       "source_docs": [
         "docs/features/discovery-and-inventory.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F3",
@@ -49,12 +53,14 @@
       "owner": "Discovery and inventory",
       "priority": "P1",
       "acceptance_criteria": "Served Go tests cover CAP-DISC-02 agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, API capability metadata, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, endpoint-discovery capability rendering, empty fleet, and stale-agent warning states.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, PKCS#11, Windows-store, Kubernetes Secret, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, PKCS#11, Windows-store, Kubernetes Secret, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
       "source_docs": [
         "docs/features/discovery-and-inventory.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F42",
@@ -68,7 +74,9 @@
       "source_docs": [
         "docs/features/discovery-and-inventory.md",
         "docs/features/ssh.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F49",
@@ -81,7 +89,9 @@
       "backend_status": "served discovery control-plane source/run/finding records plus outbox-executed AWS ACM, Azure Key Vault, and GCP Certificate Manager enumeration with credential references",
       "source_docs": [
         "docs/features/discovery-and-inventory.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F35",
@@ -95,7 +105,9 @@
       "source_docs": [
         "docs/features/discovery-and-inventory.md",
         "docs/features/secrets.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F36",
@@ -109,20 +121,24 @@
       "source_docs": [
         "docs/features/discovery-and-inventory.md",
         "docs/features/secrets.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F17",
       "requirement_text": "trstctl shall provide Certificate Transparency monitoring.",
       "owner": "Observability and risk",
       "priority": "P2",
-      "acceptance_criteria": "Served test proves a CT-log fixture certificate for a watched domain creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; API, CLI, and UI expose CT watchlist/log configuration, checkpoints, findings, and run queueing.",
+      "acceptance_criteria": "Served test proves a CT-log fixture certificate for a watched domain configured through the dedicated CT monitoring endpoint creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI configures watched names/logs and queues a CT poll.",
       "status": "served",
       "served_state": "served",
       "backend_status": "served dedicated CT monitoring API/CLI/UI watchlist management plus ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts",
       "source_docs": [
         "docs/features/observability-and-risk.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F18",
@@ -135,7 +151,9 @@
       "backend_status": "served drift discovery source/run/finding execution with outbox-backed drift alerts plus dedicated drift remediation API/CLI/UI dashboard and operator decision workflow",
       "source_docs": [
         "docs/features/observability-and-risk.md"
-      ]
+      ],
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F19",
@@ -148,7 +166,9 @@
       "backend_status": "served credential risk scoring plus CAP-POST-01 NHI over-privilege posture, CAP-POST-02 stale/dormant/orphaned NHI posture, CAP-POST-03 static-credential posture, CAP-POST-04 exposure/insecure-deployment posture, and CAP-POST-05 contextual blast-radius prioritization",
       "source_docs": [
         "docs/features/observability-and-risk.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F52",
@@ -161,19 +181,21 @@
       "backend_status": "served-cbom-scan-and-inventory",
       "source_docs": [
         "docs/features/observability-and-risk.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F4",
       "requirement_text": "trstctl shall provide CA-agnostic outbound issuance.",
       "owner": "Issuance and CAs",
       "priority": "P0",
-      "acceptance_criteria": "Served CAP-ISS-11 test covers request-only principal denied from self-issue, distinct approver approval, successful signer-backed issue, certificate inventory projection, and event evidence; external CA served tests cover configured backends and outbox idempotency; CA Hierarchy Vitest covers direct external-CA issuance through the typed client with outbox-pending and external-ca-issued browser states; CAP-K8S-07 execution tests prove public CA bundles are distributed to namespace ConfigMaps and private-key PEM fails closed.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served end-to-end for built-in self-service issuance, configured external CA registry issuance, external CA browser outbox-pending/issued states, CAP-K8S-04 native Kubernetes CertificateSigningRequest support, and CAP-K8S-07 TrustBundle CA-bundle distribution",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "acceptance_criteria": "TestServedSelfServiceIssuanceRequiresApproval proves the built-in signer-backed issuance spine. External-CA and Kubernetes controller tests do not certify shipped wiring; their DoD census entries must become served first.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial: built-in self-service issuance is served; the 14 external-CA backends are not constructed, and the Kubernetes CSR/TrustBundle posture routes remain descriptor-only",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/issuance-and-cas.md"
       ]
@@ -190,7 +212,9 @@
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/runbooks/key-ceremony.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F53",
@@ -204,7 +228,9 @@
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/guides/profile-authoring.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F46",
@@ -218,7 +244,9 @@
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/features/acme-and-dns.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F47",
@@ -231,23 +259,27 @@
       "backend_status": "served for trstctl hierarchy with OCSP, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture",
       "source_docs": [
         "docs/features/issuance-and-cas.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F26",
       "requirement_text": "trstctl shall provide HSM integration.",
       "owner": "Issuance and CAs",
       "priority": "P2",
-      "acceptance_criteria": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. TestServedInHSMNonExtractableGenerationCAPKEY04 proves the generate route returns only public metadata plus extractable=false for an opaque HSM handle. TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves the canonical editions route serves the FIPS validated-module path and external product CMVP residual. UI never exposes key material and displays only public metadata/health/posture for configured backends.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served AWS SDK v2-backed AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-02 acceptance covers Azure/GCP generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; served CAP-KEY-04 acceptance covers in-HSM non-extractable generation with extractable=false and no private material returned; served CAP-KEY-03 posture is exposed on /api/v1/editions and Platform with the FIPS 140-3 Go Cryptographic Module build path and external product CMVP residual; SoftHSM native binding remains cgo-proven",
+      "acceptance_criteria": "Managed-key tests prove opaque response shapes and provider contracts, while the DoD census remains red for all six backends. TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves only the editions posture. Cloud-provider lifecycle tests currently use author-controlled HTTP doubles; emulator/live-cloud proof is tracked separately.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: Enterprise managed-key route/FIPS posture exists behind license and configuration, but the runtime census reports zero of six advertised HSM/KMS backends served in the shipped static artifact",
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/configuration.md",
         "docs/compliance.md",
         "docs/limitations.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F5",
@@ -255,11 +287,11 @@
       "owner": "ACME and DNS validation",
       "priority": "P1",
       "acceptance_criteria": "Served GA acceptance is TestServedACMEEndToEnd plus TestServedACMEStateRebuildsAfterServerRestart on the assembled control-plane handler; roadmap residual is the dedicated ACME admin console beyond the served Protocols workflow.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert state rebuilds after restart, and missing issuing CA returns a fail closed no-protocol mount",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert state rebuilds after restart, and missing issuing CA returns a fail closed no-protocol mount",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]
@@ -270,25 +302,29 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served order-time DNS-01 publish/cleanup through the outbox using tenant provider configs, secret-reference-backed provider credentials, and DNS-01 preflight",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served order-time DNS-01 publish/cleanup through the outbox using tenant provider configs, secret-reference-backed provider credentials, and DNS-01 preflight",
       "source_docs": [
         "docs/features/acme-and-dns.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F70",
       "requirement_text": "trstctl shall provide DNS-provider plugin framework.",
       "owner": "ACME and DNS validation",
       "priority": "P2",
-      "acceptance_criteria": "UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served signed DNS-provider plugin admission/conformance provenance, provider catalog disclosure, tenant provider-config CRUD, and ACME order-time DNS-01 activation through the outbox",
+      "acceptance_criteria": "UI distinguishes built-in providers from signed plugin providers and activation is blocked unless DNS plugin conformance/provenance passes startup admission.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served signed DNS-provider plugin admission/conformance provenance, provider catalog disclosure, tenant provider-config CRUD, and ACME order-time DNS-01 activation through the outbox",
       "source_docs": [
         "docs/features/acme-and-dns.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F71",
@@ -296,12 +332,14 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served CNAME delegation helpers, provider-config delegation_target, DNS-01 preflight checks, and ACME order-time delegated publish/cleanup through the outbox with fail-closed CNAME verification",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served CNAME delegation helpers, provider-config delegation_target, DNS-01 preflight checks, and ACME order-time delegated publish/cleanup through the outbox with fail-closed CNAME verification",
       "source_docs": [
         "docs/features/acme-and-dns.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F72",
@@ -309,12 +347,14 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served CAA checker, live DNS CAA resolver, provider-config caa_issuer_domain, DNS-01 preflight live CAA checks, and ACME order-time fail-closed CAA enforcement before DNS publish",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served CAA checker, live DNS CAA resolver, provider-config caa_issuer_domain, DNS-01 preflight live CAA checks, and ACME order-time fail-closed CAA enforcement before DNS publish",
       "source_docs": [
         "docs/features/acme-and-dns.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F73",
@@ -322,12 +362,14 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI covers method selection preview and policy-denied challenge states.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served method-selection helpers, tenant provider-config allowed_methods policy management, DNS-01 preflight policy checks, and ACME order-time challenge filtering plus acceptance enforcement",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served method-selection helpers, tenant provider-config allowed_methods policy management, DNS-01 preflight policy checks, and ACME order-time challenge filtering plus acceptance enforcement",
       "source_docs": [
         "docs/features/acme-and-dns.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F74",
@@ -335,12 +377,14 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served wildcard DNS-01 policy helpers, provider-config allow_wildcards, DNS-01 preflight checks, API/UI blast-radius acknowledgement for wildcard X.509 issuance, DNS-01-only order-time enforcement, and lifecycle scheduler renewal evidence through ca.renew rotation runs",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served wildcard DNS-01 policy helpers, provider-config allow_wildcards, DNS-01 preflight checks, API/UI blast-radius acknowledgement for wildcard X.509 issuance, DNS-01-only order-time enforcement, and lifecycle scheduler renewal evidence through ca.renew rotation runs",
       "source_docs": [
         "docs/features/acme-and-dns.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F22",
@@ -348,11 +392,11 @@
       "owner": "Enrollment protocols",
       "priority": "P1",
       "acceptance_criteria": "Served GA acceptance is TestServedESTEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated EST admin console beyond the served Protocols workflow.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served /.well-known/est/* protocol workflow: server.Build mounts EST when protocols.est.enabled, a tenant binding, and an issuing CA/signer exist; TestServedESTEndToEnd drives Bearer-token-authenticated /simpleenroll with a base64 PKCS#10 CSR through the assembled control-plane handler, receives a signer-issued certs-only PKCS#7 leaf, verifies it against the served CA, records certificate.recorded, rejects unauthenticated and certs:read-only tokens, and the served EST dispatcher exposes /cacerts, /simpleenroll, /simplereenroll, and /csrattrs behind fail-closed protocol mounting",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served /.well-known/est/* protocol workflow: server.Build mounts EST when protocols.est.enabled, a tenant binding, and an issuing CA/signer exist; TestServedESTEndToEnd drives Bearer-token-authenticated /simpleenroll with a base64 PKCS#10 CSR through the assembled control-plane handler, receives a signer-issued certs-only PKCS#7 leaf, verifies it against the served CA, records certificate.recorded, rejects unauthenticated and certs:read-only tokens, and the served EST dispatcher exposes /cacerts, /simpleenroll, /simplereenroll, and /csrattrs behind fail-closed protocol mounting",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/enrollment-protocols.md",
         "docs/guides/est-enrollment.md"
@@ -364,11 +408,11 @@
       "owner": "Enrollment protocols",
       "priority": "P1",
       "acceptance_criteria": "Served GA acceptance is TestServedSCEPEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated SCEP admin console beyond the served Protocols workflow.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served /scep protocol workflow: server.Build mounts SCEP when protocols.scep.enabled, a tenant binding, and an issuing CA/signer exist; TestServedSCEPEndToEnd retrieves GetCACert from the assembled control-plane handler, posts a CMS-enveloped PKIOperation, verifies the signer-issued CertRep against the served CA, records certificate.recorded, rejects missing challenge credentials, and the served SCEP dispatcher exposes GetCACaps, GetCACert, and PKIOperation behind fail-closed protocol mounting",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served /scep protocol workflow: server.Build mounts SCEP when protocols.scep.enabled, a tenant binding, and an issuing CA/signer exist; TestServedSCEPEndToEnd retrieves GetCACert from the assembled control-plane handler, posts a CMS-enveloped PKIOperation, verifies the signer-issued CertRep against the served CA, records certificate.recorded, rejects missing challenge credentials, and the served SCEP dispatcher exposes GetCACaps, GetCACert, and PKIOperation behind fail-closed protocol mounting",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
       ]
@@ -379,11 +423,11 @@
       "owner": "Enrollment protocols",
       "priority": "P1",
       "acceptance_criteria": "Served GA acceptance is TestServedCMPEndToEnd and TestServedCMPOpenSSLClientP10CREnrollment on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated CMP admin console beyond the served Protocols workflow.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served /cmp p10cr protocol workflow: server.Build mounts CMP when protocols.cmp.enabled, a tenant binding, a sealed RA transport identity, and an issuing CA/signer exist; TestServedCMPEndToEnd posts a protected p10cr PKIMessage through the assembled control-plane handler, verifies the signer-issued certificate against the served CA, records certificate.recorded, TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp interoperability, TestCMPMalformedFailsClosed rejects malformed PKIMessage input, and protocol mounting and malformed input fail closed without required configuration",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served /cmp p10cr protocol workflow: server.Build mounts CMP when protocols.cmp.enabled, a tenant binding, a sealed RA transport identity, and an issuing CA/signer exist; TestServedCMPEndToEnd posts a protected p10cr PKIMessage through the assembled control-plane handler, verifies the signer-issued certificate against the served CA, records certificate.recorded, TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp interoperability, TestCMPMalformedFailsClosed rejects malformed PKIMessage input, and protocol mounting and malformed input fail closed without required configuration",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
       ]
@@ -394,12 +438,14 @@
       "owner": "Enrollment protocols",
       "priority": "P1",
       "acceptance_criteria": "Served tests bootstrap with a one-time token, reject token replay, renew through POST /enroll/renewal only with a verified current client certificate, reject missing or expired renewal peers, and UI tests cover token one-time visibility.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served bootstrap and verified-mTLS renewal endpoints plus agent steady-state channel renewal",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served bootstrap and verified-mTLS renewal endpoints plus agent steady-state channel renewal",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F56",
@@ -407,24 +453,26 @@
       "owner": "Enrollment protocols",
       "priority": "P2",
       "acceptance_criteria": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served API/CLI/UI policy management, challenge rotation evidence, profile guidance, telemetry, and live SCEP Intune validator trust-anchor resolution from policy trust_anchor_refs backed by served secret-store lifecycle",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served API/CLI/UI policy management, challenge rotation evidence, profile guidance, telemetry, and live SCEP Intune validator trust-anchor resolution from policy trust_anchor_refs backed by served secret-store lifecycle",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F24",
       "requirement_text": "trstctl shall provide SPIFFE Workload API.",
       "owner": "Workload identity",
       "priority": "P1",
-      "acceptance_criteria": "Served GA acceptance is TestServedSPIFFEWorkloadAPIEndToEnd plus the stock go-spiffe X.509 and JWT client tests against the assembled RunSPIFFE UDS; roadmap residual is the dedicated SPIFFE admin console beyond the served Protocols workflow.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served RunSPIFFE UDS Workload API workflow: server.Build mounts SPIFFE when protocols.spiffe.enabled and a trust domain plus issuing signer exist; real Workload API clients call FetchX509SVID, FetchX509Bundles, FetchJWTSVID, FetchJWTBundles, and ValidateJWTSVID, receive signer-backed X.509-SVID/JWT-SVID material, validate bundles with go-spiffe, emit spiffe.svid.issued audit events, and fail closed without the signer/trust-domain gate",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "acceptance_criteria": "Served GA acceptance is TestServedSPIFFEWorkloadAPIEndToEnd plus TestServedSPIFFEGoSpiffeClient and TestServedSPIFFEGoSpiffeJWTClient on the assembled RunSPIFFE UDS; roadmap residual is the dedicated SPIFFE admin console beyond the served Protocols workflow.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served RunSPIFFE UDS Workload API workflow: server runs SPIFFE when protocols.spiffe.enabled and a trust domain plus issuing signer exist; real Workload API clients call FetchX509SVID, FetchX509Bundles, FetchJWTSVID, FetchJWTBundles, and ValidateJWTSVID, receive signer-backed X.509-SVID/JWT-SVID material, validate bundles with go-spiffe, emit spiffe.svid.issued audit events, and fail closed without the signer/trust-domain gate",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/workload-identity.md"
       ]
@@ -471,7 +519,9 @@
       "source_docs": [
         "docs/features/workload-identity.md",
         "docs/features/discovery-and-inventory.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F61",
@@ -493,12 +543,12 @@
       "requirement_text": "trstctl shall provide SSH certificate authority.",
       "owner": "SSH",
       "priority": "P1",
-      "acceptance_criteria": "Served GA acceptance is TestServedSSHEndToEnd plus TestServedSSHAtScaleJourneyJOURNEY002EndToEnd and OpenAPI/CLI parity for GET /api/v1/ssh/status and POST /api/v1/ssh/certificates/revoke; roadmap residual is the dedicated host-certificate CA console beyond the served OpenSSH protocol endpoints and SSHTrust status/revocation workflow.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served SSH CA workflow: OpenSSH-compatible /ssh/ca, /ssh/issue/user, /ssh/issue/host, /ssh/revoke, and binary /ssh/krl endpoints issue through the signer-backed CA, emit ssh.cert.issued/ssh.cert.revoked evidence, and the product API/CLI expose status and revocation",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "acceptance_criteria": "Served GA acceptance is TestServedSSHEndToEnd plus TestServedSSHAtScaleJourneyJOURNEY002EndToEnd and OpenAPI/CLI parity for getSSHStatus/revokeSSHCertificate; roadmap residual is the dedicated host-certificate CA console beyond the served OpenSSH protocol endpoints and SSHTrust status/revocation workflow.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served SSH CA workflow: OpenSSH-compatible /ssh/ca, /ssh/issue/user, /ssh/issue/host, /ssh/revoke, and binary /ssh/krl endpoints issue through the signer-backed CA, emit ssh.cert.issued/ssh.cert.revoked evidence, and the product API/CLI expose status and revocation",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/ssh.md"
       ]
@@ -545,100 +595,115 @@
       "backend_status": "served endpoint-binding automation plus ARI-first lifecycle renewal scheduler with credential-bearing connector.deploy push, rotation evidence, and owner/approver expiry escalation",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F16",
       "requirement_text": "trstctl shall provide Crypto-agility and PQC readiness.",
       "owner": "Lifecycle and PQC",
       "priority": "P2",
-      "acceptance_criteria": "Served tests prove profile creation rejects unsupported algorithm labels, accepts classical, hybrid, and PQC signature labels through internal/crypto, CBOM exposes migration targets, and PQC migration queues ACME hybrid re-issuance with rollback.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served profile-selection for classical, hybrid, and PQC signature labels through internal/crypto validation, CBOM migration inventory, and PQC migration orchestration through ACME hybrid transition re-issuance",
-      "ga_served_scope": "in_ga",
+      "acceptance_criteria": "Served tests prove profile creation rejects unsupported algorithm labels, accepts classical signature labels through internal/crypto, CBOM exposes migration targets, and proprietary EE tests cover PQC migration re-issuance with rollback.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial: served profile-selection for classical labels through internal/crypto validation plus CBOM migration inventory; proprietary Enterprise/PQC algorithms and migration orchestration attach from ee/",
+      "ga_served_scope": "out_of_ga",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
-      ]
+      ],
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F57",
       "requirement_text": "trstctl shall provide PQC migration orchestration.",
       "owner": "Lifecycle and PQC",
       "priority": "P2",
-      "acceptance_criteria": "ee/pqcmigration scans a CBOM RSA certificate-key estate, queues licensed ACME PQC re-issuance through the outbox, verifies migration progress, and exercises rollback.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served when licensed from ee/",
+      "acceptance_criteria": "ee/pqcmigration tests scan a CBOM RSA certificate-key estate, queue licensed ACME PQC re-issuance through the outbox, verify migration progress, and exercise rollback.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial: served when licensed from ee/",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F7",
       "requirement_text": "trstctl shall provide Deployment connectors (initial set).",
       "owner": "Deployment connectors",
       "priority": "P2",
-      "acceptance_criteria": "Served acceptance creates connector targets, binds identities, issues, deploys, rotates, rolls back, revokes, retires, verifies connector delivery receipts, and proves endpoint-binding credential push to web-server, keystore, and load-balancer connectors; UI and CLI exercise target setup/actions.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served native connector registry and signed-plugin outbox delivery plus tenant target CRUD, identity binding, endpoint-binding credential push, test/deploy/rollback actions, and receipt evidence",
+      "acceptance_criteria": "The connector DoD census must prove buildRunDeps construction plus backend runtime acceptance before this row can leave library-only.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library: the 24 native connector packages exist, but buildRunDeps does not construct Deps.ConnectorRegistry; only target metadata, receipts, and signed-WASM dispatch are served",
       "source_docs": [
         "docs/features/deployment-connectors.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F27",
       "requirement_text": "trstctl shall provide Additional connectors.",
       "owner": "Deployment connectors",
       "priority": "P2",
-      "acceptance_criteria": "Served connector target CRUD and actions cover appliance connector names through the same outbox/native-registry/signed-plugin path, and endpoint-binding execution proves credential push to a load balancer; UI and CLI expose target setup, identity binding, deploy, and rollback.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served native/signed-plugin outbox delivery for registered appliance connectors plus tenant target CRUD, identity binding, endpoint-binding credential push, test/deploy/rollback actions, and receipt evidence",
+      "acceptance_criteria": "The connector DoD census and appliance-specific runtime acceptance must be green before this row can leave library-only.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library: additional native appliance connector packages exist, but buildRunDeps does not construct Deps.ConnectorRegistry; no native appliance backend is served",
       "source_docs": [
         "docs/features/deployment-connectors.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F50",
       "requirement_text": "trstctl shall provide Code-signing service.",
       "owner": "Code signing and timestamping",
       "priority": "P2",
-      "acceptance_criteria": "Served test signs an artifact digest with a managed key and signs keylessly against Fulcio/Rekor fixtures through the real API, auth, idempotency, event log, and outbox dispatcher.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served API + CLI",
+      "acceptance_criteria": "A shipped-binary sign/keyless acceptance plus transparency dispatch must turn code_signing.default served before this row can leave library-only.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library: code-signing routes and CLI exist, but buildRunDeps does not supply CodeSigningConfig and the shipped handler returns the fail-closed 501 sentinel",
       "source_docs": [
         "docs/features/code-signing-and-timestamping.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F51",
       "requirement_text": "trstctl shall provide Timestamping authority (RFC 3161).",
       "owner": "Code signing and timestamping",
       "priority": "P1",
-      "acceptance_criteria": "Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and keeps the dedicated TSA admin console as a roadmap residual.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served protocol",
+      "acceptance_criteria": "Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and the dedicated TSA admin console remains a roadmap residual.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served /tsa RFC 3161 protocol",
       "source_docs": [
         "docs/features/code-signing-and-timestamping.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F31",
       "requirement_text": "trstctl shall provide Credential compromise workflow.",
       "owner": "Incident and JIT",
       "priority": "P2",
-      "acceptance_criteria": "Served API tests execute compromised identity remediation, CAP-REM-02 owner self-remediation, CAP-ITDR-02 compromised-credential/stolen-token detection, and CAP-ITDR-03 abused OAuth-grant detection; UI tests render live execution, owner-action acceptance, and discovery evidence.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served-runtime",
+      "acceptance_criteria": "API tests exercise licensed incident/remediation and discovery spines; connector.right_size remains non-served until its claim is removed or an external effect is runtime-proven by the DoD census.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: the incident/remediation spine requires the Enterprise remediation feature and connector.right_size remains a non-served residual",
       "source_docs": [
         "docs/features/incident-and-jit.md",
         "docs/features/discovery-and-inventory.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F32",
@@ -646,12 +711,14 @@
       "owner": "Incident and JIT",
       "priority": "P2",
       "acceptance_criteria": "Served e2e test proves a compromised issuer reissues, deploys, and revokes multiple identities with rollback evidence; UI test starts the live fleet run and exercises pause/resume/rollback/evidence export actions.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served compromised-issuer fleet reissuance with graph enumeration, batched replacement issue/deploy, original revocation, pause/resume/rollback evidence, and signed evidence export",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served compromised-issuer fleet reissuance with graph enumeration, batched replacement issue/deploy, original revocation, pause/resume/rollback evidence, and signed evidence export",
       "source_docs": [
         "docs/features/incident-and-jit.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F33",
@@ -664,7 +731,9 @@
       "backend_status": "served self-service certificate request portal, core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions",
       "source_docs": [
         "docs/features/incident-and-jit.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F34",
@@ -672,12 +741,14 @@
       "owner": "Incident and JIT",
       "priority": "P2",
       "acceptance_criteria": "Served API requires m-of-n quorum, rejects sub-quorum online issue requests, returns a self-verifying bundle, and records breakglass.issued before responding; UI/CLI call the served route with high-risk confirmation/body-file workflows.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served online m-of-n emergency issuance plus signed offline-bundle reconciliation",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial: served online m-of-n emergency issuance plus signed offline-bundle reconciliation",
       "source_docs": [
         "docs/features/incident-and-jit.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F37",
@@ -685,12 +756,14 @@
       "owner": "Secrets",
       "priority": "P1",
       "acceptance_criteria": "Served tests cover native-store rotation, rollback-safe static rotation, connector-backed rotation rollback, and dynamic-lease replacement with connector handoff; UI hides backend-specific rotation controls until served.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served native-store rotation, rollback-safe static rotation API, connector-backed rotation with rollback through the secret-sync outbox, dynamic-lease replacement rotation with connector handoff, and event-projected scheduled zero-downtime dual-phase rotation",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served native-store rotation, rollback-safe static rotation API, connector-backed rotation with rollback through the secret-sync outbox, dynamic-lease replacement rotation with connector handoff, and event-projected scheduled zero-downtime dual-phase rotation",
       "source_docs": [
         "docs/features/secrets.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F38",
@@ -703,7 +776,9 @@
       "backend_status": "served-api-cli-leaseworker",
       "source_docs": [
         "docs/features/secrets.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F39",
@@ -711,24 +786,26 @@
       "owner": "Secrets",
       "priority": "P2",
       "acceptance_criteria": "UI proves finding snippets are redacted and actions require proper scope.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served-api-cli-gitleaks-repo-webhook-precommit-staged-diff-deep-history-custom-rules-third-party-artifact-ingest",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served-api-cli-gitleaks-repo-webhook-precommit-staged-diff-deep-history-custom-rules-third-party-artifact-ingest",
       "source_docs": [
         "docs/features/secrets.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F63",
       "requirement_text": "trstctl shall provide Native secret store.",
       "owner": "Secrets",
       "priority": "P1",
-      "acceptance_criteria": "Served GA acceptance is the assembled API create/read/rotate/delete plus version-history and point-in-time recovery tests, OpenAPI/CLI feature parity, and the Secrets UI reveal/delete/history workflow tests with no plaintext in metadata, browser storage, audit, or event logs.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served native secret store: /api/v1/secrets/store create/list/reveal/rotate/delete plus history/recover endpoints, CLI secrets store commands, and Secrets UI controls with plaintext-free metadata/event evidence",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "acceptance_criteria": "Server/API/CLI/UI tests prove the native secret store create/list/reveal/rotate/delete plus version-history and point-in-time recovery workflow is served end-to-end, with no plaintext in metadata, browser storage, audit, or event logs.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served native secret store: /api/v1/secrets/store create/list/reveal/rotate/delete plus /api/v1/secrets/store/history/{name} version reads and /api/v1/secrets/store/recover/{name} point-in-time recovery, CLI secrets store commands, and Secrets UI controls with tenant-scoped sealed history and plaintext-free metadata/event evidence",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/secrets.md"
       ]
@@ -739,26 +816,28 @@
       "owner": "Secrets",
       "priority": "P1",
       "acceptance_criteria": "UI examples match CLI/API contract, imports return metadata only, resolved reads are explicit, and generated snippets never include real secret values.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served SDK path plus trstctl-cli run injection, reference resolution, and imports",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial: served SDK path plus trstctl-cli run injection, reference resolution, and imports",
       "source_docs": [
         "docs/features/secrets.md",
         "docs/cli.md",
         "docs/journeys/manage-secrets.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F65",
       "requirement_text": "trstctl shall provide Dynamic secrets.",
       "owner": "Secrets",
       "priority": "P2",
-      "acceptance_criteria": "Served GA acceptance is TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire plus OpenAPI/CLI parity for /api/v1/secrets/leases issue/read/renew/revoke and the Secrets UI dynamic-lease controls.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served /api/v1/secrets/leases issue/read/renew/revoke workflow with trstctl-cli secrets leases commands, Secrets UI controls, copy-once credential reveal, and leaseworker expiry revocations through the outbox-backed backend queue",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "acceptance_criteria": "The dynamic-secret registry and each advertised provider need shipped-binary issue/revoke acceptance before this row can leave library-only.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library: lease routes, engine, CLI, UI, and leaseworker code exist, but buildRunDeps leaves Deps.DynamicSecretProviders empty so issue returns unavailable",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/secrets.md"
       ]
@@ -769,12 +848,14 @@
       "owner": "Secrets",
       "priority": "P2",
       "acceptance_criteria": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
       "source_docs": [
         "docs/features/secrets.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F67",
@@ -782,11 +863,11 @@
       "owner": "Secrets",
       "priority": "P1",
       "acceptance_criteria": "Served GA acceptance is TestServedPKISecretIssuesUsableKeypair plus OpenAPI/CLI parity for /api/v1/secrets/pki and the Secrets UI reveal-once workflow; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served /api/v1/secrets/pki dynamic PKI secret workflow: issuePKISecret mints a short-lived certificate and private key through internal/pkisecret and the out-of-process signer, returns a usable TLS identity, emits pkisecret.issued event evidence, keeps the private key out of logs, and records revocation state through the served revocation pipeline",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served /api/v1/secrets/pki dynamic PKI secret workflow: issuePKISecret mints a short-lived certificate and private key through internal/pkisecret and the out-of-process signer, returns a usable TLS identity, emits pkisecret.issued event evidence, keeps the private key out of logs, and records revocation state through the served revocation pipeline",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/secrets.md"
       ]
@@ -796,12 +877,12 @@
       "requirement_text": "trstctl shall provide Secret sync / platform integrations.",
       "owner": "Secrets",
       "priority": "P2",
-      "acceptance_criteria": "Served GA acceptance is the CAP-SEC-04 cloud_secret discovery and sealed-outbox sync workflow, CAP-SECR-03 target catalog, CAP-SECR-04 TrstctlSecretSync operator posture, CAP-SECR-05 TrstctlSecretInjection workload-injection reconcile, and CAP-SECR-07 unvaulted-secret plus multi-vault posture tests with no response/event/patch secret-value leakage; roadmap residual is deeper Terraform/OpenTofu provider-specific APIs and arbitrary webhook-specific managed configuration beyond the served generic JSON/webhook target shape.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served CAP-SEC-04 cloud secret-manager discovery+sync posture across AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV discovery; served sealed-outbox sync targets for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes; served CAP-SECR-04 TrstctlSecretSync CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "acceptance_criteria": "Served tests cover cloud-secret discovery and Kubernetes/workload posture. Each outbound pusher needs shipped-binary runtime acceptance before native secret-sync delivery is claimed.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial: cloud-secret discovery and Kubernetes/workload posture are served; the eight outbound sync pushers are code inventory because buildRunDeps leaves Deps.SecretSyncTargets empty",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/secrets.md"
       ]
@@ -812,12 +893,14 @@
       "owner": "Secrets",
       "priority": "P1",
       "acceptance_criteria": "UI never displays credential secret after creation and tests tenant mismatch/fail-closed errors.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT",
       "source_docs": [
         "docs/features/secrets.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F60",
@@ -825,19 +908,21 @@
       "owner": "Secrets",
       "priority": "P1",
       "acceptance_criteria": "UI proves share token is shown once, second redeem fails, and approval state is visible without value leakage.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served durable one-time shares plus dual-control approvals for sensitive secret-store changes",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served durable one-time shares plus dual-control approvals for sensitive secret-store changes",
       "source_docs": [
         "docs/features/secrets.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F28",
       "requirement_text": "trstctl shall provide Policy engine.",
       "owner": "Policy and governance",
       "priority": "P1",
-      "acceptance_criteria": "UI covers allowed, denied, policy error, overload/fail-closed, dry-run evidence states, CAP-GOV-05 access-change approvals, and the Risk CAP-GOV-03 policy compliance panel. Served Go tests prove policy dry-run, ownership attribution, NHI policy compliance, and PR/ticket-backed access-change approval with idempotency and self-approval denial.",
+      "acceptance_criteria": "UI covers allowed, denied, policy error, overload/fail-closed, dry-run evidence states, live policy version authoring/activation/rollback, CAP-GOV-05 access-change approvals, and the Risk CAP-GOV-03 policy compliance panel. Served Go tests prove policy dry-run, live activation/rollback through the mutation gate, ownership attribution, NHI policy compliance, and PR/ticket-backed access-change approval with idempotency and self-approval denial.",
       "status": "served",
       "served_state": "served",
       "backend_status": "served on mutation gate, tenant-scoped policy dry-run workbench, live lifecycle policy version authoring/activation/rollback, CAP-GOV-01 ownership attribution, CAP-GOV-03 NHI policy compliance over rotation cadence, allowed scopes/geographies, expiry, and business purpose, and CAP-GOV-05 access-change approval workflow tied to PR/ticket evidence",
@@ -855,11 +940,11 @@
       "owner": "Policy and governance",
       "priority": "P2",
       "acceptance_criteria": "Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, creates tenant-authored notification channels with redacted credential references, lists configured channels, creates routing policies, queues redacted Slack/webhook channel tests, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, tenant-authored channel credential-reference lifecycle, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox",
-      "ga_served_scope": "in_ga",
-      "ga_scope_reason": "",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial: served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, tenant-authored channel credential-reference lifecycle, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox",
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
         "docs/features/policy-and-governance.md"
       ]
@@ -870,13 +955,15 @@
       "owner": "Policy and governance",
       "priority": "P2",
       "acceptance_criteria": "UI clearly says evidence is not certification; CAP-CMP-01 served tests prove CA/Browser Forum Baseline Requirements evidence-pack posture is served; CAP-CMP-02 served tests prove WebTrust/ETSI evidence-pack posture is served; CAP-CMP-03 served tests prove FIPS 140 and Common Criteria posture evidence packs are served without claiming external validation; CAP-CMP-04 served tests prove eIDAS, NIST 800-53/CSF, CMMC 2.0, FedRAMP, and NIS2 evidence-pack/mapping posture is served; CAP-CMP-05 served tests prove SOC 2 CC6/CC7/CC8 evidence mapping is served without claiming CPA attestation; CAP-OBS-02 served test proves compliance/inventory reporting and scheduled report definitions are served; CAP-CMP-06 served test proves NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2 are served from NHI inventory/posture/audit evidence without leaking credentials; CAP-GOV-02 served tests prove NHI access-review campaigns start, decide, complete, and remain idempotent.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served-api",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served-api",
       "source_docs": [
         "docs/features/policy-and-governance.md",
         "docs/compliance.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F8",
@@ -889,7 +976,9 @@
       "backend_status": "served",
       "source_docs": [
         "docs/features/policy-and-governance.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F9",
@@ -904,7 +993,9 @@
         "docs/features/policy-and-governance.md",
         "docs/observability.md",
         "docs/configuration.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F10",
@@ -917,7 +1008,9 @@
       "backend_status": "served",
       "source_docs": [
         "docs/features/platform-and-api.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F11",
@@ -931,7 +1024,9 @@
       "source_docs": [
         "docs/features/platform-and-api.md",
         "docs/cli.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F12",
@@ -944,7 +1039,9 @@
       "backend_status": "served",
       "source_docs": [
         "docs/features/platform-and-api.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F13",
@@ -952,12 +1049,14 @@
       "owner": "Platform and API",
       "priority": "P0",
       "acceptance_criteria": "Served GA acceptance covers OIDC disabled state, enabled /auth/login redirect, /auth/callback session establishment, /auth/me loaded, /auth/logout, /auth/oidc/back-channel-logout, PKCE S256, authorization response iss validation, tenant mapping, CSRF, and no fake-token login path; roadmap residual is the provider setup wizard and richer login diagnostics.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served browser OIDC auth",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served browser OIDC auth",
       "source_docs": [
         "docs/features/platform-and-api.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F14",
@@ -967,10 +1066,12 @@
       "acceptance_criteria": "UI displays build/runtime metadata from a served endpoint; if endpoint is absent, roadmap-disclosure card is shown.",
       "status": "served",
       "served_state": "served",
-      "backend_status": "served/eval",
+      "backend_status": "served/eval plus CAP-MODEL-01 platform distribution posture",
       "source_docs": [
         "docs/features/platform-and-api.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F15",
@@ -983,7 +1084,9 @@
       "backend_status": "served",
       "source_docs": [
         "docs/features/platform-and-api.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F40",
@@ -996,7 +1099,9 @@
       "backend_status": "served RLS, tenancy, managed-provider tenant provisioning, and enterprise support/SLA posture",
       "source_docs": [
         "docs/features/platform-and-api.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F41",
@@ -1004,12 +1109,14 @@
       "owner": "Platform and API",
       "priority": "P3",
       "acceptance_criteria": "Integration test proves two clusters share trust and replicate read state within the documented RPO/RTO; UI test asserts passive federation copy instead of roadmap copy.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served",
       "source_docs": [
         "docs/features/platform-and-api.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F20",
@@ -1022,7 +1129,9 @@
       "backend_status": "served signed WASM CA and connector plugins with provenance, digest pins, capability grants, and reference plugin source trees",
       "source_docs": [
         "docs/features/extensibility-plugins.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F21",
@@ -1035,20 +1144,24 @@
       "backend_status": "served",
       "source_docs": [
         "docs/features/graph-query-ai.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "requirement_id": "F75",
       "requirement_text": "trstctl shall provide Unified semantic query layer.",
       "owner": "Graph, query, and AI",
       "priority": "P1",
-      "acceptance_criteria": "UI covers grounded answer, insufficient evidence, disabled AI, citation navigation, and injection-inert record text.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served typed semantic query layer through /api/v1/ai/query, /api/v1/ai/rca, /api/v1/graph/query, and the tenant-then-RBAC internal/query boundary",
+      "acceptance_criteria": "UI covers grounded answer, insufficient evidence, disabled AI, citation navigation, and injection-inert record text. Roadmap residual: saved prompts and richer model-assisted analysis workflow polish.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served typed semantic query layer through /api/v1/ai/query, /api/v1/ai/rca, /api/v1/graph/query, and the tenant-then-RBAC internal/query boundary",
       "source_docs": [
         "docs/features/graph-query-ai.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F76",
@@ -1056,25 +1169,29 @@
       "owner": "Graph, query, and AI",
       "priority": "P1",
       "acceptance_criteria": "Served GA acceptance covers no-model/offline default, local/cloud model status, endpoint-host-only disclosure, redaction/refusal warnings without secrets, and AI query/RCA use of the configured adapter. Roadmap residual is a self-service model settings editor that writes provider configuration from the console.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served optional off/local/cloud model adapter through /api/v1/ai/status, /api/v1/ai/query, and /api/v1/ai/rca; model egress is operator opt-in and crosses redaction plus residual-secret refusal before any local/cloud endpoint",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served optional off/local/cloud model adapter through /api/v1/ai/status, /api/v1/ai/query, and /api/v1/ai/rca; model egress is operator opt-in and crosses redaction plus residual-secret refusal before any local/cloud endpoint",
       "source_docs": [
         "docs/features/graph-query-ai.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F77",
       "requirement_text": "trstctl shall provide Grounded RCA & natural-language query.",
       "owner": "Graph, query, and AI",
       "priority": "P1",
-      "acceptance_criteria": "Served GA acceptance covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert. Roadmap residual is richer RCA timeline/export workflow polish.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served grounded RCA and natural-language query through POST /api/v1/ai/rca, the ai rca CLI command, and Assistant at /assistant; read-only answers are grounded in tenant/RBAC-scoped evidence, return citations, fail closed when ai.enable_api is disabled, render insufficient-evidence states, and treat hostile record text as inert/redacted data",
+      "acceptance_criteria": "Served GA acceptance covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert. Roadmap residual: richer RCA timeline/export workflow polish.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served grounded RCA and natural-language query through POST /api/v1/ai/rca, the ai rca CLI command, and Assistant at /assistant; read-only answers are grounded in tenant/RBAC-scoped evidence, return citations, fail closed when ai.enable_api is disabled, render insufficient-evidence states, and treat hostile record text as inert/redacted data",
       "source_docs": [
         "docs/features/graph-query-ai.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F78",
@@ -1082,12 +1199,14 @@
       "owner": "Graph, query, and AI",
       "priority": "P1",
       "acceptance_criteria": "Served GA acceptance covers the read-only MCP tool list, MCP tool calls with citations, denied write/unknown-tool states, rate-limit handling, route-backed REST MCP parity, API/CLI parity, and Assistant UI rendering. Roadmap residual is richer external agent identity/session history administration.",
-      "status": "served",
-      "served_state": "served",
-      "backend_status": "served MCP server through GET /api/v1/mcp/tools, POST /api/v1/mcp/tools/{tool}, mcp tools, mcp call, and Assistant at /assistant; tools are tenant/RBAC scoped, read-only by default, cited, rate-limited, deny unknown/write tools unless guarded writes are explicitly enabled, and route-backed REST MCP tools stay covered by parity guards",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: served MCP server through GET /api/v1/mcp/tools, POST /api/v1/mcp/tools/{tool}, mcp tools, mcp call, and Assistant at /assistant; tools are tenant/RBAC scoped, read-only by default, cited, rate-limited, deny unknown/write tools unless guarded writes are explicitly enabled, and route-backed REST MCP tools stay covered by parity guards",
       "source_docs": [
         "docs/features/graph-query-ai.md"
-      ]
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
     },
     {
       "requirement_id": "F79",
@@ -1103,7 +1222,9 @@
         "docs/privacy-data-catalog.md",
         "docs/web-console.md",
         "docs/configuration.md"
-      ]
+      ],
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     }
   ]
 }

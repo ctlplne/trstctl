@@ -51,6 +51,7 @@ required set.
 | Check (job name) | Workflow | What it guards |
 |---|---|---|
 | `build / test / lint` | `ci.yml` | Build all binaries, `make test` (race + coverage floors), full `make lint` (gofmt/vet/**trstctllint** AN-1/3/5/8, golangci-lint, actionlint), gate self-tests |
+| `definition of done / wiring census` | `ci.yml` | `make dod-gate`: exact `go list -deps ./cmd/trstctl` reachability, production `buildRunDeps` assembly, and executed non-sentinel served-handler receipts for every required manifest row |
 | `chaos (fault injection)` | `ci.yml` | `make chaos`: signer death, NATS restart/partition, PostgreSQL failover, store-write failure, restore interruption, memory-pressure bulkhead, and retry-backoff safe-failure assertions |
 | `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | Short PR fuzz smoke plus deeper scheduled parser fuzzing, so fuzz targets and committed seed corpora stay wired into the merge gate |
 | `ClusterFuzzLite / OSS-Fuzz (address)` | `ci.yml` | Hosted ClusterFuzzLite / OSS-Fuzz-family build and fuzz run for the Go fuzz target denominator, with SHA-pinned upstream actions, uploaded build/SARIF configuration, and archived run artifacts |
