@@ -257,14 +257,26 @@ func TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest(t *testing.T) {
 	if strings.Contains(low, "zero of six") {
 		t.Error("limitations.md keeps stale zero-served HSM/KMS wording after every backend became census-served — TRACE-003")
 	}
+	for _, marker := range []string{
+		"six of six backends served",
+		"control-plane process does not construct a provider",
+		"postgresql outbox",
+		"fsync-backed journal",
+		"high-fidelity protocol emulation",
+	} {
+		if !strings.Contains(low, marker) {
+			t.Errorf("limitations.md must describe the served HSM/KMS custody spine (missing %q) — TRACE-003", marker)
+		}
+	}
 }
 
-// ---- TRACE-004: deployment connectors — served spine, native library breadth ----
+// ---- TRACE-004: deployment connectors — served native delivery spine -----------
 
 // TestConnectorDeliveryServedVsLibraryMutationIsHonest pins TRACE-004. The connector
-// catalog, target metadata, outbox intent, receipts, and signed-WASM dispatch are
-// served. The native implementation set remains library-only until buildRunDeps
-// constructs it; a test that injects ConnectorRegistry does not change that fact.
+// catalog, target metadata, outbox intent, receipts, signed-WASM dispatch, and native
+// implementation set are production-assembled. Native delivery remains conditional
+// on an operator selecting a connector and supplying its target policy/credentials;
+// a test that injects ConnectorRegistry does not change that boundary.
 func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 	low := limLower(t)
 
@@ -280,8 +292,7 @@ func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 		t.Fatal("internal/api/connectors_lifecycle.go no longer defines servedConnectorCatalog; the TRACE-004 served-catalog disclosure has no code anchor — revisit this reality test")
 	}
 	// Reality anchor (consumer side): the native registry seam and dispatcher exist.
-	// That is library evidence only; production construction is governed by the DoD
-	// census mapping below.
+	// Production construction is governed by the DoD census capability mapping below.
 	serverBuild := read(t, "../internal/server/server.go")
 	if !strings.Contains(serverBuild, "ConnectorRegistry *connector.Registry") {
 		t.Fatal("server.Deps no longer exposes ConnectorRegistry; the TRACE-004 native served path lost its composition anchor")
@@ -304,16 +315,17 @@ func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 			break
 		}
 	}
-	if connectorState.ServedState != "library" || !containsString(connectorState.DoDCapabilities, "connector") {
-		t.Fatalf("F7 native connectors must stay library-only and census-bound, got state=%q capabilities=%v", connectorState.ServedState, connectorState.DoDCapabilities)
+	if connectorState.ServedState != "conditional" || !containsString(connectorState.DoDCapabilities, "connector") {
+		t.Fatalf("F7 native connectors must stay operator-conditional and census-bound, got state=%q capabilities=%v", connectorState.ServedState, connectorState.DoDCapabilities)
 	}
 
-	// The served catalog/receipts half and native library boundary must both be stated.
+	// The served catalog/receipts half and operator-conditional native delivery must
+	// both be stated.
 	if !strings.Contains(low, "connector.delivery.recorded") {
 		t.Error("limitations.md must disclose that the binary serves the connector catalog and delivery receipts — TRACE-004")
 	}
-	if !containsAll(low, []string{"deployment connector orchestration", "24 native connector packages", "library-only", "buildrundeps", "signed wasm connector", "cert_pem", "key_pem", "unrouted"}) {
-		t.Error("limitations.md must disclose the served orchestration/signed-WASM spine and native library-only boundary — TRACE-004")
+	if !containsAll(low, []string{"deployment connector orchestration", "all 24 advertised", "native connectors", "buildrundeps", "durable outbox", "provider-specific mutation", "independent external readback"}) {
+		t.Error("limitations.md must disclose the served orchestration/native-delivery spine and its operator-conditional boundary — TRACE-004")
 	}
 	for _, stale := range []string{
 		"actual target mutation is routed only when a provenance-verified signed connector plugin is loaded",

@@ -9,8 +9,9 @@
 // mutation: true. It then honors the rule only when the idempotency key actually
 // FLOWS INTO A RECOGNIZED DEDUPE SINK — a call that genuinely collapses retries:
 //
-//   - the canonical sink, (*orchestrator.Idempotency).Do(ctx, tenant, key, fn),
-//     resolved by type (the receiver's method, not its spelling); or
+//   - the canonical sinks on orchestrator.Idempotency (Do, DoBound,
+//     DoDurableEffect, DoDurableEffectBound, and DoAtMostOnceEffect), resolved by type (the
+//     receiver's method, not its spelling); or
 //   - a forwarding call whose callee declares an idempotency-named parameter in
 //     the position the key is passed to (for example the served handlers'
 //     a.mutate(w, r, idempotencyKey, fn), whose third parameter is itself the
@@ -53,6 +54,10 @@ const (
 	idempotencyPkgPath = "trstctl.com/trstctl/internal/orchestrator"
 	idempotencyType    = "Idempotency"
 	idempotencyMethod  = "Do"
+	boundMethod        = "DoBound"
+	durableMethod      = "DoDurableEffect"
+	durableBoundMethod = "DoDurableEffectBound"
+	atMostOnceMethod   = "DoAtMostOnceEffect"
 	apiPkgPath         = "trstctl.com/trstctl/internal/api"
 	idempotencyHeader  = "Idempotency-Key"
 )
@@ -303,10 +308,10 @@ func funcDecls(pass *analysis.Pass) map[*types.Func]*ast.FuncDecl {
 	return decls
 }
 
-// isCanonicalIdempotencyDo reports whether fn is
-// (*orchestrator.Idempotency).Do — the canonical dedupe sink.
+// isCanonicalIdempotencyDo reports whether fn is one of the canonical
+// orchestrator.Idempotency dedupe sinks.
 func isCanonicalIdempotencyDo(fn *types.Func) bool {
-	if fn.Name() != idempotencyMethod {
+	if fn.Name() != idempotencyMethod && fn.Name() != boundMethod && fn.Name() != durableMethod && fn.Name() != durableBoundMethod && fn.Name() != atMostOnceMethod {
 		return false
 	}
 	sig, ok := fn.Type().(*types.Signature)

@@ -193,7 +193,7 @@
       "acceptance_criteria": "TestServedSelfServiceIssuanceRequiresApproval proves the built-in signer-backed issuance spine. External-CA and Kubernetes controller tests do not certify shipped wiring; their DoD census entries must become served first.",
       "status": "partial",
       "served_state": "partial",
-      "backend_status": "partial: built-in self-service issuance is served; the 14 external-CA backends are not constructed, and the Kubernetes CSR/TrustBundle posture routes remain descriptor-only",
+      "backend_status": "partial: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven; the Kubernetes CSR/TrustBundle posture routes remain descriptor-only",
       "ga_served_scope": "out_of_ga",
       "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [
@@ -268,10 +268,10 @@
       "requirement_text": "trstctl shall provide HSM integration.",
       "owner": "Issuance and CAs",
       "priority": "P2",
-      "acceptance_criteria": "Managed-key tests prove opaque response shapes and provider contracts, while the DoD census remains red for all six backends. TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves only the editions posture. Cloud-provider lifecycle tests currently use author-controlled HTTP doubles; emulator/live-cloud proof is tracked separately.",
+      "acceptance_criteria": "TestDODManagedKeyProductionAssembly launches the licensed control-plane and shipped cgo signer artifact, proves generate/idempotent replay/rotate-through-restart/revoke/zeroize for all six HSM/KMS providers, and completes nonce-bound independent substrate receipts. TestEditionsEndpointServesCAPKEY03ValidatedModulePath separately proves the editions posture.",
       "status": "conditional",
       "served_state": "conditional",
-      "backend_status": "conditional: Enterprise managed-key route/FIPS posture exists behind license and configuration, but the runtime census reports zero of six advertised HSM/KMS backends served in the shipped static artifact",
+      "backend_status": "conditional: all six advertised HSM/KMS backends are required/census-served through the shipped control-plane and cgo HSM signer artifacts; an active Enterprise BYOK license and one provider configuration are required at runtime",
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/configuration.md",
@@ -634,45 +634,45 @@
       "requirement_text": "trstctl shall provide Deployment connectors (initial set).",
       "owner": "Deployment connectors",
       "priority": "P2",
-      "acceptance_criteria": "The connector DoD census must prove buildRunDeps construction plus backend runtime acceptance before this row can leave library-only.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library: the 24 native connector packages exist, but buildRunDeps does not construct Deps.ConnectorRegistry; only target metadata, receipts, and signed-WASM dispatch are served",
+      "acceptance_criteria": "The connector DoD census proves production buildRunDeps construction plus authenticated served target creation, identity binding, issuance/deploy, target-specific mutation, and independent external readback for all 24 native connectors.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: the shipped buildRunDeps constructs the selected members of all 24 native connectors from operator configuration and routes served issue/deploy work through the durable outbox to real target mutation and readback",
       "source_docs": [
         "docs/features/deployment-connectors.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
+      "ga_scope_reason": "The residual GA condition is explicit operator connector enablement, local command/root policy, and target credentials."
     },
     {
       "requirement_id": "F27",
       "requirement_text": "trstctl shall provide Additional connectors.",
       "owner": "Deployment connectors",
       "priority": "P2",
-      "acceptance_criteria": "The connector DoD census and appliance-specific runtime acceptance must be green before this row can leave library-only.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library: additional native appliance connector packages exist, but buildRunDeps does not construct Deps.ConnectorRegistry; no native appliance backend is served",
+      "acceptance_criteria": "The connector DoD census drives each appliance/database connector from the served target and identity workflow through production assembly, then requires exact authentication, provider wire operations, and independent external readback.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: the shipped buildRunDeps constructs every advertised appliance/database/messaging connector selected by the operator and the served deploy route performs the provider-specific authenticated mutation plus external readback",
       "source_docs": [
         "docs/features/deployment-connectors.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
+      "ga_scope_reason": "The residual GA condition is operator enablement, target endpoint policy, and provider credentials for native appliance delivery."
     },
     {
       "requirement_id": "F50",
       "requirement_text": "trstctl shall provide Code-signing service.",
       "owner": "Code signing and timestamping",
       "priority": "P2",
-      "acceptance_criteria": "A shipped-binary sign/keyless acceptance plus transparency dispatch must turn code_signing.default served before this row can leave library-only.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library: code-signing routes and CLI exist, but buildRunDeps does not supply CodeSigningConfig and the shipped handler returns the fail-closed 501 sentinel",
+      "acceptance_criteria": "The DoD runtime proof enters through the shipped key-backed and keyless routes assembled by buildRunDeps, signs the exact supplied SHA-256 digest in an isolated signer process, drains official Rekor v1 HashedRekord work, and requires external OpenSSL verification plus a pinned signed-entry-timestamp receipt.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: shipped buildRunDeps assembles tenant-scoped persistent and keyless signing through the isolated signer plus pinned Rekor v1 transparency delivery when code_signing.enabled is configured",
       "source_docs": [
         "docs/features/code-signing-and-timestamping.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
+      "ga_scope_reason": "The residual GA condition is operator-enabled tenant key or GitHub OIDC trust, an isolated signer, and a pinned Rekor log public key."
     },
     {
       "requirement_id": "F51",
@@ -694,16 +694,16 @@
       "requirement_text": "trstctl shall provide Credential compromise workflow.",
       "owner": "Incident and JIT",
       "priority": "P2",
-      "acceptance_criteria": "API tests exercise licensed incident/remediation and discovery spines; connector.right_size remains non-served until its claim is removed or an external effect is runtime-proven by the DoD census.",
+      "acceptance_criteria": "API tests exercise licensed incident/remediation and discovery spines; the connector.right_size DoD proof enters through the served playbook route, replays idempotently, performs the external entitlement mutation, reads effective scopes back, and exposes the delivered receipt.",
       "status": "conditional",
       "served_state": "conditional",
-      "backend_status": "conditional: the incident/remediation spine requires the Enterprise remediation feature and connector.right_size remains a non-served residual",
+      "backend_status": "conditional: the Enterprise remediation spine and connector.right_size external entitlement mutation are production-served when licensed and bound to an operator-configured tenant/connector endpoint",
       "source_docs": [
         "docs/features/incident-and-jit.md",
         "docs/features/discovery-and-inventory.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
+      "ga_scope_reason": "The residual GA conditions are the Enterprise remediation license and an operator-configured tenant/connector entitlement binding."
     },
     {
       "requirement_id": "F32",
@@ -832,12 +832,12 @@
       "requirement_text": "trstctl shall provide Dynamic secrets.",
       "owner": "Secrets",
       "priority": "P2",
-      "acceptance_criteria": "The dynamic-secret registry and each advertised provider need shipped-binary issue/revoke acceptance before this row can leave library-only.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library: lease routes, engine, CLI, UI, and leaseworker code exist, but buildRunDeps leaves Deps.DynamicSecretProviders empty so issue returns unavailable",
+      "acceptance_criteria": "The dynamic_secret DoD census drives all eight providers through production buildRunDeps and the authenticated lease route, proves the generated credential works independently, rotates it, revokes it, and proves both credentials are dead.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: buildRunDeps constructs all eight tenant-bound dynamic-secret providers from operator configuration; served issue/renew/revoke uses an event-projected sealed outbox and restart-safe leaseworker against the real provider authority",
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_scope_reason": "The residual GA condition is explicit secrets API enablement plus tenant provider endpoints, roles, egress policy, and credential references.",
       "source_docs": [
         "docs/features/secrets.md"
       ]
@@ -877,12 +877,12 @@
       "requirement_text": "trstctl shall provide Secret sync / platform integrations.",
       "owner": "Secrets",
       "priority": "P2",
-      "acceptance_criteria": "Served tests cover cloud-secret discovery and Kubernetes/workload posture. Each outbound pusher needs shipped-binary runtime acceptance before native secret-sync delivery is claimed.",
+      "acceptance_criteria": "The secret_sync DoD census drives all eight configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback.",
       "status": "partial",
       "served_state": "partial",
-      "backend_status": "partial: cloud-secret discovery and Kubernetes/workload posture are served; the eight outbound sync pushers are code inventory because buildRunDeps leaves Deps.SecretSyncTargets empty",
+      "backend_status": "partial: buildRunDeps production-assembles all eight tenant-bound outbound pushers and serves sealed-outbox delivery; deeper native Terraform/OpenTofu and Vault KV outbound integrations plus other secrets_residuals remain",
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_scope_reason": "Native eight-target sync is served when configured; remaining GA residuals are the explicit secrets_residuals rows for deeper Vault, KMIP, and provider-specific Terraform/OpenTofu breadth.",
       "source_docs": [
         "docs/features/secrets.md"
       ]
@@ -939,12 +939,12 @@
       "requirement_text": "trstctl shall provide Notification integrations.",
       "owner": "Policy and governance",
       "priority": "P2",
-      "acceptance_criteria": "Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, creates tenant-authored notification channels with redacted credential references, lists configured channels, creates routing policies, queues redacted Slack/webhook channel tests, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial: served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, tenant-authored channel credential-reference lifecycle, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "acceptance_criteria": "Served lifecycle and channel-test mutations enqueue durable notification work; the DoD runtime proof enters through the authenticated channel-test route assembled by buildRunDeps and requires exact PagerDuty/OpsGenie native requests, vendor acceptance envelopes, external readback, and nonce/PID-bound execution receipts.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served: production dispatcher assembles email/Slack/Teams/SMS/SIEM/webhook plus native PagerDuty Events v2 and OpsGenie Alert v2 delivery, with tenant channel lifecycle, routing policy, channel tests, inbox/dead-letter handling, and outbox-backed retries",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/policy-and-governance.md"
       ]

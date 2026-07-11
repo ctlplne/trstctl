@@ -35,6 +35,11 @@ type Server struct {
 	serving bool
 	store   *KeyStore // optional sealed persistence; nil = in-memory only
 	keyspec KeyFactory
+	// managedKeys owns remote KMS/HSM lifecycle backends in this isolated
+	// process. The control plane can reach them only through ManageKey over the
+	// authenticated signer transport; provider credentials and key operations
+	// therefore never enter the HTTP/control-plane address space (AN-4).
+	managedKeys *managedKeyRuntime
 
 	// minter, when non-nil, is the attached generic successor-minting extension
 	// (WithSuccessionMinter). The core defines only the seam; the concrete
@@ -266,8 +271,27 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 			return nil, err
 		}
 	}
+	if req.GetOperationId() != "" {
+		if s.store == nil {
+			return nil, status.Error(codes.FailedPrecondition, "sign: operation journaling requires a persistent signer")
+		}
+		unlock := s.store.lockSignOperation(req.GetOperationId())
+		defer unlock()
+		prior, replayed, err := s.store.beginSignOperation(req)
+		if err != nil {
+			switch {
+			case errors.Is(err, errSignOperationConflict):
+				return nil, status.Errorf(codes.AlreadyExists, "sign journal: %v", err)
+			default:
+				return nil, status.Errorf(codes.Internal, "sign journal: %v", err)
+			}
+		}
+		if replayed {
+			return &signerpb.SignResponse{Signature: prior, Replayed: true}, nil
+		}
+	}
 	if s.signGate != nil {
-		s.signGate() // test-only: hold the in-flight slot (nil in production)
+		s.signGate() // test-only: hold the actual private-key operation (nil in production)
 	}
 	hash, _, _ := hashFromProto(req.GetHash()) // validated above
 	sig, err := held.signer.SignDigest(req.GetDigest(), crypto.SignOptions{
@@ -276,6 +300,11 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "sign: %v", err)
+	}
+	if req.GetOperationId() != "" {
+		if err := s.store.completeSignOperation(req, sig); err != nil {
+			return nil, status.Errorf(codes.Internal, "sign journal completion: %v", err)
+		}
 	}
 	return &signerpb.SignResponse{Signature: sig}, nil
 }
@@ -396,6 +425,9 @@ func (s *Server) Shutdown() {
 	}
 	if destroyer, ok := s.gatedDestroyer.(interface{ Destroy() }); ok {
 		destroyer.Destroy()
+	}
+	if s.managedKeys != nil {
+		s.managedKeys.Close()
 	}
 }
 

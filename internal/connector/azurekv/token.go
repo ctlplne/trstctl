@@ -3,13 +3,11 @@
 package azurekv
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,13 +27,18 @@ type TokenProvider interface {
 }
 
 // staticToken is a fixed bearer token.
-type staticToken []byte
+type staticToken struct{ token []byte }
 
 // StaticToken returns a TokenProvider that always yields tok. Use it when the
 // platform already holds a valid token, or in tests.
-func StaticToken(tok []byte) TokenProvider { return staticToken(secrettext.Clone(tok)) }
+func StaticToken(tok []byte) TokenProvider { return &staticToken{token: secrettext.Clone(tok)} }
 
-func (s staticToken) Token(context.Context) ([]byte, error) { return secrettext.Clone(s), nil }
+func (s *staticToken) Token(context.Context) ([]byte, error) { return secrettext.Clone(s.token), nil }
+
+func (s *staticToken) Destroy() {
+	secret.Wipe(s.token)
+	s.token = nil
+}
 
 // DefaultScope is the OAuth2 scope for the Azure Key Vault data plane.
 const DefaultScope = "https://vault.azure.net/.default"
@@ -97,6 +100,17 @@ func NewClientCredentials(tokenURL, clientID string, clientSecret []byte, opts .
 	return p
 }
 
+// Destroy wipes the client secret and any cached access token.
+func (p *ClientCredentials) Destroy() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	secret.Wipe(p.clientSecret)
+	secret.Wipe(p.cached)
+	p.clientSecret = nil
+	p.cached = nil
+	p.exp = time.Time{}
+}
+
 // Token returns a cached token if still valid, otherwise acquires a new one.
 func (p *ClientCredentials) Token(ctx context.Context) ([]byte, error) {
 	p.mu.Lock()
@@ -105,13 +119,14 @@ func (p *ClientCredentials) Token(ctx context.Context) ([]byte, error) {
 		return secrettext.Clone(p.cached), nil
 	}
 
-	form := url.Values{}
-	form.Set("grant_type", "client_credentials")
-	form.Set("client_id", p.clientID)
-	form.Set("client_secret", secrettext.String(p.clientSecret))
-	form.Set("scope", p.scope)
+	form := make([]byte, 0, len(p.clientID)+len(p.clientSecret)+len(p.scope)+64)
+	form = appendFormPair(form, "grant_type", []byte("client_credentials"))
+	form = appendFormPair(form, "client_id", []byte(p.clientID))
+	form = appendFormPair(form, "client_secret", p.clientSecret)
+	form = appendFormPair(form, "scope", []byte(p.scope))
+	defer secret.Wipe(form)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tokenURL, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tokenURL, bytes.NewReader(form))
 	if err != nil {
 		return nil, err
 	}
@@ -123,19 +138,23 @@ func (p *ClientCredentials) Token(ctx context.Context) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if err != nil {
-			return nil, fmt.Errorf("token endpoint: status %d: read response: %w", resp.StatusCode, err)
-		}
-		return nil, fmt.Errorf("token endpoint: status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return nil, fmt.Errorf("token endpoint: status %d (response body redacted)", resp.StatusCode)
 	}
 
 	var tr struct {
 		AccessToken secretjson.StringBytes `json:"access_token"`
 		ExpiresIn   int                    `json:"expires_in"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&tr); err != nil {
-		return nil, fmt.Errorf("token endpoint: decode: %w", err)
+	data, err := secret.ReadBounded(resp.Body, 1<<20)
+	if err != nil {
+		return nil, fmt.Errorf("token endpoint: read failed (details redacted)")
+	}
+	defer secret.Wipe(data)
+	err = json.Unmarshal(data, &tr)
+	defer secret.Wipe(tr.AccessToken)
+	if err != nil {
+		return nil, fmt.Errorf("token endpoint: decode failed (details redacted)")
 	}
 	if len(tr.AccessToken) == 0 {
 		return nil, fmt.Errorf("token endpoint: empty access_token")
@@ -147,7 +166,30 @@ func (p *ClientCredentials) Token(ctx context.Context) ([]byte, error) {
 	}
 	secret.Wipe(p.cached)
 	p.cached = secrettext.Clone(tr.AccessToken)
-	secret.Wipe(tr.AccessToken)
 	p.exp = p.now().Add(time.Duration(ttl) * time.Second)
 	return secrettext.Clone(p.cached), nil
+}
+
+func appendFormPair(dst []byte, key string, value []byte) []byte {
+	if len(dst) > 0 {
+		dst = append(dst, '&')
+	}
+	dst = appendFormEncoded(dst, []byte(key))
+	dst = append(dst, '=')
+	return appendFormEncoded(dst, value)
+}
+
+func appendFormEncoded(dst, value []byte) []byte {
+	const hex = "0123456789ABCDEF"
+	for _, b := range value {
+		switch {
+		case b >= 'a' && b <= 'z', b >= 'A' && b <= 'Z', b >= '0' && b <= '9', b == '-', b == '_', b == '.', b == '~':
+			dst = append(dst, b)
+		case b == ' ':
+			dst = append(dst, '+')
+		default:
+			dst = append(dst, '%', hex[b>>4], hex[b&0x0f])
+		}
+	}
+	return dst
 }

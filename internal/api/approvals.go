@@ -10,7 +10,8 @@ import (
 )
 
 // Served dual-control approval surface (EXC-WIRE-03). A distinct approver records an
-// approval of a pending privileged action (issue, rotate, or revoke) on an identity,
+// approval of a pending privileged action (issue, rotate, revoke, or an exact
+// code-signing request) on a resource,
 // so the served mutation gate can require two distinct approvers before the action
 // proceeds (SEC-002, the served half of RED-004). Recording an approval requires the
 // certs:issue authority — the RA split means a requester (certs:request) cannot
@@ -69,7 +70,7 @@ func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if !isIdentityApprovalAction(req.Action) {
-			return 0, nil, errStatus(http.StatusBadRequest, `action must be "issue", "rotate", or "revoke"`)
+			return 0, nil, errStatus(http.StatusBadRequest, `action must be "issue", "rotate", "revoke", or "sign"`)
 		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
 		if principal.Subject == "" {
@@ -83,7 +84,7 @@ func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-var identityApprovalActions = []string{"issue", "rotate", "revoke"}
+var identityApprovalActions = []string{"issue", "rotate", "revoke", "sign"}
 
 func isIdentityApprovalAction(action string) bool {
 	for _, allowed := range identityApprovalActions {

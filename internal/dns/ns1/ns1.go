@@ -164,15 +164,15 @@ func (p *Provider) CleanupTXT(ctx context.Context, name, _ string) error {
 
 // do sets the NS1 auth header on req and runs it through the shared cloudhttp
 // round-trip (bounded read, non-2xx normalisation, drain; CODE-006). A non-2xx
-// response is translated into an *apiError so CleanupTXT's 404-is-a-no-op predicate
-// and the error text (which never carries the API key, AN-8) are unchanged. The NS1
-// records API returns no body the provider reads, so out is nil.
+// response is translated into a status-only *apiError so CleanupTXT's 404-is-a-no-op
+// predicate works without retaining attacker-controlled response bytes (AN-8). The
+// NS1 records API returns no body the provider reads, so out is nil.
 func (p *Provider) do(req *http.Request) error {
 	req.Header.Set(apiKeyHeader, secrettext.String(p.creds.APIKey))
 	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
 		var se *cloudhttp.StatusError
 		if errors.As(err, &se) {
-			return &apiError{status: se.StatusCode, body: se.Body}
+			return &apiError{status: se.StatusCode}
 		}
 		return err
 	}
@@ -189,11 +189,10 @@ type answer struct {
 	Answer []string `json:"answer"`
 }
 
-// apiError is a non-2xx NS1 response. Its body is the service error text and never
-// carries the request API key (AN-8).
+// apiError is a non-2xx NS1 response. It deliberately retains only the status; an
+// upstream body is attacker-controlled and may echo submitted material (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
-func (e *apiError) Error() string { return fmt.Sprintf("ns1: status %d: %s", e.status, e.body) }
+func (e *apiError) Error() string { return fmt.Sprintf("ns1: status %d", e.status) }

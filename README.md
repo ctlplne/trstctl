@@ -188,16 +188,18 @@ local `wiring-census.json` receipt. Every inventory number is grounded in the re
 
 | Area | What's there |
 |---|---|
-| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation. CA integrations: **14 inventory / 0 served in the shipped binary**; their packages are not yet constructed by `buildRunDeps`. |
+| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation. CA integrations: **14 inventory / 14 served in the shipped binary** through operator-configured, tenant-bound production assembly and provider-specific issuance. |
 | **Enrollment** | EST, SCEP, CMP servers; an embedded/IoT C client; Intune/MDM challenge gating |
 | **Workload identity** | SPIFFE Workload API (X.509 + JWT SVIDs), **6** cloud/hardware attesters, ephemeral issuance, an AI-agent broker |
 | **SSH** | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs |
-| **Secrets** | envelope-encrypted store, transit + KMIP, PKI-as-a-secrets-engine, and rotation. Dynamic-secret backends: **8 inventory / 0 served in the shipped binary**. Secret-sync targets: **8 inventory / 0 served in the shipped binary**. |
-| **Deployment** | Deployment connectors: **24 inventory / 0 served in the shipped binary** (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, and cloud cert stores). Target/orchestration APIs and signed WASM dispatch exist, but the native registry is not constructed. Also includes an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration. |
+| **Secrets** | envelope-encrypted store, transit + KMIP, PKI-as-a-secrets-engine, and rotation. Dynamic-secret backends: **8 inventory / 8 served in the shipped binary**. Secret-sync targets: **8 inventory / 8 served in the shipped binary**. Each is tenant-bound, operator-configured, and reached only through the event-projected sealed outbox. |
+| **Deployment** | Deployment connectors: **24 inventory / 24 served in the shipped binary** (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, and cloud cert stores). Production `buildRunDeps` constructs the selected native registry; served target/identity/deploy flows perform target-specific mutation and independent readback. Also includes an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration. |
 | **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM crypto posture, Enterprise/PQC migration posture, CT monitoring, drift, risk scoring, the credential graph |
-| **Key protection** | HSM/KMS backends: **6 inventory / 0 served in the shipped binary** until the runtime gate proves each shipped artifact/backend combination. The managed-key surface is configuration/license-gated; the isolated signer remains the default key boundary. |
+| **Key protection** | HSM/KMS backends: **6 inventory / 6 served in the shipped binary** through the separately shipped cgo HSM signer profile: AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2. The managed-key surface remains Enterprise-license- and configuration-gated, and every provider operation stays inside the isolated signer. |
 | **Crypto-agility** | classical algorithms in the MPL core; Enterprise/PQC algorithms (ML-DSA, ML-KEM, SLH-DSA, hybrid) and the PQC-migration orchestrator live behind the proprietary `ee/` boundary |
 | **Platform** | REST API (OpenAPI 3.1), CLI at full parity, web UI with a first-run wizard, OIDC/SAML/LDAP sign-on, SCIM 2.0 provisioning, RBAC + ABAC, append-only audit, multi-tenancy |
+| **Notifications** | Outbox-backed email, Slack, Teams, SMS, SIEM, HMAC webhook, native PagerDuty Events v2, and native OpsGenie Alert v2 delivery. The shipped binary constructs every channel family; credentials are redacted, locked where supported, and wiped on shutdown. |
+| **Code signing** | Conditionally served key-backed and GitHub-OIDC keyless signing through the isolated signer. The operator pins Rekor log trust; the outbox worker publishes official HashedRekord entries and verifies their signed-entry timestamps before acknowledgement. |
 | **Supply chain** | reproducible builds, cosign-signed images, and an SBOM |
 
 ## How it's built
@@ -244,7 +246,7 @@ flowchart TB
 Five binaries make this real: `trstctl` (the control plane, which supervises the
 signer as a child process), `trstctl-signer` (the isolated key-holder),
 `trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
-Under the hood: **~1453 Go files across the internal subsystem packages**, with
+Under the hood: **~1545 Go files across the internal subsystem packages**, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
 architecture linter in CI.
 
@@ -267,7 +269,9 @@ For a pre-populated click-through demo, use the demo stack. It starts local SSO,
 PostgreSQL, NATS JetStream, the isolated signer, and a seed job for the currently
 served demo APIs. The stack also includes a LocalStack KMS configuration for
 exploring the conditional managed-key surface. That convenience stack is not
-LocalStack conformance evidence and does not make any HSM/KMS census row served.
+LocalStack conformance evidence; the six served census rows come from the gate's
+nonce-bound vendor-emulator, SoftHSM, and swtpm lifecycle receipts against the
+shipped control-plane and cgo signer artifacts.
 
 ```bash
 docker compose -f deploy/demo/docker-compose.yml up --build

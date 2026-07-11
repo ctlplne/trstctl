@@ -901,11 +901,9 @@ func TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled(t *testing.T) {
 	}
 }
 
-// TestTRACE032DynamicSecretsRemainLibraryUntilProvidersAreWired locks the remediation for
-// TRACE-032. The dynamic-secret lease workflow belongs in the GA denominator once
-// issue/read/renew/revoke and leaseworker expiry are served through API, CLI, and
-// the Secrets UI with outbox-backed backend revocation.
-func TestTRACE032DynamicSecretsRemainLibraryUntilProvidersAreWired(t *testing.T) {
+// TestTRACE032DynamicSecretsRemainConditionalWhenConfigured locks the production
+// wiring proof while preserving the operator-configuration condition.
+func TestTRACE032DynamicSecretsRemainConditionalWhenConfigured(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -915,7 +913,7 @@ func TestTRACE032DynamicSecretsRemainLibraryUntilProvidersAreWired(t *testing.T)
 	if !ok {
 		t.Fatal("F65 Dynamic secrets row is missing")
 	}
-	requireResidualServedState(t, "TRACE-032", f65, "library")
+	requireResidualServedState(t, "TRACE-032", f65, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f65.BackendStatus,
@@ -925,9 +923,10 @@ func TestTRACE032DynamicSecretsRemainLibraryUntilProvidersAreWired(t *testing.T)
 		strings.Join(f65.FacetEvidence.Served.Evidence, "\n"),
 	}, "\n"))
 	for _, want := range []string{
-		"deps.dynamicsecretproviders",
-		"unavailable",
-		"dynamic_secret census",
+		"tenantdynamicsecretproviders",
+		"buildrundeps",
+		"sealed dynsecret.issue",
+		"testdodsecretintegrationsproductionassembly",
 		"issuedynamicsecretlease",
 		"renewdynamicsecretlease",
 		"revokedynamicsecretlease",
@@ -954,6 +953,9 @@ func TestTRACE032DynamicSecretsRemainLibraryUntilProvidersAreWired(t *testing.T)
 		testRefs[ref] = true
 	}
 	for _, wantRef := range []string{
+		"internal/server/dod_secret_integrations_runtime_test.go",
+		"tools/dodcensus/substrates/secret_integrations.py",
+		"tools/dodcensus/manifest.json",
 		"internal/server/secrets_served_test.go",
 		"internal/api/feature_parity_test.go",
 		"internal/cli/feature_parity_test.go",
@@ -968,7 +970,7 @@ func TestTRACE032DynamicSecretsRemainLibraryUntilProvidersAreWired(t *testing.T)
 	}
 
 	testEvidence := strings.ToLower(strings.Join(f65.FacetEvidence.Test.Evidence, "\n"))
-	for _, want := range []string{"inject provider", "test composition", "buildrundeps", "no production provider registry", "required and served"} {
+	for _, want := range []string{"unit and route tests", "required dynamic_secret census", "tenantdynamicsecretproviders", "universal production-assembly runtime proof"} {
 		if !strings.Contains(testEvidence, want) {
 			t.Errorf("TRACE-032: F65 test evidence must mention %q, got %q", want, testEvidence)
 		}
@@ -1110,6 +1112,9 @@ func TestTRACE034SecretSyncPlatformIntegrationsRemainPartial(t *testing.T) {
 		testRefs[ref] = true
 	}
 	for _, wantRef := range []string{
+		"internal/server/dod_secret_integrations_runtime_test.go",
+		"tools/dodcensus/substrates/secret_integrations.py",
+		"tools/dodcensus/manifest.json",
 		"internal/server/secrets_sync_served_test.go",
 		"internal/server/unvaulted_secret_posture_served_test.go",
 		"internal/operator/reconcile_test.go",
@@ -1126,9 +1131,10 @@ func TestTRACE034SecretSyncPlatformIntegrationsRemainPartial(t *testing.T) {
 	for _, want := range []string{
 		"cloud-secret discovery",
 		"kubernetes/workload posture",
-		"inject secretsynctargets",
-		"library behavior only",
-		"required+served secret_sync census",
+		"vendor create/update semantics",
+		"testdodsecretsyncproductionassembly",
+		"authenticated external write/readback",
+		"required secret_sync census",
 	} {
 		if !strings.Contains(testEvidence, want) {
 			t.Errorf("TRACE-034: F68 test evidence must mention %q, got %q", want, testEvidence)

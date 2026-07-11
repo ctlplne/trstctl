@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secretscan"
@@ -224,25 +225,59 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req secretSyncRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+	if idempotencyKey == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	var req secretSyncRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.Target = strings.TrimSpace(req.Target)
+	req.RemoteKey = strings.TrimSpace(req.RemoteKey)
+	if req.Name == "" || req.Target == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "name and target are required"))
+		return
+	}
+	if req.RemoteKey == "" {
+		req.RemoteKey = req.Name
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, err := secretSyncRequestBinding(principal, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.secrets.be.QueueSecretSync != nil {
+			existing, lookupErr := a.secrets.be.Store.GetSecretSyncJob(ctx, tenantID, store.DurableSecretSyncJobID(tenantID, idempotencyKey))
+			switch {
+			case lookupErr == nil:
+				if existing.SecretName != req.Name || existing.Target != req.Target || existing.RemoteKey != req.RemoteKey || !crypto.ConstantTimeEqual([]byte(existing.RequestBinding), []byte(binding)) {
+					return 0, nil, errStatus(http.StatusConflict, "Idempotency-Key was already used for a different secret sync command")
+				}
+				// The production command returns after durable enqueue. Preserve that
+				// exact public result even if the source has since rotated or the
+				// background worker has since delivered the original version.
+				return http.StatusOK, secretSyncResponse{
+					Name: existing.SecretName, Target: existing.Target, RemoteKey: existing.RemoteKey,
+					Enqueued: true, Delivered: false,
+				}, nil
+			case !store.IsNotFound(lookupErr):
+				return 0, nil, lookupErr
+			}
 		}
-		req.Name = strings.TrimSpace(req.Name)
-		req.Target = strings.TrimSpace(req.Target)
-		req.RemoteKey = strings.TrimSpace(req.RemoteKey)
-		if req.Name == "" || req.Target == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "name and target are required")
-		}
-		if req.RemoteKey == "" {
-			req.RemoteKey = req.Name
-		}
-		target := a.secrets.be.SecretSyncTargets[req.Target]
+		target := a.secrets.syncTargets(tenantID)[req.Target]
 		if target == nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret sync target is not configured")
 		}
-		if a.secrets.be.SecretSyncOutbox == nil {
+		if a.secrets.be.QueueSecretSync == nil && a.secrets.be.SecretSyncOutbox == nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret sync outbox is not configured")
 		}
 		rec, err := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name)
@@ -257,14 +292,25 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		defer secret.Wipe(value)
-		outbox := a.secrets.be.SecretSyncOutbox(tenantID, req.Target)
-		engine := secretsync.New(tenantID, target, outbox, a.secrets.be.Audit)
-		if err := engine.Sync(ctx, req.RemoteKey, value); err != nil {
-			return 0, nil, err
-		}
-		delivered, err := engine.RunDeliveries(ctx)
-		if err != nil {
-			return 0, nil, err
+		delivered := 0
+		if a.secrets.be.QueueSecretSync != nil {
+			if err := a.secrets.be.QueueSecretSync(ctx, tenantID, req.Name, rec.Version, req.Target, req.RemoteKey, idempotencyKey, binding, value); err != nil {
+				if errors.Is(err, store.ErrIdempotencyConflict) {
+					return 0, nil, errStatus(http.StatusConflict, "Idempotency-Key was already used for a different secret sync command")
+				}
+				return 0, nil, err
+			}
+		} else {
+			outbox := a.secrets.be.SecretSyncOutbox(tenantID, req.Target)
+			engine := secretsync.New(tenantID, target, outbox, a.secrets.be.Audit)
+			if err := engine.Sync(ctx, req.RemoteKey, value); err != nil {
+				return 0, nil, err
+			}
+			var err error
+			delivered, err = engine.RunDeliveries(ctx)
+			if err != nil {
+				return 0, nil, err
+			}
 		}
 		a.auditSecret(ctx, "secret.sync.requested", tenantID, req.Name, rec.Version)
 		return http.StatusOK, secretSyncResponse{
@@ -274,10 +320,31 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) secretSyncTargets(w http.ResponseWriter, _ *http.Request) {
+func secretSyncRequestBinding(principal string, req secretSyncRequest) (string, error) {
+	canonical := struct {
+		Operation string `json:"operation"`
+		Principal string `json:"principal"`
+		Name      string `json:"name"`
+		Target    string `json:"target"`
+		RemoteKey string `json:"remote_key"`
+	}{Operation: "secret.sync", Principal: principal, Name: req.Name, Target: req.Target, RemoteKey: req.RemoteKey}
+	encoded, err := json.Marshal(canonical)
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(encoded)
+	return crypto.SHA256Hex(encoded), nil
+}
+
+func (a *API) secretSyncTargets(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
 	configured := map[string]bool{}
 	if a.secrets != nil {
-		for target := range a.secrets.be.SecretSyncTargets {
+		for target := range a.secrets.syncTargets(tenantID) {
 			configured[target] = true
 		}
 	}
@@ -297,7 +364,7 @@ func (a *API) cloudSecretManagers(w http.ResponseWriter, r *http.Request) {
 	}
 	configuredSync := map[string]bool{}
 	if a.secrets != nil {
-		for target := range a.secrets.be.SecretSyncTargets {
+		for target := range a.secrets.syncTargets(tenantID) {
 			configuredSync[target] = true
 		}
 	}
@@ -327,7 +394,7 @@ func (a *API) unvaultedSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	configuredSync := map[string]bool{}
 	if a.secrets != nil {
-		for target := range a.secrets.be.SecretSyncTargets {
+		for target := range a.secrets.syncTargets(tenantID) {
 			configuredSync[target] = true
 		}
 	}

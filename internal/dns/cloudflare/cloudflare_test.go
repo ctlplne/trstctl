@@ -113,14 +113,12 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	}
 }
 
-// TestErrorBodyBoundIsCloudhttps proves the provider's non-2xx error body is bounded
-// by the SHARED cloudhttp knob, not a bespoke per-provider literal (CODE-006): the
-// upstream returns a >MaxErrorBytes error body, and the error the provider surfaces is
-// truncated to exactly cloudhttp.MaxErrorBytes. This is the "single bound change
-// reflects in a provider" acceptance — lowering cloudhttp.MaxErrorBytes changes what
-// cloudflare (and every other provider) observes, because the read is now central.
-func TestErrorBodyBoundIsCloudhttps(t *testing.T) {
-	huge := strings.Repeat("E", cloudhttp.MaxErrorBytes*3)
+// TestErrorBodyDoesNotEscapeCloudhttp proves an attacker-controlled non-2xx body
+// remains inside cloudhttp's bounded mutable buffer and cannot survive in the
+// provider error after cloudhttp wipes it (AN-8).
+func TestErrorBodyDoesNotEscapeCloudhttp(t *testing.T) {
+	const echoed = "echoed-sensitive-upstream-material"
+	huge := strings.Repeat(echoed, cloudhttp.MaxErrorBytes)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+testToken {
 			w.WriteHeader(http.StatusForbidden)
@@ -139,18 +137,12 @@ func TestErrorBodyBoundIsCloudhttps(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error from the 502 upstream")
 	}
-	// The provider wraps cloudhttp's bounded body in "cloudflare: status 502: <body>".
-	// The body portion must be capped at the shared cloudhttp.MaxErrorBytes.
 	msg := err.Error()
 	if !strings.Contains(msg, "502") {
 		t.Fatalf("error should carry the upstream status: %v", err)
 	}
-	bodyLen := strings.Count(msg, "E")
-	if bodyLen > cloudhttp.MaxErrorBytes {
-		t.Fatalf("error body = %d 'E's, exceeds the shared cloudhttp.MaxErrorBytes cap %d — the bound is not centrally applied (CODE-006)", bodyLen, cloudhttp.MaxErrorBytes)
-	}
-	if bodyLen == 0 {
-		t.Fatal("error carried no body snippet; the shared bounded read did not run")
+	if strings.Contains(msg, echoed) {
+		t.Fatalf("error retained attacker-controlled response body: %v", err)
 	}
 }
 
@@ -357,8 +349,8 @@ func (s *fakeCF) ok(w http.ResponseWriter, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-// fail mirrors a Cloudflare error envelope. It deliberately never echoes the token, so
-// surfacing this body as the provider's error text cannot leak credentials (AN-8).
+// fail mirrors a Cloudflare error envelope. Its text is attacker-controlled so the
+// provider must discard it instead of copying it into an error (AN-8).
 func (s *fakeCF) fail(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

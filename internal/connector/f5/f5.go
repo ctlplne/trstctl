@@ -11,15 +11,17 @@ package f5
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // Connector deploys certificates to an F5 BIG-IP over iControl REST.
@@ -29,7 +31,7 @@ type Connector struct {
 	profile string // the Client SSL profile to bind
 	name    string // the crypto object base name (default: the profile)
 	user    string
-	pass    string
+	pass    []byte
 }
 
 var _ connector.Connector = (*Connector)(nil)
@@ -37,9 +39,13 @@ var _ connector.Connector = (*Connector)(nil)
 // Option configures a Connector.
 type Option func(*Connector)
 
-// WithBasicAuth sets the iControl REST credentials.
-func WithBasicAuth(user, pass string) Option {
-	return func(c *Connector) { c.user, c.pass = user, pass }
+// WithBasicAuthBytes keeps the authority-bearing password zeroizable until the
+// final net/http authorization-header edge.
+func WithBasicAuthBytes(user string, pass []byte) Option {
+	return func(c *Connector) {
+		c.user = user
+		c.pass = append(c.pass[:0], pass...)
+	}
 }
 
 // WithName sets the crypto object base name (default: the profile name).
@@ -56,6 +62,11 @@ func New(baseURL, profile string, opts ...Option) *Connector {
 		o(c)
 	}
 	return c
+}
+
+func (c *Connector) Close() {
+	secret.Wipe(c.pass)
+	c.pass = nil
 }
 
 // Name identifies the connector.
@@ -104,6 +115,7 @@ func (c *Connector) callJSON(ctx context.Context, sb connector.Sandbox, method, 
 	if err != nil {
 		return fmt.Errorf("encode request: %w", err)
 	}
+	defer secret.Wipe(body)
 	return c.call(ctx, sb, method, path, "application/json", body)
 }
 
@@ -113,8 +125,8 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 		return err
 	}
 	req.Header.Set("Content-Type", contentType)
-	if c.user != "" || c.pass != "" {
-		req.SetBasicAuth(c.user, c.pass)
+	if c.user != "" || len(c.pass) > 0 {
+		req.Header.Set("Authorization", c.basicAuth())
 	}
 	resp, err := sb.Request(req)
 	if err != nil {
@@ -122,11 +134,23 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if err != nil {
-			return fmt.Errorf("status %d: read response: %w", resp.StatusCode, err)
-		}
-		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
 	}
+	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil
+}
+
+// basicAuth keeps the cleartext password byte-backed. Only the base64 HTTP
+// header value crosses into a string at net/http's forced wire boundary.
+func (c *Connector) basicAuth() string {
+	raw := make([]byte, 0, len(c.user)+1+len(c.pass))
+	raw = append(raw, c.user...)
+	raw = append(raw, ':')
+	raw = append(raw, c.pass...)
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(raw)))
+	base64.StdEncoding.Encode(encoded, raw)
+	secret.Wipe(raw)
+	defer secret.Wipe(encoded)
+	return secrettext.Prefixed("Basic ", encoded)
 }

@@ -196,6 +196,12 @@ func SafeClientWithOptions(timeout time.Duration, opts SafeClientOptions) *http.
 			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
 				return fmt.Errorf("%w: redirect to scheme %q", ErrSSRFBlocked, req.URL.Scheme)
 			}
+			if len(via) > 0 {
+				previous := via[len(via)-1].URL
+				if !strings.EqualFold(req.URL.Scheme, previous.Scheme) || !strings.EqualFold(req.URL.Host, previous.Host) {
+					return fmt.Errorf("%w: cross-origin or scheme-changing redirect", ErrSSRFBlocked)
+				}
+			}
 			if ip := net.ParseIP(req.URL.Hostname()); ip != nil && blockedIPForClient(ip, opts) {
 				return fmt.Errorf("%w: redirect to %s", ErrSSRFBlocked, req.URL.Hostname())
 			}

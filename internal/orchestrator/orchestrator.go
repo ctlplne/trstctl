@@ -183,6 +183,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				Destination:    sideEffectDest,
 				IdempotencyKey: sideEffectKey,
 				Payload:        outboxPayload,
+				EffectLane:     lifecycleEffectLane(sideEffectDest, identityID),
 			}); err != nil {
 				return err
 			}
@@ -288,11 +289,16 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			if pl.Action != "right_size" {
 				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 			}
+			outboxKey := pl.OutboxIdempotencyKey
+			if outboxKey == "" {
+				outboxKey = ev.ID
+			}
 			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 					TenantID:       ev.TenantID,
 					Destination:    DestinationConnectorRightSize,
-					IdempotencyKey: ev.ID,
+					IdempotencyKey: outboxKey,
+					EffectLane:     DestinationConnectorRightSize + ":" + pl.Connector + ":" + pl.Target,
 					Payload:        ev.Data,
 				})
 				if err != nil {
@@ -452,6 +458,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				Destination:    dest,
 				IdempotencyKey: idempotencyKey,
 				Payload:        outboxPayload,
+				EffectLane:     lifecycleEffectLane(dest, pl.IdentityID),
 			})
 			if err != nil {
 				return err
@@ -469,6 +476,13 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		return healed, fmt.Errorf("orchestrator: reconcile outbox: %w", err)
 	}
 	return healed, nil
+}
+
+func lifecycleEffectLane(destination, identityID string) string {
+	if destination == "connector.deploy" && identityID != "" {
+		return destination + ":identity:" + identityID
+	}
+	return destination
 }
 
 func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest string) (string, []byte, error) {

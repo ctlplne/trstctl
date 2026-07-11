@@ -22,14 +22,17 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/netip"
 	"strings"
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -92,6 +95,8 @@ func WithPrivateEndpointCIDRs(cidrs ...netip.Prefix) Option {
 
 // New builds the EJBCA plugin. The returned *catemplate.Plugin is a ca.CA.
 func New(cfg Config, opts ...Option) *catemplate.Plugin {
+	cfg.Token = secrettext.Clone(cfg.Token)
+	cfg.Password = secrettext.Clone(cfg.Password)
 	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{})}
 	for _, o := range opts {
 		o(b)
@@ -101,6 +106,15 @@ func New(cfg Config, opts ...Option) *catemplate.Plugin {
 
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
+
+// Destroy erases the one-shot bearer/enrollment credentials.
+func (b *backend) Destroy() {
+	secret.Wipe(b.cfg.Token)
+	secret.Wipe(b.cfg.Password)
+	if b.client != nil {
+		b.client.CloseIdleConnections()
+	}
+}
 
 // Issue enrolls the CSR via pkcs10enroll and assembles the issued PEM chain.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
@@ -120,9 +134,9 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		"end_entity_profile_name":    b.cfg.EndEntityProfile,
 		"certificate_authority_name": b.cfg.CAName,
 		"username":                   username,
-		// string(...) is the transient edge form of the []byte enrollment code on
-		// the wire (AN-8); the long-lived secret stays []byte in the Config.
-		"password":        string(b.cfg.Password),
+		// The enrollment code stays byte-backed until json.Marshal writes the
+		// bounded request buffer. That buffer is erased immediately after use.
+		"password":        secretjson.StringBytes(b.cfg.Password),
 		"include_chain":   true,
 		"response_format": "DER",
 	}
@@ -174,32 +188,37 @@ func assembleChain(certs []string) ([]byte, error) {
 }
 
 // post issues a JSON POST, attaching bearer auth when configured, decoding the
-// response into out and mapping an EJBCA error envelope to a Go error.
+// response into out and normalizing EJBCA failures to status-only errors.
 func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(buf)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))
 	if err != nil {
 		return err
 	}
 	if len(b.cfg.Token) != 0 {
-		// string(...) is the transient edge form of the []byte bearer token on the
-		// wire (AN-8); the long-lived secret stays []byte in the Config.
-		httpReq.Header.Set("Authorization", "Bearer "+string(b.cfg.Token))
+		// net/http forces header values to string. Keep that conversion at the
+		// final wire edge and never retain or format the resulting value.
+		httpReq.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.cfg.Token))
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("ejbca: POST %s: %w", url, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("ejbca: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return err
+		return errors.New("ejbca: read response failed")
 	}
+	defer secret.Wipe(data)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return apiError(resp.StatusCode, data)
 	}
@@ -211,14 +230,9 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	return nil
 }
 
-// apiError maps an EJBCA {error_code, error_message} envelope to an error.
-func apiError(status int, data []byte) error {
-	var env struct {
-		ErrorCode    int    `json:"error_code"`
-		ErrorMessage string `json:"error_message"`
-	}
-	if err := json.Unmarshal(data, &env); err == nil && env.ErrorMessage != "" {
-		return fmt.Errorf("ejbca: api error %d: %s", status, env.ErrorMessage)
-	}
+// apiError deliberately ignores EJBCA's free-form error_message. Upstreams and
+// gateways have been observed to echo request credentials into error bodies;
+// the bounded HTTP status is the only safe diagnostic allowed to escape.
+func apiError(status int, _ []byte) error {
 	return fmt.Errorf("ejbca: api error %d", status)
 }

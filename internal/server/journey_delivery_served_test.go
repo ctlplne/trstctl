@@ -91,7 +91,7 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 		}
 		t.Fatalf("connector receipts after deploy = %d, want 1 (%s); pending outbox: %+v", len(first.Items), first.Raw, pending)
 	}
-	if got := first.Items[0]; got.Status != "unrouted" || got.Connector != "nginx" || got.Target != "edge-1" || got.Fingerprint == "" {
+	if got := first.Items[0]; got.Status != "failed" || got.Connector != "nginx" || got.Target != "edge-1" || got.Fingerprint == "" {
 		t.Fatalf("bad deploy receipt: %+v", got)
 	}
 
@@ -121,7 +121,7 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 	}
 	foundSuccessorReceipt := false
 	for _, got := range afterRenew.Items {
-		if got.Status != "unrouted" || got.Fingerprint == "" {
+		if got.Status != "failed" || got.Fingerprint == "" {
 			t.Fatalf("bad deploy receipt after renewal: %+v", got)
 		}
 		if got.Fingerprint == run.SuccessorFingerprint {

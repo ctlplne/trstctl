@@ -159,13 +159,14 @@ func (p *Provider) newRequest(ctx context.Context, method, name string, body io.
 
 // do runs req through the shared cloudhttp round-trip (bounded read, non-2xx
 // normalisation, drain; CODE-006) and maps a non-2xx response to an *apiError so
-// CleanupTXT's 404-is-a-no-op predicate and the token-free error text (AN-8) are
-// unchanged. UltraDNS returns no body the provider reads, so out is nil.
+// CleanupTXT's 404-is-a-no-op predicate can inspect the retained status without
+// retaining attacker-controlled response bytes (AN-8). UltraDNS returns no body the
+// provider reads, so out is nil.
 func (p *Provider) do(req *http.Request, action, name string) error {
 	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
 		var se *cloudhttp.StatusError
 		if errors.As(err, &se) {
-			return &apiError{status: se.StatusCode, body: se.Body}
+			return &apiError{status: se.StatusCode}
 		}
 		return fmt.Errorf("ultradns: %s %s: %w", action, name, err)
 	}
@@ -181,11 +182,10 @@ type rrset struct {
 	RData []string `json:"rdata"`
 }
 
-// apiError is a non-2xx UltraDNS response. Its body is the service error text and
-// never carries the bearer token (AN-8).
+// apiError is a non-2xx UltraDNS response. It deliberately retains only the status;
+// an upstream body is attacker-controlled and may echo submitted material (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
-func (e *apiError) Error() string { return fmt.Sprintf("ultradns: status %d: %s", e.status, e.body) }
+func (e *apiError) Error() string { return fmt.Sprintf("ultradns: status %d", e.status) }

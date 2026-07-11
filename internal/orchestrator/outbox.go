@@ -3,11 +3,13 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +28,7 @@ type Message struct {
 	IdempotencyKey string
 	Payload        []byte
 	Attempts       int
+	EffectLane     string
 }
 
 // Entry is a new outbox row to enqueue alongside a state change.
@@ -34,6 +37,9 @@ type Entry struct {
 	Destination    string
 	IdempotencyKey string
 	Payload        []byte
+	// EffectLane partitions unrelated receivers that share one destination.
+	// Empty defaults to Destination for backward-compatible strict ordering.
+	EffectLane string
 }
 
 // Record is the observable state of an outbox row, including its retry bookkeeping.
@@ -105,6 +111,59 @@ type outboxCircuit struct {
 // message's IdempotencyKey, since delivery is at-least-once.
 type Handler interface {
 	Deliver(ctx context.Context, m Message) error
+}
+
+// DestinationScope confines one dispatcher sweep to a disjoint destination
+// family. IncludePrefixes selects matching destinations; ExcludePrefixes removes
+// matches. Empty include/exclude slices mean all destinations, preserving the
+// legacy Dispatch behavior. Prefixes are compared literally, never as SQL LIKE
+// patterns.
+type DestinationScope struct {
+	IncludePrefixes []string
+	ExcludePrefixes []string
+}
+
+func (s DestinationScope) validate() error {
+	seen := make(map[string]string, len(s.IncludePrefixes)+len(s.ExcludePrefixes))
+	for kind, prefixes := range map[string][]string{"include": s.IncludePrefixes, "exclude": s.ExcludePrefixes} {
+		for _, prefix := range prefixes {
+			if prefix == "" {
+				return fmt.Errorf("orchestrator: outbox destination scope has an empty %s prefix", kind)
+			}
+			if prior, ok := seen[prefix]; ok {
+				return fmt.Errorf("orchestrator: outbox destination prefix %q appears in both/duplicate %s and %s sets", prefix, prior, kind)
+			}
+			seen[prefix] = kind
+		}
+	}
+	return nil
+}
+
+func (s DestinationScope) matches(destination string) bool {
+	included := len(s.IncludePrefixes) == 0
+	for _, prefix := range s.IncludePrefixes {
+		if strings.HasPrefix(destination, prefix) {
+			included = true
+			break
+		}
+	}
+	if !included {
+		return false
+	}
+	for _, prefix := range s.ExcludePrefixes {
+		if strings.HasPrefix(destination, prefix) {
+			return false
+		}
+	}
+	return true
+}
+
+// TerminalFailureHandler records a domain terminal-state fact before an outbox
+// row is dead-lettered. The event/projection write happens while the row still has
+// a recoverable processing lease; if it fails, Dispatch leaves the lease intact so
+// recovery retries the failure fact instead of silently losing user-visible state.
+type TerminalFailureHandler interface {
+	DeliverTerminalFailure(ctx context.Context, m Message, cause error) error
 }
 
 // HandlerFunc adapts a function to a Handler.
@@ -309,12 +368,13 @@ func (o *Outbox) clockNow() time.Time { return o.now().UTC() }
 // durable iff the state change it accompanies commits (AN-6). It returns the new
 // entry's id.
 func (o *Outbox) Enqueue(ctx context.Context, tx pgx.Tx, e Entry) (int64, error) {
+	lane := effectiveOutboxLane(e.Destination, e.EffectLane)
 	var id int64
 	err := tx.QueryRow(ctx,
-		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id`,
-		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey).Scan(&id)
+		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("orchestrator: enqueue outbox: %w", err)
 	}
@@ -331,17 +391,59 @@ func (o *Outbox) Enqueue(ctx context.Context, tx pgx.Tx, e Entry) (int64, error)
 // atomic within the caller's transaction, so two concurrent reconcilers cannot both
 // insert the same key. It runs under the tenant's RLS context, like Enqueue.
 func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inserted bool, err error) {
+	lane := effectiveOutboxLane(e.Destination, e.EffectLane)
+	// READ COMMITTED does not make INSERT ... WHERE NOT EXISTS safe when two
+	// transactions start together: each snapshot can see "absent" and both can
+	// insert. Serialize only this tenant/key pair for the lifetime of the caller's
+	// transaction. The tenant is part of the lock identity, preserving AN-1 while
+	// allowing the same receiver key in different tenants to proceed independently.
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"outbox-enqueue-if-absent\x1f"+e.TenantID+"\x1f"+e.IdempotencyKey); err != nil {
+		return false, fmt.Errorf("orchestrator: lock enqueue-if-absent outbox: %w", err)
+	}
 	tag, err := tx.Exec(ctx,
-		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
-		 SELECT $1, $2, $3, $4
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane)
+		 SELECT $1, $2, $3, $4, $5
 		 WHERE NOT EXISTS (
 		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
 		 )`,
-		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey)
+		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane)
 	if err != nil {
 		return false, fmt.Errorf("orchestrator: enqueue-if-absent outbox: %w", err)
 	}
-	return tag.RowsAffected() > 0, nil
+	if tag.RowsAffected() > 0 {
+		return true, nil
+	}
+
+	// A raw idempotency key identifies one exact receiver command, not merely one
+	// row. Returning an unrelated row here makes a mutation look queued while a
+	// different subsystem, destination, or payload will actually execute. Compare
+	// the durable command before reporting a replay; callers may then safely use
+	// the outbox itself as the post-response-cache idempotency authority.
+	var destination, existingLane string
+	var payload []byte
+	if err := tx.QueryRow(ctx,
+		`SELECT destination, payload, COALESCE(NULLIF(effect_lane, ''), destination)
+		   FROM outbox
+		  WHERE tenant_id = $1 AND idempotency_key = $2
+		  ORDER BY id
+		  LIMIT 1`,
+		e.TenantID, e.IdempotencyKey).Scan(&destination, &payload, &existingLane); err != nil {
+		return false, fmt.Errorf("orchestrator: load enqueue-if-absent outbox replay: %w", err)
+	}
+	if destination != e.Destination || existingLane != lane || !bytes.Equal(payload, e.Payload) {
+		return false, fmt.Errorf("%w: outbox key belongs to a different receiver command", store.ErrIdempotencyConflict)
+	}
+	return false, nil
+}
+
+func effectiveOutboxLane(destination, lane string) string {
+	lane = strings.TrimSpace(lane)
+	if lane == "" {
+		return destination
+	}
+	return lane
 }
 
 // Dispatch performs entries that are due now, one leased row at a time, and
@@ -356,12 +458,23 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 // round-robin by tenant and destination: each round claims at most one row per
 // tenant and destination, then starts a new round if more due work remains.
 func (o *Outbox) Dispatch(ctx context.Context, h Handler) (int, error) {
+	return o.DispatchScoped(ctx, h, DestinationScope{})
+}
+
+// DispatchScoped is Dispatch constrained to one destination family. Separate
+// family pools call it concurrently; every claim, expired-lease recovery,
+// per-tenant in-flight count, and half-open circuit reservation is scoped to the
+// same family, so a saturated connector lane cannot suppress another lane.
+func (o *Outbox) DispatchScoped(ctx context.Context, h Handler, scope DestinationScope) (int, error) {
+	if err := scope.validate(); err != nil {
+		return 0, err
+	}
 	cutoff := o.clockNow()
 	seenTenants := make(map[string]bool)
 	seenDestinations := make(map[string]bool)
 	processed := 0
 	for {
-		claim, claimed, err := o.claimOne(ctx, cutoff, seenTenants, seenDestinations)
+		claim, claimed, err := o.claimOne(ctx, cutoff, seenTenants, seenDestinations, scope)
 		if err != nil {
 			return processed, err
 		}
@@ -375,10 +488,21 @@ func (o *Outbox) Dispatch(ctx context.Context, h Handler) (int, error) {
 		}
 
 		seenTenants[claim.msg.TenantID] = true
-		seenDestinations[claim.msg.Destination] = true
+		seenDestinations[effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)] = true
 		processed++
-		if err := o.finalizeClaim(ctx, claim, o.deliver(ctx, h, claim)); err != nil {
-			return processed, err
+		deliverErr := o.deliver(ctx, h, claim)
+		if deliverErr != nil && claim.attempts >= o.maxAttempts {
+			if terminal, ok := h.(TerminalFailureHandler); ok {
+				if err := terminal.DeliverTerminalFailure(ctx, claim.msg, deliverErr); err != nil {
+					destroyDeliveryError(deliverErr)
+					return processed, fmt.Errorf("orchestrator: record terminal delivery failure: %w", err)
+				}
+			}
+		}
+		finalizeErr := o.finalizeClaim(ctx, claim, deliverErr)
+		destroyDeliveryError(deliverErr)
+		if finalizeErr != nil {
+			return processed, finalizeErr
 		}
 	}
 	return processed, nil
@@ -409,7 +533,7 @@ func (o *Outbox) deliver(ctx context.Context, h Handler, claim claimedOutboxEntr
 // short transaction. The external call happens after this transaction commits, so
 // slow destinations do not hold row locks, database transactions, or pool
 // connections while the network is blocked.
-func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, seenDestinations map[string]bool) (claimedOutboxEntry, bool, error) {
+func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, seenDestinations map[string]bool, scope DestinationScope) (claimedOutboxEntry, bool, error) {
 	tx, err := o.store.SystemPool().Begin(ctx)
 	if err != nil {
 		return claimedOutboxEntry{}, false, err
@@ -417,12 +541,23 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	now := o.clockNow()
-	blockedCircuitKeys, reservedHalfOpen := o.reserveHalfOpenProbes(now)
+	blockedCircuitKeys, reservedHalfOpen := o.reserveHalfOpenProbes(now, scope)
 	if _, err := tx.Exec(ctx,
-		//trstctl:system-query — lease recovery is a cross-tenant system worker path; expired processing rows are returned to the shared pending queue.
-		`UPDATE outbox
+		//trstctl:system-query — lease recovery is a cross-tenant system worker path; expired processing rows are returned to their family's pending queue.
+		`UPDATE outbox o
 		    SET status = 'pending', worker_id = NULL, lease_until = NULL
-		  WHERE status = 'processing' AND lease_until <= $1`, now); err != nil {
+		  WHERE o.status = 'processing' AND o.lease_until <= $1
+		    AND (
+		        COALESCE(cardinality($2::text[]), 0) = 0
+		        OR EXISTS (
+		            SELECT 1 FROM unnest($2::text[]) AS included(prefix)
+		             WHERE left(o.destination, char_length(included.prefix)) = included.prefix
+		        )
+		    )
+		    AND NOT EXISTS (
+		        SELECT 1 FROM unnest($3::text[]) AS excluded(prefix)
+		         WHERE left(o.destination, char_length(excluded.prefix)) = excluded.prefix
+		    )`, now, scope.IncludePrefixes, scope.ExcludePrefixes); err != nil {
 		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, fmt.Errorf("orchestrator: recover expired outbox leases: %w", err)
 	}
@@ -437,13 +572,24 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		      WHERE o.status = 'pending'
 		        AND o.next_attempt_at <= $1
 		        AND o.tenant_id::text <> ALL($7::text[])
-		        AND o.destination <> ALL($8::text[])
-		        AND (o.tenant_id::text || chr(31) || o.destination) <> ALL($9::text[])
+			        AND COALESCE(NULLIF(o.effect_lane, ''), o.destination) <> ALL($8::text[])
+			        AND (o.tenant_id::text || chr(31) || COALESCE(NULLIF(o.effect_lane, ''), o.destination)) <> ALL($9::text[])
+		        AND (
+		            COALESCE(cardinality($10::text[]), 0) = 0
+		            OR EXISTS (
+		                SELECT 1 FROM unnest($10::text[]) AS included(prefix)
+		                 WHERE left(o.destination, char_length(included.prefix)) = included.prefix
+		            )
+		        )
+		        AND NOT EXISTS (
+		            SELECT 1 FROM unnest($11::text[]) AS excluded(prefix)
+		             WHERE left(o.destination, char_length(excluded.prefix)) = excluded.prefix
+		        )
 		        AND (
 		            SELECT count(*)
 		              FROM outbox p
 		             WHERE p.status = 'processing'
-		               AND p.destination = o.destination
+			               AND COALESCE(NULLIF(p.effect_lane, ''), p.destination) = COALESCE(NULLIF(o.effect_lane, ''), o.destination)
 		               AND p.lease_until > $2
 		        ) < $3
 		        AND (
@@ -452,6 +598,17 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		             WHERE p.status = 'processing'
 		               AND p.tenant_id = o.tenant_id
 		               AND p.lease_until > $2
+		               AND (
+		                   COALESCE(cardinality($10::text[]), 0) = 0
+		                   OR EXISTS (
+		                       SELECT 1 FROM unnest($10::text[]) AS included(prefix)
+		                        WHERE left(p.destination, char_length(included.prefix)) = included.prefix
+		                   )
+		               )
+		               AND NOT EXISTS (
+		                   SELECT 1 FROM unnest($11::text[]) AS excluded(prefix)
+		                    WHERE left(p.destination, char_length(excluded.prefix)) = excluded.prefix
+		               )
 		        ) < $4
 		        AND NOT EXISTS (
 		            SELECT 1
@@ -459,7 +616,7 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		             WHERE older.status = 'pending'
 		               AND older.next_attempt_at <= $1
 		               AND older.tenant_id = o.tenant_id
-		               AND older.destination = o.destination
+			               AND COALESCE(NULLIF(older.effect_lane, ''), older.destination) = COALESCE(NULLIF(o.effect_lane, ''), o.destination)
 		               AND (older.next_attempt_at, older.id) < (o.next_attempt_at, o.id)
 		        )
 		      ORDER BY o.next_attempt_at, o.id
@@ -474,10 +631,12 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		       last_error = NULL
 		  FROM candidate
 		 WHERE o.id = candidate.id
-		 RETURNING o.id, o.tenant_id::text, o.destination, o.payload, o.idempotency_key, o.attempts`,
+		 RETURNING o.id, o.tenant_id::text, o.destination, o.payload, o.idempotency_key, o.attempts,
+		           COALESCE(NULLIF(o.effect_lane, ''), o.destination)`,
 		cutoff, now, o.maxInFlightPerDestination, o.maxInFlightPerTenant,
-		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenDestinations), blockedCircuitKeys).
-		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts)
+		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenDestinations), blockedCircuitKeys,
+		scope.IncludePrefixes, scope.ExcludePrefixes).
+		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts, &claim.msg.EffectLane)
 	if errors.Is(err, pgx.ErrNoRows) {
 		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, tx.Commit(ctx)
@@ -492,7 +651,7 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 	}
 	claim.msg.ID = claim.id
 	claim.msg.Attempts = claim.attempts
-	o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{tenantID: claim.msg.TenantID, destination: claim.msg.Destination}, now)
+	o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{tenantID: claim.msg.TenantID, destination: effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)}, now)
 	return claim, true, nil
 }
 
@@ -532,7 +691,7 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 			    AND tenant_id = $2
 			    AND status = 'processing'
 			    AND worker_id = $3`,
-			claim.id, claim.msg.TenantID, o.workerID, deliverErr.Error(), next, status)
+			claim.id, claim.msg.TenantID, o.workerID, persistedDeliveryError(deliverErr), next, status)
 		if err != nil {
 			return fmt.Errorf("orchestrator: record failure: %w", err)
 		}
@@ -571,6 +730,31 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 	return nil
 }
 
+// persistedDeliveryError is deliberately closed-set. An external system may echo
+// the credential/private key just sent to it in an error response; persisting
+// arbitrary err.Error() would turn that attacker-controlled body into an
+// unwipeable Go string and durable PostgreSQL secret leak (AN-8).
+func persistedDeliveryError(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "external_delivery_timeout"
+	case errors.Is(err, context.Canceled):
+		return "external_delivery_canceled"
+	default:
+		return "external_delivery_failed"
+	}
+}
+
+func destroyDeliveryError(err error) {
+	if err == nil {
+		return
+	}
+	var destroyer interface{ Destroy() }
+	if errors.As(err, &destroyer) {
+		destroyer.Destroy()
+	}
+}
+
 func (o *Outbox) retryDelay(attempts int) time.Duration {
 	base := o.backoff(attempts)
 	if base <= 0 {
@@ -586,7 +770,7 @@ func (o *Outbox) retryDelay(attempts int) time.Duration {
 	return delay
 }
 
-func (o *Outbox) reserveHalfOpenProbes(now time.Time) ([]string, map[circuitKey]bool) {
+func (o *Outbox) reserveHalfOpenProbes(now time.Time, scope DestinationScope) ([]string, map[circuitKey]bool) {
 	if o.circuitFailureThreshold <= 0 {
 		return []string{}, nil
 	}
@@ -596,6 +780,9 @@ func (o *Outbox) reserveHalfOpenProbes(now time.Time) ([]string, map[circuitKey]
 	blocked := make([]string, 0, len(o.circuits))
 	reserved := make(map[circuitKey]bool)
 	for key, circuit := range o.circuits {
+		if !scope.matches(key.destination) {
+			continue
+		}
 		switch circuit.state {
 		case CircuitOpen:
 			if now.Before(circuit.openUntil) {
@@ -642,7 +829,7 @@ func (o *Outbox) recordCircuitFailure(m Message, err error, now time.Time) {
 	if o.circuitFailureThreshold <= 0 {
 		return
 	}
-	key := circuitKey{tenantID: m.TenantID, destination: m.Destination}
+	key := circuitKey{tenantID: m.TenantID, destination: effectiveOutboxLane(m.Destination, m.EffectLane)}
 	var transition *CircuitTransition
 
 	o.circuitMu.Lock()
@@ -653,7 +840,7 @@ func (o *Outbox) recordCircuitFailure(m Message, err error, now time.Time) {
 	}
 	from := circuit.state
 	circuit.failures++
-	circuit.lastError = err.Error()
+	circuit.lastError = persistedDeliveryError(err)
 	circuit.updatedAt = now
 	if circuit.state == CircuitHalfOpen || circuit.failures >= o.circuitFailureThreshold {
 		circuit.state = CircuitOpen
@@ -676,7 +863,7 @@ func (o *Outbox) recordCircuitSuccess(m Message, now time.Time) {
 	if o.circuitFailureThreshold <= 0 {
 		return
 	}
-	key := circuitKey{tenantID: m.TenantID, destination: m.Destination}
+	key := circuitKey{tenantID: m.TenantID, destination: effectiveOutboxLane(m.Destination, m.EffectLane)}
 	var transition *CircuitTransition
 
 	o.circuitMu.Lock()

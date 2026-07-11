@@ -19,8 +19,8 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/netip"
 	"strings"
@@ -28,6 +28,7 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -107,6 +108,14 @@ func New(cfg Config, opts ...Option) *catemplate.Plugin {
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
 
+// Destroy erases the one-shot Venafi token and drops idle sockets.
+func (b *backend) Destroy() {
+	secret.Wipe(b.cfg.AccessToken)
+	if b.client != nil {
+		b.client.CloseIdleConnections()
+	}
+}
+
 // Issue requests and retrieves a certificate through Venafi TPP/TLS Protect.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
 	if err := b.validateEndpoint(); err != nil {
@@ -164,7 +173,6 @@ func (b *backend) retrieve(ctx context.Context, certificateDN, guid string) ([]b
 		"Format":        "PEM",
 		"IncludeChain":  true,
 	}
-	var lastStatus string
 	for attempt := 0; attempt < maxPolls; attempt++ {
 		var out struct {
 			CertificateData string `json:"CertificateData"`
@@ -184,17 +192,13 @@ func (b *backend) retrieve(ctx context.Context, certificateDN, guid string) ([]b
 			}
 			return []byte(chain), nil
 		}
-		lastStatus = out.Status
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-time.After(b.poll):
 		}
 	}
-	if lastStatus == "" {
-		lastStatus = "pending"
-	}
-	return nil, fmt.Errorf("venafi: certificate was not issued within the polling window (last status %q)", lastStatus)
+	return nil, errors.New("venafi: certificate was not issued within the polling window")
 }
 
 func (b *backend) post(ctx context.Context, url string, body, out any) error {
@@ -202,26 +206,31 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(buf)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))
 	if err != nil {
 		return err
 	}
 	if len(b.cfg.AccessToken) != 0 {
-		// string(...) is the transient edge form of the []byte token sent on the
-		// wire (AN-8); the long-lived secret stays []byte in Config.
-		httpReq.Header.Set("Authorization", "Bearer "+string(b.cfg.AccessToken))
+		// net/http forces header values to string. Keep that conversion at the
+		// final wire edge and never retain or format the resulting value.
+		httpReq.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.cfg.AccessToken))
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("venafi: POST %s: %w", url, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("venafi: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return err
+		return errors.New("venafi: read response failed")
 	}
+	defer secret.Wipe(data)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return apiError(resp.StatusCode, data)
 	}
@@ -233,21 +242,6 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	return nil
 }
 
-func apiError(status int, data []byte) error {
-	var env struct {
-		Error   string `json:"Error"`
-		Message string `json:"Message"`
-		Code    int    `json:"Code"`
-	}
-	if err := json.Unmarshal(data, &env); err == nil {
-		switch {
-		case env.Message != "":
-			return fmt.Errorf("venafi: api error %d: %s", status, env.Message)
-		case env.Error != "":
-			return fmt.Errorf("venafi: api error %d: %s", status, env.Error)
-		case env.Code != 0:
-			return fmt.Errorf("venafi: api error %d: code %d", status, env.Code)
-		}
-	}
+func apiError(status int, _ []byte) error {
 	return fmt.Errorf("venafi: api error %d", status)
 }

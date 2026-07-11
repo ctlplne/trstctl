@@ -32,6 +32,33 @@ func TestPostgresStateRestoreOrderReturnsErrors(t *testing.T) {
 	}
 }
 
+func TestDeploymentTargetRestoreOrderIsDeterministic(t *testing.T) {
+	first, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatalf("first postgresStateRestoreOrder: %v", err)
+	}
+	second, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatalf("second postgresStateRestoreOrder: %v", err)
+	}
+	if strings.Join(first, ",") != strings.Join(second, ",") {
+		t.Fatalf("restore order changed between calls: first=%v second=%v", first, second)
+	}
+
+	position := make(map[string]int, len(first))
+	for i, table := range first {
+		position[table] = i
+	}
+	revision, haveRevision := position["deployment_target_revisions"]
+	target, haveTarget := position["deployment_targets"]
+	if !haveRevision || !haveTarget {
+		t.Fatalf("restore order must contain both target tables: %v", first)
+	}
+	if revision >= target {
+		t.Fatalf("deployment target restore order = revisions:%d targets:%d; revisions must restore first", revision, target)
+	}
+}
+
 func TestRestorePostgresStateRejectsBadManifestBeforeStoreUse(t *testing.T) {
 	tables := postgresStateTables()
 	if len(tables) == 0 {

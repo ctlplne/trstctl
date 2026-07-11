@@ -6,6 +6,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // ManagedKeyServiceFactory is supplied by the tagged EE attach seam when the
@@ -16,6 +17,7 @@ type ManagedKeyServiceFactory func(ManagedKeyServiceDeps) (api.ManagedKeyService
 // ManagedKeyServiceDeps are the core spine dependencies the licensed managed-key
 // service consumes without importing server internals.
 type ManagedKeyServiceDeps struct {
+	Store           *store.Store
 	Log             *events.Log
 	Idempotency     *orchestrator.Idempotency
 	ApprovalChecker api.ApprovalChecker

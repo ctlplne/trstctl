@@ -25,7 +25,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // defaultName is the certificate name used when a Deployment carries no target.
@@ -134,13 +134,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if err != nil {
-			return fmt.Errorf("cisco: import certificate %q: status %d: read response: %w", name, resp.StatusCode, err)
-		}
-		return fmt.Errorf("cisco: import certificate %q: status %d: %s", name, resp.StatusCode, strings.TrimSpace(string(msg)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("cisco: import certificate %q: status %d (response body redacted)", name, resp.StatusCode)
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil
 }
 
@@ -154,9 +151,11 @@ func (c *Connector) basicAuth() string {
 	raw = append(raw, c.user...)
 	raw = append(raw, ':')
 	raw = append(raw, c.pass...)
-	enc := "Basic " + base64.StdEncoding.EncodeToString(raw)
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(raw)))
+	base64.StdEncoding.Encode(encoded, raw)
 	secret.Wipe(raw) // the cleartext user:pass copy does not outlive this call
-	return enc
+	defer secret.Wipe(encoded)
+	return secrettext.Prefixed("Basic ", encoded)
 }
 
 // importRequest is the certificate-import body for the Cisco management API. The

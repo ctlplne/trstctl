@@ -19,8 +19,8 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -29,6 +29,8 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -101,6 +103,7 @@ func WithPollInterval(d time.Duration) Option {
 
 // New builds the Sectigo plugin. The returned *catemplate.Plugin is a ca.CA.
 func New(cfg Config, opts ...Option) *catemplate.Plugin {
+	cfg.Password = secrettext.Clone(cfg.Password)
 	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{}), poll: defaultPoll}
 	for _, o := range opts {
 		o(b)
@@ -110,6 +113,14 @@ func New(cfg Config, opts ...Option) *catemplate.Plugin {
 
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
+
+// Destroy erases the one-shot SCM password and drops idle sockets.
+func (b *backend) Destroy() {
+	secret.Wipe(b.cfg.Password)
+	if b.client != nil {
+		b.client.CloseIdleConnections()
+	}
+}
 
 // Issue enrolls the CSR with SCM and collects the issued chain.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
@@ -195,33 +206,34 @@ func (b *backend) tryCollect(ctx context.Context, url string) (chain []byte, pen
 	b.setAuth(httpReq)
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return nil, false, fmt.Errorf("sectigo: collect: %w", err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, false, err
+		}
+		return nil, false, errors.New("sectigo: collect request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return nil, false, err
+		return nil, false, errors.New("sectigo: read collect response failed")
 	}
 	if resp.StatusCode == http.StatusOK {
 		return data, false, nil
 	}
-	code, desc, parseErr := parseError(data)
-	if parseErr != nil {
-		return nil, false, fmt.Errorf("sectigo: collect: api error %d: decode error envelope: %w", resp.StatusCode, parseErr)
-	}
-	if code == codeBeingProcessed {
+	defer secret.Wipe(data)
+	if code, ok := parseErrorCode(data); ok && code == codeBeingProcessed {
 		return nil, true, nil
 	}
-	return nil, false, fmt.Errorf("sectigo: collect: api error %d: code %d: %s", resp.StatusCode, code, desc)
+	return nil, false, fmt.Errorf("sectigo: collect: api error %d", resp.StatusCode)
 }
 
 // postJSON issues a JSON POST, decoding the response into out and mapping an SCM
-// error envelope to a Go error.
+// error response to a status-only Go error.
 func (b *backend) postJSON(ctx context.Context, url string, body, out any) error {
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(buf)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))
 	if err != nil {
 		return err
@@ -230,19 +242,19 @@ func (b *backend) postJSON(ctx context.Context, url string, body, out any) error
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("sectigo: POST %s: %w", url, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("sectigo: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return err
+		return errors.New("sectigo: read response failed")
 	}
+	defer secret.Wipe(data)
 	if resp.StatusCode >= 400 {
-		code, desc, parseErr := parseError(data)
-		if parseErr != nil {
-			return fmt.Errorf("sectigo: api error %d: decode error envelope: %w", resp.StatusCode, parseErr)
-		}
-		return fmt.Errorf("sectigo: api error %d: code %d: %s", resp.StatusCode, code, desc)
+		return fmt.Errorf("sectigo: api error %d", resp.StatusCode)
 	}
 	if out != nil {
 		if err := json.Unmarshal(data, out); err != nil {
@@ -254,21 +266,22 @@ func (b *backend) postJSON(ctx context.Context, url string, body, out any) error
 
 func (b *backend) setAuth(r *http.Request) {
 	r.Header.Set("login", b.cfg.Login)
-	// string(...) is the transient edge form of the []byte password sent on the
-	// wire (AN-8); the long-lived secret stays []byte in the Config.
-	r.Header.Set("password", string(b.cfg.Password))
+	// net/http forces header values to string. Keep that conversion at the final
+	// wire edge and never retain or format the resulting value.
+	r.Header.Set("password", secrettext.String(b.cfg.Password))
 	r.Header.Set("customerUri", b.cfg.CustomerURI)
 	r.Header.Set("Accept", "application/json")
 }
 
-// parseError reads an SCM {code, description} envelope.
-func parseError(data []byte) (code int, description string, err error) {
+// parseErrorCode reads only SCM's bounded numeric classifier. The free-form
+// description is intentionally never decoded because a gateway may echo the
+// password or request body into it.
+func parseErrorCode(data []byte) (code int, ok bool) {
 	var env struct {
-		Code        int    `json:"code"`
-		Description string `json:"description"`
+		Code int `json:"code"`
 	}
 	if err := json.Unmarshal(data, &env); err != nil {
-		return 0, "", err
+		return 0, false
 	}
-	return env.Code, env.Description, nil
+	return env.Code, true
 }

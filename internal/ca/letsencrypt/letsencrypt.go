@@ -4,30 +4,30 @@
 // authority — Let's Encrypt or any ACME CA — implementing the ca.CA interface.
 // It drives the order through the crypto boundary's acmekey.Driver (which wraps
 // golang.org/x/crypto/acme) and finalizes with the caller's CSR. The ACME account
-// key and the whole ACME/crypto dependency live behind the crypto boundary
-// (internal/crypto/acmekey), so this package holds no crypto/* import and no
-// third-party-crypto import (AN-3, CRYPTO-002).
+// JWS adapter and the whole ACME/crypto dependency live behind the crypto
+// boundary (internal/crypto/acmekey). The shipped constructor backs that adapter
+// with the isolated signing process, so this package holds neither account-key
+// private material nor crypto/* imports (AN-3/AN-4/AN-8, CRYPTO-002).
 //
 // On the platform it runs behind ca.IssuanceService, which gives it idempotency
 // (AN-5, no double-mint on retry) and an outbox record (AN-6, observability); the
-// signer custodies issuing keys (AN-4) — here the upstream CA holds them.
+// signer custodies the ACME account key (AN-4), while the upstream CA signs the
+// requested certificate.
 package letsencrypt
 
 import (
 	"context"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"net/http"
 
 	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
-
-// ChallengeSolver provisions and removes the response for an ACME challenge (for
-// example, serving an HTTP-01 token or publishing a DNS-01 record). It is the
-// neutral solver seam from the crypto boundary, so this package names no acme.*
-// type.
-type ChallengeSolver = acmekey.ChallengeSolver
 
 // Plugin is an ACME CA plugin.
 type Plugin struct {
@@ -37,16 +37,11 @@ type Plugin struct {
 
 var _ ca.CA = (*Plugin)(nil)
 
-// NewPlugin creates an ACME CA plugin named name, talking to the ACME directory
-// at directoryURL, with a fresh account key. The default challenge solver is a
-// no-op (for pre-authorized orders); use NewPluginWithSolver to provide one.
-func NewPlugin(name, directoryURL string) (*Plugin, error) {
-	return NewPluginWithSolver(name, directoryURL, nil)
-}
-
-// NewPluginWithSolver is NewPlugin with an explicit challenge solver.
-func NewPluginWithSolver(name, directoryURL string, solver ChallengeSolver) (*Plugin, error) {
-	driver, err := acmekey.NewDriver(directoryURL, solver)
+// NewPluginWithRemoteAccountSigner is the production constructor. The ACME
+// protocol still runs through x/crypto/acme, but the account JWS key is an
+// opaque digest signer backed by the isolated signing process (AN-4/AN-8).
+func NewPluginWithRemoteAccountSigner(name, directoryURL string, client *http.Client, signer crypto.DigestSigner) (*Plugin, error) {
+	driver, err := acmekey.NewDriverWithDigestSigner(directoryURL, nil, client, signer)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +50,16 @@ func NewPluginWithSolver(name, directoryURL string, solver ChallengeSolver) (*Pl
 
 // Name identifies the authority.
 func (p *Plugin) Name() string { return p.name }
+
+// Destroy releases the ACME client. Local/test constructors also zero their
+// process-local account scalar; the shipped remote constructor only drops its
+// public-key/transport adapter because signer custody remains out of process.
+func (p *Plugin) Destroy() {
+	if p != nil && p.driver != nil {
+		p.driver.Destroy()
+		p.driver = nil
+	}
+}
 
 // Issue runs the ACME order for the request's domains and finalizes it with the
 // request's CSR, returning the issued certificate chain.
@@ -65,7 +70,13 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 
 	der, err := p.driver.IssueChain(ctx, req.DNSNames, req.CSR)
 	if err != nil {
-		return ca.Certificate{}, fmt.Errorf("letsencrypt: %w", err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return ca.Certificate{}, err
+		}
+		// ACME problem documents contain free-form detail fields and some gateways
+		// echo account authorization. Keep the internal error out of every caller,
+		// journal, and log path.
+		return ca.Certificate{}, errors.New("letsencrypt: upstream ACME issuance failed")
 	}
 
 	chain := make([]byte, 0)
@@ -74,7 +85,8 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 	}
 	info, err := certinfo.Inspect(chain)
 	if err != nil {
-		return ca.Certificate{}, fmt.Errorf("letsencrypt: parse issued cert: %w", err)
+		secret.Wipe(chain)
+		return ca.Certificate{}, errors.New("letsencrypt: upstream returned an invalid certificate chain")
 	}
 	return ca.Certificate{
 		CertificatePEM: chain,

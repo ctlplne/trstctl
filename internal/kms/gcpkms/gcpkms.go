@@ -31,6 +31,8 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -58,10 +60,11 @@ type HTTPDoer interface {
 type Backend struct {
 	parent    string
 	endpoint  string
-	creds     Credentials
+	token     *secret.Buffer
 	doer      HTTPDoer
 	now       func() time.Time
 	opTimeout time.Duration
+	initErr   error
 }
 
 var (
@@ -90,19 +93,56 @@ func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeo
 // New returns a Cloud KMS backend that creates keys under parent (a key-ring resource name
 // like "projects/P/locations/L/keyRings/R"), authenticating with creds.
 func New(parent string, creds Credentials, opts ...Option) *Backend {
-	creds.BearerToken = secrettext.Clone(creds.BearerToken)
-	b := &Backend{
+	b, err := NewSecure(parent, creds, opts...)
+	if err == nil {
+		return b
+	}
+	b = &Backend{
 		parent:    strings.Trim(parent, "/"),
 		endpoint:  defaultEndpoint,
-		creds:     creds,
-		doer:      http.DefaultClient,
+		doer:      netsec.SafeClient(defaultOpTimeout),
 		now:       time.Now,
 		opTimeout: defaultOpTimeout,
+		initErr:   err,
 	}
 	for _, o := range opts {
 		o(b)
 	}
 	return b
+}
+
+// NewSecure retains the OAuth bearer only in locked, non-dumpable memory.
+// Production signer composition uses this constructor and propagates failures.
+func NewSecure(parent string, creds Credentials, opts ...Option) (*Backend, error) {
+	if len(creds.BearerToken) == 0 {
+		return nil, fmt.Errorf("gcp-kms: bearer token is required")
+	}
+	token, err := secret.NewFrom(creds.BearerToken)
+	if err != nil {
+		return nil, fmt.Errorf("gcp-kms: protect bearer token: %w", err)
+	}
+	b := &Backend{
+		parent: strings.Trim(parent, "/"), endpoint: defaultEndpoint, token: token,
+		doer: netsec.SafeClient(defaultOpTimeout), now: time.Now, opTimeout: defaultOpTimeout,
+	}
+	for _, o := range opts {
+		o(b)
+	}
+	return b, nil
+}
+
+// Destroy wipes the retained bearer and closes idle transports.
+func (b *Backend) Destroy() {
+	if b == nil {
+		return
+	}
+	if b.token != nil {
+		b.token.Destroy()
+		b.token = nil
+	}
+	if client, ok := b.doer.(*http.Client); ok {
+		client.CloseIdleConnections()
+	}
 }
 
 // opContext derives the context a single network operation runs under when the
@@ -240,6 +280,9 @@ func (s *kmsSigner) SignContext(ctx context.Context, message []byte, opts crypto
 // internal/cloudhttp (CODE-006). The per-op timeout is already applied by the caller via
 // withTimeout(ctx) (CODE-002), so the context carries the deadline and we pass 0 here.
 func (b *Backend) call(ctx context.Context, method, path string, in any, out any) error {
+	if b.initErr != nil || b.token == nil {
+		return fmt.Errorf("gcp-kms: credentials unavailable: %w", b.initErr)
+	}
 	var body io.Reader
 	if in != nil {
 		buf, err := json.Marshal(in)
@@ -256,7 +299,7 @@ func (b *Backend) call(ctx context.Context, method, path string, in any, out any
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.creds.BearerToken))
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.token.Bytes()))
 	if err := cloudhttp.JSON(b.doer, req, out); err != nil {
 		return fmt.Errorf("gcp-kms: %w", err)
 	}

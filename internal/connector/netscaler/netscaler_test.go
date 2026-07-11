@@ -98,13 +98,19 @@ func TestDeployFailsOnBadCredentials(t *testing.T) {
 
 func TestDeployRejectsMalformedLoginResponses(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		body string
-		want string
+		name      string
+		body      string
+		want      string
+		forbidden string
 	}{
 		{name: "malformed-json", body: "{", want: "decode response"},
 		{name: "empty-json", body: `{}`, want: "missing sessionid"},
-		{name: "nitro-error", body: `{"errorcode":354,"message":"Invalid username or password"}`, want: "NITRO error 354"},
+		{
+			name:      "nitro-error",
+			body:      `{"errorcode":354,"message":"upstream echoed s3cret"}`,
+			want:      "NITRO error 354",
+			forbidden: "upstream echoed s3cret",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +130,42 @@ func TestDeployRejectsMalformedLoginResponses(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error %q missing %q", err, tc.want)
 			}
+			if tc.forbidden != "" && strings.Contains(err.Error(), tc.forbidden) {
+				t.Fatalf("error %q leaked the raw NITRO message", err)
+			}
 		})
+	}
+}
+
+// Appliance response bodies are attacker-controlled and some NITRO versions
+// echo submitted fields. A failed request must never promote an echoed password,
+// session token, certificate, or private key into an immutable Go error string.
+func TestDeployRedactsSecretsEchoedByAppliance(t *testing.T) {
+	const session = "NITRO-SESSION-DO-NOT-LOG"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/nitro/v1/config/login":
+			_, _ = io.WriteString(w, `{"sessionid":"`+session+`","errorcode":0}`)
+		case "/nitro/v1/config/systemfile":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write(bytes.Join([][]byte{[]byte(pass), []byte(session), sampleCert, sampleKey}, []byte("|")))
+		case "/nitro/v1/config/logout":
+			_, _ = io.WriteString(w, `{}`)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := netscaler.New(srv.URL, user, []byte(pass))
+	_, err := connector.Run(context.Background(), c, connector.NewHTTPOps(srv.Client()), connector.NewDeployment(certkey, sampleCert, sampleKey))
+	if err == nil {
+		t.Fatal("deploy succeeded despite appliance failure")
+	}
+	for _, forbidden := range []string{pass, session, string(sampleCert), string(sampleKey)} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("error %q leaked authority-bearing response content", err)
+		}
 	}
 }
 
@@ -135,8 +176,11 @@ func TestDeployRejectsLoginReadError(t *testing.T) {
 	if err == nil {
 		t.Fatal("deploy succeeded when login response body failed to read")
 	}
-	if !strings.Contains(err.Error(), "read response") || !strings.Contains(err.Error(), "login body truncated") {
-		t.Fatalf("error %q did not surface the response read failure", err)
+	if !strings.Contains(err.Error(), "read response") {
+		t.Fatalf("error %q did not classify the response read failure", err)
+	}
+	if strings.Contains(err.Error(), "login body truncated") {
+		t.Fatalf("error %q retained attacker-controlled response-reader detail", err)
 	}
 }
 

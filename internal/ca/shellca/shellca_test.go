@@ -3,10 +3,13 @@
 package shellca_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,14 +19,21 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	boundaryca "trstctl.com/trstctl/internal/crypto/ca"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 func TestSignCommandProducesCertificateFromCSR(t *testing.T) {
+	tempRoot := t.TempDir()
+	t.Setenv("TMPDIR", tempRoot)
+	authority := []byte("descriptor-only-authority")
 	p := shellca.New(shellca.Config{
 		Name:    "shellca",
 		Command: os.Args[0],
 		Args:    []string{"-test.run=TestShellCASignHelperProcess", "--"},
 		Env:     []string{"SHELLCA_HELPER=1"},
+		SecretFDs: []shellca.SecretFD{{
+			Name: "SHELLCA_TOKEN", Value: authority,
+		}},
 		Timeout: 5 * time.Second,
 	})
 	var _ ca.CA = p
@@ -47,6 +57,45 @@ func TestSignCommandProducesCertificateFromCSR(t *testing.T) {
 	if !containsDNS(info.DNSNames, "svc.shellca.test") {
 		t.Fatalf("issued cert DNSNames = %v, want svc.shellca.test", info.DNSNames)
 	}
+	if !bytes.Equal(authority, make([]byte, len(authority))) {
+		t.Fatalf("consumed secret descriptor bytes were not zeroed: %x", authority)
+	}
+	entries, err := os.ReadDir(tempRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("shell CA left filesystem-backed temp material: %v", entries)
+	}
+}
+
+func TestSignerEchoCannotEscapeFailure(t *testing.T) {
+	authority := []byte("shellca-receiver-echo-secret")
+	p := shellca.New(shellca.Config{
+		Name:    "shellca",
+		Command: os.Args[0],
+		Args:    []string{"-test.run=TestShellCASignHelperProcess", "--"},
+		Env:     []string{"SHELLCA_HELPER=echo-fail"},
+		SecretFDs: []shellca.SecretFD{{
+			Name: "SHELLCA_TOKEN", Value: authority,
+		}},
+		Timeout: 5 * time.Second,
+	})
+	_, err := p.Issue(context.Background(), ca.IssueRequest{
+		TenantID: "tenant-a",
+		CSR:      shellCSR(t, "echo.shellca.test", []string{"echo.shellca.test"}),
+		DNSNames: []string{"echo.shellca.test"},
+		TTL:      time.Hour,
+	})
+	if err == nil {
+		t.Fatal("Issue succeeded after signer echo-and-fail")
+	}
+	if strings.Contains(err.Error(), "shellca-receiver-echo-secret") {
+		t.Fatalf("Issue error leaked signer output: %v", err)
+	}
+	if !bytes.Equal(authority, make([]byte, len(authority))) {
+		t.Fatalf("failed signer left secret descriptor bytes in memory: %x", authority)
+	}
 }
 
 func TestValidatorRejectsInjectionLadenCommandAndArgs(t *testing.T) {
@@ -65,8 +114,44 @@ func TestValidatorRejectsInjectionLadenCommandAndArgs(t *testing.T) {
 }
 
 func TestShellCASignHelperProcess(t *testing.T) {
-	if os.Getenv("SHELLCA_HELPER") != "1" {
+	mode := os.Getenv("SHELLCA_HELPER")
+	if mode != "1" && mode != "echo-fail" {
 		return
+	}
+	if os.Getenv("SHELLCA_TOKEN") != "" {
+		_, _ = fmt.Fprintln(os.Stderr, "shellca helper: secret leaked into string environment")
+		os.Exit(2)
+	}
+	descriptor := os.Getenv("SHELLCA_TOKEN_FD")
+	if descriptor == "" {
+		_, _ = fmt.Fprintln(os.Stderr, "shellca helper: secret descriptor is missing")
+		os.Exit(2)
+	}
+	fd, err := strconv.Atoi(descriptor)
+	if err != nil || fd < 3 {
+		_, _ = fmt.Fprintln(os.Stderr, "shellca helper: secret descriptor is invalid")
+		os.Exit(2)
+	}
+	secretFile := os.NewFile(uintptr(fd), "shellca-token")
+	secretValue, err := io.ReadAll(io.LimitReader(secretFile, 1024))
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "shellca helper: read secret descriptor")
+		os.Exit(2)
+	}
+	if mode == "echo-fail" {
+		// Write far more than both stdout and stderr pipe capacities. The parent
+		// must drain both streams concurrently without retaining or reporting any
+		// echoed authority bytes.
+		for i := 0; i < 8192; i++ {
+			_, _ = os.Stdout.Write(secretValue)
+			_, _ = os.Stderr.Write(secretValue)
+		}
+		secret.Wipe(secretValue)
+		os.Exit(19)
+	}
+	if !bytes.Equal(secretValue, []byte("descriptor-only-authority")) {
+		_, _ = fmt.Fprintln(os.Stderr, "shellca helper: secret descriptor did not carry exact authority bytes")
+		os.Exit(2)
 	}
 	csrPath, certPath, ok := helperPaths(os.Args)
 	if !ok {

@@ -20,6 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // Datastore mode values.
@@ -75,36 +76,40 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
-	Server                    Server        `json:"server"`
-	Postgres                  Postgres      `json:"postgres"`
-	NATS                      NATS          `json:"nats"`
-	Log                       Log           `json:"log"`
-	Lifecycle                 Lifecycle     `json:"lifecycle"`
-	Notifications             Notifications `json:"notifications"`
-	ITSM                      ITSM          `json:"itsm"`
-	AirGap                    AirGap        `json:"air_gap"`
-	OutboundEnvCredentialRefs []string      `json:"outbound_env_credential_refs,omitempty"`
-	Telemetry                 Telemetry     `json:"telemetry"`
-	OTLP                      OTLP          `json:"otlp"`
-	Audit                     Audit         `json:"audit"`
-	Breakglass                Breakglass    `json:"breakglass"`
-	Privacy                   Privacy       `json:"privacy"`
-	Backup                    Backup        `json:"backup"`
-	License                   License       `json:"license"`
-	RateLimit                 RateLimit     `json:"rate_limit"`
-	Bulkheads                 Bulkheads     `json:"bulkheads"`
-	Migrate                   Migrate       `json:"migrate"`
-	Secrets                   Secrets       `json:"secrets"`
-	ManagedKeys               ManagedKeys   `json:"managed_keys"`
-	Signer                    Signer        `json:"signer"`
-	CA                        CA            `json:"ca"`
-	Protocols                 Protocols     `json:"protocols"`
-	Auth                      Auth          `json:"auth"`
-	Plugins                   Plugins       `json:"plugins"`
-	HA                        HA            `json:"ha"`
-	Federation                Federation    `json:"federation"`
-	PCAS                      PCAS          `json:"pcas"`
-	AI                        AI            `json:"ai"`
+	Server                    Server                   `json:"server"`
+	Postgres                  Postgres                 `json:"postgres"`
+	NATS                      NATS                     `json:"nats"`
+	Log                       Log                      `json:"log"`
+	Lifecycle                 Lifecycle                `json:"lifecycle"`
+	Connectors                Connectors               `json:"connectors"`
+	ExternalCAs               []ExternalCAConfig       `json:"external_cas,omitempty"`
+	SecretIntegrations        SecretIntegrationsConfig `json:"secret_integrations,omitempty"`
+	Notifications             Notifications            `json:"notifications"`
+	CodeSigning               CodeSigning              `json:"code_signing"`
+	ITSM                      ITSM                     `json:"itsm"`
+	AirGap                    AirGap                   `json:"air_gap"`
+	OutboundEnvCredentialRefs []string                 `json:"outbound_env_credential_refs,omitempty"`
+	Telemetry                 Telemetry                `json:"telemetry"`
+	OTLP                      OTLP                     `json:"otlp"`
+	Audit                     Audit                    `json:"audit"`
+	Breakglass                Breakglass               `json:"breakglass"`
+	Privacy                   Privacy                  `json:"privacy"`
+	Backup                    Backup                   `json:"backup"`
+	License                   License                  `json:"license"`
+	RateLimit                 RateLimit                `json:"rate_limit"`
+	Bulkheads                 Bulkheads                `json:"bulkheads"`
+	Migrate                   Migrate                  `json:"migrate"`
+	Secrets                   Secrets                  `json:"secrets"`
+	ManagedKeys               ManagedKeys              `json:"managed_keys"`
+	Signer                    Signer                   `json:"signer"`
+	CA                        CA                       `json:"ca"`
+	Protocols                 Protocols                `json:"protocols"`
+	Auth                      Auth                     `json:"auth"`
+	Plugins                   Plugins                  `json:"plugins"`
+	HA                        HA                       `json:"ha"`
+	Federation                Federation               `json:"federation"`
+	PCAS                      PCAS                     `json:"pcas"`
+	AI                        AI                       `json:"ai"`
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
@@ -134,6 +139,12 @@ const (
 	// nShield, Luna, or another standards-compliant token) for served managed-key
 	// custody. The module is opened only by the managed-key backend package.
 	ManagedKeyProviderPKCS11 = "pkcs11"
+	// ManagedKeyProviderTPM2 selects a Linux TPM 2.0 device or swtpm Unix
+	// socket. The production driver uses google/go-tpm in trstctl-signer.
+	ManagedKeyProviderTPM2 = "tpm2"
+	// ManagedKeyProviderYubiHSM2 selects Yubico's yubihsm_pkcs11 module, which
+	// reaches the device through yubihsm-connector in the cgo signer artifact.
+	ManagedKeyProviderYubiHSM2 = "yubihsm2"
 )
 
 // ManagedKeys configures the served BYOK/HSM managed-key lifecycle. Off by default:
@@ -146,6 +157,8 @@ type ManagedKeys struct {
 	Azure    ManagedKeysAzureKV   `json:"azure,omitempty"`
 	GCP      ManagedKeysGCPKMS    `json:"gcp,omitempty"`
 	PKCS11   ManagedKeysPKCS11HSM `json:"pkcs11,omitempty"`
+	TPM2     ManagedKeysTPM2      `json:"tpm2,omitempty"`
+	YubiHSM2 ManagedKeysPKCS11HSM `json:"yubihsm2,omitempty"`
 }
 
 // ManagedKeysAWSKMS configures AWS KMS custody for managed keys. Secret credential
@@ -153,32 +166,38 @@ type ManagedKeys struct {
 // be read from files, so startup can wipe temporary file buffers after constructing
 // the backend. The private managed-key material itself never enters the process.
 type ManagedKeysAWSKMS struct {
-	Region              string `json:"region,omitempty"`
-	Endpoint            string `json:"endpoint,omitempty"`
-	AccessKeyID         string `json:"access_key_id,omitempty"`
-	SecretAccessKey     []byte `json:"secret_access_key,omitempty"`
-	SecretAccessKeyFile string `json:"secret_access_key_file,omitempty"`
-	SessionToken        []byte `json:"session_token,omitempty"`
-	SessionTokenFile    string `json:"session_token_file,omitempty"`
+	Region                string   `json:"region,omitempty"`
+	Endpoint              string   `json:"endpoint,omitempty"`
+	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
+	AccessKeyID           string   `json:"access_key_id,omitempty"`
+	SecretAccessKey       []byte   `json:"secret_access_key,omitempty"`
+	SecretAccessKeyFile   string   `json:"secret_access_key_file,omitempty"`
+	SessionToken          []byte   `json:"session_token,omitempty"`
+	SessionTokenFile      string   `json:"session_token_file,omitempty"`
+	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
 }
 
 // ManagedKeysAzureKV configures Azure Key Vault / Managed HSM custody for managed
 // keys. The bearer token is a short-lived AAD access token minted outside trstctl
 // and kept as bytes until the HTTP authorization edge.
 type ManagedKeysAzureKV struct {
-	VaultURL        string `json:"vault_url,omitempty"`
-	Endpoint        string `json:"endpoint,omitempty"`
-	BearerToken     []byte `json:"bearer_token,omitempty"`
-	BearerTokenFile string `json:"bearer_token_file,omitempty"`
+	VaultURL              string   `json:"vault_url,omitempty"`
+	Endpoint              string   `json:"endpoint,omitempty"`
+	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
+	BearerToken           []byte   `json:"bearer_token,omitempty"`
+	BearerTokenFile       string   `json:"bearer_token_file,omitempty"`
+	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
 }
 
 // ManagedKeysGCPKMS configures Google Cloud KMS custody for managed keys. Parent
 // is the key ring resource, for example projects/P/locations/L/keyRings/R.
 type ManagedKeysGCPKMS struct {
-	Parent          string `json:"parent,omitempty"`
-	Endpoint        string `json:"endpoint,omitempty"`
-	BearerToken     []byte `json:"bearer_token,omitempty"`
-	BearerTokenFile string `json:"bearer_token_file,omitempty"`
+	Parent                string   `json:"parent,omitempty"`
+	Endpoint              string   `json:"endpoint,omitempty"`
+	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
+	BearerToken           []byte   `json:"bearer_token,omitempty"`
+	BearerTokenFile       string   `json:"bearer_token_file,omitempty"`
+	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
 }
 
 // ManagedKeysPKCS11HSM configures a local PKCS#11 module for managed-key custody.
@@ -190,6 +209,19 @@ type ManagedKeysPKCS11HSM struct {
 	UserPIN        []byte `json:"user_pin,omitempty"`
 	UserPINFile    string `json:"user_pin_file,omitempty"`
 	KeyLabelPrefix string `json:"key_label_prefix,omitempty"`
+}
+
+// ManagedKeysTPM2 configures a real TPM 2.0 device transport. Path may be a
+// Linux TPM character device or a swtpm Unix socket. Hierarchy/key auth values
+// remain byte-native and may be transferred to a child signer through private
+// 0600 startup files that are removed after readiness.
+type ManagedKeysTPM2 struct {
+	Path                 string `json:"path,omitempty"`
+	OwnerAuth            []byte `json:"owner_auth,omitempty"`
+	OwnerAuthFile        string `json:"owner_auth_file,omitempty"`
+	KeyAuth              []byte `json:"key_auth,omitempty"`
+	KeyAuthFile          string `json:"key_auth_file,omitempty"`
+	PersistentHandleBase uint32 `json:"persistent_handle_base,omitempty"`
 }
 
 // HA configures the multi-replica high-availability behavior of the control plane
@@ -380,8 +412,8 @@ func (h HA) LeaderCampaignIntervalDuration() (time.Duration, error) {
 // Plugins configures the served WASM-plugin surface (EXC-WIRE-05, closing
 // ARCH-007/SUPPLY-004): the running control plane loads operator-supplied CA,
 // connector, and DNS-provider plugins from directories and runs them capability-sandboxed through
-// the wazero plugin host. It is OFF by default (Enabled=false): connector.deploy
-// is acknowledged unrouted, and no WASM CA appears in the external-CA registry.
+// the wazero plugin host. It is OFF by default (Enabled=false): an otherwise
+// unowned connector.deploy fails closed, and no WASM CA appears in the external-CA registry.
 // When Enabled, a plugin is admitted ONLY after its detached Ed25519 signature
 // verifies against TrustedKeyFiles (SUPPLY-004); an unsigned, wrong-key,
 // tampered, or unpinned module makes the binary fail closed at startup — it
@@ -984,11 +1016,13 @@ func (l Lifecycle) AlertBeforeDuration() (time.Duration, error) {
 // channel-authoring surface remains separate; these settings wire the normal binary
 // to concrete outbox consumers at startup.
 type Notifications struct {
-	Slack NotificationWebhook `json:"slack,omitempty"`
-	Teams NotificationWebhook `json:"teams,omitempty"`
-	Email NotificationEmail   `json:"email,omitempty"`
-	SMS   NotificationSMS     `json:"sms,omitempty"`
-	SIEM  NotificationSIEM    `json:"siem,omitempty"`
+	Slack     NotificationWebhook   `json:"slack,omitempty"`
+	Teams     NotificationWebhook   `json:"teams,omitempty"`
+	Email     NotificationEmail     `json:"email,omitempty"`
+	SMS       NotificationSMS       `json:"sms,omitempty"`
+	SIEM      NotificationSIEM      `json:"siem,omitempty"`
+	PagerDuty NotificationPagerDuty `json:"pagerduty,omitempty"`
+	OpsGenie  NotificationOpsGenie  `json:"opsgenie,omitempty"`
 }
 
 // NotificationWebhook configures one incoming-webhook-style channel.
@@ -1190,13 +1224,25 @@ type BulkheadLimit struct {
 type Bulkheads struct {
 	API         BulkheadLimit `json:"api"`
 	Projections BulkheadLimit `json:"projections"`
-	Outbox      BulkheadLimit `json:"outbox"`
-	Signing     BulkheadLimit `json:"signing"`
-	Query       BulkheadLimit `json:"query"`
-	Policy      BulkheadLimit `json:"policy"`
-	Protocols   BulkheadLimit `json:"protocols"`
-	Agent       BulkheadLimit `json:"agent"`
-	CBOM        BulkheadLimit `json:"cbom"`
+	// Outbox is the compatibility/default limit and the independent "other"
+	// destination lane. A nil family override inherits this value, so existing
+	// config files and TRSTCTL_BULKHEAD_OUTBOX_* settings retain their meaning
+	// while every family still receives a distinct Pool instance.
+	Outbox              BulkheadLimit  `json:"outbox"`
+	OutboxExternalCA    *BulkheadLimit `json:"outbox_external_ca,omitempty"`
+	OutboxConnectors    *BulkheadLimit `json:"outbox_connectors,omitempty"`
+	OutboxSecrets       *BulkheadLimit `json:"outbox_secrets,omitempty"`
+	OutboxSecretSync    *BulkheadLimit `json:"outbox_secret_sync,omitempty"`
+	OutboxManagedKeys   *BulkheadLimit `json:"outbox_managed_keys,omitempty"`
+	OutboxTransparency  *BulkheadLimit `json:"outbox_transparency,omitempty"`
+	OutboxCodeSigning   *BulkheadLimit `json:"outbox_code_signing,omitempty"`
+	OutboxNotifications *BulkheadLimit `json:"outbox_notifications,omitempty"`
+	Signing             BulkheadLimit  `json:"signing"`
+	Query               BulkheadLimit  `json:"query"`
+	Policy              BulkheadLimit  `json:"policy"`
+	Protocols           BulkheadLimit  `json:"protocols"`
+	Agent               BulkheadLimit  `json:"agent"`
+	CBOM                BulkheadLimit  `json:"cbom"`
 }
 
 type bulkheadLimitItem struct {
@@ -1233,10 +1279,24 @@ func defaultBulkheads() Bulkheads {
 }
 
 func (b Bulkheads) items() []bulkheadLimitItem {
+	familyLimit := func(override *BulkheadLimit) BulkheadLimit {
+		if override == nil {
+			return b.Outbox
+		}
+		return *override
+	}
 	return []bulkheadLimitItem{
 		{name: bulkhead.SubsystemAPI, limit: b.API},
 		{name: bulkhead.SubsystemProjections, limit: b.Projections},
 		{name: bulkhead.SubsystemOutbox, limit: b.Outbox},
+		{name: bulkhead.SubsystemOutboxExternalCA, limit: familyLimit(b.OutboxExternalCA)},
+		{name: bulkhead.SubsystemOutboxConnectors, limit: familyLimit(b.OutboxConnectors)},
+		{name: bulkhead.SubsystemOutboxSecrets, limit: familyLimit(b.OutboxSecrets)},
+		{name: bulkhead.SubsystemOutboxSecretSync, limit: familyLimit(b.OutboxSecretSync)},
+		{name: bulkhead.SubsystemOutboxManagedKeys, limit: familyLimit(b.OutboxManagedKeys)},
+		{name: bulkhead.SubsystemOutboxTransparency, limit: familyLimit(b.OutboxTransparency)},
+		{name: bulkhead.SubsystemOutboxCodeSigning, limit: familyLimit(b.OutboxCodeSigning)},
+		{name: bulkhead.SubsystemOutboxNotifications, limit: familyLimit(b.OutboxNotifications)},
 		{name: bulkhead.SubsystemSigning, limit: b.Signing},
 		{name: bulkhead.SubsystemQuery, limit: b.Query},
 		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
@@ -1614,10 +1674,11 @@ func Default() *Config {
 		// ~2-minute default (RESIL-001). Replicas defaults to 0 here ("use the mode
 		// default"): embedded forces 1, external uses DefaultExternalReplicas (3) for
 		// HA (SPINE-004).
-		NATS:      NATS{Mode: NATSEmbedded, StoreDir: "data/nats", SyncInterval: DefaultEmbeddedSyncInterval.String()},
-		Log:       Log{Level: "info", Format: "json"},
-		Lifecycle: Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
-		AirGap:    AirGap{Enabled: false, AllowPrivate: true},
+		NATS:       NATS{Mode: NATSEmbedded, StoreDir: "data/nats", SyncInterval: DefaultEmbeddedSyncInterval.String()},
+		Log:        Log{Level: "info", Format: "json"},
+		Lifecycle:  Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
+		Connectors: Connectors{HTTPTimeout: "15s"},
+		AirGap:     AirGap{Enabled: false, AllowPrivate: true},
 		// Telemetry is OFF by default (privacy-first; decided position). The
 		// endpoint and interval are defaults that take effect only on opt-in.
 		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trstctl.com/v1/usage", Interval: "24h", InstanceIDFile: "data/telemetry/instance-id"},
@@ -1750,28 +1811,15 @@ func Load(getenv func(string) string) (*Config, error) {
 // variables take effect, so the environment can override but not blank out
 // file or default values.
 func (c *Config) applyEnv(getenv func(string) string) {
-	setString(getenv, "TRSTCTL_SERVER_ADDR", &c.Server.Addr)
-	setString(getenv, "TRSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
-	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
-	setString(getenv, "TRSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
-	setBool(getenv, "TRSTCTL_DEV_ALLOW_PLAINTEXT", &c.Server.TLS.AllowPlaintextDev)
-	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
-	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
-	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
-	setString(getenv, "TRSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
-	setInt(getenv, "TRSTCTL_POSTGRES_PORT", &c.Postgres.Port)
-	setString(getenv, "TRSTCTL_NATS_MODE", &c.NATS.Mode)
-	setString(getenv, "TRSTCTL_NATS_URL", &c.NATS.URL)
-	setString(getenv, "TRSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
-	setInt(getenv, "TRSTCTL_NATS_REPLICAS", &c.NATS.Replicas)
-	setBool(getenv, "TRSTCTL_NATS_ALLOW_SINGLE_REPLICA", &c.NATS.AllowSingleReplica)
-	setString(getenv, "TRSTCTL_NATS_SYNC_INTERVAL", &c.NATS.SyncInterval)
-	setBool(getenv, "TRSTCTL_NATS_SYNC_ALWAYS", &c.NATS.SyncAlways)
-	setString(getenv, "TRSTCTL_LOG_LEVEL", &c.Log.Level)
-	setString(getenv, "TRSTCTL_LOG_FORMAT", &c.Log.Format)
+	applyServerAndSpineEnv(getenv, c)
 	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
 	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
+	setCSV(getenv, "TRSTCTL_CONNECTORS_ENABLED", &c.Connectors.Enabled)
+	setString(getenv, "TRSTCTL_CONNECTORS_HTTP_TIMEOUT", &c.Connectors.HTTPTimeout)
+	setCSV(getenv, "TRSTCTL_CONNECTORS_ALLOW_PRIVATE_CIDRS", &c.Connectors.AllowPrivateCIDRs)
+	setBool(getenv, "TRSTCTL_CONNECTORS_ALLOW_INSECURE_HTTP", &c.Connectors.AllowInsecureHTTP)
 	setNotificationEnv(getenv, &c.Notifications)
+	applyCodeSigningEnv(getenv, &c.CodeSigning)
 	setServiceNowEnv(getenv, &c.ITSM.ServiceNow)
 	setBool(getenv, "TRSTCTL_AIRGAP_ENABLED", &c.AirGap.Enabled)
 	setBool(getenv, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", &c.AirGap.AllowPrivate)
@@ -1886,6 +1934,28 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	applyPCASEnv(getenv, &c.PCAS)
 }
 
+func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
+	setString(getenv, "TRSTCTL_SERVER_ADDR", &c.Server.Addr)
+	setString(getenv, "TRSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
+	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
+	setString(getenv, "TRSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
+	setBool(getenv, "TRSTCTL_DEV_ALLOW_PLAINTEXT", &c.Server.TLS.AllowPlaintextDev)
+	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
+	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
+	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
+	setString(getenv, "TRSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
+	setInt(getenv, "TRSTCTL_POSTGRES_PORT", &c.Postgres.Port)
+	setString(getenv, "TRSTCTL_NATS_MODE", &c.NATS.Mode)
+	setString(getenv, "TRSTCTL_NATS_URL", &c.NATS.URL)
+	setString(getenv, "TRSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
+	setInt(getenv, "TRSTCTL_NATS_REPLICAS", &c.NATS.Replicas)
+	setBool(getenv, "TRSTCTL_NATS_ALLOW_SINGLE_REPLICA", &c.NATS.AllowSingleReplica)
+	setString(getenv, "TRSTCTL_NATS_SYNC_INTERVAL", &c.NATS.SyncInterval)
+	setBool(getenv, "TRSTCTL_NATS_SYNC_ALWAYS", &c.NATS.SyncAlways)
+	setString(getenv, "TRSTCTL_LOG_LEVEL", &c.Log.Level)
+	setString(getenv, "TRSTCTL_LOG_FORMAT", &c.Log.Format)
+}
+
 func applyPCASEnv(getenv func(string) string, p *PCAS) {
 	setBool(getenv, "TRSTCTL_PCAS_DELEGATION_ENABLED", &p.Delegation.Enabled)
 	setString(getenv, "TRSTCTL_PCAS_DELEGATION_REFRESH_INTERVAL", &p.Delegation.RefreshInterval)
@@ -1917,24 +1987,45 @@ func applyManagedKeysEnv(getenv func(string) string, m *ManagedKeys) {
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PROVIDER", &m.Provider)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_REGION", &m.AWS.Region)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT", &m.AWS.Endpoint)
+	setBool(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK", &m.AWS.AllowInsecureLoopback)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID", &m.AWS.AccessKeyID)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY", &m.AWS.SecretAccessKey)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE", &m.AWS.SecretAccessKeyFile)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN", &m.AWS.SessionToken)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE", &m.AWS.SessionTokenFile)
+	setCSV(getenv, "TRSTCTL_MANAGED_KEYS_AWS_PRIVATE_EGRESS_CIDRS", &m.AWS.PrivateEgressCIDRs)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL", &m.Azure.VaultURL)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT", &m.Azure.Endpoint)
+	setBool(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_ALLOW_INSECURE_LOOPBACK", &m.Azure.AllowInsecureLoopback)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN", &m.Azure.BearerToken)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE", &m.Azure.BearerTokenFile)
+	setCSV(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_PRIVATE_EGRESS_CIDRS", &m.Azure.PrivateEgressCIDRs)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_PARENT", &m.GCP.Parent)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT", &m.GCP.Endpoint)
+	setBool(getenv, "TRSTCTL_MANAGED_KEYS_GCP_ALLOW_INSECURE_LOOPBACK", &m.GCP.AllowInsecureLoopback)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN", &m.GCP.BearerToken)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN_FILE", &m.GCP.BearerTokenFile)
+	setCSV(getenv, "TRSTCTL_MANAGED_KEYS_GCP_PRIVATE_EGRESS_CIDRS", &m.GCP.PrivateEgressCIDRs)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH", &m.PKCS11.ModulePath)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL", &m.PKCS11.TokenLabel)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN", &m.PKCS11.UserPIN)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN_FILE", &m.PKCS11.UserPINFile)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_KEY_LABEL_PREFIX", &m.PKCS11.KeyLabelPrefix)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_TPM2_PATH", &m.TPM2.Path)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_TPM2_OWNER_AUTH", &m.TPM2.OwnerAuth)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_TPM2_OWNER_AUTH_FILE", &m.TPM2.OwnerAuthFile)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_TPM2_KEY_AUTH", &m.TPM2.KeyAuth)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_TPM2_KEY_AUTH_FILE", &m.TPM2.KeyAuthFile)
+	if raw := strings.TrimSpace(getenv("TRSTCTL_MANAGED_KEYS_TPM2_PERSISTENT_HANDLE_BASE")); raw != "" {
+		if parsed, err := strconv.ParseUint(strings.TrimPrefix(strings.ToLower(raw), "0x"), 16, 32); err == nil {
+			m.TPM2.PersistentHandleBase = uint32(parsed)
+		}
+	}
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_YUBIHSM2_MODULE_PATH", &m.YubiHSM2.ModulePath)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_YUBIHSM2_TOKEN_LABEL", &m.YubiHSM2.TokenLabel)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN", &m.YubiHSM2.UserPIN)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN_FILE", &m.YubiHSM2.UserPINFile)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_YUBIHSM2_KEY_LABEL_PREFIX", &m.YubiHSM2.KeyLabelPrefix)
 }
 
 // applyAuthEnv overlays browser-auth environment knobs. The structured
@@ -2090,6 +2181,14 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	setInt(getenv, "TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE", &b.Projections.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_OUTBOX_WORKERS", &b.Outbox.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_OUTBOX_QUEUE", &b.Outbox.Queue)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_EXTERNAL_CA", b.Outbox, &b.OutboxExternalCA)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_CONNECTORS", b.Outbox, &b.OutboxConnectors)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_SECRETS", b.Outbox, &b.OutboxSecrets)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_SECRET_SYNC", b.Outbox, &b.OutboxSecretSync)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_MANAGED_KEYS", b.Outbox, &b.OutboxManagedKeys)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY", b.Outbox, &b.OutboxTransparency)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING", b.Outbox, &b.OutboxCodeSigning)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS", b.Outbox, &b.OutboxNotifications)
 	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_WORKERS", &b.Signing.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_QUEUE", &b.Signing.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_QUERY_WORKERS", &b.Query.Workers)
@@ -2102,6 +2201,22 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_QUEUE", &b.Agent.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_CBOM_WORKERS", &b.CBOM.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_CBOM_QUEUE", &b.CBOM.Queue)
+}
+
+func applyOptionalBulkheadEnv(getenv func(string) string, prefix string, fallback BulkheadLimit, dst **BulkheadLimit) {
+	workers := strings.TrimSpace(getenv(prefix + "_WORKERS"))
+	queue := strings.TrimSpace(getenv(prefix + "_QUEUE"))
+	if workers == "" && queue == "" {
+		return
+	}
+	limit := fallback
+	if n, err := strconv.Atoi(workers); workers != "" && err == nil {
+		limit.Workers = n
+	}
+	if n, err := strconv.Atoi(queue); queue != "" && err == nil {
+		limit.Queue = n
+	}
+	*dst = &limit
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -2139,6 +2254,7 @@ func setNotificationEnv(getenv func(string) string, n *Notifications) {
 	setBytes(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_TOKEN", &n.SIEM.Token)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_TOKEN_FILE", &n.SIEM.TokenFile)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_SOURCE", &n.SIEM.Source)
+	setIncidentNotificationEnv(getenv, &n.PagerDuty, &n.OpsGenie)
 }
 
 func setServiceNowEnv(getenv func(string) string, sn *ServiceNowITSM) {
@@ -2257,6 +2373,10 @@ func (c *Config) Validate() error {
 		validateServerConfig,
 		validateDatastores,
 		validateLoggingAndLifecycle,
+		func(c *Config) []error { return validateConnectors(c.Connectors) },
+		func(c *Config) []error { return validateExternalCAs(c.ExternalCAs) },
+		func(c *Config) []error { return validateSecretIntegrations(c.SecretIntegrations, c.Secrets.EnableAPI) },
+		func(c *Config) []error { return validateCodeSigning(c.CodeSigning) },
 		validateOptionalServices,
 		validateBulkheadConfig,
 		validateSignerConfig,
@@ -2415,6 +2535,7 @@ func validateNotifications(n Notifications) []error {
 	if n.SIEM.Enabled && strings.TrimSpace(n.SIEM.Endpoint) == "" {
 		errs = append(errs, errors.New("notifications.siem.endpoint is required when SIEM notifications are enabled"))
 	}
+	errs = append(errs, validateIncidentNotifications(n.PagerDuty, n.OpsGenie)...)
 	return errs
 }
 
@@ -2761,6 +2882,7 @@ func validateManagedKeys(m ManagedKeys) []error {
 	}
 	switch provider {
 	case ManagedKeyProviderAWS:
+		errs = append(errs, validateManagedKeyPrivateCIDRs("managed_keys.aws.private_egress_cidrs", m.AWS.PrivateEgressCIDRs)...)
 		if strings.TrimSpace(m.AWS.Region) == "" {
 			errs = append(errs, errors.New("managed_keys.aws.region is required when managed-key custody uses AWS KMS"))
 		}
@@ -2771,32 +2893,54 @@ func validateManagedKeys(m ManagedKeys) []error {
 			errs = append(errs, errors.New("managed_keys.aws.secret_access_key or managed_keys.aws.secret_access_key_file is required when managed-key custody uses AWS KMS"))
 		}
 		if m.AWS.Endpoint != "" {
-			u, err := url.Parse(m.AWS.Endpoint)
-			if err != nil || u.Scheme == "" || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
-				errs = append(errs, fmt.Errorf("managed_keys.aws.endpoint %q must be an absolute http(s) URL", m.AWS.Endpoint))
-			}
+			errs = append(errs, validateManagedKeyEndpoint("managed_keys.aws.endpoint", m.AWS.Endpoint, m.AWS.AllowInsecureLoopback)...)
+		}
+		if m.AWS.AllowInsecureLoopback && !netsec.IsInsecureLoopbackHTTPURL(m.AWS.Endpoint) {
+			errs = append(errs, errors.New("managed_keys.aws.allow_insecure_loopback requires an HTTP localhost/loopback endpoint override"))
+		}
+		if len(m.AWS.SecretAccessKey) > 0 && strings.TrimSpace(m.AWS.SecretAccessKeyFile) != "" {
+			errs = append(errs, errors.New("managed_keys.aws.secret_access_key and secret_access_key_file are mutually exclusive"))
+		}
+		if len(m.AWS.SessionToken) > 0 && strings.TrimSpace(m.AWS.SessionTokenFile) != "" {
+			errs = append(errs, errors.New("managed_keys.aws.session_token and session_token_file are mutually exclusive"))
 		}
 	case ManagedKeyProviderAzureKeyVault:
+		errs = append(errs, validateManagedKeyPrivateCIDRs("managed_keys.azure.private_egress_cidrs", m.Azure.PrivateEgressCIDRs)...)
 		if strings.TrimSpace(m.Azure.VaultURL) == "" {
 			errs = append(errs, errors.New("managed_keys.azure.vault_url is required when managed-key custody uses Azure Key Vault HSM"))
-		} else if !isHTTPURL(m.Azure.VaultURL) {
-			errs = append(errs, fmt.Errorf("managed_keys.azure.vault_url %q must be an absolute http(s) URL", m.Azure.VaultURL))
+		} else {
+			errs = append(errs, validateManagedKeyEndpoint("managed_keys.azure.vault_url", m.Azure.VaultURL, m.Azure.AllowInsecureLoopback)...)
 		}
 		if len(m.Azure.BearerToken) == 0 && strings.TrimSpace(m.Azure.BearerTokenFile) == "" {
 			errs = append(errs, errors.New("managed_keys.azure.bearer_token or managed_keys.azure.bearer_token_file is required when managed-key custody uses Azure Key Vault HSM"))
 		}
-		if m.Azure.Endpoint != "" && !isHTTPURL(m.Azure.Endpoint) {
-			errs = append(errs, fmt.Errorf("managed_keys.azure.endpoint %q must be an absolute http(s) URL", m.Azure.Endpoint))
+		if m.Azure.Endpoint != "" {
+			errs = append(errs, validateManagedKeyEndpoint("managed_keys.azure.endpoint", m.Azure.Endpoint, m.Azure.AllowInsecureLoopback)...)
+		}
+		if m.Azure.AllowInsecureLoopback &&
+			!netsec.IsInsecureLoopbackHTTPURL(m.Azure.VaultURL) &&
+			!netsec.IsInsecureLoopbackHTTPURL(m.Azure.Endpoint) {
+			errs = append(errs, errors.New("managed_keys.azure.allow_insecure_loopback requires an HTTP localhost/loopback vault_url or endpoint override"))
+		}
+		if len(m.Azure.BearerToken) > 0 && strings.TrimSpace(m.Azure.BearerTokenFile) != "" {
+			errs = append(errs, errors.New("managed_keys.azure.bearer_token and bearer_token_file are mutually exclusive"))
 		}
 	case ManagedKeyProviderGCPKMS:
+		errs = append(errs, validateManagedKeyPrivateCIDRs("managed_keys.gcp.private_egress_cidrs", m.GCP.PrivateEgressCIDRs)...)
 		if strings.TrimSpace(m.GCP.Parent) == "" {
 			errs = append(errs, errors.New("managed_keys.gcp.parent is required when managed-key custody uses GCP Cloud KMS"))
 		}
 		if len(m.GCP.BearerToken) == 0 && strings.TrimSpace(m.GCP.BearerTokenFile) == "" {
 			errs = append(errs, errors.New("managed_keys.gcp.bearer_token or managed_keys.gcp.bearer_token_file is required when managed-key custody uses GCP Cloud KMS"))
 		}
-		if m.GCP.Endpoint != "" && !isHTTPURL(m.GCP.Endpoint) {
-			errs = append(errs, fmt.Errorf("managed_keys.gcp.endpoint %q must be an absolute http(s) URL", m.GCP.Endpoint))
+		if m.GCP.Endpoint != "" {
+			errs = append(errs, validateManagedKeyEndpoint("managed_keys.gcp.endpoint", m.GCP.Endpoint, m.GCP.AllowInsecureLoopback)...)
+		}
+		if m.GCP.AllowInsecureLoopback && !netsec.IsInsecureLoopbackHTTPURL(m.GCP.Endpoint) {
+			errs = append(errs, errors.New("managed_keys.gcp.allow_insecure_loopback requires an HTTP localhost/loopback endpoint override"))
+		}
+		if len(m.GCP.BearerToken) > 0 && strings.TrimSpace(m.GCP.BearerTokenFile) != "" {
+			errs = append(errs, errors.New("managed_keys.gcp.bearer_token and bearer_token_file are mutually exclusive"))
 		}
 	case ManagedKeyProviderPKCS11:
 		if strings.TrimSpace(m.PKCS11.ModulePath) == "" {
@@ -2808,15 +2952,53 @@ func validateManagedKeys(m ManagedKeys) []error {
 		if len(m.PKCS11.UserPIN) == 0 && strings.TrimSpace(m.PKCS11.UserPINFile) == "" {
 			errs = append(errs, errors.New("managed_keys.pkcs11.user_pin or managed_keys.pkcs11.user_pin_file is required when managed-key custody uses PKCS#11"))
 		}
+		if len(m.PKCS11.UserPIN) > 0 && strings.TrimSpace(m.PKCS11.UserPINFile) != "" {
+			errs = append(errs, errors.New("managed_keys.pkcs11.user_pin and user_pin_file are mutually exclusive"))
+		}
+	case ManagedKeyProviderTPM2:
+		if strings.TrimSpace(m.TPM2.Path) == "" {
+			errs = append(errs, errors.New("managed_keys.tpm2.path is required when managed-key custody uses TPM 2.0"))
+		}
+		if len(m.TPM2.OwnerAuth) > 0 && strings.TrimSpace(m.TPM2.OwnerAuthFile) != "" {
+			errs = append(errs, errors.New("managed_keys.tpm2.owner_auth and owner_auth_file are mutually exclusive"))
+		}
+		if len(m.TPM2.KeyAuth) > 0 && strings.TrimSpace(m.TPM2.KeyAuthFile) != "" {
+			errs = append(errs, errors.New("managed_keys.tpm2.key_auth and key_auth_file are mutually exclusive"))
+		}
+	case ManagedKeyProviderYubiHSM2:
+		if strings.TrimSpace(m.YubiHSM2.ModulePath) == "" {
+			errs = append(errs, errors.New("managed_keys.yubihsm2.module_path is required for the Yubico PKCS#11 module"))
+		}
+		if strings.TrimSpace(m.YubiHSM2.TokenLabel) == "" {
+			errs = append(errs, errors.New("managed_keys.yubihsm2.token_label is required"))
+		}
+		if len(m.YubiHSM2.UserPIN) == 0 && strings.TrimSpace(m.YubiHSM2.UserPINFile) == "" {
+			errs = append(errs, errors.New("managed_keys.yubihsm2.user_pin or user_pin_file is required"))
+		}
+		if len(m.YubiHSM2.UserPIN) > 0 && strings.TrimSpace(m.YubiHSM2.UserPINFile) != "" {
+			errs = append(errs, errors.New("managed_keys.yubihsm2.user_pin and user_pin_file are mutually exclusive"))
+		}
 	default:
-		errs = append(errs, fmt.Errorf("managed_keys.provider %q is invalid (want %q, %q, %q, or %q)", m.Provider, ManagedKeyProviderAWS, ManagedKeyProviderAzureKeyVault, ManagedKeyProviderGCPKMS, ManagedKeyProviderPKCS11))
+		errs = append(errs, fmt.Errorf("managed_keys.provider %q is invalid (want %q, %q, %q, %q, %q, or %q)", m.Provider, ManagedKeyProviderAWS, ManagedKeyProviderAzureKeyVault, ManagedKeyProviderGCPKMS, ManagedKeyProviderPKCS11, ManagedKeyProviderTPM2, ManagedKeyProviderYubiHSM2))
 	}
 	return errs
 }
 
-func isHTTPURL(raw string) bool {
-	u, err := url.Parse(raw)
-	return err == nil && u.Scheme != "" && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http")
+func validateManagedKeyPrivateCIDRs(label string, values []string) []error {
+	var errs []error
+	for _, raw := range values {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+			errs = append(errs, fmt.Errorf("%s contains invalid CIDR %q: %w", label, raw, err))
+		}
+	}
+	return errs
+}
+
+func validateManagedKeyEndpoint(label, raw string, allowInsecureLoopback bool) []error {
+	if err := netsec.ValidateHTTPSOrInsecureLoopbackURL(raw, allowInsecureLoopback); err != nil {
+		return []error{fmt.Errorf("%s %q: %w", label, raw, err)}
+	}
+	return nil
 }
 
 func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {

@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -28,12 +27,17 @@ type TokenProvider interface {
 }
 
 // staticToken is a fixed bearer token.
-type staticToken []byte
+type staticToken struct{ token []byte }
 
 // StaticToken returns a TokenProvider that always yields tok.
-func StaticToken(tok []byte) TokenProvider { return staticToken(secrettext.Clone(tok)) }
+func StaticToken(tok []byte) TokenProvider { return &staticToken{token: secrettext.Clone(tok)} }
 
-func (s staticToken) Token(context.Context) ([]byte, error) { return secrettext.Clone(s), nil }
+func (s *staticToken) Token(context.Context) ([]byte, error) { return secrettext.Clone(s.token), nil }
+
+func (s *staticToken) Destroy() {
+	secret.Wipe(s.token)
+	s.token = nil
+}
 
 const (
 	defaultMetadataBase = "http://metadata.google.internal"
@@ -101,6 +105,15 @@ func NewMetadataToken(opts ...MetadataOption) *MetadataToken {
 	return m
 }
 
+// Destroy wipes any cached bearer token.
+func (m *MetadataToken) Destroy() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	secret.Wipe(m.cached)
+	m.cached = nil
+	m.exp = time.Time{}
+}
+
 // Token returns a cached token if still valid, otherwise fetches a new one from
 // the metadata server.
 func (m *MetadataToken) Token(ctx context.Context) ([]byte, error) {
@@ -123,19 +136,23 @@ func (m *MetadataToken) Token(ctx context.Context) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if err != nil {
-			return nil, fmt.Errorf("metadata server: status %d: read response: %w", resp.StatusCode, err)
-		}
-		return nil, fmt.Errorf("metadata server: status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return nil, fmt.Errorf("metadata server: status %d (response body redacted)", resp.StatusCode)
 	}
 
 	var tr struct {
 		AccessToken secretjson.StringBytes `json:"access_token"`
 		ExpiresIn   int                    `json:"expires_in"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&tr); err != nil {
-		return nil, fmt.Errorf("metadata server: decode: %w", err)
+	data, err := secret.ReadBounded(resp.Body, 1<<20)
+	if err != nil {
+		return nil, fmt.Errorf("metadata server: read failed (details redacted)")
+	}
+	defer secret.Wipe(data)
+	err = json.Unmarshal(data, &tr)
+	defer secret.Wipe(tr.AccessToken)
+	if err != nil {
+		return nil, fmt.Errorf("metadata server: decode failed (details redacted)")
 	}
 	if len(tr.AccessToken) == 0 {
 		return nil, fmt.Errorf("metadata server: empty access_token")
@@ -147,7 +164,6 @@ func (m *MetadataToken) Token(ctx context.Context) ([]byte, error) {
 	}
 	secret.Wipe(m.cached)
 	m.cached = secrettext.Clone(tr.AccessToken)
-	secret.Wipe(tr.AccessToken)
 	m.exp = m.now().Add(time.Duration(ttl) * time.Second)
 	return secrettext.Clone(m.cached), nil
 }

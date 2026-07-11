@@ -1717,7 +1717,7 @@ func componentSchemas() map[string]*Schema {
 	connectorDelivery := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "outbox_id": {Type: "integer"}, "identity_id": uuid(),
 		"destination": str(), "connector": str(), "target": str(), "fingerprint": str(),
-		"status":   {Type: "string", Enum: []string{"unrouted", "delivered", "failed", "test_succeeded", "rollback_recorded"}},
+		"status":   {Type: "string", Enum: []string{"queued", "delivered", "failed", "test_succeeded", "rollback_recorded"}},
 		"attempts": {Type: "integer"}, "reason": str(), "detail": str(), "rollback_ref": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "destination", "connector", "target", "status", "attempts", "created_at", "updated_at")

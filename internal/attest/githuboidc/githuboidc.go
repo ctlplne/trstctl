@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // DefaultIssuer is GitHub Actions' OIDC issuer.
@@ -70,10 +71,11 @@ func FulcioBindingFrom(att attest.Attestation) FulcioBinding {
 // Attest verifies the OIDC token and returns the attestation (with the Fulcio
 // binding recorded in Claims).
 func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation, error) {
-	raw, err := crypto.VerifyJWT(string(payload), a.JWKS)
+	raw, err := crypto.VerifyJWTBytes(payload, a.JWKS)
 	if err != nil {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: %w", err)
 	}
+	defer secret.Wipe(raw)
 	var c ghClaims
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: parse claims: %w", err)

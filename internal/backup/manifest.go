@@ -40,6 +40,11 @@ var RecoveredFromPostgresBackup = []string{
 	"credentials",
 	"ct_log_checkpoints",
 	"ct_watched_domains",
+	// Migration 0072 backfilled immutable revisions for deployment targets that
+	// predate deployment_target.upserted events. The event log therefore cannot
+	// reconstruct the complete target history; both halves restore together from
+	// the same PostgreSQL backup cut.
+	"deployment_target_revisions",
 	"deployment_targets",
 	"federation_peer_checkpoints",
 	"idempotency_keys",

@@ -36,6 +36,12 @@ type IssueRequest struct {
 	ProfileName   string
 	Protocol      string
 	RequestedEKUs []string
+
+	// RequestBinding is a non-secret digest of the authenticated principal and
+	// canonical external-CA command. The durable certificate projection retains
+	// it after response/outbox GC so a reused raw key cannot change authority,
+	// caller, CSR, names, profile, or lifetime.
+	RequestBinding string
 }
 
 // Certificate is an issued certificate (the leaf followed by its chain, PEM).

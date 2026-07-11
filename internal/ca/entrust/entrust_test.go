@@ -68,7 +68,7 @@ func TestPluginIssuesThroughEnrollmentFlow(t *testing.T) {
 	}
 }
 
-func TestPluginSurfacesGatewayErrorAsStructuredError(t *testing.T) {
+func TestPluginSurfacesGatewayErrorAsStatusOnlyError(t *testing.T) {
 	stub := newEntrustStub(t)
 	defer stub.Close()
 	stub.FailEnroll()
@@ -85,8 +85,8 @@ func TestPluginSurfacesGatewayErrorAsStructuredError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Issue succeeded; want gateway error")
 	}
-	if !strings.Contains(err.Error(), "entrust: api error 400: E_PROFILE: profile denied") {
-		t.Fatalf("Issue error = %q, want structured Entrust error", err)
+	if !strings.Contains(err.Error(), "entrust: api error 400") || strings.Contains(err.Error(), "profile denied") {
+		t.Fatalf("Issue error = %q, want status-only Entrust error", err)
 	}
 }
 

@@ -82,7 +82,7 @@ const execution = {
   revocation_status: "revocation_publish_queued",
   evidence_bundle_format: "jws",
   evidence_bundle: "sealed.audit.bundle",
-  failed_targets: ["nginx:edge/prod/payments:unrouted"],
+  failed_targets: [],
   rollback_refs: ["identity:11111111-1111-1111-1111-111111111111", "restore previous fullchain"],
   idempotency_key: "idem-1",
   created_by: "incident-commander",
@@ -94,8 +94,8 @@ const execution = {
     destination: "connector.deploy",
     connector: "nginx",
     target: "edge/prod/payments",
-    status: "unrouted",
-    attempts: 1,
+    status: "queued",
+    attempts: 0,
     created_at: "2026-06-20T12:00:00Z",
     updated_at: "2026-06-20T12:00:00Z",
   },
@@ -141,7 +141,7 @@ const fleetRun = {
     { name: "replacement deployed", status: "passed" },
     { name: "revocation published", status: "passed" },
   ],
-  failed_targets: ["nginx:edge/prod:unrouted"],
+  failed_targets: [],
   rollback_refs: ["issuer:77777777-7777-7777-7777-777777777777", "restore previous bindings"],
   evidence_bundle_format: "jws",
   evidence_bundle: "fleet.audit.bundle",
@@ -367,7 +367,8 @@ describe("incident response served execution surface", () => {
       }),
     );
     expect(await screen.findByText("Incident execution recorded")).toBeInTheDocument();
-    expect(await screen.findByText("nginx:edge/prod/payments:unrouted")).toBeInTheDocument();
+    expect(screen.queryByText("nginx:edge/prod/payments:unrouted")).not.toBeInTheDocument();
+    expect((await screen.findAllByText("queued")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("jws").length).toBeGreaterThan(0);
     expect(screen.getByText("sealed.audit.bundle")).toBeInTheDocument();
 

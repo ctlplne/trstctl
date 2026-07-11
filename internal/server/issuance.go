@@ -61,6 +61,26 @@ func IssuingCAID() string {
 // leaf profile (Server.IssueLeafWithProfile satisfies it).
 type issueFunc func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error)
 
+// connectorPluginDeployer is the narrow signed-plugin surface needed by the
+// outbox dispatcher. Keeping the seam small also lets replay-safety tests prove
+// that an untrusted plugin is never assumed idempotent merely because it loaded.
+type connectorPluginDeployer interface {
+	Has(name string) bool
+	Deploy(ctx context.Context, tenantID string, payload connector.DeployPayload) (handled bool, err error)
+}
+
+// connectorPluginDeployerFromManager avoids Go's typed-nil interface trap. ELI5:
+// putting a nil *PluginManager into an interface gives the interface a type label,
+// so `plugins != nil` even though calling a method dereferences nil. Production
+// assembly uses this conversion so an unconfigured plugin surface stays a truly
+// nil interface and connector delivery fails closed instead of panicking.
+func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeployer {
+	if pm == nil {
+		return nil
+	}
+	return pm
+}
+
 // issuanceDispatcher is the real outbox handler (AN-6). For a requested→issued
 // lifecycle transition it mints a leaf certificate from the assembled CA (whose
 // key lives in the out-of-process signer, AN-4) and records it in the inventory
@@ -99,15 +119,24 @@ type issuanceDispatcher struct {
 	publishCRL func(context.Context, string) error
 	// plugins is the served WASM-plugin surface (ARCH-007). When non-nil, a
 	// connector.deploy whose connector names a loaded, provenance-verified plugin
-	// (SUPPLY-004) is pushed through the capability sandbox; otherwise the entry is
-	// acknowledged unrouted as before. Tenant-scoped (AN-1) and event-sourced
-	// (AN-2); the plugin holds no store/signer handle.
-	plugins *PluginManager
+	// (SUPPLY-004) is pushed through the capability sandbox. Missing or declining
+	// plugins fail the row closed so configured work cannot be acknowledged without
+	// touching its receiver. Tenant-scoped (AN-1) and event-sourced (AN-2); the
+	// plugin holds no store/signer handle.
+	plugins connectorPluginDeployer
 	// connectorRegistry is the trusted native deployment connector registry
 	// (CLM-05/F7/F27). When a connector.deploy payload names a registered native
 	// connector and carries the credential bytes, the served outbox worker performs
 	// the real deploy through the connector SDK sandbox and records a durable receipt.
 	connectorRegistry *connector.Registry
+	// connectorRightSize applies connector.right_size entitlement mutations and
+	// verifies the effective scopes before the outbox row is acknowledged.
+	connectorRightSize RightSizeMutator
+	// The right-size seams are test-only crash boundaries. Production leaves them
+	// nil; adversarial tests fail after receiver I/O or after the terminal append
+	// to prove retry/reconciliation converges without inventing a second identity.
+	afterRightSizeSideEffects    func(context.Context) error
+	afterRightSizeTerminalAppend func(context.Context) error
 	// connectorPayloadKey seals connector.deploy payloads before they are persisted
 	// in outbox.payload and opens them only inside this dispatcher.
 	connectorPayloadKey sealKeyWrapper
@@ -119,9 +148,12 @@ type issuanceDispatcher struct {
 	// (NOTIF-01/F29). Nil preserves the prior no-channel behavior.
 	notifications *notify.Dispatcher
 	// transparency handles transparency.* outbox rows such as Rekor publication for
-	// served code signing (CLM-06/F50). Nil leaves rows acknowledged-unrouted, matching
-	// the generic external-destination posture.
+	// served code signing (CLM-06/F50). Nil fails those rows closed.
 	transparency orchestrator.Handler
+	// codeSign owns codesign.command and codesign.cleanup. Both are internal,
+	// first-party worker commands and must never fall through as acknowledged
+	// unknown destinations.
+	codeSign *servedCodeSigningService
 	// secretRepoScanner runs repository secret scans from the discovery.run outbox
 	// worker. It is the same pinned/redacting scanner used by POST /secrets/scans.
 	secretRepoScanner secretScanner
@@ -132,10 +164,18 @@ type issuanceDispatcher struct {
 	// handled=false for destinations it does not own, so core still fails closed for
 	// unknown first-party work.
 	licensed LicensedOutboxHandler
+	// secretIntegrations owns dynsecret.* and secret.sync.* first-party rows. It
+	// returns errors for unconfigured targets so those rows are never silently
+	// acknowledged by the generic fallback.
+	secretIntegrations *secretIntegrationOutboxDispatcher
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
 	afterIssueSideEffects func(context.Context) error
+	// nil in production; tests use it to inject the connector crash window after
+	// the receiver and durable delivery receipt commit but before the idempotency
+	// result is completed.
+	afterDeploySideEffects func(context.Context) error
 }
 
 // Deliver implements orchestrator.Handler. It mints on a ca.issue trigger,
@@ -154,6 +194,8 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 		return d.handleRevoke(ctx, m)
 	case "connector.deploy":
 		return d.handleDeploy(ctx, m)
+	case orchestrator.DestinationConnectorRightSize:
+		return d.handleConnectorRightSize(ctx, m)
 	case "discovery.run":
 		return d.handleDiscoveryRun(ctx, m)
 	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup:
@@ -175,6 +217,18 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
 	default:
+		if d.codeSign != nil {
+			handled, err := d.codeSign.Deliver(ctx, m)
+			if handled || err != nil {
+				return err
+			}
+		}
+		if d.secretIntegrations != nil {
+			handled, err := d.secretIntegrations.Deliver(ctx, m)
+			if handled || err != nil {
+				return err
+			}
+		}
 		if d.licensed != nil {
 			handled, err := d.licensed.DeliverLicensed(ctx, m)
 			if handled || err != nil {
@@ -183,21 +237,56 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 		}
 		if strings.HasPrefix(m.Destination, "notification.") {
 			if d.notifications == nil {
-				return nil
+				return fmt.Errorf("server: notification outbox destination is not configured")
 			}
-			return d.notifications.Dispatch(ctx, m.Payload)
+			return d.notifications.DispatchMessage(ctx, notify.DeliveryMessage{
+				TenantID: m.TenantID, Destination: m.Destination,
+				IdempotencyKey: m.IdempotencyKey, Payload: m.Payload,
+				OutboxID: m.ID, Attempts: m.Attempts,
+			})
 		}
 		if strings.HasPrefix(m.Destination, "transparency.") {
 			if d.transparency == nil {
-				return nil
+				return fmt.Errorf("server: transparency outbox destination is not configured")
 			}
 			return d.transparency.Deliver(ctx, m)
 		}
-		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "external-ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") || strings.HasPrefix(m.Destination, "acme.dns01.") || strings.HasPrefix(m.Destination, "itsm.") || strings.HasPrefix(m.Destination, "response.") || strings.HasPrefix(m.Destination, "ct.") {
-			return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
+		if strings.HasPrefix(m.Destination, "managedkey.") {
+			return fmt.Errorf("server: managed-key outbox destination is not configured")
 		}
-		return nil
+		// This dispatcher is the sole handler passed to every scoped and unscoped
+		// outbox sweep. There is no second worker to own an unknown destination, so
+		// accepting it here would be a global silent ACK.
+		return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
 	}
+}
+
+// DeliverTerminalFailure records domain terminal states before the generic
+// outbox dead-letters a row. Subsystems that do not own a projected pending state
+// need no callback; secret integrations and licensed managed keys do.
+func (d *issuanceDispatcher) DeliverTerminalFailure(ctx context.Context, m orchestrator.Message, cause error) error {
+	if m.Destination == orchestrator.DestinationConnectorRightSize {
+		return d.failConnectorRightSizeTerminal(ctx, m)
+	}
+	if d.codeSign != nil {
+		handled, err := d.codeSign.DeliverTerminalFailure(ctx, m, cause)
+		if handled || err != nil {
+			return err
+		}
+	}
+	if d.secretIntegrations != nil {
+		handled, err := d.secretIntegrations.DeliverTerminalFailure(ctx, m, cause)
+		if handled || err != nil {
+			return err
+		}
+	}
+	if terminal, ok := d.licensed.(LicensedOutboxTerminalFailureHandler); ok {
+		handled, err := terminal.DeliverLicensedTerminalFailure(ctx, m, cause)
+		if handled || err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // transitionTrigger is the part of a lifecycle transition payload the issuance
@@ -707,6 +796,7 @@ func (d *issuanceDispatcher) ensureTenantCRL(ctx context.Context, tenantID strin
 
 func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Context, tenantID string, ident store.Identity, reason string, certPEM, keyPEM []byte, fingerprint string) error {
 	connName, target := deploymentRoutingAttrs(ident.Attributes)
+	targetID := deploymentTargetID(ident.Attributes)
 	if target == "" {
 		target = ident.Name
 	}
@@ -720,9 +810,21 @@ func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Contex
 		}
 		return nil
 	}
-	payload, err := connector.EncodeIdentityDeploy(connName, ident.ID, connector.Deployment{
-		Target: target, CertPEM: certPEM, KeyPEM: keyPEM, Fingerprint: fingerprint,
-	})
+	deployment := connector.Deployment{Target: target, CertPEM: certPEM, KeyPEM: keyPEM, Fingerprint: fingerprint}
+	var payload []byte
+	if targetID != "" {
+		configured, targetErr := d.store.GetDeploymentTarget(ctx, tenantID, targetID)
+		if targetErr != nil {
+			return fmt.Errorf("server: load deployment target %s for credential intent: %w", targetID, targetErr)
+		}
+		if !configured.Enabled {
+			return fmt.Errorf("server: deployment target %s is disabled", targetID)
+		}
+		connName = configured.Type
+		payload, err = connector.EncodeTargetIdentityDeploy(connName, ident.ID, configured.ID, configured.RevisionID, configured.Config, deployment)
+	} else {
+		payload, err = connector.EncodeIdentityDeploy(connName, ident.ID, deployment)
+	}
 	if err != nil {
 		return err
 	}
@@ -752,6 +854,7 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 			Destination:    "connector.deploy",
 			IdempotencyKey: idemKey,
 			Payload:        sealedPayload,
+			EffectLane:     "connector.deploy:identity:" + identityID,
 		})
 		return err
 	})
@@ -763,15 +866,16 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 // outbox row is acknowledged or retried. The receipt carries only routing evidence
 // (connector, target, fingerprint, status, rollback reference), never PEM/key
 // material (AN-8). When a served WASM connector plugin is configured and owns the
-// named connector, the deployment is pushed through the capability sandbox; when no
-// native connector nor plugin owns it the row is acknowledged as "unrouted" and
-// the reason is visible.
+// named connector, the deployment is pushed through the capability sandbox. Missing
+// routing, missing credentials, and declined plugins record a closed failure receipt
+// and leave the row pending; configured work is never acknowledged as "unrouted".
 func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Message) error {
 	p, identityID, detail, err := d.resolveDeployPayload(ctx, m)
 	if err != nil {
 		return err
 	}
 	defer wipeConnectorDeployPayload(&p)
+	p.TenantID = m.TenantID
 	receipt := connectorDeliveryEvidence{
 		ID:             evidenceID("connector-delivery", m.TenantID, m.IdempotencyKey, m.ID),
 		OutboxID:       outboxPtr(m.ID),
@@ -784,61 +888,148 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 		IdempotencyKey: m.IdempotencyKey,
 		Detail:         detail,
 	}
+	if m.IdempotencyKey == "" {
+		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
+			"missing_idempotency_key", "connector deployment requires a stable idempotency key",
+			errors.New("server: connector.deploy requires an idempotency key"))
+	}
 	if p.Connector == "" {
-		receipt.Detail = nonempty(receipt.Detail, "identity has no connector target configured")
-		return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "missing_connector")
+		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
+			"missing_connector", "identity has no connector target configured",
+			errors.New("server: connector.deploy has no configured connector"))
 	}
 	if d.connectorRegistry != nil && d.connectorRegistry.Has(p.Connector) {
 		if len(p.CertPEM) == 0 || len(p.KeyPEM) == 0 {
-			receipt.Detail = "native connector payload did not carry cert_pem and key_pem"
-			return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "native_payload_missing_credential")
+			return d.failConnectorDelivery(ctx, m.TenantID, receipt,
+				"native_payload_missing_credential", "native connector payload is missing credential material",
+				errors.New("server: native connector payload is missing credential material"))
 		}
-		// Idempotent on the outbox key (AN-5 ↔ AN-6): a redelivery returns the
-		// recorded result without pushing the same credential to the target again.
-		_, err = d.idem.Do(ctx, m.TenantID, "deploy:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+		if p.Fingerprint == "" {
+			return d.failConnectorDelivery(ctx, m.TenantID, receipt,
+				"native_payload_missing_fingerprint", "native connector payload is missing its public fingerprint",
+				errors.New("server: native connector payload is missing its fingerprint"))
+		}
+		effect := func(ctx context.Context) ([]byte, error) {
 			if derr := d.connectorRegistry.Deploy(ctx, p); derr != nil {
-				_ = d.recordConnectorDelivery(ctx, m.TenantID, receipt, "failed", derr.Error())
-				return nil, derr
+				return nil, d.failConnectorDelivery(ctx, m.TenantID, receipt,
+					"native_delivery_failed", "served native connector reported a deployment failure", derr)
 			}
 			receipt.Detail = "delivered by served native connector registry"
 			receipt.RollbackRef = "restore previous certificate for " + p.Target
 			if err := d.recordConnectorDelivery(ctx, m.TenantID, receipt, "delivered", "native_delivered"); err != nil {
 				return nil, err
 			}
+			if d.afterDeploySideEffects != nil {
+				if err := d.afterDeploySideEffects(ctx); err != nil {
+					return nil, err
+				}
+			}
 			return []byte("deployed:" + p.Connector), nil
-		})
-		return err
+		}
+		return d.runConnectorEffect(ctx, m, receipt, d.connectorRegistry.ReplaySafetyFor(p.Connector), effect)
 	}
 	if d.plugins == nil {
-		receipt.Detail = "no signed connector plugin surface is configured"
-		return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "plugin_surface_unconfigured")
+		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
+			"plugin_surface_unconfigured", "no signed connector plugin surface is configured",
+			errors.New("server: signed connector plugin surface is not configured"))
 	}
 	if !d.plugins.Has(p.Connector) {
-		receipt.Detail = "connector is not owned by a loaded signed plugin"
-		return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "plugin_not_loaded")
+		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
+			"plugin_not_loaded", "connector is not owned by a loaded signed plugin",
+			errors.New("server: connector is not owned by a loaded signed plugin"))
 	}
-	// Idempotent on the outbox key (AN-5 ↔ AN-6): a redelivery returns the recorded
-	// result without invoking the plugin again.
-	_, err = d.idem.Do(ctx, m.TenantID, "deploy:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+	// A signed plugin has no enforceable receiver-side idempotency contract. Claim
+	// it before I/O and never guess that replaying its mutation is harmless.
+	effect := func(ctx context.Context) ([]byte, error) {
 		handled, derr := d.plugins.Deploy(ctx, m.TenantID, p)
 		if derr != nil {
-			_ = d.recordConnectorDelivery(ctx, m.TenantID, receipt, "failed", derr.Error())
-			return nil, derr
+			return nil, d.failConnectorDelivery(ctx, m.TenantID, receipt,
+				"plugin_delivery_failed", "signed connector plugin reported a deployment failure", derr)
 		}
 		if !handled {
-			receipt.Detail = "loaded plugin declined this connector payload"
-			if err := d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "plugin_declined"); err != nil {
-				return nil, err
-			}
-			return []byte("unrouted"), nil
+			return nil, d.failConnectorDelivery(ctx, m.TenantID, receipt,
+				"plugin_declined", "loaded signed plugin declined the connector payload",
+				errors.New("server: loaded signed plugin declined connector deployment"))
 		}
+		receipt.Detail = "delivered by served signed connector plugin"
 		receipt.RollbackRef = "restore previous certificate for " + p.Target
 		if err := d.recordConnectorDelivery(ctx, m.TenantID, receipt, "delivered", "plugin_delivered"); err != nil {
 			return nil, err
 		}
+		if d.afterDeploySideEffects != nil {
+			if err := d.afterDeploySideEffects(ctx); err != nil {
+				return nil, err
+			}
+		}
 		return []byte("deployed:" + p.Connector), nil
-	})
+	}
+	return d.runConnectorEffect(ctx, m, receipt, connector.ReplaySafetyAtMostOnce, effect)
+}
+
+// runConnectorEffect applies the connector's audited receiver contract. A
+// replay-safe receiver may be called again after a crash; an unsafe receiver is
+// claimed before I/O. For the unsafe path, an already committed delivery receipt
+// is the local reconciliation point for the smaller crash-after-receipt window.
+func (d *issuanceDispatcher) runConnectorEffect(ctx context.Context, m orchestrator.Message, receipt connectorDeliveryEvidence, safety connector.ReplaySafety, effect func(context.Context) ([]byte, error)) error {
+	key := "deploy:" + m.IdempotencyKey
+	if safety == connector.ReplaySafetyReconciled {
+		_, err := d.idem.DoDurableEffect(ctx, m.TenantID, key, effect)
+		return err
+	}
+	delivered, err := d.hasCommittedConnectorDelivery(ctx, m.TenantID, receipt)
+	if err != nil {
+		return err
+	}
+	if delivered {
+		return nil
+	}
+	_, err = d.idem.DoAtMostOnceEffect(ctx, m.TenantID, key, effect)
 	return err
+}
+
+func (d *issuanceDispatcher) failConnectorDelivery(ctx context.Context, tenantID string, receipt connectorDeliveryEvidence, reason, detail string, cause error) error {
+	receipt.Detail = detail
+	receipt.RollbackRef = ""
+	recordErr := d.recordConnectorDelivery(ctx, tenantID, receipt, "failed", reason)
+	if recordErr != nil {
+		return errors.Join(cause, fmt.Errorf("server: record connector delivery failure: %w", recordErr))
+	}
+	return cause
+}
+
+// hasCommittedConnectorDelivery accepts only the deterministic receipt for this
+// exact outbox effect. A collision or altered binding fails closed instead of
+// treating some other delivery as proof that this credential reached its target.
+func (d *issuanceDispatcher) hasCommittedConnectorDelivery(ctx context.Context, tenantID string, want connectorDeliveryEvidence) (bool, error) {
+	if d.store == nil {
+		return false, nil
+	}
+	got, err := d.store.GetConnectorDeliveryReceipt(ctx, tenantID, want.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("server: reconcile connector delivery receipt: %w", err)
+	}
+	if got.Status != "delivered" {
+		return false, nil
+	}
+	if !sameOutboxID(got.OutboxID, want.OutboxID) ||
+		got.Destination != want.Destination ||
+		got.IdempotencyKey != want.IdempotencyKey ||
+		got.Connector != want.Connector ||
+		got.Target != want.Target ||
+		got.Fingerprint != want.Fingerprint {
+		return false, fmt.Errorf("server: connector delivery receipt %s does not match its outbox binding", want.ID)
+	}
+	return true, nil
+}
+
+func sameOutboxID(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 type connectorDeliveryEvidence struct {
@@ -870,10 +1061,12 @@ type rotationRunEvidence struct {
 
 func (d *issuanceDispatcher) resolveDeployPayload(ctx context.Context, m orchestrator.Message) (connector.DeployPayload, *string, string, error) {
 	if p, identityID, detail, sealed, err := d.openSealedConnectorDeployPayload(m); sealed || err != nil {
+		p.TenantID = m.TenantID
 		return p, identityID, detail, err
 	}
 	var p connector.DeployPayload
 	if err := json.Unmarshal(m.Payload, &p); err == nil && (p.Connector != "" || p.Target != "" || p.Fingerprint != "" || len(p.CertPEM) > 0 || len(p.KeyPEM) > 0) {
+		p.TenantID = m.TenantID
 		var identityID *string
 		if id := strings.TrimSpace(p.IdentityID); id != "" {
 			identityID = &id
@@ -892,8 +1085,20 @@ func (d *issuanceDispatcher) resolveDeployPayload(ctx context.Context, m orchest
 		return connector.DeployPayload{}, nil, "", fmt.Errorf("server: load identity %s for deploy receipt: %w", trig.IdentityID, err)
 	}
 	connName, target := deploymentRoutingAttrs(ident.Attributes)
+	targetID := deploymentTargetID(ident.Attributes)
 	p.Connector = connName
 	p.Target = nonempty(target, ident.Name)
+	p.TargetID = targetID
+	p.TenantID = m.TenantID
+	if targetID != "" {
+		configured, targetErr := d.store.GetDeploymentTarget(ctx, m.TenantID, targetID)
+		if targetErr != nil {
+			return connector.DeployPayload{}, nil, "", fmt.Errorf("server: load deployment target %s for deploy receipt: %w", targetID, targetErr)
+		}
+		p.Connector = configured.Type
+		p.TargetRevision = configured.RevisionID
+		p.TargetConfig = append(json.RawMessage(nil), configured.Config...)
+	}
 	certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
 	if err != nil {
 		return connector.DeployPayload{}, nil, "", fmt.Errorf("server: load active certificate for deploy receipt %s: %w", trig.IdentityID, err)
@@ -1008,6 +1213,17 @@ func deploymentRoutingAttrs(raw json.RawMessage) (string, string) {
 	connectorName := firstStringAttr(attrs, "connector", "deployment_connector", "connector_name")
 	target := firstStringAttr(attrs, "deployment_route", "target", "deployment_target", "deployment_target_id", "deployment_location")
 	return connectorName, target
+}
+
+func deploymentTargetID(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var attrs map[string]any
+	if err := json.Unmarshal(raw, &attrs); err != nil {
+		return ""
+	}
+	return firstStringAttr(attrs, "deployment_target_id")
 }
 
 func firstStringAttr(attrs map[string]any, keys ...string) string {

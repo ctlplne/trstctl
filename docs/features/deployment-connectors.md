@@ -45,13 +45,15 @@ Delivery uses reliable, journaled delivery: the orchestrator writes a `connector
 message in the *same transaction* as the state change that requested deployment — so a
 crash can't drop it — and the running binary's outbox worker decodes it. The worker first
 checks the trusted native `ConnectorRegistry`, then the provenance-verified signed WASM
-connector plugins, and otherwise records an `unrouted` receipt. If a native registry entry
-owns the connector and the payload carries `cert_pem` plus `key_pem`, the worker runs the
-connector at-least-once and records a `delivered` or `failed` receipt. Each connector must
-be idempotent on the certificate's fingerprint, so a retry never breaks anything; a
-conformance suite proves every connector names itself, declares ≥1 capability, deploys, is
-idempotent on re-deploy, and denies an ungranted operation. Connectors compute fingerprints
-and any request signing through the single crypto path — none of them do crypto directly.
+connector plugins. If neither owns the name, the worker records a `failed` receipt and leaves
+the row pending; it never acknowledges configured work without touching a receiver. A
+`queued` receipt has `attempts=0` and means only that durable work exists, not that deployment
+happened. Proven deterministic/readback connectors may retry after a crash. Import, exec, and
+signed-plugin receivers without an enforced replay contract are claimed before I/O and become
+operator-indeterminate after an ambiguous failure instead of risking a duplicate mutation.
+The production registry's replay classification is closed and linked to repeated-deploy tests.
+Connectors compute fingerprints and request signing through the single crypto path — none of
+them do crypto directly.
 
 Retries use capped exponential backoff with per-row jitter, so a failed CA, webhook, or
 connector does not receive a synchronized retry storm. The worker also keeps a
@@ -92,11 +94,38 @@ console. A target names the connector, the route name, and references to credent
 operator-managed endpoint config; it does not store passwords, tokens, private keys, or
 certificate key bytes.
 
+The control-plane operator first enables the native connector and, for a local
+file/reload target, defines the exact roots and executables that tenant target rows may
+use. This is process configuration, so a tenant cannot grant itself a new filesystem
+root or command:
+
+```json
+{
+  "connectors": {
+    "enabled": ["nginx"],
+    "local_profiles": {
+      "nginx-prod": {
+        "allowed_roots": ["/etc/nginx/tls"],
+        "actions": [{
+          "logical_name": "nginx",
+          "command": "/usr/sbin/nginx",
+          "pass_args": true,
+          "timeout": "15s"
+        }]
+      }
+    }
+  }
+}
+```
+
+Then a tenant with `connectors:write` creates the target with the connector's strict
+target schema:
+
 ```sh
 trstctl connector target create \
   --name edge/prod/payments \
   --connector nginx \
-  --config-json '{"credential_ref":"secret://connectors/nginx/edge","host":"edge-1.internal"}'
+  --config-json '{"profile":"nginx-prod","cert_path":"/etc/nginx/tls/payments.crt","key_path":"/etc/nginx/tls/payments.key"}'
 
 trstctl connector target bind --identity "$IDENTITY_ID" --target "$TARGET_ID"
 trstctl connector target test --target "$TARGET_ID"
@@ -118,22 +147,49 @@ owner, binds that identity to the target, and queues the normal `ca.issue` and
 `ca.renew` path, so the renewed successor is delivered back to the same endpoint
 binding and produces a second connector receipt.
 
-Connectors themselves are wired at process composition time: register the trusted
-in-process connectors you need, give each one the narrow `Ops` implementation it is
-allowed to use, and pass that registry to `server.Build`. The same served outbox worker
-that handles CA issuance and revocation then drives deployment.
+The shipped `trstctl` composition constructs the trusted native registry from
+`connectors.enabled`; applications do not need to call `connector.NewRegistry`.
+Remote targets put only `secret://name` references in target JSON. The referenced
+credential is read from that tenant's encrypted secret store into locked memory for
+one outbox attempt, then destroyed. For example, an F5 target uses
+`{"endpoint":"https://bigip.internal","client_ssl_profile":"payments","username":"svc-trstctl","password_ref":"secret://connectors/f5/password"}`.
+Private management endpoints must also be admitted by the operator-owned
+`connectors.allow_private_cidrs` list. Plain HTTP is rejected unless the operator
+explicitly enables the development/emulator override for a loopback URL. That client
+can resolve and dial only loopback addresses; private CIDR grants never widen the
+plaintext exception. Do not enable it in production.
 
-```go
-reg := connector.NewRegistry(opsFor) // opsFor returns real HTTP/fs/exec Ops per connector.
-reg.Register(nginx.New(nginx.WithBinary("/usr/sbin/nginx")))
-reg.Register(acm.New("us-east-1", acm.Credentials{ /* ... */ }))
+The target JSON is closed and provider-specific; unknown fields fail the attempt
+instead of being ignored:
 
-srv, err := server.Build(ctx, server.Deps{
-    Store: store,
-    Log:   log,
-    ConnectorRegistry: reg,
-})
-```
+| Connector(s) | Required target `config` fields |
+| --- | --- |
+| `nginx`, `apache`, `caddy`, `traefik`, `postgresql`, `mysql`, `rabbitmq`, `elasticsearch`, `tomcat` | `profile`, `cert_path`, `key_path` |
+| `haproxy` | `profile`, `crt_path`, `config_path` |
+| `iis` | `profile`, `binding`, `import_dir`; optional `store`, `app_id` |
+| `postfix` | `profile`, `postfix_cert_path`, `postfix_key_path`, `dovecot_cert_path`, `dovecot_key_path` |
+| `java-keystore` | `profile`, `keystore_path`, `keystore_password_ref`, `alias`; optional `format` (`jks` or `pkcs12`) |
+| `envoy` | `endpoint`, `secret_name` |
+| `f5` | `endpoint`, `client_ssl_profile`, `username`, `password_ref`; optional `object_name` |
+| `netscaler` | `endpoint`, `username`, `password_ref`; optional `file_location` |
+| `a10`, `cisco` | `endpoint`, `username`, `password_ref` |
+| `kemp`, `fortigate` | `endpoint`, `token_ref` |
+| `paloalto` | `endpoint`, `api_key_ref` |
+| `aws-acm` | `endpoint`, `region`, `access_key_id`, `secret_access_key_ref`; optional `session_token_ref` |
+| `azure-keyvault` | `endpoint`, `bearer_token_ref`; optional `api_version` |
+| `gcp-certificate-manager` | `endpoint`, `project`, `location`, `bearer_token_ref`; optional `poll_interval` |
+
+Every `*_ref` in this table is a `secret://name` or
+`secret://name?version=N` reference in the same tenant. Every `profile` points to
+an operator-owned `connectors.local_profiles` entry. Local profile actions map the
+connector's logical command (`nginx`, `apachectl`, `caddy`, `powershell`, `netsh`,
+`haproxy`, `systemctl`, `postfix`, `doveconf`, `doveadm`, `pg_ctl`, `mysqladmin`,
+`rabbitmqctl`, or `catalina.sh`) to one absolute executable. General-purpose Unix
+shells are rejected. IIS may map its native `powershell` action to PowerShell only
+when the operator supplies an exact `logical_args` allowlist and a separate exact
+`args` execution list with `pass_args: false`; this makes the requested argv a
+comparison value and forwards no tenant-derived byte to `-Command`. Symlinked
+executables are rejected for every local profile.
 
 For endpoint-binding issue and renewal flows, the issuer builds a credential-bearing
 `connector.deploy` payload while the freshly generated private key is still in memory,
@@ -146,11 +202,12 @@ they do not claim target mutation. To add a target trstctl doesn't ship, follow 
 
 ## Pitfalls & limits
 
-- **Serving status:** the SDK and all shipped connectors (initial + appliance) are wired
-  into the served outbox path through `server.Deps.ConnectorRegistry`, and signed WASM
+- **Serving status:** the SDK and all 24 shipped connectors (initial + appliance) are
+  constructed from `connectors.enabled` by the shipped binary and wired into the served
+  outbox path through `server.Deps.ConnectorRegistry`; signed WASM
   connector plugins remain a second served path for third-party code. Tenant-scoped
   target CRUD, test, deploy, rollback, and identity binding are served; target mutation
-  still requires a native connector registry or signed plugin owner.
+  requires the matching native connector to be enabled or a signed plugin owner.
 - **Grants are deny-by-default.** If a connector seems to "do nothing," check it
   declared the capability for the operation — an ungranted op fails with `ErrDenied`,
   which is the safety net working as designed.
@@ -166,7 +223,8 @@ they do not claim target mutation. To add a target trstctl doesn't ship, follow 
 - **Capabilities:** `fs.read`, `fs.write`, `net.dial`, `process.exec` (path/host
   prefix-constrained).
 - **Initial connectors (F7):** `nginx`, `apache`, `caddy`, `haproxy`, `iis`,
-  `traefik`, `envoy`, `postfix`, `aws-acm`, `azurekv`, `gcpcm`, `javakeystore`, `f5`.
+  `traefik`, `envoy`, `postfix`, `aws-acm`, `azure-keyvault`,
+  `gcp-certificate-manager`, `java-keystore`, `f5`.
 - **Published catalog breadth (CAP-DEP-09):** first-party native targets also include
   `postgresql`, `mysql`, `rabbitmq`, `elasticsearch`, and `tomcat`, taking the shipped
   production connector catalog to 24 entries before signed third-party plugins.

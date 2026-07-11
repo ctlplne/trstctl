@@ -87,20 +87,21 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 	defer cancel()
 	if _, err := st.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox, rate_limits,
-		          owners, issuers, identities, identity_transitions, deployment_targets,
+		          owners, issuers, identities, identity_transitions, deployment_target_revisions, deployment_targets,
 		          agents, agent_cert_revocations, agent_bootstrap_tokens, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
 		          workload_attester_trust_sources,
 		          discovery_sources, discovery_schedules, discovery_runs, discovery_findings,
-		          notification_channels, notification_reads, notification_threshold_deliveries, notification_routing_policies,
+		          notification_channels, notification_reads, notification_threshold_deliveries, notification_test_operations,
+		          notification_delivery_receipts, notification_routing_policies,
 		          connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs,
 		          incident_executions, incident_fleet_reissuance_runs,
 		          pam_sessions, nhi_access_review_campaigns, nhi_access_review_items,
 		          access_change_requests, access_change_request_decisions, compliance_report_schedules,
 		          privacy_subject_erasures, privacy_retention_runs, privacy_archive_erasure_attestations,
-		          secret_shares, secret_store, read_model_snapshots,
+		          secret_shares, secret_store, dynamic_secret_operations, dynamic_secret_leases, secret_sync_jobs, read_model_snapshots,
 		          issuance_approval_requests, issuance_approvals
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("reset shared server postgres: %v", err)

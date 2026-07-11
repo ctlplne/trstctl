@@ -20,7 +20,7 @@ import (
 	"unicode"
 
 	"trstctl.com/trstctl/internal/connector"
-	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
@@ -99,6 +99,7 @@ func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connecto
 		c.observe(dep.Target, "error")
 		return err
 	}
+	defer wipeStates(old)
 	if allSame(old, files, dep) {
 		c.observe(dep.Target, "noop")
 		return nil
@@ -233,9 +234,18 @@ func readStates(sb connector.Sandbox, files []desiredFile) (map[string]fileState
 			out[f.path] = fileState{path: f.path}
 			continue
 		}
+		wipeStates(out)
 		return nil, fmt.Errorf("postfix: read current %s: %w", f.label, err)
 	}
 	return out, nil
+}
+
+func wipeStates(states map[string]fileState) {
+	for key, state := range states {
+		secret.Wipe(state.data)
+		state.data = nil
+		states[key] = state
+	}
 }
 
 func allSame(old map[string]fileState, files []desiredFile, dep connector.Deployment) bool {
@@ -245,7 +255,7 @@ func allSame(old map[string]fileState, files []desiredFile, dep connector.Deploy
 			return false
 		}
 		if f.cert {
-			if crypto.SHA256Hex(st.data) != dep.Fingerprint {
+			if connector.CertificateFingerprint(st.data) != dep.Fingerprint {
 				return false
 			}
 			continue

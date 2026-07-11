@@ -30,7 +30,7 @@ issuance layer is built to make each of those hard.
 
 Every certificate trstctl issues goes through a single, uniform interface — a `CA`
 with one real method, `Issue(request)` — no matter who actually signs. The built-in
-in-process CA, a CA in your own [hierarchy](#running-your-own-ca-hierarchy-f48), and
+signer-backed CA, a CA in your own [hierarchy](#running-your-own-ca-hierarchy-f48), and
 third-party authorities (Let's Encrypt/ACME, DigiCert, Sectigo, Microsoft AD CS,
 AWS Private CA, Google CAS, EJBCA, Smallstep, Venafi TPP/TLS Protect, Vault PKI,
 GlobalSign, Entrust, and the shell CA escape hatch) all implement that same interface.
@@ -50,9 +50,22 @@ authorities into one response with public/private counts, source ids, status, an
 served path pointers. It does not return certificate PEM or private key material.
 
 That single path is where the intended guarantees are wired to receipts. Each issuance
-carries an [`Idempotency-Key`](../glossary.md): the first call mints the certificate
-and writes a `ca.issue` record to the [outbox](../glossary.md) in the same database
-transaction (journaled first so a crash can't silently drop it). The
+carries an [`Idempotency-Key`](../glossary.md). For an upstream CA, the request first
+commits one tenant-scoped `external-ca.issue` [outbox](../glossary.md) intent. Only the
+normal bounded dispatcher calls the provider; the request waits for its exact
+tenant/key result and never drains unrelated tenants or destinations. Immediately
+before a provider that lacks a native request token is called, the worker durably
+claims that exact operation once and releases its database transaction. Providers
+whose receiver enforces the supplied token (AWS PCA, Azure Key Vault, and Google CAS)
+use the reconciled retry lane; every unproven adapter remains at-most-once. A completed
+result is replayed byte-for-byte from the `certificate.recorded` projection even after
+the bounded HTTP-idempotency result and delivered outbox row are collected. That
+projection retains the public chain plus a non-secret digest of caller, route,
+authority, CSR, names, profile, EKUs, and TTL, so a changed command gets 409 before
+provider I/O. An interrupted, ambiguous tokenless submission is never sent a second
+time: it remains explicitly indeterminate instead of guessing that the CA did nothing.
+After a definite provider result, the worker emits `certificate.recorded`, rebuildably
+projects the certificate inventory, and records the separate `ca.issue` evidence row. The
 identity-transition issuance retry path (`POST /api/v1/identities/{id}/transitions`
 to `issued`) is a known AN-5 blocker until CORRECT closes the served-stack Compose E2E
 receipt, so this page does not claim that retrying that transition with the same
@@ -64,12 +77,19 @@ anything is signed, with an `issuance.profile_evaluated` event recorded either w
 the tamper-evident log.
 
 Upstream CA credentials are configured by the control-plane operator, not written
-through tenant JSON: API keys and provider handles stay in process configuration or
-secret-backed plugin setup, then the API exposes only the non-secret registry row
-(`id`, `type`, `name`, `status`). If a retry reuses the same idempotency key, the API
-returns the cached certificate response and the upstream CA is not asked to sign again.
-If the process crashes after recording the outbox intent, the outbox worker can resume
-delivery without losing the fact that an external issuance happened.
+through tenant JSON. File references are loaded into locked byte buffers for one
+outbox attempt and wiped afterward; a shell-CA child receives credentials only through
+anonymous inherited descriptors. Azure CA private-key operations and Let's Encrypt
+account JWS signatures stay in the isolated signer. The API exposes only the
+non-secret registry row (`id`, `type`, `name`, `status`). If a retry reuses the same
+idempotency key after completion, the API returns the original projected certificate
+response and the upstream CA is not asked to sign again, including after response and
+outbox garbage collection. If the process crashes before submission,
+the outbox worker resumes it; if it crashes during an unqueryable submission, the
+at-most-once claim fails closed as indeterminate and never blind-repeats the mint.
+The production `external_cas` JSON shape, `file:/absolute/path` credential references,
+private-endpoint allowlist, custom trust-root, and mTLS fields are documented in
+[Configuration](../configuration.md#native-connector-and-external-ca-assembly).
 
 ### Kubernetes CRD-native issuance
 
@@ -310,15 +330,13 @@ wipeable memory there — only signatures and public keys cross the wire. Every 
 pass a conformance harness (`ConformBackend`) before it's trusted: it signs a probe,
 verifies it, and confirms a wrong message and a tampered signature both fail.
 
-The PKCS#11 backend now has a native module adapter as well as the fast injected
-test double: an integration test initializes a real SoftHSM token in a container,
-generates a non-extractable RSA-2048 key on that token, signs through the module,
-and verifies the returned public key through the shared backend conformance harness.
-Default release binaries stay static (`CGO_ENABLED=0`); deployments that need a
-local PKCS#11 module build the signer/control-plane package with cgo enabled and
-provide the module path, token label, and user PIN through operator-managed secret
-configuration. Other hardware families still use the same backend contract, with
-their own provider maturity and device setup requirements.
+The release includes a dedicated cgo HSM signer artifact. Its PKCS#11 adapter opens
+the configured native module and uses stable token `CKA_ID` values across signer
+restarts; TPM 2.0 uses `google/go-tpm` persistent handles; YubiHSM 2 uses Yubico's
+`yubihsm_pkcs11` ABI. The launched-binary gate proves SoftHSM and swtpm lifecycle
+behavior with independent command-line readback. The default control-plane artifact
+remains static and never loads a native module; provider credentials and private-key
+operations stay inside the separate signer.
 
 Buyer receipt for CAP-KEY-05 Multiple algorithms (RSA / ECDSA / Ed25519) + Enterprise/PQC:
 the served profile path is `POST /api/v1/profiles` and
@@ -337,10 +355,10 @@ live under `ee/pqc` and `ee/pqcmigration`, so they are not counted as MPL-core
 served evidence.
 
 The managed-key API spine is configuration- and license-gated for AWS KMS, Azure
-Key Vault / Managed HSM, GCP Cloud KMS, and PKCS#11 HSM custody. When
-`managed_keys.enabled` is true and
-`managed_keys.provider` is `aws`, `azure-key-vault`, `gcp-kms`, or `pkcs11`, the
-running control plane exposes:
+Key Vault / Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2 custody.
+When `managed_keys.enabled` is true and `managed_keys.provider` selects one of
+`aws`, `azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2`, the running
+control plane exposes:
 
 - `POST /api/v1/managed-keys` to create a KMS/HSM-resident, non-extractable signing
   key (`extractable: false` in the response; no private material is returned);
@@ -349,14 +367,14 @@ running control plane exposes:
 - `POST /api/v1/managed-keys/zeroize` to schedule provider-side destruction.
 
 The CLI mirrors those verbs under `trstctl managed-keys`. Every request is
-tenant-scoped, idempotent, and recorded as a key-material-free lifecycle event. Rotate,
-revoke, and zeroize require a distinct approval when four-eyes governance is enabled,
-so one operator cannot silently destroy a tenant's signing key. Current cloud KMS
-lifecycle tests exercise the provider wire shape with author-controlled HTTP doubles;
-they do not claim emulator or live-cloud acceptance. PKCS#11 has a SoftHSM-shaped
-served harness and a native SoftHSM module conformance test when Docker/cgo are
-available. The DoD wiring/runtime census remains the authority for which backend is
-actually present in a shipped artifact.
+tenant-scoped, idempotent, and recorded as a key-material-free lifecycle event before
+its PostgreSQL outbox command is delivered to the signer. Rotate, revoke, and
+zeroize retain their governance checks. The required DoD gate launches the shipped
+control-plane and cgo signer, exercises all six providers against faithful cloud
+emulators, SoftHSM, or swtpm, stops the signer with a committed rotation outstanding,
+and independently verifies the resulting provider state. Those receipts prove the
+supported protocol/device boundary; they are not a claim of live-cloud-account or
+customer-device certification.
 
 The same key-management posture includes the served CAP-KEY-03 FIPS path:
 `GET /api/v1/editions` and the Platform page expose the live FIPS POST booleans,
@@ -412,17 +430,17 @@ external CA registry API, each of which calls the one issuance path with an
 
 ## Pitfalls & limits
 
-- **Private-key custody is a deployment boundary.** The served CA path uses the
-  separate signer process. HSM/KMS lifecycle adapters exist, but none is currently
-  census-served in the shipped artifact; do not infer production HSM custody from
-  package presence or configuration examples. See [configuration](../configuration.md)
-  for `TRSTCTL_SIGNER_MODE` and the exact residuals.
-- **Hardware bindings are not yet served breadth.** AWS KMS, Azure Key Vault HSM,
-  GCP Cloud KMS, and PKCS#11 lifecycle packages have unit/contract coverage, but the
-  shipped wiring census currently serves zero HSM/KMS backends. Cloud tests use
-  author-controlled HTTP doubles; they are not LocalStack or live-cloud proof.
-  SoftHSM exercises the cgo PKCS#11 package, not the default static release artifact.
-  See the exact residuals in [limitations](../limitations.md).
+- **Private-key custody is a deployment boundary.** All six managed-key backends
+  are census-served through the separate HSM signer artifact, but the operator must
+  still provision an Enterprise BYOK license, one provider, credential files, IAM,
+  network egress, and device/module trust. See [configuration](../configuration.md)
+  for the exact startup contract.
+- **Emulator proof is not deployment certification.** The cloud gate uses faithful
+  vendor-protocol emulators, PKCS#11/YubiHSM use a SoftHSM-backed ABI target, and TPM
+  uses swtpm. This is stronger than an author-injected registry or package unit test,
+  but it is not LocalStack, a live cloud account, a physical customer HSM, or the
+  device's FIPS certificate. The native bindings ship in the cgo HSM signer artifact,
+  not the default static control-plane artifact.
 - **ARI-driven lifecycle scheduling is for trstctl-issued deployed X.509 identities.**
   Certificates discovered from another CA can still be inventoried and risk-scored, but
   renewing them requires a configured issuer path that can replace that outside

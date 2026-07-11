@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/notify"
@@ -225,6 +227,81 @@ func TestServedMultiChannelAlertingCAPOBS05(t *testing.T) {
 	}
 }
 
+func TestNotificationFanoutReceiptsSurvivePartialRetryAndOutboxAckCrash(t *testing.T) {
+	good := &namedFlakyNotificationChannel{name: "slack"}
+	bad := &namedFlakyNotificationChannel{name: "webhook", err: errors.New("receiver unavailable")}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.NotificationChannels = []notify.Notifier{good, bad}
+	})
+	alert, err := json.Marshal(notify.Alert{
+		Kind: notify.KindUnexpectedIssuance, TenantID: h.tenant,
+		Subject: "fanout-receipt.served.test", Severity: notify.AlertSeverityCritical,
+	})
+	if err != nil {
+		t.Fatalf("marshal alert: %v", err)
+	}
+	const key = "notification-receipt-partial-1"
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		_, err := h.srv.outbox.Enqueue(t.Context(), tx, orchestrator.Entry{
+			TenantID: h.tenant, Destination: notify.DestinationCTLog,
+			IdempotencyKey: key, Payload: alert,
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("enqueue fan-out alert: %v", err)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain partial fan-out: %v", err)
+	}
+	if good.deliveries() != 1 || bad.deliveries() != 0 {
+		t.Fatalf("first fan-out good=%d bad=%d, want 1/0", good.deliveries(), bad.deliveries())
+	}
+
+	bad.setError(nil)
+	forceNotificationOutboxPending(t, h, key)
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain recovered fan-out: %v", err)
+	}
+	if good.deliveries() != 1 || bad.deliveries() != 1 {
+		t.Fatalf("retry fan-out good=%d bad=%d, want 1/1", good.deliveries(), bad.deliveries())
+	}
+	var receipts int
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(),
+			`SELECT count(*) FROM notification_delivery_receipts WHERE tenant_id = $1`,
+			h.tenant).Scan(&receipts)
+	}); err != nil {
+		t.Fatalf("count delivery receipts: %v", err)
+	}
+	if receipts != 2 {
+		t.Fatalf("delivery receipts = %d, want 2", receipts)
+	}
+
+	// Simulate process death after both receipt projections but before the generic
+	// outbox ACK by putting the same envelope back in the pending queue.
+	forceNotificationOutboxPending(t, h, key)
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain crash replay: %v", err)
+	}
+	if good.deliveries() != 1 || bad.deliveries() != 1 {
+		t.Fatalf("crash replay resent a successful channel: good=%d bad=%d", good.deliveries(), bad.deliveries())
+	}
+}
+
+func forceNotificationOutboxPending(t *testing.T, h *servedHarness, key string) {
+	t.Helper()
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(),
+			`UPDATE outbox
+			    SET status = 'pending', next_attempt_at = now(), delivered_at = NULL,
+			        worker_id = NULL, lease_until = NULL
+			  WHERE tenant_id = $1 AND idempotency_key = $2`, h.tenant, key)
+		return err
+	}); err != nil {
+		t.Fatalf("force notification outbox pending: %v", err)
+	}
+}
+
 func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *testing.T) {
 	httpSink := newMultiChannelHTTPSink(t)
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
@@ -330,6 +407,119 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 	}
 	if !h.hasEvent(t, "notification.routing_policy.upserted") {
 		t.Fatal("missing notification.routing_policy.upserted event")
+	}
+}
+
+func TestNotificationChannelTestDurablyRejectsCallerDriftAndCannotReuseAnotherOutboxCommand(t *testing.T) {
+	channel := &flakyNotificationChannel{}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.NotificationChannels = []notify.Notifier{channel}
+	})
+	firstToken := seedScopedTokenSubject(t, h.store, h.tenant, "notification-operator-a", "notifications:read", "notifications:write")
+	secondToken := seedScopedTokenSubject(t, h.store, h.tenant, "notification-operator-b", "notifications:read", "notifications:write")
+	const rawKey = "notification-cross-subsystem-key"
+
+	// This is the historical collision: the raw key already belongs to a
+	// different subsystem. Notification tests now use a namespaced receiver key
+	// and retain their authenticated command digest in the payload.
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		_, err := h.srv.outbox.Enqueue(context.Background(), tx, orchestrator.Entry{
+			TenantID: h.tenant, Destination: ca.DestinationExternalCAIssue,
+			IdempotencyKey: rawKey, Payload: []byte(`{"authority_id":"unrelated"}`),
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("seed unrelated outbox command: %v", err)
+	}
+	body := map[string]any{"subject": "durable channel test", "severity": "critical"}
+	status, firstResponse := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/email/test", firstToken, rawKey, body)
+	if status != http.StatusAccepted {
+		t.Fatalf("notification test beside unrelated raw key = %d body=%s, want 202", status, firstResponse)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("deliver initial notification test: %v", err)
+	}
+	if channel.deliveries() != 1 {
+		t.Fatalf("initial notification receiver calls = %d, want 1", channel.deliveries())
+	}
+	var notificationRows int
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(context.Background(),
+			`SELECT count(*) FROM outbox
+			  WHERE tenant_id = $1 AND destination = 'notification.test'
+			    AND idempotency_key LIKE 'notification.test:%'`, h.tenant).Scan(&notificationRows); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(context.Background(),
+			`DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, h.tenant, rawKey); err != nil {
+			return err
+		}
+		_, err := tx.Exec(context.Background(),
+			`DELETE FROM outbox
+			  WHERE tenant_id = $1 AND destination = 'notification.test'
+			    AND idempotency_key LIKE 'notification.test:%'`, h.tenant)
+		return err
+	}); err != nil {
+		t.Fatalf("inspect notification intent / expire API and outbox caches: %v", err)
+	}
+	if notificationRows != 1 {
+		t.Fatalf("namespaced notification rows = %d, want 1", notificationRows)
+	}
+	h.srv.notifications.Close()
+	status, replayBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/email/test", firstToken, rawKey, body)
+	if status != http.StatusAccepted {
+		t.Fatalf("exact replay after response GC and channel removal = %d body=%s, want 202", status, replayBody)
+	}
+	if !bytes.Equal(replayBody, firstResponse) {
+		t.Fatalf("exact replay body changed after GC: first=%s replay=%s", firstResponse, replayBody)
+	}
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(),
+			`SELECT count(*) FROM outbox
+			  WHERE tenant_id = $1 AND destination = 'notification.test'`, h.tenant).Scan(&notificationRows)
+	}); err != nil {
+		t.Fatalf("count post-GC replay outbox: %v", err)
+	}
+	if notificationRows != 0 {
+		t.Fatalf("exact post-GC replay recreated %d notification outbox rows", notificationRows)
+	}
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(context.Background(),
+			`DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, h.tenant, rawKey)
+		return err
+	}); err != nil {
+		t.Fatalf("expire replayed notification response: %v", err)
+	}
+
+	status, conflictBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/email/test", secondToken, rawKey, body)
+	if status != http.StatusConflict {
+		t.Fatalf("changed caller after response GC = %d body=%s, want 409", status, conflictBody)
+	}
+	if channel.deliveries() != 1 {
+		t.Fatalf("changed caller reached notification receiver %d times", channel.deliveries())
+	}
+	status, originalReplay := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/email/test", firstToken, rawKey, body)
+	if status != http.StatusAccepted || !bytes.Equal(originalReplay, firstResponse) {
+		t.Fatalf("changed caller poisoned legitimate replay: status=%d first=%s replay=%s", status, firstResponse, originalReplay)
+	}
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(context.Background(),
+			`DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, h.tenant, rawKey)
+		return err
+	}); err != nil {
+		t.Fatalf("expire second replayed notification response: %v", err)
+	}
+	changedBody := map[string]any{"subject": "changed durable channel test", "severity": "critical"}
+	status, conflictBody = secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/email/test", firstToken, rawKey, changedBody)
+	if status != http.StatusConflict {
+		t.Fatalf("changed body after response GC = %d body=%s, want 409", status, conflictBody)
+	}
+	status, originalReplay = secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/email/test", firstToken, rawKey, body)
+	if status != http.StatusAccepted || !bytes.Equal(originalReplay, firstResponse) {
+		t.Fatalf("changed body poisoned legitimate replay: status=%d first=%s replay=%s", status, firstResponse, originalReplay)
+	}
+	if channel.deliveries() != 1 {
+		t.Fatalf("caller/body drift reached notification receiver %d times", channel.deliveries())
 	}
 }
 
@@ -654,6 +844,13 @@ type flakyNotificationChannel struct {
 	count int
 }
 
+type namedFlakyNotificationChannel struct {
+	mu    sync.Mutex
+	name  string
+	err   error
+	count int
+}
+
 type capturingEmailSender struct {
 	mu    sync.Mutex
 	count int
@@ -692,6 +889,30 @@ func (f *flakyNotificationChannel) Notify(context.Context, notify.Alert) error {
 }
 
 func (f *flakyNotificationChannel) deliveries() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.count
+}
+
+func (f *namedFlakyNotificationChannel) Name() string { return f.name }
+
+func (f *namedFlakyNotificationChannel) Notify(context.Context, notify.Alert) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.count++
+	return nil
+}
+
+func (f *namedFlakyNotificationChannel) setError(err error) {
+	f.mu.Lock()
+	f.err = err
+	f.mu.Unlock()
+}
+
+func (f *namedFlakyNotificationChannel) deliveries() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.count

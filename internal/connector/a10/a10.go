@@ -10,10 +10,8 @@ package a10
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,6 +19,8 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // Connector deploys certificates to an A10 load balancer over HTTPS.
@@ -64,6 +64,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	if err != nil {
 		return fmt.Errorf("a10: %w", err)
 	}
+	defer secret.Wipe(token)
 	certFile := dep.Target + ".crt"
 	keyFile := dep.Target + ".key"
 	if err := c.upload(ctx, sb, token, "ssl-cert", certFile, dep.CertPEM); err != nil {
@@ -78,68 +79,86 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	return nil
 }
 
-func (c *Connector) login(ctx context.Context, sb connector.Sandbox) (string, error) {
-	data, err := c.call(ctx, sb, http.MethodPost, "/axapi/v3/auth", "", map[string]any{
-		"credentials": map[string]string{"username": c.user, "password": string(c.pass)},
+func (c *Connector) login(ctx context.Context, sb connector.Sandbox) ([]byte, error) {
+	data, err := c.call(ctx, sb, http.MethodPost, "/axapi/v3/auth", nil, authRequest{
+		Credentials: credentials{Username: c.user, Password: secretjson.StringBytes(c.pass)},
 	})
 	if err != nil {
-		return "", fmt.Errorf("login: %w", err)
+		return nil, fmt.Errorf("login: %w", err)
 	}
+	defer secret.Wipe(data)
 	var out struct {
 		AuthResponse struct {
-			Signature string `json:"signature"`
+			Signature secretjson.StringBytes `json:"signature"`
 		} `json:"authresponse"`
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
-		return "", fmt.Errorf("login: decode response: %w", err)
+		return nil, fmt.Errorf("login: decode response failed (details redacted)")
 	}
-	if strings.TrimSpace(out.AuthResponse.Signature) == "" {
-		return "", fmt.Errorf("login: response missing authresponse.signature")
+	defer secret.Wipe(out.AuthResponse.Signature)
+	if len(bytes.TrimSpace(out.AuthResponse.Signature)) == 0 {
+		return nil, fmt.Errorf("login: response missing authresponse.signature")
 	}
-	return out.AuthResponse.Signature, nil
+	return append([]byte(nil), out.AuthResponse.Signature...), nil
 }
 
-func (c *Connector) upload(ctx context.Context, sb connector.Sandbox, token, kind, filename string, content []byte) error {
-	_, err := c.call(ctx, sb, http.MethodPost, "/axapi/v3/file/"+kind, token, map[string]any{
-		kind: map[string]string{
-			"file":         filename,
-			"file-content": base64.StdEncoding.EncodeToString(content),
+func (c *Connector) upload(ctx context.Context, sb connector.Sandbox, token []byte, kind, filename string, content []byte) error {
+	data, err := c.call(ctx, sb, http.MethodPost, "/axapi/v3/file/"+kind, token, map[string]any{
+		kind: struct {
+			File        string                 `json:"file"`
+			FileContent secretjson.Base64Bytes `json:"file-content"`
+		}{
+			File:        filename,
+			FileContent: secretjson.Base64Bytes(content),
 		},
 	})
+	secret.Wipe(data)
 	return err
 }
 
-func (c *Connector) bind(ctx context.Context, sb connector.Sandbox, token, template, certFile, keyFile string) error {
-	_, err := c.call(ctx, sb, http.MethodPut, "/axapi/v3/slb/template/client-ssl/"+url.PathEscape(template), token, map[string]any{
+func (c *Connector) bind(ctx context.Context, sb connector.Sandbox, token []byte, template, certFile, keyFile string) error {
+	data, err := c.call(ctx, sb, http.MethodPut, "/axapi/v3/slb/template/client-ssl/"+url.PathEscape(template), token, map[string]any{
 		"client-ssl": map[string]string{"name": template, "cert": certFile, "key": keyFile},
 	})
+	secret.Wipe(data)
 	return err
 }
 
-func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path, token string, payload any) ([]byte, error) {
+func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path string, token []byte, payload any) ([]byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
+	defer secret.Wipe(body)
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.Header.Set("Authorization", "A10 "+token)
+	if len(token) > 0 {
+		req.Header.Set("Authorization", secrettext.Prefixed("A10 ", token))
 	}
 	resp, err := sb.Request(req)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return nil, fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+	}
+	data, err := secret.ReadBounded(resp.Body, 1<<20)
+	if err != nil {
+		return nil, fmt.Errorf("read response (details redacted)")
 	}
 	return data, nil
+}
+
+type authRequest struct {
+	Credentials credentials `json:"credentials"`
+}
+
+type credentials struct {
+	Username string                 `json:"username"`
+	Password secretjson.StringBytes `json:"password"`
 }

@@ -12,12 +12,15 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/digicert"
 	"trstctl.com/trstctl/internal/ca/digicert/digicertfake"
@@ -26,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -45,10 +49,16 @@ func TestServedExternalCARegistryIssuesViaConfiguredBackends(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(acme.Close)
-	le, err := letsencrypt.NewPlugin("lets-encrypt", acme.DirectoryURL())
+	account, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
-		t.Fatalf("letsencrypt plugin: %v", err)
+		t.Fatalf("generate test ACME account signer: %v", err)
 	}
+	t.Cleanup(account.Destroy)
+	le, err := letsencrypt.NewPluginWithRemoteAccountSigner("lets-encrypt", acme.DirectoryURL(), http.DefaultClient, account)
+	if err != nil {
+		t.Fatalf("letsencrypt remote-account plugin: %v", err)
+	}
+	t.Cleanup(le.Destroy)
 
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
@@ -72,12 +82,13 @@ func TestServedExternalCARegistryIssuesViaConfiguredBackends(t *testing.T) {
 		t.Fatalf("registry items = %+v, want digicert and lets-encrypt", listed.Items)
 	}
 
-	digi := issueExternalCA(t, h, "digicert", "svc.digicert.served.test", "clm-03-digicert")
+	digiBody := externalCAIssueRequestBody(t, "svc.digicert.served.test")
+	digi := issueExternalCAWithBody(t, h, "digicert", "clm-03-digicert", digiBody)
 	assertServedCert(t, digi, "digicert", "svc.digicert.served.test")
 	if got := externalCAOutboxCount(t, h, "clm-03-digicert:external-ca:digicert"); got != 1 {
 		t.Fatalf("DigiCert ca.issue outbox rows = %d, want 1", got)
 	}
-	digiReplay := issueExternalCA(t, h, "digicert", "svc.digicert.served.test", "clm-03-digicert")
+	digiReplay := issueExternalCAWithBody(t, h, "digicert", "clm-03-digicert", digiBody)
 	if digiReplay.Serial != digi.Serial || digiReplay.CertificatePEM != digi.CertificatePEM {
 		t.Fatalf("DigiCert replay minted a different cert: first=%s replay=%s", digi.Serial, digiReplay.Serial)
 	}
@@ -176,8 +187,8 @@ func TestExternalCAOutboxIntentExistsBeforeProviderIssue(t *testing.T) {
 	})
 
 	issued := issueExternalCA(t, h, caID, dnsName, idemKey)
-	if issued.Serial != "spine-001-serial" {
-		t.Fatalf("guarded external CA serial = %q", issued.Serial)
+	if issued.Serial == "" {
+		t.Fatal("guarded external CA returned no certificate serial")
 	}
 	if guard.calls != 1 {
 		t.Fatalf("provider Issue calls = %d, want 1", guard.calls)
@@ -188,6 +199,81 @@ func TestExternalCAOutboxIntentExistsBeforeProviderIssue(t *testing.T) {
 	if got := guard.providerToken; got != ca.ProviderIdempotencyKey(issueKey) {
 		t.Fatalf("provider idempotency token = %q, want derived token %q", got, ca.ProviderIdempotencyKey(issueKey))
 	}
+}
+
+func TestExternalCAIssueNeverDrainsUnrelatedWorkOnRequestPath(t *testing.T) {
+	const (
+		targetCA    = "target"
+		unrelatedCA = "unrelated"
+		idemKey     = "external-ca-isolation"
+	)
+	set := bulkhead.NewSet(
+		bulkhead.Config{Name: bulkhead.SubsystemAPI, Workers: 2, Queue: 8},
+		bulkhead.Config{Name: bulkhead.SubsystemOutbox, Workers: 1, Queue: 0},
+	)
+	t.Cleanup(set.Close)
+	blocked := &externalCABlockingProbe{name: unrelatedCA}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.Bulkhead = set
+		d.ExternalCAs = []ExternalCA{
+			{ID: targetCA, Type: "probe", CA: newIdempotentExternalCA(targetCA)},
+			{ID: unrelatedCA, Type: "probe", CA: blocked},
+		}
+	})
+
+	csr := externalCACSR(t, "svc.external-ca-isolation.test")
+	payload, err := json.Marshal(ca.ExternalIssuePayload{
+		AuthorityID: unrelatedCA, TenantID: h.tenant, CSR: csr,
+		DNSNames: []string{"unrelated.external-ca-isolation.test"}, TTLNanos: int64(time.Hour),
+		ProviderIdempotencyKey: ca.ProviderIdempotencyKey("older-unrelated-external-ca"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		_, err := h.srv.outbox.Enqueue(context.Background(), tx, orchestrator.Entry{
+			TenantID: h.tenant, Destination: ca.DestinationExternalCAIssue,
+			IdempotencyKey: "older-unrelated-external-ca", Payload: payload,
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("enqueue unrelated external CA work: %v", err)
+	}
+
+	release := make(chan struct{})
+	occupied := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseWorker := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(releaseWorker)
+	if err := set.Pool(bulkhead.SubsystemOutbox).Submit(func() {
+		close(occupied)
+		<-release
+	}); err != nil {
+		t.Fatalf("occupy outbox bulkhead: %v", err)
+	}
+	<-occupied
+	startServedExternalCADispatcher(t, h)
+
+	requestCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	_, err = h.srv.externalCAs.IssueExternalCA(requestCtx, h.tenant, targetCA, idemKey, "external-ca-isolation-binding", api.ExternalCAIssueRequest{
+		CSRDER: csr, DNSNames: []string{"svc.external-ca-isolation.test"}, TTLSeconds: 3600,
+	})
+	elapsed := time.Since(started)
+	if !errors.Is(err, api.ErrExternalCAUpstream) || !strings.Contains(err.Error(), "timed out") {
+		releaseWorker()
+		t.Fatalf("isolated issue error = %v, want sanitized request timeout while bounded worker is saturated", err)
+	}
+	if elapsed > time.Second {
+		releaseWorker()
+		t.Fatalf("isolated issue took %s, want prompt request-context cancellation", elapsed)
+	}
+	if calls := blocked.calls.Load(); calls != 0 {
+		releaseWorker()
+		t.Fatalf("request path dispatched unrelated external CA %d times; only RunDispatcher may deliver outbox work", calls)
+	}
+	releaseWorker()
 }
 
 func TestExternalCAOutboxCrashRecovery(t *testing.T) {
@@ -204,8 +290,9 @@ func TestExternalCAOutboxCrashRecovery(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		upstream.store = d.Store
-		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "crashy", CA: upstream}}
+		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "crashy", CA: upstream, ReplaySafety: ca.ExternalIssueReconciled}}
 	})
+	startServedExternalCADispatcher(t, h)
 
 	csrDER := externalCACSR(t, dnsName)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
@@ -261,8 +348,9 @@ func TestExternalCARetryDoesNotDoubleMint(t *testing.T) {
 		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "idempotent", CA: upstream}}
 	})
 
-	first := issueExternalCA(t, h, caID, dnsName, idemKey)
-	second := issueExternalCA(t, h, caID, dnsName, idemKey)
+	body := externalCAIssueRequestBody(t, dnsName)
+	first := issueExternalCAWithBody(t, h, caID, idemKey, body)
+	second := issueExternalCAWithBody(t, h, caID, idemKey, body)
 	if second.Serial != first.Serial || second.CertificatePEM != first.CertificatePEM {
 		t.Fatalf("external CA idempotent retry changed certificate: first=%s second=%s", first.Serial, second.Serial)
 	}
@@ -271,6 +359,71 @@ func TestExternalCARetryDoesNotDoubleMint(t *testing.T) {
 	}
 	if got := externalCAOutboxCount(t, h, idemKey+":external-ca:"+caID); got != 1 {
 		t.Fatalf("ca.issue observability rows = %d, want exactly 1", got)
+	}
+}
+
+func TestExternalCAReplaySurvivesResponseAndOutboxGCAndRejectsChangedCaller(t *testing.T) {
+	const (
+		caID    = "durable-binding"
+		idemKey = "external-ca-durable-binding"
+		dnsName = "svc.external-ca-durable-binding.test"
+	)
+	upstream := newIdempotentExternalCA(caID)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "test", CA: upstream}}
+	})
+	body := externalCAIssueRequestBody(t, dnsName)
+	startServedExternalCADispatcher(t, h)
+	code, firstRaw := doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", idemKey, body)
+	if code != http.StatusCreated {
+		t.Fatalf("initial durable external CA issue = %d body=%s", code, firstRaw)
+	}
+	var first externalCAIssueResponse
+	if err := json.Unmarshal(firstRaw, &first); err != nil {
+		t.Fatalf("decode initial durable response: %v", err)
+	}
+	if upstream.calls != 1 || upstream.mints != 1 {
+		t.Fatalf("initial provider calls=%d mints=%d, want 1/1", upstream.calls, upstream.mints)
+	}
+	purgeExternalCAWorkerResult(t, h, idemKey, caID)
+	forceExternalCAOutboxDue(t, h, idemKey+":external-ca:"+caID)
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("reconcile crash-after-certificate-record: %v", err)
+	}
+	if upstream.calls != 1 || upstream.mints != 1 {
+		t.Fatalf("worker crash recovery repeated provider: calls=%d mints=%d", upstream.calls, upstream.mints)
+	}
+	purgeExternalCAEphemeralState(t, h, idemKey, caID)
+
+	code, replayRaw := doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", idemKey, body)
+	if code != http.StatusCreated {
+		t.Fatalf("post-GC replay = %d body=%s", code, replayRaw)
+	}
+	if !bytes.Equal(replayRaw, firstRaw) {
+		t.Fatalf("post-GC replay bytes changed:\nfirst=%s\nreplay=%s", firstRaw, replayRaw)
+	}
+	var replay externalCAIssueResponse
+	if err := json.Unmarshal(replayRaw, &replay); err != nil {
+		t.Fatalf("decode replay response: %v", err)
+	}
+	if replay.Serial != first.Serial || replay.CertificatePEM != first.CertificatePEM {
+		t.Fatalf("post-GC replay changed result: first=%s replay=%s", first.Serial, replay.Serial)
+	}
+	if upstream.calls != 1 || upstream.mints != 1 {
+		t.Fatalf("post-GC replay reached provider: calls=%d mints=%d", upstream.calls, upstream.mints)
+	}
+
+	// Remove the freshly recreated bounded HTTP response, leaving only the
+	// certificate.recorded projection as authority. A different caller must hit a
+	// durable conflict before provider I/O.
+	purgeExternalCAAPIResult(t, h, idemKey)
+	code, response := doExternalCARequestAs(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", idemKey, "different-issuer", body)
+	if code != http.StatusConflict {
+		t.Fatalf("changed caller after GC = %d body=%s, want 409", code, response)
+	}
+	if upstream.calls != 1 || upstream.mints != 1 {
+		t.Fatalf("changed caller reached provider: calls=%d mints=%d", upstream.calls, upstream.mints)
 	}
 }
 
@@ -286,6 +439,7 @@ func TestExternalCASanitizeUpstreamErrors(t *testing.T) {
 			},
 		}}
 	})
+	startServedExternalCADispatcher(t, h)
 
 	csrDER := externalCACSR(t, "svc.leaky.served.test")
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
@@ -310,6 +464,19 @@ func TestExternalCASanitizeUpstreamErrors(t *testing.T) {
 
 type externalCALeakyFailure struct {
 	err error
+}
+
+type externalCABlockingProbe struct {
+	name  string
+	calls atomic.Int64
+}
+
+func (p *externalCABlockingProbe) Name() string { return p.name }
+
+func (p *externalCABlockingProbe) Issue(ctx context.Context, _ ca.IssueRequest) (ca.Certificate, error) {
+	p.calls.Add(1)
+	<-ctx.Done()
+	return ca.Certificate{}, ctx.Err()
 }
 
 func (f externalCALeakyFailure) Name() string { return "leaky-external-ca" }
@@ -358,15 +525,12 @@ func (f *idempotentExternalCA) Issue(_ context.Context, req ca.IssueRequest) (ca
 		return cert, nil
 	}
 	f.mints++
-	serial := fmt.Sprintf("%s-serial-%d", f.name, f.mints)
-	cert := ca.Certificate{
-		CertificatePEM: []byte("-----BEGIN CERTIFICATE-----\nred-003\n-----END CERTIFICATE-----\n"),
-		Serial:         serial,
-		NotAfter:       time.Now().Add(24 * time.Hour).UTC(),
-		Issuer:         f.Name(),
+	cert, err := testExternalCACertificate(req, f.Name())
+	if err != nil {
+		return ca.Certificate{}, err
 	}
 	f.issued[req.ProviderIdempotencyKey] = cert
-	f.lastSerial = serial
+	f.lastSerial = cert.Serial
 	if f.failFirst {
 		f.failFirst = false
 		return ca.Certificate{}, errors.New("simulated process crash after upstream mint")
@@ -421,11 +585,41 @@ func (g *externalCAIntentGuard) Issue(ctx context.Context, req ca.IssueRequest) 
 	if req.ProviderIdempotencyKey != ca.ProviderIdempotencyKey(g.key) {
 		return ca.Certificate{}, fmt.Errorf("provider idempotency token = %q, want %q", req.ProviderIdempotencyKey, ca.ProviderIdempotencyKey(g.key))
 	}
+	return testExternalCACertificate(req, g.Name())
+}
+
+// testExternalCACertificate makes the provider seam return a real leaf, not a
+// PEM-shaped placeholder. The served issuance worker now projects the public
+// certificate into durable inventory, so the test double must satisfy the same
+// cryptographic parse/verification contract as a real upstream CA.
+func testExternalCACertificate(req ca.IssueRequest, issuer string) (ca.Certificate, error) {
+	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		return ca.Certificate{}, err
+	}
+	defer signer.Destroy()
+	caDER, err := crypto.SelfSignedCACert(signer, issuer, 48*time.Hour)
+	if err != nil {
+		return ca.Certificate{}, err
+	}
+	ttl := req.TTL
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+	leafDER, err := crypto.SignLeafFromCSR(caDER, signer, req.CSR, ttl)
+	if err != nil {
+		return ca.Certificate{}, err
+	}
+	leafPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
+	info, err := certinfo.Inspect(leafPEM)
+	if err != nil {
+		return ca.Certificate{}, err
+	}
 	return ca.Certificate{
-		CertificatePEM: []byte("-----BEGIN CERTIFICATE-----\nspine-001\n-----END CERTIFICATE-----\n"),
-		Serial:         "spine-001-serial",
-		NotAfter:       time.Now().Add(24 * time.Hour).UTC(),
-		Issuer:         g.Name(),
+		CertificatePEM: leafPEM,
+		Serial:         info.SerialNumber,
+		NotAfter:       info.NotAfter.UTC(),
+		Issuer:         info.Issuer,
 	}, nil
 }
 
@@ -444,19 +638,29 @@ type externalCAListItem struct {
 
 func issueExternalCA(t *testing.T, h *servedHarness, caID, dnsName, idem string) externalCAIssueResponse {
 	t.Helper()
+	return issueExternalCAWithBody(t, h, caID, idem, externalCAIssueRequestBody(t, dnsName))
+}
+
+func externalCAIssueRequestBody(t *testing.T, dnsName string) map[string]any {
+	t.Helper()
 	csrDER := externalCACSR(t, dnsName)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
-	code, body := doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", idem, map[string]any{
-		"csr_pem":     string(csrPEM),
-		"dns_names":   []string{dnsName},
+	return map[string]any{
+		"csr_pem": string(csrPEM), "dns_names": []string{dnsName},
 		"ttl_seconds": int64((24 * time.Hour).Seconds()),
-	})
+	}
+}
+
+func issueExternalCAWithBody(t *testing.T, h *servedHarness, caID, idem string, body map[string]any) externalCAIssueResponse {
+	t.Helper()
+	startServedExternalCADispatcher(t, h)
+	code, response := doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", idem, body)
 	if code != http.StatusCreated {
-		t.Fatalf("issue through %s = %d, want 201; body=%s", caID, code, body)
+		t.Fatalf("issue through %s = %d, want 201; body=%s", caID, code, response)
 	}
 	var got externalCAIssueResponse
-	if err := json.Unmarshal(body, &got); err != nil {
-		t.Fatalf("decode issue response from %s: %v body=%s", caID, err, body)
+	if err := json.Unmarshal(response, &got); err != nil {
+		t.Fatalf("decode issue response from %s: %v body=%s", caID, err, response)
 	}
 	return got
 }
@@ -477,6 +681,11 @@ func externalCACSR(t *testing.T, dnsName string) []byte {
 
 func doExternalCARequest(t *testing.T, h *servedHarness, method, path, idem string, body any) (int, []byte) {
 	t.Helper()
+	return doExternalCARequestAs(t, h, method, path, idem, "clm-03-admin", body)
+}
+
+func doExternalCARequestAs(t *testing.T, h *servedHarness, method, path, idem, subject string, body any) (int, []byte) {
+	t.Helper()
 	var rdr io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -491,7 +700,7 @@ func doExternalCARequest(t *testing.T, h *servedHarness, method, path, idem stri
 	}
 	req.Header.Set("X-Tenant-ID", h.tenant)
 	req.Header.Set("X-Roles", "admin")
-	req.Header.Set("X-Subject", "clm-03-admin")
+	req.Header.Set("X-Subject", subject)
 	if idem != "" {
 		req.Header.Set("Idempotency-Key", idem)
 	}
@@ -505,6 +714,49 @@ func doExternalCARequest(t *testing.T, h *servedHarness, method, path, idem stri
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, b
+}
+
+func purgeExternalCAAPIResult(t *testing.T, h *servedHarness, rawKey string) {
+	t.Helper()
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(context.Background(), `DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, h.tenant, rawKey)
+		return err
+	}); err != nil {
+		t.Fatalf("purge external CA API response: %v", err)
+	}
+}
+
+func purgeExternalCAWorkerResult(t *testing.T, h *servedHarness, rawKey, caID string) {
+	t.Helper()
+	serviceKey := rawKey + ":external-ca:" + caID
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(context.Background(),
+			`DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`,
+			h.tenant, "external-ca.issue:"+serviceKey)
+		return err
+	}); err != nil {
+		t.Fatalf("purge external CA worker result: %v", err)
+	}
+}
+
+func purgeExternalCAEphemeralState(t *testing.T, h *servedHarness, rawKey, caID string) {
+	t.Helper()
+	serviceKey := rawKey + ":external-ca:" + caID
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(context.Background(),
+			`DELETE FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = ANY($2::text[])`,
+			h.tenant, []string{rawKey, "external-ca.issue:" + serviceKey}); err != nil {
+			return err
+		}
+		_, err := tx.Exec(context.Background(),
+			`DELETE FROM outbox
+			  WHERE tenant_id = $1 AND destination = 'external-ca.issue' AND idempotency_key = $2`,
+			h.tenant, serviceKey)
+		return err
+	}); err != nil {
+		t.Fatalf("purge external CA ephemeral state: %v", err)
+	}
 }
 
 func assertServedCert(t *testing.T, cert externalCAIssueResponse, issuer, dnsName string) {

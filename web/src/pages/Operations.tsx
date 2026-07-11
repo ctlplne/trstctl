@@ -57,7 +57,7 @@ const statusOptions = [
   { value: "succeeded", label: "Succeeded" },
   { value: "failed", label: "Failed" },
   { value: "delivered", label: "Delivered" },
-  { value: "unrouted", label: "Unrouted" },
+  { value: "queued", label: "Queued" },
   { value: "awaiting_approval", label: "Awaiting approval" },
 ];
 
@@ -291,7 +291,7 @@ function OperationActions({
       </div>
     );
   }
-  if (row.statusKey === "running" || row.statusKey === "unrouted") {
+  if (row.statusKey === "running" || row.statusKey === "queued") {
     return (
       <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onCancel(row)}>
         {`Cancel ${row.id}`}
@@ -454,7 +454,7 @@ function operationTypeLabel(type: OperationType): string {
 function statusTone(status: string) {
   if (status === "succeeded" || status === "delivered") return "success";
   if (status === "failed") return "critical";
-  if (status === "awaiting_approval" || status === "unrouted") return "warning";
+  if (status === "awaiting_approval" || status === "queued") return "warning";
   if (status === "running") return "operate";
   return "neutral";
 }

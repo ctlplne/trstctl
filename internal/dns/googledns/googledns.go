@@ -49,6 +49,11 @@ const defaultEndpoint = "https://dns.googleapis.com/dns/v1"
 // length of a challenge, so a short TTL keeps cleanup fast.
 const txtTTL = 60
 
+var (
+	errRecordAlreadyExists = errors.New("googledns: record already exists")
+	errRecordNotFound      = errors.New("googledns: record not found")
+)
+
 // Provider satisfies the DNS-01 plugin template.
 var _ acme.DNSProvider = (*Provider)(nil)
 
@@ -181,15 +186,11 @@ func (p *Provider) change(ctx context.Context, body changeBody) error {
 	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", p.creds.BearerToken))
 
 	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalisation,
-	// and drain (CODE-006); the non-2xx *StatusError is translated to the package's
-	// *apiError so the is4xxContaining "already exists"/"not found" idempotency
-	// predicates (and the token-free error text, AN-8) are unchanged. Cloud DNS
-	// returns no body the provider reads, so out is nil.
-	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
-		var se *cloudhttp.StatusError
-		if errors.As(err, &se) {
-			return &apiError{status: se.StatusCode, body: se.Body}
-		}
+	// and drain (CODE-006). Idempotent semantic responses are classified while
+	// cloudhttp still owns the bounded mutable bytes. Only a closed sentinel or
+	// status survives; cloudhttp wipes the body before returning (AN-8).
+	if err := cloudhttp.JSON(p.doer, req, nil,
+		cloudhttp.WithStatusMapper(mapGoogleDNSStatus)); err != nil {
 		return fmt.Errorf("googledns: change: %w", err)
 	}
 	return nil
@@ -218,39 +219,47 @@ type resourceRecordSet struct {
 	RRDatas []string `json:"rrdatas"`
 }
 
-// apiError is a non-2xx Cloud DNS response. Its body is the service error text and
-// never carries the bearer token (AN-8).
+// apiError is a non-2xx Cloud DNS response. It deliberately retains only the status;
+// an upstream body is attacker-controlled and may echo submitted material (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
-func (e *apiError) Error() string { return fmt.Sprintf("googledns: status %d: %s", e.status, e.body) }
+func (e *apiError) Error() string { return fmt.Sprintf("googledns: status %d", e.status) }
+
+func mapGoogleDNSStatus(status int, body []byte) error {
+	if status/100 == 4 {
+		switch {
+		case containsASCIIFold(body, []byte("alreadyexists")),
+			containsASCIIFold(body, []byte("already exists")):
+			return errRecordAlreadyExists
+		case containsASCIIFold(body, []byte("notfound")),
+			containsASCIIFold(body, []byte("not found")):
+			return errRecordNotFound
+		}
+	}
+	return &apiError{status: status}
+}
+
+// containsASCIIFold classifies a bounded response without converting secret-bearing
+// bytes into an immutable string or allocating a lowercase copy.
+func containsASCIIFold(body, needle []byte) bool {
+	for i := 0; i+len(needle) <= len(body); i++ {
+		if bytes.EqualFold(body[i:i+len(needle)], needle) {
+			return true
+		}
+	}
+	return false
+}
 
 // isAlreadyExists reports whether err is Cloud DNS's "already exists" rejection,
 // returned when adding a record that is already present — a no-op for present.
 func isAlreadyExists(err error) bool {
-	return is4xxContaining(err, "alreadyexists", "already exists")
+	return errors.Is(err, errRecordAlreadyExists)
 }
 
 // isNotFound reports whether err is Cloud DNS's "not found" rejection, returned when
 // deleting a record that is already gone — a no-op for cleanup.
 func isNotFound(err error) bool {
-	return is4xxContaining(err, "notfound", "not found")
-}
-
-// is4xxContaining reports whether err is an apiError with a 4xx status whose body
-// (case-folded) contains any of the given needles.
-func is4xxContaining(err error, needles ...string) bool {
-	var ae *apiError
-	if !errors.As(err, &ae) || ae.status/100 != 4 {
-		return false
-	}
-	b := strings.ToLower(ae.body)
-	for _, n := range needles {
-		if strings.Contains(b, n) {
-			return true
-		}
-	}
-	return false
+	return errors.Is(err, errRecordNotFound)
 }

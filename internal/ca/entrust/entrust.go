@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,6 +26,7 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 const (
@@ -167,11 +169,11 @@ func (b *backend) awaitCertificate(ctx context.Context, trackingID string) ([]by
 		switch strings.ToUpper(out.Status) {
 		case "ISSUED":
 			if strings.TrimSpace(out.Certificate) == "" {
-				return nil, fmt.Errorf("entrust: enrollment %s is issued but missing certificate PEM", trackingID)
+				return nil, errors.New("entrust: issued enrollment carried no certificate PEM")
 			}
 			return assembleChain(out.Certificate, out.Chain)
 		case "REJECTED", "DENIED", "FAILED":
-			return nil, fmt.Errorf("entrust: enrollment %s was %s", trackingID, out.Status)
+			return nil, errors.New("entrust: enrollment terminated without issuance")
 		}
 		select {
 		case <-ctx.Done():
@@ -179,7 +181,7 @@ func (b *backend) awaitCertificate(ctx context.Context, trackingID string) ([]by
 		case <-time.After(b.poll):
 		}
 	}
-	return nil, fmt.Errorf("entrust: enrollment %s was not issued within the polling window", trackingID)
+	return nil, errors.New("entrust: enrollment was not issued within the polling window")
 }
 
 type enrollmentRequest struct {
@@ -210,13 +212,16 @@ func (b *backend) enrollmentURL(trackingID string) string {
 
 func (b *backend) doJSON(ctx context.Context, method, url string, body, out any) error {
 	var reader io.Reader
+	var buf []byte
 	if body != nil {
-		buf, err := json.Marshal(body)
+		var err error
+		buf, err = json.Marshal(body)
 		if err != nil {
 			return err
 		}
 		reader = bytes.NewReader(buf)
 	}
+	defer secret.Wipe(buf)
 	req, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
 		return err
@@ -227,13 +232,17 @@ func (b *backend) doJSON(ctx context.Context, method, url string, body, out any)
 	}
 	resp, err := b.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("entrust: %s %s: %w", method, url, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("entrust: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return err
+		return errors.New("entrust: read response failed")
 	}
+	defer secret.Wipe(data)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return apiError(resp.StatusCode, data)
 	}
@@ -245,22 +254,7 @@ func (b *backend) doJSON(ctx context.Context, method, url string, body, out any)
 	return nil
 }
 
-func apiError(status int, data []byte) error {
-	var env struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		Error   string `json:"error"`
-	}
-	if err := json.Unmarshal(data, &env); err == nil {
-		switch {
-		case env.Code != "" && env.Message != "":
-			return fmt.Errorf("entrust: api error %d: %s: %s", status, env.Code, env.Message)
-		case env.Message != "":
-			return fmt.Errorf("entrust: api error %d: %s", status, env.Message)
-		case env.Error != "":
-			return fmt.Errorf("entrust: api error %d: %s", status, env.Error)
-		}
-	}
+func apiError(status int, _ []byte) error {
 	return fmt.Errorf("entrust: api error %d", status)
 }
 

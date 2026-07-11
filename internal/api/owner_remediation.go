@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -128,10 +129,21 @@ func (a *API) listOwnerRemediationActions(w http.ResponseWriter, r *http.Request
 func (a *API) acceptOwnerRemediationAction(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	actionID := r.PathValue("id")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req ownerRemediationAcceptRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+	var req ownerRemediationAcceptRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	binding, err := rightSizeRequestBinding(r, canonicalOwnerRightSizeCommand(req))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if replay, found, err := a.durableRightSizeReplay(ctx, tenantID, idempotencyKey, binding); err != nil {
+			return 0, nil, err
+		} else if found {
+			return replay.InitialHTTPStatus, json.RawMessage(replay.InitialResponse), nil
 		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
 		action, owner, err := a.ownerRemediationActionByID(ctx, tenantID, actionID)
@@ -151,22 +163,45 @@ func (a *API) acceptOwnerRemediationAction(w http.ResponseWriter, r *http.Reques
 			RecommendedScopes: normalizedScopeSelection(req.RecommendedScopes, action.RecommendedScopes),
 			RollbackRef:       firstNonEmpty(strings.TrimSpace(req.RollbackRef), action.RollbackRef),
 		}
-		run, err := a.runRightSizePlaybook(ctx, tenantID, principal, runReq, idempotencyKey)
+		run, err := a.prepareRightSizePlaybook(ctx, tenantID, principal, runReq, idempotencyKey)
 		if err != nil {
 			return 0, nil, err
 		}
+		run.TenantID = tenantID
+		run.RequestBinding = binding
+		run.InitialHTTPStatus = http.StatusCreated
+		run.CreatedAt = time.Now().UTC()
+		run.UpdatedAt = run.CreatedAt
 		action.Status = "accepted"
 		action.RemediationRunID = run.ID
 		if run.ConnectorDeliveryID != nil {
 			action.ConnectorDeliveryID = *run.ConnectorDeliveryID
 		}
-		return http.StatusCreated, ownerRemediationRunResponse{
+		initial, err := json.Marshal(ownerRemediationRunResponse{
 			Capability:     ownerRemediationCapability,
 			Status:         "accepted",
 			Action:         action,
-			RemediationRun: a.remediationPlaybookRunResponse(ctx, tenantID, run),
-		}, nil
+			RemediationRun: a.initialRightSizeRunResponse(ctx, tenantID, run),
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		run.InitialResponse = initial
+		authoritative, err := a.orch.RecordConnectorRightSizeOperation(ctx, tenantID, run)
+		if err != nil {
+			return 0, nil, err
+		}
+		return authoritative.InitialHTTPStatus, json.RawMessage(authoritative.InitialResponse), nil
 	})
+}
+
+func canonicalOwnerRightSizeCommand(req ownerRemediationAcceptRequest) ownerRemediationAcceptRequest {
+	return ownerRemediationAcceptRequest{
+		Reason: strings.TrimSpace(req.Reason), Connector: strings.TrimSpace(req.Connector),
+		Target: strings.TrimSpace(req.Target), RemoveScopes: canonicalRightSizeScopes(req.RemoveScopes),
+		RecommendedScopes: canonicalRightSizeScopes(req.RecommendedScopes),
+		RollbackRef:       strings.TrimSpace(req.RollbackRef),
+	}
 }
 
 func (a *API) ownerRemediationActionByID(ctx context.Context, tenantID, id string) (ownerRemediationAction, store.Owner, error) {

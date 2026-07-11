@@ -50,6 +50,10 @@ func do(t *testing.T, srv *httptest.Server, method, path string, o reqOpts) (int
 	}
 	if o.tenant != "" {
 		req.Header.Set("X-Tenant-ID", o.tenant)
+		// Mutations bind the raw Idempotency-Key to an authenticated principal.
+		// This direct-handler harness uses the explicit insecure test resolver, so
+		// provide the same subject a real auth middleware would attach.
+		req.Header.Set("X-Subject", "projections-test-admin")
 	}
 	if o.bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+o.bearer)

@@ -21,6 +21,21 @@ type Backend interface {
 	Revoke(ctx context.Context, ref string) error
 }
 
+// RequestBackend is the richer production creation contract. It carries the
+// stable lease id and requested validity into the target so retries converge on
+// one external identity and native-expiry backends do not silently ignore TTL.
+// The small Backend interface remains for third-party implementations.
+type RequestBackend interface {
+	CreateCredential(ctx context.Context, req GenerateRequest) (ref string, secret []byte, err error)
+}
+
+// PreparedRequestBackend applies a locally-prepared, durable credential identity
+// during the external worker call. It is used by provider APIs that do not offer
+// a request-id parameter but can idempotently upload/find the same public identity.
+type PreparedRequestBackend interface {
+	CreatePreparedCredential(ctx context.Context, req GenerateRequest, prepared []byte) (ref string, secret []byte, err error)
+}
+
 // BackendProvider adapts any Backend into a dynsecret.Provider (the S17.1a template).
 type BackendProvider struct {
 	name    string
@@ -37,7 +52,16 @@ func (p *BackendProvider) Name() string { return p.name }
 
 // Generate implements Provider.
 func (p *BackendProvider) Generate(ctx context.Context, req GenerateRequest) (Credential, error) {
-	ref, secret, err := p.backend.Create(ctx, req.Role)
+	var (
+		ref    string
+		secret []byte
+		err    error
+	)
+	if backend, ok := p.backend.(RequestBackend); ok {
+		ref, secret, err = backend.CreateCredential(ctx, req)
+	} else {
+		ref, secret, err = p.backend.Create(ctx, req.Role)
+	}
 	if err != nil {
 		return Credential{}, err
 	}

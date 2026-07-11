@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/scim"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -130,7 +131,7 @@ func (a *API) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		member, err := a.applySCIMUser(ctx, tenantID, subject, in)
 		if err != nil {
 			return 0, nil, err
@@ -203,7 +204,7 @@ func (a *API) scimPutUser(w http.ResponseWriter, r *http.Request) {
 		in.UserName = subject
 	}
 	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		member, err := a.applySCIMUser(ctx, tenantID, subject, in)
 		if err != nil {
 			return 0, nil, err
@@ -228,7 +229,7 @@ func (a *API) scimPatchUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		cur, err := a.store.GetTenantMember(ctx, tenantID, subject)
 		if err != nil {
 			return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
@@ -257,7 +258,7 @@ func (a *API) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		if _, err := a.store.GetTenantMember(ctx, tenantID, subject); err != nil {
 			return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
 		}
@@ -310,7 +311,7 @@ func (a *API) scimCreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		for _, m := range in.Members {
 			if strings.TrimSpace(m.Value) == "" {
 				continue
@@ -385,7 +386,7 @@ func (a *API) scimPatchGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		if gp.ReplaceAll != nil {
 			current, err := a.store.ListTenantMembersByRole(ctx, tenantID, roleName)
 			if err != nil {
@@ -440,7 +441,7 @@ func (a *API) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		members, err := a.store.ListTenantMembersByRole(ctx, tenantID, roleName)
 		if err != nil {
 			return 0, nil, err
@@ -547,7 +548,7 @@ func (a *API) prepareSCIMMutation(w http.ResponseWriter, r *http.Request) (scimT
 	return tok, raw, true
 }
 
-func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, idempotencyKey string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, idempotencyKey string, requestBody []byte, fn func(ctx context.Context, tenantID string) (int, any, error)) {
 	if a.idem == nil || a.orch == nil {
 		writeSCIMError(w, http.StatusServiceUnavailable, "", "SCIM mutation spine is not configured")
 		return
@@ -556,8 +557,13 @@ func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, 
 		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "Idempotency-Key header or deterministic SCIM request body is required")
 		return
 	}
+	binding, err := scimMutationBinding(tok, r, requestBody)
+	if err != nil {
+		writeSCIMError(w, http.StatusInternalServerError, "", "SCIM request binding failed")
+		return
+	}
 	ctx := events.ContextWithActor(r.Context(), events.Actor{Subject: "scim:" + tok.Name, Roles: []string{scimProvisionerRole}})
-	raw, err := a.idem.Do(ctx, tok.TenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
+	cacheRaw, err := a.idem.DoBound(ctx, tok.TenantID, idempotencyKey, binding, func(ctx context.Context) ([]byte, error) {
 		status, body, ferr := fn(ctx, tok.TenantID)
 		if ferr != nil {
 			return nil, ferr
@@ -568,21 +574,26 @@ func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, 
 			if mErr != nil {
 				return nil, mErr
 			}
+			defer secret.Wipe(bj)
 			bodyJSON = bj
 		}
-		return json.Marshal(cachedResponse{Status: status, Body: bodyJSON})
+		return json.Marshal(cachedResponse{Status: status, Body: bodyJSON, Binding: binding})
 	})
 	if err != nil {
 		writeSCIMMappedError(w, err)
 		return
 	}
-	defer secret.Wipe(raw)
+	defer secret.Wipe(cacheRaw)
 	var c cachedResponse
-	if err := json.Unmarshal(raw, &c); err != nil {
+	if err := json.Unmarshal(cacheRaw, &c); err != nil {
 		writeSCIMError(w, http.StatusInternalServerError, "", "SCIM replay cache decode failed")
 		return
 	}
 	defer secret.Wipe(c.Body)
+	if !crypto.ConstantTimeEqual([]byte(c.Binding), []byte(binding)) {
+		writeSCIMError(w, http.StatusConflict, "", "Idempotency-Key was already used for a different authenticated SCIM request")
+		return
+	}
 	if c.Status == http.StatusNoContent {
 		w.WriteHeader(c.Status)
 		return
@@ -632,6 +643,31 @@ func scimIdempotencyKey(r *http.Request, body []byte) string {
 	return "scim:" + crypto.SHA256Hex(material)
 }
 
+func scimMutationBinding(tok scimToken, r *http.Request, body []byte) (string, error) {
+	escapedPath := ""
+	if r.URL != nil {
+		escapedPath = r.URL.EscapedPath()
+	}
+	material, err := json.Marshal(struct {
+		Domain      string `json:"domain"`
+		TokenHash   string `json:"token_hash"`
+		Method      string `json:"method"`
+		EscapedPath string `json:"escaped_path"`
+		BodySHA256  string `json:"body_sha256"`
+	}{
+		Domain:      "trstctl.api.scim-mutation-binding.v1",
+		TokenHash:   tok.TokenHash,
+		Method:      r.Method,
+		EscapedPath: escapedPath,
+		BodySHA256:  crypto.SHA256Hex(body),
+	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(material)
+	return crypto.SHA256Hex(material), nil
+}
+
 func writeSCIM(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", scim.ContentType)
 	w.WriteHeader(status)
@@ -642,6 +678,10 @@ func writeSCIM(w http.ResponseWriter, status int, body any) {
 
 func writeSCIMMappedError(w http.ResponseWriter, err error) {
 	var scimErr scimHTTPError
+	if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+		writeSCIMError(w, http.StatusConflict, "", "Idempotency-Key was already used for a different authenticated SCIM request")
+		return
+	}
 	if errors.As(err, &scimErr) {
 		writeSCIMError(w, scimErr.status, scimErr.scimType, scimErr.detail)
 		return

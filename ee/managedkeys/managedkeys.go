@@ -42,8 +42,10 @@ import (
 )
 
 // Lifecycle is the remote-custody key lifecycle the service drives. It is exactly
-// crypto.RemoteKeyLifecycle; every internal/kms backend that implements it (AWS
-// KMS today, plus the in-memory fake used by the served E2E test) plugs in here.
+// crypto.RemoteKeyLifecycle; the shipped signer wires AWS KMS, Azure Key Vault,
+// GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2 implementations. Fast unit tests
+// may still use the in-memory fake, but only the launched-binary census is served
+// evidence.
 type Lifecycle = crypto.RemoteKeyLifecycle
 
 // EventSink records a lifecycle transition (AN-2). The served control plane backs

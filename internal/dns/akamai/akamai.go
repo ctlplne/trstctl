@@ -359,9 +359,9 @@ func edgeGridSign(clientSecret []byte, timestamp string, dataToSign []byte) stri
 // — supplied as a cloudhttp request-signer so its keyed MAC and content digest remain
 // in this package behind the crypto boundary (AN-3) — and is applied just before the
 // request is sent, over exactly the body bytes that will be transmitted. A non-2xx
-// *StatusError is translated to the package's *apiError so CleanupTXT's 404-is-a-no-op
-// predicate and the credential-free error text (AN-8) are unchanged. Akamai returns no
-// body the provider reads, so out is nil.
+// *StatusError is translated to a status-only *apiError so CleanupTXT's 404-is-a-no-op
+// predicate works without retaining attacker-controlled response bytes (AN-8).
+// Akamai returns no body the provider reads, so out is nil.
 func (p *Provider) do(req *http.Request, body []byte, action, name string) error {
 	signer := func(r *http.Request, _ []byte) error {
 		p.signEdgeGrid(r, body, p.now().UTC(), p.nonce())
@@ -370,7 +370,7 @@ func (p *Provider) do(req *http.Request, body []byte, action, name string) error
 	if err := cloudhttp.JSON(p.doer, req, nil, cloudhttp.WithSigner(signer)); err != nil {
 		var se *cloudhttp.StatusError
 		if errors.As(err, &se) {
-			return &apiError{status: se.StatusCode, body: se.Body}
+			return &apiError{status: se.StatusCode}
 		}
 		return fmt.Errorf("akamai: %s %s: %w", action, name, err)
 	}
@@ -401,11 +401,10 @@ type recordBody struct {
 	RData []string `json:"rdata"`
 }
 
-// apiError is a non-2xx Akamai response. Its body is the service error text and never
-// carries the request credentials (AN-8).
+// apiError is a non-2xx Akamai response. It deliberately retains only the status;
+// an upstream body is attacker-controlled and may echo submitted material (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
-func (e *apiError) Error() string { return fmt.Sprintf("akamai: status %d: %s", e.status, e.body) }
+func (e *apiError) Error() string { return fmt.Sprintf("akamai: status %d", e.status) }

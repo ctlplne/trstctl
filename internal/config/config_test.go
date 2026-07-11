@@ -79,6 +79,7 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_MANAGED_KEYS_PROVIDER":                         "aws",
 		"TRSTCTL_MANAGED_KEYS_AWS_REGION":                       "us-east-1",
 		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":                     "http://127.0.0.1:4566",
+		"TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK":      "true",
 		"TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID":                "test",
 		"TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY":            "test-secret",
 		"TRSTCTL_PROTOCOLS_RA_KEY_FILE":                         "/var/lib/trstctl/protocol-ra.key",
@@ -156,7 +157,7 @@ func TestEnvOverridesFile(t *testing.T) {
 	if !cfg.Protocols.KMIP.Enabled || cfg.Protocols.KMIP.TenantID == "" || cfg.Protocols.KMIP.Addr != ":5697" || cfg.Protocols.KMIP.CertFile == "" || cfg.Protocols.KMIP.KeyFile == "" || cfg.Protocols.KMIP.ClientCAFile == "" {
 		t.Errorf("KMIP env enable+tenant+mTLS should apply, got %+v", cfg.Protocols.KMIP)
 	}
-	if !cfg.ManagedKeys.Enabled || cfg.ManagedKeys.Provider != ManagedKeyProviderAWS || cfg.ManagedKeys.AWS.Region != "us-east-1" || cfg.ManagedKeys.AWS.Endpoint != "http://127.0.0.1:4566" || cfg.ManagedKeys.AWS.AccessKeyID != "test" || string(cfg.ManagedKeys.AWS.SecretAccessKey) != "test-secret" {
+	if !cfg.ManagedKeys.Enabled || cfg.ManagedKeys.Provider != ManagedKeyProviderAWS || cfg.ManagedKeys.AWS.Region != "us-east-1" || cfg.ManagedKeys.AWS.Endpoint != "http://127.0.0.1:4566" || !cfg.ManagedKeys.AWS.AllowInsecureLoopback || cfg.ManagedKeys.AWS.AccessKeyID != "test" || string(cfg.ManagedKeys.AWS.SecretAccessKey) != "test-secret" {
 		t.Errorf("managed-key AWS env enable+custody config should apply, got %+v", cfg.ManagedKeys)
 	}
 	if cfg.NATS.Mode != Default().NATS.Mode {
@@ -256,6 +257,55 @@ func TestManagedKeyCloudKMSEnvAndValidation(t *testing.T) {
 	c.ManagedKeys.GCP.BearerTokenFile = "/etc/trstctl/gcp-kms-token"
 	if err := c.Validate(); err != nil {
 		t.Fatalf("valid GCP managed-key config rejected: %v", err)
+	}
+}
+
+func TestManagedKeyCloudEndpointsRequireHTTPSExceptExplicitLoopback(t *testing.T) {
+	providers := []struct {
+		name  string
+		build func(endpoint string, allow bool) ManagedKeys
+	}{
+		{name: "AWS", build: func(endpoint string, allow bool) ManagedKeys {
+			return ManagedKeys{Enabled: true, Provider: ManagedKeyProviderAWS, AWS: ManagedKeysAWSKMS{
+				Region: "us-east-1", Endpoint: endpoint, AllowInsecureLoopback: allow,
+				AccessKeyID: "test", SecretAccessKey: []byte("test"), PrivateEgressCIDRs: []string{"10.0.0.0/8", "127.0.0.0/8"},
+			}}
+		}},
+		{name: "Azure", build: func(endpoint string, allow bool) ManagedKeys {
+			return ManagedKeys{Enabled: true, Provider: ManagedKeyProviderAzureKeyVault, Azure: ManagedKeysAzureKV{
+				VaultURL: "https://vault.example.test", Endpoint: endpoint, AllowInsecureLoopback: allow,
+				BearerToken: []byte("test"), PrivateEgressCIDRs: []string{"10.0.0.0/8", "127.0.0.0/8"},
+			}}
+		}},
+		{name: "GCP", build: func(endpoint string, allow bool) ManagedKeys {
+			return ManagedKeys{Enabled: true, Provider: ManagedKeyProviderGCPKMS, GCP: ManagedKeysGCPKMS{
+				Parent: "projects/p/locations/us/keyRings/r", Endpoint: endpoint, AllowInsecureLoopback: allow,
+				BearerToken: []byte("test"), PrivateEgressCIDRs: []string{"10.0.0.0/8", "127.0.0.0/8"},
+			}}
+		}},
+	}
+	tests := []struct {
+		name     string
+		endpoint string
+		allow    bool
+		ok       bool
+	}{
+		{name: "HTTPS production", endpoint: "https://kms.example.test/v1", ok: true},
+		{name: "public HTTP even with opt in", endpoint: "http://198.51.100.10:8080", allow: true},
+		{name: "private HTTP even with private CIDR and opt in", endpoint: "http://10.1.2.3:8080", allow: true},
+		{name: "loopback HTTP without opt in", endpoint: "http://127.0.0.1:8080"},
+		{name: "loopback HTTP with opt in", endpoint: "http://127.0.0.1:8080", allow: true, ok: true},
+		{name: "localhost HTTP with opt in", endpoint: "http://localhost:8080", allow: true, ok: true},
+	}
+	for _, provider := range providers {
+		for _, tt := range tests {
+			t.Run(provider.name+"/"+tt.name, func(t *testing.T) {
+				err := errors.Join(validateManagedKeys(provider.build(tt.endpoint, tt.allow))...)
+				if (err == nil) != tt.ok {
+					t.Fatalf("validateManagedKeys() = %v, want ok=%v", err, tt.ok)
+				}
+			})
+		}
 	}
 }
 

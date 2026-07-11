@@ -61,6 +61,10 @@ func TestServedRemediationPlaybooksCAPREM01RightSizeEndToEnd(t *testing.T) {
 		string(authz.IncidentsRead), string(authz.IncidentsWrite), string(authz.NHIRead),
 		string(authz.ConnectorsRead),
 	})
+	otherAdminToken := seedServedAPIToken(t, ctx, st, tenantID, "different-incident-commander", []string{
+		string(authz.IncidentsRead), string(authz.IncidentsWrite), string(authz.NHIRead),
+		string(authz.ConnectorsRead),
+	})
 
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
@@ -94,6 +98,7 @@ func TestServedRemediationPlaybooksCAPREM01RightSizeEndToEnd(t *testing.T) {
 	if code != http.StatusCreated {
 		t.Fatalf("run right-size playbook = %d, want 201; body=%s", code, body)
 	}
+	firstRunBody := append([]byte(nil), body...)
 	var run struct {
 		ID                  string          `json:"id"`
 		PlaybookID          string          `json:"playbook_id"`
@@ -139,6 +144,59 @@ func TestServedRemediationPlaybooksCAPREM01RightSizeEndToEnd(t *testing.T) {
 	if len(run.RollbackRefs) != 1 || run.RollbackRefs[0] != "restore iam policy version v17" {
 		t.Fatalf("rollback refs = %#v", run.RollbackRefs)
 	}
+	identityForKey := orchestrator.ConnectorRightSizeIdentityFor(tenantID, "cap-rem-01-right-size")
+	if run.ID != identityForKey.OperationID || run.ConnectorDeliveryID != identityForKey.DeliveryID {
+		t.Fatalf("right-size identities = run %q delivery %q, want deterministic %q/%q", run.ID, run.ConnectorDeliveryID, identityForKey.OperationID, identityForKey.DeliveryID)
+	}
+
+	// The generic response recorder is intentionally not the durable authority.
+	// Delete it, then prove the operation row returns the byte-identical first
+	// response and rejects a changed body before another event/outbox/receipt can
+	// be created.
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, tenantID, "cap-rem-01-right-size")
+		return err
+	}); err != nil {
+		t.Fatalf("collect transient response recorder: %v", err)
+	}
+	replayCode, replayBody := doBearer(t, ts, http.MethodPost, "/api/v1/remediation/playbooks/nhi-right-size/runs", adminToken, "cap-rem-01-right-size", map[string]any{
+		"target_identity_id": identity.ID,
+		"reason":             "remove unused production grants",
+		"connector":          "aws-iam",
+		"target":             "arn:aws:iam::123456789012:role/payments-bot",
+		"remove_scopes":      []string{"secrets:write", "admin:*"},
+		"rollback_ref":       "restore iam policy version v17",
+	})
+	if replayCode != http.StatusCreated || !bytes.Equal(firstRunBody, replayBody) {
+		t.Fatalf("post-recorder-GC replay = %d body=%s; want exact %s", replayCode, replayBody, firstRunBody)
+	}
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, tenantID, "cap-rem-01-right-size")
+		return err
+	}); err != nil {
+		t.Fatalf("collect replay cache: %v", err)
+	}
+	changedCode, changedBody := doBearer(t, ts, http.MethodPost, "/api/v1/remediation/playbooks/nhi-right-size/runs", adminToken, "cap-rem-01-right-size", map[string]any{
+		"target_identity_id": identity.ID,
+		"reason":             "changed command must conflict",
+		"connector":          "aws-iam",
+		"target":             "arn:aws:iam::123456789012:role/payments-bot",
+		"remove_scopes":      []string{"admin:*"},
+	})
+	if changedCode != http.StatusConflict {
+		t.Fatalf("changed post-GC command = %d, want 409; body=%s", changedCode, changedBody)
+	}
+	callerCode, callerBody := doBearer(t, ts, http.MethodPost, "/api/v1/remediation/playbooks/nhi-right-size/runs", otherAdminToken, "cap-rem-01-right-size", map[string]any{
+		"target_identity_id": identity.ID,
+		"reason":             "remove unused production grants",
+		"connector":          "aws-iam",
+		"target":             "arn:aws:iam::123456789012:role/payments-bot",
+		"remove_scopes":      []string{"secrets:write", "admin:*"},
+		"rollback_ref":       "restore iam policy version v17",
+	})
+	if callerCode != http.StatusConflict {
+		t.Fatalf("changed authenticated caller = %d, want 409; body=%s", callerCode, callerBody)
+	}
 
 	code, listBody := doBearer(t, ts, http.MethodGet, "/api/v1/remediation/playbook-runs?playbook_id=nhi-right-size", adminToken, "", nil)
 	if code != http.StatusOK || !bytes.Contains(listBody, []byte(run.ID)) {
@@ -149,29 +207,34 @@ func TestServedRemediationPlaybooksCAPREM01RightSizeEndToEnd(t *testing.T) {
 		t.Fatalf("get playbook run = %d body=%s; want connector delivery id", code, getBody)
 	}
 
-	var outboxRows int
+	var outboxRows, receiptRows int
 	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
+		if err := tx.QueryRow(ctx,
 			`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = $2`,
-			tenantID, orchestrator.DestinationConnectorRightSize).Scan(&outboxRows)
+			tenantID, orchestrator.DestinationConnectorRightSize).Scan(&outboxRows); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx,
+			`SELECT count(*) FROM connector_delivery_receipts WHERE tenant_id = $1 AND destination = $2`,
+			tenantID, orchestrator.DestinationConnectorRightSize).Scan(&receiptRows)
 	}); err != nil {
 		t.Fatalf("count right-size outbox rows: %v", err)
 	}
-	if outboxRows != 1 {
-		t.Fatalf("right-size outbox rows = %d, want 1", outboxRows)
+	if outboxRows != 1 || receiptRows != 1 {
+		t.Fatalf("right-size durable rows = outbox %d receipt %d, want 1/1", outboxRows, receiptRows)
 	}
 
-	var sawPlaybookEvent bool
+	var playbookEvents int
 	if err := log.Replay(ctx, 0, func(ev events.Event) error {
 		if ev.Type == projections.EventRemediationPlaybookRunRecorded && ev.TenantID == tenantID && bytes.Contains(ev.Data, []byte(run.ID)) {
-			sawPlaybookEvent = true
+			playbookEvents++
 		}
 		return nil
 	}); err != nil {
 		t.Fatalf("replay event log: %v", err)
 	}
-	if !sawPlaybookEvent {
-		t.Fatal("remediation.playbook_run.recorded event was not recorded")
+	if playbookEvents != 1 {
+		t.Fatalf("remediation.playbook_run.recorded events = %d, want exactly 1", playbookEvents)
 	}
 }
 

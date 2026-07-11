@@ -40,7 +40,7 @@ func (m *Memory) Do(ctx context.Context, tenantID, key string, fn func(context.C
 	m.mu.Lock()
 	if r, ok := m.done[full]; ok {
 		m.mu.Unlock()
-		return r, nil
+		return append([]byte(nil), r...), nil
 	}
 	if m.inflight[full] {
 		m.mu.Unlock()
@@ -54,8 +54,14 @@ func (m *Memory) Do(ctx context.Context, tenantID, key string, fn func(context.C
 	m.mu.Lock()
 	delete(m.inflight, full)
 	if err == nil {
-		m.done[full] = res
+		// The cache owns one copy and each caller receives another. Mutation or
+		// explicit wiping by the callback/caller must never erase the durable
+		// in-memory replay result.
+		m.done[full] = append([]byte(nil), res...)
 	}
 	m.mu.Unlock()
-	return res, err
+	if err != nil {
+		return res, err
+	}
+	return append([]byte(nil), res...), nil
 }

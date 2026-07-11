@@ -3,6 +3,7 @@
 package opsgenie_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,9 +23,14 @@ const testKey = "genie-key-do-not-log"
 
 func newChannel(t *testing.T, srv *fakeOG, apiKey string) *opsgenie.Channel {
 	t.Helper()
-	return opsgenie.New([]byte(apiKey),
+	channel, err := opsgenie.New([]byte(apiKey),
 		opsgenie.WithEndpoint(srv.URL()),
 		opsgenie.WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatalf("opsgenie.New: %v", err)
+	}
+	t.Cleanup(channel.Close)
+	return channel
 }
 
 // TestOpsGenieConforms drives the channel through the shared notification conformance
@@ -92,6 +98,110 @@ func TestKeyNeverLogged(t *testing.T) {
 	}
 }
 
+func TestRemoteEchoResponseBuffersAreWipedAndNeverEscape(t *testing.T) {
+	const echoed = "opsgenie-remote-echo-authority"
+	tests := []struct {
+		name       string
+		statusCode int
+		body       []byte
+	}{
+		{name: "error drain", statusCode: http.StatusBadGateway, body: []byte(echoed)},
+		{name: "accepted decode", statusCode: http.StatusAccepted, body: []byte(`{"result":"` + echoed + `","requestId":"` + echoed + `"}`)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			responseBody := &retainingResponseBody{data: tc.body}
+			channel, err := opsgenie.New([]byte(testKey), opsgenie.WithHTTPClient(roundTripDoer(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: tc.statusCode, Body: responseBody}, nil
+			})))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer channel.Close()
+			err = channel.Notify(context.Background(), notify.Alert{Kind: notify.KindCertificateExpiry, Subject: "cn=echo"})
+			if err == nil {
+				t.Fatal("remote echo response unexpectedly succeeded")
+			}
+			if strings.Contains(err.Error(), echoed) {
+				t.Fatalf("remote echo escaped through error: %v", err)
+			}
+			responseBody.assertObservedWiped(t)
+		})
+	}
+}
+
+type retainingResponseBody struct {
+	data     []byte
+	observed [][]byte
+}
+
+func (b *retainingResponseBody) Read(dst []byte) (int, error) {
+	if len(b.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(dst, b.data)
+	b.data = b.data[n:]
+	b.observed = append(b.observed, dst[:n])
+	return n, nil
+}
+
+func (*retainingResponseBody) Close() error { return nil }
+
+func (b *retainingResponseBody) assertObservedWiped(t *testing.T) {
+	t.Helper()
+	if len(b.observed) == 0 {
+		t.Fatal("response body observed no owned destination buffer")
+	}
+	for _, view := range b.observed {
+		if !bytes.Equal(view, make([]byte, len(view))) {
+			t.Fatalf("response read buffer retained remote echo bytes: %x", view)
+		}
+	}
+}
+
+func TestNewRejectsHeaderInjectionAndNonTokenKeys(t *testing.T) {
+	tests := [][]byte{
+		[]byte("key\r\nX-Injected: true"),
+		[]byte("key with space"),
+		{0x7f},
+		{0xc3, 0xa9},
+		[]byte(strings.Repeat("a", 256)),
+	}
+	for _, key := range tests {
+		channel, err := opsgenie.New(key)
+		if channel != nil {
+			channel.Close()
+			t.Fatalf("New(%q) returned a channel for a non-token key", key)
+		}
+		if err == nil {
+			t.Fatalf("New(%q) accepted a non-token key", key)
+		}
+		if strings.Contains(err.Error(), string(key)) {
+			t.Fatalf("validation error leaked rejected key %q: %v", key, err)
+		}
+	}
+}
+
+func TestNotifyRejectsForgedAcceptanceResult(t *testing.T) {
+	channel, err := opsgenie.New([]byte(testKey), opsgenie.WithHTTPClient(roundTripDoer(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusAccepted,
+			Body:       io.NopCloser(strings.NewReader(`{"result":"Alert discarded","requestId":"forged-request"}`)),
+		}, nil
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer channel.Close()
+	if err := channel.Notify(context.Background(), notify.Alert{Kind: notify.KindCertificateExpiry, Subject: "cn=example"}); err == nil {
+		t.Fatal("OpsGenie channel accepted a 202 response whose result did not acknowledge processing")
+	}
+}
+
+type roundTripDoer func(*http.Request) (*http.Response, error)
+
+func (f roundTripDoer) Do(request *http.Request) (*http.Response, error) { return f(request) }
+
 // TestNotifySendsMessageAndDescription verifies the happy path puts FormatMessage(alert)
 // in message and alert.Detail in description, and that a valid GenieKey is accepted.
 func TestNotifySendsMessageAndDescription(t *testing.T) {
@@ -125,8 +235,12 @@ func TestDefaultClientRejectsUnsafeEndpoints(t *testing.T) {
 		"https://10.0.0.5/v2/alerts",
 		"https://169.254.169.254/latest/meta-data/",
 	} {
-		ch := opsgenie.New([]byte(testKey), opsgenie.WithEndpoint(target))
-		err := ch.Notify(context.Background(), alert)
+		ch, err := opsgenie.New([]byte(testKey), opsgenie.WithEndpoint(target))
+		if err != nil {
+			t.Fatalf("opsgenie.New: %v", err)
+		}
+		t.Cleanup(ch.Close)
+		err = ch.Notify(context.Background(), alert)
 		if err == nil {
 			t.Fatalf("default OpsGenie client delivered to unsafe endpoint %s", target)
 		}
@@ -203,10 +317,17 @@ func (s *fakeOG) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	var req struct {
 		Message     string `json:"message"`
+		Alias       string `json:"alias"`
 		Description string `json:"description"`
+		Source      string `json:"source"`
+		Priority    string `json:"priority"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		s.fail(w, http.StatusBadRequest, "malformed alert")
+		return
+	}
+	if !strings.HasPrefix(req.Alias, "trstctl-") || req.Source != "trstctl" || req.Priority == "" {
+		s.fail(w, http.StatusBadRequest, "invalid native alert fields")
 		return
 	}
 
@@ -225,8 +346,8 @@ func (s *fakeOG) handle(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// fail mirrors an OpsGenie error envelope. It deliberately never echoes the key, so
-// surfacing this body as the channel's error text cannot leak credentials (AN-8).
+// fail mirrors an OpsGenie error envelope. Its text is attacker-controlled so the
+// channel must discard it instead of copying it into an error (AN-8).
 func (s *fakeOG) fail(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

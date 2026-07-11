@@ -3,157 +3,20 @@
 package managedkeys
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os"
-	"strings"
-	"time"
 
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/egress"
-	"trstctl.com/trstctl/internal/kms/awskms"
-	"trstctl.com/trstctl/internal/kms/azurekv"
-	"trstctl.com/trstctl/internal/kms/gcpkms"
-	"trstctl.com/trstctl/internal/kms/pkcs11"
 	"trstctl.com/trstctl/internal/server"
 )
 
-// FactoryFromConfig assembles the licensed managed-key service factory from the
-// operator's BYOK/HSM custody config. A disabled config returns nil, nil so a
-// licensed deployment with BYOK off still leaves the API surface hidden.
-func FactoryFromConfig(ctx context.Context, cfg config.ManagedKeys, guard *egress.Guard) (server.ManagedKeyServiceFactory, error) {
-	backend, err := CustodyFromConfig(ctx, cfg, guard)
-	if err != nil {
-		return nil, err
-	}
-	if backend == nil {
-		return nil, nil
-	}
-	return NewFactory(backend), nil
-}
-
-// CustodyFromConfig assembles the remote-custody backend once at startup and
-// injects it behind crypto.RemoteKeyLifecycle. This is deliberately the generic
-// compile-time interface + dependency-injection pattern used by crypto.Signer,
-// Java JCA, OpenSSL ENGINE, and PKCS#11.
-func CustodyFromConfig(_ context.Context, cfg config.ManagedKeys, guard *egress.Guard) (crypto.RemoteKeyLifecycle, error) {
+// FactoryFromConfig is retained as a source-compatible composition helper. It
+// deliberately does not construct or receive a KMS/HSM backend: provider
+// construction moved into cmd/trstctl-signer and every external action is
+// reached through the durable managedkey.command outbox worker.
+func FactoryFromConfig(_ context.Context, cfg config.ManagedKeys, _ *egress.Guard) (server.ManagedKeyServiceFactory, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
-	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
-	if provider == "" {
-		provider = config.ManagedKeyProviderAWS
-	}
-	switch provider {
-	case config.ManagedKeyProviderAWS:
-		return awsManagedKeyCustodyFromConfig(cfg.AWS, guard)
-	case config.ManagedKeyProviderAzureKeyVault:
-		return azureManagedKeyCustodyFromConfig(cfg.Azure, guard)
-	case config.ManagedKeyProviderGCPKMS:
-		return gcpManagedKeyCustodyFromConfig(cfg.GCP, guard)
-	case config.ManagedKeyProviderPKCS11:
-		return pkcs11ManagedKeyCustodyFromConfig(cfg.PKCS11)
-	default:
-		return nil, fmt.Errorf("managed-key custody provider %q is not supported", cfg.Provider)
-	}
-}
-
-func awsManagedKeyCustodyFromConfig(cfg config.ManagedKeysAWSKMS, guard *egress.Guard) (crypto.RemoteKeyLifecycle, error) {
-	secretAccessKey, wipeSecret, err := managedKeySecretBytes("managed_keys.aws.secret_access_key", cfg.SecretAccessKey, cfg.SecretAccessKeyFile)
-	if err != nil {
-		return nil, err
-	}
-	defer wipeSecret()
-	sessionToken, wipeToken, err := managedKeySecretBytes("managed_keys.aws.session_token", cfg.SessionToken, cfg.SessionTokenFile)
-	if err != nil {
-		return nil, err
-	}
-	defer wipeToken()
-
-	opts := []awskms.Option{}
-	if cfg.Endpoint != "" {
-		opts = append(opts, awskms.WithEndpoint(cfg.Endpoint))
-	}
-	if guard != nil && guard.Enabled() {
-		opts = append(opts, awskms.WithHTTPClient(guard.Client(30*time.Second)))
-	}
-	return awskms.New(cfg.Region, awskms.Credentials{
-		AccessKeyID:     cfg.AccessKeyID,
-		SecretAccessKey: secretAccessKey,
-		SessionToken:    sessionToken,
-	}, opts...), nil
-}
-
-func azureManagedKeyCustodyFromConfig(cfg config.ManagedKeysAzureKV, guard *egress.Guard) (crypto.RemoteKeyLifecycle, error) {
-	token, wipeToken, err := managedKeySecretBytes("managed_keys.azure.bearer_token", cfg.BearerToken, cfg.BearerTokenFile)
-	if err != nil {
-		return nil, err
-	}
-	defer wipeToken()
-
-	opts := []azurekv.Option{}
-	if cfg.Endpoint != "" {
-		opts = append(opts, azurekv.WithEndpoint(cfg.Endpoint))
-	}
-	if guard != nil && guard.Enabled() {
-		opts = append(opts, azurekv.WithHTTPClient(guard.Client(30*time.Second)))
-	}
-	return azurekv.New(cfg.VaultURL, azurekv.Credentials{BearerToken: token}, opts...), nil
-}
-
-func gcpManagedKeyCustodyFromConfig(cfg config.ManagedKeysGCPKMS, guard *egress.Guard) (crypto.RemoteKeyLifecycle, error) {
-	token, wipeToken, err := managedKeySecretBytes("managed_keys.gcp.bearer_token", cfg.BearerToken, cfg.BearerTokenFile)
-	if err != nil {
-		return nil, err
-	}
-	defer wipeToken()
-
-	opts := []gcpkms.Option{}
-	if cfg.Endpoint != "" {
-		opts = append(opts, gcpkms.WithEndpoint(cfg.Endpoint))
-	}
-	if guard != nil && guard.Enabled() {
-		opts = append(opts, gcpkms.WithHTTPClient(guard.Client(30*time.Second)))
-	}
-	return gcpkms.New(cfg.Parent, gcpkms.Credentials{BearerToken: token}, opts...), nil
-}
-
-func pkcs11ManagedKeyCustodyFromConfig(cfg config.ManagedKeysPKCS11HSM) (crypto.RemoteKeyLifecycle, error) {
-	userPIN, wipePIN, err := managedKeySecretBytes("managed_keys.pkcs11.user_pin", cfg.UserPIN, cfg.UserPINFile)
-	if err != nil {
-		return nil, err
-	}
-	defer wipePIN()
-
-	session, err := pkcs11.OpenModuleSession(pkcs11.ModuleConfig{
-		ModulePath:     cfg.ModulePath,
-		TokenLabel:     cfg.TokenLabel,
-		UserPIN:        userPIN,
-		KeyLabelPrefix: cfg.KeyLabelPrefix,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return pkcs11.New(session), nil
-}
-
-func managedKeySecretBytes(name string, inline []byte, file string) ([]byte, func(), error) {
-	if len(inline) > 0 && file != "" {
-		return nil, func() {}, fmt.Errorf("%s and %s_file are mutually exclusive", name, name)
-	}
-	if len(inline) > 0 {
-		return inline, func() {}, nil
-	}
-	if file == "" {
-		return nil, func() {}, nil
-	}
-	raw, err := os.ReadFile(file)
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("read %s_file: %w", name, err)
-	}
-	raw = bytes.TrimSpace(raw)
-	return raw, func() { secret.Wipe(raw) }, nil
+	return NewDurableFactory(cfg.Provider), nil
 }

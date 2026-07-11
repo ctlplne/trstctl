@@ -80,7 +80,7 @@ func TestPluginIssuesThroughOrderRetrieveFlow(t *testing.T) {
 	}
 }
 
-func TestPluginSurfacesAuthFailureAsStructuredError(t *testing.T) {
+func TestPluginSurfacesAuthFailureAsStatusOnlyError(t *testing.T) {
 	stub := newGlobalSignStub(t, "gs-key-sensitive", "gs-secret-sensitive")
 	defer stub.Close()
 
@@ -96,8 +96,8 @@ func TestPluginSurfacesAuthFailureAsStructuredError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Issue succeeded; want auth error")
 	}
-	if !strings.Contains(err.Error(), "globalsign: api error 401: invalid credentials") {
-		t.Fatalf("Issue error = %q, want structured GlobalSign auth error", err)
+	if !strings.Contains(err.Error(), "globalsign: api error 401") || strings.Contains(err.Error(), "invalid credentials") {
+		t.Fatalf("Issue error = %q, want status-only GlobalSign auth error", err)
 	}
 	if strings.Contains(err.Error(), "wrong-secret-sensitive") || strings.Contains(err.Error(), "gs-key-sensitive") {
 		t.Fatalf("Issue error leaked credentials: %q", err)

@@ -109,7 +109,7 @@ func (p *Provider) post(ctx context.Context, action, name, value string) error {
 	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
 		var se *cloudhttp.StatusError
 		if errors.As(err, &se) {
-			return &apiError{status: se.StatusCode, body: se.Body}
+			return &apiError{status: se.StatusCode}
 		}
 		return fmt.Errorf("webhookdns: %s %s: %w", action, name, err)
 	}
@@ -124,7 +124,6 @@ type request struct {
 
 type apiError struct {
 	status int
-	body   string
 }
 
-func (e *apiError) Error() string { return fmt.Sprintf("webhookdns: status %d: %s", e.status, e.body) }
+func (e *apiError) Error() string { return fmt.Sprintf("webhookdns: status %d", e.status) }

@@ -201,11 +201,14 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureBYOK) {
-		managedKeyFactory, err := eemanagedkeys.FactoryFromConfig(ctx, attachConfig(cfg).ManagedKeys, deps.EgressGuard)
-		if err != nil {
-			return err
+		managedKeysConfig := attachConfig(cfg).ManagedKeys
+		if managedKeysConfig.Enabled {
+			// The factory receives only provider identity + the event/store spine.
+			// Provider constructors and credentials live in trstctl-signer; the
+			// licensed outbox handler is the sole ManageKey RPC caller (AN-4/AN-6).
+			deps.ManagedKeyFactory = eemanagedkeys.NewDurableFactory(managedKeysConfig.Provider)
+			deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eemanagedkeys.NewDurableOutboxFactory())
 		}
-		deps.ManagedKeyFactory = managedKeyFactory
 		deps.KMIPFactory = eekmip.NewFactory()
 		if log != nil {
 			log.Info("Enterprise BYOK support attached", slog.String("feature", string(license.FeatureBYOK)))
@@ -249,7 +252,7 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 }
 
 func attachRemediation(log *slog.Logger, deps *server.Deps) {
-	deps.EnableRemediation = true
+	server.EnableRemediationEdition(deps)
 	if log != nil {
 		log.Info("Enterprise remediation attached", slog.String("feature", string(license.FeatureRemediation)))
 	}

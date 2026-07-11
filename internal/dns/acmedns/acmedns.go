@@ -170,26 +170,23 @@ func (p *Provider) update(ctx context.Context, value string) error {
 	req.Header.Set("X-Api-Key", string(p.creds.Password))
 
 	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalisation,
-	// and drain (CODE-006); the non-2xx *StatusError is translated to the package's
-	// *apiError, whose text is the acme-dns error body and never carries the request
-	// credentials (AN-8). acme-dns's /update returns no body the provider reads, so
-	// out is nil.
+	// and drain (CODE-006); a non-2xx response retains only its status, never the
+	// attacker-controlled response body (AN-8). acme-dns's /update returns no body the
+	// provider reads, so out is nil.
 	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
 		var se *cloudhttp.StatusError
 		if errors.As(err, &se) {
-			return &apiError{status: se.StatusCode, body: se.Body}
+			return &apiError{status: se.StatusCode}
 		}
 		return fmt.Errorf("acmedns: update %s: %w", p.subdomain, err)
 	}
 	return nil
 }
 
-// apiError is a non-2xx acme-dns response. Its body is the service error text (e.g.
-// the {"error":"unauthorized"} acme-dns returns on a bad key) and never carries the
-// request credentials (AN-8).
+// apiError is a non-2xx acme-dns response. It deliberately retains only the status;
+// an upstream body is attacker-controlled and may echo submitted material (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
-func (e *apiError) Error() string { return fmt.Sprintf("acmedns: status %d: %s", e.status, e.body) }
+func (e *apiError) Error() string { return fmt.Sprintf("acmedns: status %d", e.status) }

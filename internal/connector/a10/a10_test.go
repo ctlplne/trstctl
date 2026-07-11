@@ -5,7 +5,10 @@ package a10_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -48,6 +51,40 @@ func TestDeployFailsWithoutAuth(t *testing.T) {
 	}
 	if _, ok := srv.Binding("payments-client-ssl"); ok {
 		t.Fatal("template bound despite failed auth")
+	}
+}
+
+// aXAPI error bodies are untrusted and may echo the submitted password, session
+// signature, certificate, or private key. They must remain byte-backed and must
+// not become part of the durable error returned to the outbox worker.
+func TestDeployRedactsSecretsEchoedByAppliance(t *testing.T) {
+	const (
+		password = "A10-PASSWORD-DO-NOT-LOG"
+		token    = "A10-TOKEN-DO-NOT-LOG"
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/axapi/v3/auth":
+			_, _ = io.WriteString(w, `{"authresponse":{"signature":"`+token+`"}}`)
+		case "/axapi/v3/file/ssl-cert":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write(bytes.Join([][]byte{[]byte(password), []byte(token), a10Cert, a10Key}, []byte("|")))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := a10.New(srv.URL, "admin", []byte(password))
+	t.Cleanup(c.Close)
+	_, err := connector.Run(context.Background(), c, connector.NewHTTPOps(srv.Client()), connector.NewDeployment("payments-client-ssl", a10Cert, a10Key))
+	if err == nil {
+		t.Fatal("deploy succeeded despite appliance failure")
+	}
+	for _, forbidden := range []string{password, token, string(a10Cert), string(a10Key)} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("error %q leaked authority-bearing response content", err)
+		}
 	}
 }
 

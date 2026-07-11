@@ -4012,14 +4012,14 @@ export interface components {
         };
         Approval: {
             /** @enum {string} */
-            action: "issue" | "rotate" | "revoke";
+            action: "issue" | "rotate" | "revoke" | "sign";
             approvals: number;
             approver: string;
             resource: string;
         };
         ApprovalRequest: {
             /** @enum {string} */
-            action: "issue" | "rotate" | "revoke";
+            action: "issue" | "rotate" | "revoke" | "sign";
         };
         Attestation: {
             claims?: Record<string, never>;
@@ -4724,7 +4724,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /** @enum {string} */
-            status: "unrouted" | "delivered" | "failed" | "test_succeeded" | "rollback_recorded";
+            status: "queued" | "delivered" | "failed" | "test_succeeded" | "rollback_recorded";
             target: string;
             /** Format: uuid */
             tenant_id: string;

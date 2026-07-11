@@ -35,7 +35,7 @@ func TestF5DeploysRenewedCertViaOutbox(t *testing.T) {
 	reg := connector.NewRegistry(func(string) connector.Ops {
 		return connector.NewHTTPOps(srv.Client())
 	})
-	reg.Register(f5.New(srv.URL(), profile, f5.WithBasicAuth("admin", "s3cret")))
+	reg.Register(f5.New(srv.URL(), profile, f5.WithBasicAuthBytes("admin", []byte("s3cret"))))
 
 	payload, err := connector.EncodeDeploy("f5", connector.NewDeployment("bigip-1", f5Cert, f5Key))
 	if err != nil {

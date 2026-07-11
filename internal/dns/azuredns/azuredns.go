@@ -192,7 +192,7 @@ func (p *Provider) do(ctx context.Context, method, name string, body []byte, all
 			if allow404 && se.StatusCode == http.StatusNotFound {
 				return nil
 			}
-			return &apiError{status: se.StatusCode, body: se.Body}
+			return &apiError{status: se.StatusCode}
 		}
 		return err
 	}
@@ -246,13 +246,13 @@ type txtRecord struct {
 	Value []string `json:"value"`
 }
 
-// apiError is a non-2xx Azure DNS response. Its body is the service error text and
-// never carries the bearer token (AN-8).
+// apiError is a non-2xx Azure DNS response. It deliberately retains only the
+// status: an upstream body is attacker-controlled and may echo submitted material
+// (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
 func (e *apiError) Error() string {
-	return fmt.Sprintf("azuredns: status %d: %s", e.status, e.body)
+	return fmt.Sprintf("azuredns: status %d", e.status)
 }

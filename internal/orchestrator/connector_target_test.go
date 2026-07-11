@@ -29,7 +29,7 @@ func TestBindIdentityDeploymentTargetProjectsRoutingAttributes(t *testing.T) {
 		t.Fatalf("CreateIdentity: %v", err)
 	}
 	target, err := orch.UpsertDeploymentTarget(ctx, tenantA, store.DeploymentTarget{
-		Name: "edge/prod/payments", Type: "nginx", Config: json.RawMessage(`{"credential_ref":"secret://connectors/nginx"}`),
+		Name: "edge/prod/payments", Type: "nginx", Config: json.RawMessage(`{"endpoint":"https://management.example.test","credential_ref":"secret://connectors/nginx"}`),
 	})
 	if err != nil {
 		t.Fatalf("UpsertDeploymentTarget: %v", err)
@@ -54,6 +54,9 @@ func TestBindIdentityDeploymentTargetProjectsRoutingAttributes(t *testing.T) {
 		if attrs[key] != want {
 			t.Fatalf("attrs[%s] = %q, want %q in %s", key, attrs[key], want, bound.Attributes)
 		}
+	}
+	if route := attrs["deployment_route"]; route != "" {
+		t.Fatalf("management endpoint leaked into deployment_route: %q in %s", route, bound.Attributes)
 	}
 	if err := orch.Transition(ctx, tenantA, identity.ID, orchestrator.StateIssued, "issue after connector target binding"); err != nil {
 		t.Fatalf("Transition issued after binding: %v", err)

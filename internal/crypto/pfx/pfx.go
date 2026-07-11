@@ -71,6 +71,13 @@ func Encode(keyPEM, certChainPEM []byte, password string) ([]byte, error) {
 // secret — they are stored in the blob in the clear — and remain unique per
 // distinct credential; the password protection is unchanged.
 func EncodeDeterministic(keyPEM, certChainPEM []byte, password string) ([]byte, error) {
+	return EncodeDeterministicBytes(keyPEM, certChainPEM, []byte(password))
+}
+
+// EncodeDeterministicBytes is the AN-8 production edge: callers retain a
+// zeroizable password buffer and the string conversion required by the PKCS#12
+// library stays inside the cryptographic boundary.
+func EncodeDeterministicBytes(keyPEM, certChainPEM, password []byte) ([]byte, error) {
 	key, err := parsePrivateKey(keyPEM)
 	if err != nil {
 		return nil, err
@@ -79,8 +86,8 @@ func EncodeDeterministic(keyPEM, certChainPEM []byte, password string) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	r := detrand.New([]byte("trstctl/pfx/v1"), []byte(password), keyPEM, certChainPEM)
-	return pkcs12.Modern.WithRand(r).Encode(key, leaf, cas, password)
+	r := detrand.New([]byte("trstctl/pfx/v1"), password, keyPEM, certChainPEM)
+	return pkcs12.Modern.WithRand(r).Encode(key, leaf, cas, string(password))
 }
 
 // Decode parses a PKCS#12 blob with password and returns the private key and

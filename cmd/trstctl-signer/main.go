@@ -37,6 +37,7 @@ func main() {
 	kmsKeyRef := flag.String("kms-key-ref", "", "external KMS/HSM key identifier used by the signer keystore wrapper")
 	kmsWrapCommand := flag.String("kms-wrap-command", "", "absolute path to signer-local KMS/HSM wrapper command; receives wrap|unwrap provider keyRef and DEK bytes on stdin")
 	kmsTimeout := flag.Duration("kms-timeout", 10*time.Second, "deadline for each external KMS/HSM wrap/unwrap operation")
+	managedKeysConfig := flag.String("managed-keys-config", "", "path to signer-local managed-key provider JSON (credentials must be file references, never argv/env)")
 	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
 	allowInsecureDevNonLinux := flag.Bool("allow-insecure-dev-nonlinux", false, "development-only: allow signer startup on non-Linux where process hardening, UDS peer UID checks, and locked memory are unavailable")
 
@@ -108,6 +109,12 @@ func main() {
 		defer authz.Destroy()
 		opts = append(opts, signing.WithAuthorizer(authz))
 	}
+	managedOpts, err := appendManagedKeyOptions(opts, lic, *managedKeysConfig, *keystore)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: configure managed-key provider: %v\n", err)
+		os.Exit(1)
+	}
+	opts = managedOpts
 	// With a key store, persist keys sealed at rest so a restart preserves the
 	// issuing CA instead of silently rotating it (R3.2). Without one, keys are
 	// in-memory only.

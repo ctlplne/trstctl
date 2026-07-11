@@ -8,17 +8,25 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/gcpcm"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -186,12 +194,387 @@ func TestIssuanceDispatcherRecoversRecordedCertificateBeforeRetryingSigner(t *te
 
 func TestIssuanceDispatcherFailsUnsupportedFirstPartyDestination(t *testing.T) {
 	d := &issuanceDispatcher{}
-	err := d.Deliver(context.Background(), orchestrator.Message{Destination: "ca.rotate"})
-	if err == nil || !strings.Contains(err.Error(), "unsupported first-party outbox destination") {
-		t.Fatalf("unsupported ca.* destination error = %v, want fail-closed error", err)
+	for _, destination := range []string{"ca.rotate", "connector.unimplemented", "future.vendor.command"} {
+		err := d.Deliver(context.Background(), orchestrator.Message{Destination: destination})
+		if err == nil || !strings.Contains(err.Error(), "unsupported first-party outbox destination") {
+			t.Fatalf("unsupported %s destination error = %v, want fail-closed error", destination, err)
+		}
 	}
-	if err := d.Deliver(context.Background(), orchestrator.Message{Destination: "notification.expiry"}); err != nil {
-		t.Fatalf("non-owned notification destination should remain unrouted, got %v", err)
+	for _, destination := range []string{"notification.expiry", "transparency.rekor", "managedkey.command"} {
+		if err := d.Deliver(context.Background(), orchestrator.Message{Destination: destination}); err == nil {
+			t.Fatalf("missing handler for %s silently acknowledged the row", destination)
+		}
+	}
+}
+
+func TestIssuanceDispatcherMissingFirstPartyHandlersLeaveOutboxRowsPending(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	destinations := []string{"notification.expiry", "transparency.rekor", "managedkey.command"}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		for i, destination := range destinations {
+			if _, err := h.outbox.Enqueue(ctx, tx, orchestrator.Entry{
+				TenantID: h.tenant, Destination: destination,
+				IdempotencyKey: fmt.Sprintf("missing-handler-%d", i), Payload: []byte(`{}`),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("enqueue first-party rows: %v", err)
+	}
+	if n, err := h.outbox.Dispatch(ctx, h.handler); err != nil || n != len(destinations) {
+		t.Fatalf("Dispatch = (%d, %v), want (%d, nil)", n, err, len(destinations))
+	}
+	pending, err := h.outbox.Pending(ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("Pending: %v", err)
+	}
+	got := make(map[string]orchestrator.Record, len(pending))
+	for _, row := range pending {
+		got[row.Destination] = row
+	}
+	for _, destination := range destinations {
+		row, ok := got[destination]
+		if !ok {
+			t.Errorf("%s row was acknowledged despite its missing handler", destination)
+			continue
+		}
+		if row.Status != "pending" || row.Attempts != 1 || row.LastError == "" {
+			t.Errorf("%s row = %+v, want pending attempt with visible error", destination, row)
+		}
+	}
+}
+
+type connectorReplayProbe struct {
+	name   string
+	calls  int
+	deploy func(call int) error
+}
+
+func (p *connectorReplayProbe) Name() string { return p.name }
+
+func (p *connectorReplayProbe) Capabilities() pluginhost.Grant { return pluginhost.NewGrant() }
+
+func (p *connectorReplayProbe) Deploy(context.Context, connector.Sandbox, connector.Deployment) error {
+	p.calls++
+	if p.deploy != nil {
+		return p.deploy(p.calls)
+	}
+	return nil
+}
+
+type connectorPluginProbe struct {
+	owned  map[string]bool
+	calls  int
+	deploy func(call int) (bool, error)
+}
+
+type gcpcmAmbiguousReceiverOps struct {
+	patches int
+	applied bool
+}
+
+func (o *gcpcmAmbiguousReceiverOps) Send(string, []byte) error {
+	return errors.New("unexpected raw send")
+}
+
+func (o *gcpcmAmbiguousReceiverOps) WriteFile(string, []byte) error {
+	return errors.New("unexpected file write")
+}
+
+func (o *gcpcmAmbiguousReceiverOps) Exec(string, []string) error {
+	return errors.New("unexpected process execution")
+}
+
+func (o *gcpcmAmbiguousReceiverOps) Request(req *http.Request) (*http.Response, error) {
+	if req.Method != http.MethodPatch {
+		return nil, fmt.Errorf("unexpected GCP request %s %s", req.Method, req.URL)
+	}
+	o.patches++
+	o.applied = true
+	return nil, errors.New("receiver applied PATCH but response was lost")
+}
+
+func (p *connectorPluginProbe) Has(name string) bool { return p != nil && p.owned[name] }
+
+func (p *connectorPluginProbe) Deploy(context.Context, string, connector.DeployPayload) (bool, error) {
+	p.calls++
+	if p.deploy != nil {
+		return p.deploy(p.calls)
+	}
+	return true, nil
+}
+
+func connectorDeployTestMessage(t *testing.T, connectorName, key string) orchestrator.Message {
+	t.Helper()
+	payload, err := connector.EncodeDeploy(connectorName, connector.NewDeployment(
+		"edge/test", []byte("test certificate"), []byte("test private key"),
+	))
+	if err != nil {
+		t.Fatalf("EncodeDeploy: %v", err)
+	}
+	return orchestrator.Message{
+		ID: 41, TenantID: "11111111-1111-1111-1111-111111111111",
+		Destination: "connector.deploy", IdempotencyKey: key, Payload: payload, Attempts: 1,
+	}
+}
+
+func TestConnectorReplaySafetyControlsAmbiguousFailureRetry(t *testing.T) {
+	ambiguous := errors.New("receiver response was lost after mutation")
+	t.Run("unsafe receiver is never replayed", func(t *testing.T) {
+		probe := &connectorReplayProbe{name: "unsafe", deploy: func(int) error { return ambiguous }}
+		registry := connector.NewRegistry(func(string) connector.Ops { return connector.NewMemoryOps() })
+		registry.Register(probe)
+		d := &issuanceDispatcher{idem: orchestrator.NewMemoryIdempotency(), connectorRegistry: registry}
+		message := connectorDeployTestMessage(t, probe.name, "unsafe-crash")
+
+		if err := d.Deliver(context.Background(), message); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
+			t.Fatalf("first ambiguous failure = %v, want ErrEffectIndeterminate", err)
+		}
+		if err := d.Deliver(context.Background(), message); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
+			t.Fatalf("unsafe retry = %v, want ErrEffectIndeterminate", err)
+		}
+		if probe.calls != 1 {
+			t.Fatalf("unsafe receiver calls = %d, want 1", probe.calls)
+		}
+	})
+
+	t.Run("reconciled receiver may retry", func(t *testing.T) {
+		probe := &connectorReplayProbe{name: "safe", deploy: func(call int) error {
+			if call == 1 {
+				return ambiguous
+			}
+			return nil
+		}}
+		registry := connector.NewRegistry(func(string) connector.Ops { return connector.NewMemoryOps() })
+		registry.RegisterWithReplaySafety(probe, connector.ReplaySafetyReconciled)
+		d := &issuanceDispatcher{idem: orchestrator.NewMemoryIdempotency(), connectorRegistry: registry}
+		message := connectorDeployTestMessage(t, probe.name, "safe-crash")
+
+		if err := d.Deliver(context.Background(), message); !errors.Is(err, ambiguous) {
+			t.Fatalf("first replay-safe failure = %v, want receiver error", err)
+		}
+		if err := d.Deliver(context.Background(), message); err != nil {
+			t.Fatalf("replay-safe retry: %v", err)
+		}
+		if probe.calls != 2 {
+			t.Fatalf("replay-safe receiver calls = %d, want 2", probe.calls)
+		}
+	})
+}
+
+func TestGCPConnectorAmbiguousAppliedPatchIsNeverBlindlyRetried(t *testing.T) {
+	provider := gcpcm.StaticToken([]byte("gcp-replay-token"))
+	if destroyer, ok := provider.(interface{ Destroy() }); ok {
+		t.Cleanup(destroyer.Destroy)
+	}
+	conn := gcpcm.New("replay-project", "global", provider,
+		gcpcm.WithEndpoint("https://gcp-replay.test"), gcpcm.WithPollInterval(0))
+	if got := nativeConnectorReplaySafety(conn.Name()); got != connector.ReplaySafetyAtMostOnce {
+		t.Fatalf("GCP replay safety = %v, want at-most-once", got)
+	}
+
+	receiver := &gcpcmAmbiguousReceiverOps{}
+	registry := connector.NewRegistry(func(string) connector.Ops { return receiver })
+	registry.RegisterWithReplaySafety(conn, nativeConnectorReplaySafety(conn.Name()))
+	dispatcher := &issuanceDispatcher{idem: orchestrator.NewMemoryIdempotency(), connectorRegistry: registry}
+	message := connectorDeployTestMessage(t, conn.Name(), "gcpcm-applied-crash")
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		if err := dispatcher.Deliver(context.Background(), message); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
+			t.Fatalf("attempt %d = %v, want ErrEffectIndeterminate", attempt, err)
+		}
+	}
+	if !receiver.applied || receiver.patches != 1 {
+		t.Fatalf("GCP ambiguous receiver applied=%v PATCHes=%d, want one applied mutation and no blind retry", receiver.applied, receiver.patches)
+	}
+}
+
+func TestSignedConnectorPluginDefaultsToAtMostOnce(t *testing.T) {
+	ambiguous := errors.New("signed plugin returned after an ambiguous receiver mutation")
+	plugin := &connectorPluginProbe{
+		owned:  map[string]bool{"third-party": true},
+		deploy: func(int) (bool, error) { return true, ambiguous },
+	}
+	d := &issuanceDispatcher{idem: orchestrator.NewMemoryIdempotency(), plugins: plugin}
+	message := connectorDeployTestMessage(t, "third-party", "plugin-crash")
+	for attempt := 1; attempt <= 2; attempt++ {
+		if err := d.Deliver(context.Background(), message); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
+			t.Fatalf("attempt %d = %v, want ErrEffectIndeterminate", attempt, err)
+		}
+	}
+	if plugin.calls != 1 {
+		t.Fatalf("signed plugin calls = %d, want 1 without an enforced replay contract", plugin.calls)
+	}
+}
+
+func TestConnectorDeployRoutingFailuresRemainPendingAndNeverRecordUnrouted(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	plugin := &connectorPluginProbe{
+		owned:  map[string]bool{"declined": true},
+		deploy: func(int) (bool, error) { return false, nil },
+	}
+	h.handler.plugins = plugin
+
+	type deployCase struct {
+		connector string
+		key       string
+		reason    string
+	}
+	cases := []deployCase{
+		{connector: "", key: "missing-connector", reason: "missing_connector"},
+		{connector: "not-loaded", key: "missing-plugin", reason: "plugin_not_loaded"},
+		{connector: "declined", key: "declined-plugin", reason: "plugin_declined"},
+	}
+	ids := make(map[string]int64, len(cases))
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		for _, tc := range cases {
+			message := connectorDeployTestMessage(t, tc.connector, tc.key)
+			id, err := h.outbox.Enqueue(ctx, tx, orchestrator.Entry{
+				TenantID: h.tenant, Destination: message.Destination,
+				IdempotencyKey: tc.key, Payload: message.Payload,
+			})
+			if err != nil {
+				return err
+			}
+			ids[tc.key] = id
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("enqueue connector routes: %v", err)
+	}
+	if n, err := h.outbox.Dispatch(ctx, h.handler); err != nil || n != len(cases) {
+		t.Fatalf("Dispatch = (%d, %v), want (%d, nil)", n, err, len(cases))
+	}
+	pending, err := h.outbox.Pending(ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("Pending: %v", err)
+	}
+	if len(pending) != len(cases) {
+		t.Fatalf("pending connector rows = %d, want %d: %+v", len(pending), len(cases), pending)
+	}
+	for _, tc := range cases {
+		id := ids[tc.key]
+		receiptID := evidenceID("connector-delivery", h.tenant, tc.key, id)
+		receipt, err := h.store.GetConnectorDeliveryReceipt(ctx, h.tenant, receiptID)
+		if err != nil {
+			t.Fatalf("GetConnectorDeliveryReceipt(%s): %v", tc.key, err)
+		}
+		if receipt.Status != "failed" || receipt.Reason != tc.reason {
+			t.Errorf("%s receipt = %+v, want failed/%s", tc.key, receipt, tc.reason)
+		}
+		if receipt.Status == "unrouted" || receipt.Reason == "unrouted" {
+			t.Errorf("%s was recorded as an acknowledged unrouted deployment: %+v", tc.key, receipt)
+		}
+	}
+}
+
+func TestConnectorFailureReceiptRedactsCredentialEchoFromReceiverError(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	const sentinel = "DO-NOT-PERSIST-PRIVATE-KEY-SENTINEL"
+	probe := &connectorReplayProbe{name: "hostile", deploy: func(int) error {
+		return fmt.Errorf("upstream echoed credential %s", sentinel)
+	}}
+	registry := connector.NewRegistry(func(string) connector.Ops { return connector.NewMemoryOps() })
+	registry.Register(probe)
+	h.handler.connectorRegistry = registry
+	privateKey := []byte("-----BEGIN PRIVATE KEY-----\n" + sentinel + "\n-----END PRIVATE KEY-----")
+	payload, err := connector.EncodeDeploy(probe.name, connector.NewDeployment("hostile-target", []byte("hostile-cert"), privateKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var outboxID int64
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		outboxID, err = h.outbox.Enqueue(ctx, tx, orchestrator.Entry{
+			TenantID: h.tenant, Destination: "connector.deploy",
+			IdempotencyKey: "hostile-error", Payload: payload,
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("enqueue hostile connector: %v", err)
+	}
+	if n, err := h.outbox.Dispatch(ctx, h.handler); err != nil || n != 1 {
+		t.Fatalf("Dispatch = (%d, %v), want (1, nil)", n, err)
+	}
+	receiptID := evidenceID("connector-delivery", h.tenant, "hostile-error", outboxID)
+	receipt, err := h.store.GetConnectorDeliveryReceipt(ctx, h.tenant, receiptID)
+	if err != nil {
+		t.Fatalf("GetConnectorDeliveryReceipt: %v", err)
+	}
+	if receipt.Status != "failed" || receipt.Reason != "native_delivery_failed" ||
+		strings.Contains(receipt.Reason, sentinel) || strings.Contains(receipt.Detail, sentinel) {
+		t.Fatalf("hostile error leaked into receipt: %+v", receipt)
+	}
+	found := false
+	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type != projections.EventConnectorDeliveryRecorded || !bytes.Contains(event.Data, []byte(receiptID)) {
+			return nil
+		}
+		found = true
+		if bytes.Contains(event.Data, []byte(sentinel)) || bytes.Contains(event.Data, privateKey) {
+			t.Fatalf("credential echo leaked into connector delivery event: %s", event.Data)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("Replay: %v", err)
+	}
+	if !found {
+		t.Fatal("connector failure did not emit its delivery receipt event")
+	}
+}
+
+func TestAtMostOnceConnectorRecoversCrashAfterCommittedDeliveryReceipt(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	probe := &connectorReplayProbe{name: "unsafe-success"}
+	registry := connector.NewRegistry(func(string) connector.Ops { return connector.NewMemoryOps() })
+	registry.Register(probe)
+	h.handler.connectorRegistry = registry
+	h.handler.afterDeploySideEffects = func(context.Context) error {
+		return errors.New("crash after connector receipt commit")
+	}
+	outbox := orchestrator.NewOutbox(h.store,
+		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
+		orchestrator.WithRetryJitter(func(time.Duration) time.Duration { return 0 }),
+	)
+	message := connectorDeployTestMessage(t, probe.name, "receipt-recovery")
+	var outboxID int64
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		var err error
+		outboxID, err = outbox.Enqueue(ctx, tx, orchestrator.Entry{
+			TenantID: h.tenant, Destination: message.Destination,
+			IdempotencyKey: message.IdempotencyKey, Payload: message.Payload,
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("enqueue connector: %v", err)
+	}
+	if n, err := outbox.Dispatch(ctx, h.handler); err != nil || n != 1 {
+		t.Fatalf("first Dispatch = (%d, %v), want (1, nil)", n, err)
+	}
+	if probe.calls != 1 {
+		t.Fatalf("receiver calls after crash = %d, want 1", probe.calls)
+	}
+	receiptID := evidenceID("connector-delivery", h.tenant, message.IdempotencyKey, outboxID)
+	if receipt, err := h.store.GetConnectorDeliveryReceipt(ctx, h.tenant, receiptID); err != nil {
+		t.Fatalf("delivery receipt did not commit before crash: %v", err)
+	} else if receipt.Status != "delivered" {
+		t.Fatalf("delivery receipt status = %q, want delivered", receipt.Status)
+	}
+	if n, err := outbox.Dispatch(ctx, h.handler); err != nil || n != 1 {
+		t.Fatalf("recovery Dispatch = (%d, %v), want (1, nil)", n, err)
+	}
+	if probe.calls != 1 {
+		t.Fatalf("receipt recovery repeated unsafe receiver: calls=%d", probe.calls)
+	}
+	if pending, err := outbox.Pending(ctx, h.tenant); err != nil {
+		t.Fatalf("Pending: %v", err)
+	} else if len(pending) != 0 {
+		t.Fatalf("reconciled connector row remained pending: %+v", pending)
 	}
 }
 

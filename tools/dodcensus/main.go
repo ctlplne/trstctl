@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,7 +45,9 @@ var (
 	testNamePattern    = regexp.MustCompile(`^TestDOD[A-Za-z0-9_]+$`)
 	cardIDPattern      = regexp.MustCompile(`^[A-Z][A-Z0-9-]+$`)
 	digestPattern      = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	receiptMACPattern  = regexp.MustCompile(`^hmac-sha256:[0-9a-f]{64}$`)
 	pinnedImagePattern = regexp.MustCompile(`^[^[:space:]@]+@sha256:[0-9a-f]{64}$`)
+	buildArgPattern    = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 )
 
 // Manifest is the versioned, repo-owned list of product claims under the DoD gate.
@@ -62,30 +65,57 @@ type Manifest struct {
 // a profile is either structurally tied to a published OCI image, or it is only a
 // plan. A planned profile can never make a capability SERVED.
 type BuildProfile struct {
-	BinaryPackage string            `json:"binary_package"`
-	CGOEnabled    string            `json:"cgo_enabled"`
-	GOOS          string            `json:"goos"`
-	GOARCH        string            `json:"goarch"`
-	Tags          []string          `json:"tags"`
-	Release       string            `json:"release"`
-	Artifact      ArtifactProof     `json:"artifact"`
-	RuntimeEnv    map[string]string `json:"-"`
-	HostRuntime   bool              `json:"-"`
+	BinaryPackage      string             `json:"binary_package"`
+	CGOEnabled         string             `json:"cgo_enabled"`
+	GOOS               string             `json:"goos"`
+	GOARCH             string             `json:"goarch"`
+	Tags               []string           `json:"tags"`
+	Release            string             `json:"release"`
+	Artifact           ArtifactProof      `json:"artifact"`
+	RuntimeRunner      RuntimeRunnerProof `json:"runtime_runner"`
+	RuntimeEnv         map[string]string  `json:"-"`
+	HostRuntime        bool               `json:"-"`
+	RuntimeExecution   bool               `json:"-"`
+	RuntimeRunnerImage string             `json:"-"`
+	RuntimeScratchDir  string             `json:"-"`
+	RuntimeBroker      *substrateBroker   `json:"-"`
+}
+
+// RuntimeRunnerProof pins the native execution environment used when the
+// harness host cannot execute a shipped profile directly. IdentityFiles bind
+// the Dockerfile and the exact Go module inputs copied into that image.
+type RuntimeRunnerProof struct {
+	Dockerfile    string   `json:"dockerfile"`
+	Platform      string   `json:"platform"`
+	Identity      string   `json:"identity"`
+	IdentityFiles []string `json:"identity_files"`
 }
 
 // ArtifactProof binds a profile to the exact publishing step and exact executable
 // inside the resulting OCI image. It is not a local Make target: local compilation
 // does not prove that users receive those bytes.
 type ArtifactProof struct {
-	Workflow      string `json:"workflow,omitempty"`
-	Job           string `json:"job,omitempty"`
-	Dockerfile    string `json:"dockerfile,omitempty"`
-	BuilderAction string `json:"builder_action,omitempty"`
-	BuilderOutput string `json:"builder_output,omitempty"`
-	BuilderTags   string `json:"builder_tags,omitempty"`
-	BuildOutput   string `json:"build_output,omitempty"`
-	BinaryPath    string `json:"binary_path,omitempty"`
-	Platform      string `json:"platform,omitempty"`
+	Workflow      string              `json:"workflow,omitempty"`
+	Job           string              `json:"job,omitempty"`
+	Dockerfile    string              `json:"dockerfile,omitempty"`
+	BuilderAction string              `json:"builder_action,omitempty"`
+	BuilderOutput string              `json:"builder_output,omitempty"`
+	BuilderTags   string              `json:"builder_tags,omitempty"`
+	BuildOutput   string              `json:"build_output,omitempty"`
+	BinaryPath    string              `json:"binary_path,omitempty"`
+	Platform      string              `json:"platform,omitempty"`
+	Companions    []CompanionArtifact `json:"companions,omitempty"`
+	BuildArgs     map[string]string   `json:"build_args,omitempty"`
+}
+
+// CompanionArtifact is a second executable required for the entrypoint binary
+// to serve its advertised paths. The static control plane supervises the signer
+// as a separate process, so proving only the entrypoint would prove a car with
+// its engine omitted from the published image.
+type CompanionArtifact struct {
+	BinaryPackage string `json:"binary_package"`
+	BuildOutput   string `json:"build_output"`
+	BinaryPath    string `json:"binary_path"`
 }
 
 // Substrate is the closed set of non-in-process systems accepted by the runtime
@@ -97,6 +127,7 @@ type Substrate struct {
 	Execution      string   `json:"execution"`
 	Command        []string `json:"command,omitempty"`
 	CommandSHA256  string   `json:"command_sha256,omitempty"`
+	IdentityFiles  []string `json:"identity_files,omitempty"`
 	Image          string   `json:"image,omitempty"`
 	Identity       string   `json:"identity"`
 	ContractFile   string   `json:"contract_file"`
@@ -230,13 +261,47 @@ type commandRunner interface {
 	Run(context.Context, string, BuildProfile, string, ...string) commandResult
 }
 
+type runtimeProfilePreparer interface {
+	PrepareRuntime(context.Context, string, BuildProfile) (BuildProfile, error)
+}
+
+type substrateBrokerProvider interface {
+	StartSubstrateBroker(string, string, bool) (*substrateBroker, error)
+}
+
 type osRunner struct {
-	CacheDir string
+	CacheDir    string
+	LinuxRunner *linuxRuntimeExecutor
+}
+
+func (r osRunner) PrepareRuntime(ctx context.Context, repo string, profile BuildProfile) (BuildProfile, error) {
+	if runtime.GOOS == profile.GOOS && runtime.GOARCH == profile.GOARCH {
+		return profile, nil
+	}
+	if r.LinuxRunner == nil {
+		return profile, fmt.Errorf("DoD runtime host %s/%s does not match shipped profile %s/%s and no reviewed Linux runner is configured", runtime.GOOS, runtime.GOARCH, profile.GOOS, profile.GOARCH)
+	}
+	image, err := r.LinuxRunner.prepare(ctx, repo, profile)
+	if err != nil {
+		return profile, err
+	}
+	profile.RuntimeRunnerImage = image
+	return profile, nil
+}
+
+func (r osRunner) StartSubstrateBroker(repo, receiptDir string, crossHost bool) (*substrateBroker, error) {
+	return startSubstrateBroker(repo, receiptDir, crossHost)
 }
 
 func (r osRunner) Run(ctx context.Context, dir string, profile BuildProfile, name string, args ...string) commandResult {
 	if err := validateDODGoInvocation(name, args); err != nil {
 		return commandResult{Err: err, ExitCode: -1}
+	}
+	if profile.RuntimeExecution && (runtime.GOOS != profile.GOOS || runtime.GOARCH != profile.GOARCH) {
+		if r.LinuxRunner == nil {
+			return commandResult{Err: fmt.Errorf("DoD runtime host %s/%s does not match shipped profile %s/%s and no reviewed Linux runner is configured", runtime.GOOS, runtime.GOARCH, profile.GOOS, profile.GOARCH), ExitCode: -1}
+		}
+		return r.LinuxRunner.run(ctx, dir, r.CacheDir, profile, args)
 	}
 	if err := os.MkdirAll(r.CacheDir, 0o700); err != nil {
 		return commandResult{Err: fmt.Errorf("create isolated Go cache: %w", err), ExitCode: -1}
@@ -268,10 +333,17 @@ func validateDODGoInvocation(name string, args []string) error {
 		return fmt.Errorf("DoD census only executes the go tool with a closed argv shape")
 	}
 	index := 1
+	proofTagged := false
 	if index < len(args) && strings.HasPrefix(args[index], "-tags=") {
 		tags := strings.TrimPrefix(args[index], "-tags=")
 		if tags == "" || strings.ContainsAny(tags, " \t\r\n\x00") {
 			return fmt.Errorf("DoD census go tags are invalid")
+		}
+		for _, tag := range strings.Split(tags, ",") {
+			if tag == "" || !capabilityPattern.MatchString(tag) {
+				return fmt.Errorf("DoD census go tags are invalid")
+			}
+			proofTagged = proofTagged || tag == dodProofBuildTag
 		}
 		index++
 	}
@@ -280,10 +352,16 @@ func validateDODGoInvocation(name string, args []string) error {
 	}
 	switch args[0] {
 	case "list":
+		if proofTagged {
+			return fmt.Errorf("DoD census dependency listing must use only shipped artifact tags")
+		}
 		if len(args)-index != 2 || args[index] != "-deps" || !validPackage(args[index+1]) {
 			return fmt.Errorf("DoD census go list argv is outside the closed -deps package shape")
 		}
 	case "test":
+		if !proofTagged {
+			return fmt.Errorf("DoD census receipt test requires reserved build tag %q", dodProofBuildTag)
+		}
 		if len(args)-index != 5 || args[index] != "-json" || args[index+1] != "-count=1" || args[index+2] != "-run" || args[index+3] == "" || !validPackage(args[index+4]) {
 			return fmt.Errorf("DoD census go test argv is outside the closed receipt-test shape")
 		}
@@ -302,7 +380,7 @@ func validateDODGoInvocation(name string, args []string) error {
 func dodCommandEnvironment(base []string, cacheDir string, profile BuildProfile) []string {
 	out := make([]string, 0, len(base)+8+len(profile.RuntimeEnv))
 	for _, item := range base {
-		if strings.HasPrefix(item, "CGO_ENABLED=") || strings.HasPrefix(item, "GOCACHE=") || strings.HasPrefix(item, "GOFLAGS=") || strings.HasPrefix(item, "GOOS=") || strings.HasPrefix(item, "GOARCH=") || strings.HasPrefix(item, "TRSTCTL_DOD_") {
+		if strings.HasPrefix(item, "CGO_ENABLED=") || strings.HasPrefix(item, "GOCACHE=") || strings.HasPrefix(item, "GOFLAGS=") || strings.HasPrefix(item, "GOOS=") || strings.HasPrefix(item, "GOARCH=") || strings.HasPrefix(item, "TRSTCTL_") {
 			continue
 		}
 		out = append(out, item)
@@ -360,7 +438,7 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if cacheDir == "" {
 		cacheDir = filepath.Join(os.TempDir(), "trstctl-dodcensus-gocache")
 	}
-	report, err := evaluate(ctx, repo, manifest, osRunner{CacheDir: cacheDir}, sel)
+	report, err := evaluate(ctx, repo, manifest, osRunner{CacheDir: cacheDir, LinuxRunner: newLinuxRuntimeExecutor()}, sel)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "dodcensus: evaluate: %v\n", err)
 		return 2
@@ -451,12 +529,33 @@ func validateManifest(manifest Manifest) error {
 		if profile.Release == releaseShipped && !artifactConfigured(profile.Artifact) {
 			return fmt.Errorf("shipped build profile %q has no complete OCI release proof", name)
 		}
+		if profile.Release == releaseShipped {
+			if err := validateRuntimeRunnerProof("build profile "+name, profile); err != nil {
+				return err
+			}
+		}
 		if profile.Release == releasePlanned && artifactConfigured(profile.Artifact) {
 			return fmt.Errorf("planned build profile %q must not claim a fictional release artifact", name)
+		}
+		seenCompanion := map[string]bool{}
+		for _, companion := range profile.Artifact.Companions {
+			if companion.BinaryPackage == "" || companion.BuildOutput == "" || companion.BinaryPath == "" ||
+				!strings.HasPrefix(companion.BinaryPackage, "./") || !filepath.IsAbs(companion.BuildOutput) || !filepath.IsAbs(companion.BinaryPath) || seenCompanion[companion.BinaryPath] {
+				return fmt.Errorf("build profile %q has an invalid or duplicate companion artifact %+v", name, companion)
+			}
+			seenCompanion[companion.BinaryPath] = true
+		}
+		for key, value := range profile.Artifact.BuildArgs {
+			if !buildArgPattern.MatchString(key) || value == "" || strings.TrimSpace(value) != value {
+				return fmt.Errorf("build profile %q has invalid required artifact build arg %q=%q", name, key, value)
+			}
 		}
 		for _, tag := range profile.Tags {
 			if !capabilityPattern.MatchString(tag) {
 				return fmt.Errorf("build profile %q has invalid tag %q", name, tag)
+			}
+			if tag == dodProofBuildTag {
+				return fmt.Errorf("build profile %q may not claim reserved runtime-proof tag %q", name, tag)
 			}
 		}
 	}
@@ -653,6 +752,10 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 	}
 	runtimeExecutions := map[string]*runtimeTestExecution{}
 	runtimeGroups := groupRuntimeEntries(manifest)
+	launched, err := launchedBinarySpecForManifest(absRepo, manifest)
+	if err != nil {
+		return Report{}, err
+	}
 	defer cleanupRuntimeExecutions(runtimeExecutions)
 	for _, entry := range manifest.Entries {
 		profileName, profile := resolvedProfile(manifest, entry)
@@ -670,10 +773,10 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 		case !dependencyEvidence.OK || !assemblyEvidence.OK:
 			status = statusLibraryOnly
 		default:
-			runtimeEvidence = inspectRuntimeBinding(absRepo, entry, manifest.Substrates)
+			runtimeEvidence = inspectRuntimeBinding(absRepo, entry, manifest.Substrates, profile)
 			if runtimeEvidence.OK {
 				cacheKey := runtimeCacheKey(profileName, entry)
-				runtimeEvidence = runRuntimeProof(ctx, absRepo, entry, profileName, profile, manifest.Substrates[entry.Runtime.SubstrateID], runner, runtimeGroups[cacheKey], runtimeExecutions)
+				runtimeEvidence = runRuntimeProof(ctx, absRepo, entry, profileName, profile, launched, manifest.Substrates[entry.Runtime.SubstrateID], runner, runtimeGroups[cacheKey], runtimeExecutions)
 			}
 			if runtimeEvidence.OK {
 				status = statusServed
@@ -700,7 +803,20 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 }
 
 func inspectArtifactDeclaration(repo string, profile BuildProfile) checkEvidence {
-	return inspectOCIArtifact(repo, profile)
+	artifact := inspectOCIArtifact(repo, profile)
+	if !artifact.OK {
+		return artifact
+	}
+	runner := inspectRuntimeRunnerProof(repo, profile)
+	artifact.Required = append(artifact.Required, runner.Required...)
+	artifact.Found = append(artifact.Found, runner.Found...)
+	if !runner.OK {
+		artifact.OK = false
+		artifact.Detail = runner.Detail
+		return artifact
+	}
+	artifact.Detail += "; cross-host runtime runner identity and package inputs are pinned"
+	return artifact
 }
 
 func inspectDependencies(entry Entry, packages map[string]bool, toolchainOK bool, listed commandResult) checkEvidence {

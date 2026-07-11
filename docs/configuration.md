@@ -150,6 +150,150 @@ How far ahead of expiry trstctl renews and alerts. Values are Go durations.
 | `TRSTCTL_LIFECYCLE_RENEW_BEFORE` | `720h` (30 days) | Renew this far before expiry. |
 | `TRSTCTL_LIFECYCLE_ALERT_BEFORE` | `336h` (14 days) | Alert this far before expiry. |
 
+## Native connector and external-CA assembly
+
+The 24 native deployment connectors and 14 external-CA drivers are compiled into
+`trstctl`, but start deny-by-default: the operator chooses the exact integrations to
+construct in the JSON config file. These structured bindings are not flattened
+into environment variables because they contain tenant/provider associations where a
+parallel-list typo could cross a security boundary.
+
+A local connector needs both an enabled driver and an operator-owned execution
+profile. Tenant target JSON can then select that profile, but cannot invent a command
+or escape its allowed roots:
+
+```json
+{
+  "connectors": {
+    "enabled": ["nginx", "f5"],
+    "http_timeout": "15s",
+    "allow_private_cidrs": ["10.40.0.0/16"],
+    "local_profiles": {
+      "nginx-prod": {
+        "allowed_roots": ["/etc/nginx/tls"],
+        "actions": [{
+          "logical_name": "nginx",
+          "command": "/usr/sbin/nginx",
+          "pass_args": true,
+          "timeout": "15s"
+        }]
+      }
+    },
+    "right_size": [{
+      "tenant_id": "11111111-1111-4111-8111-111111111111",
+      "connector": "least-privilege",
+      "endpoint": "https://entitlements.internal",
+      "token_ref": "secret://connectors/right-size-token"
+    }]
+  }
+}
+```
+
+Local action commands must be absolute, executable, regular non-symlink files.
+Unix shell interpreters are rejected. The one native-administration exception is
+IIS PowerShell: its profile must pin the complete connector `logical_args`, set a
+separate complete operator-owned `args` list, and leave `pass_args` false. The
+runtime compares the connector request with that fixed logical argv and executes
+only the fixed operator argv, so target data never becomes PowerShell source text.
+
+`connectors.right_size` binds one tenant plus the playbook's connector name to an
+operator endpoint and a same-tenant encrypted-secret reference. The durable
+`connector.right_size` worker sends an idempotent `PATCH`, verifies the vendor's
+mutation receipt, performs an authenticated `GET` readback, and only then records a
+delivered connector receipt. Store the referenced token through the tenant secrets
+surface (`secrets.enable_api=true`) before enabling the binding. An unconfigured
+tenant/connector pair fails closed.
+
+External-CA credentials use `file:/absolute/path` references. Files are loaded into
+locked memory for one outbox attempt and wiped afterward. Network policy, private
+CIDRs, custom roots, and mTLS identities are operator-owned:
+
+```json
+{
+  "external_cas": [{
+    "id": "aws-pca-prod",
+    "type": "awspca",
+    "name": "Production AWS Private CA",
+    "endpoint": "https://acm-pca.us-east-1.amazonaws.com",
+    "region": "us-east-1",
+    "certificate_authority_arn": "arn:aws:acm-pca:us-east-1:123456789012:certificate-authority/UUID",
+    "access_key_id": "AKIA...",
+    "secret_access_key_ref": "file:/run/secrets/aws-pca-secret",
+    "network": {"timeout": "15s"}
+  }, {
+    "id": "azure-managed-hsm-ca",
+    "type": "azurekv",
+    "name": "Azure Managed HSM Issuing CA",
+    "tenant_id": "11111111-1111-4111-8111-111111111111",
+    "endpoint": "https://production.managedhsm.azure.net",
+    "managed_key_ref": "https://production.managedhsm.azure.net/keys/issuing-ca/0123456789abcdef",
+    "ca_cert_file": "/etc/trstctl/azure-issuing-ca-chain.pem",
+    "network": {"timeout": "15s"}
+  }, {
+    "id": "entrust-prod",
+    "type": "entrust",
+    "name": "Entrust CA Gateway",
+    "endpoint": "https://entrust-ca.internal",
+    "ca_id": "production-ca",
+    "network": {
+      "root_ca_file": "/etc/trstctl/entrust-server-ca.pem",
+      "client_cert_file": "/etc/trstctl/entrust-client.pem",
+      "client_key_file": "/run/secrets/entrust-client-key.pem",
+      "server_name": "entrust-ca.internal",
+      "timeout": "15s"
+    }
+  }, {
+    "id": "letsencrypt-prod",
+    "type": "letsencrypt",
+    "name": "Let's Encrypt",
+    "directory_url": "https://acme-v02.api.letsencrypt.org/directory"
+  }, {
+    "id": "shell-ca-prod",
+    "type": "shellca",
+    "name": "Isolated Shell CA",
+    "command": "/usr/local/libexec/trstctl-shell-ca",
+    "args": ["--profile", "production"],
+    "env_refs": {"CA_TOKEN": "file:/run/secrets/shell-ca-token"},
+    "network": {"timeout": "15s"}
+  }]
+}
+```
+
+External-CA endpoints require HTTPS. The separate
+`network.allow_insecure_http` escape hatch is accepted only for an HTTP
+`localhost`, `127/8`, or `::1` development emulator; the runtime client also
+refuses any non-loopback resolution or cross-origin/scheme-changing redirect.
+`allow_private_endpoint` and private CIDR grants never authorize plaintext.
+
+The Azure CA block carries only routing and public trust material. `tenant_id`
+binds the authority to one tenant, `managed_key_ref` is the opaque HTTPS key id
+returned by that tenant's managed-key lifecycle, and `ca_cert_file` is the public
+issuer chain whose leaf public key must match the managed key. Do not put an Azure
+bearer token, `key_name`, or `key_version` in `external_cas`: Azure credentials and
+private-key operations live in the isolated signer's `managed_keys` backend.
+
+Let's Encrypt account JWS signatures also cross the signer transport. The control
+plane derives a stable account handle from the external-CA id and directory URL,
+but it receives only the public key and signatures; the ECDSA account private key
+never enters the HTTP process.
+
+Entrust always requires the complete `network` mTLS identity shown above. The
+client pins `root_ca_file`, verifies `server_name`, and presents the paired client
+certificate/key. Missing, partial, or untrusted client material fails before an
+Entrust enrollment request is sent; plaintext HTTP is not an Entrust mode.
+
+For `shellca`, each `env_refs` key is a logical credential name, not a secret-valued
+environment variable. The child sees `CA_TOKEN_FD=<number>` and reads the exact
+credential bytes from that inherited anonymous pipe. It never receives `CA_TOKEN`,
+and trstctl consumes and wipes the byte buffer after the one child attempt. No
+credential pathname or filesystem-backed secret copy is created for the child.
+
+Supported `type` values are `adcs`, `awspca`, `azurekv`, `digicert`, `ejbca`,
+`entrust`, `gcpcas`, `globalsign`, `letsencrypt`, `sectigo`, `shellca`,
+`smallstep`, `vaultpki`, and `venafi`. `trstctl -check-config` validates every
+provider's required fields before the server accepts traffic. The exact connector
+target schemas are listed in [Deployment connectors](features/deployment-connectors.md).
+
 ## Notifications
 
 Notification channels are off until an operator configures them. When enabled, lifecycle
@@ -179,6 +323,87 @@ references or files.
 | `TRSTCTL_NOTIFICATIONS_SIEM_ENDPOINT` | empty | HTTPS endpoint for the SIEM collector or forwarding gateway. |
 | `TRSTCTL_NOTIFICATIONS_SIEM_TOKEN` / `TRSTCTL_NOTIFICATIONS_SIEM_TOKEN_FILE` | empty | Optional collector bearer token as bytes or a file. |
 | `TRSTCTL_NOTIFICATIONS_SIEM_SOURCE` | `trstctl` | Source label in SIEM events. |
+| `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ENABLED` | `false` | Enable native PagerDuty Events API v2 delivery. |
+| `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ENDPOINT` | PagerDuty public Events v2 endpoint | Override the enqueue URL; production endpoints must use HTTPS. |
+| `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY` / `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY_FILE` | empty | PagerDuty integration routing key. Set exactly one when enabled; the file form keeps the key out of the environment. |
+| `TRSTCTL_NOTIFICATIONS_PAGERDUTY_TIMEOUT` | `10s` | Bounded Events API request deadline. |
+| `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ALLOW_PRIVATE_CIDRS` | empty | Comma-separated exact private CIDRs allowed by the SSRF-safe client for an operator-run gateway. |
+| `TRSTCTL_NOTIFICATIONS_OPSGENIE_ENABLED` | `false` | Enable native OpsGenie Alert API v2 delivery. |
+| `TRSTCTL_NOTIFICATIONS_OPSGENIE_ENDPOINT` | OpsGenie public Alert API endpoint | Override the create-alert URL; production endpoints must use HTTPS. |
+| `TRSTCTL_NOTIFICATIONS_OPSGENIE_API_KEY` / `TRSTCTL_NOTIFICATIONS_OPSGENIE_API_KEY_FILE` | empty | OpsGenie API key. Set exactly one when enabled; the file form keeps the key out of the environment. |
+| `TRSTCTL_NOTIFICATIONS_OPSGENIE_TIMEOUT` | `10s` | Bounded Alert API request deadline. |
+| `TRSTCTL_NOTIFICATIONS_OPSGENIE_ALLOW_PRIVATE_CIDRS` | empty | Comma-separated exact private CIDRs allowed by the SSRF-safe client for an operator-run gateway. |
+
+PagerDuty and OpsGenie credentials are copied into locked, non-dumpable memory at
+startup and wiped on shutdown. Both integrations send deterministic vendor idempotency
+identifiers, require the vendor's exact acceptance receipt, and redact remote error
+bodies. `*_ALLOW_INSECURE_HTTP` exists only for a loopback development emulator; even
+when set, it cannot enable cleartext delivery to a non-loopback host.
+
+## Code signing
+
+The shipped code-signing routes stay fail-closed until `code_signing.enabled` is true.
+Tenant-to-key and tenant-to-OIDC associations are structured JSON only: putting these
+parallel lists in environment variables would make it too easy to attach one tenant's
+trust to another tenant. A minimal key-backed plus GitHub Actions keyless configuration
+looks like this:
+
+```json
+{
+  "code_signing": {
+    "enabled": true,
+    "keys": [{
+      "tenant_id": "tenant-acme",
+      "id": "release-key",
+      "handle": "acme-release-code-signing",
+      "algorithm": "ecdsa-p256",
+      "create_if_missing": true
+    }],
+    "github_oidc_tenants": [{
+      "tenant_id": "tenant-acme",
+      "issuer": "https://token.actions.githubusercontent.com",
+      "audience": "sigstore",
+      "jwks_file": "/run/trstctl/github-actions-jwks.json",
+      "allowed_owners": ["acme"]
+    }],
+    "ephemeral_algorithm": "ecdsa-p256",
+    "rekor": {
+      "endpoint": "https://rekor.example.com/api/v1/log/entries",
+      "timeout": "10s",
+      "log_public_key_file": "/run/trstctl/rekor-log-public-key.pem"
+    }
+  }
+}
+```
+
+`create_if_missing` provisions a `code-sign`-purpose-constrained handle inside the
+separate signer process; the control plane never receives the private key. Keyless
+requests also create and destroy their one-use key inside that signer. Pin the Rekor
+log public key from the Rekor operator's authenticated distribution channel. Startup
+fails if this trust anchor is absent or malformed, and every outbox delivery verifies
+the returned signed-entry timestamp against it before acknowledging the row.
+
+Code signing uses the shared live policy controls rather than a decorative, code-only
+allow list. With `ca.policy.enabled=true`, OPA receives action `code_sign`, the
+authenticated actor, the configured key ID (or `keyless:<verified-san>`), and
+`attrs.digest_sha256`; evaluation errors and policy-pool saturation fail closed. With
+`ca.policy.require_approval=true`, a denied response returns
+`approval_required:codesign:<sha256>`. A distinct `certs:issue` approver posts
+`{"action":"sign"}` to `/api/v1/identities/{that-resource}/approvals`, after which the
+requester retries the same signing tuple with a new `Idempotency-Key`. The resource hash
+binds tenant, authenticated requester, key/keyless identity, and exact digest.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_CODE_SIGNING_ENABLED` | `false` | Enable production assembly of the served key-backed and keyless routes. |
+| `TRSTCTL_CODE_SIGNING_EPHEMERAL_ALGORITHM` | `ecdsa-p256` | Algorithm for isolated one-use keyless keys; currently only P-256 is accepted. |
+| `TRSTCTL_CODE_SIGNING_REKOR_ENDPOINT` | Sigstore public Rekor v1 endpoint | HashedRekord create endpoint. Production endpoints must use HTTPS. |
+| `TRSTCTL_CODE_SIGNING_REKOR_TIMEOUT` | `10s` | Bounded create/readback deadline. |
+| `TRSTCTL_CODE_SIGNING_REKOR_LOG_PUBLIC_KEY_FILE` | empty | Required PEM PKIX public key used to verify Rekor signed-entry timestamps. |
+| `TRSTCTL_CODE_SIGNING_REKOR_ALLOW_PRIVATE_CIDRS` | empty | Comma-separated exact private CIDRs allowed for an operator-run Rekor deployment. |
+
+`TRSTCTL_CODE_SIGNING_REKOR_ALLOW_INSECURE_HTTP` is accepted only for a loopback
+development emulator. It cannot relax transport security for a remote Rekor service.
 
 ## Telemetry
 
@@ -517,6 +742,57 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_SECRETS_AUTH_SECRET_FILE` | unset | Optional HMAC key file for machine-login token credentials. When unset, the login method fails closed while other secrets routes continue to work. |
 | `TRSTCTL_SECRETS_GITLEAKS_BIN` | auto-detect | Path to the pinned Gitleaks `v8.27.2` binary used by `POST /api/v1/secrets/scans`. Empty resolves `TRSTCTL_GITLEAKS_BIN`, `tools/bin/gitleaks`, then `PATH`. Run `tools/gitleaks/install.sh` during image build or host provisioning to install the supported checksum-verified release tarball. A missing binary makes scan requests fail closed with `503`. |
 
+Dynamic-secret providers and outbound sync targets use structured JSON/YAML because
+each entry is bound to exactly one tenant. Authority-bearing values are references,
+not inline strings: `file:/absolute/path` loads an operator-owned `0600` file, while
+`secret://path` opens that tenant's encrypted secret-store row for one outbox attempt.
+Both are copied into locked, non-dumpable memory and destroyed after the provider call.
+
+```json
+{
+  "secrets": {"enable_api": true},
+  "secret_integrations": {
+    "dynamic_providers": [{
+      "tenant_id": "11111111-1111-4111-8111-111111111111",
+      "id": "orders-postgres",
+      "type": "postgresql",
+      "admin_dsn_ref": "file:/run/secrets/orders-postgres-admin-dsn",
+      "database": "orders",
+      "schema": "public",
+      "allowed_roles": ["reader"],
+      "max_ttl": "1h",
+      "username_prefix": "trstctl_orders"
+    }],
+    "sync_targets": [{
+      "tenant_id": "11111111-1111-4111-8111-111111111111",
+      "id": "orders-github",
+      "type": "github-actions",
+      "endpoint": "https://api.github.com",
+      "owner": "example",
+      "repo": "orders",
+      "token_ref": "secret://integrations/github-actions-token"
+    }]
+  }
+}
+```
+
+Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
+`azure-entra`, `kubernetes`, and `redis`. Sync `type` values are
+`aws-secrets-manager`, `gcp-secret-manager`, `azure-key-vault`, `github-actions`,
+`gitlab-ci`, `vercel`, `generic-ci-json`, and `kubernetes-secrets`. Startup validates
+each provider's required native fields, role bindings, endpoint scheme, private-egress
+CIDRs, and credential-reference form before accepting traffic. An absent tenant target
+or provider fails its served mutation closed; it never falls back to another tenant or
+to a test registry.
+
+Every dynamic-provider and sync-target HTTP endpoint must use HTTPS in production.
+`allow_private_endpoint` grants a named private destination; it never grants plaintext.
+Local emulators may set `allow_insecure_loopback: true`, but only beside an `http://`
+endpoint whose host is exactly `localhost`, an address in `127.0.0.0/8`, or `::1`.
+The runtime client resolves and dials loopback only, so changing DNS or adding a private
+CIDR cannot stretch this development switch to a LAN, VPC, metadata service, or public
+host.
+
 Machine-auth methods beyond the HMAC token are configured in the JSON/YAML config
 file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,
 `aws-iam`, `gcp`, `azure`, `oidc`, or `jwt`. JWT-family methods require
@@ -538,41 +814,67 @@ readable by the pod's `fsGroup`, and all parent directories reject group/world
 writes. Unsafe restored files fail startup instead of silently weakening key
 custody.
 
-## Conditional managed-key adapters (AWS, Azure, GCP, and PKCS#11)
+## Conditional managed-key adapters (six served providers)
 
 The managed-key lifecycle is off by default and requires an Enterprise license plus
-startup configuration. The repository contains adapters for AWS KMS, Azure Key Vault
-/ Managed HSM, GCP Cloud KMS, and PKCS#11 modules. These adapters are conditional
-implementation surfaces, not a served-backend claim: the shipped-artifact wiring
-census currently reports zero HSM/KMS backends served. Today the licensed attach seam
-constructs providers in the control-plane process, state is process-local, and calls
-are synchronous. See [Current limitations](limitations.md#ca-key-custody) before
-evaluating this configuration.
+startup configuration. AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS,
+PKCS#11, TPM 2.0, and YubiHSM 2 are all required/census-served through the shipped
+cgo HSM signer artifact. “Conditional” means the route is inert until the operator
+selects and provisions one provider; it no longer means library-only. The control
+plane records a tenant event and PostgreSQL outbox command, while the isolated signer
+constructs the provider and performs the private operation. The control-plane process
+never receives provider credentials.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables the conditional managed-key API assembly. When false, the routes fail closed with `501`; enabling it does not make a backend census-served. |
-| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider: `aws`, `azure-key-vault`, `gcp-kms`, or `pkcs11`. The provider is selected at startup and injected into the control plane; it is not a runtime plugin engine. |
+| `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables licensed managed-key event/outbox assembly. When false, the routes fail closed; no provider is constructed. |
+| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider: `aws`, `azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2`. Selection is startup-static ordinary interface injection, not a runtime plugin engine. |
 | `TRSTCTL_MANAGED_KEYS_AWS_REGION` | unset | AWS region for KMS, for example `us-east-1`. Required when enabled. |
-| `TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override, used for LocalStack, VPC endpoints, or partitions. Leave unset for regional AWS KMS. |
+| `TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT` | unset | Optional absolute HTTPS endpoint override, used for VPC endpoints or partitions. Leave unset for regional AWS KMS. |
+| `TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK` | `false` | Development-only plaintext opt-in. It is accepted only when the AWS endpoint is `http://localhost`, `http://127.0.0.0/8`, or `http://[::1]`; resolved non-loopback addresses still fail at dial time. |
 | `TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID` | unset | AWS access key id. Required for the current served AWS KMS backend. |
-| `TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY` | unset | AWS secret access key supplied from the environment as bytes at startup. Prefer the file variant for production. |
+| `TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY` | unset | Inline compatibility input. The isolated child-signer path rejects it; use the file variant. |
 | `TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE` | unset | File containing the AWS secret access key. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
-| `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN` | unset | Optional temporary session token. |
+| `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN` | unset | Inline compatibility input. The isolated child-signer path rejects it; use the optional file variant. |
 | `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE` | unset | Optional file containing the temporary session token. |
+| `TRSTCTL_MANAGED_KEYS_AWS_PRIVATE_EGRESS_CIDRS` | unset | Comma-separated private CIDRs explicitly granted to an AWS private/VPC endpoint. Metadata and link-local destinations remain blocked. |
 | `TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL` | unset | Azure Key Vault or Managed HSM vault URL, for example `https://trstctl-prod.managedhsm.azure.net`. Required when provider is `azure-key-vault`. |
-| `TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override for private endpoints or tests. Leave unset for the vault URL. |
-| `TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN` | unset | Azure AD access token supplied from the environment as bytes at startup. Prefer the file variant for production. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT` | unset | Optional absolute HTTPS endpoint override for private endpoints. Leave unset for the vault URL. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_ALLOW_INSECURE_LOOPBACK` | `false` | Development-only plaintext opt-in restricted to a loopback `vault_url` or endpoint; it cannot authorize private-network or public HTTP. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN` | unset | Inline compatibility input. The isolated child-signer path rejects it; use the file variant. |
 | `TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE` | unset | File containing the Azure bearer token. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_PRIVATE_EGRESS_CIDRS` | unset | Comma-separated private CIDRs explicitly granted to an Azure private endpoint. Metadata and link-local destinations remain blocked. |
 | `TRSTCTL_MANAGED_KEYS_GCP_PARENT` | unset | GCP Cloud KMS key-ring resource, for example `projects/P/locations/L/keyRings/R`. Required when provider is `gcp-kms`. |
-| `TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override for private service endpoints or tests. Leave unset for `https://cloudkms.googleapis.com/v1`. |
-| `TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN` | unset | GCP OAuth2 access token supplied from the environment as bytes at startup. Prefer the file variant for production. |
+| `TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT` | unset | Optional absolute HTTPS endpoint override for private service endpoints. Leave unset for `https://cloudkms.googleapis.com/v1`. |
+| `TRSTCTL_MANAGED_KEYS_GCP_ALLOW_INSECURE_LOOPBACK` | `false` | Development-only plaintext opt-in restricted to an HTTP loopback endpoint; it cannot authorize private-network or public HTTP. |
+| `TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN` | unset | Inline compatibility input. The isolated child-signer path rejects it; use the file variant. |
 | `TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN_FILE` | unset | File containing the GCP bearer token. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
+| `TRSTCTL_MANAGED_KEYS_GCP_PRIVATE_EGRESS_CIDRS` | unset | Comma-separated private CIDRs explicitly granted to a GCP private service endpoint. Metadata and link-local destinations remain blocked. |
 | `TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH` | unset | Native PKCS#11 module path, for example `libsofthsm2.so`, nShield `cknfast`, or Luna `Cryptoki`. Required when provider is `pkcs11`. |
 | `TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL` | unset | Initialized token label to log in to. Required when provider is `pkcs11`. |
-| `TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN` | unset | PKCS#11 user PIN supplied from the environment as bytes at startup. Prefer the file variant for production. |
+| `TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN` | unset | Inline compatibility input. The isolated child-signer path rejects it; use the file variant. |
 | `TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN_FILE` | unset | File containing the PKCS#11 user PIN. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
 | `TRSTCTL_MANAGED_KEYS_PKCS11_KEY_LABEL_PREFIX` | `trstctl-pkcs11` | Label prefix for generated token objects. |
+| `TRSTCTL_MANAGED_KEYS_TPM2_PATH` | unset | Linux TPM device (for example `/dev/tpmrm0`) or swtpm Unix socket. Required for `tpm2`. |
+| `TRSTCTL_MANAGED_KEYS_TPM2_OWNER_AUTH` | unset | Inline compatibility input. The isolated child-signer path rejects it; use `OWNER_AUTH_FILE` when hierarchy auth is required. |
+| `TRSTCTL_MANAGED_KEYS_TPM2_OWNER_AUTH_FILE` | unset | Optional file containing TPM owner-hierarchy authorization. |
+| `TRSTCTL_MANAGED_KEYS_TPM2_KEY_AUTH` | unset | Inline compatibility input. The isolated child-signer path rejects it; use `KEY_AUTH_FILE`. |
+| `TRSTCTL_MANAGED_KEYS_TPM2_KEY_AUTH_FILE` | unset | Optional file containing authorization assigned to generated signing objects. |
+| `TRSTCTL_MANAGED_KEYS_TPM2_PERSISTENT_HANDLE_BASE` | `0x81010000` | First signer-owned persistent handle. The first 256 handles remain the legacy fresh-key bank; operation-aware keys deterministically probe the remaining persistent range and carry the full durable-operation digest in immutable `TPM Public.AuthPolicy`. Foreign occupied handles are skipped, never adopted or overwritten. |
+| `TRSTCTL_MANAGED_KEYS_YUBIHSM2_MODULE_PATH` | unset | Path to Yubico's `yubihsm_pkcs11` module. Required for `yubihsm2`. |
+| `TRSTCTL_MANAGED_KEYS_YUBIHSM2_TOKEN_LABEL` | unset | Token/connector label selected through the vendor PKCS#11 ABI. |
+| `TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN` | unset | Inline compatibility input. The isolated child-signer path rejects it; use the file variant. |
+| `TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN_FILE` | unset | File containing the YubiHSM authentication value/PIN. |
+| `TRSTCTL_MANAGED_KEYS_YUBIHSM2_KEY_LABEL_PREFIX` | `trstctl-pkcs11` | Label prefix for generated YubiHSM signing objects. |
+
+| Provider | Shipped binding | Required DoD substrate |
+| --- | --- | --- |
+| `aws` | AWS SDK v2 asymmetric KMS | Faithful SigV4 KMS emulator |
+| `azure-key-vault` | Azure Keys/Managed HSM data plane | Faithful Managed HSM wire emulator |
+| `gcp-kms` | GCP Cloud KMS REST data plane | Faithful resource/digest emulator |
+| `pkcs11` | Native cgo PKCS#11 module | SoftHSM plus independent `pkcs11-tool` readback |
+| `tpm2` | `google/go-tpm` persistent object driver | swtpm plus independent `tpm2-tools` readback |
+| `yubihsm2` | Yubico PKCS#11 connector ABI | SoftHSM-backed vendor-ABI emulator |
 
 Development-only LocalStack shape (not conformance or shipped-runtime proof):
 
@@ -581,9 +883,16 @@ export TRSTCTL_MANAGED_KEYS_ENABLED=true
 export TRSTCTL_MANAGED_KEYS_PROVIDER=aws
 export TRSTCTL_MANAGED_KEYS_AWS_REGION=us-east-1
 export TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT=http://127.0.0.1:4566
+export TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK=true
 export TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID=test
-export TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY=test
+printf '%s' test > /tmp/localstack-kms-secret
+chmod 0600 /tmp/localstack-kms-secret
+export TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE=/tmp/localstack-kms-secret
 ```
+
+Private endpoint CIDR grants control *where* HTTPS may go. They never weaken TLS.
+The three `ALLOW_INSECURE_LOOPBACK` switches are deliberately separate and accept
+only loopback HTTP for a same-host emulator.
 
 Example production shape:
 
@@ -632,16 +941,52 @@ managed_keys:
     key_label_prefix: trstctl-ca
 ```
 
-Static no-cgo builds fail closed if `provider: pkcs11` is selected. Build the
-managed-key package with cgo enabled for local HSM custody so the native module can
-be loaded.
+Example TPM 2.0 shape:
+
+```yaml
+managed_keys:
+  enabled: true
+  provider: tpm2
+  tpm2:
+    path: /dev/tpmrm0
+    owner_auth_file: /etc/trstctl/tpm-owner-auth
+    key_auth_file: /etc/trstctl/tpm-key-auth
+    persistent_handle_base: 2164326400 # 0x81010000
+```
+
+Example YubiHSM 2 shape:
+
+```yaml
+managed_keys:
+  enabled: true
+  provider: yubihsm2
+  yubihsm2:
+    module_path: /usr/lib/yubihsm_pkcs11.so
+    token_label: trstctl-prod
+    user_pin_file: /etc/trstctl/yubihsm-auth
+    key_label_prefix: trstctl-ca
+```
+
+Static no-cgo signer builds fail closed if `pkcs11` or `yubihsm2` is selected.
+Use the published artifact built by `deploy/docker/Dockerfile.signer-hsm`; its
+release profile enables cgo and installs `/usr/local/bin/trstctl-signer-hsm`.
 
 When the licensed attach seam succeeds, operators with `keys:write` can exercise
 `POST /api/v1/managed-keys` and the rotate/revoke/zeroize API and CLI shapes. Requests
-require `Idempotency-Key` and lifecycle events omit private bytes, but current
-process-local lifecycle state and synchronous provider calls leave restart and
-provider-success/commit-failure gaps. Treat the surface as evaluation-only until its
-exact backend census row is `SERVED + REQUIRED`.
+require `Idempotency-Key`; lifecycle events omit private bytes; tenant projections
+use PostgreSQL RLS; and provider work is delivered by the durable outbox to the
+separate signer. The signer writes an fsync-backed operation intent before provider I/O.
+Every shipped provider also carries that identity into provider state: an atomic AWS tag,
+deterministic Azure/GCP resource identity, deterministic PKCS#11 `CKA_ID` (including
+YubiHSM), or a full-width TPM public tag plus deterministic handle probing. If a provider
+commits and the signer dies before journaling the response, restart finds the same effect;
+revoke/zeroize likewise confirm terminal provider state rather than blindly repeating a
+mutation. Managed-key outbox circuits are partitioned by provider and current key (or
+operation ID before a key exists), so one unavailable key does not stall every managed-key
+command. All six exact backend census rows are `SERVED + REQUIRED`.
+For an externally deployed signer, mount the same file-backed provider descriptor
+and pass it with `--managed-keys-config` plus the signed `--license`; never copy a
+credential into argv or an inline JSON field.
 
 ## Signer topology & CA custody
 
@@ -881,7 +1226,15 @@ that is actually saturating.
 | --- | --- | --- |
 | `TRSTCTL_BULKHEAD_API_WORKERS` / `TRSTCTL_BULKHEAD_API_QUEUE` | `8` / `256` | Cheap REST/API work. Keep this protected from heavy query, protocol, and agent waves. |
 | `TRSTCTL_BULKHEAD_PROJECTIONS_WORKERS` / `TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE` | `2` / `128` | Served event-log projection tail ownership and restart work. A saturated projections pool sheds tail starts and retries, while the durable cursor preserves ordered projection. Raise workers only when PostgreSQL and NATS have headroom. |
-| `TRSTCTL_BULKHEAD_OUTBOX_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_QUEUE` | `4` / `256` | External side effects: CA calls, connector deploys, webhooks, notifications. |
+| `TRSTCTL_BULKHEAD_OUTBOX_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_QUEUE` | `4` / `256` | Default for every outbox family and the independent “other” lane (`ca.*`, revocation, DNS automation, ITSM, discovery, and plugin-owned destinations). Existing deployments can keep using only this pair. |
+| `TRSTCTL_BULKHEAD_OUTBOX_EXTERNAL_CA_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_EXTERNAL_CA_QUEUE` | inherits outbox | Override only `external-ca.*` issuance calls. |
+| `TRSTCTL_BULKHEAD_OUTBOX_CONNECTORS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_CONNECTORS_QUEUE` | inherits outbox | Override `connector.*`, including deploy, rollback, test, and right-size calls. |
+| `TRSTCTL_BULKHEAD_OUTBOX_SECRETS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_SECRETS_QUEUE` | inherits outbox | Override dynamic-secret provider calls (`dynsecret.*`). |
+| `TRSTCTL_BULKHEAD_OUTBOX_SECRET_SYNC_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_SECRET_SYNC_QUEUE` | inherits outbox | Override outbound secret-sync calls (`secret.sync*`) without sharing dynamic-secret workers. |
+| `TRSTCTL_BULKHEAD_OUTBOX_MANAGED_KEYS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_MANAGED_KEYS_QUEUE` | inherits outbox | Override durable managed-key/HSM commands (`managedkey.*`). |
+| `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_QUEUE` | inherits outbox | Override transparency publication (`transparency.*`). |
+| `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_QUEUE` | inherits outbox | Override code-signing commands (`codesign.*`) without sharing transparency workers. |
+| `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_QUEUE` | inherits outbox | Override operator notifications (`notification.*`). |
 | `TRSTCTL_BULKHEAD_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_SIGNING_QUEUE` | `4` / `64` | Control-plane work waiting on signer RPC. Do not set this above signer capacity. |
 | `TRSTCTL_BULKHEAD_QUERY_WORKERS` / `TRSTCTL_BULKHEAD_QUERY_QUEUE` | `4` / `64` | Heavy graph/risk/read queries that scale with inventory size. |
 | `TRSTCTL_BULKHEAD_POLICY_WORKERS` / `TRSTCTL_BULKHEAD_POLICY_QUEUE` | `4` / `64` | OPA/Rego policy gate work. Saturation fails closed rather than blocking issuance. |
@@ -900,6 +1253,15 @@ Fleet-size guidance:
 `trstctl --check-config` prints the effective `bulkheads.<subsystem>.workers` and
 `bulkheads.<subsystem>.queue` values, so CI/CD can diff the resolved runtime limits
 before a rollout.
+
+Every outbox family owns a separate queue and worker set even when all limits are
+inherited from `bulkheads.outbox`. In plain terms, a connector endpoint that stops
+answering can fill only the connector lane; it cannot occupy the workers that issue
+through an upstream CA, synchronize a secret, publish code-signing evidence, or page
+an operator. JSON config may override a family with `outbox_external_ca`,
+`outbox_connectors`, `outbox_secrets`, `outbox_secret_sync`,
+`outbox_managed_keys`, `outbox_transparency`, `outbox_code_signing`, or
+`outbox_notifications` inside `bulkheads`.
 
 ## Config file
 

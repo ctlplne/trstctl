@@ -20,7 +20,7 @@ import (
 	"unicode"
 
 	"trstctl.com/trstctl/internal/connector"
-	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
@@ -93,11 +93,13 @@ func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connecto
 		c.observe(dep.Target, "error")
 		return fmt.Errorf("caddy: read current certificate: %w", err)
 	}
+	defer secret.Wipe(oldCert)
 	oldKey, hadKey, err := readExisting(sb, c.keyPath)
 	if err != nil {
 		c.observe(dep.Target, "error")
 		return fmt.Errorf("caddy: read current key: %w", err)
 	}
+	defer secret.Wipe(oldKey)
 	if sameDeployment(oldCert, hadCert, oldKey, hadKey, dep) {
 		c.observe(dep.Target, "noop")
 		return nil
@@ -136,7 +138,7 @@ func readExisting(sb connector.Sandbox, file string) ([]byte, bool, error) {
 }
 
 func sameDeployment(oldCert []byte, hadCert bool, oldKey []byte, hadKey bool, dep connector.Deployment) bool {
-	if !hadCert || crypto.SHA256Hex(oldCert) != dep.Fingerprint {
+	if !hadCert || connector.CertificateFingerprint(oldCert) != dep.Fingerprint {
 		return false
 	}
 	if len(dep.KeyPEM) == 0 {

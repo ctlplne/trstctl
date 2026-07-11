@@ -39,6 +39,9 @@
 coverage.*
 cover.out.*
 /coverage/
+# Python substrate-test bytecode is local interpreter output, never source.
+__pycache__/
+*.py[cod]
 # Volatile DoD receipt: make dod-gate always emits a fresh timestamped census.
 /wiring-census.json
 

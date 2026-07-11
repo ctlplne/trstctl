@@ -92,8 +92,8 @@ func TestPluginSurfacesVaultErrorsWithoutLeakingToken(t *testing.T) {
 	if err == nil {
 		t.Fatal("Issue succeeded; want Vault error")
 	}
-	if !strings.Contains(err.Error(), "vaultpki: api error 403: denied by policy") {
-		t.Fatalf("Issue error = %q, want structured Vault error", err)
+	if !strings.Contains(err.Error(), "vaultpki: api error 403") || strings.Contains(err.Error(), "denied by policy") {
+		t.Fatalf("Issue error = %q, want status-only Vault error", err)
 	}
 	if strings.Contains(err.Error(), "vault-token-sensitive") {
 		t.Fatalf("Issue error leaked Vault token: %q", err)

@@ -178,13 +178,22 @@ revokes the underlying credential automatically — even across a restart, becau
 revocation intent is journaled first to a durable [outbox](../glossary.md) and delivered
 at-least-once, so a crash can't silently drop it. Eight concrete backends ship behind
 one interface: PostgreSQL, MySQL, MongoDB, AWS IAM, GCP IAM, Azure Entra, Kubernetes
-ServiceAccount tokens, and Redis ACL users. PostgreSQL is exercised against a real
-database process in CI; Redis, Kubernetes, and the cloud IAM providers speak their real
-wire protocols against in-process emulators; MySQL and MongoDB expose driver-facing
-admin seams so production adapters create and revoke actual scoped users.
+ServiceAccount tokens, and Redis ACL users. The DoD gate reaches all four database
+providers through official digest-pinned server containers and reaches each cloud or
+Kubernetes provider through a separate protocol-faithful process with exact
+authentication and independent credential use/revocation checks.
 
 The running control plane mounts the dynamic lease lifecycle when `secrets.enable_api`
-is on and the operator wires provider backends:
+is on and `secret_integrations.dynamic_providers` supplies tenant-bound endpoints,
+allowed roles, maximum TTLs, egress policy, and `file:` or same-tenant `secret://`
+credential references. `buildRunDeps` constructs that production registry. Issuance
+first commits a deterministic pending lease and sealed outbox command; only the outbox
+worker calls the provider, and a crash retry reuses the same external identity:
+
+Cloud and Kubernetes provider endpoints require HTTPS. A private-endpoint CIDR grant
+does not permit HTTP. The separate `allow_insecure_loopback` switch exists only for a
+same-host emulator and is limited, both before startup and at socket dial time, to
+`localhost`, `127.0.0.0/8`, or `::1`.
 
 - `POST /api/v1/secrets/leases` issues exactly one credential copy for a provider,
   role, and TTL, guarded by `secrets:write` plus `Idempotency-Key`.
@@ -339,6 +348,26 @@ CI/CD variables, Vercel project environment variables, generic CI JSON endpoints
 Kubernetes Secrets. Terraform/OpenTofu and arbitrary webhook targets remain available
 through the generic JSON/webhook pusher shape until a deeper provider-specific API is
 configured.
+
+Every redelivery carries the same durable sync-operation ID. AWS Secrets Manager uses
+it as both `ClientRequestToken` and `Idempotency-Key`. GCP Secret Manager and Azure Key
+Vault read and constant-time-compare the current version before creating another one,
+while also forwarding the operation ID. Thus a crash after the receiver commits but
+before the local outbox acknowledgement reconciles to the existing remote value instead
+of creating a second version. The DoD receiver rejects a changed replay tuple and proves
+the version count remains one.
+
+Targets are configured under `secret_integrations.sync_targets` with one tenant and
+credential reference each. The dispatcher resolves that reference only for one outbox
+attempt and destroys the locked buffer afterward. GitHub values use its real
+X25519/XSalsa20-Poly1305 sealed-box wire format: trstctl fetches the repository public
+key, seals locally, and never sends plaintext to GitHub. The DoD receiver owns the
+corresponding private key in a separate process and must independently decrypt the
+landed ciphertext back to the source value before the GitHub row is served.
+
+Sync endpoints follow the same transport rule as dynamic providers: HTTPS is the
+production default, `allow_private_endpoint` is only an address grant, and plaintext
+requires the explicit loopback-only emulator switch.
 
 `GET /api/v1/secrets/cloud-secret-managers` and `trstctl-cli secrets
 cloud-secret-managers` expose the served CAP-SEC-04 cloud secret-manager integration
@@ -545,8 +574,8 @@ managed key. See [The web console](../web-console.md).
 
 ## Use it
 
-The served pieces run through the API/CLI; the remaining library-only pieces are still
-available through their Go APIs. The shapes:
+The served workflows run through the API/CLI. Embedders can use the same lower-level Go
+interfaces directly; these examples show their byte-oriented shapes:
 
 ```go
 // Native store: versioned, envelope-encrypted put/get

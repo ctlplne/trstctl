@@ -10,6 +10,7 @@ import (
 
 	"trstctl.com/trstctl/ee/agentid/delegation/carriage"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // credential.go models the CREDENTIAL a caller presents and performs, offline,
@@ -205,9 +206,11 @@ func decodeAndVerifyToken(cred Credential, root TrustRoot) (carriage.BoundValues
 		if err != nil {
 			return carriage.BoundValues{}, Window{}, ErrNoTrustRoot
 		}
-		if _, err := crypto.VerifyJWTBytes(cred.Bytes, jwks); err != nil {
+		claims, err := crypto.VerifyJWTBytes(cred.Bytes, jwks)
+		if err != nil {
 			return carriage.BoundValues{}, Window{}, ErrSignatureInvalid
 		}
+		secret.Wipe(claims)
 		verified = true
 	} else if len(root.IssuerPublicDER) > 0 && len(cred.Signature) > 0 {
 		// Detached-signature path over the whole token bytes.

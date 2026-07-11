@@ -71,8 +71,16 @@ type AlertRecipient struct {
 }
 
 type Alert struct {
-	Kind                 string           `json:"kind"`
-	TenantID             string           `json:"tenant_id"`
+	Kind     string `json:"kind"`
+	TenantID string `json:"tenant_id"`
+	// OperationID is the durable receiver identity for operator-triggered alerts.
+	// It is namespaced and derived from the API idempotency key, so two distinct
+	// commands with identical human-readable text do not collapse at PagerDuty or
+	// OpsGenie. RequestBinding is a non-secret digest of the authenticated caller
+	// and canonical command retained in the outbox payload after response-cache GC.
+	OperationID          string           `json:"operation_id,omitempty"`
+	RequestBinding       string           `json:"request_binding,omitempty"`
+	CredentialConfigured bool             `json:"credential_configured,omitempty"`
 	CertificateID        string           `json:"certificate_id,omitempty"`
 	Subject              string           `json:"subject,omitempty"`
 	Serial               string           `json:"serial,omitempty"`

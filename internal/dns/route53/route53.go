@@ -51,6 +51,8 @@ const (
 	txtTTL      = 60
 )
 
+var errRecordNotFound = errors.New("route53: record not found")
+
 // Provider satisfies the DNS-01 plugin template.
 var _ acme.DNSProvider = (*Provider)(nil)
 
@@ -180,15 +182,14 @@ func (p *Provider) change(ctx context.Context, action, name, value string) error
 	// the shared cloudhttp round-trip (bounded read, non-2xx normalisation, drain;
 	// CODE-006). SigV4 stays here — supplied as a cloudhttp request-signer so its keyed
 	// MAC remains in this package behind the crypto boundary (AN-3). The non-2xx
-	// *StatusError is translated to the package's *apiError so isNotFound's body match
-	// (and the credential-free error text, AN-8) are unchanged. Route 53 returns an XML
-	// body the provider does not read, so out is nil.
+	// Route 53's idempotent-delete response is classified while cloudhttp still owns
+	// the bounded mutable response bytes. Only a closed sentinel or status survives;
+	// cloudhttp wipes the body before returning (AN-8). Route 53 returns an XML body
+	// the provider otherwise does not read, so out is nil.
 	req = cloudhttp.SetBody(req, body)
-	if err := cloudhttp.JSON(p.doer, req, nil, cloudhttp.WithSigner(p.sigV4Signer())); err != nil {
-		var se *cloudhttp.StatusError
-		if errors.As(err, &se) {
-			return &apiError{status: se.StatusCode, body: se.Body}
-		}
+	if err := cloudhttp.JSON(p.doer, req, nil,
+		cloudhttp.WithSigner(p.sigV4Signer()),
+		cloudhttp.WithStatusMapper(mapRoute53Status)); err != nil {
 		return fmt.Errorf("route53: %s %s: %w", action, name, err)
 	}
 	return nil
@@ -316,22 +317,35 @@ type resourceRecord struct {
 	Value string `xml:"Value"`
 }
 
-// apiError is a non-2xx Route 53 response. Its body is the service error text and
-// never carries request credentials (AN-8).
+// apiError is a non-2xx Route 53 response. It deliberately retains only the status;
+// an upstream body is attacker-controlled and may echo submitted material (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
-func (e *apiError) Error() string { return fmt.Sprintf("route53: status %d: %s", e.status, e.body) }
+func (e *apiError) Error() string { return fmt.Sprintf("route53: status %d", e.status) }
+
+func mapRoute53Status(status int, body []byte) error {
+	if status/100 == 4 && (containsASCIIFold(body, []byte("not found")) ||
+		containsASCIIFold(body, []byte("notfound"))) {
+		return errRecordNotFound
+	}
+	return &apiError{status: status}
+}
+
+// containsASCIIFold classifies a bounded response without converting secret-bearing
+// bytes into an immutable string or allocating a lowercase copy.
+func containsASCIIFold(body, needle []byte) bool {
+	for i := 0; i+len(needle) <= len(body); i++ {
+		if bytes.EqualFold(body[i:i+len(needle)], needle) {
+			return true
+		}
+	}
+	return false
+}
 
 // isNotFound reports whether err is Route 53's InvalidChangeBatch "not found",
 // returned when DELETEing a record that is already gone — a no-op for cleanup.
 func isNotFound(err error) bool {
-	var ae *apiError
-	if errors.As(err, &ae) {
-		b := strings.ToLower(ae.body)
-		return strings.Contains(b, "not found") || strings.Contains(b, "notfound")
-	}
-	return false
+	return errors.Is(err, errRecordNotFound)
 }

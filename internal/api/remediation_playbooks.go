@@ -5,13 +5,18 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
 	guuid "github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -130,6 +135,10 @@ func (a *API) listRemediationPlaybooks(w http.ResponseWriter, r *http.Request) {
 func (a *API) runRemediationPlaybook(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	playbookID := r.PathValue("id")
+	if playbookID == remediationPlaybookRightSizeNHI {
+		a.runConnectorRightSizePlaybook(w, r, idempotencyKey)
+		return
+	}
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req remediationPlaybookRunRequest
 		if err := decodeJSON(r, &req); err != nil {
@@ -152,16 +161,151 @@ func (a *API) runRemediationPlaybook(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, err
 			}
 			return http.StatusCreated, a.remediationPlaybookRunResponse(ctx, tenantID, run), nil
-		case remediationPlaybookRightSizeNHI:
-			run, err := a.runRightSizePlaybook(ctx, tenantID, principal, req, idempotencyKey)
-			if err != nil {
-				return 0, nil, err
-			}
-			return http.StatusCreated, a.remediationPlaybookRunResponse(ctx, tenantID, run), nil
 		default:
 			return 0, nil, errStatus(http.StatusNotFound, "unknown remediation playbook")
 		}
 	})
+}
+
+// runConnectorRightSizePlaybook uses the playbook-run projection as the durable
+// idempotency authority. The generic recorder remains only a short-lived response
+// cache: after its GC, this path still returns the exact bytes retained on the
+// tenant-scoped operation and never reconstructs or re-executes the command.
+func (a *API) runConnectorRightSizePlaybook(w http.ResponseWriter, r *http.Request, idempotencyKey string) {
+	var req remediationPlaybookRunRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	binding, err := rightSizeRequestBinding(r, canonicalRightSizePlaybookCommand(req))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if replay, found, err := a.durableRightSizeReplay(ctx, tenantID, idempotencyKey, binding); err != nil {
+			return 0, nil, err
+		} else if found {
+			return replay.InitialHTTPStatus, json.RawMessage(replay.InitialResponse), nil
+		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		run, err := a.prepareRightSizePlaybook(ctx, tenantID, principal, req, idempotencyKey)
+		if err != nil {
+			return 0, nil, err
+		}
+		run.TenantID = tenantID
+		run.RequestBinding = binding
+		run.InitialHTTPStatus = http.StatusCreated
+		run.CreatedAt = time.Now().UTC()
+		run.UpdatedAt = run.CreatedAt
+		initial, err := json.Marshal(a.initialRightSizeRunResponse(ctx, tenantID, run))
+		if err != nil {
+			return 0, nil, err
+		}
+		run.InitialResponse = initial
+		authoritative, err := a.orch.RecordConnectorRightSizeOperation(ctx, tenantID, run)
+		if err != nil {
+			return 0, nil, err
+		}
+		return authoritative.InitialHTTPStatus, json.RawMessage(authoritative.InitialResponse), nil
+	})
+}
+
+func (a *API) initialRightSizeRunResponse(ctx context.Context, tenantID string, run store.RemediationPlaybookRun) remediationPlaybookRunResponse {
+	response := a.remediationPlaybookRunResponse(ctx, tenantID, run)
+	if run.ConnectorDeliveryID == nil {
+		return response
+	}
+	var identityID *string
+	if run.TargetIdentityID != "" {
+		value := run.TargetIdentityID
+		identityID = &value
+	}
+	rollbackRef := ""
+	if len(run.RollbackRefs) > 0 {
+		rollbackRef = run.RollbackRefs[0]
+	}
+	identity := orchestrator.ConnectorRightSizeIdentityFor(tenantID, run.IdempotencyKey)
+	delivery := toConnectorDeliveryResponse(store.ConnectorDeliveryReceipt{
+		ID: *run.ConnectorDeliveryID, TenantID: tenantID, IdentityID: identityID,
+		Destination: orchestrator.DestinationConnectorRightSize,
+		Connector:   run.Connector, Target: run.Target, Status: "queued", Attempts: 0,
+		Reason: "least_privilege_right_size_queued", Detail: "usage-backed right-size connector intent queued",
+		RollbackRef: rollbackRef, IdempotencyKey: identity.OutboxIdempotencyKey,
+		CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
+	})
+	response.ConnectorDelivery = &delivery
+	return response
+}
+
+func (a *API) durableRightSizeReplay(ctx context.Context, tenantID, idempotencyKey, binding string) (store.RemediationPlaybookRun, bool, error) {
+	run, err := a.store.GetRemediationPlaybookRunByIdempotencyKey(ctx, tenantID, idempotencyKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.RemediationPlaybookRun{}, false, nil
+	}
+	if err != nil {
+		return store.RemediationPlaybookRun{}, false, err
+	}
+	if !crypto.ConstantTimeEqual([]byte(run.RequestBinding), []byte(binding)) {
+		return store.RemediationPlaybookRun{}, false, orchestrator.ErrIdempotencyConflict
+	}
+	if run.InitialHTTPStatus == 0 || len(run.InitialResponse) == 0 || !json.Valid(run.InitialResponse) {
+		return store.RemediationPlaybookRun{}, false, errors.New("durable right-size operation has no valid initial response")
+	}
+	return run, true, nil
+}
+
+func rightSizeRequestBinding(r *http.Request, command any) (string, error) {
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		return "", err
+	}
+	escapedPath := ""
+	if r.URL != nil {
+		escapedPath = r.URL.EscapedPath()
+	}
+	material, err := json.Marshal(struct {
+		Domain      string `json:"domain"`
+		Principal   string `json:"principal"`
+		Method      string `json:"method"`
+		EscapedPath string `json:"escaped_path"`
+		Command     any    `json:"command"`
+	}{
+		Domain: "trstctl.connector-right-size-command.v1", Principal: principal,
+		Method: r.Method, EscapedPath: escapedPath, Command: command,
+	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(material)
+	return crypto.SHA256Hex(material), nil
+}
+
+func canonicalRightSizePlaybookCommand(req remediationPlaybookRunRequest) remediationPlaybookRunRequest {
+	return remediationPlaybookRunRequest{
+		TargetIdentityID: strings.TrimSpace(req.TargetIdentityID),
+		InventoryID:      strings.TrimSpace(req.InventoryID), Reason: strings.TrimSpace(req.Reason),
+		Connector: strings.TrimSpace(req.Connector), Target: strings.TrimSpace(req.Target),
+		ReplacementName:   strings.TrimSpace(req.ReplacementName),
+		RemoveScopes:      canonicalRightSizeScopes(req.RemoveScopes),
+		RecommendedScopes: canonicalRightSizeScopes(req.RecommendedScopes),
+		RollbackRef:       strings.TrimSpace(req.RollbackRef),
+	}
+}
+
+func canonicalRightSizeScopes(values []string) []string {
+	set := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if normalized := normalizeNHIPostureString(value); normalized != "" {
+			set[normalized] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for value := range set {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (a *API) listRemediationPlaybookRuns(w http.ResponseWriter, r *http.Request) {
@@ -292,7 +436,7 @@ func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal 
 	}, "")
 }
 
-func (a *API) runRightSizePlaybook(ctx context.Context, tenantID string, principal authz.Principal, req remediationPlaybookRunRequest, idempotencyKey string) (store.RemediationPlaybookRun, error) {
+func (a *API) prepareRightSizePlaybook(ctx context.Context, tenantID string, principal authz.Principal, req remediationPlaybookRunRequest, idempotencyKey string) (store.RemediationPlaybookRun, error) {
 	finding, err := a.rightSizeFinding(ctx, tenantID, req)
 	if err != nil {
 		return store.RemediationPlaybookRun{}, err
@@ -318,10 +462,6 @@ func (a *API) runRightSizePlaybook(ctx context.Context, tenantID string, princip
 	if strings.HasPrefix(finding.InventoryID, "identity/") {
 		identityID = strings.TrimPrefix(finding.InventoryID, "identity/")
 	}
-	var identityIDPtr *string
-	if identityID != "" {
-		identityIDPtr = &identityID
-	}
 	scopeDelta, err := json.Marshal(map[string]any{
 		"inventory_id":       finding.InventoryID,
 		"ref":                finding.Ref,
@@ -339,27 +479,17 @@ func (a *API) runRightSizePlaybook(ctx context.Context, tenantID string, princip
 	if err != nil {
 		return store.RemediationPlaybookRun{}, err
 	}
-	delivery, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
-		ID: guuid.NewString(), IdentityID: identityIDPtr, Destination: orchestrator.DestinationConnectorRightSize,
-		Connector: connector, Target: target, Status: "queued", Attempts: 1,
-		Reason:         "least_privilege_right_size_queued",
-		Detail:         "usage-backed right-size playbook queued removal of unused grants: " + strings.Join(remove, ","),
-		RollbackRef:    firstNonEmpty(strings.TrimSpace(req.RollbackRef), "restore prior grants "+strings.Join(remove, ",")),
-		IdempotencyKey: idempotencyKey,
-	})
-	if err != nil {
-		return store.RemediationPlaybookRun{}, err
-	}
-	deliveryID := delivery.ID
-	return a.orch.RecordRemediationPlaybookRun(ctx, tenantID, store.RemediationPlaybookRun{
-		ID: guuid.NewString(), PlaybookID: remediationPlaybookRightSizeNHI, TargetIdentityID: identityID,
+	operationIdentity := orchestrator.ConnectorRightSizeIdentityFor(tenantID, idempotencyKey)
+	deliveryID := operationIdentity.DeliveryID
+	return store.RemediationPlaybookRun{
+		ID: operationIdentity.OperationID, PlaybookID: remediationPlaybookRightSizeNHI, TargetIdentityID: identityID,
 		InventoryID: finding.InventoryID, Status: "queued", Phase: "right_size_connector_intent_queued",
 		Action: "right_size", Reason: reason, Connector: connector, Target: target,
 		ConnectorDeliveryID: &deliveryID, ScopeDelta: scopeDelta,
-		EvidenceRefs:   append([]string{"nhi_posture:CAP-POST-01", "connector_delivery:" + delivery.ID}, finding.EvidenceRefs...),
+		EvidenceRefs:   append([]string{"nhi_posture:CAP-POST-01", "connector_delivery:" + deliveryID}, finding.EvidenceRefs...),
 		RollbackRefs:   remediationRollbackRefs(req.RollbackRef, "restore prior grants "+strings.Join(remove, ",")),
 		IdempotencyKey: idempotencyKey, CreatedBy: principal.Subject,
-	}, orchestrator.DestinationConnectorRightSize)
+	}, nil
 }
 
 func (a *API) rightSizeFinding(ctx context.Context, tenantID string, req remediationPlaybookRunRequest) (nhiOverPrivilegeFinding, error) {

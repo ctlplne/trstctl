@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -95,6 +94,15 @@ func New(region string, creds Credentials, opts ...Option) *Connector {
 	return c
 }
 
+// Close destroys the request-signing credential copies owned by this one-shot
+// target connector. Production factories defer it after every delivery.
+func (c *Connector) Close() {
+	secret.Wipe(c.creds.SecretAccessKey)
+	secret.Wipe(c.creds.SessionToken)
+	c.creds.SecretAccessKey = nil
+	c.creds.SessionToken = nil
+}
+
 func (c *Connector) setEndpoint(endpoint string) {
 	c.endpoint = strings.TrimRight(endpoint, "/")
 	if u, err := url.Parse(endpoint); err == nil {
@@ -145,13 +153,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if err != nil {
-			return fmt.Errorf("acm: import certificate: status %d: read response: %w", resp.StatusCode, err)
-		}
-		return fmt.Errorf("acm: import certificate: status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("acm: import certificate: status %d (response body redacted)", resp.StatusCode)
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil
 }
 
@@ -181,31 +186,45 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 	}
 	sort.Strings(signed)
 
-	var canonHeaders strings.Builder
+	canonHeaders := make([]byte, 0, 256+len(c.creds.SessionToken))
 	for _, h := range signed {
-		v := strings.TrimSpace(req.Header.Get(h))
-		if h == "host" {
-			v = c.host
+		canonHeaders = append(canonHeaders, h...)
+		canonHeaders = append(canonHeaders, ':')
+		switch h {
+		case "host":
+			canonHeaders = append(canonHeaders, c.host...)
+		case "x-amz-security-token":
+			// The session token already has one unavoidable string copy in the
+			// HTTP header. Build the signed canonical copy directly from the
+			// owned bytes so it never enters strings.Builder/String again.
+			canonHeaders = append(canonHeaders, bytes.TrimSpace(c.creds.SessionToken)...)
+		default:
+			canonHeaders = append(canonHeaders, strings.TrimSpace(req.Header.Get(h))...)
 		}
-		canonHeaders.WriteString(h + ":" + v + "\n")
+		canonHeaders = append(canonHeaders, '\n')
 	}
 	signedHeaders := strings.Join(signed, ";")
 
-	canonicalRequest := strings.Join([]string{
-		req.Method,
-		req.URL.EscapedPath(),
-		"", // no query
-		canonHeaders.String(),
-		signedHeaders,
-		crypto.SHA256Hex(body),
-	}, "\n")
+	canonicalRequest := make([]byte, 0, len(canonHeaders)+len(req.Method)+len(req.URL.EscapedPath())+len(signedHeaders)+96)
+	canonicalRequest = append(canonicalRequest, req.Method...)
+	canonicalRequest = append(canonicalRequest, '\n')
+	canonicalRequest = append(canonicalRequest, req.URL.EscapedPath()...)
+	canonicalRequest = append(canonicalRequest, '\n', '\n') // empty query string
+	canonicalRequest = append(canonicalRequest, canonHeaders...)
+	canonicalRequest = append(canonicalRequest, '\n')
+	canonicalRequest = append(canonicalRequest, signedHeaders...)
+	canonicalRequest = append(canonicalRequest, '\n')
+	canonicalRequest = append(canonicalRequest, crypto.SHA256Hex(body)...)
+	canonicalHash := crypto.SHA256Hex(canonicalRequest)
+	secret.Wipe(canonicalRequest)
+	secret.Wipe(canonHeaders)
 
 	credScope := dateStamp + "/" + c.region + "/" + service + "/aws4_request"
 	stringToSign := strings.Join([]string{
 		"AWS4-HMAC-SHA256",
 		amzDate,
 		credScope,
-		crypto.SHA256Hex([]byte(canonicalRequest)),
+		canonicalHash,
 	}, "\n")
 
 	// The SigV4 derived key starts from "AWS4"||secret. Assemble it in a []byte so
@@ -223,7 +242,9 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
 	secret.Wipe(kService)
 	defer secret.Wipe(kSigning)
-	signature := hex.EncodeToString(crypto.HMACSHA256(kSigning, []byte(stringToSign)))
+	signatureMAC := crypto.HMACSHA256(kSigning, []byte(stringToSign))
+	signature := hex.EncodeToString(signatureMAC)
+	secret.Wipe(signatureMAC)
 
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 "+
 		"Credential="+c.creds.AccessKeyID+"/"+credScope+", "+

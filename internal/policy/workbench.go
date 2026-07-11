@@ -163,7 +163,7 @@ func evalRego(ctx context.Context, filename, module, query string, input map[str
 func validateLifecycleDryRunInput(input map[string]any) error {
 	action, _ := input["action"].(string)
 	switch Action(strings.TrimSpace(action)) {
-	case ActionIssue, ActionDeploy, ActionRevoke:
+	case ActionIssue, ActionDeploy, ActionRevoke, ActionCodeSign:
 	default:
 		return errors.New("policy: lifecycle dry-run input.action must be issue, deploy, or revoke")
 	}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -23,11 +24,45 @@ type KeyStore struct {
 	dir        string
 	wrapper    seal.KeyWrapper
 	keyFactory KeyFactory
+	signMu     sync.Mutex
+	signLocks  map[string]*signOperationLock
+}
+
+type signOperationLock struct {
+	mu   sync.Mutex
+	refs int
 }
 
 // NewKeyStore returns a KeyStore over dir, sealing with wrapper.
 func NewKeyStore(dir string, wrapper seal.KeyWrapper) *KeyStore {
-	return &KeyStore{dir: dir, wrapper: wrapper, keyFactory: defaultKeyFactory{}}
+	return &KeyStore{dir: dir, wrapper: wrapper, keyFactory: defaultKeyFactory{}, signLocks: make(map[string]*signOperationLock)}
+}
+
+// lockSignOperation serializes one operation ID from durable intent creation
+// through completed-result rename. Therefore an existing "executing" record
+// seen while holding this lock can only come from a prior signer process (or a
+// failed call that returned no signature), and is safe to resume. Exact
+// concurrent calls wait and replay the completed bytes instead of both signing.
+func (ks *KeyStore) lockSignOperation(operationID string) func() {
+	ks.signMu.Lock()
+	lock := ks.signLocks[operationID]
+	if lock == nil {
+		lock = &signOperationLock{}
+		ks.signLocks[operationID] = lock
+	}
+	lock.refs++
+	ks.signMu.Unlock()
+
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		ks.signMu.Lock()
+		lock.refs--
+		if lock.refs == 0 {
+			delete(ks.signLocks, operationID)
+		}
+		ks.signMu.Unlock()
+	}
 }
 
 func (ks *KeyStore) withKeyFactory(factory KeyFactory) {

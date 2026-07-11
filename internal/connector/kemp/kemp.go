@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // Connector deploys certificates to a Kemp LoadMaster over HTTPS.
@@ -88,23 +88,22 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 	if err != nil {
 		return fmt.Errorf("encode request: %w", err)
 	}
+	defer secret.Wipe(body)
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+string(c.token))
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
 	resp, err := sb.Request(req)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
 	}
+	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil
 }

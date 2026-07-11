@@ -98,6 +98,7 @@ func TestServedIncidentExecutionIssuesReplacementRevokesAndSealsEvidence(t *test
 		RollbackRefs          []string        `json:"rollback_refs"`
 		ConnectorDelivery     struct {
 			Status      string `json:"status"`
+			Attempts    int    `json:"attempts"`
 			Connector   string `json:"connector"`
 			Target      string `json:"target"`
 			RollbackRef string `json:"rollback_ref"`
@@ -125,11 +126,14 @@ func TestServedIncidentExecutionIssuesReplacementRevokesAndSealsEvidence(t *test
 	if execResp.EvidenceBundleFormat != "jws" || strings.Count(execResp.EvidenceBundle, ".") != 2 {
 		t.Fatalf("evidence bundle = format %q bundle %q; want compact JWS", execResp.EvidenceBundleFormat, execResp.EvidenceBundle)
 	}
-	if execResp.ConnectorDelivery.Status != "unrouted" || execResp.ConnectorDelivery.Connector != "nginx" || execResp.ConnectorDelivery.Target != "edge/prod/payments" {
+	if execResp.ConnectorDelivery.Status != "queued" || execResp.ConnectorDelivery.Attempts != 0 || execResp.ConnectorDelivery.Connector != "nginx" || execResp.ConnectorDelivery.Target != "edge/prod/payments" {
 		t.Fatalf("connector delivery evidence = %+v", execResp.ConnectorDelivery)
 	}
-	if len(execResp.FailedTargets) != 1 || !strings.Contains(execResp.FailedTargets[0], "edge/prod/payments") {
-		t.Fatalf("failed targets = %#v", execResp.FailedTargets)
+	if execResp.ConnectorDelivery.Status == "delivered" {
+		t.Fatal("zero-attempt incident connector intent was presented as delivered")
+	}
+	if len(execResp.FailedTargets) != 0 {
+		t.Fatalf("queued connector intent was presented as a failed target: %#v", execResp.FailedTargets)
 	}
 	if len(execResp.RollbackRefs) < 3 || !strings.Contains(strings.Join(execResp.RollbackRefs, " "), "previous fullchain") {
 		t.Fatalf("rollback refs = %#v", execResp.RollbackRefs)

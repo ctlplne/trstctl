@@ -26,6 +26,15 @@ const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
 	62: true,
+	72: true,
+	75: true,
+	77: true,
+	78: true,
+	79: true,
+	80: true,
+	81: true,
+	82: true,
+	83: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -122,7 +131,14 @@ func TestMigrationsPreserveSeededContent(t *testing.T) {
 	// 6) Additive columns must exist and carry their declared defaults on the
 	// pre-existing rows (the ALTER applied to populated tables, not just empty ones).
 	assertColumnDefault(t, ctx, pool, "outbox", "worker_id", "") // nullable add — NULL is fine, just must exist
+	assertColumnDefault(t, ctx, pool, "outbox", "effect_lane", "")
+	assertColumnDefault(t, ctx, pool, "remediation_playbook_runs", "request_binding", "")
+	assertColumnDefault(t, ctx, pool, "remediation_playbook_runs", "initial_response", "")
+	assertColumnDefault(t, ctx, pool, "remediation_playbook_runs", "terminal_reason", "")
 	assertColumnDefault(t, ctx, pool, "certificates", "issuance_idempotency_key", "")
+	assertColumnDefault(t, ctx, pool, "certificates", "issuance_request_binding", "")
+	assertColumnDefault(t, ctx, pool, "certificates", "certificate_pem", "")
+	assertColumnDefault(t, ctx, pool, "certificates", "issuance_response", "")
 }
 
 // TestMigrationDataContentBackfills is the SCHEMA-002 acceptance: migrations that
@@ -261,6 +277,564 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 				count, beforeCount, ownerRefOK, ownerEmailOK, digestIntervalOK, digestTimezoneOK)
 		}
 	})
+
+	t.Run("0072_connector_target_revision_backfill", testMigration0072ConnectorTargetRevisionBackfill)
+	t.Run("0075_dynamic_secret_preparation_default", testMigration0075DynamicSecretPreparationDefault)
+	t.Run("0077_idempotency_request_binding_default", testMigration0077IdempotencyRequestBindingDefault)
+	t.Run("0078_dynamic_secret_request_binding_default", testMigration0078DynamicSecretRequestBindingDefault)
+	t.Run("0079_managed_key_request_binding_default", testMigration0079ManagedKeyRequestBindingDefault)
+	t.Run("0080_external_ca_request_binding_defaults", testMigration0080ExternalCARequestBindingDefaults)
+	t.Run("0081_dynamic_secret_command_backfill", testMigration0081DynamicSecretCommandBackfill)
+	t.Run("0082_connector_right_size_operation_defaults", testMigration0082ConnectorRightSizeOperationDefaults)
+	t.Run("0083_outbox_effect_lane_default", testMigration0083OutboxEffectLaneDefault)
+}
+
+func testMigration0072ConnectorTargetRevisionBackfill(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 72)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	for index, tenantID := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO deployment_targets (id, tenant_id, name, type, config, created_at)
+			VALUES ($1, $2, $3, 'kubernetes', $4::jsonb, $5::timestamptz)`,
+			uuid(tenantID, 7200+index), tenantID, "edge-"+tenantID,
+			fmt.Sprintf(`{"namespace":"tenant-%d"}`, index),
+			fmt.Sprintf("2026-02-0%dT03:04:05Z", index+1)); err != nil {
+			t.Fatalf("seed pre-0072 deployment target %s: %v", tenantID, err)
+		}
+	}
+	stable := `
+		SELECT id::text, tenant_id::text, name, type, config::text, created_at::text
+		  FROM deployment_targets
+		 ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0072 changed existing target content: count %d/%d checksum %s/%s",
+			beforeCount, afterCount, beforeChecksum, afterChecksum)
+	}
+
+	var revisions int
+	var targetIDs, names, types, configs, enabled, created bool
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*),
+		       bool_and(r.revision_id = 'legacy:' || t.id::text),
+		       bool_and(r.name = t.name),
+		       bool_and(r.type = t.type),
+		       bool_and(r.config = t.config),
+		       bool_and(r.enabled AND t.enabled),
+		       bool_and(r.created_at = t.created_at)
+		  FROM deployment_targets t
+		  JOIN deployment_target_revisions r
+		    ON r.tenant_id = t.tenant_id AND r.target_id = t.id AND r.revision_id = t.revision_id`).
+		Scan(&revisions, &targetIDs, &names, &types, &configs, &enabled, &created); err != nil {
+		t.Fatalf("inspect 0072 revision backfill: %v", err)
+	}
+	if revisions != beforeCount || !targetIDs || !names || !types || !configs || !enabled || !created {
+		t.Fatalf("0072 revision backfill mismatch: rows=%d want=%d id=%t name=%t type=%t config=%t enabled=%t created=%t",
+			revisions, beforeCount, targetIDs, names, types, configs, enabled, created)
+	}
+}
+
+func testMigration0075DynamicSecretPreparationDefault(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 75)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	for index, tenantID := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO dynamic_secret_leases
+			       (tenant_id, id, idempotency_key, provider, role, backend_ref,
+			        sealed_credential, state, issue_outbox_id, issued_at, expires_at,
+			        hard_expires_at, updated_at)
+			VALUES ($1, $2, $3, 'postgresql', 'reader', '', ''::bytea, 'pending', $4,
+			        '2026-03-01T00:00:00Z'::timestamptz,
+			        '2026-03-01T00:10:00Z'::timestamptz,
+			        '2026-03-01T00:20:00Z'::timestamptz,
+			        '2026-03-01T00:00:00Z'::timestamptz)`,
+			tenantID, fmt.Sprintf("lease-%d", index), fmt.Sprintf("lease-idem-%d", index), 7500+index); err != nil {
+			t.Fatalf("seed pre-0075 dynamic lease %s: %v", tenantID, err)
+		}
+	}
+	stable := `
+		SELECT tenant_id::text, id, idempotency_key, provider, role, backend_ref,
+		       encode(sealed_credential, 'hex'), state, issue_outbox_id::text,
+		       issued_at::text, expires_at::text, hard_expires_at::text, updated_at::text
+		  FROM dynamic_secret_leases
+		 ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0075 changed existing lease content: count %d/%d checksum %s/%s",
+			beforeCount, afterCount, beforeChecksum, afterChecksum)
+	}
+	var rows int
+	var empty, nonnull bool
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*), bool_and(octet_length(sealed_preparation) = 0),
+		       bool_and(sealed_preparation IS NOT NULL)
+		  FROM dynamic_secret_leases`).Scan(&rows, &empty, &nonnull); err != nil {
+		t.Fatalf("inspect 0075 sealed preparation backfill: %v", err)
+	}
+	if rows != beforeCount || !empty || !nonnull {
+		t.Fatalf("0075 preparation default mismatch: rows=%d want=%d empty=%t nonnull=%t",
+			rows, beforeCount, empty, nonnull)
+	}
+}
+
+// runPopulatedDefaultMigrationHarness applies exactly migrations 1..N-1,
+// inserts real multi-tenant rows in the historical shape, fingerprints every
+// pre-existing column named by stableProjection, applies only N, and proves N
+// neither drops nor rewrites that content before checking its filled defaults.
+func runPopulatedDefaultMigrationHarness(
+	t *testing.T,
+	version int,
+	stableProjection string,
+	seed func(context.Context, *pgxpool.Pool),
+	assertDefaults func(context.Context, *pgxpool.Pool, int),
+) {
+	t.Helper()
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, version)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database for %04d: %v", version, err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	seed(ctx, pool)
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stableProjection)
+	if beforeCount < 2 {
+		t.Fatalf("%04d precondition: populated N-1 table has %d rows, want multi-tenant rows", version, beforeCount)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stableProjection)
+	if afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("%04d changed N-1 content: count %d/%d checksum %s/%s",
+			version, beforeCount, afterCount, beforeChecksum, afterChecksum)
+	}
+	assertDefaults(ctx, pool, beforeCount)
+}
+
+func testMigration0077IdempotencyRequestBindingDefault(t *testing.T) {
+	stable := `
+		SELECT tenant_id::text, key, status, encode(COALESCE(result, ''::bytea), 'hex'),
+		       created_at::text, COALESCE(completed_at::text, '')
+		  FROM idempotency_keys
+		 ORDER BY tenant_id, key`
+	runPopulatedDefaultMigrationHarness(t, 77, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO idempotency_keys
+					       (tenant_id, key, status, result, created_at, completed_at)
+					VALUES ($1, $2, 'completed', $3,
+					        '2026-07-01T10:00:00Z'::timestamptz,
+					        '2026-07-01T10:00:01Z'::timestamptz)`,
+					tenantID, fmt.Sprintf("pre-0077-key-%d", index), []byte(fmt.Sprintf("result-%d", index))); err != nil {
+					t.Fatalf("seed pre-0077 idempotency row %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var empty, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(request_binding = ''),
+				       bool_and(request_binding IS NOT NULL)
+				  FROM idempotency_keys`).Scan(&rows, &empty, &nonnull); err != nil {
+				t.Fatalf("inspect 0077 request_binding default: %v", err)
+			}
+			if rows != want || !empty || !nonnull {
+				t.Fatalf("0077 defaults rows=%d want=%d empty=%t nonnull=%t", rows, want, empty, nonnull)
+			}
+		})
+}
+
+func testMigration0078DynamicSecretRequestBindingDefault(t *testing.T) {
+	stable := `
+		SELECT tenant_id::text, id, idempotency_key, provider, role, backend_ref,
+		       encode(sealed_preparation, 'hex'), encode(sealed_credential, 'hex'),
+		       state, issue_outbox_id::text, revocation_status,
+		       COALESCE(revoke_outbox_id::text, ''), last_error, issued_at::text,
+		       expires_at::text, hard_expires_at::text, COALESCE(revoked_at::text, ''),
+		       updated_at::text
+		  FROM dynamic_secret_leases
+		 ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 78, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				state, backendRef, credential := "pending", "", []byte{}
+				if index == 1 {
+					state, backendRef, credential = "active", "provider-handle-1", []byte("sealed-credential-1")
+				}
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO dynamic_secret_leases
+					       (tenant_id, id, idempotency_key, provider, role, backend_ref,
+					        sealed_preparation, sealed_credential, state, issue_outbox_id,
+					        issued_at, expires_at, hard_expires_at, updated_at)
+					VALUES ($1, $2, $3, 'postgresql', 'reader', $4, $5, $6, $7, $8,
+					        '2026-07-02T10:00:00Z'::timestamptz,
+					        '2026-07-02T10:30:00Z'::timestamptz,
+					        '2026-07-02T11:00:00Z'::timestamptz,
+					        '2026-07-02T10:00:02Z'::timestamptz)`,
+					tenantID, fmt.Sprintf("pre-0078-lease-%d", index), fmt.Sprintf("pre-0078-key-%d", index),
+					backendRef, []byte(fmt.Sprintf("sealed-preparation-%d", index)), credential, state, 7800+index); err != nil {
+					t.Fatalf("seed pre-0078 dynamic lease %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var empty, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(request_binding = ''),
+				       bool_and(request_binding IS NOT NULL)
+				  FROM dynamic_secret_leases`).Scan(&rows, &empty, &nonnull); err != nil {
+				t.Fatalf("inspect 0078 request_binding default: %v", err)
+			}
+			if rows != want || !empty || !nonnull {
+				t.Fatalf("0078 defaults rows=%d want=%d empty=%t nonnull=%t", rows, want, empty, nonnull)
+			}
+		})
+}
+
+func testMigration0079ManagedKeyRequestBindingDefault(t *testing.T) {
+	stable := `
+		SELECT tenant_id::text, operation_id, provider, action, key_id, algorithm,
+		       status, result_key_id, encode(public_der, 'hex'), result_state,
+		       outbox_id::text, last_error, created_at::text, updated_at::text
+		  FROM managed_key_operations
+		 ORDER BY tenant_id, operation_id`
+	runPopulatedDefaultMigrationHarness(t, 79, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx,
+					`INSERT INTO tenants (tenant_id, name) VALUES ($1, $2) ON CONFLICT (tenant_id) DO NOTHING`,
+					tenantID, fmt.Sprintf("pre-0079-tenant-%d", index)); err != nil {
+					t.Fatalf("seed pre-0079 tenant %s: %v", tenantID, err)
+				}
+				status, resultKeyID, resultState, publicDER := "queued", "", "", []byte{}
+				if index == 1 {
+					status, resultKeyID, resultState, publicDER = "completed", "key-v1", "active", []byte("public-der-1")
+				}
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO managed_key_operations
+					       (tenant_id, operation_id, provider, action, key_id, algorithm,
+					        status, result_key_id, public_der, result_state, outbox_id,
+					        last_error, created_at, updated_at)
+					VALUES ($1, $2, 'aws-kms', 'generate', '', 'ecdsa-p256',
+					        $3, $4, $5, $6, $7, '',
+					        '2026-07-03T10:00:00Z'::timestamptz,
+					        '2026-07-03T10:00:01Z'::timestamptz)`,
+					tenantID, fmt.Sprintf("pre-0079-operation-%d", index), status,
+					resultKeyID, publicDER, resultState, 7900+index); err != nil {
+					t.Fatalf("seed pre-0079 managed-key operation %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var empty, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(request_binding = ''),
+				       bool_and(request_binding IS NOT NULL)
+				  FROM managed_key_operations`).Scan(&rows, &empty, &nonnull); err != nil {
+				t.Fatalf("inspect 0079 request_binding default: %v", err)
+			}
+			if rows != want || !empty || !nonnull {
+				t.Fatalf("0079 defaults rows=%d want=%d empty=%t nonnull=%t", rows, want, empty, nonnull)
+			}
+		})
+}
+
+func testMigration0080ExternalCARequestBindingDefaults(t *testing.T) {
+	stable := `
+		SELECT id::text, tenant_id::text, COALESCE(owner_id::text, ''), subject,
+		       array_to_string(sans, ','), issuer, serial, fingerprint, key_algorithm,
+		       COALESCE(not_before::text, ''), COALESCE(not_after::text, ''),
+		       deployment_location, source, created_at::text, status,
+		       COALESCE(replaces_id::text, ''), COALESCE(revoked_at::text, ''),
+		       revocation_reason, COALESCE(renewed_at::text, ''),
+		       COALESCE(alerted_at::text, ''), issuance_idempotency_key,
+		       encode(certificate_der, 'hex')
+		  FROM certificates
+		 ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 80, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO certificates
+					       (id, tenant_id, subject, sans, issuer, serial, fingerprint,
+					        key_algorithm, not_before, not_after, deployment_location,
+					        source, created_at, status, revocation_reason,
+					        issuance_idempotency_key, certificate_der)
+					VALUES ($1, $2, $3, ARRAY[$4, $5]::text[], 'issuer-1', $6, $7,
+					        'ecdsa-p256', '2026-07-04T10:00:00Z'::timestamptz,
+					        '2026-08-04T10:00:00Z'::timestamptz, $8, 'external-ca',
+					        '2026-07-04T10:00:01Z'::timestamptz, 'active', '', $9, $10)`,
+					uuid(tenantID, 8000+index), tenantID, fmt.Sprintf("CN=pre-0080-%d", index),
+					fmt.Sprintf("pre-0080-%d.example", index), fmt.Sprintf("alt-pre-0080-%d.example", index),
+					fmt.Sprintf("serial-%d", index), fmt.Sprintf("fingerprint-%d", index),
+					fmt.Sprintf("cluster-%d", index), fmt.Sprintf("issuance-key-%d", index),
+					[]byte(fmt.Sprintf("certificate-der-%d", index))); err != nil {
+					t.Fatalf("seed pre-0080 certificate %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var bindingsEmpty, pemEmpty, responseEmpty, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(issuance_request_binding = ''),
+				       bool_and(octet_length(certificate_pem) = 0),
+				       bool_and(octet_length(issuance_response) = 0),
+				       bool_and(issuance_request_binding IS NOT NULL AND certificate_pem IS NOT NULL AND issuance_response IS NOT NULL)
+				  FROM certificates`).Scan(&rows, &bindingsEmpty, &pemEmpty, &responseEmpty, &nonnull); err != nil {
+				t.Fatalf("inspect 0080 request binding/PEM defaults: %v", err)
+			}
+			if rows != want || !bindingsEmpty || !pemEmpty || !responseEmpty || !nonnull {
+				t.Fatalf("0080 defaults rows=%d want=%d binding_empty=%t pem_empty=%t response_empty=%t nonnull=%t",
+					rows, want, bindingsEmpty, pemEmpty, responseEmpty, nonnull)
+			}
+		})
+}
+
+func testMigration0081DynamicSecretCommandBackfill(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 81)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	for index, tenantID := range []string{tenantA, tenantB} {
+		binding := "sha256:authenticated-issue-command"
+		state, backendRef, sealed := "active", "backend-ref", []byte("sealed-result")
+		if index == 1 {
+			binding, state, backendRef, sealed = "", "pending", "", []byte{}
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO dynamic_secret_leases
+			       (tenant_id, id, idempotency_key, request_binding, provider, role,
+			        backend_ref, sealed_preparation, sealed_credential, state,
+			        issue_outbox_id, issued_at, expires_at, hard_expires_at, updated_at)
+			VALUES ($1, $2, $3, $4, 'postgresql', 'reader', $5, ''::bytea, $6,
+			        $7, $8, '2026-07-11T18:00:00Z', '2026-07-11T18:30:00Z',
+			        '2026-07-11T19:00:00Z', '2026-07-11T18:00:00Z')`,
+			tenantID, fmt.Sprintf("lease-%d", index), fmt.Sprintf("issue-key-%d", index), binding,
+			backendRef, sealed, state, 8100+index); err != nil {
+			t.Fatalf("seed pre-0081 dynamic lease %s: %v", tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO secret_sync_jobs
+			       (tenant_id, id, secret_name, secret_version, target, remote_key,
+			        value_digest, status, outbox_id, idempotency_key, requested_at, updated_at)
+			VALUES ($1, $2, 'production/deploy', 1, 'github-actions', 'DEPLOY_TOKEN',
+			        $3, 'pending', $4, $5, '2026-07-11T18:00:00Z', '2026-07-11T18:00:00Z')`,
+			tenantID, fmt.Sprintf("sync-%d", index), strings.Repeat(fmt.Sprintf("%d", index+1), 64),
+			8200+index, fmt.Sprintf("secret.sync.github-actions:sync-key-%d", index)); err != nil {
+			t.Fatalf("seed pre-0081 sync job %s: %v", tenantID, err)
+		}
+	}
+	stable := `
+		SELECT tenant_id::text, id, idempotency_key, request_binding, provider, role,
+		       backend_ref, state, issue_outbox_id::text, issued_at::text,
+		       expires_at::text, hard_expires_at::text, updated_at::text
+		  FROM dynamic_secret_leases
+		 ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0081 changed lease content: count %d/%d checksum %s/%s",
+			beforeCount, afterCount, beforeChecksum, afterChecksum)
+	}
+
+	var operations, exactBinding, legacyBinding, statuses int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*),
+		       count(*) FILTER (WHERE idempotency_key = 'issue-key-0' AND request_binding = 'sha256:authenticated-issue-command'),
+		       count(*) FILTER (WHERE idempotency_key = 'issue-key-1' AND request_binding = 'legacy-unbound'),
+		       count(*) FILTER (WHERE (idempotency_key = 'issue-key-0' AND status = 'completed')
+		                            OR (idempotency_key = 'issue-key-1' AND status = 'pending'))
+		  FROM dynamic_secret_operations`).Scan(&operations, &exactBinding, &legacyBinding, &statuses); err != nil {
+		t.Fatalf("inspect 0081 operation backfill: %v", err)
+	}
+	if operations != 2 || exactBinding != 1 || legacyBinding != 1 || statuses != 2 {
+		t.Fatalf("0081 operation backfill rows=%d exact=%d legacy=%d statuses=%d", operations, exactBinding, legacyBinding, statuses)
+	}
+	var syncRows int
+	var emptyBindings bool
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*), bool_and(request_binding = '') FROM secret_sync_jobs`).Scan(&syncRows, &emptyBindings); err != nil {
+		t.Fatalf("inspect 0081 secret-sync binding default: %v", err)
+	}
+	if syncRows != 2 || !emptyBindings {
+		t.Fatalf("0081 secret-sync default rows=%d empty_bindings=%t", syncRows, emptyBindings)
+	}
+}
+
+func testMigration0082ConnectorRightSizeOperationDefaults(t *testing.T) {
+	assertMigrationUsesConcurrentIndex(t, 82, "CREATE UNIQUE INDEX CONCURRENTLY")
+	stable := `
+		SELECT id::text, tenant_id::text, playbook_id, target_identity_id,
+		       inventory_id, status, phase, action, reason, connector, target,
+		       COALESCE(outbox_id::text, ''), COALESCE(connector_delivery_id::text, ''),
+		       scope_delta::text, array_to_string(evidence_refs, ','),
+		       array_to_string(rollback_refs, ','), idempotency_key, created_by,
+		       created_at::text, updated_at::text
+		  FROM remediation_playbook_runs
+		 ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 82, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for tenantIndex, tenantID := range []string{tenantA, tenantB} {
+				for duplicate := 0; duplicate < 2; duplicate++ {
+					row := tenantIndex*2 + duplicate
+					if _, err := pool.Exec(ctx, `
+						INSERT INTO remediation_playbook_runs
+						       (id, tenant_id, playbook_id, target_identity_id, inventory_id,
+						        status, phase, action, reason, connector, target, outbox_id,
+						        connector_delivery_id, scope_delta, evidence_refs, rollback_refs,
+						        idempotency_key, created_by, created_at, updated_at)
+						VALUES ($1, $2, 'nhi-right-size', $3, $4, 'queued',
+						        'right_size_connector_intent_queued', 'right_size', $5,
+						        'least-privilege', $6, $7, $8, $9::jsonb,
+						        ARRAY[$10, $11]::text[], ARRAY[$12]::text[], $13, $14,
+						        '2026-07-06T10:00:00Z'::timestamptz,
+						        '2026-07-06T10:00:01Z'::timestamptz)`,
+						uuid(tenantID, 8200+row), tenantID, fmt.Sprintf("identity-%d", row),
+						fmt.Sprintf("identity/identity-%d", row), fmt.Sprintf("right-size reason %d", row),
+						fmt.Sprintf("service-%d", row), 8200+row, uuid(tenantID, 8250+row),
+						fmt.Sprintf(`{"remove_scopes":["write:%d"],"risk_score":%d}`, row, 80+row),
+						"nhi_posture:CAP-POST-01", fmt.Sprintf("connector_delivery:%d", row),
+						fmt.Sprintf("restore-grants-%d", row), "legacy-shared-key-"+tenantID,
+						fmt.Sprintf("operator-%d", row)); err != nil {
+						t.Fatalf("seed pre-0082 remediation row %s/%d: %v", tenantID, duplicate, err)
+					}
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var bindingEmpty, statusZero, responseEmpty, terminalEmpty, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(request_binding = ''),
+				       bool_and(initial_http_status = 0),
+				       bool_and(octet_length(initial_response) = 0),
+				       bool_and(terminal_reason = ''),
+				       bool_and(request_binding IS NOT NULL
+				                AND initial_http_status IS NOT NULL
+				                AND initial_response IS NOT NULL
+				                AND terminal_reason IS NOT NULL)
+				  FROM remediation_playbook_runs`).Scan(
+				&rows, &bindingEmpty, &statusZero, &responseEmpty, &terminalEmpty, &nonnull); err != nil {
+				t.Fatalf("inspect 0082 durable-operation defaults: %v", err)
+			}
+			if rows != want || !bindingEmpty || !statusZero || !responseEmpty || !terminalEmpty || !nonnull {
+				t.Fatalf("0082 defaults rows=%d want=%d binding=%t status=%t response=%t terminal=%t nonnull=%t",
+					rows, want, bindingEmpty, statusZero, responseEmpty, terminalEmpty, nonnull)
+			}
+			assertIndexReady(t, ctx, pool, "remediation_playbook_runs_right_size_idempotency_idx")
+		})
+}
+
+func testMigration0083OutboxEffectLaneDefault(t *testing.T) {
+	assertMigrationUsesConcurrentIndex(t, 83, "CREATE INDEX CONCURRENTLY")
+	stable := `
+		SELECT id::text, tenant_id::text, destination, encode(payload, 'hex'),
+		       idempotency_key, status, attempts::text, COALESCE(last_error, ''),
+		       next_attempt_at::text, created_at::text,
+		       COALESCE(delivered_at::text, ''), COALESCE(worker_id, ''),
+		       COALESCE(lease_until::text, '')
+		  FROM outbox
+		 ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 83, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for tenantIndex, tenantID := range []string{tenantA, tenantB} {
+				for rowIndex, status := range []string{"processing", "pending"} {
+					row := tenantIndex*2 + rowIndex
+					var workerID any
+					var leaseUntil any
+					if status == "processing" {
+						workerID = fmt.Sprintf("worker-%d", row)
+						leaseUntil = "2026-07-07T10:05:00Z"
+					}
+					if _, err := pool.Exec(ctx, `
+						INSERT INTO outbox
+						       (tenant_id, destination, payload, idempotency_key, status,
+						        attempts, last_error, next_attempt_at, created_at,
+						        worker_id, lease_until)
+						VALUES ($1, $2, $3, $4, $5, $6, $7,
+						        '2026-07-07T10:00:00Z'::timestamptz,
+						        '2026-07-07T09:59:00Z'::timestamptz, $8, $9::timestamptz)`,
+						tenantID, fmt.Sprintf("connector.receiver-%d", rowIndex),
+						[]byte(fmt.Sprintf("payload-%d", row)), fmt.Sprintf("pre-0083-key-%d", row),
+						status, row+1, fmt.Sprintf("attempt-%d", row), workerID, leaseUntil); err != nil {
+						t.Fatalf("seed pre-0083 outbox row %s/%s: %v", tenantID, status, err)
+					}
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var empty, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(effect_lane = ''),
+				       bool_and(effect_lane IS NOT NULL)
+				  FROM outbox`).Scan(&rows, &empty, &nonnull); err != nil {
+				t.Fatalf("inspect 0083 effect_lane default: %v", err)
+			}
+			if rows != want || !empty || !nonnull {
+				t.Fatalf("0083 defaults rows=%d want=%d empty=%t nonnull=%t", rows, want, empty, nonnull)
+			}
+			assertIndexReady(t, ctx, pool, "outbox_effect_lane_processing_idx")
+		})
+}
+
+func assertMigrationUsesConcurrentIndex(t *testing.T, version int, indexDDL string) {
+	t.Helper()
+	_, target := splitMigrationsAtVersion(t, version)
+	if !target.noTx {
+		t.Fatalf("%s must declare migrate: no-transaction", target.name)
+	}
+	if !strings.Contains(strings.ToUpper(target.body), strings.ToUpper(indexDDL)) {
+		t.Fatalf("%s missing online DDL %q", target.name, indexDDL)
+	}
+}
+
+func assertIndexReady(t *testing.T, ctx context.Context, pool *pgxpool.Pool, name string) {
+	t.Helper()
+	var valid, ready bool
+	if err := pool.QueryRow(ctx, `
+		SELECT i.indisvalid, i.indisready
+		  FROM pg_index i
+		  JOIN pg_class c ON c.oid = i.indexrelid
+		 WHERE c.relname = $1`, name).Scan(&valid, &ready); err != nil {
+		t.Fatalf("inspect index %s: %v", name, err)
+	}
+	if !valid || !ready {
+		t.Fatalf("index %s valid=%t ready=%t, want true/true", name, valid, ready)
+	}
 }
 
 // TestMigration0071HistoricalLifecycleCompositePKContent is the SCHEMA-007

@@ -16,6 +16,8 @@ import (
 	guuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -472,86 +474,181 @@ func (a *API) deleteNotificationRoutingPolicy(w http.ResponseWriter, r *http.Req
 //trstctl:mutation
 func (a *API) testNotificationChannel(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	channelID := r.PathValue("id")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	channelID := strings.TrimSpace(r.PathValue("id"))
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	var req notificationChannelTestRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	severity, err := normalizeNotificationSeverity(req.Severity)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	subject := strings.TrimSpace(req.Subject)
+	if subject == "" {
+		subject = "Notification channel test"
+	}
+	detail := strings.TrimSpace(req.Detail)
+	if detail == "" {
+		detail = "Operator-requested notification channel test"
+	}
+	routingPolicyID := strings.TrimSpace(req.RoutingPolicyID)
+	if routingPolicyID != "" {
+		if _, err := guuid.Parse(routingPolicyID); err != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "routing_policy_id must be a UUID"))
+			return
+		}
+	}
+	ownerEmail := strings.TrimSpace(req.OwnerEmail)
+	credentialRef := strings.TrimSpace(req.CredentialRef)
+	binding, err := notificationChannelTestBinding(principal, r.Method, r.URL.EscapedPath(), channelID, severity, subject, detail, routingPolicyID, ownerEmail, credentialRef)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	operationID := "notification.test:" + crypto.SHA256Hex([]byte(tenantID+"\x00"+idempotencyKey))
+	// Consult the event-sourced authority before the bounded API recorder claims
+	// the raw key. Otherwise a hostile changed replay after recorder GC could leave
+	// a new bound cache row that temporarily poisons the legitimate command.
+	if _, _, err := a.notificationChannelTestReplay(r.Context(), tenantID, operationID, channelID, binding, idempotencyKey); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if replay, found, err := a.notificationChannelTestReplay(ctx, tenantID, operationID, channelID, binding, idempotencyKey); err != nil {
+			return 0, nil, err
+		} else if found {
+			return http.StatusAccepted, replay, nil
+		}
 		channel, err := a.notificationChannelForTest(ctx, tenantID, channelID)
 		if err != nil {
 			return 0, nil, err
 		}
-		if a.store == nil || a.notificationOutbox == nil {
+		if a.store == nil || a.log == nil || a.notificationOutbox == nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "notification test outbox is not configured")
 		}
-		var req notificationChannelTestRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		severity, err := normalizeNotificationSeverity(req.Severity)
-		if err != nil {
-			return 0, nil, err
-		}
-		subject := strings.TrimSpace(req.Subject)
-		if subject == "" {
-			subject = "Notification channel test"
-		}
-		detail := strings.TrimSpace(req.Detail)
-		if detail == "" {
-			detail = "Operator-requested notification channel test"
-		}
-		routingPolicyID := strings.TrimSpace(req.RoutingPolicyID)
-		if routingPolicyID != "" {
-			if _, err := guuid.Parse(routingPolicyID); err != nil {
-				return 0, nil, errStatus(http.StatusBadRequest, "routing_policy_id must be a UUID")
-			}
-		}
+		configuredCredential := firstNonEmpty(credentialRef, channel.CredentialRef)
 		alert := notify.Alert{
-			Kind:            notify.KindNotificationChannelTest,
-			TenantID:        tenantID,
-			Subject:         subject,
-			Detail:          detail,
-			Severity:        severity,
-			RoutingPolicyID: routingPolicyID,
-			TargetChannel:   channel.ID,
-			OwnerEmail:      strings.TrimSpace(req.OwnerEmail),
+			Kind:                 notify.KindNotificationChannelTest,
+			TenantID:             tenantID,
+			OperationID:          operationID,
+			RequestBinding:       binding,
+			CredentialConfigured: strings.TrimSpace(configuredCredential) != "",
+			Subject:              subject,
+			Detail:               detail,
+			Severity:             severity,
+			RoutingPolicyID:      routingPolicyID,
+			TargetChannel:        channel.ID,
+			OwnerEmail:           ownerEmail,
 		}
 		payload, err := json.Marshal(alert)
 		if err != nil {
 			return 0, nil, err
 		}
-		var (
-			outboxID int64
-			queuedAt time.Time
-		)
-		err = a.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			if _, err := a.notificationOutbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-				TenantID:       tenantID,
-				Destination:    notify.DestinationTest,
-				IdempotencyKey: idempotencyKey,
-				Payload:        payload,
-			}); err != nil {
-				return err
-			}
-			return tx.QueryRow(ctx,
-				`SELECT id, created_at
-				   FROM outbox
-				  WHERE tenant_id = $1 AND idempotency_key = $2
-				  ORDER BY id
-				  LIMIT 1`,
-				tenantID, idempotencyKey).Scan(&outboxID, &queuedAt)
+		command, err := json.Marshal(projections.NotificationTestQueued{
+			ID: operationID, RequestBinding: binding, ChannelID: channel.ID,
+			Destination:          notify.DestinationTest,
+			EffectLane:           notify.DestinationTest + ":channel:" + channel.ID,
+			CredentialConfigured: alert.CredentialConfigured,
+			Payload:              append(json.RawMessage(nil), payload...),
 		})
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusAccepted, notificationChannelTestResponse{
-			ChannelID:      channel.ID,
-			Destination:    notify.DestinationTest,
-			OutboxID:       outboxID,
-			Status:         "queued",
-			CredentialRef:  redactCredentialRef(firstNonEmpty(req.CredentialRef, channel.CredentialRef)),
-			SecretHandling: "credential reference redacted; tenant channel endpoint metadata is read only by the delivery worker",
-			IdempotencyKey: idempotencyKey,
-			QueuedAt:       queuedAt.UTC(),
-		}, nil
+		ev, err := a.log.Append(ctx, events.Event{
+			ID:       "notification.test.queued:" + strings.TrimPrefix(operationID, "notification.test:"),
+			Type:     projections.EventNotificationTestQueued,
+			TenantID: tenantID,
+			Data:     command,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := projections.New(a.store).Apply(ctx, ev); err != nil {
+			if errors.Is(err, store.ErrIdempotencyConflict) {
+				return 0, nil, orchestrator.ErrIdempotencyConflict
+			}
+			return 0, nil, err
+		}
+		authoritative, err := a.store.GetNotificationTestOperation(ctx, tenantID, operationID)
+		if err != nil {
+			return 0, nil, err
+		}
+		if !crypto.ConstantTimeEqual([]byte(authoritative.RequestBinding), []byte(binding)) {
+			return 0, nil, orchestrator.ErrIdempotencyConflict
+		}
+		return http.StatusAccepted, notificationChannelTestOperationResponse(authoritative, idempotencyKey), nil
 	})
+}
+
+func (a *API) notificationChannelTestReplay(ctx context.Context, tenantID, operationID, channelID, binding, rawKey string) (notificationChannelTestResponse, bool, error) {
+	if a.store == nil {
+		return notificationChannelTestResponse{}, false, nil
+	}
+	op, err := a.store.GetNotificationTestOperation(ctx, tenantID, operationID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notificationChannelTestResponse{}, false, nil
+	}
+	if err != nil {
+		return notificationChannelTestResponse{}, false, err
+	}
+	if op.ID != operationID || op.Destination != notify.DestinationTest ||
+		op.ChannelID != channelID ||
+		!crypto.ConstantTimeEqual([]byte(op.RequestBinding), []byte(binding)) {
+		return notificationChannelTestResponse{}, false, errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated notification command")
+	}
+	return notificationChannelTestOperationResponse(op, rawKey), true, nil
+}
+
+func notificationChannelTestOperationResponse(op store.NotificationTestOperation, rawKey string) notificationChannelTestResponse {
+	credentialRef := ""
+	if op.CredentialConfigured {
+		credentialRef = "redacted"
+	}
+	return notificationChannelTestResponse{
+		ChannelID: op.ChannelID, Destination: op.Destination, OutboxID: op.OutboxID,
+		Status: "queued", CredentialRef: credentialRef,
+		SecretHandling: "credential reference redacted; tenant channel endpoint metadata is read only by the delivery worker",
+		IdempotencyKey: rawKey, QueuedAt: op.QueuedAt.UTC(),
+	}
+}
+
+func notificationChannelTestBinding(principal, method, path, channelID, severity, subject, detail, routingPolicyID, ownerEmail, credentialRef string) (string, error) {
+	command := struct {
+		Operation       string `json:"operation"`
+		Principal       string `json:"principal"`
+		Method          string `json:"method"`
+		Path            string `json:"path"`
+		ChannelID       string `json:"channel_id"`
+		Severity        string `json:"severity"`
+		Subject         string `json:"subject"`
+		Detail          string `json:"detail"`
+		RoutingPolicyID string `json:"routing_policy_id"`
+		OwnerEmail      string `json:"owner_email"`
+		CredentialRef   string `json:"credential_ref"`
+	}{
+		Operation: "notification.channel_test", Principal: principal,
+		Method: method, Path: path, ChannelID: channelID, Severity: severity,
+		Subject: subject, Detail: detail, RoutingPolicyID: routingPolicyID, OwnerEmail: ownerEmail,
+		CredentialRef: credentialRef,
+	}
+	encoded, err := json.Marshal(command)
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(encoded)
+	return crypto.SHA256Hex(encoded), nil
 }
 
 func (a *API) listNotifications(w http.ResponseWriter, r *http.Request) {

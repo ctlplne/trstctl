@@ -17,11 +17,14 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc/credentials"
+
+	boundary "trstctl.com/trstctl/internal/crypto"
 )
 
 // (crypto/tls is already imported above for the ClientCertSource/credentials path;
@@ -56,6 +59,9 @@ func GenerateAgentKey(commonName string) (*AgentIdentity, error) {
 // CSR returns a PKCS#10 certificate request (DER) for this identity's key. Only
 // the CSR — carrying the public key, never the private key — is sent to the CA.
 func (a *AgentIdentity) CSR() ([]byte, error) {
+	if a == nil || a.key == nil {
+		return nil, errors.New("mtls: agent identity is destroyed")
+	}
 	return x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
 		Subject: pkix.Name{CommonName: a.commonName},
 	}, a.key)
@@ -64,6 +70,9 @@ func (a *AgentIdentity) CSR() ([]byte, error) {
 // UseCertificate adopts the certificate chain (PEM) the CA issued for this
 // identity's CSR, after verifying the leaf carries this identity's public key.
 func (a *AgentIdentity) UseCertificate(chainPEM []byte) error {
+	if a == nil || a.key == nil {
+		return errors.New("mtls: agent identity is destroyed")
+	}
 	var ders [][]byte
 	rest := chainPEM
 	for {
@@ -96,6 +105,9 @@ func (a *AgentIdentity) UseCertificate(chainPEM []byte) error {
 // ClientCertificate implements ClientCertSource, presenting this identity's
 // certificate for a TLS handshake.
 func (a *AgentIdentity) ClientCertificate() (*tls.Certificate, error) {
+	if a == nil || a.key == nil {
+		return nil, errors.New("mtls: agent identity is destroyed")
+	}
 	if a.leaf == nil {
 		return nil, errors.New("mtls: agent identity has no certificate yet")
 	}
@@ -127,11 +139,16 @@ func (a *AgentIdentity) CertificatePEM() []byte { return a.chainPEM }
 // Save persists the private key (0600) and certificate chain to keyPath and
 // certPath. The key stays on the host; it is never transmitted.
 func (a *AgentIdentity) Save(keyPath, certPath string) error {
+	if a == nil || a.key == nil {
+		return errors.New("mtls: agent identity is destroyed")
+	}
 	der, err := x509.MarshalPKCS8PrivateKey(a.key)
 	if err != nil {
 		return err
 	}
+	defer wipeBytes(der)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	defer wipeBytes(keyPEM)
 	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return fmt.Errorf("mtls: write key: %w", err)
 	}
@@ -148,10 +165,12 @@ func LoadAgentIdentity(commonName, keyPath, certPath string) (*AgentIdentity, er
 	if err != nil {
 		return nil, err
 	}
+	defer wipeBytes(keyPEM)
 	block, _ := pem.Decode(keyPEM)
 	if block == nil {
 		return nil, errors.New("mtls: stored key is not PEM")
 	}
+	defer wipeBytes(block.Bytes)
 	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("mtls: parse stored key: %w", err)
@@ -162,13 +181,44 @@ func LoadAgentIdentity(commonName, keyPath, certPath string) (*AgentIdentity, er
 	}
 	chainPEM, err := os.ReadFile(certPath)
 	if err != nil {
+		wipeAgentKey(key)
 		return nil, err
 	}
 	a := &AgentIdentity{commonName: commonName, key: key}
 	if err := a.UseCertificate(chainPEM); err != nil {
+		a.Destroy()
 		return nil, err
 	}
 	return a, nil
+}
+
+// Destroy zeroes the client private scalar and releases the certificate copies.
+// It is idempotent. Short-lived upstream-CA clients call this after their final
+// TLS connection is closed so an mTLS credential is not retained in heap memory.
+func (a *AgentIdentity) Destroy() {
+	if a == nil {
+		return
+	}
+	wipeAgentKey(a.key)
+	a.key = nil
+	wipeBytes(a.chainPEM)
+	for _, der := range a.chainDER {
+		wipeBytes(der)
+	}
+	a.chainPEM = nil
+	a.chainDER = nil
+	a.leaf = nil
+}
+
+func wipeAgentKey(key *ecdsa.PrivateKey) {
+	boundary.WipeECDSAPrivateKey(key)
+}
+
+func wipeBytes(value []byte) {
+	for i := range value {
+		value[i] = 0
+	}
+	runtime.KeepAlive(value)
 }
 
 // SignClientCSR signs a PKCS#10 CSR as a short-lived agent client certificate

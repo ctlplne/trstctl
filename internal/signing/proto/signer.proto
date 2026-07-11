@@ -54,6 +54,18 @@ service SignerService {
   // DestroyKey zeroizes and forgets a key handle. It is idempotent.
   rpc DestroyKey(DestroyKeyRequest) returns (DestroyKeyResponse);
 
+  // ManageKey performs a remote-custody lifecycle command in this isolated
+  // signer process. The control plane sends only tenant-scoped public metadata
+  // and an outbox-derived operation id; provider credentials and the private
+  // key remain signer-side. operation_id makes a redelivered outbox command
+  // return the original public result instead of repeating a provider action.
+  rpc ManageKey(ManageKeyRequest) returns (ManageKeyResponse);
+
+  // SignManagedKey signs a digest with a tenant-bound provider key. The
+  // ownership lookup and provider private-key operation both run inside this
+  // isolated signer process; callers provide only public routing metadata.
+  rpc SignManagedKey(SignManagedKeyRequest) returns (SignManagedKeyResponse);
+
   // Health reports liveness and readiness. It returns no secret material.
   rpc Health(HealthRequest) returns (HealthResponse);
 
@@ -149,6 +161,7 @@ enum KeyPurpose {
   KEY_PURPOSE_SSH_CERT = 3;    // sign SSH certificates
   KEY_PURPOSE_CODE_SIGN = 4;   // produce code-signing signatures
   KEY_PURPOSE_GENERIC = 5;     // unclassified signing (e.g. test/CSR self-sign)
+  KEY_PURPOSE_ACME_ACCOUNT = 6; // sign ACME account JWS requests only
 }
 
 // KeyHandle is an opaque, unguessable reference to a private key held by the
@@ -210,10 +223,16 @@ message SignRequest {
   // signing tuple. It stays byte-native across the gRPC boundary so callers and the
   // signer can wipe their owned buffers after use.
   bytes authorization_token = 6;
+  // operation_id binds a durable control-plane command to one exact signer
+  // result. A persistent signer journals the request tuple and signature before
+  // replying; redelivery returns the original bytes and a changed tuple is
+  // rejected. Empty preserves the ordinary non-journaled Sign behavior.
+  string operation_id = 7;
 }
 
 message SignResponse {
   bytes signature = 1;
+  bool replayed = 2;
 }
 
 message SignArtifactRequest {
@@ -286,6 +305,62 @@ message DestroyKeyRequest {
 }
 
 message DestroyKeyResponse {}
+
+enum ManagedKeyAction {
+  MANAGED_KEY_ACTION_UNSPECIFIED = 0;
+  MANAGED_KEY_ACTION_GENERATE = 1;
+  MANAGED_KEY_ACTION_ROTATE = 2;
+  MANAGED_KEY_ACTION_REVOKE = 3;
+  MANAGED_KEY_ACTION_ZEROIZE = 4;
+}
+
+message ManageKeyRequest {
+  // tenant_id is part of the durable signer-side ownership binding. It is
+  // public routing metadata, not provider credential material.
+  string tenant_id = 1;
+  // provider selects one signer-local configured backend (aws-kms,
+  // azure-key-vault, gcp-kms, pkcs11, tpm2, or yubihsm2).
+  string provider = 2;
+  // operation_id is the durable control-plane outbox idempotency identity.
+  string operation_id = 3;
+  ManagedKeyAction action = 4;
+  // key_id is empty for generate and required for rotate/revoke/zeroize.
+  string key_id = 5;
+  Algorithm algorithm = 6;
+}
+
+message ManageKeyResponse {
+  string provider = 1;
+  string key_id = 2;
+  Algorithm algorithm = 3;
+  bytes public_key = 4;
+  // state is one of active, revoked, or zeroized.
+  string state = 5;
+  // replayed is true when the signer returned a durable completed operation
+  // rather than touching the provider again.
+  bool replayed = 6;
+}
+
+message SignManagedKeyRequest {
+  string tenant_id = 1;
+  string provider = 2;
+  string key_id = 3;
+  Algorithm algorithm = 4;
+  bytes digest = 5;
+  Hash hash = 6;
+  RSAPadding rsa_padding = 7;
+  // Every managed-key private operation requires an independently minted,
+  // short-lived authorization over the complete request tuple. The signer
+  // validates expiry and consumes nonce durably before calling the provider.
+  KeyPurpose purpose = 8;
+  int64 authorization_expires_unix = 9;
+  bytes authorization_nonce = 10;
+  bytes authorization_token = 11;
+}
+
+message SignManagedKeyResponse {
+  bytes signature = 1;
+}
 
 message HealthRequest {}
 

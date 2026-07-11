@@ -3,6 +3,7 @@
 package yubihsm_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -18,13 +19,17 @@ import (
 // connector-assigned identifiers, exactly as a real device would mint. No crypto/* here —
 // the double stays behind the AN-3 boundary just like the production binding will.
 type softConnector struct {
-	mu   sync.Mutex
-	keys map[string]*crypto.LockedSigner
-	n    int
+	mu         sync.Mutex
+	keys       map[string]*crypto.LockedSigner
+	revoked    map[string]bool
+	operations map[string]string
+	n          int
 }
 
 func newSoftConnector() *softConnector {
-	return &softConnector{keys: map[string]*crypto.LockedSigner{}}
+	return &softConnector{
+		keys: map[string]*crypto.LockedSigner{}, revoked: map[string]bool{}, operations: map[string]string{},
+	}
 }
 
 func (c *softConnector) GenerateKey(alg crypto.Algorithm) (string, []byte, error) {
@@ -40,15 +45,69 @@ func (c *softConnector) GenerateKey(alg crypto.Algorithm) (string, []byte, error
 	return handle, ls.Public().DER, nil
 }
 
+func (c *softConnector) GenerateKeyForOperation(operationID string, alg crypto.Algorithm) (string, []byte, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if handle := c.operations[operationID]; handle != "" {
+		key := c.keys[handle]
+		if key == nil {
+			return "", nil, fmt.Errorf("yubihsm device: reconciled object %q not found", handle)
+		}
+		return handle, key.Public().DER, nil
+	}
+	ls, err := crypto.GenerateLockedKey(alg)
+	if err != nil {
+		return "", nil, err
+	}
+	c.n++
+	handle := fmt.Sprintf("0x%04x", c.n)
+	c.keys[handle] = ls
+	c.operations[operationID] = handle
+	return handle, ls.Public().DER, nil
+}
+
 func (c *softConnector) SignDigest(handle string, digest []byte, opts crypto.SignOptions) ([]byte, error) {
 	c.mu.Lock()
 	ls := c.keys[handle]
+	revoked := c.revoked[handle]
 	c.mu.Unlock()
 	if ls == nil {
 		// Mirror a device rejecting an unknown object: fail closed.
 		return nil, fmt.Errorf("yubihsm device: object %q not found", handle)
 	}
+	if revoked {
+		return nil, fmt.Errorf("yubihsm device: object %q is revoked", handle)
+	}
 	return ls.SignDigest(digest, opts)
+}
+
+func (c *softConnector) RevokeKey(handle string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.keys[handle] == nil {
+		return nil
+	}
+	c.revoked[handle] = true
+	return nil
+}
+
+func (c *softConnector) ZeroizeKey(handle string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if key := c.keys[handle]; key != nil {
+		key.Destroy()
+		delete(c.keys, handle)
+	}
+	delete(c.revoked, handle)
+	return nil
+}
+
+func (c *softConnector) RevokeKeyForOperation(_ string, handle string) error {
+	return c.RevokeKey(handle)
+}
+
+func (c *softConnector) ZeroizeKeyForOperation(_ string, handle string) error {
+	return c.ZeroizeKey(handle)
 }
 
 func (c *softConnector) Close() error {
@@ -97,5 +156,55 @@ func TestSignUnknownHandleFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "yubihsm") {
 		t.Fatalf("error not attributed to the backend: %v", err)
+	}
+}
+
+func TestYubiHSMOperationIdentityReconcilesCreateRevokeAndZeroize(t *testing.T) {
+	connector := newSoftConnector()
+	t.Cleanup(func() { _ = connector.Close() })
+	backend := yubihsm.New(connector)
+	var lifecycle crypto.OperationAwareRemoteKeyLifecycle = backend
+	ctx := context.Background()
+
+	first, firstRef, err := lifecycle.GenerateManagedKeyForOperation(ctx, "yubihsm-create-op", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, replayedRef, err := yubihsm.New(connector).GenerateManagedKeyForOperation(ctx, "yubihsm-create-op", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayedRef != firstRef || connector.n != 1 || !crypto.ConstantTimeEqual(first.Public().DER, replayed.Public().DER) {
+		t.Fatalf("create reconciliation refs=%+v/%+v device effects=%d", firstRef, replayedRef, connector.n)
+	}
+	if err := lifecycle.RevokeKeyForOperation(ctx, "yubihsm-revoke-op", firstRef); err != nil {
+		t.Fatal(err)
+	}
+	if err := lifecycle.RevokeKeyForOperation(ctx, "yubihsm-revoke-op", firstRef); err != nil {
+		t.Fatalf("reconcile revoke: %v", err)
+	}
+	if _, err := first.Sign([]byte("revoked"), crypto.SignOptions{Hash: crypto.SHA256}); err == nil {
+		t.Fatal("reconciled revoke still signs")
+	}
+
+	successor, successorRef, err := lifecycle.RotateKeyForOperation(ctx, "yubihsm-rotate-op", firstRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayedSuccessor, replayedSuccessorRef, err := lifecycle.RotateKeyForOperation(ctx, "yubihsm-rotate-op", firstRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayedSuccessorRef != successorRef || connector.n != 2 || !crypto.ConstantTimeEqual(successor.Public().DER, replayedSuccessor.Public().DER) {
+		t.Fatalf("rotate reconciliation refs=%+v/%+v device effects=%d", successorRef, replayedSuccessorRef, connector.n)
+	}
+	if err := lifecycle.ZeroizeKeyForOperation(ctx, "yubihsm-zeroize-op", successorRef); err != nil {
+		t.Fatal(err)
+	}
+	if err := lifecycle.ZeroizeKeyForOperation(ctx, "yubihsm-zeroize-op", successorRef); err != nil {
+		t.Fatalf("reconcile zeroize: %v", err)
+	}
+	if _, err := successor.Sign([]byte("zeroized"), crypto.SignOptions{Hash: crypto.SHA256}); err == nil {
+		t.Fatal("reconciled zeroize still signs")
 	}
 }

@@ -6,12 +6,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/projections"
@@ -170,7 +174,7 @@ func (c tenantHTTPChannel) Notify(ctx context.Context, alert Alert) error {
 		return fmt.Errorf("tenant channel %q: request failed", c.id)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
+	_ = secret.DrainBounded(resp.Body, 1024)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("tenant channel %q: endpoint returned HTTP %d", c.id, resp.StatusCode)
 	}
@@ -221,6 +225,76 @@ func (l *StoreThresholdDedupLedger) RecordThresholdNotificationOnChannel(ctx con
 	}
 	ev, err := l.log.Append(ctx, events.Event{
 		Type: projections.EventNotificationThresholdDelivered, TenantID: rec.TenantID, Data: payload,
+	})
+	if err != nil {
+		return err
+	}
+	return l.projector.Apply(ctx, ev)
+}
+
+// StoreDeliveryReceiptLedger adapts the event-sourced per-channel delivery
+// projection to Dispatcher. Unlike the bounded outbox and API response caches,
+// these receipts rebuild from the immutable event log.
+type StoreDeliveryReceiptLedger struct {
+	store     *store.Store
+	log       *events.Log
+	projector *projections.Projector
+}
+
+// NewStoreDeliveryReceiptLedger builds a durable notification delivery ledger.
+func NewStoreDeliveryReceiptLedger(s *store.Store, log *events.Log) *StoreDeliveryReceiptLedger {
+	var projector *projections.Projector
+	if s != nil {
+		projector = projections.New(s)
+	}
+	return &StoreDeliveryReceiptLedger{store: s, log: log, projector: projector}
+}
+
+// HasNotificationDelivery returns true only when the deterministic receipt has
+// the exact receiver-command binding supplied by the current outbox message.
+func (l *StoreDeliveryReceiptLedger) HasNotificationDelivery(ctx context.Context, want NotificationDeliveryReceipt) (bool, error) {
+	if l == nil || l.store == nil {
+		return false, nil
+	}
+	got, err := l.store.GetNotificationDeliveryReceipt(ctx, want.TenantID, want.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if got.TenantID != want.TenantID || got.ID != want.ID ||
+		got.Destination != want.Destination || got.Channel != want.Channel ||
+		!crypto.ConstantTimeEqual([]byte(got.NotificationKeyDigest), []byte(want.NotificationKeyDigest)) ||
+		!crypto.ConstantTimeEqual([]byte(got.PayloadDigest), []byte(want.PayloadDigest)) {
+		return false, fmt.Errorf("%w: notification delivery receipt binding differs", store.ErrIdempotencyConflict)
+	}
+	return true, nil
+}
+
+// RecordNotificationDelivery appends and immediately projects one successful
+// per-channel receiver effect. Event id and receipt id are deterministic, so a
+// crash after append or projection converges on the same row.
+func (l *StoreDeliveryReceiptLedger) RecordNotificationDelivery(ctx context.Context, rec NotificationDeliveryReceipt) error {
+	if l == nil || l.store == nil {
+		return nil
+	}
+	if l.log == nil || l.projector == nil {
+		return fmt.Errorf("notify: delivery receipt ledger requires event log and projector")
+	}
+	payload, err := json.Marshal(projections.NotificationDeliveryRecorded{
+		ID: rec.ID, Destination: rec.Destination,
+		NotificationKeyDigest: rec.NotificationKeyDigest, PayloadDigest: rec.PayloadDigest,
+		Channel: rec.Channel, OutboxID: rec.OutboxID, Attempts: rec.Attempts,
+		DeliveredAt: rec.DeliveredAt,
+	})
+	if err != nil {
+		return err
+	}
+	ev, err := l.log.Append(ctx, events.Event{
+		ID:   "notification.delivery.recorded:" + strings.TrimPrefix(rec.ID, "notification.delivery:"),
+		Type: projections.EventNotificationDeliveryRecorded, TenantID: rec.TenantID,
+		Time: rec.DeliveredAt, Data: payload,
 	})
 	if err != nil {
 		return err

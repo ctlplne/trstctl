@@ -23,7 +23,7 @@ describe("U1-4 closed-loop deployment receipts", () => {
     const deliveries = [
       delivery({ id: "d1", connector: "nginx", target: "edge/prod", status: "delivered" }),
       delivery({ id: "d2", connector: "f5", target: "dc/lb", status: "failed", rollback_ref: "restore-123" }),
-      delivery({ id: "d3", connector: "acm", target: "aws/use1", status: "unrouted" }),
+      delivery({ id: "d3", connector: "acm", target: "aws/use1", status: "queued", attempts: 0 }),
     ];
     render(<DeploymentReceipts deliveries={deliveries} />);
     const list = screen.getByRole("list", { name: "Connector delivery receipts" });

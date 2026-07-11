@@ -59,6 +59,7 @@ receipt cannot certify it.
 | F33 | Just-in-time issuance with approval flows | docs/features/incident-and-jit.md |
 | F38 | Ephemeral API key issuance | docs/features/secrets.md |
 | F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
+| F29 | Notification integrations | docs/features/policy-and-governance.md |
 | F8 | RBAC | docs/features/policy-and-governance.md |
 | F9 | Audit log surfaces | docs/features/policy-and-governance.md, docs/observability.md, docs/configuration.md |
 | F10 | REST API | docs/features/platform-and-api.md |
@@ -90,13 +91,17 @@ receipt cannot certify it.
 | F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
 | F24 | SPIFFE Workload API | docs/features/workload-identity.md |
 | F43 | SSH certificate authority | docs/features/ssh.md |
+| F50 | Code-signing service | docs/features/code-signing-and-timestamping.md |
 | F51 | Timestamping authority | docs/features/code-signing-and-timestamping.md |
 | F26 | HSM integration | docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, docs/limitations.md |
+| F7 | Deployment connectors initial set | docs/features/deployment-connectors.md |
+| F27 | Additional deployment connectors | docs/features/deployment-connectors.md |
 | F31 | Credential compromise workflow | docs/features/incident-and-jit.md, docs/features/discovery-and-inventory.md |
 | F32 | Fleet re-issuance for CA compromise | docs/features/incident-and-jit.md |
 | F37 | Secret rotation engine | docs/features/secrets.md |
 | F39 | Code/CI secret scanning bridge | docs/features/secrets.md |
 | F63 | Native secret store | docs/features/secrets.md |
+| F65 | Dynamic secrets | docs/features/secrets.md |
 | F67 | PKI as a secrets engine | docs/features/secrets.md |
 | F58 | Platform auth-method framework | docs/features/secrets.md |
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
@@ -119,16 +124,11 @@ receipt cannot certify it.
 | F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 | F68 | Secret sync / platform integrations | docs/features/secrets.md |
-| F29 | Notification integrations | docs/features/policy-and-governance.md |
 
 ### Library-only
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F7 | Deployment connectors initial set | docs/features/deployment-connectors.md |
-| F27 | Additional deployment connectors | docs/features/deployment-connectors.md |
-| F50 | Code-signing service | docs/features/code-signing-and-timestamping.md |
-| F65 | Dynamic secrets | docs/features/secrets.md |
 
 ### Roadmap
 
@@ -161,25 +161,22 @@ never live in the API process. What you can do end to end against the running bi
   configured alert window, writes `notification.expiry` outbox work, stamps
   `alerted_at` in the same transaction so one certificate does not spam, and the
   served outbox worker dispatches the alert through operator-wired Slack, Teams,
-  email, SMS, SIEM, or webhook channels. PagerDuty and OpsGenie implementations are
-  library-only until the production notification dispatcher constructs them. The payload and notification inbox
+  email, SMS, SIEM, webhook, PagerDuty Events v2, or OpsGenie Alert v2 channels. The
+  shipped production dispatcher constructs both incident channels from operator
+  configuration, holds their credentials in locked memory, and wipes them on shutdown.
+  The payload and notification inbox
   include the certificate owner plus active approver escalation recipients, severity,
   and threshold-day metadata. This is runtime delivery, not a tenant
   channel-management API.
 - **Deployment connector orchestration** serves target metadata, identity binding,
-  outbox intent, receipts, and provenance-verified signed WASM connector dispatch.
-  The 24 native connector packages are **library-only**: `buildRunDeps` does not
-  construct `Deps.ConnectorRegistry`, and there is no operator configuration that
-  can fill an exported field of the internal server package. Endpoint-binding issue
-  and renewal flows create
-  credential-bearing `connector.deploy` payloads while the generated key is still in
-  memory, then wipe the exported process buffer after the intent is recorded. Those
-  payloads carry `cert_pem` and `key_pem`, are delivered at-least-once to the
-  registered connector, and record `delivered` or `failed` receipts without
-  returning PEM/key bytes. A later
-  metadata-only operator deploy action still records an `unrouted` receipt instead
-  of pretending it deployed bytes the control plane no longer has.
-  The code inventory is 24 native connectors, not 24 served backends: nginx, Apache, Caddy, Envoy, IIS,
+  outbox intent, receipts, provenance-verified WASM dispatch, and all 24 advertised native connectors.
+  `buildRunDeps` constructs the operator-selected production
+  registry; strict target schemas bind endpoint/filesystem/process policy and
+  same-tenant secret references before a served issue/deploy route can enqueue work.
+  Credential-bearing `connector.deploy` payloads exist only while the generated key
+  is needed, travel through the durable outbox, and are wiped after delivery. The DoD
+  proof requires provider-specific mutation plus independent external readback before
+  a connector is counted served. The inventory is nginx, Apache, Caddy, Envoy, IIS,
   HAProxy, F5, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, Postfix,
   Traefik, AWS ACM, Azure Key Vault, GCP Certificate Manager, Java keystore,
   PostgreSQL, MySQL, RabbitMQ, Elasticsearch, and Tomcat.
@@ -235,11 +232,13 @@ never live in the API process. What you can do end to end against the running bi
   `POST /api/v1/remediation/owner-actions/{id}/accept`: a bound owner can accept the
   CAP-POST-01 least-privilege recommendation, and trstctl records the same
   `remediation.playbook_run.recorded` evidence plus a `connector.right_size` outbox
-  intent. The shipped dispatcher currently acknowledges that unknown kind without
-  applying an entitlement change or advancing the API-created queued receipt. That
-  queued receipt is not external-effect evidence. Therefore the recommendation and
-  evidence spine is available when licensed, but the advertised entitlement mutation
-  is not served.
+  intent. When the operator configures the matching tenant/connector binding, the
+  shipped dispatcher authenticates to the entitlement service with a tenant-secret
+  reference, sends the stable outbox idempotency key, applies the requested scope
+  removal, reads the effective scopes back independently, and advances the queued
+  connector receipt to delivered or failed. An absent binding and every unknown
+  `connector.*` outbox kind fail closed. The rule is simple: a queued receipt is not
+  external-effect evidence. Only the verified delivered receipt is.
   SIEM/SOAR/chat/ITSM response dispatch is served through
   `POST /api/v1/incidents/response-integrations/dispatch`, which records
   `response.integration.dispatched` and queues Splunk HEC, Jira issue, configured Slack
@@ -416,11 +415,11 @@ redacted evidence refs rather than the raw subject.
 
 ## Built and tested, but not yet served by the binary
 
-F7, F27, F50, and F65 currently use `served_state=library` and appear under
-**Library-only** in the matrix above. These rows have implementation and tests, but
-the production assembly does not yet provide the advertised usable path. They move
-out of this bucket only when their exact wiring-census entries are `SERVED +
-REQUIRED`; package existence or a test-created registry is not enough.
+No current feature-map row is in this bucket. The empty matrix section is deliberate:
+future **library code** that is built and tested but **not yet wired into the served
+API** must be listed there as **library-only** until its required wiring-census proof
+passes. Phase 2 residual breadth remains under Partial or Roadmap instead of being
+quietly promoted.
 
 ## Conditional, partial, and residual boundaries
 
@@ -452,12 +451,14 @@ integration work.
   same authority policy, records `ca.authority.rekeyed`, and keeps the stable issue
   URL live. Offline-root re-key and cross-signing remain operator workflows until
   their served routes ship (see the [key-ceremony runbook](runbooks/key-ceremony.md)).
-- **14 CA integrations are code inventory, not served backends.** The built-in CA
-  issuance spine is served, but `buildRunDeps` does not construct
-  `Deps.ExternalCAs`, and the binary has no external-CA credential configuration
-  surface yet. The library packages are AD CS, AWS PCA, Azure Key Vault, DigiCert,
-  EJBCA, Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA,
-  Smallstep, Vault PKI, and Venafi TPP/TLS Protect.
+- **All 14 external CA integrations are served when configured.** `buildRunDeps`
+  constructs tenant-bound AD CS, AWS PCA, Azure Key Vault, DigiCert, EJBCA, Entrust,
+  GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA, Smallstep, Vault PKI,
+  and Venafi TPP/TLS Protect clients. The authenticated served issue route journals
+  the request before the upstream call, and the DoD proof independently validates
+  the returned chain for every provider. F4 remains partial only because its separate
+  Kubernetes CSR/TrustBundle posture rows are still residual, not because CA breadth
+  is library-only.
 - **Discovery collectors with residual connector-owned execution**: SSH host-key scanning
   is served through the discovery outbox worker, and on-host SSH/private-key inventory is
   served through the agent mTLS inventory report path. Connector-specific external
@@ -541,11 +542,11 @@ the running binary serves**:
   replacement issue/deploy, compromised-issuer fleet reissuance, revocation queue,
   connector receipt, rollback evidence, automated remediation playbooks,
   SIEM/SOAR/chat/ITSM response dispatch, and sealed audit bundle), and the existing
-  **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only / library-only**
-  surfaces remain labeled here until they receive their own served UI: online
-  break-glass issuance workflows (with API-served break-glass reconciliation but no
-  always-online issuance workflow), secret-sync dispatch, connector-driven deploy actions, discovery
-  scan scheduling, and very-large-list cursor/virtualized browsing.
+  **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only** surfaces
+  remain labeled until they receive their own served UI, including the bounded
+  break-glass reconciliation workflow and very-large-list cursor/virtualized browsing.
+  This is a UI boundary, not a claim that the corresponding served API is
+  library-only.
 - **Console UX hardening.** A **destructive-transition confirmation**
   (revoke/retire require an explicit, credential-named confirm dialog) and
   **429/`Retry-After` handling** (the API client surfaces a concrete "retry in Ns"
@@ -687,18 +688,21 @@ writing a new token file and restarting the control plane so the new hash is loa
     secret store and dynamic PKI secret; it does not implement Vault mount
     management, Vault ACL policy authoring, cubbyhole, response wrapping, Vault
     transit paths, or every Vault/OpenBao secret engine;
-  - **dynamic-secret routes exist, but the eight providers are library-only** (F65).
+  - **dynamic secrets are served when tenant providers are configured** (F65).
     `POST /api/v1/secrets/leases`,
     `GET /api/v1/secrets/leases/{lease_id}`,
     `POST /api/v1/secrets/leases/{lease_id}/renew`, and
     `POST /api/v1/secrets/leases/{lease_id}/revoke` — issue returns the backend
     credential once, later reads return metadata only, renew extends an active lease,
-    revoke closes it, and the leaseworker can expire leases through an outbox-backed
-    backend revocation queue. In the shipped assembly `Deps.DynamicSecretProviders`
-    is empty, so issuance returns unavailable rather than a credential. The code inventory covers
+    revoke closes it, and the leaseworker expires leases through an outbox-backed
+    backend revocation queue. `buildRunDeps` constructs a tenant-bound registry for
     `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`, `azure-entra`,
-    `kubernetes`, and `redis`; there is not yet an operator configuration path that
-    constructs those providers;
+    `kubernetes`, and `redis` from operator endpoint, role, egress, and credential
+    references. Issuance itself is also outbox-only: the pending event and sealed
+    command commit first, provider retries reuse one stable lease identity, and only
+    the authorized issue response opens the sealed credential. The DoD proof logs in
+    with each generated credential, rotates it, revokes both copies, and verifies both
+    are rejected afterward;
   - **secret rotation** (F37) backs `POST /api/v1/secrets/rotations` — the running
     control plane drives the four-phase stage, cutover, verify, retire flow through
     concrete PostgreSQL, MySQL, and AWS IAM rotators, `connector:<target>` secret-sync
@@ -726,12 +730,15 @@ writing a new token file and restarting the control plane so the new hash is loa
   The running binary mounts `POST /api/v1/secrets/syncs` and `trstctl-cli secrets syncs
   run`. A request reads one stored secret, writes a sealed tenant-scoped outbox row
   before any external write, records immutable sync intent, and returns metadata
-  only. `buildRunDeps` does not construct `Deps.SecretSyncTargets`, so the shipped
-  route cannot deliver to a native pusher yet. The code inventory covers
+  only. `buildRunDeps` constructs tenant-bound targets for
   AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab
   CI/CD variables, Vercel project environment variables, generic CI JSON endpoints, and
-  Kubernetes Secrets. `GET /api/v1/secrets/syncs/targets` shows the built-in catalog,
-  but none are production-configured today. `GET /api/v1/secrets/cloud-secret-managers` and
+  Kubernetes Secrets from operator configuration. Only the outbox dispatcher resolves
+  the target credential and writes externally. The DoD proof enforces exact target
+  authentication, decrypts GitHub's X25519 sealed box in a separate receiver process,
+  and independently reads every destination value back. `GET
+  /api/v1/secrets/syncs/targets` shows both the catalog and this installation's
+  configured targets. `GET /api/v1/secrets/cloud-secret-managers` and
   `trstctl-cli secrets cloud-secret-managers` show the served CAP-SEC-04 cloud
   secret-manager integration posture: read-only `cloud_secret` discovery for AWS
   Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV, plus
@@ -995,13 +1002,13 @@ This is a deliberate, documented trust boundary (not an accident):
     in the signer under its own stable handle, the TSA certificate is persisted at
     `protocols.tsa_cert_file`, and the certificate carries the critical
     `timeStamping` EKU that stock OpenSSL enforces.
-  - the **code-signing service is library-only**. Routes and matching CLI commands
-    exist for `POST /api/v1/code-signing/sign` and
-    `POST /api/v1/code-signing/keyless`, but `buildRunDeps` does not supply a
-    `CodeSigningConfig`; the shipped handler therefore returns the fail-closed 501
-    sentinel instead of a signature. The library signs digests, records `codesign.*`
-    events, and has a Rekor outbox seam, but that tested seam is not a user-usable
-    binary capability yet.
+  - the **code-signing service is served by the running binary** at
+    `POST /api/v1/code-signing/sign` and `POST /api/v1/code-signing/keyless` when
+    `code_signing.enabled` is configured. Tenant-scoped persistent keys and one-use
+    keyless keys stay in the isolated signer process. GitHub OIDC identity is verified
+    from tenant-pinned JWKS before the Fulcio SAN/issuer is derived. Rekor publication
+    uses the transactional outbox and acknowledges only an exact HashedRekord receipt
+    whose signed-entry timestamp verifies under the operator-pinned log key.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator
@@ -1242,15 +1249,15 @@ writeback. API/CI access still uses scoped API tokens.
 The assembled issuing CA's key is now **persisted, sealed at rest** in the
 signer's key store: a signer restart **preserves** the CA instead of
 silently rotating it, and the key survives across restarts. Root/intermediate
-m-of-n ceremonies and signer-backed leaf issuance are now served. Local PKCS#11
-custody has a real cgo module binding that is proved against SoftHSM for
-token-side RSA-2048 generate/sign, but the default release binaries remain static
-and use the sealed signer key store by default. Helm `externalKMS` is wired for
-signer key-store envelope custody, so regulated deployments can wrap signer
-key-store DEKs through an operator-supplied AWS KMS, GCP KMS, Azure Key Vault, or
-PKCS#11 adapter instead of mounting the local signer KEK. Non-extractable
-HSM/KMS-resident CA-key adapters exist, but none is census-served in the shipped
-artifact. The online `POST /api/v1/breakglass/issue` route is also not
+m-of-n ceremonies and signer-backed leaf issuance are now served. The release
+also publishes a cgo-enabled HSM signer artifact that links the native PKCS#11
+binding; the default static control-plane artifact does not load native modules.
+The conditional managed-key path has required launched-binary receipts for all
+six advertised providers, while the sealed local signer key store remains the
+default when no provider is configured. Helm `externalKMS` separately wraps
+signer key-store DEKs through an operator-supplied AWS KMS, GCP KMS, Azure Key
+Vault, or PKCS#11 adapter instead of mounting the local signer KEK. The online
+`POST /api/v1/breakglass/issue` route is still not
 production-assembled and its caller-supplied approver names are not an independent
 m-of-n proof. Break-glass bundle reconciliation is served separately at
 `POST /api/v1/breakglass/reconcile`.
@@ -1271,39 +1278,57 @@ same hardening the isolated signer uses). This narrows - but, given Go's runtime
 does not eliminate - the window in which an unprotected key sits in dumpable heap; it
 is complemented process-wide by `RLIMIT_CORE=0` / `PR_SET_DUMPABLE=0`.
 
-**BYOK / HSM key lifecycle.** The repository contains lifecycle adapters for AWS
-KMS, Azure Key Vault, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2, plus conditional
-managed-key API and CLI surfaces. The current shipped wiring does **not** satisfy the
-six-backend claim: the wiring census reports zero of six backends served.
+**BYOK / HSM key lifecycle.** The conditional Enterprise surface supports AWS KMS,
+Azure Key Vault / Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2. The
+required wiring census reports **six of six backends served** through the shipped
+control-plane plus cgo HSM signer artifact; package reachability or a registry built
+only by a test is not used as evidence.
 
-When licensed configuration attaches one of the implemented remote providers today,
-the control-plane process constructs and calls that provider directly. Provider
-private bytes remain inside the remote KMS/HSM, but provider operations and
-credentials are not yet isolated behind the separate signer process. Lifecycle
-tracking is process-memory state rather than a replayable tenant/RLS projection, and
-provider calls are synchronous rather than durable outbox work. An API idempotency
-record therefore cannot reconcile every crash window after a provider succeeds but
-before local completion is committed. PKCS#11 also transiently converts its PIN to a
-Go `string`. These are explicit AN-1/AN-2/AN-4/AN-5/AN-6/AN-8 residuals, not custody
-guarantees.
+With an active BYOK license and `managed_keys.enabled`, the control-plane process
+does not construct a provider or receive provider credentials. Its tagged EE attach
+seam installs the tenant-scoped event/projection factory and durable PostgreSQL
+outbox handler. A separate dispatcher delivers the lifecycle command over the
+authenticated signer transport. The isolated signer constructs exactly one selected
+provider under the `ee/` fence and stores provider ownership, operation outcome, and
+consumed sign-authorization nonces in its fsync-backed journal. An `executing` operation
+is not abandoned after restart: every shipped receiver finds or reconciles the same
+durable operation identity. AWS stamps it atomically in `CreateKey`; Azure and GCP use
+deterministic provider resource names; PKCS#11 and YubiHSM use deterministic `CKA_ID`;
+TPM enumerates persistent objects and accepts only a full SHA-256 operation tag from
+immutable `TPM Public.AuthPolicy`, probing past foreign handles without adopting or
+overwriting them. Revoke and zeroize read provider/device state before and after the
+terminal transition, so a lost response does not repeat the effect. The swtpm gate also
+pre-occupies the first deterministic handle with a same-algorithm foreign object and
+proves that object remains untouched.
 
-The conditional handlers at `POST /api/v1/managed-keys` and its rotate, revoke, and
-zeroize companions return opaque handles/public metadata rather than private-key
-bytes. Destructive operations retain their approval checks. Until signer-side provider construction,
-durable operation state, outbox execution, restart reconciliation, and real substrate
-proof land, these routes are conditional implementation surfaces and no HSM/KMS
-backend is advertised as served in the shipped binary.
+The handlers at `POST /api/v1/managed-keys` and its rotate, revoke, and zeroize
+companions return only opaque handles, public DER, algorithm, non-extractable state,
+and lifecycle state. Every mutation requires `Idempotency-Key`; immutable events
+build the tenant/RLS projection, and the provider call comes only from the sealed
+outbox. Managed-key signing additionally requires a short-lived, request-bound token
+from the configured content-authority command. The signer consumes its random nonce
+durably before calling the provider, so token replay fails both in-process and after
+restart. Provider credentials must be file-backed, are copied into locked byte
+buffers, and are wiped on shutdown; the one unavoidable PKCS#11 `C_Login` conversion
+exists only at the upstream string-only ABI edge.
 
-AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, and PKCS#11 HSM packages can
-attach through `managed_keys` configuration in the licensed default build. The AWS
-backend uses the official AWS SDK v2 client, while Azure and GCP use their cloud KMS
-data-plane APIs. Current cloud-provider lifecycle tests use author-controlled HTTP
-doubles; this catalog does **not** claim emulator or live-cloud acceptance. PKCS#11
-has native SoftHSM container evidence only in a cgo-enabled build; static no-cgo
-builds fail closed when `provider: pkcs11` is selected. TPM 2.0 and YubiHSM 2 do not
-yet have equivalent shipped-driver wiring. Startup config remains static and
-provider-selected: it does not load runtime crypto plugins or let policy choose
-provider algorithms at request time.
+| Provider | Production binding in the shipped HSM signer | Gate substrate and lifecycle proof |
+| --- | --- | --- |
+| AWS KMS | Official AWS SDK v2 asymmetric KMS client | SigV4-checking emulator; atomic operation tag, ambiguous-create recovery, disable/deletion readback |
+| Azure Key Vault / Managed HSM | Keys data-plane client with bearer-token file | Managed-HSM emulator; deterministic key identity, ambiguous-create recovery, revoke/delete readback |
+| GCP Cloud KMS | Cloud KMS REST data plane with bearer-token file | Deterministic-resource emulator; ambiguous-create recovery, disable/destroy readback |
+| PKCS#11 | cgo module session with operation-derived `CKA_ID` handles | SoftHSM token; restart find-or-create plus independent `pkcs11-tool` state readback |
+| TPM 2.0 | `google/go-tpm` device or swtpm socket with tagged persistent handles | swtpm plus `tpm2-tools`; full operation-tag readback, forced foreign-handle collision, restart and eviction |
+| YubiHSM 2 | Yubico `yubihsm_pkcs11` ABI through the PKCS#11 connector | Vendor-ABI emulator with deterministic `CKA_ID`; independent sign/revoke/deletion readback |
+
+The cloud receipts are high-fidelity protocol emulation, not a claim that this test
+ran in a customer's live cloud account. Likewise, SoftHSM proves the PKCS#11 ABI and
+swtpm proves TPM command/lifecycle behavior; an operator still validates its exact
+device firmware, module certificate, network policy, and cloud IAM. The LocalStack
+demo is not the DoD receipt source. Static no-cgo signer builds fail closed for native
+PKCS#11/YubiHSM selection; use the published HSM signer artifact. Provider selection
+is startup-static: this is ordinary Go interface injection, not a runtime crypto
+plugin engine or a policy-selected algorithm marketplace.
 
 Still **library-tier** (reachable from no served verb yet): the **in-process** key
 lifecycle for the local CA/issuing signing key and the secrets KEK (generate-or-import

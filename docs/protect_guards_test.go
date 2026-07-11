@@ -160,6 +160,14 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"{Name: SubsystemAPI",
 		"{Name: SubsystemOutbox",
+		"{Name: SubsystemOutboxExternalCA",
+		"{Name: SubsystemOutboxConnectors",
+		"{Name: SubsystemOutboxSecrets",
+		"{Name: SubsystemOutboxSecretSync",
+		"{Name: SubsystemOutboxManagedKeys",
+		"{Name: SubsystemOutboxTransparency",
+		"{Name: SubsystemOutboxCodeSigning",
+		"{Name: SubsystemOutboxNotifications",
 		"{Name: SubsystemSigning",
 		"{Name: SubsystemQuery",
 		"{Name: SubsystemPolicy",
@@ -173,8 +181,15 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 
 	server := read(t, "../internal/server/server.go")
 	for _, want := range []string{
-		"s.outbox.Dispatch(ctx, s.obHandler)",
-		"s.bulk.Submit(bulkhead.SubsystemOutbox, run)",
+		"s.outbox.DispatchScoped(ctx, s.obHandler, family.scope)",
+		"pool: bulkhead.SubsystemOutboxExternalCA",
+		"pool: bulkhead.SubsystemOutboxConnectors",
+		"pool: bulkhead.SubsystemOutboxSecrets",
+		"pool: bulkhead.SubsystemOutboxSecretSync",
+		"pool: bulkhead.SubsystemOutboxManagedKeys",
+		"pool: bulkhead.SubsystemOutboxTransparency",
+		"pool: bulkhead.SubsystemOutboxCodeSigning",
+		"pool: bulkhead.SubsystemOutboxNotifications",
 		"s.bulk.Close()",
 		"drain outbox",
 	} {
@@ -2162,7 +2177,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/backup/backup.go", []string{"trstctl-event-log-backup", "version    = 1", "unsupported backup version"}},
 		{"../internal/backup/full_manifest.go", []string{"trstctl-full-backup", "fullVersion      = 1", "unsupported full backup manifest version"}},
 		{"../internal/backup/postgres_state.go", []string{"trstctl-postgres-state-backup", "postgresStateVersion    = 1", "unsupported postgres-state backup version"}},
-		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 1", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
+		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 3", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
 	} {
 		body := read(t, file.path)
 		for _, want := range file.want {
@@ -2193,7 +2208,7 @@ func TestSSRFStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/protocols/acme", "TestHTTP01SSRFBlocksMetadataAndLoopback"},
 		{"../internal/protocols/acme", "TestHTTP01SSRFBlocksRebindViaResolvedIP"},
 		{"../internal/protocols/acme", "TestSSRFRedirectSchemeRejected"},
-		{"../internal/cloudhttp", "TestJSONBoundsErrorBody"},
+		{"../internal/cloudhttp", "TestJSONBoundsAndWipesMappedErrorBody"},
 		{"../internal/cloudhttp", "TestJSONTimeoutFloorAppliesWhenNoDeadline"},
 		{"../internal/cloudhttp", "TestProvidersImportAndCallCloudhttp"},
 		{"../internal/cloudhttp", "TestProvidersHaveNoBespokeRoundTrip"},
@@ -2248,8 +2263,9 @@ func TestSSRFStrengthGuardsStayRequired(t *testing.T) {
 		"MaxBodyBytes = 1 << 20",
 		"MaxErrorBytes = 4096",
 		"context.WithTimeout",
-		"io.LimitReader(resp.Body, MaxErrorBytes)",
-		"io.LimitReader(resp.Body, MaxBodyBytes)",
+		"secret.ReadBounded(resp.Body, MaxErrorBytes)",
+		"secret.ReadBounded(resp.Body, MaxBodyBytes+1)",
+		"len(raw) > MaxBodyBytes",
 	} {
 		if !strings.Contains(cloudHTTP, want) {
 			t.Errorf("SEC-004: cloudhttp.go no longer contains %q; cloud HTTP bounded-read/timeout proof weakened", want)
@@ -2836,7 +2852,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	storeProjection := read(t, "../internal/store/projection.go")
 	for _, want := range []string{
-		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "mdm_scep_policies", "workload_attester_trust_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_channels", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions"}`,
+		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "mdm_scep_policies", "workload_attester_trust_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions"}`,
 		"func (s *Store) RebuildReadModelTx(",
 		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
 		"func (s *Store) RestoreReadModelTx(",
@@ -2864,7 +2880,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	}
 	snapshotGo := read(t, "../internal/store/snapshot.go")
 	for _, want := range []string{
-		"const SnapshotFormatVersion = 1",
+		"const SnapshotFormatVersion = 3",
 		"func (s *Store) WriteTenantSnapshot(",
 		"func (s *Store) LatestSnapshotOffset(",
 		"func (s *Store) RestoreSnapshotsTx(",
@@ -2946,6 +2962,14 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"SubsystemAPI",
 		"SubsystemOutbox",
+		"SubsystemOutboxExternalCA",
+		"SubsystemOutboxConnectors",
+		"SubsystemOutboxSecrets",
+		"SubsystemOutboxSecretSync",
+		"SubsystemOutboxManagedKeys",
+		"SubsystemOutboxTransparency",
+		"SubsystemOutboxCodeSigning",
+		"SubsystemOutboxNotifications",
 		"SubsystemSigning",
 		"SubsystemQuery",
 		"SubsystemProtocols",
@@ -3686,7 +3710,8 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 		"target := authz.Scope{TenantID: principal.TenantID",
 		"a.rateLimiter.Allow(r.Context(), principal.TenantID)",
 		"ctx = events.ContextWithActor(ctx, events.Actor",
-		"a.idem.Do(r.Context(), tenantID, idempotencyKey",
+		"a.idem.DoDurableEffectBound(r.Context(), tenantID, idempotencyKey, binding",
+		"a.idem.DoBound(r.Context(), tenantID, idempotencyKey, binding",
 	)
 	failClosed := read(t, "../internal/api/failclosed_guard_test.go")
 	check("internal/api/failclosed_guard_test.go", failClosed,

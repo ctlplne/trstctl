@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 const (
@@ -87,6 +89,7 @@ func VerifyJWTBytes(token []byte, jwks JWKS) (claimsJSON []byte, err error) {
 		return nil, fmt.Errorf("crypto: malformed JWT (want 3 segments)")
 	}
 	hb := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[0])))
+	defer secret.Wipe(hb)
 	n, err := base64.RawURLEncoding.Decode(hb, parts[0])
 	if err != nil {
 		return nil, fmt.Errorf("crypto: JWT header: %w", err)
@@ -109,6 +112,7 @@ func VerifyJWTBytes(token []byte, jwks JWKS) (claimsJSON []byte, err error) {
 		return nil, err
 	}
 	sig := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[2])))
+	defer secret.Wipe(sig)
 	n, err = base64.RawURLEncoding.Decode(sig, parts[2])
 	if err != nil {
 		return nil, fmt.Errorf("crypto: JWT signature: %w", err)
@@ -118,12 +122,14 @@ func VerifyJWTBytes(token []byte, jwks JWKS) (claimsJSON []byte, err error) {
 	signingInput = append(signingInput, parts[0]...)
 	signingInput = append(signingInput, '.')
 	signingInput = append(signingInput, parts[1]...)
+	defer secret.Wipe(signingInput)
 	if err := verifyJOSE(hdr.Alg, pub, signingInput, sig); err != nil {
 		return nil, err
 	}
 	payload := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[1])))
 	n, err = base64.RawURLEncoding.Decode(payload, parts[1])
 	if err != nil {
+		secret.Wipe(payload)
 		return nil, fmt.Errorf("crypto: JWT payload: %w", err)
 	}
 	return payload[:n], nil

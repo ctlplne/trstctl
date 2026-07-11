@@ -14,17 +14,19 @@ package awskms
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	awskmssdk "github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -52,12 +54,15 @@ const defaultOpTimeout = 30 * time.Second
 
 // Backend is an AWS KMS crypto.Backend.
 type Backend struct {
-	region    string
-	endpoint  string
-	creds     Credentials
-	doer      HTTPDoer
-	opTimeout time.Duration
-	client    *awskmssdk.Client
+	region          string
+	endpoint        string
+	accessKeyID     string
+	secretAccessKey *secret.Buffer
+	sessionToken    *secret.Buffer
+	doer            HTTPDoer
+	opTimeout       time.Duration
+	client          *awskmssdk.Client
+	initErr         error
 }
 
 var (
@@ -84,14 +89,48 @@ func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeo
 
 // New returns an AWS KMS backend for region, signing with creds.
 func New(region string, creds Credentials, opts ...Option) *Backend {
-	creds.SecretAccessKey = secrettext.Clone(creds.SecretAccessKey)
-	creds.SessionToken = secrettext.Clone(creds.SessionToken)
-	b := &Backend{region: region, creds: creds, doer: http.DefaultClient, opTimeout: defaultOpTimeout}
+	b, err := NewSecure(region, creds, opts...)
+	if err == nil {
+		return b
+	}
+	// Preserve the historical pointer-only constructor for callers that cannot
+	// surface allocation errors. The backend remains unusable and every provider
+	// operation fails closed with initErr; production uses NewSecure below.
+	b = &Backend{region: region, accessKeyID: creds.AccessKeyID, doer: netsec.SafeClient(defaultOpTimeout), opTimeout: defaultOpTimeout, initErr: err}
 	for _, o := range opts {
 		o(b)
 	}
 	b.client = b.sdkClient()
 	return b
+}
+
+// NewSecure constructs an AWS KMS backend while copying authority-bearing
+// credentials into locked, non-dumpable memory. Callers must call Destroy.
+func NewSecure(region string, creds Credentials, opts ...Option) (*Backend, error) {
+	if len(creds.SecretAccessKey) == 0 {
+		return nil, errors.New("aws-kms: secret access key is required")
+	}
+	secretKey, err := secret.NewFrom(creds.SecretAccessKey)
+	if err != nil {
+		return nil, fmt.Errorf("aws-kms: protect secret access key: %w", err)
+	}
+	var session *secret.Buffer
+	if len(creds.SessionToken) > 0 {
+		session, err = secret.NewFrom(creds.SessionToken)
+		if err != nil {
+			secretKey.Destroy()
+			return nil, fmt.Errorf("aws-kms: protect session token: %w", err)
+		}
+	}
+	b := &Backend{
+		region: region, accessKeyID: creds.AccessKeyID, secretAccessKey: secretKey,
+		sessionToken: session, doer: netsec.SafeClient(defaultOpTimeout), opTimeout: defaultOpTimeout,
+	}
+	for _, o := range opts {
+		o(b)
+	}
+	b.client = b.sdkClient()
+	return b, nil
 }
 
 // opContext derives the context a single network operation runs under when the
@@ -114,23 +153,57 @@ func (b *Backend) setEndpoint(endpoint string) {
 }
 
 func (b *Backend) sdkClient() *awskmssdk.Client {
-	// The AWS SDK credential provider requires string-valued credentials. trstctl
-	// keeps config/file material as []byte until this SDK edge and never logs or
-	// returns it; AWS's provider owns the unavoidable edge string after this point.
+	// Do not use aws.NewCredentialsCache or StaticCredentialsProvider: both retain
+	// string copies for the process lifetime. The SDK calls this provider at the
+	// SigV4 edge for each request; the unavoidable strings then live only for that
+	// request while the source authority remains in locked memory.
 	cfg := awssdk.Config{
-		Region: b.region,
-		Credentials: awssdk.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
-			b.creds.AccessKeyID,
-			secrettext.String(b.creds.SecretAccessKey),
-			secrettext.String(b.creds.SessionToken),
-		)),
-		HTTPClient: b.doer,
+		Region:      b.region,
+		Credentials: lockedCredentialsProvider{backend: b},
+		HTTPClient:  b.doer,
 	}
 	return awskmssdk.NewFromConfig(cfg, func(o *awskmssdk.Options) {
 		if b.endpoint != "" {
 			o.BaseEndpoint = awssdk.String(b.endpoint)
 		}
 	})
+}
+
+type lockedCredentialsProvider struct{ backend *Backend }
+
+func (p lockedCredentialsProvider) Retrieve(context.Context) (awssdk.Credentials, error) {
+	if p.backend == nil || p.backend.initErr != nil || p.backend.secretAccessKey == nil {
+		return awssdk.Credentials{}, errors.New("aws-kms: locked credentials are unavailable")
+	}
+	var session []byte
+	if p.backend.sessionToken != nil {
+		session = p.backend.sessionToken.Bytes()
+	}
+	return awssdk.Credentials{
+		AccessKeyID:     p.backend.accessKeyID,
+		SecretAccessKey: secrettext.String(p.backend.secretAccessKey.Bytes()),
+		SessionToken:    secrettext.String(session),
+		Source:          "trstctl-locked-signer-config",
+	}, nil
+}
+
+// Destroy wipes signer-local AWS credentials and closes idle transports. It is
+// safe to call repeatedly during signer shutdown.
+func (b *Backend) Destroy() {
+	if b == nil {
+		return
+	}
+	if b.secretAccessKey != nil {
+		b.secretAccessKey.Destroy()
+		b.secretAccessKey = nil
+	}
+	if b.sessionToken != nil {
+		b.sessionToken.Destroy()
+		b.sessionToken = nil
+	}
+	if client, ok := b.doer.(*http.Client); ok {
+		client.CloseIdleConnections()
+	}
 }
 
 // Name identifies the backend.

@@ -3,6 +3,7 @@
 package cloudhttp
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -61,8 +62,9 @@ func TestJSONNilOutDiscardsBody(t *testing.T) {
 	}
 }
 
-// TestJSONNon2xxIsStatusError: a non-2xx response becomes a *StatusError carrying the
-// status and a bounded body snippet.
+// TestJSONNon2xxIsStatusError: a non-2xx response becomes a *StatusError carrying
+// only the status. Attacker-controlled upstream text must not escape into an
+// immutable Go error string.
 func TestJSONNon2xxIsStatusError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -78,13 +80,14 @@ func TestJSONNon2xxIsStatusError(t *testing.T) {
 	if se.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", se.StatusCode)
 	}
-	if se.Body != "denied: bad scope" {
-		t.Errorf("body = %q, want trimmed 'denied: bad scope'", se.Body)
+	if strings.Contains(err.Error(), "bad scope") {
+		t.Fatalf("upstream response body escaped into error text: %v", err)
 	}
 }
 
-// TestJSONBoundsErrorBody: a giant error body is truncated to MaxErrorBytes.
-func TestJSONBoundsErrorBody(t *testing.T) {
+// TestJSONBoundsAndWipesMappedErrorBody proves the mapper sees at most the shared
+// cap and that its byte view is zeroed before JSON returns.
+func TestJSONBoundsAndWipesMappedErrorBody(t *testing.T) {
 	big := strings.Repeat("x", MaxErrorBytes*4)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -92,13 +95,47 @@ func TestJSONBoundsErrorBody(t *testing.T) {
 	}))
 	defer srv.Close()
 	req := newReq(t, context.Background(), http.MethodGet, srv.URL, "")
-	err := JSON(http.DefaultClient, req, nil)
-	var se *StatusError
-	if !errors.As(err, &se) {
-		t.Fatalf("expected *StatusError, got %v", err)
+	mapped := errors.New("closed provider state")
+	var mapperView []byte
+	err := JSON(http.DefaultClient, req, nil, WithStatusMapper(func(_ int, body []byte) error {
+		mapperView = body // retained only to verify JSON's mandatory post-call wipe
+		return mapped
+	}))
+	if !errors.Is(err, mapped) {
+		t.Fatalf("error = %v, want closed mapped error", err)
 	}
-	if len(se.Body) > MaxErrorBytes {
-		t.Errorf("error body not bounded: %d bytes (cap %d)", len(se.Body), MaxErrorBytes)
+	if len(mapperView) != MaxErrorBytes {
+		t.Fatalf("mapper body = %d bytes, want cap %d", len(mapperView), MaxErrorBytes)
+	}
+	for i, b := range mapperView {
+		if b != 0 {
+			t.Fatalf("mapped response byte %d was not wiped", i)
+		}
+	}
+}
+
+// TestJSONWipesEveryReaderDestination catches the subtle io.ReadAll growth
+// failure: when ReadAll replaces a growing backing array, wiping only its final
+// return value cannot reach the older arrays. The hostile reader keeps views of
+// every destination slice it was handed; JSON must leave all of them zeroed.
+func TestJSONWipesEveryReaderDestination(t *testing.T) {
+	body := &retainedReadCloser{remaining: bytes.Repeat([]byte("receiver-echoed-secret"), MaxErrorBytes)}
+	doer := doerFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusBadGateway, Body: body, Request: req}, nil
+	})
+	req := newReq(t, context.Background(), http.MethodPost, "https://receiver.example.test/write", "")
+	if err := JSON(doer, req, nil); err == nil {
+		t.Fatal("expected closed status error")
+	}
+	if len(body.destinations) < 2 {
+		t.Fatalf("reader calls = %d, want multiple chunks", len(body.destinations))
+	}
+	for call, destination := range body.destinations {
+		for offset, value := range destination {
+			if value != 0 {
+				t.Fatalf("reader destination call=%d offset=%d retained secret byte %#x", call, offset, value)
+			}
+		}
 	}
 }
 
@@ -209,3 +246,28 @@ func TestJSONSignerErrorAbortsBeforeSend(t *testing.T) {
 type doerFunc func(*http.Request) (*http.Response, error)
 
 func (f doerFunc) Do(r *http.Request) (*http.Response, error) { return f(r) }
+
+type retainedReadCloser struct {
+	remaining    []byte
+	destinations [][]byte
+}
+
+func (r *retainedReadCloser) Read(destination []byte) (int, error) {
+	if len(r.remaining) == 0 {
+		return 0, io.EOF
+	}
+	const chunk = 257
+	n := len(destination)
+	if n > chunk {
+		n = chunk
+	}
+	if n > len(r.remaining) {
+		n = len(r.remaining)
+	}
+	copy(destination[:n], r.remaining[:n])
+	r.destinations = append(r.destinations, destination[:n:n])
+	r.remaining = r.remaining[n:]
+	return n, nil
+}
+
+func (*retainedReadCloser) Close() error { return nil }

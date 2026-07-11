@@ -23,6 +23,44 @@ func TestMemoryReplaysResult(t *testing.T) {
 	}
 }
 
+func TestMemoryReplayOwnsResultAcrossCallerMutation(t *testing.T) {
+	m := NewMemory()
+	ctx := context.Background()
+	source := []byte("credential-bearing-result")
+	calls := 0
+	first, err := m.Do(ctx, "t1", "owned", func(context.Context) ([]byte, error) {
+		calls++
+		return source, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range source {
+		source[i] = 0
+	}
+	for i := range first {
+		first[i] = 0
+	}
+
+	second, err := m.Do(ctx, "t1", "owned", func(context.Context) ([]byte, error) {
+		t.Fatal("replay executed callback")
+		return nil, nil
+	})
+	if err != nil || string(second) != "credential-bearing-result" {
+		t.Fatalf("replay after first/source wipe = %q err=%v", second, err)
+	}
+	for i := range second {
+		second[i] = 0
+	}
+	third, err := m.Do(ctx, "t1", "owned", func(context.Context) ([]byte, error) {
+		t.Fatal("second replay executed callback")
+		return nil, nil
+	})
+	if err != nil || string(third) != "credential-bearing-result" || calls != 1 {
+		t.Fatalf("replay after second wipe = %q err=%v calls=%d", third, err, calls)
+	}
+}
+
 func TestMemoryErrorReleasesClaim(t *testing.T) {
 	m := NewMemory()
 	ctx := context.Background()

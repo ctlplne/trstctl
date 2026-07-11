@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -48,14 +49,26 @@ type Deployment struct {
 	Fingerprint string
 }
 
-// NewDeployment builds a Deployment, computing the certificate fingerprint via
-// the crypto boundary (AN-3).
+// CertificateFingerprint returns the canonical certificate fingerprint used by
+// the shipped issuance path: SHA-256 over the parsed certificate DER. The raw
+// byte hash fallback keeps opaque connector SDK fixtures deterministic; served
+// deployments always carry a parseable certificate and therefore take the DER
+// path.
+func CertificateFingerprint(certPEM []byte) string {
+	if info, err := certinfo.Inspect(certPEM); err == nil {
+		return info.SHA256Fingerprint
+	}
+	return crypto.SHA256Hex(certPEM)
+}
+
+// NewDeployment builds a Deployment, computing the canonical certificate
+// fingerprint via the crypto boundary (AN-3).
 func NewDeployment(target string, certPEM, keyPEM []byte) Deployment {
 	return Deployment{
 		Target:      target,
 		CertPEM:     certPEM,
 		KeyPEM:      keyPEM,
-		Fingerprint: crypto.SHA256Hex(certPEM),
+		Fingerprint: CertificateFingerprint(certPEM),
 	}
 }
 
@@ -118,6 +131,7 @@ type Stats struct {
 
 // sandbox enforces a grant over an Ops: each call is capability-checked first.
 type sandbox struct {
+	ctx    context.Context
 	grant  pluginhost.Grant
 	ops    Ops
 	denied int
@@ -156,6 +170,9 @@ func (s *sandbox) Exec(name string, args ...string) error {
 		s.denied++
 		return ErrDenied
 	}
+	if executor, ok := s.ops.(ContextExecutor); ok {
+		return executor.ExecContext(s.ctx, name, args)
+	}
 	return s.ops.Exec(name, args)
 }
 
@@ -177,7 +194,7 @@ func (s *sandbox) Request(req *http.Request) (*http.Response, error) {
 // never exceed its grant — the same discipline the plugin host enforces for
 // WASM connectors. It returns the deployment's stats.
 func Run(ctx context.Context, c Connector, ops Ops, dep Deployment) (Stats, error) {
-	sb := &sandbox{grant: c.Capabilities(), ops: ops}
+	sb := &sandbox{ctx: ctx, grant: c.Capabilities(), ops: ops}
 	err := c.Deploy(ctx, sb, dep)
 	return Stats{Denied: sb.denied}, err
 }

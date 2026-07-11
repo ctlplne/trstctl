@@ -37,6 +37,8 @@ const (
 	SignerService_VerifyOperation_FullMethodName      = "/trstctl.signing.v1.SignerService/VerifyOperation"
 	SignerService_GatedDestroy_FullMethodName         = "/trstctl.signing.v1.SignerService/GatedDestroy"
 	SignerService_DestroyKey_FullMethodName           = "/trstctl.signing.v1.SignerService/DestroyKey"
+	SignerService_ManageKey_FullMethodName            = "/trstctl.signing.v1.SignerService/ManageKey"
+	SignerService_SignManagedKey_FullMethodName       = "/trstctl.signing.v1.SignerService/SignManagedKey"
 	SignerService_Health_FullMethodName               = "/trstctl.signing.v1.SignerService/Health"
 	SignerService_MintSuccessor_FullMethodName        = "/trstctl.signing.v1.SignerService/MintSuccessor"
 	SignerService_GenerateSuccessorKEM_FullMethodName = "/trstctl.signing.v1.SignerService/GenerateSuccessorKEM"
@@ -82,6 +84,16 @@ type SignerServiceClient interface {
 	GatedDestroy(ctx context.Context, in *GatedDestroyRequest, opts ...grpc.CallOption) (*GatedDestroyResponse, error)
 	// DestroyKey zeroizes and forgets a key handle. It is idempotent.
 	DestroyKey(ctx context.Context, in *DestroyKeyRequest, opts ...grpc.CallOption) (*DestroyKeyResponse, error)
+	// ManageKey performs a remote-custody lifecycle command in this isolated
+	// signer process. The control plane sends only tenant-scoped public metadata
+	// and an outbox-derived operation id; provider credentials and the private
+	// key remain signer-side. operation_id makes a redelivered outbox command
+	// return the original public result instead of repeating a provider action.
+	ManageKey(ctx context.Context, in *ManageKeyRequest, opts ...grpc.CallOption) (*ManageKeyResponse, error)
+	// SignManagedKey signs a digest with a tenant-bound provider key. The
+	// ownership lookup and provider private-key operation both run inside this
+	// isolated signer process; callers provide only public routing metadata.
+	SignManagedKey(ctx context.Context, in *SignManagedKeyRequest, opts ...grpc.CallOption) (*SignManagedKeyResponse, error)
 	// Health reports liveness and readiness. It returns no secret material.
 	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 	// MintSuccessor mints a dual-signed PCAS succession record inside the signer
@@ -201,6 +213,26 @@ func (c *signerServiceClient) DestroyKey(ctx context.Context, in *DestroyKeyRequ
 	return out, nil
 }
 
+func (c *signerServiceClient) ManageKey(ctx context.Context, in *ManageKeyRequest, opts ...grpc.CallOption) (*ManageKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_ManageKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) SignManagedKey(ctx context.Context, in *SignManagedKeyRequest, opts ...grpc.CallOption) (*SignManagedKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignManagedKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_SignManagedKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *signerServiceClient) Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HealthResponse)
@@ -298,6 +330,16 @@ type SignerServiceServer interface {
 	GatedDestroy(context.Context, *GatedDestroyRequest) (*GatedDestroyResponse, error)
 	// DestroyKey zeroizes and forgets a key handle. It is idempotent.
 	DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error)
+	// ManageKey performs a remote-custody lifecycle command in this isolated
+	// signer process. The control plane sends only tenant-scoped public metadata
+	// and an outbox-derived operation id; provider credentials and the private
+	// key remain signer-side. operation_id makes a redelivered outbox command
+	// return the original public result instead of repeating a provider action.
+	ManageKey(context.Context, *ManageKeyRequest) (*ManageKeyResponse, error)
+	// SignManagedKey signs a digest with a tenant-bound provider key. The
+	// ownership lookup and provider private-key operation both run inside this
+	// isolated signer process; callers provide only public routing metadata.
+	SignManagedKey(context.Context, *SignManagedKeyRequest) (*SignManagedKeyResponse, error)
 	// Health reports liveness and readiness. It returns no secret material.
 	Health(context.Context, *HealthRequest) (*HealthResponse, error)
 	// MintSuccessor mints a dual-signed PCAS succession record inside the signer
@@ -367,6 +409,12 @@ func (UnimplementedSignerServiceServer) GatedDestroy(context.Context, *GatedDest
 }
 func (UnimplementedSignerServiceServer) DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DestroyKey not implemented")
+}
+func (UnimplementedSignerServiceServer) ManageKey(context.Context, *ManageKeyRequest) (*ManageKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageKey not implemented")
+}
+func (UnimplementedSignerServiceServer) SignManagedKey(context.Context, *SignManagedKeyRequest) (*SignManagedKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignManagedKey not implemented")
 }
 func (UnimplementedSignerServiceServer) Health(context.Context, *HealthRequest) (*HealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Health not implemented")
@@ -533,6 +581,42 @@ func _SignerService_DestroyKey_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_ManageKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).ManageKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_ManageKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).ManageKey(ctx, req.(*ManageKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_SignManagedKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignManagedKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).SignManagedKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_SignManagedKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).SignManagedKey(ctx, req.(*SignManagedKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SignerService_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HealthRequest)
 	if err := dec(in); err != nil {
@@ -675,6 +759,14 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DestroyKey",
 			Handler:    _SignerService_DestroyKey_Handler,
+		},
+		{
+			MethodName: "ManageKey",
+			Handler:    _SignerService_ManageKey_Handler,
+		},
+		{
+			MethodName: "SignManagedKey",
+			Handler:    _SignerService_SignManagedKey_Handler,
 		},
 		{
 			MethodName: "Health",

@@ -95,6 +95,14 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 	if certDER == nil {
 		certDER = []byte{}
 	}
+	certPEM := c.CertificatePEM
+	if certPEM == nil {
+		certPEM = []byte{}
+	}
+	issuanceResponse := c.IssuanceResponse
+	if issuanceResponse == nil {
+		issuanceResponse = []byte{}
+	}
 	if c.ReplacesID != nil && *c.ReplacesID == c.ID {
 		return fmt.Errorf("certificate successor %s cannot replace itself", c.ID)
 	}
@@ -104,20 +112,23 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 	_, err := tx.Exec(ctx,
 		`INSERT INTO certificates
 		        (id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint,
-		         key_algorithm, not_before, not_after, deployment_location, source, certificate_der, issuance_idempotency_key,
-		         replaces_id, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		         key_algorithm, not_before, not_after, deployment_location, source, certificate_der, certificate_pem, issuance_response,
+		         issuance_idempotency_key, issuance_request_binding, replaces_id, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
 		    SET owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, sans = EXCLUDED.sans,
 		        issuer = EXCLUDED.issuer, serial = EXCLUDED.serial, key_algorithm = EXCLUDED.key_algorithm,
 		        not_before = EXCLUDED.not_before, not_after = EXCLUDED.not_after,
 		        deployment_location = EXCLUDED.deployment_location, source = EXCLUDED.source,
-		        certificate_der = EXCLUDED.certificate_der,
-		        issuance_idempotency_key = EXCLUDED.issuance_idempotency_key,
+		        certificate_der = CASE WHEN octet_length(EXCLUDED.certificate_der) > 0 THEN EXCLUDED.certificate_der ELSE certificates.certificate_der END,
+		        certificate_pem = CASE WHEN octet_length(EXCLUDED.certificate_pem) > 0 THEN EXCLUDED.certificate_pem ELSE certificates.certificate_pem END,
+		        issuance_response = CASE WHEN octet_length(EXCLUDED.issuance_response) > 0 THEN EXCLUDED.issuance_response ELSE certificates.issuance_response END,
+		        issuance_idempotency_key = CASE WHEN EXCLUDED.issuance_idempotency_key <> '' THEN EXCLUDED.issuance_idempotency_key ELSE certificates.issuance_idempotency_key END,
+		        issuance_request_binding = CASE WHEN EXCLUDED.issuance_request_binding <> '' THEN EXCLUDED.issuance_request_binding ELSE certificates.issuance_request_binding END,
 		        replaces_id = EXCLUDED.replaces_id`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
-		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, c.IssuanceIdempotencyKey,
-		c.ReplacesID, c.CreatedAt)
+		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
+		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID, c.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -298,7 +309,7 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 // backup-set manifest test (internal/backup) enforces that every persistent table
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
-var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "mdm_scep_policies", "workload_attester_trust_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_channels", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions"}
+var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "mdm_scep_policies", "workload_attester_trust_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly
@@ -396,7 +407,7 @@ func (s *Store) DeleteTenantReadModelTx(ctx context.Context, tx pgx.Tx, tenantID
 	}
 	// Order: dependents first. identity_transitions and certificates reference
 	// identities/owners; the tenants row is removed last.
-	ordered := []string{"identity_transitions", "connector_delivery_receipts", "lifecycle_rotation_runs", "remediation_playbook_runs", "incident_fleet_reissuance_runs", "pam_sessions", "secret_rotation_schedules", "compliance_report_schedules", "access_change_request_decisions", "access_change_requests", "nhi_access_review_items", "nhi_access_review_campaigns", "notification_reads", "notification_threshold_deliveries", "notification_channels", "ca_crls", "ca_ocsp_responders", "ca_issued_certs", "ca_ceremony_approvals", "ca_key_ceremonies", "certificates", "crypto_assets", "agent_cert_revocations", "identities", "certificate_profiles", "workload_attester_trust_sources", "mdm_scep_policies", "acme_dns01_provider_configs", "discovery_findings", "discovery_runs", "discovery_schedules", "discovery_sources", "privacy_archive_erasure_attestations", "privacy_retention_runs", "privacy_subject_erasures", "issuers", "owners", "tenants"}
+	ordered := []string{"identity_transitions", "notification_delivery_receipts", "notification_test_operations", "connector_delivery_receipts", "lifecycle_rotation_runs", "remediation_playbook_runs", "incident_fleet_reissuance_runs", "pam_sessions", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "compliance_report_schedules", "access_change_request_decisions", "access_change_requests", "nhi_access_review_items", "nhi_access_review_campaigns", "notification_reads", "notification_threshold_deliveries", "notification_channels", "ca_crls", "ca_ocsp_responders", "ca_issued_certs", "ca_ceremony_approvals", "ca_key_ceremonies", "certificates", "crypto_assets", "agent_cert_revocations", "identities", "certificate_profiles", "workload_attester_trust_sources", "mdm_scep_policies", "acme_dns01_provider_configs", "discovery_findings", "discovery_runs", "discovery_schedules", "discovery_sources", "privacy_archive_erasure_attestations", "privacy_retention_runs", "privacy_subject_erasures", "issuers", "owners", "tenants"}
 	for _, table := range ordered {
 		if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE tenant_id = $1", tenantID); err != nil {
 			return fmt.Errorf("store: delete read-model %s for tenant: %w", table, err)

@@ -24,7 +24,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // defaultName is the local-certificate object name used when the deployment
@@ -122,7 +122,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	req.Header.Set("Content-Type", "application/json")
 	// FortiOS REST API token, presented as a bearer credential. Never logged. The
 	// header value is the transient edge form of the []byte token.
-	req.Header.Set("Authorization", "Bearer "+string(c.token))
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
 
 	resp, err := sb.Request(req)
 	if err != nil {
@@ -130,17 +130,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		// The response body may echo the request; FortiOS does not echo the
-		// Authorization header, and we never add the token to the error. Bound
-		// the read so a hostile/large body cannot blow up memory.
-		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if err != nil {
-			return fmt.Errorf("fortigate: deploy certificate %q: status %d: read response: %w", name, resp.StatusCode, err)
-		}
-		return fmt.Errorf("fortigate: deploy certificate %q: status %d: %s",
-			name, resp.StatusCode, strings.TrimSpace(string(msg)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("fortigate: deploy certificate %q: status %d (response body redacted)", name, resp.StatusCode)
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil
 }
 

@@ -105,3 +105,23 @@ func TestValidatePublicHTTPSURLRejectsUnsafeEndpoints(t *testing.T) {
 		}
 	}
 }
+
+func TestSafeClientRejectsCredentialBearingCrossOriginRedirects(t *testing.T) {
+	client := netsec.SafeClient(time.Second)
+	origin, _ := http.NewRequest(http.MethodGet, "https://api.example.test/start", nil)
+	sameOrigin, _ := http.NewRequest(http.MethodGet, "https://api.example.test/next", nil)
+	if err := client.CheckRedirect(sameOrigin, []*http.Request{origin}); err != nil {
+		t.Fatalf("same-origin HTTPS redirect rejected: %v", err)
+	}
+	for _, target := range []string{
+		"http://api.example.test/plaintext",
+		"https://attacker.example.test/steal",
+		"https://api.example.test:8443/other-origin",
+	} {
+		redirect, _ := http.NewRequest(http.MethodGet, target, nil)
+		redirect.Header.Set("Authorization", "Bearer must-not-cross-origin")
+		if err := client.CheckRedirect(redirect, []*http.Request{origin}); !errors.Is(err, netsec.ErrSSRFBlocked) {
+			t.Fatalf("redirect to %s error = %v, want ErrSSRFBlocked", target, err)
+		}
+	}
+}

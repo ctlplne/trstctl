@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "name": "trstctl native connector high-fidelity emulator contract",
+  "entries": {
+    "connector.registry": "authenticated A10 login, certificate upload, key upload, client-SSL bind, readback",
+    "connector.nginx": "atomic certificate/key files, config-test process, reload process, readback",
+    "connector.apache": "atomic certificate/key files, config-test process, graceful reload process, readback",
+    "connector.caddy": "atomic watched files, reload process, readback",
+    "connector.envoy": "SDS GET followed by PUT of a v3 TLS Secret and readback",
+    "connector.iis": "PFX staging, PowerShell import, HTTP.SYS rebind, process transcript",
+    "connector.haproxy": "combined PEM write, configuration validation, reload, readback",
+    "connector.f5": "authenticated iControl uploads, crypto installs, Client SSL profile bind, readback",
+    "connector.netscaler": "NITRO login, file uploads, sslcertkey update, logout, readback",
+    "connector.a10": "AXAPI login, certificate/key uploads, client-SSL template bind, readback",
+    "connector.kemp": "authenticated certificate upload and virtual-service bind, readback",
+    "connector.cisco": "authenticated identity-certificate import and readback",
+    "connector.fortigate": "authenticated FortiOS local-certificate upsert and readback",
+    "connector.paloalto": "authenticated PAN-OS certificate and private-key imports and readback",
+    "connector.postfix": "atomic Postfix/Dovecot files, both validations and reloads, readback",
+    "connector.traefik": "atomic watched certificate/key files and readback",
+    "connector.acm": "canonical SigV4-verified ACM ImportCertificate and readback",
+    "connector.azurekv": "bearer-authenticated Key Vault certificate import and readback",
+    "connector.gcpcm": "bearer-authenticated Certificate Manager patch plus operation poll and readback",
+    "connector.javakeystore": "atomic PKCS12/JKS write plus independent file readback",
+    "connector.postgresql": "atomic TLS files, PostgreSQL reload process, readback",
+    "connector.mysql": "atomic TLS files, MySQL reload process, readback",
+    "connector.rabbitmq": "atomic TLS files, RabbitMQ rotation process, readback",
+    "connector.elasticsearch": "atomic watched TLS files and readback",
+    "connector.tomcat": "atomic TLS files, Tomcat reload process, readback"
+  },
+  "security": {
+    "process": "out-of-process, nonce/entry/PID bound",
+    "authentication": "native connector authentication is exact: Basic, bearer, A10/NITRO sessions, or PAN-OS keys must match the configured credential; ACM recomputes the credential-, region-, service-, header-, and payload-bound SigV4 signature",
+    "user_path": "served target CRUD + identity bind + target deploy route; production issuance creates the sealed connector.deploy outbox command",
+    "completion": "passed is true only after the entry-specific mutation sequence, exact validation/reload argv in order, and readback from the connector-specific installed credential path"
+  }
+}

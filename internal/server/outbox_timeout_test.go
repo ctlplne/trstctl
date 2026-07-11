@@ -73,7 +73,7 @@ func TestOutboxDeliveryTimeoutMetricIsLabeledByTenantAndDestination(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rec.Status != "pending" || !strings.Contains(rec.LastError, context.DeadlineExceeded.Error()) {
+	if rec.Status != "pending" || rec.LastError != "external_delivery_timeout" {
 		t.Fatalf("row = {status:%q last_error:%q}, want pending timeout", rec.Status, rec.LastError)
 	}
 

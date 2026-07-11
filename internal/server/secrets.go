@@ -59,6 +59,7 @@ type secretRevocationSink struct {
 	log   *events.Log
 }
 
+const dynamicSecretIssueDestination = "dynsecret.issue"
 const dynamicSecretRevokeDestination = "dynsecret.revoke"
 const secretSyncDestinationPrefix = "secret.sync."
 
@@ -77,7 +78,7 @@ func (q dynamicSecretOutboxQueue) Enqueue(ctx context.Context, item dynsecret.Re
 	return q.store.WithTenant(ctx, q.tenantID, func(tx pgx.Tx) error {
 		_, err := q.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID: q.tenantID, Destination: dynamicSecretRevokeDestination,
-			IdempotencyKey: key, Payload: payload,
+			EffectLane: "dynsecret.provider:" + item.Provider, IdempotencyKey: key, Payload: payload,
 		})
 		return err
 	})
@@ -126,10 +127,11 @@ func dynamicSecretRevokeKey(leaseID string) string {
 }
 
 type secretSyncOutboxPayload struct {
-	ID     string `json:"id"`
-	Key    string `json:"key"`
-	Target string `json:"target"`
-	Sealed []byte `json:"sealed"`
+	ID             string `json:"id"`
+	Key            string `json:"key"`
+	Target         string `json:"target"`
+	RequestBinding string `json:"request_binding,omitempty"`
+	Sealed         []byte `json:"sealed"`
 }
 
 type secretSyncOutboxQueue struct {
@@ -158,7 +160,7 @@ func (q secretSyncOutboxQueue) Enqueue(ctx context.Context, item secretsync.Sync
 	return q.store.WithTenant(ctx, q.tenantID, func(tx pgx.Tx) error {
 		_, err := q.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID: q.tenantID, Destination: secretSyncDestination(q.target),
-			IdempotencyKey: key, Payload: payload,
+			EffectLane: "secret.sync:" + q.target, IdempotencyKey: key, Payload: payload,
 		})
 		return err
 	})
@@ -313,6 +315,22 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		SecretRotators:             d.SecretRotators,
 		SecretSyncTargets:          d.SecretSyncTargets,
 		SecretScanner:              secretScannerFromDeps(d),
+	}
+	if d.TenantDynamicSecretProviders != nil {
+		be.DynamicProvidersForTenant = d.TenantDynamicSecretProviders.ForTenant
+		be.DynamicLifecycleForTenant = func(tenantID string) (dynsecret.Lifecycle, error) {
+			return newDurableDynamicSecretLifecycle(
+				tenantID, d.TenantDynamicSecretProviders.ForTenant(tenantID), d.Store, d.Log, d.KEK, s.outbox,
+				s.wakeOutbox,
+			)
+		}
+		be.DynamicLifecycleTenantIDs = d.TenantDynamicSecretProviders.TenantIDs
+	}
+	if d.TenantSecretSyncTargets != nil {
+		be.SecretSyncTargetsForTenant = d.TenantSecretSyncTargets.ForTenant
+		be.QueueSecretSync = func(ctx context.Context, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error {
+			return queueSecretSyncEvent(ctx, d.Store, d.Log, d.KEK, tenantID, secretName, secretVersion, target, remoteKey, idempotencyKey, requestBinding, value)
+		}
 	}
 	if s.outbox != nil {
 		be.DynamicRevokeQueue = func(tenantID string) dynsecret.RevokeQueue {

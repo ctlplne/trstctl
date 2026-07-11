@@ -4,6 +4,7 @@ package projections_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -43,10 +44,16 @@ func TestLetsEncryptIssuanceIdempotentAndObservable(t *testing.T) {
 	}
 	t.Cleanup(acmeCA.Close)
 
-	plugin, err := letsencrypt.NewPlugin("lets-encrypt", acmeCA.DirectoryURL())
+	account, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(account.Destroy)
+	plugin, err := letsencrypt.NewPluginWithRemoteAccountSigner("lets-encrypt", acmeCA.DirectoryURL(), http.DefaultClient, account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(plugin.Destroy)
 	svc := ca.NewIssuanceService(plugin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s)
 
 	req := ca.IssueRequest{TenantID: tenantA, CSR: leCSR(t), DNSNames: []string{"le.acme.test"}, TTL: 24 * time.Hour}

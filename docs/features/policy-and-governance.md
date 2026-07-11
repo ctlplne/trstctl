@@ -249,7 +249,14 @@ supported/configured channel families, queue redacted channel tests through
 `/api/v1/notification-channels/{id}/test`, list/get the tenant-scoped notification inbox,
 inspect owner/approver escalation fields, mark rows read at
 `/api/v1/notifications/{id}/read`, and requeue failed notification dispatches from
-`/api/v1/notifications/{id}/requeue` with idempotency keys.
+`/api/v1/notifications/{id}/requeue` with idempotency keys. Every successful fan-out
+channel records a tenant-scoped `notification.delivery.recorded` event before the
+outbox row is acknowledged; if a sibling fails or the worker restarts before ACK,
+retry skips channels whose receipts rebuild from the event log. Channel tests are
+`notification.test.queued` events with an authenticated request digest and durable
+response metadata, so an exact `Idempotency-Key` replay returns the original response
+after both bounded API-response and delivered-outbox retention, while a changed caller
+or body fails with `409` before any receiver call.
 
 ### Compliance reporting (F62)
 

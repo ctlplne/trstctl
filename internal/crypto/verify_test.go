@@ -3,9 +3,29 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"testing"
 )
+
+func TestParsePublicKeyPEMClassifiesAndRejectsTrailingData(t *testing.T) {
+	key, err := GenerateLockedKey(ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	pemBytes := MarshalPublicKeyPEM(key.Public().DER)
+	parsed, err := ParsePublicKeyPEM(pemBytes)
+	if err != nil {
+		t.Fatalf("ParsePublicKeyPEM: %v", err)
+	}
+	if parsed.Algorithm != ECDSAP256 || !bytes.Equal(parsed.DER, key.Public().DER) {
+		t.Fatalf("parsed public key = %+v, want ECDSA-P256 exact DER", parsed)
+	}
+	if _, err := ParsePublicKeyPEM(append(pemBytes, []byte("second trust object")...)); err == nil {
+		t.Fatal("ParsePublicKeyPEM accepted trailing trust material")
+	}
+}
 
 func TestVerifyMessageECDSAandRSA(t *testing.T) {
 	for _, alg := range []Algorithm{ECDSAP256, RSA2048} {

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "contract": "trstctl.notification-native.v1",
+  "pagerduty": {
+    "method": "POST",
+    "path": "/v2/enqueue",
+    "authentication": "routing_key JSON token",
+    "required": ["routing_key", "event_action=trigger", "dedup_key", "payload.summary", "payload.source", "payload.severity"],
+    "success": {"status": 202, "body": ["status=success", "dedup_key echoes request"]}
+  },
+  "opsgenie": {
+    "method": "POST",
+    "path": "/v2/alerts",
+    "authentication": "Authorization: GenieKey <api-key>",
+    "required": ["message", "alias", "description", "source=trstctl", "priority"],
+    "success": {"status": 202, "body": ["result", "requestId"]}
+  },
+  "retry_identity": {
+    "pagerduty": "dedup_key",
+    "opsgenie": "alias"
+  }
+}

@@ -101,6 +101,18 @@ type SecretsBackend struct {
 	// served lease API (F65). Empty means the API is mounted but lease issuance fails
 	// closed with 503.
 	DynamicProviders []dynsecret.Provider
+	// DynamicProvidersForTenant is the production resolver. It prevents one
+	// tenant's configured upstream authority from appearing in another tenant's
+	// lease engine. DynamicProviders remains only as an embed/test compatibility
+	// seam and is used when this resolver is nil.
+	DynamicProvidersForTenant func(tenantID string) []dynsecret.Provider
+	// DynamicLifecycleForTenant supplies the restart-safe production lifecycle.
+	// When nil, the API constructs the reference in-memory Engine for embedders and
+	// tests from DynamicProviders.
+	DynamicLifecycleForTenant func(tenantID string) (dynsecret.Lifecycle, error)
+	// DynamicLifecycleTenantIDs enumerates configured tenants so the restart-time
+	// expiry worker recovers durable leases before a tenant sends a new request.
+	DynamicLifecycleTenantIDs func() []string
 	// DynamicRevokeQueue returns the tenant-scoped durable revocation queue. The
 	// server wires this to the PostgreSQL outbox; embedders may supply their own.
 	DynamicRevokeQueue func(tenantID string) dynsecret.RevokeQueue
@@ -115,6 +127,14 @@ type SecretsBackend struct {
 	// POST /api/v1/secrets/syncs (F68). Empty means the route is mounted but fails
 	// closed with 503.
 	SecretSyncTargets map[string]*secretsync.Target
+	// SecretSyncTargetsForTenant is the production resolver. Target names and
+	// credentials are tenant-bound; the legacy static map is used only when this
+	// resolver is nil.
+	SecretSyncTargetsForTenant func(tenantID string) map[string]*secretsync.Target
+	// QueueSecretSync is the production event+sealed-outbox command. It returns
+	// after durable enqueue; the process-wide outbox worker performs the external
+	// write. Nil uses the legacy Engine path for embedded tests.
+	QueueSecretSync func(ctx context.Context, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error
 	// SecretSyncOutbox returns the tenant/target durable outbox used before any
 	// external sync write is attempted (AN-6). The server wires this to the sealed
 	// PostgreSQL outbox; embedders may supply their own.
@@ -133,7 +153,25 @@ type secretsService struct {
 	be SecretsBackend
 
 	mu     sync.Mutex
-	leases map[string]*dynsecret.Engine // tenant -> dynamic lease engine
+	leases map[string]dynsecret.Lifecycle // tenant -> dynamic lease lifecycle
+}
+
+func (s *secretsService) dynamicProviders(tenantID string) []dynsecret.Provider {
+	if s.be.DynamicProvidersForTenant != nil {
+		return s.be.DynamicProvidersForTenant(tenantID)
+	}
+	return append([]dynsecret.Provider(nil), s.be.DynamicProviders...)
+}
+
+func (s *secretsService) syncTargets(tenantID string) map[string]*secretsync.Target {
+	if s.be.SecretSyncTargetsForTenant != nil {
+		return s.be.SecretSyncTargetsForTenant(tenantID)
+	}
+	out := make(map[string]*secretsync.Target, len(s.be.SecretSyncTargets))
+	for id, target := range s.be.SecretSyncTargets {
+		out[id] = target
+	}
+	return out
 }
 
 // WithSecrets mounts the served secrets/identity surface (GAP-006). The KEK, store,
@@ -143,7 +181,7 @@ type secretsService struct {
 func WithSecrets(be SecretsBackend) Option {
 	return func(c *config) {
 		c.secrets = &secretsService{
-			be: be, leases: map[string]*dynsecret.Engine{},
+			be: be, leases: map[string]dynsecret.Lifecycle{},
 		}
 	}
 }
@@ -161,6 +199,10 @@ func (a *API) RunDynamicLeaseWorker(ctx context.Context) {
 		interval = a.secrets.be.DynamicLeaseWorkerInterval
 	}
 	apiTokenWorker := leaseworker.New(apiTokenLeaseEngine{orch: a.orch}, interval)
+	if a.secrets != nil {
+		a.secrets.ensureDynamicLifecycleTenants()
+		a.secrets.tickDynamicLeases(ctx)
+	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
@@ -723,7 +765,7 @@ func (a *API) connectorSecretRotator(tenantID, targetID, remoteKey string) (rota
 	if targetID == "" {
 		return nil, errStatus(http.StatusBadRequest, "connector rotation target is required")
 	}
-	target := a.secrets.be.SecretSyncTargets[targetID]
+	target := a.secrets.syncTargets(tenantID)[targetID]
 	if target == nil {
 		return nil, errStatus(http.StatusServiceUnavailable, "secret sync target is not configured")
 	}
@@ -744,7 +786,7 @@ func (a *API) dynamicLeaseSecretRotator(ctx context.Context, tenantID, provider 
 	if targetID == "" {
 		return nil, errStatus(http.StatusBadRequest, "target is required for dynamic-lease rotation")
 	}
-	target := a.secrets.be.SecretSyncTargets[targetID]
+	target := a.secrets.syncTargets(tenantID)[targetID]
 	if target == nil {
 		return nil, errStatus(http.StatusServiceUnavailable, "secret sync target is not configured")
 	}
@@ -762,7 +804,8 @@ func (a *API) dynamicLeaseSecretRotator(ctx context.Context, tenantID, provider 
 	return &dynamicLeaseRotationRotator{
 		api: a, tenantID: tenantID, provider: provider, targetID: targetID,
 		target: target, remoteKey: strings.TrimSpace(req.RemoteKey), ttl: ttl,
-		engine: engine, staged: map[string]*dynamicLeaseRotationState{},
+		engine: engine, issueIdempotencyKey: "rotation:" + provider + ":" + strings.TrimSpace(req.Key) + ":" + strings.TrimSpace(req.OldRef),
+		staged: map[string]*dynamicLeaseRotationState{},
 	}, nil
 }
 
@@ -927,14 +970,15 @@ func (s *connectorRotationState) destroy() {
 }
 
 type dynamicLeaseRotationRotator struct {
-	api       *API
-	tenantID  string
-	provider  string
-	targetID  string
-	target    *secretsync.Target
-	remoteKey string
-	ttl       time.Duration
-	engine    *dynsecret.Engine
+	api                 *API
+	tenantID            string
+	provider            string
+	targetID            string
+	target              *secretsync.Target
+	remoteKey           string
+	ttl                 time.Duration
+	engine              dynsecret.Lifecycle
+	issueIdempotencyKey string
 
 	mu     sync.Mutex
 	staged map[string]*dynamicLeaseRotationState
@@ -946,7 +990,7 @@ type dynamicLeaseRotationState struct {
 }
 
 func (r *dynamicLeaseRotationRotator) Stage(ctx context.Context, key string) (string, error) {
-	lease, credential, err := r.engine.Issue(ctx, r.provider, key, r.ttl, "")
+	lease, credential, err := r.engine.Issue(ctx, r.provider, key, r.ttl, r.issueIdempotencyKey)
 	if err != nil {
 		return "", dynamicLeaseError(err)
 	}

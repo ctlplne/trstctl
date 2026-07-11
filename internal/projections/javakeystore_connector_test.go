@@ -48,7 +48,7 @@ func TestJavaKeystoreDeploysRenewedCertViaOutbox(t *testing.T) {
 	const ksPath = "/etc/app/keystore.p12"
 	ops := connector.NewMemoryOps() // the host filesystem, in memory
 	reg := connector.NewRegistry(func(string) connector.Ops { return ops })
-	reg.Register(javakeystore.New(ksPath, "changeit", "server"))
+	reg.Register(javakeystore.New(ksPath, []byte("changeit"), "server"))
 
 	payload, err := connector.EncodeDeploy("java-keystore", connector.NewDeployment("app", []byte(jksCertPEM), []byte(jksKeyPEM)))
 	if err != nil {

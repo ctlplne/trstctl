@@ -9,11 +9,8 @@
 // CreateCertificate call on a CA pool (projects/{p}/locations/{l}/caPools/{pool})
 // with the CSR and a lifetime returns the issued certificate with its leaf
 // (pemCertificate) and chain (pemCertificateChain) directly — no polling. That
-// API is reached through the GCP SDK with OAuth2 (service-account) auth, which
-// cannot run in a Linux CI, so the plugin drives the CAS CreateCertificate
-// *operation semantics* over the gcpcas.API seam, with a faithful in-process
-// double for CI (internal/ca/gcpcas/gcpcasfake). The production GCP-SDK transport
-// is the integration follow-up.
+// HTTPAPI is the production CAS v1 REST/OAuth transport; the API seam also
+// supports the faithful in-process double in internal/ca/gcpcas/gcpcasfake.
 //
 // The package holds no crypto/* (AN-3) and custodies no signing key — GCP does —
 // so AN-4 is not implicated; on the platform it runs behind ca.IssuanceService
@@ -49,10 +46,9 @@ type Certificate struct {
 	PemCertificateChain []string // issuing chain, PEM
 }
 
-// API is the subset of the CAS API the plugin uses. The production
-// implementation is the GCP SDK (OAuth2 auth); CI uses an in-process double. CAS
-// issues synchronously, so CreateCertificate returns the issued certificate
-// directly.
+// API is the subset of CAS used by the plugin. HTTPAPI is the production OAuth2
+// implementation. CAS issues synchronously, so CreateCertificate returns the
+// issued certificate directly.
 type API interface {
 	CreateCertificate(ctx context.Context, in CreateCertificateInput) (Certificate, error)
 }
@@ -81,6 +77,13 @@ func New(cfg Config, api API) *catemplate.Plugin {
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
 
+// Destroy releases credentials retained by a short-lived production API.
+func (b *backend) Destroy() {
+	if d, ok := b.api.(interface{ Destroy() }); ok {
+		d.Destroy()
+	}
+}
+
 // Issue creates a certificate on the CA pool and assembles the returned leaf and
 // chain into a PEM chain.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
@@ -91,11 +94,7 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	if lifetime <= 0 {
 		lifetime = defaultValidity
 	}
-	certID, err := randomID()
-	if err != nil {
-		return nil, err
-	}
-	requestID, err := randomID()
+	certID, requestID, err := providerIDs(req.ProviderIdempotencyKey)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +112,26 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		return nil, fmt.Errorf("gcpcas: create certificate returned no certificate")
 	}
 	return assembleChain(out.PemCertificate, out.PemCertificateChain), nil
+}
+
+// providerIDs maps the platform's stable provider idempotency key to both CAS
+// request identifiers. A replay therefore addresses the same Certificate
+// resource and the same requestId instead of minting a second certificate.
+func providerIDs(providerKey string) (certificateID, requestID string, err error) {
+	key := strings.ToLower(strings.TrimSpace(providerKey))
+	if len(key) >= 32 {
+		key = key[:32]
+		return "trstctl-" + key[:24], key[:8] + "-" + key[8:12] + "-" + key[12:16] + "-" + key[16:20] + "-" + key[20:32], nil
+	}
+	certRandom, err := randomID()
+	if err != nil {
+		return "", "", err
+	}
+	requestRandom, err := randomID()
+	if err != nil {
+		return "", "", err
+	}
+	return "trstctl-" + certRandom, requestRandom[:8] + "-" + requestRandom[8:12] + "-" + requestRandom[12:16] + "-" + requestRandom[16:20] + "-" + requestRandom[20:32], nil
 }
 
 // assembleChain concatenates the leaf and chain PEM, leaf first.

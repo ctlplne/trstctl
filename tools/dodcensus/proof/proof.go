@@ -9,6 +9,8 @@ package proof
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -36,40 +39,75 @@ var sentinelFragments = [][]byte{
 }
 
 type expectation struct {
-	SchemaVersion     int               `json:"schema_version"`
-	Repo              string            `json:"repo"`
-	Nonce             string            `json:"nonce"`
-	ID                string            `json:"id"`
-	BuildProfile      string            `json:"build_profile"`
-	Method            string            `json:"method"`
-	Path              string            `json:"path"`
-	SubstrateID       string            `json:"substrate_id"`
-	SubstrateKind     string            `json:"substrate_kind"`
-	SubstrateIdentity string            `json:"substrate_identity"`
-	ContractDigest    string            `json:"contract_digest"`
-	Verifier          string            `json:"verifier"`
-	Execution         string            `json:"execution"`
-	Command           []string          `json:"command,omitempty"`
-	Image             string            `json:"image,omitempty"`
-	ReceiptFile       string            `json:"receipt_file"`
-	Required          map[string]string `json:"required_observations"`
+	SchemaVersion         int               `json:"schema_version"`
+	Repo                  string            `json:"repo"`
+	Nonce                 string            `json:"nonce"`
+	ID                    string            `json:"id"`
+	BuildProfile          string            `json:"build_profile"`
+	Method                string            `json:"method"`
+	Path                  string            `json:"path"`
+	RuntimeMode           string            `json:"runtime_mode"`
+	SubstrateID           string            `json:"substrate_id"`
+	SubstrateKind         string            `json:"substrate_kind"`
+	SubstrateIdentity     string            `json:"substrate_identity"`
+	ContractDigest        string            `json:"contract_digest"`
+	Verifier              string            `json:"verifier"`
+	Execution             string            `json:"execution"`
+	Command               []string          `json:"command,omitempty"`
+	Image                 string            `json:"image,omitempty"`
+	ReceiptFile           string            `json:"receipt_file"`
+	EvidenceFile          string            `json:"evidence_file"`
+	RuntimeRunnerIdentity string            `json:"runtime_runner_identity"`
+	RuntimeRunnerImage    string            `json:"runtime_runner_image,omitempty"`
+	LaunchedModulePath    string            `json:"launched_module_path"`
+	LaunchedBinaryPackage string            `json:"launched_binary_package"`
+	LaunchedCompanions    []string          `json:"launched_companions,omitempty"`
+	LaunchedCGOEnabled    string            `json:"launched_cgo_enabled"`
+	LaunchedGOOS          string            `json:"launched_goos"`
+	LaunchedGOARCH        string            `json:"launched_goarch"`
+	LaunchedTags          []string          `json:"launched_tags,omitempty"`
+	BrokerEndpoint        string            `json:"broker_endpoint"`
+	BrokerToken           string            `json:"broker_token"`
+	Required              map[string]string `json:"required_observations"`
 }
 
 type receipt struct {
-	SchemaVersion     int               `json:"schema_version"`
-	Nonce             string            `json:"nonce"`
-	ID                string            `json:"id"`
-	BuildProfile      string            `json:"build_profile"`
-	Method            string            `json:"method"`
-	Path              string            `json:"path"`
-	SubstrateID       string            `json:"substrate_id"`
-	SubstrateKind     string            `json:"substrate_kind"`
-	SubstrateIdentity string            `json:"substrate_identity"`
-	ContractDigest    string            `json:"contract_digest"`
-	Verifier          string            `json:"verifier"`
-	Passed            bool              `json:"passed"`
-	Skipped           bool              `json:"skipped"`
-	Observations      map[string]string `json:"observations"`
+	SchemaVersion         int                     `json:"schema_version"`
+	Nonce                 string                  `json:"nonce"`
+	ID                    string                  `json:"id"`
+	BuildProfile          string                  `json:"build_profile"`
+	Method                string                  `json:"method"`
+	Path                  string                  `json:"path"`
+	RuntimeMode           string                  `json:"runtime_mode"`
+	SubstrateID           string                  `json:"substrate_id"`
+	SubstrateKind         string                  `json:"substrate_kind"`
+	SubstrateIdentity     string                  `json:"substrate_identity"`
+	ContractDigest        string                  `json:"contract_digest"`
+	Verifier              string                  `json:"verifier"`
+	Passed                bool                    `json:"passed"`
+	Skipped               bool                    `json:"skipped"`
+	Observations          map[string]string       `json:"observations"`
+	ExecutionReceipt      json.RawMessage         `json:"execution_receipt"`
+	RuntimeRunnerIdentity string                  `json:"runtime_runner_identity"`
+	RuntimeRunnerImage    string                  `json:"runtime_runner_image,omitempty"`
+	LaunchedProcess       *launchedProcessReceipt `json:"launched_process,omitempty"`
+	MAC                   string                  `json:"mac"`
+}
+
+type launchedProcessReceipt struct {
+	PID                     int    `json:"pid"`
+	ProcessStartTicks       string `json:"process_start_ticks"`
+	ProcessMode             string `json:"process_mode"`
+	BinaryPackage           string `json:"binary_package"`
+	BinaryDigest            string `json:"binary_digest"`
+	BinaryDevice            string `json:"binary_device"`
+	BinaryInode             string `json:"binary_inode"`
+	InterpreterDigest       string `json:"interpreter_digest,omitempty"`
+	InterpreterDevice       string `json:"interpreter_device,omitempty"`
+	InterpreterInode        string `json:"interpreter_inode,omitempty"`
+	Address                 string `json:"address"`
+	ListenerInode           string `json:"listener_inode"`
+	AcceptedConnectionInode string `json:"accepted_connection_inode"`
 }
 
 // Evidence is intentionally sealed by the unexported dodEvidence method. Code
@@ -95,6 +133,7 @@ type Session struct {
 	expect     expectation
 	statusCode int
 	body       []byte
+	launched   *launchedProcessReceipt
 	once       sync.Once
 }
 
@@ -103,23 +142,57 @@ type Session struct {
 // expectation. The process must echo a nonce-bound READY record and later a final
 // action receipt from the same PID.
 type ExternalSubstrate struct {
-	t        *testing.T
-	expect   expectation
-	cmd      *exec.Cmd
-	decoder  *json.Decoder
-	endpoint string
-	pid      int
-	stopped  bool
+	t                *testing.T
+	expect           expectation
+	cmd              *exec.Cmd
+	decoder          *json.Decoder
+	endpoint         string
+	pid              int
+	runtimeIdentity  string
+	mu               sync.Mutex
+	receiptRequested bool
+	stopOnce         sync.Once
+	stopErr          error
+	waitOnce         sync.Once
+	waitDone         chan struct{}
+	waitErr          error
+	receiptDoneOnce  sync.Once
+	receiptDone      chan struct{}
+	broker           bool
+	brokerEndpoint   string
+	brokerToken      string
+}
+
+type brokerStartRequest struct {
+	Token      string            `json:"token"`
+	ID         string            `json:"id"`
+	RuntimeEnv map[string]string `json:"runtime_env,omitempty"`
+}
+
+type brokerStartResponse struct {
+	Endpoint string `json:"endpoint"`
+	PID      int    `json:"pid"`
+}
+
+type brokerStopRequest struct {
+	Token string `json:"token"`
+	ID    string `json:"id"`
+}
+
+type brokerStopResponse struct {
+	Receipt json.RawMessage `json:"receipt"`
 }
 
 type substrateReady struct {
-	SchemaVersion  int    `json:"schema_version"`
-	Challenge      string `json:"challenge"`
-	Identity       string `json:"identity"`
-	ContractDigest string `json:"contract_digest"`
-	PID            int    `json:"pid"`
-	Ready          bool   `json:"ready"`
-	Endpoint       string `json:"endpoint"`
+	SchemaVersion   int    `json:"schema_version"`
+	Challenge       string `json:"challenge"`
+	EntryID         string `json:"entry_id"`
+	Identity        string `json:"identity"`
+	ContractDigest  string `json:"contract_digest"`
+	PID             int    `json:"pid"`
+	Ready           bool   `json:"ready"`
+	Endpoint        string `json:"endpoint"`
+	RuntimeIdentity string `json:"runtime_identity,omitempty"`
 }
 
 // StartCommand launches the exact digest-bound command from the manifest.
@@ -132,11 +205,26 @@ func StartCommand(t *testing.T, id string) *ExternalSubstrate {
 	if expected.Repo == "" || len(expected.Command) == 0 {
 		t.Fatalf("DOD-CENSUS: %s command expectation is incomplete", id)
 	}
+	if expected.BrokerEndpoint != "" && expected.BrokerToken != "" {
+		return startBrokerExternal(t, expected)
+	}
 	commandPath := filepath.Join(expected.Repo, filepath.FromSlash(expected.Command[0]))
 	cmd := exec.Command(commandPath, expected.Command[1:]...)
 	cmd.Dir = expected.Repo
 	cmd.Env = substrateEnvironment(expected)
 	return startExternal(t, expected, cmd, true)
+}
+
+// OnlyExpectation returns the one selected ID when a parent gate gives a shared
+// runtime test exactly one expectation, and returns empty when it selected the
+// full group. The envelope still fails closed when missing or malformed.
+func OnlyExpectation(t *testing.T) string {
+	t.Helper()
+	expected := loadExpectations(t)
+	if len(expected) == 1 {
+		return expected[0].ID
+	}
+	return ""
 }
 
 // StartContainer launches the exact digest-pinned image from the manifest.
@@ -145,6 +233,9 @@ func StartContainer(t *testing.T, id string) *ExternalSubstrate {
 	expected := expectationFor(t, id)
 	if expected.Execution != "container" || expected.Image == "" {
 		t.Fatalf("DOD-CENSUS: %s container expectation is incomplete", id)
+	}
+	if expected.BrokerEndpoint != "" && expected.BrokerToken != "" {
+		return startBrokerExternal(t, expected)
 	}
 	args := []string{"run", "--rm", "-i"}
 	for _, item := range substrateEnvironmentPairs(expected) {
@@ -155,6 +246,79 @@ func StartContainer(t *testing.T, id string) *ExternalSubstrate {
 	cmd.Dir = expected.Repo
 	cmd.Env = cleanEnvironment(os.Environ())
 	return startExternal(t, expected, cmd, false)
+}
+
+func startBrokerExternal(t *testing.T, expected expectation) *ExternalSubstrate {
+	t.Helper()
+	dynamic := map[string]string{}
+	for _, name := range brokerDynamicEnvironmentNames(expected) {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			dynamic[name] = value
+		}
+	}
+	payload := brokerStartRequest{Token: expected.BrokerToken, ID: expected.ID, RuntimeEnv: dynamic}
+	var ready brokerStartResponse
+	brokerRequest(t, expected.BrokerEndpoint+"/start", payload, &ready)
+	parsed, err := url.Parse(ready.Endpoint)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || ready.PID <= 0 {
+		t.Fatal("DOD-CENSUS: parent broker returned invalid substrate READY")
+	}
+	external := &ExternalSubstrate{
+		t: t, expect: expected, endpoint: ready.Endpoint, pid: ready.PID,
+		broker: true, brokerEndpoint: expected.BrokerEndpoint, brokerToken: expected.BrokerToken,
+		receiptDone: make(chan struct{}), waitDone: make(chan struct{}),
+	}
+	t.Cleanup(external.cleanup)
+	return external
+}
+
+func brokerDynamicEnvironmentNames(expected expectation) []string {
+	if expected.SubstrateID == "managed_key_custody" {
+		return []string{"TRSTCTL_HSM_PROOF_IMAGE", "TRSTCTL_HSM_PROOF_NETWORK"}
+	}
+	switch expected.ID {
+	case "external_ca.entrust":
+		return []string{
+			"TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE",
+			"TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE",
+			"TRSTCTL_ENTRUST_MTLS_CLIENT_CA_FILE",
+		}
+	case "code_signing.default":
+		return []string{"TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE"}
+	default:
+		return nil
+	}
+}
+
+func brokerRequest(t *testing.T, endpoint string, requestValue, responseValue any) {
+	t.Helper()
+	encoded, err := json.Marshal(requestValue)
+	if err != nil {
+		t.Fatalf("DOD-CENSUS: encode parent broker request: %v", err)
+	}
+	request, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(encoded))
+	if err != nil {
+		t.Fatalf("DOD-CENSUS: create parent broker request: %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 40 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("DOD-CENSUS: parent broker request: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		t.Fatalf("DOD-CENSUS: parent broker status=%d body=%s", response.StatusCode, body)
+	}
+	decoder := json.NewDecoder(io.LimitReader(response.Body, maxEvidenceBody+1))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(responseValue); err != nil {
+		t.Fatalf("DOD-CENSUS: decode parent broker response: %v", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		t.Fatal("DOD-CENSUS: parent broker response has trailing JSON")
+	}
 }
 
 func startExternal(t *testing.T, expected expectation, cmd *exec.Cmd, requireHostPID bool) *ExternalSubstrate {
@@ -193,20 +357,35 @@ func startExternal(t *testing.T, expected expectation, cmd *exec.Cmd, requireHos
 	case <-time.After(10 * time.Second):
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		t.Fatal("DOD-CENSUS: substrate did not emit READY within 10 seconds")
+		t.Fatalf("DOD-CENSUS: substrate did not emit READY within 10 seconds; stderr=%s", stderr.String())
 	}
 	parsedEndpoint, endpointErr := url.Parse(ready.Endpoint)
-	if ready.SchemaVersion != 1 || ready.Challenge != expected.Nonce || ready.Identity != expected.SubstrateIdentity || ready.ContractDigest != expected.ContractDigest || !ready.Ready || ready.PID <= 0 || endpointErr != nil || (parsedEndpoint.Scheme != "http" && parsedEndpoint.Scheme != "https") || parsedEndpoint.Host == "" {
+	if ready.SchemaVersion != 1 || ready.Challenge != expected.Nonce || ready.EntryID != expected.ID || ready.Identity != expected.SubstrateIdentity || ready.ContractDigest != expected.ContractDigest || !ready.Ready || ready.PID <= 0 || endpointErr != nil || (parsedEndpoint.Scheme != "http" && parsedEndpoint.Scheme != "https") || parsedEndpoint.Host == "" {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 		t.Fatal("DOD-CENSUS: substrate READY failed nonce/identity/contract/PID/endpoint validation")
+	}
+	if !runtimeIdentityMatches(expected.SubstrateID, ready.RuntimeIdentity) {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatal("DOD-CENSUS: substrate READY has missing, mutable, or unexpected runtime image identity")
 	}
 	if requireHostPID && ready.PID != cmd.Process.Pid {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 		t.Fatalf("DOD-CENSUS: READY pid %d is not launched command pid %d", ready.PID, cmd.Process.Pid)
 	}
-	return &ExternalSubstrate{t: t, expect: expected, cmd: cmd, decoder: decoder, endpoint: ready.Endpoint, pid: ready.PID}
+	external := &ExternalSubstrate{
+		t: t, expect: expected, cmd: cmd, decoder: decoder, endpoint: ready.Endpoint, pid: ready.PID,
+		runtimeIdentity: ready.RuntimeIdentity,
+		waitDone:        make(chan struct{}), receiptDone: make(chan struct{}),
+	}
+	// Register immediately after READY validation. Any later assertion failure
+	// (including t.Fatal before StopAndReceipt) gives the substrate a bounded
+	// SIGINT grace period so its own container/process cleanup runs, then kills
+	// and reaps it as a fail-safe.
+	t.Cleanup(external.cleanup)
+	return external
 }
 
 // Endpoint is the validated address emitted by the external READY record.
@@ -216,11 +395,23 @@ func (s *ExternalSubstrate) Endpoint() string { return s.endpoint }
 // action receipt. Session.Complete validates and hashes these bytes.
 func (s *ExternalSubstrate) StopAndReceipt() []byte {
 	s.t.Helper()
-	if s.stopped {
+	s.mu.Lock()
+	if s.receiptRequested {
+		s.mu.Unlock()
 		s.t.Fatal("DOD-CENSUS: substrate stopped more than once")
 	}
-	s.stopped = true
-	if err := s.cmd.Process.Signal(os.Interrupt); err != nil {
+	s.receiptRequested = true
+	s.mu.Unlock()
+	defer s.finishReceipt()
+	if s.broker {
+		var stopped brokerStopResponse
+		brokerRequest(s.t, s.brokerEndpoint+"/stop", brokerStopRequest{Token: s.brokerToken, ID: s.expect.ID}, &stopped)
+		if len(stopped.Receipt) == 0 || len(stopped.Receipt) > maxEvidenceBody {
+			s.t.Fatal("DOD-CENSUS: parent broker returned an invalid receipt size")
+		}
+		return append([]byte(nil), stopped.Receipt...)
+	}
+	if err := s.signalStop(); err != nil {
 		s.t.Fatalf("DOD-CENSUS: stop substrate: %v", err)
 	}
 	resultChannel := make(chan struct {
@@ -244,19 +435,111 @@ func (s *ExternalSubstrate) StopAndReceipt() []byte {
 		receipt = result.value
 	case <-time.After(10 * time.Second):
 		_ = s.cmd.Process.Kill()
+		_, _ = s.waitProcess(2 * time.Second)
 		s.t.Fatal("DOD-CENSUS: substrate did not emit final receipt within 10 seconds")
 	}
-	if err := s.cmd.Wait(); err != nil {
-		s.t.Fatalf("DOD-CENSUS: substrate exit: %v", err)
+	waitErr, reaped := s.waitProcess(10 * time.Second)
+	if !reaped {
+		_ = s.cmd.Process.Kill()
+		_, _ = s.waitProcess(2 * time.Second)
+		s.t.Fatal("DOD-CENSUS: substrate did not exit within 10 seconds after its final receipt")
+	}
+	if waitErr != nil {
+		if !receipt.Passed {
+			s.t.Fatalf("DOD-CENSUS: substrate %s reported passed=false and exited unsuccessfully: %v", receipt.EntryID, waitErr)
+		}
+		s.t.Fatalf("DOD-CENSUS: substrate exit: %v", waitErr)
 	}
 	if receipt.PID != s.pid {
 		s.t.Fatalf("DOD-CENSUS: final receipt pid %d differs from READY pid %d", receipt.PID, s.pid)
+	}
+	if receipt.RuntimeIdentity != s.runtimeIdentity || !runtimeIdentityMatches(s.expect.SubstrateID, receipt.RuntimeIdentity) {
+		s.t.Fatal("DOD-CENSUS: final receipt runtime image identity differs from READY or is mutable")
 	}
 	raw, err := json.Marshal(receipt)
 	if err != nil {
 		s.t.Fatalf("DOD-CENSUS: encode final receipt: %v", err)
 	}
 	return raw
+}
+
+func (s *ExternalSubstrate) signalStop() error {
+	s.stopOnce.Do(func() {
+		s.stopErr = s.cmd.Process.Signal(os.Interrupt)
+	})
+	return s.stopErr
+}
+
+func (s *ExternalSubstrate) waitProcess(timeout time.Duration) (error, bool) {
+	s.waitOnce.Do(func() {
+		go func() {
+			err := s.cmd.Wait()
+			s.mu.Lock()
+			s.waitErr = err
+			s.mu.Unlock()
+			close(s.waitDone)
+		}()
+	})
+	select {
+	case <-s.waitDone:
+		s.mu.Lock()
+		err := s.waitErr
+		s.mu.Unlock()
+		return err, true
+	case <-time.After(timeout):
+		return nil, false
+	}
+}
+
+func (s *ExternalSubstrate) finishReceipt() {
+	s.receiptDoneOnce.Do(func() { close(s.receiptDone) })
+}
+
+func (s *ExternalSubstrate) cleanup() {
+	if s.broker {
+		s.mu.Lock()
+		requested := s.receiptRequested
+		if !requested {
+			s.receiptRequested = true
+		}
+		s.mu.Unlock()
+		if !requested {
+			request := brokerStopRequest{Token: s.brokerToken, ID: s.expect.ID}
+			encoded, _ := json.Marshal(request)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			httpRequest, _ := http.NewRequestWithContext(ctx, http.MethodPost, s.brokerEndpoint+"/stop", bytes.NewReader(encoded))
+			httpRequest.Header.Set("Content-Type", "application/json")
+			client := &http.Client{Timeout: 3 * time.Second}
+			response, err := client.Do(httpRequest)
+			if err == nil {
+				_ = response.Body.Close()
+			}
+		}
+		return
+	}
+	s.mu.Lock()
+	receiptRequested := s.receiptRequested
+	s.mu.Unlock()
+	if receiptRequested {
+		select {
+		case <-s.receiptDone:
+		case <-time.After(12 * time.Second):
+			// A concurrent/aborted receipt read exceeded its own ten-second
+			// bound. Fall through to the kill-and-reap safety net.
+		}
+	}
+	select {
+	case <-s.waitDone:
+		return
+	default:
+	}
+	_ = s.signalStop()
+	if _, reaped := s.waitProcess(10 * time.Second); reaped {
+		return
+	}
+	_ = s.cmd.Process.Kill()
+	_, _ = s.waitProcess(5 * time.Second)
 }
 
 func expectationFor(t *testing.T, id string) expectation {
@@ -284,6 +567,7 @@ func substrateEnvironment(expected expectation) []string {
 func substrateEnvironmentPairs(expected expectation) []string {
 	return []string{
 		"TRSTCTL_DOD_CHALLENGE=" + expected.Nonce,
+		"TRSTCTL_DOD_ENTRY_ID=" + expected.ID,
 		"TRSTCTL_DOD_SUBSTRATE_IDENTITY=" + expected.SubstrateIdentity,
 		"TRSTCTL_DOD_CONTRACT_DIGEST=" + expected.ContractDigest,
 	}
@@ -320,7 +604,10 @@ func Start(t *testing.T, id string, handler http.Handler, request *http.Request)
 	if expected == nil {
 		t.Fatalf("DOD-CENSUS: no gate-issued expectation for %s", id)
 	}
-	if expected.SchemaVersion != 1 || expected.Nonce == "" || expected.BuildProfile == "" || expected.SubstrateID == "" || expected.SubstrateIdentity == "" || expected.ContractDigest == "" || expected.Verifier == "" || expected.ReceiptFile == "" {
+	if expected.RuntimeMode != "assembled-handler" {
+		t.Fatalf("DOD-CENSUS: %s launched-binary expectation cannot use an in-process Handler", id)
+	}
+	if expected.SchemaVersion != 1 || expected.Nonce == "" || expected.BuildProfile == "" || expected.RuntimeMode == "" || expected.SubstrateID == "" || expected.SubstrateIdentity == "" || expected.ContractDigest == "" || expected.Verifier == "" || expected.ReceiptFile == "" || expected.EvidenceFile == "" || expected.RuntimeRunnerIdentity == "" || expected.BrokerEndpoint == "" || expected.BrokerToken == "" {
 		t.Fatalf("DOD-CENSUS: expectation for %s is incomplete", id)
 	}
 	if request.Method != expected.Method || request.URL == nil || request.URL.Path != expected.Path {
@@ -334,16 +621,26 @@ func Start(t *testing.T, id string, handler http.Handler, request *http.Request)
 	return &Session{t: t, expect: *expected, statusCode: capture.status, body: append([]byte(nil), capture.body.Bytes()...)}
 }
 
-// StartResponse binds evidence to a response returned by an independently
-// launched shipped binary (for example the control plane talking to the separate
-// signer process). It is the multi-process counterpart to Start's in-package
-// handler path.
-func StartResponse(t *testing.T, id string, response *http.Response) *Session {
+// StartResponse accepts only the opaque result of ShippedProcess.Do. The result
+// binds the HTTP bytes to the gate-built cmd/trstctl executable and to a LISTEN
+// socket owned by that exact live PID.
+func StartResponse(t *testing.T, id string, launched *launchedResponse) *Session {
 	t.Helper()
+	if launched == nil || launched.response == nil || launched.id != id {
+		t.Fatalf("DOD-CENSUS: %s has no matching gate-owned launched response", id)
+	}
+	response := launched.response
 	if response == nil || response.Request == nil || response.Request.URL == nil {
 		t.Fatalf("DOD-CENSUS: %s has nil launched-binary response/request", id)
 	}
 	expected := expectationFor(t, id)
+	if expected.RuntimeMode != "launched-binary" || launched.witness.PID <= 0 ||
+		launched.witness.BinaryPackage != expected.LaunchedBinaryPackage ||
+		!strings.HasPrefix(launched.witness.BinaryDigest, "sha256:") ||
+		launched.witness.Address != response.Request.URL.Host ||
+		!validLaunchedWitnessShape(launched.witness) {
+		t.Fatalf("DOD-CENSUS: %s launched process witness does not match gate expectation/response", id)
+	}
 	if response.Request.Method != expected.Method || response.Request.URL.Path != expected.Path {
 		t.Fatalf("DOD-CENSUS: launched response route %s %s does not match %s %s", response.Request.Method, response.Request.URL.Path, expected.Method, expected.Path)
 	}
@@ -360,7 +657,36 @@ func StartResponse(t *testing.T, id string, response *http.Response) *Session {
 	if err := responseIsServed(response.StatusCode, body); err != nil {
 		t.Fatalf("DOD-CENSUS: %s launched route is not served: %v", id, err)
 	}
-	return &Session{t: t, expect: expected, statusCode: response.StatusCode, body: append([]byte(nil), body...)}
+	witness := launched.witness
+	return &Session{
+		t: t, expect: expected, statusCode: response.StatusCode, body: append([]byte(nil), body...),
+		launched: &witness,
+	}
+}
+
+func validLaunchedWitnessShape(witness launchedProcessReceipt) bool {
+	positiveDecimal := func(value string) bool {
+		parsed, err := strconv.ParseUint(value, 10, 64)
+		return err == nil && parsed > 0 && strconv.FormatUint(parsed, 10) == value
+	}
+	validDigest := func(value string) bool {
+		algorithm, encoded, ok := strings.Cut(value, ":")
+		digest, err := hex.DecodeString(encoded)
+		return ok && algorithm == "sha256" && err == nil && len(digest) == 32 && encoded == strings.ToLower(encoded)
+	}
+	if !positiveDecimal(witness.ProcessStartTicks) || !positiveDecimal(witness.BinaryDevice) || !positiveDecimal(witness.BinaryInode) ||
+		!positiveDecimal(witness.ListenerInode) || !positiveDecimal(witness.AcceptedConnectionInode) ||
+		witness.ListenerInode == witness.AcceptedConnectionInode || !validDigest(witness.BinaryDigest) {
+		return false
+	}
+	switch witness.ProcessMode {
+	case processModeNative:
+		return witness.InterpreterDigest == "" && witness.InterpreterDevice == "" && witness.InterpreterInode == ""
+	case processModeBinfmt:
+		return validDigest(witness.InterpreterDigest) && positiveDecimal(witness.InterpreterDevice) && positiveDecimal(witness.InterpreterInode)
+	default:
+		return false
+	}
 }
 
 func loadExpectations(t *testing.T) []expectation {
@@ -420,20 +746,22 @@ func (s *Session) Complete(evidence Evidence) {
 		completed = true
 		r := receipt{
 			SchemaVersion: 1, Nonce: s.expect.Nonce, ID: s.expect.ID,
-			BuildProfile: s.expect.BuildProfile, Method: s.expect.Method, Path: s.expect.Path,
+			BuildProfile: s.expect.BuildProfile, Method: s.expect.Method, Path: s.expect.Path, RuntimeMode: s.expect.RuntimeMode,
 			SubstrateID: s.expect.SubstrateID, SubstrateKind: s.expect.SubstrateKind,
 			SubstrateIdentity: s.expect.SubstrateIdentity, ContractDigest: s.expect.ContractDigest,
 			Verifier: s.expect.Verifier, Passed: true, Skipped: false,
-			Observations: payload.observations,
+			Observations: payload.observations, ExecutionReceipt: append(json.RawMessage(nil), payload.execution...),
+			RuntimeRunnerIdentity: s.expect.RuntimeRunnerIdentity, RuntimeRunnerImage: s.expect.RuntimeRunnerImage,
+			LaunchedProcess: s.launched,
 		}
-		file, err := os.OpenFile(s.expect.ReceiptFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		file, err := os.OpenFile(s.expect.EvidenceFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
-			s.t.Fatalf("DOD-CENSUS: create unique receipt: %v", err)
+			s.t.Fatalf("DOD-CENSUS: create unique unsigned evidence envelope: %v", err)
 		}
 		encoder := json.NewEncoder(file)
 		if err := encoder.Encode(r); err != nil {
 			_ = file.Close()
-			s.t.Fatalf("DOD-CENSUS: encode receipt: %v", err)
+			s.t.Fatalf("DOD-CENSUS: encode unsigned evidence envelope: %v", err)
 		}
 		if err := file.Sync(); err != nil {
 			_ = file.Close()
@@ -449,12 +777,14 @@ func (s *Session) Complete(evidence Evidence) {
 }
 
 type substrateExecutionReceipt struct {
-	SchemaVersion  int    `json:"schema_version"`
-	Challenge      string `json:"challenge"`
-	Identity       string `json:"identity"`
-	ContractDigest string `json:"contract_digest"`
-	PID            int    `json:"pid"`
-	Passed         bool   `json:"passed"`
+	SchemaVersion   int    `json:"schema_version"`
+	Challenge       string `json:"challenge"`
+	EntryID         string `json:"entry_id"`
+	Identity        string `json:"identity"`
+	ContractDigest  string `json:"contract_digest"`
+	PID             int    `json:"pid"`
+	Passed          bool   `json:"passed"`
+	RuntimeIdentity string `json:"runtime_identity,omitempty"`
 }
 
 func (s *Session) validateExecutionReceipt(raw []byte) (string, error) {
@@ -470,14 +800,26 @@ func (s *Session) validateExecutionReceipt(raw []byte) (string, error) {
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return "", fmt.Errorf("trailing data")
 	}
-	if receipt.SchemaVersion != 1 || receipt.Challenge != s.expect.Nonce || receipt.Identity != s.expect.SubstrateIdentity || receipt.ContractDigest != s.expect.ContractDigest || receipt.PID <= 0 || receipt.PID == os.Getpid() || !receipt.Passed {
+	if receipt.SchemaVersion != 1 || receipt.Challenge != s.expect.Nonce || receipt.EntryID != s.expect.ID || receipt.Identity != s.expect.SubstrateIdentity || receipt.ContractDigest != s.expect.ContractDigest || receipt.PID <= 0 || receipt.PID == os.Getpid() || !receipt.Passed {
 		return "", fmt.Errorf("nonce/identity/contract/PID/pass mismatch")
+	}
+	if !runtimeIdentityMatches(s.expect.SubstrateID, receipt.RuntimeIdentity) {
+		return "", fmt.Errorf("runtime image identity is missing, mutable, or unexpected")
 	}
 	canonical, err := json.Marshal(receipt)
 	if err != nil {
 		return "", err
 	}
 	return "sha256:" + internalcrypto.SHA256Hex(canonical), nil
+}
+
+func runtimeIdentityMatches(substrateID, value string) bool {
+	if substrateID != "managed_key_custody" {
+		return value == ""
+	}
+	algorithm, digest, ok := strings.Cut(value, ":")
+	decoded, err := hex.DecodeString(digest)
+	return ok && algorithm == "sha256" && err == nil && len(decoded) == 32 && digest == strings.ToLower(digest)
 }
 
 type responseCapture struct {

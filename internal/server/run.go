@@ -315,6 +315,15 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 		"--kek", cfg.Secrets.KEKFile,
 		"--auth-secret", cfg.Signer.AuthSecretFile,
 	}
+	managedKeysCleanup := func() {}
+	if cfg.ManagedKeys.Enabled {
+		managedKeysConfig, cleanup, err := prepareManagedKeySignerConfig(cfg.ManagedKeys)
+		if err != nil {
+			return nil, nil, fmt.Errorf("prepare signer managed-key config: %w", err)
+		}
+		managedKeysCleanup = cleanup
+		args = append(args, "--managed-keys-config", managedKeysConfig)
+	}
 	if cfg.License.File != "" {
 		args = append(args, "--license", cfg.License.File)
 	}
@@ -323,12 +332,16 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 	}
 	sup, err := signing.Supervise(ctx, signerBin, socket, args...)
 	if err != nil {
+		managedKeysCleanup()
 		return nil, nil, fmt.Errorf("start signer: %w", err)
 	}
-	return sup, sup.Close, nil
+	return sup, func() {
+		sup.Close()
+		managedKeysCleanup()
+	}, nil
 }
 
-func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard) (Deps, error) {
+func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard) (_ Deps, err error) {
 	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
 	if err != nil {
 		return Deps{}, fmt.Errorf("audit signing key: %w", err)
@@ -373,6 +386,39 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("notifications: %w", err)
 	}
+	incidentNotificationChannels, err := incidentNotificationChannelsFromConfig(cfg.Notifications, egressGuard)
+	if err != nil {
+		return Deps{}, fmt.Errorf("incident notifications: %w", err)
+	}
+	notificationChannels = append(notificationChannels, incidentNotificationChannels...)
+	// From this point until the returned Deps is successfully transferred to
+	// Build, buildRunDeps owns every channel credential. Any later constructor
+	// failure must wipe that authority rather than abandoning locked buffers.
+	defer func() { closeNotificationChannelsOnError(notificationChannels, err) }()
+	codeSigning, err := codeSigningConfigFromConfig(ctx, cfg.CodeSigning, signer.signer, signer.tokenProvider, egressGuard)
+	if err != nil {
+		return Deps{}, fmt.Errorf("code-signing: %w", err)
+	}
+	connectorRegistry, err := connectorRegistryFromConfig(cfg.Connectors, st, sec.kek, egressGuard)
+	if err != nil {
+		return Deps{}, fmt.Errorf("connectors: %w", err)
+	}
+	connectorRightSize, err := connectorRightSizeHandler(cfg.Connectors, st, sec.kek, egressGuard)
+	if err != nil {
+		return Deps{}, fmt.Errorf("connector right-size: %w", err)
+	}
+	externalCAs, err := externalCAsFromConfig(ctx, cfg.ExternalCAs, signer.signer, signer.tokenProvider, egressGuard)
+	if err != nil {
+		return Deps{}, fmt.Errorf("external CAs: %w", err)
+	}
+	dynamicSecretProviders, err := dynamicSecretProvidersFromConfig(ctx, cfg.SecretIntegrations.DynamicProviders, st, sec.kek, egressGuard)
+	if err != nil {
+		return Deps{}, fmt.Errorf("dynamic-secret providers: %w", err)
+	}
+	secretSyncTargets, err := secretSyncTargetsFromConfig(ctx, cfg.SecretIntegrations.SyncTargets, st, sec.kek, egressGuard)
+	if err != nil {
+		return Deps{}, fmt.Errorf("secret-sync targets: %w", err)
+	}
 	telemetryReporter, err := telemetryReporterFromConfig(cfg.Telemetry, st, egressGuard)
 	if err != nil {
 		return Deps{}, fmt.Errorf("telemetry: %w", err)
@@ -395,11 +441,17 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
 		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
 		PrivacyRetentionEnabled: privacyRetentionEnabled, PrivacyRetentionInterval: privacyRetentionInterval,
-		PrivacyRetentionPolicy: privacyRetentionPolicy,
-		LifecycleRenewBefore:   renewBefore,
-		LifecycleAlertBefore:   alertBefore,
-		NotificationChannels:   notificationChannels,
-		Logger:                 logger, RateLimiter: rateLimiter,
+		PrivacyRetentionPolicy:       privacyRetentionPolicy,
+		LifecycleRenewBefore:         renewBefore,
+		LifecycleAlertBefore:         alertBefore,
+		NotificationChannels:         notificationChannels,
+		CodeSigning:                  codeSigning,
+		ConnectorRegistry:            connectorRegistry,
+		ConnectorRightSize:           connectorRightSize,
+		ExternalCAs:                  externalCAs,
+		TenantDynamicSecretProviders: dynamicSecretProviders,
+		TenantSecretSyncTargets:      secretSyncTargets,
+		Logger:                       logger, RateLimiter: rateLimiter,
 		OTLPExporter:    otlpExporter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},

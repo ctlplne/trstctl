@@ -14,14 +14,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secretjson"
 )
 
 const (
@@ -86,6 +87,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 		c.observe(dep.Target, "error")
 		return fmt.Errorf("envoy: read current SDS secret: %w", err)
 	}
+	defer wipeResource(&current)
 	desired := resourceFromDeployment(c.secretName, dep)
 	if hadCurrent && sameSecret(current, desired) {
 		c.observe(dep.Target, "noop")
@@ -134,14 +136,21 @@ func (c *Connector) current(ctx context.Context, sb connector.Sandbox) (sdsResou
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
 		return sdsResource{}, false, nil
 	}
 	if resp.StatusCode/100 != 2 {
 		return sdsResource{}, false, responseError(resp)
 	}
+	data, err := secret.ReadBounded(resp.Body, 1<<20)
+	if err != nil {
+		return sdsResource{}, false, fmt.Errorf("read SDS secret (details redacted)")
+	}
+	defer secret.Wipe(data)
 	var res sdsResource
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&res); err != nil {
-		return sdsResource{}, false, fmt.Errorf("decode SDS secret: %w", err)
+	if err := json.Unmarshal(data, &res); err != nil {
+		wipeResource(&res)
+		return sdsResource{}, false, fmt.Errorf("decode SDS secret failed (details redacted)")
 	}
 	return res, true, nil
 }
@@ -151,6 +160,7 @@ func (c *Connector) put(ctx context.Context, sb connector.Sandbox, res sdsResour
 	if err != nil {
 		return fmt.Errorf("encode SDS secret: %w", err)
 	}
+	defer secret.Wipe(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.secretURL(), bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -164,6 +174,7 @@ func (c *Connector) put(ctx context.Context, sb connector.Sandbox, res sdsResour
 	if resp.StatusCode/100 != 2 {
 		return responseError(resp)
 	}
+	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil
 }
 
@@ -172,11 +183,8 @@ func (c *Connector) secretURL() string {
 }
 
 func responseError(resp *http.Response) error {
-	msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	if err != nil {
-		return fmt.Errorf("status %d: read response: %w", resp.StatusCode, err)
-	}
-	return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+	_ = secret.DrainBounded(resp.Body, 4<<10)
+	return fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
 }
 
 func sameSecret(a, b sdsResource) bool {
@@ -204,10 +212,25 @@ func resourceFromDeployment(name string, dep connector.Deployment) sdsResource {
 		Name:        name,
 		Fingerprint: dep.Fingerprint,
 		TLSCertificate: tlsCertificate{
-			CertificateChain: dataSource{InlineBytes: dep.CertPEM},
-			PrivateKey:       dataSource{InlineBytes: dep.KeyPEM},
+			CertificateChain: dataSource{InlineBytes: secretjson.Base64Bytes(dep.CertPEM)},
+			PrivateKey:       dataSource{InlineBytes: secretjson.Base64Bytes(dep.KeyPEM)},
 		},
 	}}}
+}
+
+// wipeResource destroys key-bearing byte slices decoded from the remote SDS
+// endpoint. Desired resources alias the caller-owned deployment and therefore
+// are never passed here; this helper owns only response-decoder allocations.
+func wipeResource(res *sdsResource) {
+	if res == nil {
+		return
+	}
+	for i := range res.Resources {
+		secret.Wipe(res.Resources[i].TLSCertificate.CertificateChain.InlineBytes)
+		secret.Wipe(res.Resources[i].TLSCertificate.PrivateKey.InlineBytes)
+		res.Resources[i].TLSCertificate.CertificateChain.InlineBytes = nil
+		res.Resources[i].TLSCertificate.PrivateKey.InlineBytes = nil
+	}
 }
 
 type sdsResource struct {
@@ -227,5 +250,5 @@ type tlsCertificate struct {
 }
 
 type dataSource struct {
-	InlineBytes []byte `json:"inline_bytes"`
+	InlineBytes secretjson.Base64Bytes `json:"inline_bytes"`
 }

@@ -157,9 +157,13 @@ func TestFeatureCatalogHasExplicitServedState(t *testing.T) {
 	if counts["served"] == 0 {
 		t.Error("served_state ledger should include at least one served row")
 	}
-	if counts["conditional"] == 0 || counts["partial"] == 0 || counts["library"] == 0 {
-		t.Errorf("honest served-state ledger must exercise conditional, partial, and library states, got %#v", counts)
+	if counts["conditional"] == 0 || counts["partial"] == 0 {
+		t.Errorf("honest served-state ledger must exercise conditional and partial states, got %#v", counts)
 	}
+	// Library and roadmap remain valid values but are not quota categories. Once a
+	// formerly library-only mechanism is wired, forcing at least one feature to keep
+	// that label would make the claims ledger lie. The live-census test below, not a
+	// taxonomy quota, is the fail-closed proof for every DoD-gated feature.
 
 	for _, item := range byID {
 		if item.ServedState != "library" && item.ServedState != "roadmap" {
@@ -241,25 +245,25 @@ func TestFeatureServedStateMatchesLiveWiringCensus(t *testing.T) {
 func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T) {
 	want := map[string]string{
 		"F3":  "conditional", // agent_channel.enabled gates the actual agent transport
-		"F4":  "partial",     // built-in issuance is served; external CA breadth is not
+		"F4":  "partial",     // built-in and external CA issuance are served; Kubernetes posture routes remain
 		"F5":  "conditional", // protocols.acme.enabled
-		"F7":  "library",     // advertised native connector set is not constructed
+		"F7":  "conditional", // all 24 native connectors are assembled when their immutable targets are configured
 		"F13": "conditional", // browser SSO needs operator IdP configuration
 		"F16": "partial",     // classical agility is served; PQC residual remains
 		"F22": "conditional", // protocols.est.enabled
 		"F23": "conditional", // protocols.scep.enabled
 		"F24": "conditional", // protocols.spiffe.enabled
-		"F26": "conditional", // Enterprise/config gate plus six-backend runtime residual
-		"F27": "library",     // advertised additional native connectors are not constructed
-		"F29": "partial",     // core channels work; PagerDuty/OpsGenie are not wired
-		"F31": "conditional", // Enterprise remediation gate plus right-size residual
+		"F26": "conditional", // all six backends are served; Enterprise license/config remains the runtime condition
+		"F27": "conditional", // the additional native connectors share the configured production target registry
+		"F29": "served",      // all advertised channels are production-assembled
+		"F31": "conditional", // Enterprise remediation license and configured connector target gate the served workflow
 		"F32": "conditional", // Enterprise remediation license
 		"F34": "partial",     // issuance works; break-glass rotation residual remains
 		"F37": "conditional", // secrets.enable_api
 		"F39": "conditional", // secrets.enable_api
 		"F41": "conditional", // Enterprise HA license plus federation.enabled
 		"F43": "conditional", // protocols.ssh.enabled
-		"F50": "library",     // served route remains a 501 stub
+		"F50": "conditional", // code_signing.enabled plus signer/Rekor trust
 		"F51": "conditional", // protocols.tsa.enabled
 		"F54": "conditional", // agent_channel.enabled gates embedded-client renewal
 		"F55": "conditional", // protocols.cmp.enabled
@@ -270,10 +274,10 @@ func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T)
 		"F62": "conditional", // Enterprise governance/evidence-pack license
 		"F63": "conditional", // secrets.enable_api
 		"F64": "partial",     // served SDK spine; Vault/Terraform residuals remain
-		"F65": "library",     // lease route has no production provider registry
+		"F65": "conditional", // all eight providers are assembled when tenant endpoints and credentials are configured
 		"F66": "partial",     // transit is served; KMIP residuals/config remain
 		"F67": "conditional", // secrets.enable_api
-		"F68": "partial",     // discovery/Kubernetes spine exists; eight pushers are not wired
+		"F68": "partial",     // eight native pushers are served; explicit secrets_residuals remain
 		"F69": "conditional", // ACME plus provider configuration
 		"F70": "conditional",
 		"F71": "conditional",
@@ -300,12 +304,11 @@ func TestHonestyAuthorityRejectsKnownW0Overclaims(t *testing.T) {
 	limitations := read(t, "limitations.md")
 	normalizedLimitations := strings.Join(strings.Fields(limitations), " ")
 	for _, want := range []string{
-		"F7, F27, F50, and F65 currently use `served_state=library`",
 		"queued receipt is not external-effect evidence.",
-		"zero of six backends served",
 		"not production-assembled",
 		"not independent authenticated approvals",
-		"AN-1/AN-2/AN-4/AN-5/AN-6/AN-8 residuals",
+		"six of six backends served",
+		"fsync-backed journal",
 	} {
 		if !strings.Contains(normalizedLimitations, want) {
 			t.Errorf("limitations.md must keep the W0 honesty disclosure %q", want)
@@ -315,25 +318,35 @@ func TestHonestyAuthorityRejectsKnownW0Overclaims(t *testing.T) {
 		"No current `feature-map-backlog.json` row uses `served_state=library`",
 		"it records an unrouted receipt",
 		"online m-of-n break-glass issuance is served",
-		"HSM/KMS-resident CA private keys are supported through the managed-key custody path",
+		"zero of six backends served",
+		"provider operations and credentials are not yet isolated",
 	} {
 		if strings.Contains(normalizedLimitations, forbidden) {
 			t.Errorf("limitations.md keeps disproven W0 claim %q", forbidden)
 		}
 	}
+	for _, name := range []string{"features/deployment-connectors.md", "journeys/automate-fleet-tls.md"} {
+		doc := strings.ToLower(read(t, name))
+		if strings.Contains(doc, "unrouted") {
+			t.Errorf("%s must not claim that unowned connector work is silently acknowledged", name)
+		}
+		if !strings.Contains(doc, "queued") || !strings.Contains(doc, "attempt") {
+			t.Errorf("%s must explain that queued connector evidence has no receiver attempt", name)
+		}
+	}
 
-	issuance := strings.ToLower(read(t, "features/issuance-and-cas.md"))
+	issuance := strings.ToLower(strings.Join(strings.Fields(read(t, "features/issuance-and-cas.md")), " "))
 	if strings.Contains(issuance, "localstack-proven") {
 		t.Error("issuance-and-cas.md must not turn an unexecuted LocalStack configuration into acceptance proof")
 	}
-	for _, want := range []string{"zero hsm/kms backends", "not localstack or live-cloud proof", "not the default static release artifact"} {
+	for _, want := range []string{"all six managed-key backends", "faithful vendor-protocol emulators", "cgo hsm signer artifact"} {
 		if !strings.Contains(issuance, want) {
 			t.Errorf("issuance-and-cas.md must keep hardware-custody qualification %q", want)
 		}
 	}
 
 	readme := strings.ToLower(strings.Join(strings.Fields(read(t, "../README.md")), " "))
-	for _, want := range []string{"not localstack conformance evidence", "does not make any hsm/kms census row served"} {
+	for _, want := range []string{"not localstack conformance evidence", "six served census rows come from the gate's"} {
 		if !strings.Contains(readme, want) {
 			t.Errorf("README demo text must keep LocalStack qualification %q", want)
 		}

@@ -15,16 +15,16 @@ import (
 
 type fakeManagedKeyService struct{}
 
-func (fakeManagedKeyService) Generate(_ context.Context, _ string, alg crypto.Algorithm, _ string) (api.ManagedKey, error) {
+func (fakeManagedKeyService) Generate(_ context.Context, _ string, alg crypto.Algorithm, _, _ string) (api.ManagedKey, error) {
 	return api.ManagedKey{KeyID: "fake-managed-key-1", Algorithm: alg, Version: 1, State: "active"}, nil
 }
-func (fakeManagedKeyService) Rotate(context.Context, string, string, string, string) (api.ManagedKey, error) {
+func (fakeManagedKeyService) Rotate(context.Context, string, string, string, string, string) (api.ManagedKey, error) {
 	return api.ManagedKey{}, nil
 }
-func (fakeManagedKeyService) Revoke(context.Context, string, string, string, string) (api.ManagedKey, error) {
+func (fakeManagedKeyService) Revoke(context.Context, string, string, string, string, string) (api.ManagedKey, error) {
 	return api.ManagedKey{}, nil
 }
-func (fakeManagedKeyService) Zeroize(context.Context, string, string, string, string) (api.ManagedKey, error) {
+func (fakeManagedKeyService) Zeroize(context.Context, string, string, string, string, string) (api.ManagedKey, error) {
 	return api.ManagedKey{}, nil
 }
 

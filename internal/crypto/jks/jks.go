@@ -37,6 +37,12 @@ var epoch = time.Unix(0, 0).UTC()
 // The salt is not secret (it is stored in the keystore in the clear) and remains
 // unique per distinct credential, so the protection is unchanged.
 func EncodeDeterministic(keyPEM, certChainPEM []byte, password, alias string) ([]byte, error) {
+	return EncodeDeterministicBytes(keyPEM, certChainPEM, []byte(password), alias)
+}
+
+// EncodeDeterministicBytes confines the legacy JKS password-string conversion
+// to the cryptographic boundary while production callers retain []byte.
+func EncodeDeterministicBytes(keyPEM, certChainPEM, password []byte, alias string) ([]byte, error) {
 	keyDER, err := pkcs8DER(keyPEM)
 	if err != nil {
 		return nil, err
@@ -48,7 +54,7 @@ func EncodeDeterministic(keyPEM, certChainPEM []byte, password, alias string) ([
 
 	ks := keystore.New(
 		keystore.WithCustomRandomNumberGenerator(
-			detrand.New([]byte("trstctl/jks/v1"), []byte(password), []byte(alias), keyPEM, certChainPEM),
+			detrand.New([]byte("trstctl/jks/v1"), password, []byte(alias), keyPEM, certChainPEM),
 		),
 		keystore.WithOrderedAliases(),
 	)
@@ -57,11 +63,11 @@ func EncodeDeterministic(keyPEM, certChainPEM []byte, password, alias string) ([
 		PrivateKey:       keyDER,
 		CertificateChain: chain,
 	}
-	if err := ks.SetPrivateKeyEntry(alias, entry, []byte(password)); err != nil {
+	if err := ks.SetPrivateKeyEntry(alias, entry, password); err != nil {
 		return nil, fmt.Errorf("jks: set entry: %w", err)
 	}
 	var buf bytes.Buffer
-	if err := ks.Store(&buf, []byte(password)); err != nil {
+	if err := ks.Store(&buf, password); err != nil {
 		return nil, fmt.Errorf("jks: store: %w", err)
 	}
 	return buf.Bytes(), nil

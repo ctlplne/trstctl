@@ -113,7 +113,7 @@ func newServedPKCS11ManagedKeys(lc crypto.RemoteKeyLifecycle) *servedPKCS11Manag
 	return &servedPKCS11ManagedKeys{lc: lc, keys: map[string]crypto.KeyRef{}}
 }
 
-func (s *servedPKCS11ManagedKeys) Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, _ string) (api.ManagedKey, error) {
+func (s *servedPKCS11ManagedKeys) Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, _, _ string) (api.ManagedKey, error) {
 	signer, ref, err := s.lc.GenerateManagedKey(ctx, alg)
 	if err != nil {
 		return api.ManagedKey{}, err
@@ -124,7 +124,7 @@ func (s *servedPKCS11ManagedKeys) Generate(ctx context.Context, tenantID string,
 	return api.ManagedKey{KeyID: ref.ID, Algorithm: ref.Algorithm, Version: 1, State: "active", PublicDER: signer.Public().DER}, nil
 }
 
-func (s *servedPKCS11ManagedKeys) Rotate(ctx context.Context, tenantID, keyID, _, _ string) (api.ManagedKey, error) {
+func (s *servedPKCS11ManagedKeys) Rotate(ctx context.Context, tenantID, keyID, _, _, _ string) (api.ManagedKey, error) {
 	ref, err := s.ref(tenantID, keyID)
 	if err != nil {
 		return api.ManagedKey{}, err
@@ -140,7 +140,7 @@ func (s *servedPKCS11ManagedKeys) Rotate(ctx context.Context, tenantID, keyID, _
 	return api.ManagedKey{KeyID: next.ID, Algorithm: next.Algorithm, Version: 2, State: "active", PublicDER: signer.Public().DER}, nil
 }
 
-func (s *servedPKCS11ManagedKeys) Revoke(ctx context.Context, tenantID, keyID, _, _ string) (api.ManagedKey, error) {
+func (s *servedPKCS11ManagedKeys) Revoke(ctx context.Context, tenantID, keyID, _, _, _ string) (api.ManagedKey, error) {
 	ref, err := s.ref(tenantID, keyID)
 	if err != nil {
 		return api.ManagedKey{}, err
@@ -151,7 +151,7 @@ func (s *servedPKCS11ManagedKeys) Revoke(ctx context.Context, tenantID, keyID, _
 	return api.ManagedKey{KeyID: ref.ID, Algorithm: ref.Algorithm, Version: 2, State: "revoked"}, nil
 }
 
-func (s *servedPKCS11ManagedKeys) Zeroize(ctx context.Context, tenantID, keyID, _, _ string) (api.ManagedKey, error) {
+func (s *servedPKCS11ManagedKeys) Zeroize(ctx context.Context, tenantID, keyID, _, _, _ string) (api.ManagedKey, error) {
 	ref, err := s.ref(tenantID, keyID)
 	if err != nil {
 		return api.ManagedKey{}, err

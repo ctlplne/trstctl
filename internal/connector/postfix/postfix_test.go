@@ -11,12 +11,24 @@ import (
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/postfix"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 var (
-	mailCertA = []byte("-----BEGIN CERTIFICATE-----\nmail-cert-a\n-----END CERTIFICATE-----\n")
+	mailCertA = []byte(`-----BEGIN CERTIFICATE-----
+MIIBiDCCAS2gAwIBAgIBATAKBggqhkjOPQQDAjAlMSMwIQYDVQQDExpjb25mb3Jt
+YW5jZS5jb25uZWN0b3IudGVzdDAeFw0yNTAxMDEwMDAwMDBaFw0zNTAxMDEwMDAw
+MDBaMCUxIzAhBgNVBAMTGmNvbmZvcm1hbmNlLmNvbm5lY3Rvci50ZXN0MFkwEwYH
+KoZIzj0CAQYIKoZIzj0DAQcDQgAE4TYNtNbbVlPcVpyznJuujANXTbsaRNL5D41K
+VfB5GdJEG372Pgtn59Mp7+1+PUbyHTbaKJ1RU0n6vgW5/BCC1aNOMEwwDgYDVR0P
+AQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMBMCUGA1UdEQQeMByCGmNvbmZv
+cm1hbmNlLmNvbm5lY3Rvci50ZXN0MAoGCCqGSM49BAMCA0kAMEYCIQD2NqiRyoq8
+T1vJogCsCMRDiEMMsA04Qhbs5uF149egpgIhALTX3I6Xe4dQk3GMTEaXC5GWXkaj
+O9xXOtFRqPTY0dXn
+-----END CERTIFICATE-----
+`)
 	mailKeyA  = []byte("-----BEGIN PRIVATE KEY-----\nmail-key-a\n-----END PRIVATE KEY-----\n")
 	mailCertB = []byte("-----BEGIN CERTIFICATE-----\nmail-cert-b\n-----END CERTIFICATE-----\n")
 	mailKeyB  = []byte("-----BEGIN PRIVATE KEY-----\nmail-key-b\n-----END PRIVATE KEY-----\n")
@@ -27,6 +39,7 @@ func TestDeployWritesBothServicesIdempotentlyAndReloads(t *testing.T) {
 	registry := observ.NewRegistry()
 	c := postfix.New(testConfig(), postfix.WithMetrics(registry))
 	dep := connector.NewDeployment("mail/edge", mailCertA, mailKeyA)
+	assertShippedFingerprint(t, dep.Fingerprint, mailCertA)
 
 	if _, err := connector.Run(context.Background(), c, ops, dep); err != nil {
 		t.Fatalf("first deploy: %v", err)
@@ -62,6 +75,17 @@ func TestDeployWritesBothServicesIdempotentlyAndReloads(t *testing.T) {
 	}
 	if !strings.Contains(text, `trstctl_postfix_deployments_total{target="mail/edge",result="noop"} 1`) {
 		t.Fatalf("missing noop counter:\n%s", text)
+	}
+}
+
+func assertShippedFingerprint(t *testing.T, got string, cert []byte) {
+	t.Helper()
+	info, err := certinfo.Inspect(cert)
+	if err != nil {
+		t.Fatalf("inspect certificate fixture: %v", err)
+	}
+	if got != info.SHA256Fingerprint {
+		t.Fatalf("deployment fingerprint = %q, want shipped DER fingerprint %q", got, info.SHA256Fingerprint)
 	}
 }
 

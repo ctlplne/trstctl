@@ -35,14 +35,13 @@ package paloalto
 import (
 	"bytes"
 	"context"
-	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -88,6 +87,12 @@ func New(baseURL string, apiKey []byte, opts ...Option) *Connector {
 		o(c)
 	}
 	return c
+}
+
+// Close destroys the API key copy owned by this one-shot connector.
+func (c *Connector) Close() {
+	secret.Wipe(c.apiKey)
+	c.apiKey = nil
 }
 
 // Name identifies the connector.
@@ -153,67 +158,56 @@ func (c *Connector) importPart(ctx context.Context, sb connector.Sandbox, catego
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+	}
 
 	// Bound the read so a hostile/large body cannot blow up memory. PAN-OS error
 	// bodies are small XML; the success body is too.
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := secret.ReadBounded(resp.Body, 1<<20)
 	if err != nil {
-		return fmt.Errorf("read response: %w", err)
+		return fmt.Errorf("read response (details redacted)")
 	}
-	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("status %d: %s", resp.StatusCode, panMessage(body))
-	}
+	defer secret.Wipe(body)
 	// PAN-OS reports failure inside a 200, so the XML status is authoritative.
 	if panFailed(body) {
-		return fmt.Errorf("PAN-OS reported failure: %s", panMessage(body))
+		return fmt.Errorf("PAN-OS reported failure (response body redacted)")
 	}
 	return nil
 }
 
-// panResponse is the PAN-OS XML API envelope, parsed only far enough to read the
-// outcome (the status attribute and any human-readable message). This is a status
-// read, not a certificate parse — no crypto/*.
-type panResponse struct {
-	XMLName xml.Name `xml:"response"`
-	Status  string   `xml:"status,attr"`
-	// msg may be plain text (<msg>…</msg>) or a nested line list
-	// (<msg><line>…</line></msg>); InnerXML captures either for diagnostics.
-	Msg struct {
-		Inner string `xml:",innerxml"`
-	} `xml:"msg"`
-}
-
-// panFailed reports whether body is a PAN-OS XML response that explicitly signals
-// a non-success outcome (status="error", or any status other than "success"). A
-// body that does not parse as a PAN-OS envelope carries no status to contradict
-// the 2xx, so it is not a failure — only an envelope present *and* not "success"
-// is. This is the failure-in-200 case the PAN-OS XML API uses for auth and
-// validation errors.
+// panFailed identifies PAN-OS's failure-in-200 envelope without decoding attacker-
+// controlled XML text into immutable strings (AN-8).
 func panFailed(body []byte) bool {
-	var r panResponse
-	if err := xml.Unmarshal(body, &r); err != nil {
-		return false // not a PAN-OS envelope; the 2xx stands
-	}
-	if r.XMLName.Local != "response" {
-		return false // some other XML document; do not interpret its status
-	}
-	return r.Status != "success"
+	return containsASCIIFold(body, []byte(`status="error"`)) ||
+		containsASCIIFold(body, []byte(`status='error'`))
 }
 
-// panMessage extracts a short, key-free diagnostic from a PAN-OS response body
-// for use in errors. PAN-OS does not echo the API key in its response, and the
-// key never reaches this function, so the message is safe to surface.
-func panMessage(body []byte) string {
-	var r panResponse
-	if err := xml.Unmarshal(body, &r); err == nil {
-		if msg := strings.TrimSpace(r.Msg.Inner); msg != "" {
-			return fmt.Sprintf("status=%q: %s", r.Status, msg)
+func containsASCIIFold(haystack, needle []byte) bool {
+	if len(needle) == 0 {
+		return true
+	}
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		match := true
+		for j, want := range needle {
+			got := haystack[i+j]
+			if got >= 'A' && got <= 'Z' {
+				got += 'a' - 'A'
+			}
+			if want >= 'A' && want <= 'Z' {
+				want += 'a' - 'A'
+			}
+			if got != want {
+				match = false
+				break
+			}
 		}
-		if r.Status != "" {
-			return fmt.Sprintf("status=%q", r.Status)
+		if match {
+			return true
 		}
 	}
-	return strings.TrimSpace(string(body))
+	return false
 }
 
 // certName derives the certificate object name from the deployment target,

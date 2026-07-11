@@ -26,10 +26,28 @@ func TestReviewedExecAllowlistPinsDODCensusProcessBoundaries(t *testing.T) {
 			"StartCommand":   true,
 			"StartContainer": true,
 		},
+		"tools/dodcensus/proof/launched.go": {
+			"buildShippedProcess": true,
+			"CreateToken":         true,
+			"Start":               true,
+		},
+		"tools/dodcensus/runtime_runner.go": {
+			"runHostCommand": true,
+		},
+		"tools/dodcensus/substrate_broker.go": {
+			"launch": true,
+		},
 	}
 	for file, functions := range want {
 		if got := reviewedExecUses[file]; !reflect.DeepEqual(got, functions) {
 			t.Fatalf("%s reviewed exec allowlist = %#v, want %#v", file, got, functions)
 		}
+	}
+}
+
+func TestReviewedExecAllowlistPinsConnectorLocalOpsBoundary(t *testing.T) {
+	want := map[string]bool{"ExecContext": true}
+	if got := reviewedExecUses["internal/connector/localops.go"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("internal/connector/localops.go reviewed exec allowlist = %#v, want %#v", got, want)
 	}
 }

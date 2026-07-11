@@ -130,6 +130,31 @@ func CreateGoodViaDo(w http.ResponseWriter, r *http.Request) {
 	_ = w
 }
 
+// CreateGoodViaBound threads the raw header into the authenticated
+// request-bound transactional sink.
+//
+//trstctl:mutation
+func CreateGoodViaBound(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	_, _ = dedupe.DoBound(r.Context(), "tenant", idempotencyKey, "request-binding", func(ctx context.Context) ([]byte, error) {
+		return nil, nil
+	})
+	_ = w
+}
+
+// CreateGoodViaBoundDurable threads the raw header into the authenticated
+// request-bound durable sink. The binding is separate and does not replace the
+// required header provenance.
+//
+//trstctl:mutation
+func CreateGoodViaBoundDurable(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	_, _ = dedupe.DoDurableEffectBound(r.Context(), "tenant", idempotencyKey, "request-binding", func(ctx context.Context) ([]byte, error) {
+		return nil, nil
+	})
+	_ = w
+}
+
 // RegisterTenantForwards accepts the key as a parameter and forwards it to the
 // dedupe store (orchestrator-path style).
 //

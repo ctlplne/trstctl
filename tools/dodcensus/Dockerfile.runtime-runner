@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+
+# Native Linux executor for shipped-profile DoD tests when the harness runs on
+# another OS/architecture (for example Darwin/arm64). The caller must pass a
+# golang@sha256:... base; no mutable fallback is accepted.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# The snapshot pins the complete package universe. docker.io supplies only the
+# client here; the runner talks to the explicitly mounted host Docker socket.
+RUN printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260701T000000Z bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260701T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+ && rm -f /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates docker.io git openssl python3 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Cache only modules whose checksums are committed in the runner identity.
+COPY go.mod go.sum /runtime-modules/
+RUN cd /runtime-modules && GOFLAGS=-mod=readonly go mod download
+
+RUN groupadd --system --gid 65532 nonroot \
+ && useradd --system --uid 65532 --gid 65532 --home-dir /home/nonroot --create-home --shell /usr/sbin/nologin nonroot \
+ && chown -R 65532:65532 /go /home/nonroot
+
+USER 65532:65532
+ENV HOME=/home/nonroot
+ENTRYPOINT ["go"]

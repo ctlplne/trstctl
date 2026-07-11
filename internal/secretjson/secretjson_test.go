@@ -3,6 +3,7 @@
 package secretjson_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 
@@ -30,6 +31,25 @@ func TestBase64BytesMarshalsAsBase64JSONString(t *testing.T) {
 	}
 	if got, want := string(body), `{"key":"c2VjcmV0LWtleQ=="}`; got != want {
 		t.Fatalf("json = %s, want %s", got, want)
+	}
+}
+
+func TestBase64BytesUnmarshalsBase64JSONString(t *testing.T) {
+	old := []byte("old-key-material")
+	body := struct {
+		Key secretjson.Base64Bytes `json:"key"`
+	}{Key: secretjson.Base64Bytes(old)}
+	if err := json.Unmarshal([]byte(`{"key":"c2VjcmV0LWtleQ=="}`), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(body.Key), "secret-key"; got != want {
+		t.Fatalf("key = %q, want %q", got, want)
+	}
+	if !bytes.Equal(old, make([]byte, len(old))) {
+		t.Fatalf("replaced key buffer was not wiped: %x", old)
+	}
+	if err := json.Unmarshal([]byte(`{"key":"%%%"}`), &body); err == nil {
+		t.Fatal("invalid base64 was accepted")
 	}
 }
 

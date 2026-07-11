@@ -360,7 +360,7 @@ func (a *API) recordFleetReissuanceDelivery(ctx context.Context, tenantID, repla
 	identityID := replacementIdentityID
 	return a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 		ID: guuid.NewString(), IdentityID: &identityID, Destination: "connector.deploy",
-		Connector: connector, Target: target, Status: "unrouted", Attempts: 1,
+		Connector: connector, Target: target, Status: "queued", Attempts: 0,
 		Reason:      "fleet replacement deployment requires connector worker confirmation",
 		Detail:      "served compromised issuer fleet reissuance queued replacement deploy before revocation: " + reason,
 		RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,

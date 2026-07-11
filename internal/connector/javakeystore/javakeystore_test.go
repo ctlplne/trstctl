@@ -54,7 +54,7 @@ func deploy(t *testing.T, c *javakeystore.Connector) *connector.MemoryOps {
 // certificate under the configured password.
 func TestDeployWritesPKCS12Keystore(t *testing.T) {
 	const ksPath = "/etc/app/keystore.p12"
-	ops := deploy(t, javakeystore.New(ksPath, password, alias))
+	ops := deploy(t, javakeystore.New(ksPath, []byte(password), alias))
 
 	blob, ok := ops.File(ksPath)
 	if !ok {
@@ -73,7 +73,7 @@ func TestDeployWritesPKCS12Keystore(t *testing.T) {
 // back to the renewed credential under the configured alias and password.
 func TestDeployWritesJKSKeystore(t *testing.T) {
 	const ksPath = "/etc/app/keystore.jks"
-	ops := deploy(t, javakeystore.New(ksPath, password, alias))
+	ops := deploy(t, javakeystore.New(ksPath, []byte(password), alias))
 
 	blob, ok := ops.File(ksPath)
 	if !ok {
@@ -94,13 +94,13 @@ func TestDeployWritesJKSKeystore(t *testing.T) {
 // Format follows the file extension, and WithFormat overrides it.
 func TestFormatFromExtensionAndOverride(t *testing.T) {
 	// .bin extension defaults to PKCS#12...
-	binOps := deploy(t, javakeystore.New("/etc/app/store.bin", password, alias))
+	binOps := deploy(t, javakeystore.New("/etc/app/store.bin", []byte(password), alias))
 	blob, _ := binOps.File("/etc/app/store.bin")
 	if _, _, err := pfx.Decode(blob, password); err != nil {
 		t.Errorf("unknown extension should default to PKCS#12: %v", err)
 	}
 	// ...but WithFormat(JKS) overrides it.
-	ovOps := deploy(t, javakeystore.New("/etc/app/store.bin", password, alias, javakeystore.WithFormat(javakeystore.FormatJKS)))
+	ovOps := deploy(t, javakeystore.New("/etc/app/store.bin", []byte(password), alias, javakeystore.WithFormat(javakeystore.FormatJKS)))
 	blob, _ = ovOps.File("/etc/app/store.bin")
 	if _, _, err := jks.Decode(blob, password, alias); err != nil {
 		t.Errorf("WithFormat(JKS) should produce a JKS keystore: %v", err)
@@ -111,7 +111,7 @@ func TestFormatFromExtensionAndOverride(t *testing.T) {
 // is idempotent.
 func TestDeployIsDeterministic(t *testing.T) {
 	for _, ksPath := range []string{"/etc/app/k.p12", "/etc/app/k.jks"} {
-		c := javakeystore.New(ksPath, password, alias)
+		c := javakeystore.New(ksPath, []byte(password), alias)
 		a, _ := deploy(t, c).File(ksPath)
 		b, _ := deploy(t, c).File(ksPath)
 		if !bytes.Equal(a, b) {
@@ -123,7 +123,7 @@ func TestDeployIsDeterministic(t *testing.T) {
 // Least privilege: fs.write to the keystore directory only — no network, no
 // exec, and not other directories.
 func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
-	c := javakeystore.New("/etc/app/keystore.p12", password, alias)
+	c := javakeystore.New("/etc/app/keystore.p12", []byte(password), alias)
 	grant := c.Capabilities()
 	if grant.Has(pluginhost.CapNetDial) {
 		t.Error("keystore connector must not request net.dial")
@@ -144,7 +144,7 @@ func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 
 // The connector satisfies the shared connector conformance suite.
 func TestJavaKeystorePassesConformance(t *testing.T) {
-	c := javakeystore.New("/etc/app/keystore.p12", password, alias)
+	c := javakeystore.New("/etc/app/keystore.p12", []byte(password), alias)
 	rep := connector.Conformance(context.Background(), c)
 	if !rep.OK() {
 		for _, ch := range rep.Checks {

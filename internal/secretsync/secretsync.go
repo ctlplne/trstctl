@@ -11,6 +11,7 @@ package secretsync
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -19,6 +20,23 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secrettext"
 )
+
+type operationIDContextKey struct{}
+
+// WithOperationID binds one durable outbox/job identity to all receiver calls
+// made by a pusher. Provider implementations use it for native request tokens,
+// read-before-version reconciliation, and the standard Idempotency-Key header.
+func WithOperationID(ctx context.Context, operationID string) context.Context {
+	if operationID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, operationIDContextKey{}, operationID)
+}
+
+func operationIDFromContext(ctx context.Context) string {
+	value, _ := ctx.Value(operationIDContextKey{}).(string)
+	return value
+}
 
 // Pusher delivers a key/value to one external platform.
 type Pusher interface {
@@ -36,6 +54,26 @@ func NewTarget(name string, p Pusher) *Target { return &Target{name: name, pushe
 
 // Name returns the target name.
 func (t *Target) Name() string { return t.name }
+
+// Deliver performs one outbox-owned delivery. It is exported so the production
+// dispatcher can drain secret.sync.* rows without reconstructing a registry or
+// reaching into Target's private pusher field.
+func (t *Target) Deliver(ctx context.Context, key string, value []byte) error {
+	if t == nil || t.pusher == nil {
+		return errors.New("secretsync: target is not configured")
+	}
+	return t.pusher.Push(ctx, key, value)
+}
+
+// DeliverOperation is the production/outbox path. The stable operation id must
+// survive every redelivery so version-creating receivers can dedupe or reconcile
+// a success whose local acknowledgement was interrupted.
+func (t *Target) DeliverOperation(ctx context.Context, operationID, key string, value []byte) error {
+	if operationID == "" {
+		return errors.New("secretsync: durable delivery operation id is required")
+	}
+	return t.Deliver(WithOperationID(ctx, operationID), key, value)
+}
 
 // ProviderCatalogEntry describes one built-in sync integration. It is metadata only:
 // credentials and endpoint URLs stay in operator configuration, not the catalog.
@@ -111,7 +149,7 @@ func (e *Engine) RunDeliveries(ctx context.Context) (int, error) {
 	}
 	done := 0
 	for _, it := range items {
-		err := e.target.pusher.Push(ctx, it.Key, it.Value)
+		err := e.target.DeliverOperation(ctx, it.ID, it.Key, it.Value)
 		secret.Wipe(it.Value)
 		if err != nil {
 			continue // fail-safe: keep queued, retry later

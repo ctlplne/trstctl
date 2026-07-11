@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.7
+
+# Runtime verifier derived from the exact shipped cgo signer image. Extra tools
+# are independent device readers used by the DoD test; the signer binary itself
+# is byte-for-byte the artifact built by Dockerfile.signer-hsm.
+# The proof passes the locally built signer's sha256 image ID. Requiring the
+# argument prevents a mutable local tag from selecting different signer bytes.
+ARG SIGNER_IMAGE
+FROM ${SIGNER_IMAGE}
+USER root
+RUN printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260701T000000Z bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260701T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+ && rm -f /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends openssl opensc softhsm2 swtpm tpm2-tools socat python3 \
+ && rm -rf /var/lib/apt/lists/*
+COPY tools/dodcensus/substrates/managed_key_signer_entrypoint.sh /usr/local/bin/dod-managed-key-signer
+COPY tools/dodcensus/substrates/managed_keys.py /usr/local/libexec/trstctl-managed-keys.py
+RUN chmod 0755 /usr/local/bin/dod-managed-key-signer /usr/local/libexec/trstctl-managed-keys.py
+ENTRYPOINT ["/usr/local/bin/dod-managed-key-signer"]

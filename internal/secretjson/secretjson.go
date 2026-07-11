@@ -47,6 +47,26 @@ func (b Base64Bytes) MarshalJSON() ([]byte, error) {
 	return QuoteBase64(b), nil
 }
 
+// UnmarshalJSON decodes a base64 JSON string without first materializing the
+// encoded value as an immutable Go string. This is used for response fields that
+// can contain private-key material, such as Envoy SDS inline_bytes.
+func (b *Base64Bytes) UnmarshalJSON(src []byte) error {
+	encoded, err := UnquoteBytes(src)
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(encoded)
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(encoded)))
+	n, err := base64.StdEncoding.Decode(decoded, encoded)
+	if err != nil {
+		secret.Wipe(decoded)
+		return fmt.Errorf("secretjson: invalid base64: %w", err)
+	}
+	secret.Wipe(*b)
+	*b = decoded[:n]
+	return nil
+}
+
 // QuoteBytes returns src quoted as a JSON string. PEM and base64 connector
 // payloads are ASCII; bytes outside the JSON control range are copied as-is.
 func QuoteBytes(src []byte) []byte {

@@ -18,8 +18,8 @@
 //   - send the request through an injectable Doer (so tests pass a double),
 //   - read the body under a fixed cap so a hostile/huge response cannot exhaust
 //     memory,
-//   - turn a non-2xx status into a normalised *StatusError carrying the status and a
-//     bounded, credential-free snippet of the body,
+//   - turn a non-2xx status into a normalised *StatusError carrying only the status,
+//     after a bounded, byte-native classification pass and explicit body wipe,
 //   - decode a 2xx JSON body into out (when out != nil) or drain-and-discard it.
 //
 // No cryptographic operation happens here, so it imports no crypto/* (AN-3): a
@@ -45,10 +45,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Doer is the minimal HTTP client seam: production passes http.DefaultClient (or a
@@ -79,26 +79,30 @@ const (
 	MaxErrorBytes = 4096
 )
 
-// StatusError is a normalised non-2xx response. Body is the (bounded, trimmed)
-// response text; provider error bodies carry an API message and never echo the
-// request's bearer token / key / signature, so surfacing them does not leak
-// credentials (AN-8). Callers may wrap it with provider context (e.g.
-// "azure-key-vault: sign: %w") or translate it into their own typed error
-// (the DNS providers map it to a package-local *apiError that still exposes the
-// status code their idempotency predicates inspect).
+// StatusError is a normalised non-2xx response. It deliberately retains only the
+// status code. Upstream error bodies are attacker-controlled and can echo submitted
+// credentials, so JSON keeps them in a bounded []byte, optionally classifies them,
+// and wipes them before returning (AN-8). Callers may wrap this error with provider
+// context or translate it into a package-local status error.
 type StatusError struct {
 	StatusCode int
-	Body       string
 }
 
 func (e *StatusError) Error() string {
-	return fmt.Sprintf("status %d: %s", e.StatusCode, e.Body)
+	return fmt.Sprintf("status %d", e.StatusCode)
 }
+
+// StatusMapper maps a non-2xx response to a closed, provider-specific error while
+// the bounded response body is still available as mutable bytes. The body is valid
+// only for the duration of the call and must not be retained. JSON wipes it before
+// returning. A nil result falls back to *StatusError.
+type StatusMapper func(statusCode int, body []byte) error
 
 // options is the resolved configuration of a single round-trip.
 type options struct {
-	timeout time.Duration
-	sign    Signer
+	timeout   time.Duration
+	sign      Signer
+	mapStatus StatusMapper
 }
 
 // Option configures a single cloudhttp call.
@@ -116,11 +120,18 @@ func WithTimeout(d time.Duration) Option { return func(o *options) { o.timeout =
 // their credential header before calling JSON).
 func WithSigner(s Signer) Option { return func(o *options) { o.sign = s } }
 
+// WithStatusMapper installs a byte-native classifier for provider-specific
+// non-2xx states such as AWS RequestInProgress or Route 53's idempotent-delete
+// response. The mapper must return only a closed sentinel/typed error and must not
+// retain body.
+func WithStatusMapper(mapper StatusMapper) Option {
+	return func(o *options) { o.mapStatus = mapper }
+}
+
 // JSON sends req through doer and decodes a 2xx JSON response into out (out may be nil
-// to drain and discard the body). A non-2xx response yields a *StatusError with a
-// bounded body snippet. Options configure the timeout floor (WithTimeout) and the
-// request-signing seam (WithSigner); with no options it behaves as a plain bounded,
-// error-normalising JSON round-trip.
+// to drain and discard the body). A non-2xx response yields a status-only
+// *StatusError after its bounded byte body is optionally classified and wiped.
+// Options configure the timeout floor, request signer, and closed status mapper.
 func JSON(doer Doer, req *http.Request, out any, opts ...Option) error {
 	var cfg options
 	for _, o := range opts {
@@ -150,16 +161,27 @@ func JSON(doer Doer, req *http.Request, out any, opts ...Option) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, MaxErrorBytes))
-		return &StatusError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(msg))}
+		msg, _ := secret.ReadBounded(resp.Body, MaxErrorBytes)
+		defer secret.Wipe(msg)
+		if cfg.mapStatus != nil {
+			if mapped := cfg.mapStatus(resp.StatusCode, msg); mapped != nil {
+				return mapped
+			}
+		}
+		return &StatusError{StatusCode: resp.StatusCode}
 	}
-	if out == nil {
-		// Drain a bounded remainder so the connection can be reused, matching the
-		// per-provider drain() the providers previously did by hand.
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxBodyBytes))
+	raw, err := secret.ReadBounded(resp.Body, MaxBodyBytes+1)
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(raw)
+	if len(raw) > MaxBodyBytes {
+		return fmt.Errorf("cloudhttp: response exceeds %d-byte limit", MaxBodyBytes)
+	}
+	if out == nil || len(raw) == 0 {
 		return nil
 	}
-	return json.NewDecoder(io.LimitReader(resp.Body, MaxBodyBytes)).Decode(out)
+	return json.Unmarshal(raw, out)
 }
 
 // signedBody returns the body bytes a Signer must hash. A provider that signs a

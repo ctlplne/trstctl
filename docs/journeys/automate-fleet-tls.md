@@ -117,8 +117,9 @@ deployment happen on their own.
    REST at `/api/v1/lifecycle/endpoint-bindings`. The target stores non-secret
    metadata and credential references only. Actual target mutation still moves through
    `connector.deploy` outbox work; if no native registry or signed plugin owns the
-   connector, the binary records an `unrouted` receipt instead of pretending delivery
-   happened.
+   connector, the binary records a failed worker receipt and leaves the work pending.
+   A queued receipt has zero attempts and is intent evidence only; it never claims that
+   delivery happened.
 
 ## Where next
 

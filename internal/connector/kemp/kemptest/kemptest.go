@@ -54,6 +54,14 @@ func (s *Server) Binding(virtualService string) (Binding, bool) {
 	return b, ok
 }
 
+// ObjectCounts reports the number of named certificate and virtual-service
+// objects. Replaying a target-derived PUT/PATCH must keep both counts stable.
+func (s *Server) ObjectCounts() (certificates, bindings int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.certs), len(s.bindings)
+}
+
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+s.token {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)

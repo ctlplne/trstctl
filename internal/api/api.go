@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
@@ -1665,8 +1666,9 @@ func principalRoles(p authz.Principal) []string {
 // cachedResponse is the response envelope stored by the idempotency recorder so
 // a replayed key returns the identical status and body.
 type cachedResponse struct {
-	Status int             `json:"s"`
-	Body   json.RawMessage `json:"b"`
+	Status  int             `json:"s"`
+	Body    json.RawMessage `json:"b"`
+	Binding string          `json:"h,omitempty"`
 }
 
 type secretResponse interface {
@@ -1677,6 +1679,27 @@ type secretResponse interface {
 // returns the original response without re-executing. It requires a tenant and a
 // non-empty key, both surfaced as problem+json.
 func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+	a.mutateWithRecorder(w, r, idempotencyKey, "", fn, false)
+}
+
+// mutateDurable wraps a mutation whose callback is itself an independently
+// durable, idempotent state machine (normally event -> projection -> outbox). It
+// preserves the identical HTTP response for replay, but unlike mutate it releases
+// the tenant transaction before the callback waits for an external worker. This
+// prevents a slow provider from consuming the API subsystem's PostgreSQL pool.
+func (a *API) mutateDurable(w http.ResponseWriter, r *http.Request, idempotencyKey string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+	a.mutateWithRecorder(w, r, idempotencyKey, "", fn, true)
+}
+
+// mutateDurableBound is mutateDurable plus an immutable, non-secret digest of
+// the authenticated principal and canonical request. The raw header value still
+// reaches the AN-5 recorder; the binding prevents the same key from replaying a
+// cached success for a different command or caller.
+func (a *API) mutateDurableBound(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+	a.mutateWithRecorder(w, r, idempotencyKey, binding, fn, true)
+}
+
+func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error), durable bool) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
 		a.writeProblem(w, problem.New(http.StatusUnauthorized, "missing or invalid tenant"))
@@ -1686,8 +1709,24 @@ func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey stri
 		a.writeProblem(w, problem.New(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
 		return
 	}
+	if binding == "" {
+		principal, err := requestPrincipalSubject(r.Context())
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		escapedPath := ""
+		if r.URL != nil {
+			escapedPath = r.URL.EscapedPath()
+		}
+		binding, err = mutationRouteBinding(principal, r.Method, escapedPath)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 
-	raw, err := a.idem.Do(r.Context(), tenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
+	recordResult := func(ctx context.Context) ([]byte, error) {
 		status, body, ferr := fn(ctx, tenantID)
 		if ferr != nil {
 			return nil, ferr
@@ -1704,9 +1743,21 @@ func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey stri
 			defer secret.Wipe(bj)
 			bodyJSON = bj
 		}
-		return json.Marshal(cachedResponse{Status: status, Body: bodyJSON})
-	})
+		return json.Marshal(cachedResponse{Status: status, Body: bodyJSON, Binding: binding})
+	}
+	var (
+		raw []byte
+		err error
+	)
+	if durable {
+		raw, err = a.idem.DoDurableEffectBound(r.Context(), tenantID, idempotencyKey, binding, recordResult)
+	} else {
+		raw, err = a.idem.DoBound(r.Context(), tenantID, idempotencyKey, binding, recordResult)
+	}
 	if err != nil {
+		if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+			err = errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request")
+		}
 		a.writeError(w, err)
 		return
 	}
@@ -1718,6 +1769,10 @@ func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey stri
 		return
 	}
 	defer secret.Wipe(c.Body)
+	if (c.Binding != "" || binding != "") && !crypto.ConstantTimeEqual([]byte(c.Binding), []byte(binding)) {
+		a.writeError(w, errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request"))
+		return
+	}
 	if c.Status == http.StatusNoContent {
 		w.WriteHeader(c.Status)
 		return
@@ -1725,6 +1780,29 @@ func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey stri
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(c.Status)
 	_, _ = w.Write(c.Body)
+}
+
+// mutationRouteBinding scopes a raw Idempotency-Key to the authenticated caller
+// and exact served route when a handler has no command-specific body binding.
+// The domain label prevents this digest from being confused with any other
+// binding scheme, and only the non-secret SHA-256 digest is persisted.
+func mutationRouteBinding(principal, method, escapedPath string) (string, error) {
+	material, err := json.Marshal(struct {
+		Domain      string `json:"domain"`
+		Principal   string `json:"principal"`
+		Method      string `json:"method"`
+		EscapedPath string `json:"escaped_path"`
+	}{
+		Domain:      "trstctl.api.mutation-route-binding.v1",
+		Principal:   principal,
+		Method:      method,
+		EscapedPath: escapedPath,
+	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(material)
+	return crypto.SHA256Hex(material), nil
 }
 
 // apiError lets a handler choose the problem status for a domain failure.

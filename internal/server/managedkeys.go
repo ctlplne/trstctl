@@ -23,6 +23,7 @@ func buildManagedKeyService(d Deps, idem *orchestrator.Idempotency) (api.Managed
 		checker = storeApprovalChecker{store: d.Store, required: required}
 	}
 	return d.ManagedKeyFactory(ManagedKeyServiceDeps{
+		Store:           d.Store,
 		Log:             d.Log,
 		Idempotency:     idem,
 		ApprovalChecker: checker,

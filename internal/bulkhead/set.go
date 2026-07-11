@@ -9,8 +9,23 @@ import "sort"
 const (
 	SubsystemAPI         = "api"
 	SubsystemProjections = "projections"
-	SubsystemOutbox      = "outbox"
-	SubsystemSigning     = "signing"
+	// SubsystemOutbox is the compatibility/default lane for outbox destinations
+	// that do not belong to one of the external-effect families below. Existing
+	// deployment configuration continues to tune this lane and is also the
+	// fallback limit for family-specific pools when no override is supplied.
+	SubsystemOutbox = "outbox"
+	// W1 external effects have independent bounded pools. A slow connector must
+	// not consume the workers that issue through an external CA, synchronize a
+	// secret, write transparency evidence, or page an operator (AN-7).
+	SubsystemOutboxExternalCA    = "outbox.external_ca"
+	SubsystemOutboxConnectors    = "outbox.connectors"
+	SubsystemOutboxSecrets       = "outbox.secrets" // dynamic-secret provider calls
+	SubsystemOutboxSecretSync    = "outbox.secret_sync"
+	SubsystemOutboxManagedKeys   = "outbox.managed_keys"
+	SubsystemOutboxTransparency  = "outbox.transparency"
+	SubsystemOutboxCodeSigning   = "outbox.code_signing"
+	SubsystemOutboxNotifications = "outbox.notifications"
+	SubsystemSigning             = "signing"
 	// SubsystemQuery is the bounded pool for heavy, per-request O(inventory) read
 	// families — the credential-graph and risk-scoring endpoints (SPINE-005). Routing
 	// them to their own pool keeps a burst of expensive graph/risk builds from
@@ -64,6 +79,14 @@ func DefaultConfigs() []Config {
 		{Name: SubsystemAPI, Workers: 8, Queue: 256},
 		{Name: SubsystemProjections, Workers: 2, Queue: 128},
 		{Name: SubsystemOutbox, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxExternalCA, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxConnectors, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxSecrets, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxSecretSync, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxManagedKeys, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxTransparency, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxCodeSigning, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxNotifications, Workers: 4, Queue: 256},
 		{Name: SubsystemSigning, Workers: 4, Queue: 64},
 		// The heavy read pool (SPINE-005) is sized smaller than the CRUD pool: it caps
 		// how many concurrent O(inventory) graph/risk builds run, so they shed fast

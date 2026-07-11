@@ -45,6 +45,21 @@ func inspectOCIArtifact(repo string, profile BuildProfile) checkEvidence {
 		"build_output=" + proof.BuildOutput, "binary_path=" + proof.BinaryPath,
 		"entrypoint=" + proof.BinaryPath,
 	}
+	for _, companion := range proof.Companions {
+		required = append(required,
+			"companion_go_build="+companion.BinaryPackage,
+			"companion_build_output="+companion.BuildOutput,
+			"companion_binary_path="+companion.BinaryPath,
+		)
+	}
+	buildArgNames := make([]string, 0, len(proof.BuildArgs))
+	for name := range proof.BuildArgs {
+		buildArgNames = append(buildArgNames, name)
+	}
+	sort.Strings(buildArgNames)
+	for _, name := range buildArgNames {
+		required = append(required, "build_arg="+name+"="+proof.BuildArgs[name])
+	}
 	evidence := checkEvidence{Required: required}
 	if profile.Release != releaseShipped {
 		evidence.Detail = "build profile is planned, not shipped; planned artifacts never serve a capability"
@@ -133,6 +148,17 @@ func inspectOCIArtifact(repo string, profile BuildProfile) checkEvidence {
 		evidence.Detail = fmt.Sprintf("publishing builder tags = %q, want exact nonempty %q", tags, proof.BuilderTags)
 		return evidence
 	}
+	buildArgs, buildArgsErr := workflowBuildArgs(builder.With["build-args"])
+	if buildArgsErr != nil {
+		evidence.Detail = "publishing builder build-args: " + buildArgsErr.Error()
+		return evidence
+	}
+	for name, want := range proof.BuildArgs {
+		if got, ok := buildArgs[name]; !ok || got != want {
+			evidence.Detail = fmt.Sprintf("publishing builder build arg %s = %q, want exact %q", name, got, want)
+			return evidence
+		}
+	}
 	dockerfilePath, err := safeRepoPath(repo, proof.Dockerfile)
 	if err != nil {
 		evidence.Detail = "Dockerfile path: " + err.Error()
@@ -195,6 +221,30 @@ func commaSetContains(value, want string) bool {
 	return false
 }
 
+func workflowBuildArgs(value any) (map[string]string, error) {
+	raw, ok := scalarString(value)
+	if !ok || raw == "" {
+		return map[string]string{}, nil
+	}
+	out := map[string]string{}
+	for _, rawLine := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+			return nil, fmt.Errorf("invalid assignment %q", line)
+		}
+		name := strings.TrimSpace(parts[0])
+		if _, duplicate := out[name]; duplicate {
+			return nil, fmt.Errorf("duplicate assignment for %s", name)
+		}
+		out[name] = strings.TrimSpace(parts[1])
+	}
+	return out, nil
+}
+
 func inspectDockerfile(source string, profile BuildProfile) error {
 	proof := profile.Artifact
 	instructions := dockerInstructions(source)
@@ -207,10 +257,25 @@ func inspectDockerfile(source string, profile BuildProfile) error {
 	buildFound := false
 	copyFound := false
 	entrypointFound := false
+	companionBuilds := make(map[string]bool, len(proof.Companions))
+	companionCopies := make(map[string]bool, len(proof.Companions))
+	requiredArgs := make(map[string]bool, len(proof.BuildArgs))
+	defaultedRequiredArg := ""
 	expectedTags := append([]string(nil), profile.Tags...)
 	sort.Strings(expectedTags)
 	for _, instruction := range instructions {
 		upper := strings.ToUpper(instruction)
+		if strings.HasPrefix(upper, "ARG ") {
+			declaration := strings.TrimSpace(instruction[len("ARG "):])
+			for name := range proof.BuildArgs {
+				if declaration == name {
+					requiredArgs[name] = true
+				}
+				if strings.HasPrefix(declaration, name+"=") {
+					defaultedRequiredArg = name
+				}
+			}
+		}
 		if strings.HasPrefix(upper, "ENV ") && envAssignment(instruction[4:], "CGO_ENABLED") == profile.CGOEnabled {
 			cgoFound = true
 		}
@@ -225,11 +290,21 @@ func inspectDockerfile(source string, profile BuildProfile) error {
 			if dockerGoBuildMatches(command, profile.BinaryPackage, proof.BuildOutput, expectedTags) {
 				buildFound = true
 			}
+			for _, companion := range proof.Companions {
+				if dockerGoBuildMatches(command, companion.BinaryPackage, companion.BuildOutput, expectedTags) {
+					companionBuilds[companion.BinaryPath] = true
+				}
+			}
 		}
 		if strings.HasPrefix(upper, "COPY ") {
 			fields := strings.Fields(instruction)
 			if len(fields) == 4 && fields[0] == "COPY" && fields[1] == "--from=build" && fields[2] == proof.BuildOutput && fields[3] == proof.BinaryPath {
 				copyFound = true
+			}
+			for _, companion := range proof.Companions {
+				if len(fields) == 4 && fields[0] == "COPY" && fields[1] == "--from=build" && fields[2] == companion.BuildOutput && fields[3] == companion.BinaryPath {
+					companionCopies[companion.BinaryPath] = true
+				}
 			}
 		}
 		if strings.HasPrefix(upper, "ENTRYPOINT ") {
@@ -242,6 +317,14 @@ func inspectDockerfile(source string, profile BuildProfile) error {
 	if !cgoFound {
 		return fmt.Errorf("missing exact CGO_ENABLED=%s in build environment", profile.CGOEnabled)
 	}
+	if defaultedRequiredArg != "" {
+		return fmt.Errorf("required build ARG %s has a mutable/default fallback", defaultedRequiredArg)
+	}
+	for name := range proof.BuildArgs {
+		if !requiredArgs[name] {
+			return fmt.Errorf("missing required no-default Dockerfile ARG %s", name)
+		}
+	}
 	if !goosFound || !goarchFound {
 		return fmt.Errorf("missing exact GOOS=${TARGETOS} and GOARCH=${TARGETARCH} target binding")
 	}
@@ -253,6 +336,14 @@ func inspectDockerfile(source string, profile BuildProfile) error {
 	}
 	if !entrypointFound {
 		return fmt.Errorf("missing exact JSON ENTRYPOINT [%q]", proof.BinaryPath)
+	}
+	for _, companion := range proof.Companions {
+		if !companionBuilds[companion.BinaryPath] {
+			return fmt.Errorf("missing exact companion go build package=%s output=%s", companion.BinaryPackage, companion.BuildOutput)
+		}
+		if !companionCopies[companion.BinaryPath] {
+			return fmt.Errorf("missing exact companion COPY --from=build %s %s", companion.BuildOutput, companion.BinaryPath)
+		}
 	}
 	return nil
 }

@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: MPL-2.0
+
+package store_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/store"
+)
+
+func TestNotificationTestOperationSurvivesOutboxGCAndRejectsBindingDrift(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	queuedAt := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	op := store.NotificationTestOperation{
+		TenantID: tenantA, ID: "notification.test:durable-op",
+		RequestBinding: "binding-a", ChannelID: "slack",
+		Destination: "notification.test", CredentialConfigured: true, QueuedAt: queuedAt,
+	}
+	payload := []byte(`{"kind":"notification.channel_test","tenant_id":"` + tenantA + `","target_channel":"slack"}`)
+	apply := func(candidate store.NotificationTestOperation) error {
+		return s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyNotificationTestQueuedTx(ctx, tx, candidate,
+				"notification.test:channel:slack", payload)
+		})
+	}
+	if err := apply(op); err != nil {
+		t.Fatalf("project notification test: %v", err)
+	}
+	got, err := s.GetNotificationTestOperation(ctx, tenantA, op.ID)
+	if err != nil {
+		t.Fatalf("get notification test: %v", err)
+	}
+	if got.OutboxID == 0 || got.RequestBinding != op.RequestBinding || !got.QueuedAt.Equal(queuedAt) {
+		t.Fatalf("projected operation = %+v", got)
+	}
+
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM outbox WHERE tenant_id = $1 AND id = $2`, tenantA, got.OutboxID)
+		return err
+	}); err != nil {
+		t.Fatalf("simulate outbox GC: %v", err)
+	}
+	if err := apply(op); err != nil {
+		t.Fatalf("exact event replay after outbox GC: %v", err)
+	}
+	var outboxes int
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+			tenantA, op.ID).Scan(&outboxes)
+	}); err != nil {
+		t.Fatalf("count recreated outboxes: %v", err)
+	}
+	if outboxes != 0 {
+		t.Fatalf("event replay recreated %d GC'd outboxes, want 0", outboxes)
+	}
+
+	changed := op
+	changed.RequestBinding = "binding-b"
+	if err := apply(changed); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("changed binding error = %v, want ErrIdempotencyConflict", err)
+	}
+	if _, err := s.GetNotificationTestOperation(ctx, tenantB, op.ID); !store.IsNotFound(err) {
+		t.Fatalf("tenant B operation lookup error = %v, want not found", err)
+	}
+}
+
+func TestNotificationDeliveryReceiptProjectionIsTenantScopedAndImmutable(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	outboxID := int64(91)
+	rec := store.NotificationDeliveryReceipt{
+		TenantID: tenantA, ID: "notification.delivery:receipt-a",
+		Destination: "notification.ct", NotificationKeyDigest: "key-digest",
+		PayloadDigest: "payload-digest", Channel: "Slack", OutboxID: &outboxID,
+		Attempts: 1, DeliveredAt: time.Date(2026, 7, 11, 12, 1, 0, 0, time.UTC),
+	}
+	apply := func(candidate store.NotificationDeliveryReceipt) error {
+		return s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyNotificationDeliveryRecordedTx(ctx, tx, candidate)
+		})
+	}
+	if err := apply(rec); err != nil {
+		t.Fatalf("project delivery receipt: %v", err)
+	}
+	got, err := s.GetNotificationDeliveryReceipt(ctx, tenantA, rec.ID)
+	if err != nil {
+		t.Fatalf("get delivery receipt: %v", err)
+	}
+	if got.Channel != "slack" || got.PayloadDigest != rec.PayloadDigest {
+		t.Fatalf("projected receipt = %+v", got)
+	}
+	if _, err := s.GetNotificationDeliveryReceipt(ctx, tenantB, rec.ID); !store.IsNotFound(err) {
+		t.Fatalf("tenant B receipt lookup error = %v, want not found", err)
+	}
+	changed := rec
+	changed.PayloadDigest = "changed-payload"
+	if err := apply(changed); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("changed receipt binding error = %v, want ErrIdempotencyConflict", err)
+	}
+}

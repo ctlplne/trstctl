@@ -9,11 +9,12 @@
 // certificate (with an x509 policy: subject and SANs) starts a CertificateOperation
 // whose status moves inProgress -> completed; the operation is polled, then the
 // certificate is fetched (its leaf is the base64-DER `cer`, followed by the
-// issuing chain). That API is reached over HTTPS with Entra ID (AAD) bearer auth
-// via the Azure SDK, which cannot run in a Linux CI, so the plugin drives the Key
-// Vault create -> poll-operation -> get *semantics* over the azurekv.API seam,
-// with a faithful in-process double for CI (internal/ca/azurekv/azurekvfake). The
-// production Azure-SDK transport is the integration follow-up.
+// issuing chain). HTTPAPI supplies the Entra-bearer Key Vault REST transport; the
+// API seam also supports the in-process operation double in
+// internal/ca/azurekv/azurekvfake. Native Key Vault's "Unknown" issuer flow
+// generates its own CSR and requires an external issuer plus pending/merge, so a
+// caller-owned CSR works only through a compatible certificate gateway; this is
+// not a substitute for Azure remote-key signing.
 //
 // The package holds no crypto/* (AN-3) and custodies no signing key — Key Vault
 // does (it is key-custodial) — so AN-4 is not implicated; on the platform it runs
@@ -25,6 +26,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/ca"
@@ -64,9 +66,8 @@ type Certificate struct {
 	Chain [][]byte
 }
 
-// API is the subset of the Key Vault certificates API the plugin uses. The
-// production implementation is the Azure SDK (AAD auth); CI uses an in-process
-// double. The certificate operation is inProgress until issuance completes.
+// API is the subset of Key Vault Certificates used by the plugin. HTTPAPI is the
+// production REST transport; tests may use an in-process double.
 type API interface {
 	CreateCertificate(ctx context.Context, in CreateCertificateInput) (CertificateOperation, error)
 	GetCertificateOperation(ctx context.Context, vaultBaseURL, certName string) (CertificateOperation, error)
@@ -119,6 +120,13 @@ func New(cfg Config, api API, opts ...Option) *catemplate.Plugin {
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
 
+// Destroy releases credentials retained by a short-lived production API.
+func (b *backend) Destroy() {
+	if d, ok := b.api.(interface{ Destroy() }); ok {
+		d.Destroy()
+	}
+}
+
 // Issue creates a Key Vault certificate, polls its operation to completion, and
 // fetches the issued certificate.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
@@ -129,7 +137,7 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	if lifetime <= 0 {
 		lifetime = defaultValidity
 	}
-	name, err := b.certificateName()
+	name, err := b.certificateName(req.ProviderIdempotencyKey)
 	if err != nil {
 		return nil, err
 	}
@@ -161,14 +169,10 @@ func (b *backend) awaitOperation(ctx context.Context, name string, op Certificat
 		case StatusCompleted:
 			return nil
 		case StatusFailed:
-			msg := op.Error
-			if msg == "" {
-				msg = "certificate operation failed"
-			}
-			return fmt.Errorf("azurekv: certificate %s: %s", name, msg)
+			return fmt.Errorf("azurekv: certificate operation failed")
 		case StatusInProgress:
 			if polls >= maxPolls {
-				return fmt.Errorf("azurekv: certificate %s still in progress after %d polls", name, polls)
+				return fmt.Errorf("azurekv: certificate operation exceeded the polling window")
 			}
 			select {
 			case <-ctx.Done():
@@ -181,7 +185,7 @@ func (b *backend) awaitOperation(ctx context.Context, name string, op Certificat
 			}
 			op = next
 		default:
-			return fmt.Errorf("azurekv: certificate %s has unexpected operation status %q", name, op.Status)
+			return fmt.Errorf("azurekv: certificate operation returned an unexpected status")
 		}
 	}
 }
@@ -200,10 +204,14 @@ func assembleChain(cert Certificate) ([]byte, error) {
 
 // certificateName builds a unique Key Vault certificate name. The platform's
 // IssuanceService is the authoritative idempotency guard (AN-5).
-func (b *backend) certificateName() (string, error) {
+func (b *backend) certificateName(providerKey string) (string, error) {
 	prefix := b.cfg.CertificatePrefix
 	if prefix == "" {
 		prefix = "trstctl"
+	}
+	providerKey = strings.ToLower(strings.TrimSpace(providerKey))
+	if len(providerKey) >= 24 {
+		return prefix + "-" + providerKey[:24], nil
 	}
 	r, err := crypto.RandomBytes(12)
 	if err != nil {

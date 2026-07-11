@@ -185,19 +185,21 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, endp
 		return operation{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return operation{}, fmt.Errorf("read response: %w", err)
-	}
 	if resp.StatusCode/100 != 2 {
-		return operation{}, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return operation{}, fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
 	}
-	if strings.TrimSpace(string(data)) == "" {
+	data, err := secret.ReadBounded(resp.Body, 1<<20)
+	if err != nil {
+		return operation{}, fmt.Errorf("read response (details redacted)")
+	}
+	defer secret.Wipe(data)
+	if len(bytes.TrimSpace(data)) == 0 {
 		return operation{}, nil
 	}
 	var op operation
 	if err := json.Unmarshal(data, &op); err != nil {
-		return operation{}, fmt.Errorf("decode operation response: %w", err)
+		return operation{}, fmt.Errorf("decode operation response failed (details redacted)")
 	}
 	return op, nil
 }

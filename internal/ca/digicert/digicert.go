@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -98,6 +100,14 @@ func New(name, baseURL string, apiKey []byte, opts ...Option) *catemplate.Plugin
 
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.name }
+
+// Destroy erases the one-shot CertCentral credential and drops idle sockets.
+func (b *backend) Destroy() {
+	secret.Wipe(b.apiKey)
+	if b.client != nil {
+		b.client.CloseIdleConnections()
+	}
+}
 
 // Issue runs the CertCentral issuance flow: submit the order, await issuance,
 // download the chain.
@@ -185,11 +195,11 @@ func (b *backend) awaitIssued(ctx context.Context, orderID, certID int) (int, er
 		switch info.Status {
 		case "issued":
 			if cid == 0 {
-				return 0, fmt.Errorf("digicert: order %d issued but no certificate id", orderID)
+				return 0, errors.New("digicert: issued order carried no certificate id")
 			}
 			return cid, nil
 		case "rejected", "canceled":
-			return 0, fmt.Errorf("digicert: order %d %s", orderID, info.Status)
+			return 0, errors.New("digicert: order terminated without issuance")
 		}
 		select {
 		case <-ctx.Done():
@@ -197,7 +207,7 @@ func (b *backend) awaitIssued(ctx context.Context, orderID, certID int) (int, er
 		case <-time.After(pollInterval):
 		}
 	}
-	return 0, fmt.Errorf("digicert: order %d was not issued within the polling window", orderID)
+	return 0, errors.New("digicert: order was not issued within the polling window")
 }
 
 // downloadChain fetches the full PEM chain (pem_all) for the certificate.
@@ -210,14 +220,18 @@ func (b *backend) downloadChain(ctx context.Context, certID int) ([]byte, error)
 	httpReq.Header.Set("X-DC-DEVKEY", secrettext.String(b.apiKey))
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("digicert: download certificate: %w", err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, errors.New("digicert: download request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("digicert: read certificate response failed")
 	}
 	if resp.StatusCode >= 400 {
+		secret.Wipe(data)
 		return nil, apiError(resp.StatusCode, data)
 	}
 	return data, nil
@@ -228,16 +242,19 @@ func (b *backend) orderURL(suffix string) string {
 }
 
 // do issues a JSON request, decoding the response into out (when non-nil) and
-// mapping a CertCentral error envelope to a Go error.
+// normalizing CertCentral failures to status-only errors.
 func (b *backend) do(ctx context.Context, method, url string, body, out any) error {
 	var reader io.Reader
+	var buf []byte
 	if body != nil {
-		buf, err := json.Marshal(body)
+		var err error
+		buf, err = json.Marshal(body)
 		if err != nil {
 			return err
 		}
 		reader = bytes.NewReader(buf)
 	}
+	defer secret.Wipe(buf)
 	httpReq, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
 		return err
@@ -249,13 +266,17 @@ func (b *backend) do(ctx context.Context, method, url string, body, out any) err
 	}
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("digicert: %s %s: %w", method, url, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("digicert: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return err
+		return errors.New("digicert: read response failed")
 	}
+	defer secret.Wipe(data)
 	if resp.StatusCode >= 400 {
 		return apiError(resp.StatusCode, data)
 	}
@@ -267,16 +288,7 @@ func (b *backend) do(ctx context.Context, method, url string, body, out any) err
 	return nil
 }
 
-// apiError maps a CertCentral {"errors":[{code,message}]} envelope to an error.
-func apiError(status int, data []byte) error {
-	var env struct {
-		Errors []struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
-		} `json:"errors"`
-	}
-	if err := json.Unmarshal(data, &env); err == nil && len(env.Errors) > 0 {
-		return fmt.Errorf("digicert: api error %d: %s: %s", status, env.Errors[0].Code, env.Errors[0].Message)
-	}
+// apiError deliberately ignores CertCentral's free-form error envelope.
+func apiError(status int, _ []byte) error {
 	return fmt.Errorf("digicert: api error %d", status)
 }

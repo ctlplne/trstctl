@@ -72,6 +72,24 @@ type servedHarness struct {
 	signer SignerProvider
 	authz  *crypto.SignAuthorizer
 	caFile string
+
+	externalCADispatcherOnce sync.Once
+}
+
+func startServedExternalCADispatcher(t *testing.T, h *servedHarness) {
+	t.Helper()
+	h.externalCADispatcherOnce.Do(func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			h.srv.RunDispatcher(ctx)
+		}()
+		t.Cleanup(func() {
+			cancel()
+			<-done
+		})
+	})
 }
 
 const servedTestTenant = "11111111-1111-1111-1111-111111111111"

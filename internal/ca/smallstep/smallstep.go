@@ -21,8 +21,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/netip"
 	"strings"
@@ -32,6 +32,9 @@ import (
 	"trstctl.com/trstctl/internal/ca/catemplate"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -85,6 +88,7 @@ func WithPrivateEndpointCIDRs(cidrs ...netip.Prefix) Option {
 
 // New builds the Smallstep plugin. The returned *catemplate.Plugin is a ca.CA.
 func New(cfg Config, opts ...Option) *catemplate.Plugin {
+	cfg.ProvisionerKey = secrettext.Clone(cfg.ProvisionerKey)
 	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{}), now: time.Now}
 	for _, o := range opts {
 		o(b)
@@ -94,6 +98,14 @@ func New(cfg Config, opts ...Option) *catemplate.Plugin {
 
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
+
+// Destroy erases the one-shot JWK provisioner secret and drops idle sockets.
+func (b *backend) Destroy() {
+	secret.Wipe(b.cfg.ProvisionerKey)
+	if b.client != nil {
+		b.client.CloseIdleConnections()
+	}
+}
 
 // Issue mints a one-time token and submits the CSR to step-ca's /1.0/sign.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
@@ -107,9 +119,12 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	defer secret.Wipe(ott)
+	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: req.CSR})
+	defer secret.Wipe(csrPEM)
 	payload := map[string]any{
-		"csr": string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: req.CSR})),
-		"ott": ott,
+		"csr": secretjson.StringBytes(csrPEM),
+		"ott": secretjson.StringBytes(ott),
 	}
 	var out struct {
 		Crt       string   `json:"crt"`
@@ -130,11 +145,12 @@ func (b *backend) validateEndpoint() error {
 }
 
 // mintOTT builds and signs a step-ca one-time token through the jose boundary.
-func (b *backend) mintOTT(subject string, sans []string) (string, error) {
+func (b *backend) mintOTT(subject string, sans []string) ([]byte, error) {
 	nonce, err := crypto.RandomBytes(16)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	defer secret.Wipe(nonce)
 	now := b.now()
 	claims := map[string]any{
 		"iss":  b.cfg.ProvisionerName,
@@ -148,9 +164,10 @@ func (b *backend) mintOTT(subject string, sans []string) (string, error) {
 	}
 	payload, err := json.Marshal(claims)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return jose.SignHS256(b.cfg.ProvisionerKey, payload), nil
+	defer secret.Wipe(payload)
+	return jose.SignHS256Bytes(b.cfg.ProvisionerKey, payload), nil
 }
 
 // assembleChain prefers the certChain (leaf first) and falls back to crt+ca.
@@ -184,6 +201,7 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(buf)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))
 	if err != nil {
 		return err
@@ -192,13 +210,17 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	httpReq.Header.Set("Accept", "application/json")
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("smallstep: POST %s: %w", url, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("smallstep: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return err
+		return errors.New("smallstep: read response failed")
 	}
+	defer secret.Wipe(data)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return apiError(resp.StatusCode, data)
 	}
@@ -210,13 +232,7 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	return nil
 }
 
-// apiError maps a step-ca error body ({"message": ...}) to a Go error.
-func apiError(status int, data []byte) error {
-	var env struct {
-		Message string `json:"message"`
-	}
-	if err := json.Unmarshal(data, &env); err == nil && env.Message != "" {
-		return fmt.Errorf("smallstep: api error %d: %s", status, env.Message)
-	}
+// apiError deliberately ignores step-ca's free-form error body.
+func apiError(status int, _ []byte) error {
 	return fmt.Errorf("smallstep: api error %d", status)
 }

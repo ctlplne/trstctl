@@ -44,6 +44,7 @@ func TestAPIErrorMappersPreserveStatusContracts(t *testing.T) {
 		want int
 	}{
 		{errors.New("not permitted by policy"), http.StatusForbidden},
+		{errors.New("idempotency key was already used for another signing command"), http.StatusConflict},
 		{errors.New("digest required"), http.StatusBadRequest},
 		{errors.New("unknown key id"), http.StatusNotFound},
 	} {

@@ -28,11 +28,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 )
@@ -124,12 +124,10 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	return nil
 }
 
-// readError turns a non-2xx response into a postError whose text is the response body.
-// The Teams error body is the service's own message and never echoes the webhook URL, so
-// surfacing it does not leak the secret (AN-8).
+// readError bounds and discards the untrusted upstream body (AN-8).
 func readError(resp *http.Response) error {
-	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return &postError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
+	_ = secret.DrainBounded(resp.Body, 4096)
+	return &postError{status: resp.StatusCode}
 }
 
 // scrubURL guards against the standard library embedding the webhook URL in an error
@@ -153,7 +151,7 @@ func scrubURL(err error, secret string) error {
 var errRedacted = errors.New("request to msteams webhook failed (details withheld to avoid leaking the webhook URL)")
 
 // drain consumes and discards a successful response body so the connection can be reused.
-func drain(resp *http.Response) { _, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) }
+func drain(resp *http.Response) { _ = secret.DrainBounded(resp.Body, 1<<20) }
 
 // messageCard is the legacy Teams MessageCard wire shape this channel posts.
 type messageCard struct {
@@ -163,13 +161,11 @@ type messageCard struct {
 	Text    string `json:"text"`
 }
 
-// postError is a non-2xx Teams response. Its body is the service's error text and never
-// carries the webhook URL (AN-8).
+// postError is a body-free non-2xx Teams response (AN-8).
 type postError struct {
 	status int
-	body   string
 }
 
 func (e *postError) Error() string {
-	return fmt.Sprintf("msteams: status %d: %s", e.status, e.body)
+	return fmt.Sprintf("msteams: status %d (response body redacted)", e.status)
 }

@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 const (
@@ -41,11 +43,22 @@ const (
 //
 // The command must write a PEM certificate chain, leaf first, to the output path.
 type Config struct {
-	Name    string
-	Command string
-	Args    []string
-	Env     []string
-	Timeout time.Duration
+	Name      string
+	Command   string
+	Args      []string
+	Env       []string
+	SecretFDs []SecretFD
+	Timeout   time.Duration
+}
+
+// SecretFD is byte-native authority passed to the signer command through an
+// inherited anonymous-pipe descriptor. The child receives only NAME_FD=<n> in
+// its environment; the secret itself is never converted to a Go string, copied
+// into exec.Cmd.Env, or written to a filesystem path. Value is consumed and
+// wiped after the child attempt (AN-8).
+type SecretFD struct {
+	Name  string
+	Value []byte
 }
 
 type backend struct {
@@ -81,6 +94,7 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	csrPath := filepath.Join(dir, "request.csr.pem")
 	certPath := filepath.Join(dir, "certificate.pem")
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: req.CSR})
+	defer secret.Wipe(csrPEM)
 	if err := os.WriteFile(csrPath, csrPEM, 0o600); err != nil {
 		return nil, fmt.Errorf("shellca: write CSR: %w", err)
 	}
@@ -98,20 +112,149 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 }
 
 func (b *backend) run(ctx context.Context, csrPath, certPath string) error {
+	defer wipeSecretFDs(b.cfg.SecretFDs)
 	runCtx, cancel := context.WithTimeout(ctx, b.cfg.Timeout)
 	defer cancel()
 	args := append([]string(nil), b.cfg.Args...)
 	args = append(args, csrPath, certPath)
 	cmd := exec.CommandContext(runCtx, b.cfg.Command, args...)
-	cmd.Env = append(os.Environ(), b.cfg.Env...)
-	out, err := cmd.CombinedOutput()
+	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"}, b.cfg.Env...)
+	readers, writers, descriptors, err := openSecretPipes(b.cfg.SecretFDs)
 	if err != nil {
+		return err
+	}
+	cmd.ExtraFiles = readers
+	cmd.Env = append(cmd.Env, descriptors...)
+	// A signer command is untrusted enough to echo authority material. Give the
+	// child raw OS pipes and drain their read ends through our own wiping buffers.
+	// This avoids io.Writer's rule that a writer may not modify exec's pooled input
+	// slice, while still preventing output larger than a pipe from deadlocking.
+	outputReaders, outputWriters, err := openOutputPipes()
+	if err != nil {
+		closeFiles(readers)
+		closeFiles(writers)
+		return err
+	}
+	cmd.Stdout = outputWriters[0]
+	cmd.Stderr = outputWriters[1]
+	if err := cmd.Start(); err != nil {
+		closeFiles(readers)
+		closeFiles(writers)
+		closeFiles(outputReaders)
+		closeFiles(outputWriters)
+		return fmt.Errorf("shellca: start sign command: %w", err)
+	}
+	closeFiles(outputWriters)
+	outputResults := make(chan error, len(outputReaders))
+	for _, reader := range outputReaders {
+		go func(reader *os.File) {
+			outputResults <- secret.Drain(reader)
+		}(reader)
+	}
+	// Start duplicates the read ends into the child. Close the parent's read
+	// copies, then stream each locked byte slice concurrently so a child may read
+	// descriptors in any order without a pipe-buffer deadlock.
+	closeFiles(readers)
+	writeResults := make(chan error, len(writers))
+	for index, writer := range writers {
+		value := b.cfg.SecretFDs[index].Value
+		go func() {
+			err := writeAll(writer, value)
+			if closeErr := writer.Close(); err == nil {
+				err = closeErr
+			}
+			writeResults <- err
+		}()
+	}
+	waitErr := cmd.Wait()
+	// A descendant may inherit an output descriptor. Closing our read ends after
+	// the direct child exits wakes every drain goroutine without retaining output.
+	closeFiles(outputReaders)
+	for range outputReaders {
+		<-outputResults
+	}
+	// Force any still-blocked writer to wake if a failed child (or one of its
+	// descendants) kept a read descriptor open without consuming it.
+	closeFiles(writers)
+	var writeErr error
+	for range writers {
+		if err := <-writeResults; err != nil && writeErr == nil {
+			writeErr = err
+		}
+	}
+	if waitErr != nil {
 		if runCtx.Err() != nil {
 			return fmt.Errorf("shellca: sign command timed out: %w", runCtx.Err())
 		}
-		return fmt.Errorf("shellca: sign command failed: %w (output: %s)", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("shellca: sign command failed: %w", waitErr)
+	}
+	if writeErr != nil {
+		return fmt.Errorf("shellca: stream secret descriptor: %w", writeErr)
 	}
 	return nil
+}
+
+func openOutputPipes() ([]*os.File, []*os.File, error) {
+	readers := make([]*os.File, 0, 2)
+	writers := make([]*os.File, 0, 2)
+	for range 2 {
+		reader, writer, err := os.Pipe()
+		if err != nil {
+			closeFiles(readers)
+			closeFiles(writers)
+			return nil, nil, fmt.Errorf("shellca: create child output pipe: %w", err)
+		}
+		readers = append(readers, reader)
+		writers = append(writers, writer)
+	}
+	return readers, writers, nil
+}
+
+func openSecretPipes(secrets []SecretFD) ([]*os.File, []*os.File, []string, error) {
+	readers := make([]*os.File, 0, len(secrets))
+	writers := make([]*os.File, 0, len(secrets))
+	descriptors := make([]string, 0, len(secrets))
+	for index, item := range secrets {
+		reader, writer, err := os.Pipe()
+		if err != nil {
+			closeFiles(readers)
+			closeFiles(writers)
+			return nil, nil, nil, fmt.Errorf("shellca: create secret pipe: %w", err)
+		}
+		readers = append(readers, reader)
+		writers = append(writers, writer)
+		descriptors = append(descriptors, fmt.Sprintf("%s_FD=%d", item.Name, 3+index))
+	}
+	return readers, writers, descriptors, nil
+}
+
+func writeAll(file *os.File, value []byte) error {
+	for len(value) > 0 {
+		n, err := file.Write(value)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrShortWrite
+		}
+		value = value[n:]
+	}
+	return nil
+}
+
+func closeFiles(files []*os.File) {
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+		_ = file.Close()
+	}
+}
+
+func wipeSecretFDs(secrets []SecretFD) {
+	for index := range secrets {
+		secret.Wipe(secrets[index].Value)
+	}
 }
 
 // ValidateConfig rejects command strings that would be meaningful to a shell.
@@ -136,6 +279,19 @@ func ValidateConfig(cfg Config) error {
 		if err := validateEnv(fmt.Sprintf("env[%d]", i), env); err != nil {
 			return err
 		}
+	}
+	seenSecretNames := map[string]bool{}
+	for i, secret := range cfg.SecretFDs {
+		if err := validateEnvKey(fmt.Sprintf("secret_fd[%d]", i), secret.Name); err != nil {
+			return err
+		}
+		if len(secret.Value) == 0 {
+			return fmt.Errorf("shellca: secret_fd[%d] is empty", i)
+		}
+		if seenSecretNames[secret.Name] {
+			return fmt.Errorf("shellca: duplicate secret descriptor name %q", secret.Name)
+		}
+		seenSecretNames[secret.Name] = true
 	}
 	if cfg.Timeout < 0 {
 		return fmt.Errorf("shellca: timeout cannot be negative")
@@ -163,13 +319,23 @@ func validateEnv(label, value string) error {
 	if !ok || key == "" {
 		return fmt.Errorf("shellca: %s must be KEY=value", label)
 	}
+	if err := validateEnvKey(label, key); err != nil {
+		return err
+	}
+	if strings.ContainsAny(value, "\x00\r\n") {
+		return fmt.Errorf("shellca: %s contains a newline or NUL", label)
+	}
+	return nil
+}
+
+func validateEnvKey(label, key string) error {
+	if key == "" || strings.HasSuffix(key, "_FD") {
+		return fmt.Errorf("shellca: %s has invalid or reserved environment key %q", label, key)
+	}
 	for _, r := range key {
 		if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
 			return fmt.Errorf("shellca: %s has invalid environment key %q", label, key)
 		}
-	}
-	if strings.ContainsAny(value, "\x00\r\n") {
-		return fmt.Errorf("shellca: %s contains a newline or NUL", label)
 	}
 	return nil
 }

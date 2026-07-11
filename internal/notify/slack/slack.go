@@ -26,11 +26,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 )
@@ -117,12 +117,11 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	return nil
 }
 
-// readError turns a non-2xx Slack response into an apiError whose text is the response
-// body. Slack webhook error bodies are short tokens like "invalid_token" or "no_service"
-// and never echo the request URL, so surfacing them does not leak the webhook (AN-8).
+// readError bounds and discards the untrusted upstream body. A receiver can echo
+// submitted alert data, so it must never become an immutable error string (AN-8).
 func readError(resp *http.Response) error {
-	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
+	_ = secret.DrainBounded(resp.Body, 4096)
+	return &apiError{status: resp.StatusCode}
 }
 
 // scrubURL guards against the standard library embedding the webhook URL in an error
@@ -146,7 +145,7 @@ func scrubURL(err error, secret string) error {
 var errRedacted = errors.New("request to slack webhook failed (details withheld to avoid leaking the webhook URL)")
 
 // drain consumes and discards a successful response body so the connection can be reused.
-func drain(resp *http.Response) { _, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) }
+func drain(resp *http.Response) { _ = secret.DrainBounded(resp.Body, 1<<20) }
 
 // payload is the Slack incoming-webhook request body. text is the only field a webhook
 // requires; FormatMessage produces it.
@@ -154,13 +153,11 @@ type payload struct {
 	Text string `json:"text"`
 }
 
-// apiError is a non-2xx Slack response. Its body is the Slack error text and never
-// carries the webhook URL (AN-8).
+// apiError is a body-free non-2xx Slack response (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
 func (e *apiError) Error() string {
-	return fmt.Sprintf("slack: status %d: %s", e.status, e.body)
+	return fmt.Sprintf("slack: status %d (response body redacted)", e.status)
 }

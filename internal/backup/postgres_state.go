@@ -352,6 +352,9 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"credentials",
 		"ct_log_checkpoints",
 		"ct_watched_domains",
+		// Restore the immutable revision before the current target row that names
+		// it. Migration 0072 created legacy revisions without corresponding events.
+		"deployment_target_revisions",
 		"deployment_targets",
 		"federation_peer_checkpoints",
 		"idempotency_keys",

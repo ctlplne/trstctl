@@ -6,15 +6,10 @@
 // /sign API — the private key never leaves the vault. Digests route through internal/crypto
 // (no crypto/*); requests authenticate with an AAD bearer token supplied by the caller.
 //
-// It speaks the Key Vault REST wire protocol directly over an injectable HTTP doer so it is
-// exercised against a faithful in-process double on CI; real-backend validation is deferred
-// (the same pattern Phase 1 used for the cloud connectors).
-//
-// NOTE ON PUBLIC KEYS: real Azure Key Vault returns a key's public material as a JWK, not as
-// a DER SubjectPublicKeyInfo. Converting JWK->SPKI without importing crypto/* (AN-3) is out
-// of scope for this sprint; the double therefore returns base64-std DER directly and the
-// create/get responses are modeled to carry that DER. JWK->SPKI conversion is a deferred
-// follow-up.
+// It speaks the Key Vault REST wire protocol directly over an injectable HTTP
+// doer. Real Azure JWK public material is converted to SPKI by internal/crypto,
+// and SignerForKey binds an operator-provisioned key version without creating or
+// exporting private material.
 package azurekv
 
 import (
@@ -25,11 +20,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -56,16 +54,18 @@ type HTTPDoer interface {
 type Backend struct {
 	vaultURL  string
 	endpoint  string
-	creds     Credentials
+	token     *secret.Buffer
 	doer      HTTPDoer
 	n         int
 	opTimeout time.Duration
+	initErr   error
 }
 
 var (
 	_ crypto.Backend             = (*Backend)(nil)
 	_ crypto.ContextKeyGenerator = (*Backend)(nil)
 	_ crypto.ContextSigner       = (*kvSigner)(nil)
+	_ crypto.DigestSigner        = (*kvSigner)(nil)
 )
 
 // Option configures a Backend.
@@ -89,18 +89,56 @@ func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeo
 // New returns an Azure Key Vault backend for vaultURL (e.g. https://my-vault.vault.azure.net),
 // authenticating with creds.
 func New(vaultURL string, creds Credentials, opts ...Option) *Backend {
-	creds.BearerToken = secrettext.Clone(creds.BearerToken)
-	b := &Backend{
+	b, err := NewSecure(vaultURL, creds, opts...)
+	if err == nil {
+		return b
+	}
+	b = &Backend{
 		vaultURL:  strings.TrimRight(vaultURL, "/"),
-		creds:     creds,
-		doer:      http.DefaultClient,
+		doer:      netsec.SafeClient(defaultOpTimeout),
 		opTimeout: defaultOpTimeout,
+		initErr:   err,
 	}
 	b.endpoint = b.vaultURL
 	for _, o := range opts {
 		o(b)
 	}
 	return b
+}
+
+// NewSecure retains the Entra bearer only in locked, non-dumpable memory.
+// Production signer composition uses this constructor and propagates failures.
+func NewSecure(vaultURL string, creds Credentials, opts ...Option) (*Backend, error) {
+	if len(creds.BearerToken) == 0 {
+		return nil, fmt.Errorf("azure-key-vault: bearer token is required")
+	}
+	token, err := secret.NewFrom(creds.BearerToken)
+	if err != nil {
+		return nil, fmt.Errorf("azure-key-vault: protect bearer token: %w", err)
+	}
+	b := &Backend{
+		vaultURL: strings.TrimRight(vaultURL, "/"), token: token,
+		doer: netsec.SafeClient(defaultOpTimeout), opTimeout: defaultOpTimeout,
+	}
+	b.endpoint = b.vaultURL
+	for _, o := range opts {
+		o(b)
+	}
+	return b, nil
+}
+
+// Destroy erases the short-lived Entra bearer and drops idle sockets.
+func (b *Backend) Destroy() {
+	if b == nil {
+		return
+	}
+	if b.token != nil {
+		b.token.Destroy()
+		b.token = nil
+	}
+	if client, ok := b.doer.(*http.Client); ok {
+		client.CloseIdleConnections()
+	}
 }
 
 // opContext derives the context a single network operation runs under when the
@@ -138,44 +176,113 @@ func (b *Backend) GenerateKeyContext(ctx context.Context, alg crypto.Algorithm) 
 	name := fmt.Sprintf("trstctl-key-%d", b.n)
 	ctx, cancel := b.opContext(ctx)
 	defer cancel()
-	// The create response models both the key identifier and (per the package note) the
-	// base64-std DER SubjectPublicKeyInfo the double provides.
-	var created struct {
-		Key struct {
-			Kid string `json:"kid"`
-		} `json:"key"`
-		DER string `json:"der"`
-	}
+	var created keyResponse
 	path := fmt.Sprintf("/keys/%s/create", name)
 	if err := b.call(ctx, http.MethodPost, path, body, &created); err != nil {
 		return nil, fmt.Errorf("azure-key-vault: create key: %w", err)
 	}
 	keyName, version := keyNameAndVersion(created.Key.Kid, name)
-	pub, err := b.publicKey(ctx, keyName, version, alg, created.DER)
+	pub, err := b.publicKey(ctx, keyName, version, alg, created)
 	if err != nil {
 		return nil, err
 	}
 	return &kvSigner{b: b, name: keyName, version: version, alg: alg, pub: pub}, nil
 }
 
-// publicKey resolves the key's DER SubjectPublicKeyInfo. If the create response already
-// carried it, that is used; otherwise the key is fetched.
-func (b *Backend) publicKey(ctx context.Context, name, version string, alg crypto.Algorithm, derB64 string) (crypto.PublicKey, error) {
-	if derB64 == "" {
-		var out struct {
-			DER string `json:"der"`
-		}
-		path := keyPath(name, version)
-		if err := b.call(ctx, http.MethodGet, path, nil, &out); err != nil {
+// SignerForKey binds an existing Key Vault/Managed-HSM key version. It fetches
+// the real public JWK, requires the sign operation, and returns a DigestSigner
+// whose private-key operations go only to /keys/{name}/{version}/sign.
+func (b *Backend) SignerForKey(ctx context.Context, name, version string) (crypto.DigestSigner, error) {
+	if !validKeyComponent(name) || (version != "" && !validKeyComponent(version)) {
+		return nil, fmt.Errorf("azure-key-vault: invalid key name or version")
+	}
+	var resource keyResponse
+	if err := b.call(ctx, http.MethodGet, keyPath(name, version), nil, &resource); err != nil {
+		return nil, fmt.Errorf("azure-key-vault: get existing key: %w", err)
+	}
+	if !containsString(resource.Key.KeyOps, "sign") {
+		return nil, fmt.Errorf("azure-key-vault: key %q does not permit sign", name)
+	}
+	resolvedName, resolvedVersion := keyNameAndVersion(resource.Key.Kid, name)
+	if version != "" {
+		resolvedVersion = version
+	}
+	pub, err := b.publicKey(ctx, resolvedName, resolvedVersion, "", resource)
+	if err != nil {
+		return nil, err
+	}
+	return &kvSigner{b: b, name: resolvedName, version: resolvedVersion, alg: pub.Algorithm, pub: pub}, nil
+}
+
+type keyResponse struct {
+	Key keyJWK `json:"key"`
+	// DER preserves compatibility with older private emulators. Real Azure
+	// responses use the JWK fields above.
+	DER string `json:"der,omitempty"`
+}
+
+type keyJWK struct {
+	Kid    string   `json:"kid"`
+	Kty    string   `json:"kty"`
+	Crv    string   `json:"crv,omitempty"`
+	N      string   `json:"n,omitempty"`
+	E      string   `json:"e,omitempty"`
+	X      string   `json:"x,omitempty"`
+	Y      string   `json:"y,omitempty"`
+	KeyOps []string `json:"key_ops,omitempty"`
+}
+
+// publicKey resolves the real JWK (or the compatibility DER field). If a create
+// response omitted public material, it fetches the key resource once.
+func (b *Backend) publicKey(ctx context.Context, name, version string, expected crypto.Algorithm, resource keyResponse) (crypto.PublicKey, error) {
+	if resource.DER == "" && resource.Key.Kty == "" {
+		if err := b.call(ctx, http.MethodGet, keyPath(name, version), nil, &resource); err != nil {
 			return crypto.PublicKey{}, fmt.Errorf("azure-key-vault: get public key: %w", err)
 		}
-		derB64 = out.DER
 	}
-	der, err := base64.StdEncoding.DecodeString(derB64)
+	if resource.DER != "" {
+		der, err := base64.StdEncoding.DecodeString(resource.DER)
+		if err != nil {
+			return crypto.PublicKey{}, fmt.Errorf("azure-key-vault: decode compatibility public key: %w", err)
+		}
+		return crypto.PublicKey{Algorithm: expected, DER: der}, nil
+	}
+	decode := func(label, value string) ([]byte, error) {
+		if value == "" {
+			return nil, nil
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(value)
+		if err != nil {
+			return nil, fmt.Errorf("azure-key-vault: decode JWK %s: %w", label, err)
+		}
+		return decoded, nil
+	}
+	n, err := decode("n", resource.Key.N)
 	if err != nil {
-		return crypto.PublicKey{}, fmt.Errorf("azure-key-vault: decode public key: %w", err)
+		return crypto.PublicKey{}, err
 	}
-	return crypto.PublicKey{Algorithm: alg, DER: der}, nil
+	e, err := decode("e", resource.Key.E)
+	if err != nil {
+		return crypto.PublicKey{}, err
+	}
+	x, err := decode("x", resource.Key.X)
+	if err != nil {
+		return crypto.PublicKey{}, err
+	}
+	y, err := decode("y", resource.Key.Y)
+	if err != nil {
+		return crypto.PublicKey{}, err
+	}
+	pub, err := crypto.PublicKeyFromJWK(crypto.JSONWebKey{
+		KeyType: resource.Key.Kty, Curve: resource.Key.Crv, N: n, E: e, X: x, Y: y,
+	})
+	if err != nil {
+		return crypto.PublicKey{}, fmt.Errorf("azure-key-vault: public JWK: %w", err)
+	}
+	if expected != "" && pub.Algorithm != expected {
+		return crypto.PublicKey{}, fmt.Errorf("azure-key-vault: created key algorithm %q differs from requested %q", pub.Algorithm, expected)
+	}
+	return pub, nil
 }
 
 // kvSigner signs a digest via the Key Vault /sign API; the key never leaves the vault.
@@ -204,6 +311,16 @@ func (s *kvSigner) SignContext(ctx context.Context, message []byte, opts crypto.
 	if err != nil {
 		return nil, err
 	}
+	return s.signDigestContext(ctx, digest, opts)
+}
+
+// SignDigest implements the canonical X.509/HSM signing contract without
+// hashing the digest a second time.
+func (s *kvSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	return s.signDigestContext(context.Background(), digest, opts)
+}
+
+func (s *kvSigner) signDigestContext(ctx context.Context, digest []byte, opts crypto.SignOptions) ([]byte, error) {
 	joseAlg, err := signingAlgorithm(s.alg, opts)
 	if err != nil {
 		return nil, err
@@ -229,7 +346,12 @@ func (s *kvSigner) SignContext(ctx context.Context, message []byte, opts crypto.
 	if err != nil {
 		return nil, fmt.Errorf("azure-key-vault: decode signature: %w", err)
 	}
-	return sig, nil
+	switch s.alg {
+	case crypto.ECDSAP256, crypto.ECDSAP384, crypto.ECDSAP521:
+		return crypto.NormalizeECDSASignature(s.alg, sig)
+	default:
+		return sig, nil
+	}
 }
 
 // call performs a bearer-authenticated Key Vault REST request and decodes the JSON response.
@@ -238,6 +360,9 @@ func (s *kvSigner) SignContext(ctx context.Context, message []byte, opts crypto.
 // bounded read, non-2xx normalisation, JSON decode — is internal/cloudhttp (CODE-006). The
 // per-op timeout is already applied by the caller via withTimeout(ctx) (CODE-002).
 func (b *Backend) call(ctx context.Context, method, path string, body []byte, out any) error {
+	if b.initErr != nil || b.token == nil {
+		return fmt.Errorf("azure-key-vault: credentials unavailable: %w", b.initErr)
+	}
 	u := b.endpoint + path + "?api-version=" + apiVersion
 	var rdr io.Reader
 	if body != nil {
@@ -252,7 +377,7 @@ func (b *Backend) call(ctx context.Context, method, path string, body []byte, ou
 	}
 	req.Header.Set("Accept", "application/json")
 	// Bearer auth: the AAD access token authenticates every request.
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.creds.BearerToken))
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.token.Bytes()))
 	if err := cloudhttp.JSON(b.doer, req, out); err != nil {
 		return fmt.Errorf("azure-key-vault: %w", err)
 	}
@@ -266,6 +391,19 @@ func keyPath(name, version string) string {
 		return "/keys/" + name
 	}
 	return "/keys/" + name + "/" + version
+}
+
+var keyComponentPattern = regexp.MustCompile(`^[A-Za-z0-9-]{1,127}$`)
+
+func validKeyComponent(value string) bool { return keyComponentPattern.MatchString(value) }
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), want) {
+			return true
+		}
+	}
+	return false
 }
 
 // keyNameAndVersion extracts the key name and version from a Key Vault key identifier

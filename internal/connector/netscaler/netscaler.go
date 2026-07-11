@@ -20,10 +20,8 @@ package netscaler
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -31,6 +29,8 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const defaultFileLocation = "/nsconfig/ssl"
@@ -106,6 +106,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	if err != nil {
 		return fmt.Errorf("netscaler: %w", err)
 	}
+	defer secret.Wipe(token)
 	defer func() { _ = c.logout(ctx, sb, token) }()
 
 	certFile := dep.Target + ".crt"
@@ -122,76 +123,78 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	return nil
 }
 
-func (c *Connector) login(ctx context.Context, sb connector.Sandbox) (string, error) {
-	// The NITRO login body carries the password once on the wire; string(c.pass)
-	// is the transient edge form of the []byte secret (AN-8). The marshaled body
-	// inside call() is short-lived and not retained.
-	data, err := c.call(ctx, sb, http.MethodPost, "/nitro/v1/config/login", "", loginReq{
-		Login: credentials{Username: c.user, Password: string(c.pass)},
+func (c *Connector) login(ctx context.Context, sb connector.Sandbox) ([]byte, error) {
+	data, err := c.call(ctx, sb, http.MethodPost, "/nitro/v1/config/login", nil, loginReq{
+		Login: credentials{Username: c.user, Password: secretjson.StringBytes(c.pass)},
 	})
 	if err != nil {
-		return "", fmt.Errorf("login: %w", err)
+		return nil, fmt.Errorf("login: %w", err)
 	}
+	defer secret.Wipe(data)
 	var lr struct {
-		SessionID string `json:"sessionid"`
-		ErrorCode int    `json:"errorcode"`
-		Message   string `json:"message"`
+		SessionID secretjson.StringBytes `json:"sessionid"`
+		ErrorCode int                    `json:"errorcode"`
 	}
 	if err := json.Unmarshal(data, &lr); err != nil {
-		return "", fmt.Errorf("login: decode response: %w", err)
+		return nil, fmt.Errorf("login: decode response failed (details redacted)")
 	}
+	defer secret.Wipe(lr.SessionID)
 	if lr.ErrorCode != 0 {
-		return "", fmt.Errorf("login: NITRO error %d: %s", lr.ErrorCode, strings.TrimSpace(lr.Message))
+		return nil, fmt.Errorf("login: NITRO error %d (response message redacted)", lr.ErrorCode)
 	}
-	if strings.TrimSpace(lr.SessionID) == "" {
-		return "", fmt.Errorf("login: response missing sessionid")
+	if len(bytes.TrimSpace(lr.SessionID)) == 0 {
+		return nil, fmt.Errorf("login: response missing sessionid")
 	}
-	return lr.SessionID, nil
+	return append([]byte(nil), lr.SessionID...), nil
 }
 
-func (c *Connector) upload(ctx context.Context, sb connector.Sandbox, token, filename string, content []byte) error {
-	_, err := c.call(ctx, sb, http.MethodPost, "/nitro/v1/config/systemfile", token, systemfileReq{
+func (c *Connector) upload(ctx context.Context, sb connector.Sandbox, token []byte, filename string, content []byte) error {
+	data, err := c.call(ctx, sb, http.MethodPost, "/nitro/v1/config/systemfile", token, systemfileReq{
 		Systemfile: systemfile{
 			Filename:     filename,
-			Filecontent:  base64.StdEncoding.EncodeToString(content),
+			Filecontent:  secretjson.Base64Bytes(content),
 			Filelocation: c.fileLocation,
 			Fileencoding: "BASE64",
 		},
 	})
+	secret.Wipe(data)
 	return err
 }
 
-func (c *Connector) rebind(ctx context.Context, sb connector.Sandbox, token, certkey, certFile, keyFile string) error {
-	_, err := c.call(ctx, sb, http.MethodPut, "/nitro/v1/config/sslcertkey", token, sslcertkeyReq{
+func (c *Connector) rebind(ctx context.Context, sb connector.Sandbox, token []byte, certkey, certFile, keyFile string) error {
+	data, err := c.call(ctx, sb, http.MethodPut, "/nitro/v1/config/sslcertkey", token, sslcertkeyReq{
 		Sslcertkey: sslcertkey{Certkey: certkey, Cert: certFile, Key: keyFile, NoDomainCheck: true},
 	})
+	secret.Wipe(data)
 	return err
 }
 
 // logout closes the NITRO session. It is best-effort: the certificate is already
 // deployed, so a failed logout must not fail the deployment.
-func (c *Connector) logout(ctx context.Context, sb connector.Sandbox, token string) error {
-	if token == "" {
+func (c *Connector) logout(ctx context.Context, sb connector.Sandbox, token []byte) error {
+	if len(token) == 0 {
 		return nil
 	}
-	_, err := c.call(ctx, sb, http.MethodPost, "/nitro/v1/config/logout", token, logoutReq{})
+	data, err := c.call(ctx, sb, http.MethodPost, "/nitro/v1/config/logout", token, logoutReq{})
+	secret.Wipe(data)
 	return err
 }
 
 // call performs a NITRO request through the sandbox, attaching the session token
 // (when present) as the NITRO_AUTH_TOKEN cookie, and returns the response body.
-func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path, token string, payload any) ([]byte, error) {
+func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path string, token []byte, payload any) ([]byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
+	defer secret.Wipe(body)
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.AddCookie(&http.Cookie{Name: "NITRO_AUTH_TOKEN", Value: token})
+	if len(token) > 0 {
+		req.AddCookie(&http.Cookie{Name: "NITRO_AUTH_TOKEN", Value: secrettext.String(token)})
 	}
 
 	resp, err := sb.Request(req)
@@ -199,12 +202,13 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return nil, fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+	}
+	data, err := secret.ReadBounded(resp.Body, 1<<20)
+	if err != nil {
+		return nil, fmt.Errorf("read response (details redacted)")
 	}
 	return data, nil
 }
@@ -214,8 +218,8 @@ type loginReq struct {
 }
 
 type credentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string                 `json:"username"`
+	Password secretjson.StringBytes `json:"password"`
 }
 
 type logoutReq struct {
@@ -227,10 +231,10 @@ type systemfileReq struct {
 }
 
 type systemfile struct {
-	Filename     string `json:"filename"`
-	Filecontent  string `json:"filecontent"`
-	Filelocation string `json:"filelocation"`
-	Fileencoding string `json:"fileencoding"`
+	Filename     string                 `json:"filename"`
+	Filecontent  secretjson.Base64Bytes `json:"filecontent"`
+	Filelocation string                 `json:"filelocation"`
+	Fileencoding string                 `json:"fileencoding"`
 }
 
 type sslcertkeyReq struct {

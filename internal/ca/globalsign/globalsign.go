@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -26,6 +27,7 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -138,6 +140,15 @@ func normalizeConfig(cfg Config) Config {
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
 
+// Destroy erases the one-shot Atlas credentials and drops idle sockets.
+func (b *backend) Destroy() {
+	secret.Wipe(b.cfg.APIKey)
+	secret.Wipe(b.cfg.APISecret)
+	if b.client != nil {
+		b.client.CloseIdleConnections()
+	}
+}
+
 // Issue submits an order, then retrieves the issued chain by serial number.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
 	if b.cfg.BaseURL == "" {
@@ -195,11 +206,11 @@ func (b *backend) awaitCertificate(ctx context.Context, serial string) ([]byte, 
 		switch out.Status {
 		case "issued":
 			if strings.TrimSpace(out.Certificate) == "" {
-				return nil, fmt.Errorf("globalsign: certificate %s is issued but missing certificate PEM", serial)
+				return nil, errors.New("globalsign: issued certificate response carried no certificate PEM")
 			}
 			return assembleChain(out.Certificate, out.Chain)
 		case "rejected", "denied", "failed":
-			return nil, fmt.Errorf("globalsign: certificate %s was %s", serial, out.Status)
+			return nil, errors.New("globalsign: certificate request terminated without issuance")
 		}
 		select {
 		case <-ctx.Done():
@@ -207,7 +218,7 @@ func (b *backend) awaitCertificate(ctx context.Context, serial string) ([]byte, 
 		case <-time.After(b.poll):
 		}
 	}
-	return nil, fmt.Errorf("globalsign: certificate %s was not issued within the polling window", serial)
+	return nil, errors.New("globalsign: certificate was not issued within the polling window")
 }
 
 type certificateRequest struct {
@@ -241,13 +252,16 @@ func (b *backend) certificateURL(serial string) string {
 
 func (b *backend) doJSON(ctx context.Context, method, url string, body, out any) error {
 	var reader io.Reader
+	var buf []byte
 	if body != nil {
-		buf, err := json.Marshal(body)
+		var err error
+		buf, err = json.Marshal(body)
 		if err != nil {
 			return err
 		}
 		reader = bytes.NewReader(buf)
 	}
+	defer secret.Wipe(buf)
 	req, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
 		return err
@@ -259,13 +273,17 @@ func (b *backend) doJSON(ctx context.Context, method, url string, body, out any)
 	}
 	resp, err := b.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("globalsign: %s %s: %w", method, url, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("globalsign: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return err
+		return errors.New("globalsign: read response failed")
 	}
+	defer secret.Wipe(data)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return apiError(resp.StatusCode, data)
 	}
@@ -282,44 +300,8 @@ func (b *backend) setAuth(r *http.Request) {
 	r.Header.Set("ApiSecret", secrettext.String(b.cfg.APISecret))
 }
 
-func apiError(status int, data []byte) error {
-	msg := errorMessage(data)
-	if msg == "" {
-		return fmt.Errorf("globalsign: api error %d", status)
-	}
-	return fmt.Errorf("globalsign: api error %d: %s", status, msg)
-}
-
-func errorMessage(data []byte) string {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return ""
-	}
-	for _, key := range []string{"error", "message"} {
-		if v, ok := raw[key]; ok {
-			var s string
-			if err := json.Unmarshal(v, &s); err == nil && s != "" {
-				return s
-			}
-		}
-	}
-	if v, ok := raw["errors"]; ok {
-		var list []string
-		if err := json.Unmarshal(v, &list); err == nil && len(list) > 0 {
-			return strings.Join(list, "; ")
-		}
-		var objects []struct {
-			Message string `json:"message"`
-			Code    string `json:"code"`
-		}
-		if err := json.Unmarshal(v, &objects); err == nil && len(objects) > 0 {
-			if objects[0].Code != "" && objects[0].Message != "" {
-				return objects[0].Code + ": " + objects[0].Message
-			}
-			return objects[0].Message
-		}
-	}
-	return ""
+func apiError(status int, _ []byte) error {
+	return fmt.Errorf("globalsign: api error %d", status)
 }
 
 func assembleChain(cert, chain string) ([]byte, error) {

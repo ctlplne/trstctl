@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -50,10 +51,12 @@ func deployFiles(prefix, certPath, keyPath string, reload []string, sb connector
 	if err != nil {
 		return fmt.Errorf("%s: read current certificate: %w", prefix, err)
 	}
+	defer secret.Wipe(oldCert)
 	oldKey, hadKey, err := readExisting(sb, keyPath)
 	if err != nil {
 		return fmt.Errorf("%s: read current key: %w", prefix, err)
 	}
+	defer secret.Wipe(oldKey)
 	if hadCert && crypto.SHA256Hex(oldCert) == dep.Fingerprint && (len(dep.KeyPEM) == 0 || hadKey && bytes.Equal(oldKey, dep.KeyPEM)) {
 		return nil
 	}

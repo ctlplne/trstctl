@@ -12,6 +12,7 @@ import (
 	_ "crypto/sha256" // register SHA-256
 	_ "crypto/sha512" // register SHA-384 and SHA-512
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"math/big"
 	"runtime"
@@ -206,6 +207,14 @@ func wipeStdlibKey(key any) {
 	runtime.KeepAlive(key)
 }
 
+// WipeECDSAPrivateKey best-effort zeroizes a transient standard-library ECDSA
+// key. Go exposes no destruction method for ecdsa.PrivateKey, so every
+// crypto-boundary subpackage routes the unavoidable legacy scalar wipe through
+// this one reviewed AN-8 seam instead of reaching into deprecated fields itself.
+func WipeECDSAPrivateKey(key *ecdsa.PrivateKey) {
+	wipeStdlibKey(key)
+}
+
 // zeroBigInt clears the words backing a *big.Int and sets it to zero.
 func zeroBigInt(n *big.Int) {
 	if n == nil {
@@ -303,6 +312,50 @@ func RSAPublicKeyDERFromComponents(modulus, exponent []byte) ([]byte, error) {
 		return nil, fmt.Errorf("crypto: marshal RSA public key: %w", err)
 	}
 	return der, nil
+}
+
+// ECDSAPublicKeyDERFromComponents validates device-returned curve coordinates
+// and marshals them as PKIX SubjectPublicKeyInfo inside the AN-3 boundary. TPM
+// and HSM adapters pass byte components so they never import crypto/ecdsa,
+// crypto/elliptic, or crypto/x509 themselves.
+func ECDSAPublicKeyDERFromComponents(curveName string, xBytes, yBytes []byte) ([]byte, error) {
+	var curve elliptic.Curve
+	switch curveName {
+	case "P-256":
+		curve = elliptic.P256()
+	case "P-384":
+		curve = elliptic.P384()
+	case "P-521":
+		curve = elliptic.P521()
+	default:
+		return nil, fmt.Errorf("crypto: unsupported EC curve %q", curveName)
+	}
+	public, err := parseECDSAPublicKeyComponents(curve, xBytes, yBytes)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: EC public point is not on %s", curveName)
+	}
+	return x509.MarshalPKIXPublicKey(public)
+}
+
+// parseECDSAPublicKeyComponents uses Go's safe SEC 1 parser for point
+// validation. Building the fixed-width uncompressed encoding by hand avoids
+// elliptic.Curve.IsOnCurve and elliptic.Marshal, whose low-level APIs are
+// deprecated because callers can accidentally skip validation.
+func parseECDSAPublicKeyComponents(curve elliptic.Curve, xBytes, yBytes []byte) (*ecdsa.PublicKey, error) {
+	if curve == nil || curve.Params() == nil {
+		return nil, errors.New("crypto: EC curve is required")
+	}
+	coordinateSize := (curve.Params().BitSize + 7) / 8
+	x := new(big.Int).SetBytes(xBytes)
+	y := new(big.Int).SetBytes(yBytes)
+	if x.BitLen() > curve.Params().BitSize || y.BitLen() > curve.Params().BitSize {
+		return nil, errors.New("crypto: EC coordinate exceeds the curve size")
+	}
+	encoded := make([]byte, 1+2*coordinateSize)
+	encoded[0] = 4
+	x.FillBytes(encoded[1 : 1+coordinateSize])
+	y.FillBytes(encoded[1+coordinateSize:])
+	return ecdsa.ParseUncompressedPublicKey(curve, encoded)
 }
 
 func rsaBits(a Algorithm) int {

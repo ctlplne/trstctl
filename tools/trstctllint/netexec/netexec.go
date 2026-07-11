@@ -116,11 +116,25 @@ var reviewedExecUses = map[string]map[string]bool{
 		"StartCommand":   true,
 		"StartContainer": true,
 	},
+	"tools/dodcensus/proof/launched.go": {
+		"buildShippedProcess": true,
+		"CreateToken":         true,
+		"Start":               true,
+	},
+	"tools/dodcensus/runtime_runner.go": {
+		"runHostCommand": true,
+	},
+	"tools/dodcensus/substrate_broker.go": {
+		"launch": true,
+	},
 	"cmd/trstctl-agent/sshtrust.go": {
 		"runCommandLine": true,
 	},
 	"internal/ca/shellca/shellca.go": {
 		"run": true,
+	},
+	"internal/connector/localops.go": {
+		"ExecContext": true,
 	},
 	"internal/perf/live.go": {
 		"liveSignerBinary": true,

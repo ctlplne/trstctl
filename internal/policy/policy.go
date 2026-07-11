@@ -25,9 +25,10 @@ import (
 type Action string
 
 const (
-	ActionIssue  Action = "issue"
-	ActionDeploy Action = "deploy"
-	ActionRevoke Action = "revoke"
+	ActionIssue    Action = "issue"
+	ActionDeploy   Action = "deploy"
+	ActionRevoke   Action = "revoke"
+	ActionCodeSign Action = "code_sign"
 )
 
 // Input is the decision input. It is marshalled to the Rego document `input`, so policies

@@ -18,6 +18,12 @@ import (
 // uses it), so List*Page can express "from the beginning" as id > ZeroUUID.
 const ZeroUUID = "00000000-0000-0000-0000-000000000000"
 
+// ErrIdempotencyConflict means a tenant-scoped durable identity already belongs
+// to a different command. Reusing the existing row would create read-model /
+// outbox disagreement; inserting another row would create a second external
+// effect. Callers map this fail-closed condition to HTTP 409.
+var ErrIdempotencyConflict = errors.New("store: idempotency identity belongs to a different command")
+
 // IsNotFound reports whether err indicates a missing row (as returned by the
 // Get* repositories), letting callers map it to a 404 without importing the
 // database driver.

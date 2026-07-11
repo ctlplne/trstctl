@@ -3,6 +3,7 @@
 package pagerduty_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,9 +23,14 @@ const testRoutingKey = "pd-routing-key-do-not-log"
 
 func newChannel(t *testing.T, srv *fakePD, routingKey string) *pagerduty.Channel {
 	t.Helper()
-	return pagerduty.New(routingKey,
+	channel, err := pagerduty.New([]byte(routingKey),
 		pagerduty.WithEndpoint(srv.URL()),
 		pagerduty.WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatalf("pagerduty.New: %v", err)
+	}
+	t.Cleanup(channel.Close)
+	return channel
 }
 
 // TestPagerDutyConforms drives the channel through the shared notification conformance
@@ -88,6 +94,110 @@ func TestRoutingKeyNeverLogged(t *testing.T) {
 	}
 }
 
+func TestRemoteEchoResponseBuffersAreWipedAndNeverEscape(t *testing.T) {
+	const echoed = "pagerduty-remote-echo-authority"
+	tests := []struct {
+		name       string
+		statusCode int
+		body       []byte
+	}{
+		{name: "error drain", statusCode: http.StatusBadGateway, body: []byte(echoed)},
+		{name: "accepted decode", statusCode: http.StatusAccepted, body: []byte(`{"status":"` + echoed + `","dedup_key":"` + echoed + `"}`)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			responseBody := &retainingResponseBody{data: tc.body}
+			channel, err := pagerduty.New([]byte(testRoutingKey), pagerduty.WithHTTPClient(pagerDutyDoer(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: tc.statusCode, Body: responseBody}, nil
+			})))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer channel.Close()
+			err = channel.Notify(context.Background(), notify.Alert{Kind: notify.KindCertificateExpiry, Subject: "cn=echo"})
+			if err == nil {
+				t.Fatal("remote echo response unexpectedly succeeded")
+			}
+			if strings.Contains(err.Error(), echoed) {
+				t.Fatalf("remote echo escaped through error: %v", err)
+			}
+			responseBody.assertObservedWiped(t)
+		})
+	}
+}
+
+type retainingResponseBody struct {
+	data     []byte
+	observed [][]byte
+}
+
+func (b *retainingResponseBody) Read(dst []byte) (int, error) {
+	if len(b.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(dst, b.data)
+	b.data = b.data[n:]
+	b.observed = append(b.observed, dst[:n])
+	return n, nil
+}
+
+func (*retainingResponseBody) Close() error { return nil }
+
+func (b *retainingResponseBody) assertObservedWiped(t *testing.T) {
+	t.Helper()
+	if len(b.observed) == 0 {
+		t.Fatal("response body observed no owned destination buffer")
+	}
+	for _, view := range b.observed {
+		if !bytes.Equal(view, make([]byte, len(view))) {
+			t.Fatalf("response read buffer retained remote echo bytes: %x", view)
+		}
+	}
+}
+
+func TestNewRejectsJSONInjectionAndNonTokenRoutingKeys(t *testing.T) {
+	tests := [][]byte{
+		[]byte(`key","event_action":"resolve`),
+		[]byte("key with space"),
+		{0x7f},
+		{0xc3, 0xa9},
+		[]byte(strings.Repeat("a", 256)),
+	}
+	for _, key := range tests {
+		channel, err := pagerduty.New(key)
+		if channel != nil {
+			channel.Close()
+			t.Fatalf("New(%q) returned a channel for a non-token routing key", key)
+		}
+		if err == nil {
+			t.Fatalf("New(%q) accepted a non-token routing key", key)
+		}
+		if strings.Contains(err.Error(), string(key)) {
+			t.Fatalf("validation error leaked rejected routing key %q: %v", key, err)
+		}
+	}
+}
+
+func TestNotifyRejectsForgedAcceptanceDedupKey(t *testing.T) {
+	channel, err := pagerduty.New([]byte(testRoutingKey), pagerduty.WithHTTPClient(pagerDutyDoer(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusAccepted,
+			Body:       io.NopCloser(strings.NewReader(`{"status":"success","dedup_key":"attacker-controlled"}`)),
+		}, nil
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer channel.Close()
+	if err := channel.Notify(context.Background(), notify.Alert{Kind: notify.KindCertificateExpiry, Subject: "cn=example"}); err == nil {
+		t.Fatal("PagerDuty channel accepted a 202 response that did not bind the submitted dedup key")
+	}
+}
+
+type pagerDutyDoer func(*http.Request) (*http.Response, error)
+
+func (f pagerDutyDoer) Do(request *http.Request) (*http.Response, error) { return f(request) }
+
 func TestDefaultClientRejectsUnsafeEndpoints(t *testing.T) {
 	alert := notify.Alert{Kind: notify.KindCertificateExpiry, Subject: "cn=x"}
 	for _, target := range []string{
@@ -97,8 +207,12 @@ func TestDefaultClientRejectsUnsafeEndpoints(t *testing.T) {
 		"https://10.0.0.5/v2/enqueue",
 		"https://169.254.169.254/latest/meta-data/",
 	} {
-		ch := pagerduty.New(testRoutingKey, pagerduty.WithEndpoint(target))
-		err := ch.Notify(context.Background(), alert)
+		ch, err := pagerduty.New([]byte(testRoutingKey), pagerduty.WithEndpoint(target))
+		if err != nil {
+			t.Fatalf("pagerduty.New: %v", err)
+		}
+		t.Cleanup(ch.Close)
+		err = ch.Notify(context.Background(), alert)
 		if err == nil {
 			t.Fatalf("default PagerDuty client delivered to unsafe endpoint %s", target)
 		}
@@ -164,6 +278,7 @@ func (s *fakePD) handle(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RoutingKey  string `json:"routing_key"`
 		EventAction string `json:"event_action"`
+		DedupKey    string `json:"dedup_key"`
 		Payload     struct {
 			Summary  string `json:"summary"`
 			Source   string `json:"source"`
@@ -182,6 +297,10 @@ func (s *fakePD) handle(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusBadRequest, "unsupported event action")
 		return
 	}
+	if !strings.HasPrefix(req.DedupKey, "trstctl-") {
+		s.fail(w, http.StatusBadRequest, "missing dedup key")
+		return
+	}
 
 	s.mu.Lock()
 	s.calls++
@@ -193,12 +312,12 @@ func (s *fakePD) handle(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":    "success",
 		"message":   "Event processed",
-		"dedup_key": "trstctl-dedup",
+		"dedup_key": req.DedupKey,
 	})
 }
 
-// fail mirrors a PagerDuty error envelope. It deliberately never echoes the routing key,
-// so surfacing this body as the channel's error text cannot leak credentials (AN-8).
+// fail mirrors a PagerDuty error envelope. Its text is attacker-controlled so the
+// channel must discard it instead of copying it into an error (AN-8).
 func (s *fakePD) fail(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/ca/catemplate"
-	"trstctl.com/trstctl/internal/ca/letsencrypt"
 	"trstctl.com/trstctl/internal/ca/letsencrypt/acmefake"
 )
 
@@ -21,10 +20,7 @@ func TestLetsEncryptPassesCAConformance(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 
-	p, err := letsencrypt.NewPlugin("lets-encrypt", srv.DirectoryURL())
-	if err != nil {
-		t.Fatalf("NewPlugin: %v", err)
-	}
+	p := newRemoteAccountPlugin(t, "lets-encrypt", srv.DirectoryURL())
 
 	report := catemplate.Conformance(context.Background(), p)
 	if !report.OK() {

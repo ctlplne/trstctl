@@ -1104,7 +1104,9 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			        END,
 			        reason = '',
 			        evidence_refs = '{}'::text[],
-			        rollback_refs = '{}'::text[]
+			        rollback_refs = '{}'::text[],
+			        initial_http_status = 0,
+			        initial_response = ''::bytea
 			  WHERE tenant_id = $1
 			    AND updated_at < $2
 			    AND (created_by <> '' OR reason <> '' OR cardinality(evidence_refs) > 0 OR cardinality(rollback_refs) > 0)`,
@@ -2319,7 +2321,9 @@ func eraseRemediationRunPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, su
 			    SET created_by = $3,
 			        reason = '',
 			        evidence_refs = $4,
-			        rollback_refs = $5
+			        rollback_refs = $5,
+			        initial_http_status = 0,
+			        initial_response = ''::bytea
 			  WHERE tenant_id = $1 AND id::text = $2`,
 			tenantID, r.id,
 			redactSubjectValue(tenantID, subjectRef, placeholder, r.createdBy),

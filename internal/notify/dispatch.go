@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // S10.2 — the notification template. notify already defines the Alert vocabulary and
@@ -89,6 +92,41 @@ type ThresholdDedupLedger interface {
 	RecordThresholdNotificationOnChannel(ctx context.Context, rec ThresholdNotificationDelivery) error
 }
 
+// DeliveryMessage is the notification-safe subset of an outbox message. Keeping
+// this type here avoids a notify -> orchestrator import cycle while still binding
+// receipts to the exact tenant, destination, receiver key, and payload.
+type DeliveryMessage struct {
+	TenantID       string
+	Destination    string
+	IdempotencyKey string
+	Payload        []byte
+	OutboxID       int64
+	Attempts       int
+}
+
+// NotificationDeliveryReceipt is the durable evidence for one successful
+// channel in one fan-out. Idempotency keys and alert bodies are retained only as
+// SHA-256 digests.
+type NotificationDeliveryReceipt struct {
+	TenantID              string
+	ID                    string
+	Destination           string
+	NotificationKeyDigest string
+	PayloadDigest         string
+	Channel               string
+	OutboxID              *int64
+	Attempts              int
+	DeliveredAt           time.Time
+}
+
+// DeliveryReceiptLedger is the event-sourced per-channel delivery authority.
+// HasNotificationDelivery must fail closed when the id resolves to a receipt with
+// different destination/key/payload/channel bindings.
+type DeliveryReceiptLedger interface {
+	HasNotificationDelivery(context.Context, NotificationDeliveryReceipt) (bool, error)
+	RecordNotificationDelivery(context.Context, NotificationDeliveryReceipt) error
+}
+
 // Dispatcher fans a notification.* outbox entry out to its registered channels. It is
 // the outbox handler for the notification surface: the producer enqueued the Alert in
 // the same transaction as the state change that raised it, and this delivers it. One
@@ -100,6 +138,7 @@ type Dispatcher struct {
 	channelSource ChannelResolver
 	defaultPolicy RoutingPolicy
 	dedup         ThresholdDedupLedger
+	deliveries    DeliveryReceiptLedger
 }
 
 // NewDispatcher builds a Dispatcher over the given channels.
@@ -123,6 +162,25 @@ func (d *Dispatcher) SetDefaultRoutingPolicy(p RoutingPolicy) { d.defaultPolicy 
 // SetThresholdDedupLedger installs the projected per-threshold delivery ledger.
 func (d *Dispatcher) SetThresholdDedupLedger(l ThresholdDedupLedger) { d.dedup = l }
 
+// SetDeliveryReceiptLedger installs the durable per-channel fan-out ledger.
+func (d *Dispatcher) SetDeliveryReceiptLedger(l DeliveryReceiptLedger) { d.deliveries = l }
+
+// Close releases credential material held by long-lived channel implementations.
+// The server calls it only after its final outbox drain, so no delivery can race a
+// credential wipe. Close is deliberately optional on Notifier to keep stateless
+// channels small and to preserve the public notification SDK contract.
+func (d *Dispatcher) Close() {
+	if d == nil {
+		return
+	}
+	for _, channel := range d.channels {
+		if closer, ok := channel.(interface{ Close() }); ok {
+			closer.Close()
+		}
+	}
+	d.channels = nil
+}
+
 // Dispatch decodes an Alert from a notification.* outbox payload and delivers it to
 // the effective channel set, accumulating per-channel failures.
 func (d *Dispatcher) Dispatch(ctx context.Context, payload []byte) error {
@@ -130,14 +188,75 @@ func (d *Dispatcher) Dispatch(ctx context.Context, payload []byte) error {
 	if err := json.Unmarshal(payload, &alert); err != nil {
 		return fmt.Errorf("notify: malformed alert payload: %w", err)
 	}
+	// Compatibility callers do not have the outbox envelope. Use a deterministic
+	// synthetic envelope; the served binary always calls DispatchMessage below.
+	return d.dispatchAlert(ctx, DeliveryMessage{
+		TenantID: alert.TenantID, Destination: "notification.compat",
+		IdempotencyKey: "payload:" + crypto.SHA256Hex(payload), Payload: payload,
+	}, alert)
+}
+
+// DispatchMessage delivers one fully bound outbox message. The envelope is part
+// of every receipt identity, so a reused receiver key with altered payload cannot
+// inherit another command's successful channels.
+func (d *Dispatcher) DispatchMessage(ctx context.Context, message DeliveryMessage) error {
+	if strings.TrimSpace(message.TenantID) == "" || strings.TrimSpace(message.Destination) == "" ||
+		strings.TrimSpace(message.IdempotencyKey) == "" || len(message.Payload) == 0 {
+		return fmt.Errorf("notify: delivery message requires tenant, destination, idempotency key, and payload")
+	}
+	var alert Alert
+	if err := json.Unmarshal(message.Payload, &alert); err != nil {
+		return fmt.Errorf("notify: malformed alert payload: %w", err)
+	}
+	if alert.TenantID == "" {
+		alert.TenantID = message.TenantID
+	}
+	if alert.TenantID != message.TenantID {
+		return fmt.Errorf("notify: alert tenant does not match outbox tenant")
+	}
+	return d.dispatchAlert(ctx, message, alert)
+}
+
+func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage, alert Alert) error {
 	channels, err := d.effectiveChannels(ctx, alert)
 	if err != nil {
 		return err
 	}
-	var failed []string
-	now := time.Now()
+	failed := make([]string, 0)
+	type deliveryAttempt struct {
+		notifier Notifier
+		receipt  NotificationDeliveryReceipt
+	}
+	ready := make([]deliveryAttempt, 0, len(channels))
+	seenChannels := make(map[string]bool, len(channels))
 	for _, ch := range channels {
 		channel := normalizeChannelName(ch.Name())
+		if channel == "" || seenChannels[channel] {
+			continue
+		}
+		seenChannels[channel] = true
+		receipt := notificationDeliveryReceipt(message, channel)
+		delivered, err := d.deliveryAlreadyRecorded(ctx, receipt)
+		if err != nil {
+			failed = append(failed, ch.Name()+": delivery receipt check: "+err.Error())
+			continue
+		}
+		if delivered {
+			// A crash may have landed the generic receipt before the older expiry
+			// threshold projection. Heal that secondary dedup fact without resending.
+			thresholdRecorded, thresholdErr := d.thresholdAlreadySent(ctx, alert, channel)
+			if thresholdErr != nil {
+				failed = append(failed, ch.Name()+": threshold dedup check: "+thresholdErr.Error())
+				continue
+			}
+			if !thresholdRecorded {
+				thresholdErr = d.recordThresholdSent(ctx, alert, channel, time.Now().UTC())
+			}
+			if thresholdErr != nil {
+				failed = append(failed, ch.Name()+": threshold dedup record: "+thresholdErr.Error())
+			}
+			continue
+		}
 		skip, err := d.thresholdAlreadySent(ctx, alert, channel)
 		if err != nil {
 			failed = append(failed, ch.Name()+": dedup check: "+err.Error())
@@ -146,11 +265,66 @@ func (d *Dispatcher) Dispatch(ctx context.Context, payload []byte) error {
 		if skip {
 			continue
 		}
-		if err := ch.Notify(ctx, alert); err != nil {
+		ready = append(ready, deliveryAttempt{notifier: ch, receipt: receipt})
+	}
+
+	// Fan-out is a bounded bulkhead. All advertised channel families fit in one
+	// wave, while tenant-authored overflow waits in the local bounded worker set.
+	// A hung first receiver therefore cannot consume the parent outbox deadline
+	// before later healthy receivers are even attempted (AN-7).
+	const (
+		maxParallelChannels = 16
+		perChannelTimeout   = 5 * time.Second
+	)
+	type channelResult struct {
+		index int
+		err   error
+	}
+	results := make(chan channelResult, len(ready))
+	jobs := make(chan int)
+	workerCount := len(ready)
+	if workerCount > maxParallelChannels {
+		workerCount = maxParallelChannels
+	}
+	var workers sync.WaitGroup
+	workers.Add(workerCount)
+	for range workerCount {
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				channelCtx, cancel := context.WithTimeout(ctx, perChannelTimeout)
+				err := ready[index].notifier.Notify(channelCtx, alert)
+				cancel()
+				results <- channelResult{index: index, err: err}
+			}
+		}()
+	}
+	go func() {
+		defer close(jobs)
+		for index := range ready {
+			jobs <- index
+		}
+	}()
+	workers.Wait()
+	close(results)
+
+	byIndex := make([]error, len(ready))
+	for result := range results {
+		byIndex[result.index] = result.err
+	}
+	now := time.Now()
+	for index, attempt := range ready {
+		ch := attempt.notifier
+		if err := byIndex[index]; err != nil {
 			failed = append(failed, ch.Name()+": "+err.Error())
 			continue
 		}
-		if err := d.recordThresholdSent(ctx, alert, channel, now); err != nil {
+		attempt.receipt.DeliveredAt = now
+		if err := d.recordDelivery(ctx, attempt.receipt); err != nil {
+			failed = append(failed, ch.Name()+": delivery receipt: "+err.Error())
+			continue
+		}
+		if err := d.recordThresholdSent(ctx, alert, normalizeChannelName(ch.Name()), now); err != nil {
 			failed = append(failed, ch.Name()+": dedup record: "+err.Error())
 		}
 	}
@@ -158,6 +332,37 @@ func (d *Dispatcher) Dispatch(ctx context.Context, payload []byte) error {
 		return fmt.Errorf("notify: %d channel(s) failed: %s", len(failed), strings.Join(failed, "; "))
 	}
 	return nil
+}
+
+func notificationDeliveryReceipt(message DeliveryMessage, channel string) NotificationDeliveryReceipt {
+	keyDigest := crypto.SHA256Hex([]byte(message.IdempotencyKey))
+	payloadDigest := crypto.SHA256Hex(message.Payload)
+	id := "notification.delivery:" + crypto.SHA256Hex([]byte(
+		message.TenantID+"\x00"+message.Destination+"\x00"+keyDigest+"\x00"+channel))
+	var outboxID *int64
+	if message.OutboxID != 0 {
+		value := message.OutboxID
+		outboxID = &value
+	}
+	return NotificationDeliveryReceipt{
+		TenantID: message.TenantID, ID: id, Destination: message.Destination,
+		NotificationKeyDigest: keyDigest, PayloadDigest: payloadDigest, Channel: channel,
+		OutboxID: outboxID, Attempts: message.Attempts,
+	}
+}
+
+func (d *Dispatcher) deliveryAlreadyRecorded(ctx context.Context, rec NotificationDeliveryReceipt) (bool, error) {
+	if d.deliveries == nil {
+		return false, nil
+	}
+	return d.deliveries.HasNotificationDelivery(ctx, rec)
+}
+
+func (d *Dispatcher) recordDelivery(ctx context.Context, rec NotificationDeliveryReceipt) error {
+	if d.deliveries == nil {
+		return nil
+	}
+	return d.deliveries.RecordNotificationDelivery(ctx, rec)
 }
 
 func (d *Dispatcher) thresholdAlreadySent(ctx context.Context, alert Alert, channel string) (bool, error) {
@@ -198,15 +403,16 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 		return nil, nil
 	}
 	if alert.Kind == KindNotificationChannelTest && strings.TrimSpace(alert.TargetChannel) != "" {
-		channels := d.channelsByNameStrict([]string{alert.TargetChannel})
+		requested := []string{alert.TargetChannel}
+		channels := d.channelsByNameStrict(requested)
 		if len(channels) == 0 && d.channelSource != nil {
-			dynamic, err := d.channelSource.ResolveNotificationChannels(ctx, alert.TenantID, []string{alert.TargetChannel})
+			dynamic, err := d.channelSource.ResolveNotificationChannels(ctx, alert.TenantID, requested)
 			if err != nil {
 				return nil, fmt.Errorf("notify: resolve channel %q: %w", alert.TargetChannel, err)
 			}
 			channels = append(channels, dynamic...)
 		}
-		if len(channels) == 0 {
+		if len(missingChannelNames(requested, channels)) != 0 {
 			return nil, fmt.Errorf("notify: channel %q is not configured", alert.TargetChannel)
 		}
 		return channels, nil
@@ -232,7 +438,29 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 		}
 		channels = append(channels, dynamic...)
 	}
+	if missing := missingChannelNames(names, channels); len(missing) > 0 {
+		return nil, fmt.Errorf("notify: requested channel(s) are not configured: %s", strings.Join(missing, ", "))
+	}
 	return channels, nil
+}
+
+func missingChannelNames(requested []string, channels []Notifier) []string {
+	if len(requested) == 0 {
+		return nil
+	}
+	configured := make(map[string]bool, len(channels))
+	for _, channel := range channels {
+		if channel != nil {
+			configured[normalizeChannelName(channel.Name())] = true
+		}
+	}
+	var missing []string
+	for _, name := range cleanChannelNames(requested) {
+		if !configured[name] {
+			missing = append(missing, name)
+		}
+	}
+	return missing
 }
 
 func (d *Dispatcher) channelsByNameStrict(names []string) []Notifier {
@@ -262,9 +490,6 @@ func (d *Dispatcher) channelsByName(names []string) []Notifier {
 		if wanted[normalizeChannelName(ch.Name())] {
 			out = append(out, ch)
 		}
-	}
-	if len(out) == 0 {
-		return append([]Notifier(nil), d.channels...)
 	}
 	return out
 }

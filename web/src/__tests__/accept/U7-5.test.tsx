@@ -17,7 +17,10 @@ beforeEach(() => {
     algorithm: "ECDSA-P256",
     artifact_type: "container",
     fulcio_issuer: "https://oauth2.example",
+    fulcio_san: "acme/payments/.github/workflows/release.yml@refs/heads/main",
     public_key_der: "BASE64DER",
+    signature: "KEYLESSBASE64SIG",
+    transparency_destination: "transparency.rekor",
   });
 });
 
@@ -30,19 +33,22 @@ describe("U7-5 code-signing console (keyless)", () => {
       </MemoryRouter>,
     );
     await user.click(screen.getByRole("button", { name: "Keyless (Fulcio)" }));
-    await user.type(screen.getByLabelText("Artifact digest"), "sha256:def");
-    await user.type(screen.getByLabelText("Identity payload"), "oidc-token");
+    await user.type(screen.getByLabelText("Artifact digest"), `sha256:${"f".repeat(64)}`);
+    await user.type(screen.getByLabelText("Identity payload"), "header.payload.signature");
     await user.click(screen.getByRole("button", { name: "Sign artifact" }));
 
     await waitFor(() =>
       expect(apiMock.signCodeKeyless).toHaveBeenCalledWith({
         artifact_type: "container",
-        digest: "sha256:def",
-        identity_method: "oidc",
-        identity_payload: "oidc-token",
+        digest: "//////////////////////////////////////////8=",
+        identity_method: "github_oidc",
+        identity_payload: "aGVhZGVyLnBheWxvYWQuc2lnbmF0dXJl",
       }),
     );
     expect(await screen.findByText("Signature receipt")).toBeInTheDocument();
     expect(screen.getByText("https://oauth2.example")).toBeInTheDocument();
+    expect(screen.getByText("acme/payments/.github/workflows/release.yml@refs/heads/main")).toBeInTheDocument();
+    expect(screen.getByText("KEYLESSBASE64SIG")).toBeInTheDocument();
+    expect(screen.getByText("transparency.rekor")).toBeInTheDocument();
   });
 });

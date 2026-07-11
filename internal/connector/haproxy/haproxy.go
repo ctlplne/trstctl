@@ -15,6 +15,7 @@ import (
 	"path"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -70,6 +71,7 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 // keeps serving the previous bundle.
 func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connector.Deployment) error {
 	bundle := combine(dep.CertPEM, dep.KeyPEM)
+	defer secret.Wipe(bundle)
 	if err := sb.WriteFile(c.crtPath, bundle); err != nil {
 		return fmt.Errorf("haproxy: write certificate bundle: %w", err)
 	}

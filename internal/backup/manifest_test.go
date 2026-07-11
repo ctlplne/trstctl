@@ -114,3 +114,23 @@ func TestLogRebuildSetMatchesProjections(t *testing.T) {
 		t.Errorf("RecoveredByLogRebuild = %v, want store.ReadModelTables = %v", got, want)
 	}
 }
+
+// TestDeploymentTargetsUseOnePostgresRecoveryClass pins the migration-0072
+// exception: legacy targets and their generated immutable revisions have no
+// historical events, so neither table can be reconstructed by log replay.
+func TestDeploymentTargetsUseOnePostgresRecoveryClass(t *testing.T) {
+	for _, table := range []string{"deployment_target_revisions", "deployment_targets"} {
+		class, ok := backup.Classify(table)
+		if !ok {
+			t.Fatalf("%s is missing from the recovery manifest", table)
+		}
+		if class != backup.ClassPostgresBackup {
+			t.Errorf("%s recovery class = %q, want %q", table, class, backup.ClassPostgresBackup)
+		}
+		for _, rebuilt := range store.ReadModelTables {
+			if rebuilt == table {
+				t.Errorf("%s is also in store.ReadModelTables; one table cannot use two recovery paths", table)
+			}
+		}
+	}
+}

@@ -30,7 +30,7 @@ func TestDeployInstallsAndBindsCertificate(t *testing.T) {
 	srv := f5test.New(user, pass)
 	defer srv.Close()
 
-	c := f5.New(srv.URL(), profile, f5.WithBasicAuth(user, pass))
+	c := f5.New(srv.URL(), profile, f5.WithBasicAuthBytes(user, []byte(pass)))
 	ops := connector.NewHTTPOps(srv.Client())
 
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment("app", sampleCert, sampleKey)); err != nil {
@@ -65,7 +65,7 @@ func TestDeployHonorsCustomName(t *testing.T) {
 	srv := f5test.New(user, pass)
 	defer srv.Close()
 
-	c := f5.New(srv.URL(), profile, f5.WithBasicAuth(user, pass), f5.WithName("renewed-2026"))
+	c := f5.New(srv.URL(), profile, f5.WithBasicAuthBytes(user, []byte(pass)), f5.WithName("renewed-2026"))
 	ops := connector.NewHTTPOps(srv.Client())
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment("app", sampleCert, sampleKey)); err != nil {
 		t.Fatalf("deploy: %v", err)
@@ -85,7 +85,7 @@ func TestDeployFailsWithoutAuth(t *testing.T) {
 	srv := f5test.New(user, pass)
 	defer srv.Close()
 
-	c := f5.New(srv.URL(), profile, f5.WithBasicAuth("admin", "wrong"))
+	c := f5.New(srv.URL(), profile, f5.WithBasicAuthBytes("admin", []byte("wrong")))
 	ops := connector.NewHTTPOps(srv.Client())
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment("app", sampleCert, sampleKey)); err == nil {
 		t.Fatal("expected deploy to fail on bad credentials, got nil")
@@ -100,7 +100,7 @@ func TestDeployIsIdempotent(t *testing.T) {
 	srv := f5test.New(user, pass)
 	defer srv.Close()
 
-	c := f5.New(srv.URL(), profile, f5.WithBasicAuth(user, pass))
+	c := f5.New(srv.URL(), profile, f5.WithBasicAuthBytes(user, []byte(pass)))
 	ops := connector.NewHTTPOps(srv.Client())
 	dep := connector.NewDeployment("app", sampleCert, sampleKey)
 
@@ -120,7 +120,7 @@ func TestDeployIsIdempotent(t *testing.T) {
 func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 	srv := f5test.New(user, pass)
 	defer srv.Close()
-	c := f5.New(srv.URL(), profile, f5.WithBasicAuth(user, pass))
+	c := f5.New(srv.URL(), profile, f5.WithBasicAuthBytes(user, []byte(pass)))
 
 	grant := c.Capabilities()
 	if grant.Has(pluginhost.CapFSWrite) {
@@ -141,7 +141,7 @@ func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 
 // The connector satisfies the shared connector conformance suite.
 func TestF5PassesConformance(t *testing.T) {
-	c := f5.New("https://bigip.test", profile, f5.WithBasicAuth(user, pass))
+	c := f5.New("https://bigip.test", profile, f5.WithBasicAuthBytes(user, []byte(pass)))
 	rep := connector.Conformance(context.Background(), c)
 	if !rep.OK() {
 		for _, ch := range rep.Checks {

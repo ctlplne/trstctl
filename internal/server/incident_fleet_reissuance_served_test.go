@@ -105,8 +105,12 @@ func TestServedFleetReissuanceForCompromisedIssuerReissuesRevokesAndExportsEvide
 		ReplacementIdentityIDs []string `json:"replacement_identity_ids"`
 		RevokedIdentityIDs     []string `json:"revoked_identity_ids"`
 		ConnectorDeliveryIDs   []string `json:"connector_delivery_ids"`
-		BatchCount             int      `json:"batch_count"`
-		Batches                []struct {
+		ConnectorDeliveries    []struct {
+			Status   string `json:"status"`
+			Attempts int    `json:"attempts"`
+		} `json:"connector_deliveries"`
+		BatchCount int `json:"batch_count"`
+		Batches    []struct {
 			Index                  int      `json:"index"`
 			Status                 string   `json:"status"`
 			IdentityIDs            []string `json:"identity_ids"`
@@ -138,14 +142,22 @@ func TestServedFleetReissuanceForCompromisedIssuerReissuesRevokesAndExportsEvide
 	if len(run.ReplacementIdentityIDs) != 2 || len(run.ConnectorDeliveryIDs) != 2 {
 		t.Fatalf("replacement/delivery ids = replacements %#v deliveries %#v", run.ReplacementIdentityIDs, run.ConnectorDeliveryIDs)
 	}
+	if len(run.ConnectorDeliveries) != 2 {
+		t.Fatalf("connector delivery evidence = %#v, want two queued intents", run.ConnectorDeliveries)
+	}
+	for _, delivery := range run.ConnectorDeliveries {
+		if delivery.Status != "queued" || delivery.Attempts != 0 || delivery.Status == "delivered" {
+			t.Fatalf("pre-worker fleet delivery evidence = %+v, want queued/0 and never delivered", delivery)
+		}
+	}
 	if !bytes.Contains(run.GraphImpact, []byte(`"id":"iss:`+issuerID+`"`)) {
 		t.Fatalf("graph impact does not anchor the compromised issuer: %s", run.GraphImpact)
 	}
 	if len(run.HealthGates) != 2 || run.HealthGates[0].Status != "passed" {
 		t.Fatalf("health gates = %#v", run.HealthGates)
 	}
-	if len(run.FailedTargets) != 2 || !strings.Contains(strings.Join(run.FailedTargets, " "), "edge/prod") {
-		t.Fatalf("failed targets = %#v", run.FailedTargets)
+	if len(run.FailedTargets) != 0 {
+		t.Fatalf("queued fleet connector intents were presented as failed targets: %#v", run.FailedTargets)
 	}
 	if len(run.RollbackRefs) < 7 || !strings.Contains(strings.Join(run.RollbackRefs, " "), "previous fullchain") {
 		t.Fatalf("rollback refs = %#v", run.RollbackRefs)

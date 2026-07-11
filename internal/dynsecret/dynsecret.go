@@ -47,11 +47,23 @@ type Provider interface {
 	Revoke(ctx context.Context, backendRef string) error
 }
 
+// PreparedProvider splits local credential preparation from the provider-side
+// external mutation. The bounded outbox worker seals and event-projects Prepared
+// bytes before its first provider call; every retry then applies exactly the same
+// prepared identity. Prepare runs only in that worker and MUST be local-only.
+type PreparedProvider interface {
+	Provider
+	Prepare(ctx context.Context, req GenerateRequest) ([]byte, error)
+	GeneratePrepared(ctx context.Context, req GenerateRequest, prepared []byte) (Credential, error)
+}
+
 // LeaseState is the state of a lease.
 type LeaseState string
 
 const (
+	LeasePending LeaseState = "pending"
 	LeaseActive  LeaseState = "active"
+	LeaseFailed  LeaseState = "failed"
 	LeaseRevoked LeaseState = "revoked"
 )
 

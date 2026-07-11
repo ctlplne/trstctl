@@ -3,6 +3,7 @@
 package codesign
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -17,7 +18,7 @@ type keyMap struct {
 	m map[string]crypto.DigestSigner
 }
 
-func (k keyMap) Signer(id string) (crypto.DigestSigner, error) {
+func (k keyMap) Signer(_ string, id string) (crypto.DigestSigner, error) {
 	s, ok := k.m[id]
 	if !ok {
 		return nil, fmt.Errorf("no key %s", id)
@@ -29,6 +30,46 @@ type gateFn func(ctx context.Context, t, p, k, d string) (bool, string)
 
 func (g gateFn) MaySign(ctx context.Context, t, p, k, d string) (bool, string) {
 	return g(ctx, t, p, k, d)
+}
+
+type recordingDigestSigner struct {
+	inner crypto.DigestSigner
+	seen  []byte
+}
+
+func (s *recordingDigestSigner) Public() crypto.PublicKey    { return s.inner.Public() }
+func (s *recordingDigestSigner) Algorithm() crypto.Algorithm { return s.inner.Algorithm() }
+func (s *recordingDigestSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	s.seen = append(s.seen[:0], digest...)
+	return s.inner.SignDigest(digest, opts)
+}
+
+func TestCodesignSignsTheSuppliedSHA256DigestExactlyOnce(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	recorder := &recordingDigestSigner{inner: key}
+	svc, err := New(Config{TenantID: "tenant-a", Keys: keyMap{m: map[string]crypto.DigestSigner{"release": recorder}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := crypto.SHA256Sum([]byte("artifact bytes"))
+	sig, err := svc.Sign(context.Background(), SignRequest{Principal: "builder", KeyID: "release", ArtifactType: "blob", Digest: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(recorder.seen, digest) {
+		t.Fatalf("signer received %x, want caller's exact digest %x", recorder.seen, digest)
+	}
+	doubleHash := crypto.SHA256Sum(digest)
+	if bytes.Equal(recorder.seen, doubleHash) {
+		t.Fatal("code signing double-hashed the artifact digest")
+	}
+	if err := crypto.VerifyDigest(key.Public(), digest, sig.Value, crypto.SignOptions{Hash: crypto.SHA256, RSAPadding: crypto.RSAPKCS1v15}); err != nil {
+		t.Fatalf("stock digest verification failed: %v", err)
+	}
 }
 
 func TestCodesignKeyBasedNoKeyToRequester(t *testing.T) {
@@ -75,15 +116,16 @@ func TestCodesignKeylessFulcioBound(t *testing.T) {
 	defer eph.Destroy()
 	svc, _ := New(Config{TenantID: "t1", Keys: keyMap{m: map[string]crypto.DigestSigner{}}})
 	digest := crypto.SHA256Sum([]byte("image-manifest"))
-	// The verified attestation is authoritative: its Subject is the SAN and its
-	// oidc_issuer claim is the issuer (PKIGOV-011). The caller may echo them, but
-	// they must match the attestation.
+	// The verified attestation is authoritative: Fulcio-specific verified claims
+	// take precedence over the generic OIDC subject/issuer.
 	san := "https://github.com/acme/x/.github/workflows/release.yml@refs/heads/main"
 	sig, err := svc.SignKeyless(context.Background(), KeylessRequest{
 		Principal: "ci",
 		Identity: attest.Attestation{
-			Method: "github_oidc", Subject: san,
-			Claims:     map[string]string{"oidc_issuer": "https://token.actions.githubusercontent.com"},
+			Method: "github_oidc", Subject: "repo:acme/x:ref:refs/heads/main",
+			Claims: map[string]string{
+				"fulcio_san": san, "fulcio_issuer": "https://token.actions.githubusercontent.com",
+			},
 			VerifiedAt: time.Now(),
 		},
 		FulcioSAN:    san,
@@ -102,6 +144,34 @@ func TestCodesignKeylessFulcioBound(t *testing.T) {
 	}
 	if sig.FulcioIssuer != "https://token.actions.githubusercontent.com" {
 		t.Errorf("keyless issuer = %q, want the verified attestation issuer", sig.FulcioIssuer)
+	}
+}
+
+func TestCodesignKeylessRequiresConfiguredGateDecision(t *testing.T) {
+	eph, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer eph.Destroy()
+	rec := &auditsink.Recorder{}
+	called := false
+	gate := gateFn(func(_ context.Context, tenantID, principal, keyID, digestHex string) (bool, string) {
+		called = true
+		if tenantID != "t1" || principal != "ci" || keyID != "keyless:repo:acme/release" || digestHex == "" {
+			t.Fatalf("keyless gate tuple = tenant %q principal %q key %q digest %q", tenantID, principal, keyID, digestHex)
+		}
+		return false, "approval required"
+	})
+	svc, _ := New(Config{TenantID: "t1", Keys: keyMap{m: map[string]crypto.DigestSigner{}}, Gate: gate, Audit: rec})
+	_, err := svc.SignKeyless(context.Background(), KeylessRequest{
+		Principal: "ci",
+		Identity: attest.Attestation{
+			Method: "github_oidc", Subject: "repo:acme/release", VerifiedAt: time.Now(),
+		},
+		Ephemeral: eph, ArtifactType: "oci-image", Digest: crypto.SHA256Sum([]byte("artifact")),
+	})
+	if err == nil || !called {
+		t.Fatalf("keyless gate refusal = called %v err %v", called, err)
+	}
+	if rec.Count("codesign.keyless.refused") != 1 {
+		t.Fatalf("keyless gate refusal audit count = %d", rec.Count("codesign.keyless.refused"))
 	}
 }
 

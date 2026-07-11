@@ -85,6 +85,8 @@ const (
 	EventNotificationRoutingPolicyUpserted        = "notification.routing_policy.upserted"
 	EventNotificationRoutingPolicyDeleted         = "notification.routing_policy.deleted"
 	EventNotificationThresholdDelivered           = "notification.threshold.delivered"
+	EventNotificationTestQueued                   = "notification.test.queued"
+	EventNotificationDeliveryRecorded             = "notification.delivery.recorded"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
 	EventLicensedCryptoMigrationStarted           = "licensed_crypto.migration.started"
 	EventLicensedCryptoMigrationAssetCompleted    = "licensed_crypto.migration.asset_completed"
@@ -214,7 +216,10 @@ type CertificateRecorded struct {
 	Source                 string     `json:"source"`
 	ReplacesID             *string    `json:"replaces_id,omitempty"`
 	CertificateDER         []byte     `json:"certificate_der,omitempty"`
+	CertificatePEM         []byte     `json:"certificate_pem,omitempty"`
+	IssuanceResponse       []byte     `json:"issuance_response,omitempty"`
 	IssuanceIdempotencyKey string     `json:"issuance_idempotency_key,omitempty"`
+	IssuanceRequestBinding string     `json:"issuance_request_binding,omitempty"`
 }
 
 // CertificateRevoked is the payload of a certificate.revoked event. The
@@ -767,6 +772,34 @@ type NotificationThresholdDelivered struct {
 	SentAt        time.Time `json:"sent_at,omitempty"`
 }
 
+// NotificationTestQueued is the immutable authenticated command for an
+// operator-requested channel test. Payload is the exact credential-free Alert
+// placed on the outbox; the projector creates the durable operation and intent
+// atomically.
+type NotificationTestQueued struct {
+	ID                   string          `json:"id"`
+	RequestBinding       string          `json:"request_binding"`
+	ChannelID            string          `json:"channel_id"`
+	Destination          string          `json:"destination"`
+	EffectLane           string          `json:"effect_lane"`
+	CredentialConfigured bool            `json:"credential_configured"`
+	Payload              json.RawMessage `json:"payload"`
+}
+
+// NotificationDeliveryRecorded is one successful notification receiver effect.
+// It stores only deterministic routing/payload digests, never the raw
+// Idempotency-Key, alert body, endpoint, or channel credential.
+type NotificationDeliveryRecorded struct {
+	ID                    string    `json:"id"`
+	Destination           string    `json:"destination"`
+	NotificationKeyDigest string    `json:"notification_key_digest"`
+	PayloadDigest         string    `json:"payload_digest"`
+	Channel               string    `json:"channel"`
+	OutboxID              *int64    `json:"outbox_id,omitempty"`
+	Attempts              int       `json:"attempts,omitempty"`
+	DeliveredAt           time.Time `json:"delivered_at,omitempty"`
+}
+
 // NotificationChannelUpserted is the payload of notification.channel.upserted.
 // It stores delivery metadata plus a credential reference, never credential
 // values.
@@ -915,19 +948,20 @@ type LicensedCryptoMigrationRollbackCompleted struct {
 // It is delivery evidence only: no certificate PEM, key PEM, token, or secret
 // bytes may appear here.
 type ConnectorDeliveryRecorded struct {
-	ID             string  `json:"id"`
-	OutboxID       *int64  `json:"outbox_id,omitempty"`
-	IdentityID     *string `json:"identity_id,omitempty"`
-	Destination    string  `json:"destination"`
-	Connector      string  `json:"connector"`
-	Target         string  `json:"target"`
-	Fingerprint    string  `json:"fingerprint,omitempty"`
-	Status         string  `json:"status"`
-	Attempts       int     `json:"attempts,omitempty"`
-	Reason         string  `json:"reason,omitempty"`
-	Detail         string  `json:"detail,omitempty"`
-	RollbackRef    string  `json:"rollback_ref,omitempty"`
-	IdempotencyKey string  `json:"idempotency_key,omitempty"`
+	ID               string  `json:"id"`
+	OutboxID         *int64  `json:"outbox_id,omitempty"`
+	IdentityID       *string `json:"identity_id,omitempty"`
+	RemediationRunID string  `json:"remediation_run_id,omitempty"`
+	Destination      string  `json:"destination"`
+	Connector        string  `json:"connector"`
+	Target           string  `json:"target"`
+	Fingerprint      string  `json:"fingerprint,omitempty"`
+	Status           string  `json:"status"`
+	Attempts         int     `json:"attempts,omitempty"`
+	Reason           string  `json:"reason,omitempty"`
+	Detail           string  `json:"detail,omitempty"`
+	RollbackRef      string  `json:"rollback_ref,omitempty"`
+	IdempotencyKey   string  `json:"idempotency_key,omitempty"`
 }
 
 // DeploymentTargetUpserted is the payload of deployment_target.upserted.
@@ -1038,23 +1072,28 @@ type IncidentFleetReissuanceRecorded struct {
 // action phase, scope delta, outbox/connector evidence ids, rollback references,
 // and the operator/idempotency metadata needed to audit a served remediation run.
 type RemediationPlaybookRunRecorded struct {
-	ID                  string          `json:"id"`
-	PlaybookID          string          `json:"playbook_id"`
-	TargetIdentityID    string          `json:"target_identity_id,omitempty"`
-	InventoryID         string          `json:"inventory_id,omitempty"`
-	Status              string          `json:"status"`
-	Phase               string          `json:"phase"`
-	Action              string          `json:"action"`
-	Reason              string          `json:"reason,omitempty"`
-	Connector           string          `json:"connector,omitempty"`
-	Target              string          `json:"target,omitempty"`
-	OutboxID            *int64          `json:"outbox_id,omitempty"`
-	ConnectorDeliveryID *string         `json:"connector_delivery_id,omitempty"`
-	ScopeDelta          json.RawMessage `json:"scope_delta"`
-	EvidenceRefs        []string        `json:"evidence_refs,omitempty"`
-	RollbackRefs        []string        `json:"rollback_refs,omitempty"`
-	IdempotencyKey      string          `json:"idempotency_key,omitempty"`
-	CreatedBy           string          `json:"created_by,omitempty"`
+	ID                   string          `json:"id"`
+	PlaybookID           string          `json:"playbook_id"`
+	TargetIdentityID     string          `json:"target_identity_id,omitempty"`
+	InventoryID          string          `json:"inventory_id,omitempty"`
+	Status               string          `json:"status"`
+	Phase                string          `json:"phase"`
+	Action               string          `json:"action"`
+	Reason               string          `json:"reason,omitempty"`
+	Connector            string          `json:"connector,omitempty"`
+	Target               string          `json:"target,omitempty"`
+	OutboxID             *int64          `json:"outbox_id,omitempty"`
+	ConnectorDeliveryID  *string         `json:"connector_delivery_id,omitempty"`
+	ScopeDelta           json.RawMessage `json:"scope_delta"`
+	EvidenceRefs         []string        `json:"evidence_refs,omitempty"`
+	RollbackRefs         []string        `json:"rollback_refs,omitempty"`
+	IdempotencyKey       string          `json:"idempotency_key,omitempty"`
+	RequestBinding       string          `json:"request_binding,omitempty"`
+	InitialHTTPStatus    int             `json:"initial_http_status,omitempty"`
+	InitialResponse      json.RawMessage `json:"initial_response,omitempty"`
+	TerminalReason       string          `json:"terminal_reason,omitempty"`
+	OutboxIdempotencyKey string          `json:"outbox_idempotency_key,omitempty"`
+	CreatedBy            string          `json:"created_by,omitempty"`
 }
 
 // ResponseIntegrationDispatched is the payload of response.integration.dispatched.
@@ -1397,6 +1436,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventNotificationRoutingPolicyUpserted:   {1: true},
 	EventNotificationRoutingPolicyDeleted:    {1: true},
 	EventNotificationThresholdDelivered:      {1: true},
+	EventNotificationTestQueued:              {1: true},
+	EventNotificationDeliveryRecorded:        {1: true},
 	EventCBOMAssetObserved:                   {1: true},
 	EventDeploymentTargetUpserted:            {1: true},
 	EventDeploymentTargetDeleted:             {1: true},
@@ -1486,6 +1527,15 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 	if err := ValidateSchemaVersion(e); err != nil {
 		return err
 	}
+	if handled, err := p.applySecretIntegrationTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyManagedKeyTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyCodeSigningTx(ctx, tx, e); handled {
+		return err
+	}
 	switch e.Type {
 	case EventOwnerCreated:
 		var pl OwnerCreated
@@ -1538,7 +1588,9 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, CAID: pl.CAID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, DeploymentLocation: pl.DeploymentLocation,
-			Source: pl.Source, CertificateDER: pl.CertificateDER, IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey,
+			Source: pl.Source, CertificateDER: pl.CertificateDER, CertificatePEM: pl.CertificatePEM,
+			IssuanceResponse:       pl.IssuanceResponse,
+			IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey, IssuanceRequestBinding: pl.IssuanceRequestBinding,
 			ReplacesID: pl.ReplacesID, CreatedAt: e.Time,
 		}); err != nil {
 			return err
@@ -2057,6 +2109,35 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			TenantID: e.TenantID, ScheduleID: pl.ScheduleID, RunID: pl.RunID,
 			Status: pl.Status, NewRef: pl.NewRef, Error: pl.Error, RanAt: e.Time,
 		})
+	case EventNotificationTestQueued:
+		var pl NotificationTestQueued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.RequestBinding == "" || pl.ChannelID == "" ||
+			pl.Destination == "" || pl.EffectLane == "" || len(pl.Payload) == 0 {
+			return fmt.Errorf("projections: %s requires id, request binding, channel, destination, effect lane, and payload", e.Type)
+		}
+		return p.store.ApplyNotificationTestQueuedTx(ctx, tx, store.NotificationTestOperation{
+			TenantID: e.TenantID, ID: pl.ID, RequestBinding: pl.RequestBinding,
+			ChannelID: pl.ChannelID, Destination: pl.Destination,
+			CredentialConfigured: pl.CredentialConfigured, QueuedAt: e.Time,
+		}, pl.EffectLane, pl.Payload)
+	case EventNotificationDeliveryRecorded:
+		var pl NotificationDeliveryRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		deliveredAt := pl.DeliveredAt
+		if deliveredAt.IsZero() {
+			deliveredAt = e.Time
+		}
+		return p.store.ApplyNotificationDeliveryRecordedTx(ctx, tx, store.NotificationDeliveryReceipt{
+			TenantID: e.TenantID, ID: pl.ID, Destination: pl.Destination,
+			NotificationKeyDigest: pl.NotificationKeyDigest, PayloadDigest: pl.PayloadDigest,
+			Channel: pl.Channel, OutboxID: pl.OutboxID, Attempts: pl.Attempts,
+			DeliveredAt: deliveredAt,
+		})
 	case EventNotificationThresholdDelivered:
 		var pl NotificationThresholdDelivered
 		if err := decode(e, &pl); err != nil {
@@ -2188,13 +2269,33 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if pl.ID == "" || pl.Status == "" {
 			return fmt.Errorf("projections: %s requires id and status", e.Type)
 		}
-		return p.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+		receipt := store.ConnectorDeliveryReceipt{
 			ID: pl.ID, TenantID: e.TenantID, OutboxID: pl.OutboxID, IdentityID: pl.IdentityID,
 			Destination: pl.Destination, Connector: pl.Connector, Target: pl.Target,
 			Fingerprint: pl.Fingerprint, Status: pl.Status, Attempts: pl.Attempts,
 			Reason: pl.Reason, Detail: pl.Detail, RollbackRef: pl.RollbackRef,
 			IdempotencyKey: pl.IdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
-		})
+		}
+		if err := p.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, receipt); err != nil {
+			return err
+		}
+		if pl.RemediationRunID == "" {
+			return nil
+		}
+		if pl.Destination != "connector.right_size" || pl.OutboxID == nil || pl.Reason == "" {
+			return fmt.Errorf("projections: %s right-size terminal event is incomplete", e.Type)
+		}
+		status, phase := "", ""
+		switch pl.Status {
+		case "delivered":
+			status, phase = "succeeded", "right_size_entitlements_mutated"
+		case "failed":
+			status, phase = "failed", "right_size_connector_failed"
+		default:
+			return fmt.Errorf("projections: %s right-size terminal status %q is invalid", e.Type, pl.Status)
+		}
+		return p.store.ApplyConnectorRightSizeTerminalTx(ctx, tx, e.TenantID,
+			pl.RemediationRunID, pl.ID, *pl.OutboxID, status, phase, pl.Reason, e.Time)
 	case EventDeploymentTargetUpserted:
 		var pl DeploymentTargetUpserted
 		if err := decode(e, &pl); err != nil {
@@ -2205,7 +2306,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyDeploymentTargetUpsertedTx(ctx, tx, store.DeploymentTarget{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Type: pl.Connector, Config: pl.Config,
-		}, e.Time)
+		}, e.ID, e.Time)
 	case EventDeploymentTargetDeleted:
 		var pl DeploymentTargetDeleted
 		if err := decode(e, &pl); err != nil {
@@ -2293,16 +2394,41 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if pl.ID == "" || pl.PlaybookID == "" || pl.Status == "" || pl.Action == "" {
 			return fmt.Errorf("projections: %s requires id, playbook_id, status, and action", e.Type)
 		}
-		return p.store.ApplyRemediationPlaybookRunRecordedTx(ctx, tx, store.RemediationPlaybookRun{
+		run := store.RemediationPlaybookRun{
 			ID: pl.ID, TenantID: e.TenantID, PlaybookID: pl.PlaybookID,
 			TargetIdentityID: pl.TargetIdentityID, InventoryID: pl.InventoryID,
 			Status: pl.Status, Phase: pl.Phase, Action: pl.Action, Reason: pl.Reason,
 			Connector: pl.Connector, Target: pl.Target, OutboxID: pl.OutboxID,
 			ConnectorDeliveryID: pl.ConnectorDeliveryID, ScopeDelta: pl.ScopeDelta,
 			EvidenceRefs: pl.EvidenceRefs, RollbackRefs: pl.RollbackRefs,
-			IdempotencyKey: pl.IdempotencyKey, CreatedBy: pl.CreatedBy,
+			IdempotencyKey: pl.IdempotencyKey, RequestBinding: pl.RequestBinding,
+			InitialHTTPStatus: pl.InitialHTTPStatus, InitialResponse: pl.InitialResponse,
+			TerminalReason: pl.TerminalReason, CreatedBy: pl.CreatedBy,
 			CreatedAt: e.Time, UpdatedAt: e.Time,
-		})
+		}
+		if pl.Action != "right_size" || pl.RequestBinding == "" {
+			return p.store.ApplyRemediationPlaybookRunRecordedTx(ctx, tx, run)
+		}
+		if pl.ConnectorDeliveryID == nil || *pl.ConnectorDeliveryID == "" ||
+			pl.OutboxIdempotencyKey == "" || pl.InitialHTTPStatus == 0 || len(pl.InitialResponse) == 0 {
+			return fmt.Errorf("projections: %s durable right-size operation is incomplete", e.Type)
+		}
+		var identityID *string
+		if pl.TargetIdentityID != "" {
+			value := pl.TargetIdentityID
+			identityID = &value
+		}
+		rollbackRef := ""
+		if len(pl.RollbackRefs) > 0 {
+			rollbackRef = pl.RollbackRefs[0]
+		}
+		return p.store.ApplyConnectorRightSizeRequestedTx(ctx, tx, run, store.ConnectorDeliveryReceipt{
+			ID: *pl.ConnectorDeliveryID, TenantID: e.TenantID, IdentityID: identityID,
+			Destination: "connector.right_size", Connector: pl.Connector, Target: pl.Target,
+			Status: "queued", Attempts: 0, Reason: "least_privilege_right_size_queued",
+			Detail: "usage-backed right-size connector intent queued", RollbackRef: rollbackRef,
+			IdempotencyKey: pl.OutboxIdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
+		}, "connector.right_size", pl.OutboxIdempotencyKey, e.Data)
 	case EventResponseIntegrationDispatched:
 		var pl ResponseIntegrationDispatched
 		if err := decode(e, &pl); err != nil {

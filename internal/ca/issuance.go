@@ -3,19 +3,23 @@
 package ca
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/dependents"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -32,9 +36,21 @@ type IssuanceService struct {
 	log    *events.Log // optional; when set, profile-gated decisions are audited (S8.1)
 
 	outboxAuthorityID string
-	drainOutbox       func(context.Context) error
+	wakeOutbox        func()
 	dependentRecorder dependents.Recorder
+	externalReplay    ExternalIssueReplaySafety
 }
+
+// ExternalIssueReplaySafety is the audited upstream crash contract. The default
+// is at-most-once: a provider without a pre-submit token must never be called
+// blindly after an ambiguous failure. Reconciled is reserved for adapters that
+// enforce the supplied ProviderIdempotencyKey at their receiver.
+type ExternalIssueReplaySafety uint8
+
+const (
+	ExternalIssueAtMostOnce ExternalIssueReplaySafety = iota
+	ExternalIssueReconciled
+)
 
 // Option configures an IssuanceService.
 type Option func(*IssuanceService)
@@ -45,11 +61,22 @@ func WithAuditLog(log *events.Log) Option { return func(s *IssuanceService) { s.
 
 // WithOutboxIssueWorker moves provider issuance to the shared outbox dispatcher.
 // authorityID identifies which configured CA owns the external-ca.issue row, and
-// drain is used by synchronous served APIs to wait for the worker-produced result.
-func WithOutboxIssueWorker(authorityID string, drain func(context.Context) error) Option {
+// wake asks that normal bounded worker to sweep after the durable intent commits.
+// It never performs provider work on the request goroutine.
+func WithOutboxIssueWorker(authorityID string, wake func()) Option {
 	return func(s *IssuanceService) {
 		s.outboxAuthorityID = authorityID
-		s.drainOutbox = drain
+		s.wakeOutbox = wake
+	}
+}
+
+// WithExternalIssueReplaySafety attaches the provider adapter's audited replay
+// contract. Unknown values fail closed to at-most-once.
+func WithExternalIssueReplaySafety(safety ExternalIssueReplaySafety) Option {
+	return func(s *IssuanceService) {
+		if safety == ExternalIssueReconciled {
+			s.externalReplay = safety
+		}
 	}
 }
 
@@ -76,6 +103,11 @@ const DestinationExternalCAIssue = "external-ca.issue"
 // the idempotent result before the served request needed to return.
 var ErrExternalIssueIncomplete = errors.New("ca: external CA issue result is not complete")
 
+const (
+	externalIssueResultPollInterval = 10 * time.Millisecond
+	externalIssueResultWaitTimeout  = 30 * time.Second
+)
+
 // ExternalIssuePayload is the durable outbox payload for provider-backed CA
 // issuance. It carries the full provider request so the outbox worker, not the
 // request handler, owns issue/poll/download side effects.
@@ -89,6 +121,7 @@ type ExternalIssuePayload struct {
 	ProfileName            string   `json:"profile_name,omitempty"`
 	Protocol               string   `json:"protocol,omitempty"`
 	RequestedEKUs          []string `json:"requested_ekus,omitempty"`
+	RequestBinding         string   `json:"request_binding"`
 }
 
 func externalIssueResultKey(idempotencyKey string) string {
@@ -119,6 +152,7 @@ func newExternalIssuePayload(authorityID string, req IssueRequest) ExternalIssue
 		ProfileName:            req.ProfileName,
 		Protocol:               req.Protocol,
 		RequestedEKUs:          append([]string(nil), req.RequestedEKUs...),
+		RequestBinding:         req.RequestBinding,
 	}
 }
 
@@ -132,6 +166,7 @@ func (p ExternalIssuePayload) IssueRequest() IssueRequest {
 		ProfileName:            p.ProfileName,
 		Protocol:               p.Protocol,
 		RequestedEKUs:          append([]string(nil), p.RequestedEKUs...),
+		RequestBinding:         p.RequestBinding,
 	}
 }
 
@@ -166,12 +201,12 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	if err := s.recordIntent(ctx, req.TenantID, idempotencyKey, req); err != nil {
 		return Certificate{}, err
 	}
-	raw, err := s.idem.Do(ctx, req.TenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
+	raw, err := s.idem.DoAtMostOnceEffect(ctx, req.TenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
 		cert, err := s.ca.Issue(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.record(ctx, req.TenantID, idempotencyKey, cert); err != nil {
+		if err := s.record(ctx, req.TenantID, idempotencyKey, req.RequestBinding, cert); err != nil {
 			return nil, err
 		}
 		return json.Marshal(cert)
@@ -190,35 +225,89 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 }
 
 func (s *IssuanceService) issueViaOutbox(ctx context.Context, req IssueRequest, idempotencyKey string) (Certificate, error) {
+	if req.RequestBinding == "" {
+		return Certificate{}, errors.New("ca: external CA issue is missing its authenticated request binding")
+	}
+	if cert, found, err := s.recoverExternalIssue(ctx, req.TenantID, idempotencyKey, req.RequestBinding); err != nil || found {
+		return cert, err
+	}
 	payload, err := json.Marshal(newExternalIssuePayload(s.outboxAuthorityID, req))
 	if err != nil {
 		return Certificate{}, err
 	}
+	var (
+		outboxID        int64
+		initialAttempts int
+	)
 	if err := s.store.WithTenant(ctx, req.TenantID, func(tx pgx.Tx) error {
-		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+		if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID:       req.TenantID,
 			Destination:    DestinationExternalCAIssue,
 			IdempotencyKey: idempotencyKey,
 			Payload:        payload,
-		})
-		return err
+			EffectLane:     DestinationExternalCAIssue + ":authority:" + s.outboxAuthorityID,
+		}); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx,
+			`SELECT id, attempts
+			   FROM outbox
+			  WHERE tenant_id = $1 AND idempotency_key = $2`,
+			req.TenantID, idempotencyKey).Scan(&outboxID, &initialAttempts)
 	}); err != nil {
 		return Certificate{}, err
 	}
-	if s.drainOutbox != nil {
-		if err := s.drainOutbox(ctx); err != nil {
+	if s.wakeOutbox != nil {
+		s.wakeOutbox()
+	}
+	return s.waitForExternalIssue(ctx, req.TenantID, idempotencyKey, req.RequestBinding, outboxID, initialAttempts)
+}
+
+func (s *IssuanceService) waitForExternalIssue(ctx context.Context, tenantID, idempotencyKey, requestBinding string, outboxID int64, initialAttempts int) (Certificate, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, externalIssueResultWaitTimeout)
+	defer cancel()
+	ticker := time.NewTicker(externalIssueResultPollInterval)
+	defer ticker.Stop()
+	for {
+		if cert, found, err := s.recoverExternalIssue(waitCtx, tenantID, idempotencyKey, requestBinding); err != nil {
+			return Certificate{}, err
+		} else if found {
+			return cert, nil
+		}
+		var raw []byte
+		var err error
+		if s.externalReplay == ExternalIssueReconciled {
+			raw, err = s.idem.BoundResult(waitCtx, tenantID, externalIssueResultKey(idempotencyKey), requestBinding)
+		} else {
+			raw, err = s.idem.Result(waitCtx, tenantID, externalIssueResultKey(idempotencyKey))
+		}
+		if err == nil {
+			var cert Certificate
+			if err := json.Unmarshal(raw, &cert); err != nil {
+				return Certificate{}, err
+			}
+			return cert, nil
+		}
+		if !errors.Is(err, orchestrator.ErrIdempotencyNotFound) && !errors.Is(err, orchestrator.ErrInProgress) {
 			return Certificate{}, err
 		}
+		record, recordErr := s.outbox.Get(waitCtx, tenantID, outboxID)
+		if recordErr != nil {
+			return Certificate{}, recordErr
+		}
+		// A retryable worker failure belongs to this exact issuance. Return a
+		// sanitized upstream failure now; a replay wakes the worker and recovers
+		// using the same provider idempotency key. Never inspect or dispatch any
+		// unrelated tenant/destination row from this request path.
+		if record.Status == "failed" || (record.Status == "pending" && record.Attempts > initialAttempts && record.LastError != "") {
+			return Certificate{}, fmt.Errorf("%w: worker attempt failed", ErrExternalIssueIncomplete)
+		}
+		select {
+		case <-waitCtx.Done():
+			return Certificate{}, waitCtx.Err()
+		case <-ticker.C:
+		}
 	}
-	raw, err := s.idem.Result(ctx, req.TenantID, externalIssueResultKey(idempotencyKey))
-	if err != nil {
-		return Certificate{}, fmt.Errorf("%w: %v", ErrExternalIssueIncomplete, err)
-	}
-	var cert Certificate
-	if err := json.Unmarshal(raw, &cert); err != nil {
-		return Certificate{}, err
-	}
-	return cert, nil
 }
 
 // DeliverExternalIssue performs one external-ca.issue outbox message. It is the
@@ -244,16 +333,38 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 	if req.ProviderIdempotencyKey == "" {
 		req.ProviderIdempotencyKey = ProviderIdempotencyKey(m.IdempotencyKey)
 	}
-	raw, err := s.idem.Do(ctx, m.TenantID, externalIssueResultKey(m.IdempotencyKey), func(ctx context.Context) ([]byte, error) {
+	if req.RequestBinding == "" {
+		return errors.New("ca: external issue payload has no authenticated request binding")
+	}
+	// Every served external-CA adapter receives a stable provider token. The
+	// durable certificate projection closes crash-after-record for all adapters;
+	// only adapters whose receiver actually enforces that token may re-enter the
+	// provider after an ambiguous pre-record failure.
+	effect := func(ctx context.Context) ([]byte, error) {
+		if recovered, found, err := s.recoverExternalIssue(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding); err != nil {
+			return nil, err
+		} else if found {
+			return json.Marshal(recovered)
+		}
 		cert, err := s.ca.Issue(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.record(ctx, m.TenantID, m.IdempotencyKey, cert); err != nil {
+		if err := s.record(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding, cert); err != nil {
 			return nil, err
 		}
 		return json.Marshal(cert)
-	})
+	}
+	var raw []byte
+	var err error
+	if s.externalReplay == ExternalIssueReconciled {
+		raw, err = s.idem.DoDurableEffectBound(ctx, m.TenantID, externalIssueResultKey(m.IdempotencyKey), req.RequestBinding, effect)
+	} else {
+		// The durable certificate check above closes crash-after-record. If the
+		// provider returned ambiguously before record, retain an indeterminate
+		// at-most-once claim rather than risking a second certificate.
+		raw, err = s.idem.DoAtMostOnceEffect(ctx, m.TenantID, externalIssueResultKey(m.IdempotencyKey), effect)
+	}
 	if err != nil {
 		return err
 	}
@@ -262,6 +373,36 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 		return err
 	}
 	return s.recordDependentOnce(ctx, req, m.IdempotencyKey, cert)
+}
+
+func (s *IssuanceService) recoverExternalIssue(ctx context.Context, tenantID, idempotencyKey, requestBinding string) (Certificate, bool, error) {
+	recovered, err := s.store.GetIssuedCertificateRecovery(ctx, tenantID, idempotencyKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Certificate{}, false, nil
+	}
+	if err != nil {
+		return Certificate{}, false, err
+	}
+	if requestBinding != "" && !crypto.ConstantTimeEqual([]byte(recovered.RequestBinding), []byte(requestBinding)) {
+		return Certificate{}, false, fmt.Errorf("%w: external CA issuance key belongs to a different authenticated command", store.ErrIdempotencyConflict)
+	}
+	if len(recovered.CertificatePEM) == 0 || recovered.Serial == "" || recovered.NotAfter == nil {
+		return Certificate{}, false, errors.New("ca: durable external CA result is incomplete")
+	}
+	if len(recovered.Response) > 0 {
+		var exact Certificate
+		if err := json.Unmarshal(recovered.Response, &exact); err != nil {
+			return Certificate{}, false, errors.New("ca: durable external CA response is invalid")
+		}
+		if !bytes.Equal(exact.CertificatePEM, recovered.CertificatePEM) || exact.Serial != recovered.Serial || exact.NotAfter.IsZero() || exact.Issuer == "" {
+			return Certificate{}, false, errors.New("ca: durable external CA response does not match certificate inventory")
+		}
+		return exact, true, nil
+	}
+	return Certificate{
+		CertificatePEM: append([]byte(nil), recovered.CertificatePEM...),
+		Serial:         recovered.Serial, Issuer: recovered.Issuer, NotAfter: recovered.NotAfter.UTC(),
+	}, true, nil
 }
 
 // enforceProfile resolves the request's bound profile (if any) and validates the
@@ -338,6 +479,7 @@ func (s *IssuanceService) recordIntent(ctx context.Context, tenantID, key string
 			Destination:    DestinationExternalCAIssue,
 			IdempotencyKey: key,
 			Payload:        payload,
+			EffectLane:     DestinationExternalCAIssue + ":authority:" + s.ca.Name(),
 		})
 		return err
 	})
@@ -364,8 +506,58 @@ func (s *IssuanceService) auditDecision(ctx context.Context, req IssueRequest, v
 	return err
 }
 
-// record writes a ca.issue outbox entry so the issuance is observable (AN-6).
-func (s *IssuanceService) record(ctx context.Context, tenantID, key string, cert Certificate) error {
+// record appends the public issued-certificate fact and projects inventory before
+// writing the downstream ca.issue notification. The event is the reconstructable
+// source of truth (AN-2); idempotency_keys is only a bounded response cache.
+func (s *IssuanceService) record(ctx context.Context, tenantID, key, requestBinding string, cert Certificate) error {
+	if s.log != nil {
+		info, err := certinfo.Inspect(cert.CertificatePEM)
+		if err != nil {
+			return fmt.Errorf("ca: inspect issued certificate: %w", err)
+		}
+		leafDER, err := certinfo.LeafDER(cert.CertificatePEM)
+		if err != nil {
+			return fmt.Errorf("ca: extract issued certificate DER: %w", err)
+		}
+		caID := s.outboxAuthorityID
+		if caID != "" {
+			if err := uuid.Validate(caID); err != nil {
+				// External registry IDs are UUIDs in production configuration. A
+				// legacy non-UUID test/plugin name remains useful inventory source
+				// metadata but cannot populate the UUID CA revocation relation.
+				caID = ""
+			}
+		}
+		notBefore, notAfter := info.NotBefore.UTC(), info.NotAfter.UTC()
+		issuanceResponse, err := json.Marshal(cert)
+		if err != nil {
+			return err
+		}
+		payload, err := json.Marshal(projections.CertificateRecorded{
+			ID:   uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenantID+"\x00external-ca\x00"+key)).String(),
+			CAID: caID, Subject: info.Subject, SANs: append([]string(nil), info.DNSNames...),
+			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
+			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &notBefore, NotAfter: &notAfter,
+			Source: "external-ca:" + s.outboxAuthorityID, CertificateDER: leafDER,
+			CertificatePEM:         append([]byte(nil), cert.CertificatePEM...),
+			IssuanceResponse:       issuanceResponse,
+			IssuanceIdempotencyKey: key, IssuanceRequestBinding: requestBinding,
+		})
+		if err != nil {
+			return err
+		}
+		eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenantID+"\x00certificate.recorded\x00"+key)).String()
+		event, err := s.log.Append(ctx, events.Event{
+			ID: eventID, Type: projections.EventCertificateRecorded, TenantID: tenantID, Data: payload,
+		})
+		if err != nil {
+			return err
+		}
+		if err := projections.New(s.store).Apply(ctx, event); err != nil {
+			return err
+		}
+	}
+
 	payload, err := json.Marshal(struct {
 		Serial string `json:"serial"`
 		Issuer string `json:"issuer"`

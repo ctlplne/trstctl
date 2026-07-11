@@ -717,7 +717,7 @@ function ConnectorDetailRow({ children, mono = false, term }: { term: string; ch
 function deliveryStatusTone(status: ConnectorDelivery["status"]) {
   if (status === "delivered" || status === "test_succeeded") return "success";
   if (status === "failed") return "critical";
-  if (status === "unrouted") return "warning";
+  if (status === "queued") return "warning";
   return "neutral";
 }
 

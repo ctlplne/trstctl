@@ -2169,10 +2169,10 @@
       "phase": "P0",
       "priority": 4,
       "served_state": "partial",
-      "backend_status": "partial: built-in self-service issuance is served; the 14 external-CA backends are not constructed, and the Kubernetes CSR/TrustBundle posture routes remain descriptor-only",
-      "current_frontend_mapping": "partial: Request, Approvals, Wizard, and Identities use the served built-in issuance spine; CA Hierarchy external-CA actions and Kubernetes controller posture are disclosures until their DoD entries are served",
+      "backend_status": "partial: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven; the Kubernetes CSR/TrustBundle posture routes remain descriptor-only",
+      "current_frontend_mapping": "partial: Request, Approvals, Wizard, Identities, and CA Hierarchy use served built-in/external issuance; Kubernetes controller posture remains disclosure until its separate DoD entries are served",
       "target_gui_mapping": "Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states.",
-      "acceptance_test": "TestServedSelfServiceIssuanceRequiresApproval proves the built-in signer-backed issuance spine. External-CA and Kubernetes controller tests do not certify shipped wiring; their DoD census entries must become served first.",
+      "acceptance_test": "Built-in acceptance proves signer-backed issuance; the external-CA DoD proof drives all 14 configured drivers through production buildRunDeps and the served issue route to independently verified chains; Kubernetes controller DoD entries remain the only residual.",
       "source_docs": [
         "docs/features/issuance-and-cas.md"
       ],
@@ -2226,20 +2226,24 @@
         "served": {
           "evidence": [
             "The built-in self-service request, approval, signer issuance, inventory, and event path is served.",
-            "Fresh DoD census controls the residual: external_ca is not constructed in buildRunDeps and k8s_posture_routes remain descriptor-only.",
+            "All 14 external-CA drivers are constructed from validated operator configuration by buildRunDeps and reached through the served registry/issue route, durable outbox, exact provider protocol, and independent chain verification.",
+            "The remaining DoD residual is k8s_posture_routes, whose CSR/TrustBundle rows remain descriptor-only until their later wiring wave.",
             "served_state=partial",
-            "backend_status=partial: built-in self-service issuance is served; the 14 external-CA backends are not constructed, and the Kubernetes CSR/TrustBundle posture routes remain descriptor-only"
+            "backend_status=partial: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven; the Kubernetes CSR/TrustBundle posture routes remain descriptor-only"
           ],
           "refs": [
             "internal/api/external_ca.go",
             "internal/server/external_ca.go",
+            "internal/server/external_ca_config.go",
+            "internal/server/dod_external_ca_runtime_test.go",
+            "tools/dodcensus/substrates/external_ca.py",
             "internal/api/kubernetes.go",
             "internal/agent/k8s/certificate_signing_request.go",
             "internal/agent/k8s/trust_bundle.go",
             "internal/agent/k8s/issuer_controller.go"
           ],
           "commands": [
-            "make test"
+            "make dod-gate"
           ]
         },
         "ui": {
@@ -2302,12 +2306,14 @@
         "test": {
           "evidence": [
             "TestServedSelfServiceIssuanceRequiresApproval proves the built-in issuance spine.",
-            "External-CA and Kubernetes tests inject registries/controllers in test code; they are library/controller evidence, not shipped wiring proof.",
-            "The fresh DoD census is the promotion authority."
+            "TestDODExternalCAUniversalProductionAssembly starts one nonce-bound process per configured CA, calls production buildRunDeps and Build, enters through the authenticated served issue route, and independently verifies the returned chain.",
+            "Kubernetes controller tests remain controller/library evidence until their separate DoD rows are wired; the fresh DoD census is the promotion authority."
           ],
           "refs": [
             "internal/server/self_service_issuance_served_test.go",
             "internal/server/external_ca_served_test.go",
+            "internal/server/dod_external_ca_runtime_test.go",
+            "tools/dodcensus/external_ca_manifest_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "internal/server/kubernetes_csr_served_test.go",
             "internal/server/kubernetes_trust_bundle_served_test.go",
@@ -2405,7 +2411,6 @@
         "k8s_posture_routes"
       ],
       "dod_residuals": {
-        "external_ca": "Fresh repo-native external_ca census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served.",
         "k8s_posture_routes": "Fresh repo-native k8s_posture_routes census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
       }
     },
@@ -3144,10 +3149,10 @@
       "phase": "P2",
       "priority": 54,
       "served_state": "conditional",
-      "backend_status": "conditional: Enterprise managed-key route/FIPS posture exists behind license and configuration, but the runtime census reports zero of six advertised HSM/KMS backends served in the shipped static artifact",
-      "current_frontend_mapping": "conditional disclosure: CA Hierarchy shows licensed/configured managed-key metadata/actions and Platform shows FIPS posture, but no HSM/KMS backend is claimed served until its runtime census entry is green",
+      "backend_status": "conditional: all six advertised HSM/KMS backends are required/census-served through the shipped control-plane and cgo HSM signer artifacts; an active Enterprise BYOK license and one provider configuration are required at runtime",
+      "current_frontend_mapping": "conditional action surface: CA Hierarchy shows licensed/configured managed-key metadata/actions for the six served backends, while Platform shows the separate FIPS build/module posture",
       "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
-      "acceptance_test": "Managed-key tests prove opaque response shapes and provider contracts, while the DoD census remains red for all six backends. TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves only the editions posture. Cloud-provider lifecycle tests currently use author-controlled HTTP doubles; emulator/live-cloud proof is tracked separately.",
+      "acceptance_test": "TestDODManagedKeyProductionAssembly launches the licensed control-plane and shipped cgo signer artifact, drives generate/idempotent replay/rotate-through-restart/revoke/zeroize for AWS, Azure, GCP, PKCS#11, TPM 2.0, and YubiHSM 2, and completes nonce-bound independent substrate receipts. TestEditionsEndpointServesCAPKEY03ValidatedModulePath separately proves the FIPS editions posture.",
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/configuration.md",
@@ -3169,6 +3174,11 @@
         "internal/kms/pkcs11/session_cgo.go",
         "internal/kms/pkcs11/session_nocgo.go",
         "internal/kms/pkcs11/softhsm_real_test.go",
+        "ee/managedkeys/signerwiring/wiring.go",
+        "internal/signing/managedkeys.go",
+        "internal/server/dod_managed_key_runtime_test.go",
+        "tools/dodcensus/substrates/managed_keys.py",
+        "tools/dodcensus/manifest.json",
         "internal/server/managedkeys_cloudkms_served_test.go",
         "internal/api/editions.go",
         "internal/api/editions_test.go",
@@ -3198,9 +3208,10 @@
         "served": {
           "evidence": [
             "GET /api/v1/editions serves the CAP-KEY-03 FIPS module/build posture.",
-            "Managed-key routes fail closed without a runtime-proven custody backend; package reachability or author-controlled doubles do not count as served backend proof.",
+            "Managed-key routes fail closed without an active BYOK license and provider configuration; package reachability or a test-constructed registry does not count as served backend proof.",
+            "All six advertised providers have required nonce-bound launched-binary receipts through the separate cgo HSM signer artifact.",
             "served_state=conditional",
-            "backend_status=conditional: Enterprise managed-key route/FIPS posture exists behind license and configuration, but the runtime census reports zero of six advertised HSM/KMS backends served in the shipped static artifact"
+            "backend_status=conditional: six of six HSM/KMS backends are census-served; Enterprise BYOK licensing and provider configuration remain runtime conditions"
           ],
           "refs": [
             "internal/api/managedkeys.go",
@@ -3218,7 +3229,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: conditional disclosure/action: CAHierarchy at /ca-hierarchy shows configured AWS, Azure, GCP, and PKCS#11 metadata/actions without claiming a served backend; Platform at /platform shows the separate FIPS build posture and product CMVP residual",
+        "current_frontend_mapping: conditional action: CAHierarchy at /ca-hierarchy shows configured AWS, Azure, GCP, PKCS#11, TPM 2.0, and YubiHSM 2 metadata/actions backed by required census receipts; Platform at /platform shows the separate FIPS build posture and product CMVP residual",
             "target_gui_mapping: Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state."
           ],
           "refs": [
@@ -3230,7 +3241,7 @@
         },
         "cli": {
           "evidence": [
-            "CLI parity exposes managed-keys generate, rotate, revoke, and zeroize against the same conditional API shapes; this is not backend runtime proof."
+        "CLI parity exposes managed-keys generate, rotate, revoke, and zeroize against the same licensed/configured API; the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
           ],
           "refs": [
             "internal/cli/command.go",
@@ -3261,7 +3272,7 @@
             "KMS-03 acceptance: TestPKCS11SoftHSMContainerGenerateSign initializes a SoftHSM token in Docker and runs the cgo-tagged real binding conformance test.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
-            "Cloud-provider lifecycle coverage currently uses author-controlled HTTP doubles; no emulator/live-cloud acceptance is claimed by this row."
+        "TestDODManagedKeyProductionAssembly proves all six providers through the shipped binary composition using faithful cloud wire emulators, SoftHSM, and swtpm; it intentionally does not claim a live customer cloud account or physical-device certification."
           ],
           "refs": [
             "ee/managedkeys/managedkeys_test.go",
@@ -3309,7 +3320,7 @@
         },
         "telemetry": {
           "evidence": [
-            "No dedicated HSM health metric or shipped-backend runtime signal is claimed; lifecycle events in test-assembled paths are not DoD receipts."
+        "The DoD census is the shipped-backend runtime signal; dedicated continuous HSM health metrics remain a separate observability enhancement and do not reduce the served lifecycle breadth."
           ],
           "refs": [
             "internal/server/managedkeys_seam_test.go",
@@ -3344,9 +3355,7 @@
       "dod_capabilities": [
         "hsm_kms"
       ],
-      "dod_residuals": {
-        "hsm_kms": "Fresh repo-native hsm_kms census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+  "dod_residuals": {}
     },
     {
       "id": "GUI-F018",
@@ -7265,11 +7274,11 @@
       "domain": "Deployment connectors",
       "phase": "P2",
       "priority": 69,
-      "served_state": "library",
-      "backend_status": "library: the 24 native connector packages exist, but buildRunDeps does not construct Deps.ConnectorRegistry; only target metadata, receipts, and signed-WASM dispatch are served",
-      "current_frontend_mapping": "disclosure: Connectors UI serves target metadata, bindings, catalog, receipts, and signed-WASM status; the 24 native backends are library-only until the connector census is green",
+      "served_state": "conditional",
+      "backend_status": "conditional: the shipped buildRunDeps constructs the selected members of all 24 native connectors from operator configuration and routes served issue/deploy work through the durable outbox to real target mutation and readback",
+      "current_frontend_mapping": "served when configured: Connectors at /connectors creates strict-schema native targets, binds identities, invokes issue/deploy, and shows delivered or failed receipts for the same production registry",
       "target_gui_mapping": "Connector registry/deployment UI for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations with grants and outbox delivery state.",
-      "acceptance_test": "The connector DoD census must prove buildRunDeps construction plus backend runtime acceptance before this row can leave library-only.",
+      "acceptance_test": "The connector DoD census proves production buildRunDeps construction plus authenticated served target creation, identity binding, issuance/deploy, target-specific mutation, and independent external readback for all 24 native connectors.",
       "source_docs": [
         "docs/features/deployment-connectors.md"
       ],
@@ -7320,7 +7329,22 @@
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: fresh DoD census reports this implementation breadth is not served by the shipped binary."
+          "evidence": [
+            "buildRunDeps constructs ConnectorRegistry from connectors.enabled and operator-owned local/network policy; tenant target rows can select only a strict compiled schema and secret references.",
+            "TestDODNativeConnectorsProductionAssembly enters through authenticated served target creation, identity binding, and deploy routes, drains real issuance plus connector.deploy work, and requires a target-specific external mutation/readback receipt for every native connector.",
+            "Unknown connector.* outbox destinations and configured-but-unowned connector names fail closed.",
+            "served_state=conditional",
+            "backend_status=conditional: the shipped buildRunDeps constructs the selected members of all 24 native connectors from operator configuration and routes served issue/deploy work through the durable outbox to real target mutation and readback"
+          ],
+          "refs": [
+            "internal/server/run_connectors.go",
+            "internal/server/dod_connector_runtime_test.go",
+            "tools/dodcensus/substrates/connector_target.py",
+            "tools/dodcensus/manifest.json"
+          ],
+          "commands": [
+            "make dod-gate"
+          ]
         },
         "ui": {
           "evidence": [
@@ -7352,9 +7376,9 @@
         },
         "test": {
           "evidence": [
-            "Native connector tests construct ConnectorRegistry in test code and prove library behavior only.",
+            "Package tests prove connector-local contracts and deny-by-default operations.",
             "Signed-WASM dispatch tests prove the separate served plugin spine.",
-            "The connector DoD census is required before native backends are claimed served."
+            "The connector DoD proof uses production buildRunDeps and served user routes; it never constructs ConnectorRegistry in test code."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
@@ -7387,7 +7411,7 @@
         },
         "audit": {
           "evidence": [
-            "Native connector delivery emits connector.delivery.recorded with delivered, failed, or unrouted status and never returns PEM/key material in receipts."
+            "Connector intent uses queued with attempts=0; native connector workers emit delivered or failed outcomes and never return PEM/key material in receipts."
           ],
           "refs": [
             "internal/server/issuance.go",
@@ -7426,13 +7450,11 @@
         }
       },
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_scope_reason": "The residual GA condition is explicit operator connector enablement, local command/root policy, and target credentials.",
       "dod_capabilities": [
         "connector"
       ],
-      "dod_residuals": {
-        "connector": "Fresh repo-native connector census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F042",
@@ -7441,11 +7463,11 @@
       "domain": "Deployment connectors",
       "phase": "P2",
       "priority": 70,
-      "served_state": "library",
-      "backend_status": "library: additional native appliance connector packages exist, but buildRunDeps does not construct Deps.ConnectorRegistry; no native appliance backend is served",
-      "current_frontend_mapping": "disclosure: Connectors UI shows appliance catalog/target metadata and receipts, while native appliance delivery remains library-only until the connector census is green",
+      "served_state": "conditional",
+      "backend_status": "conditional: the shipped buildRunDeps constructs every advertised appliance/database/messaging connector selected by the operator and the served deploy route performs the provider-specific authenticated mutation plus external readback",
+      "current_frontend_mapping": "served when configured: Connectors at /connectors creates appliance/database targets with secret references, binds identities, invokes deploy, and shows the production receipt",
       "target_gui_mapping": "Connector UI for the 24 shipped native targets, including F5/BIG-IP, NetScaler, A10, Kemp, PostgreSQL, MySQL, RabbitMQ, Elasticsearch, Tomcat, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback.",
-      "acceptance_test": "The connector DoD census and appliance-specific runtime acceptance must be green before this row can leave library-only.",
+      "acceptance_test": "The connector DoD census drives each appliance/database connector from the served target and identity workflow through production assembly, then requires exact authentication, provider wire operations, and independent external readback.",
       "source_docs": [
         "docs/features/deployment-connectors.md"
       ],
@@ -7500,7 +7522,22 @@
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: fresh DoD census reports this implementation breadth is not served by the shipped binary."
+          "evidence": [
+            "The shipped composition registers the appliance, cloud-store, database, messaging, search, and Java-keystore constructors selected in connectors.enabled.",
+            "Each target JSON schema rejects unknown fields, loads authority only from a same-tenant secret reference, and applies operator-owned endpoint/filesystem/process policy.",
+            "TestDODNativeConnectorsProductionAssembly drives every row through served target creation, identity binding, issuance/deploy, exact vendor authentication, mutation, receipt, and independent external readback.",
+            "served_state=conditional",
+            "backend_status=conditional: the shipped buildRunDeps constructs every advertised appliance/database/messaging connector selected by the operator and the served deploy route performs the provider-specific authenticated mutation plus external readback"
+          ],
+          "refs": [
+            "internal/server/run_connectors.go",
+            "internal/server/dod_connector_runtime_test.go",
+            "tools/dodcensus/substrates/connector_target.py",
+            "tools/dodcensus/contracts/connector-universal-v1.json"
+          ],
+          "commands": [
+            "make dod-gate"
+          ]
         },
         "ui": {
           "evidence": [
@@ -7532,8 +7569,8 @@
         },
         "test": {
           "evidence": [
-            "Appliance connector tests exercise implementation packages through test-constructed registries.",
-            "No test-constructed registry certifies shipped native wiring; the connector DoD census is authoritative."
+            "Appliance connector package tests exercise failure, rollback, credential, and wire-shape behavior.",
+            "The authoritative connector DoD proof does not construct a registry; it follows production buildRunDeps from the served API to the external target process."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
@@ -7605,13 +7642,11 @@
         }
       },
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_scope_reason": "The residual GA condition is operator enablement, target endpoint policy, and provider credentials for native appliance delivery.",
       "dod_capabilities": [
         "connector"
       ],
-      "dod_residuals": {
-        "connector": "Fresh repo-native connector census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F043",
@@ -7620,11 +7655,11 @@
       "domain": "Code signing and timestamping",
       "phase": "P2",
       "priority": 71,
-      "served_state": "library",
-      "backend_status": "library: code-signing routes and CLI exist, but buildRunDeps does not supply CodeSigningConfig and the shipped handler returns the fail-closed 501 sentinel",
-      "current_frontend_mapping": "disclosure: CodeSigning UI describes request, approval, signature receipt, and transparency intent; no signature is claimed until the code_signing census is served",
+      "served_state": "conditional",
+      "backend_status": "conditional: shipped buildRunDeps assembles tenant-scoped persistent and keyless signing through the isolated signer plus pinned Rekor v1 transparency delivery when code_signing.enabled is configured",
+      "current_frontend_mapping": "served: CodeSigning at /codesign submits authenticated key-backed and keyless digest-signing mutations and renders the returned signature, public key, verified Fulcio identity, and Rekor outbox destination",
       "target_gui_mapping": "Code-signing UI for signing requests, key/keyless mode, approvals, artifact digest, policy decision, signature download, and audit evidence.",
-      "acceptance_test": "A shipped-binary sign/keyless acceptance plus transparency dispatch must turn code_signing.default served before this row can leave library-only.",
+      "acceptance_test": "The DoD runtime proof enters through the shipped key-backed and keyless routes assembled by buildRunDeps, signs the exact supplied SHA-256 digest in an isolated signer process, drains official Rekor v1 HashedRekord work, and requires external OpenSSL verification plus a pinned signed-entry-timestamp receipt.",
       "source_docs": [
         "docs/features/code-signing-and-timestamping.md"
       ],
@@ -7632,11 +7667,16 @@
         "internal/codesign",
         "internal/api/codesign.go",
         "internal/server/codesign.go",
-        "internal/server/codesign_served_test.go"
+        "internal/config/code_signing.go",
+        "internal/server/code_signing_config.go",
+        "internal/server/rekor.go",
+        "internal/server/dod_code_signing_runtime_test.go"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/CodeSigning.tsx"
+      ],
       "status": "closed",
-      "notes": "CLM-06 wires F50 into the served path: /api/v1/code-signing/sign and /api/v1/code-signing/keyless require keys:write + Idempotency-Key, derive signer principal from auth, emit codesign.* events, and queue transparency.rekor outbox rows delivered through a Rekor fixture. Test evidence: go test./internal/server -run TestServedCodeSigningKeyBasedAndKeylessSigstore -count=1 -v.",
+      "notes": "WIRE-CODESIGN-001 closes the shipped assembly gap. buildRunDeps now constructs tenant-bound signer handles, offline GitHub OIDC attestors, one-use isolated signer keys, and a Rekor outbox handler with an operator-pinned log public key. The DoD proof drives both served mutations, independently verifies exact pre-hashed signatures with OpenSSL, forces the real Rekor 409 Location readback flow, and verifies the signed-entry timestamp before the outbox row can be acknowledged.",
       "api_surface": [
         "signCodeArtifact",
         "signCodeArtifactKeyless"
@@ -7649,16 +7689,34 @@
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: fresh DoD census reports this implementation breadth is not served by the shipped binary."
+          "evidence": [
+            "buildRunDeps returns CodeSigning assembled by codeSigningConfigFromConfig when code_signing.enabled is configured.",
+            "Persistent and keyless private operations remain in the separate signer process; tenant/key resolution is tenant-scoped and one-use keyless handles are destroyed after signing.",
+            "Rekor delivery submits the official HashedRekord shape, verifies the exact artifact signature, echoed body, log identity, RFC 6962 leaf UUID, and signed-entry timestamp under an operator-pinned log public key.",
+            "TestDODCodeSigningProductionAssembly proves buildRunDeps -> Build -> served POST -> durable transparency outbox -> independent external verification and process-bound readback.",
+            "served_state=conditional",
+            "backend_status=conditional: shipped buildRunDeps assembles tenant-scoped persistent and keyless signing through the isolated signer plus pinned Rekor v1 transparency delivery when code_signing.enabled is configured"
+          ],
+          "refs": [
+            "internal/server/run.go",
+            "internal/server/code_signing_config.go",
+            "internal/server/rekor.go",
+            "internal/server/dod_code_signing_runtime_test.go",
+            "tools/dodcensus/substrates/notification_rekor.py"
+          ],
+          "commands": [
+            "make dod-gate"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: CodeSigning at /codesign - signing request ledger, key/keyless modes, approvals, policy decision, signature receipt, Rekor outbox destination, and audit disclosure backed by served API/CLI",
+            "current_frontend_mapping: served: CodeSigning at /codesign submits authenticated key-backed and keyless digest-signing mutations and renders the returned signature, public key, verified Fulcio identity, and Rekor outbox destination",
             "target_gui_mapping: Code-signing UI for signing requests, key/keyless mode, approvals, artifact digest, policy decision, signature download, and audit evidence."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
-            "web/src/App.tsx"
+            "web/src/App.tsx",
+            "web/src/pages/CodeSigning.tsx"
           ]
         },
         "cli": {
@@ -7682,10 +7740,15 @@
         },
         "test": {
           "evidence": [
-            "Code-signing tests inject CodeSigningConfig and prove the library service contract.",
-            "The shipped buildRunDeps path leaves the handler at its fail-closed 501 sentinel; code_signing.default must become required and served."
+            "TestDODCodeSigningProductionAssembly starts a separate signer process, uses production buildRunDeps and Build, calls the served key-backed and keyless mutations, and drains two transparency rows to an out-of-process Rekor emulator.",
+            "The emulator uses OpenSSL as an independent verifier for the exact pre-hashed signatures, signs the official Rekor SET payload with a per-run external key, and exposes nonce/PID-bound readback required by the census.",
+            "Focused unit tests reject double-hashed digests, cross-tenant signer resolution, forged OIDC identity, forged Rekor SETs, unbound UUID/body/log identity, and unsafe duplicate Locations."
           ],
           "refs": [
+            "internal/codesign/codesign_test.go",
+            "internal/server/rekor_test.go",
+            "internal/server/dod_code_signing_runtime_test.go",
+            "tools/dodcensus/notification_codesign_manifest_test.go",
             "internal/server/codesign_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
@@ -7753,13 +7816,11 @@
         }
       },
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_scope_reason": "The residual GA condition is operator-enabled tenant key or GitHub OIDC trust, an isolated signer, and a pinned Rekor log public key.",
       "dod_capabilities": [
         "code_signing"
       ],
-      "dod_residuals": {
-        "code_signing": "Fresh repo-native code_signing census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F044",
@@ -7910,10 +7971,10 @@
       "phase": "P2",
       "priority": 72,
       "served_state": "conditional",
-      "backend_status": "conditional: the incident/remediation spine requires the Enterprise remediation feature and connector.right_size remains a non-served residual",
-      "current_frontend_mapping": "conditional: licensed Incidents at /incidents exposes compromise execution, revoke/rotate evidence, response dispatch, owner recommendations, and audit bundles; connector.right_size only queues recommendation intent and does not mutate external entitlements; Discovery exposes metadata-only compromise and OAuth-grant findings",
+      "backend_status": "conditional: the Enterprise remediation spine and connector.right_size external entitlement mutation are production-served when licensed and bound to an operator-configured tenant/connector endpoint",
+      "current_frontend_mapping": "conditional: licensed Incidents at /incidents exposes compromise execution, revoke/rotate evidence, response dispatch, owner recommendations, right-size delivered/failed receipts, and audit bundles; Discovery exposes metadata-only compromise and OAuth-grant findings",
       "target_gui_mapping": "Incident workflow UI for compromised credential intake, blast-radius preview, remediation plan, reissue-before-revoke order, approvals, and evidence bundle.",
-      "acceptance_test": "API tests exercise licensed incident/remediation and discovery spines; connector.right_size remains non-served until its claim is removed or an external effect is runtime-proven by the DoD census.",
+      "acceptance_test": "API tests exercise licensed incident/remediation and discovery spines; the connector.right_size DoD proof enters through the served playbook route, replays idempotently, performs the external entitlement mutation, reads effective scopes back, and exposes the delivered receipt.",
       "source_docs": [
         "docs/features/incident-and-jit.md",
         "docs/features/discovery-and-inventory.md"
@@ -7986,9 +8047,9 @@
             "credential_compromise Discovery sources/runs record compromised_credential findings tagged OWASP NHI2 and CAP-ITDR-02 from metadata-only evidence refs.",
             "oauth_grant Discovery sources/runs record oauth_grant_abuse findings tagged CAP-ITDR-03 from metadata-only threat signals, reason codes, evidence refs, and source event refs.",
             "GET /api/v1/remediation/owner-actions lists CAP-REM-02 owner-bound right-size actions from CAP-POST-01 posture evidence; POST /api/v1/remediation/owner-actions/{id}/accept records remediation.playbook_run.recorded and queues connector.right_size through the outbox.",
-            "connector.right_size currently records recommendation/outbox intent only; the generic dispatcher does not apply or receipt an external entitlement mutation.",
+            "connector.right_size selects an operator-bound tenant/connector entitlement endpoint, applies the usage-backed removal with the stable outbox idempotency key, reads effective scopes back, and advances the API-created receipt to delivered or failed.",
             "served_state=conditional",
-            "backend_status=conditional: the incident/remediation spine requires the Enterprise remediation feature and connector.right_size remains a non-served residual"
+            "backend_status=conditional: the Enterprise remediation spine and connector.right_size external entitlement mutation are production-served when licensed and bound to an operator-configured tenant/connector endpoint"
           ],
           "refs": [
             "internal/api/incidents.go",
@@ -8003,6 +8064,8 @@
             "internal/orchestrator/response_integrations.go",
             "internal/orchestrator/itsm.go",
             "internal/server/itsm.go",
+            "internal/server/connector_right_size.go",
+            "cmd/trstctl/dod_connector_right_size_runtime_test.go",
             "internal/projections/projections.go",
             "internal/store/incidents.go",
             "internal/store/remediation_playbooks.go",
@@ -8010,12 +8073,12 @@
             "internal/server/remediation_playbooks_served_test.go"
           ],
           "commands": [
-            "make test"
+            "make dod-gate"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: conditional licensed Incidents workflow with served subpaths for compromise evidence and response dispatch; right-size remains recommendation-only and has no external mutation receipt; Discovery shows metadata-only compromise and OAuth-grant findings",
+            "current_frontend_mapping: conditional licensed Incidents workflow with served compromise evidence, response dispatch, right-size external mutation receipts, and metadata-only Discovery compromise/OAuth-grant findings",
             "target_gui_mapping: Incident workflow UI for compromised credential intake, blast-radius preview, remediation plan, reissue-before-revoke order, approvals, and evidence bundle.",
             "Incidents at /incidents renders CAP-REM-02 owner self-remediation actions and accepts an action through the served API."
           ],
@@ -8057,6 +8120,7 @@
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
             "TestServedOwnerDrivenSelfRemediationCAPREM02EndToEnd proves CAP-REM-02 serves owner-bound self-remediation actions, rejects another owner, accepts with idempotency, and records outbox/event evidence.",
+            "TestDODConnectorRightSizeProductionAssembly enters through the authenticated served playbook route, replays the mutation idempotently, drains connector.right_size, verifies external effective scopes, and reads the delivered receipt through the served API.",
             "Incidents UI tests render the owner self-remediation queue and accept a served action."
           ],
           "refs": [
@@ -8065,6 +8129,7 @@
             "internal/server/response_integrations_served_test.go",
             "internal/server/itsm_served_test.go",
             "internal/server/discovery_served_test.go",
+            "cmd/trstctl/dod_connector_right_size_runtime_test.go",
             "web/src/__tests__/incidents.test.tsx",
             "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
@@ -8150,13 +8215,11 @@
         }
       },
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_scope_reason": "The residual GA conditions are the Enterprise remediation license and an operator-configured tenant/connector entitlement binding.",
       "dod_capabilities": [
         "connector_right_size"
       ],
-      "dod_residuals": {
-        "connector_right_size": "Fresh repo-native connector_right_size census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F046",
@@ -9617,11 +9680,11 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 77,
-      "served_state": "library",
-      "backend_status": "library: lease routes, engine, CLI, UI, and leaseworker code exist, but buildRunDeps leaves Deps.DynamicSecretProviders empty so issue returns unavailable",
-      "current_frontend_mapping": "disclosure: Secrets UI shows the dynamic-lease workflow and backend catalog, but no production provider can issue a credential until the dynamic_secret census is green",
+      "served_state": "conditional",
+      "backend_status": "conditional: buildRunDeps constructs all eight tenant-bound dynamic-secret providers from operator configuration; served issue/renew/revoke uses an event-projected sealed outbox and restart-safe leaseworker against the real provider authority",
+      "current_frontend_mapping": "served when configured: Secrets at /secrets lists configured tenant providers and drives issue, reveal-once credential use, renew, revoke, status, and backend errors through the production registry",
       "target_gui_mapping": "Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow.",
-      "acceptance_test": "The dynamic-secret registry and each advertised provider need shipped-binary issue/revoke acceptance before this row can leave library-only.",
+      "acceptance_test": "The dynamic_secret DoD census drives all eight providers through production buildRunDeps and the authenticated lease route, proves the generated credential works independently, rotates it, revokes it, and proves both credentials are dead.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
@@ -9635,7 +9698,7 @@
         "web/src/pages/Secrets.tsx"
       ],
       "status": "closed",
-      "notes": "SEC-03 mounted the dynsecret.Engine lease lifecycle on the served path. Test evidence: internal/server/secrets_served_test.go issues, renews, revokes, and leaseworker-expires leases through the API; web/src/lib/api.test.ts verifies the typed client routes and mutation idempotency. Coverage evidence: the OpenAPI golden, CLI catalog, registered customer routes catalog, and customer docs list the served lease surface.",
+      "notes": "SEC-03 mounted the dynsecret.Engine lease lifecycle on the served path. WIRE-DYNSEC-000/101-108 add validated tenant/provider configuration, production buildRunDeps construction, event-projected pending/issued/revoked lease state, sealed issuance/revocation outbox work, stable crash-retry identities, and a universal shipped-assembly proof against official PostgreSQL, MySQL, MongoDB, and Redis containers plus protocol-faithful AWS IAM, GCP IAM, Azure Entra, and Kubernetes substrates. Test evidence: TestDODSecretIntegrationsProductionAssembly issues, renews, rotates, uses, and revokes each provider credential from the authenticated served route; the external process independently verifies use and post-revoke denial.",
       "api_surface": [
         "issueDynamicSecretLease",
         "getDynamicSecretLease",
@@ -9650,7 +9713,23 @@
       ],
       "facet_evidence": {
         "served": {
-          "na": "N/A: fresh DoD census reports this implementation breadth is not served by the shipped binary."
+          "evidence": [
+            "buildRunDeps constructs TenantDynamicSecretProviders from validated operator configuration and returns that registry to Build.",
+            "Lease issuance projects a deterministic pending lease plus sealed dynsecret.issue outbox command before the provider worker makes any external call; retries converge on one provider identity.",
+            "TestDODSecretIntegrationsProductionAssembly enters through POST /api/v1/secrets/leases, independently uses and rotates each credential, revokes both through the outbox, and verifies post-revoke denial for all eight providers.",
+            "served_state=conditional",
+            "backend_status=conditional: buildRunDeps constructs all eight tenant-bound dynamic-secret providers from operator configuration; served issue/renew/revoke uses an event-projected sealed outbox and restart-safe leaseworker against the real provider authority"
+          ],
+          "refs": [
+            "internal/server/secret_integrations.go",
+            "internal/server/dynamic_secret_lifecycle.go",
+            "internal/server/dod_secret_integrations_runtime_test.go",
+            "tools/dodcensus/substrates/secret_integrations.py",
+            "tools/dodcensus/manifest.json"
+          ],
+          "commands": [
+            "make dod-gate"
+          ]
         },
         "ui": {
           "evidence": [
@@ -9690,10 +9769,13 @@
         },
         "test": {
           "evidence": [
-            "Dynamic-lease tests inject provider implementations and prove engine/route behavior in a test composition.",
-            "buildRunDeps supplies no production provider registry; dynamic_secret census entries must become required and served."
+            "Dynamic-lease unit and route tests cover lifecycle behavior, tenant isolation, idempotency, event projection, and sealed outbox state.",
+            "The required dynamic_secret census entries bind every provider constructor to TenantDynamicSecretProviders and the same universal production-assembly runtime proof."
           ],
           "refs": [
+            "internal/server/dod_secret_integrations_runtime_test.go",
+            "tools/dodcensus/substrates/secret_integrations.py",
+            "tools/dodcensus/manifest.json",
             "internal/server/secrets_served_test.go",
             "internal/api/feature_parity_test.go",
             "internal/cli/feature_parity_test.go",
@@ -9771,13 +9853,11 @@
         }
       },
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_scope_reason": "The residual GA condition is explicit secrets API enablement plus tenant provider endpoints, roles, egress policy, and credential references.",
       "dod_capabilities": [
         "dynamic_secret"
       ],
-      "dod_residuals": {
-        "dynamic_secret": "Fresh repo-native dynamic_secret census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F055",
@@ -10161,10 +10241,10 @@
       "phase": "P2",
       "priority": 79,
       "served_state": "partial",
-      "backend_status": "partial: cloud-secret discovery and Kubernetes/workload posture are served; the eight outbound sync pushers are code inventory because buildRunDeps leaves Deps.SecretSyncTargets empty",
-      "current_frontend_mapping": "partial: Secrets UI serves discovery, catalog, Kubernetes/workload-injection, and unvaulted posture; outbound native sync delivery is disclosed unavailable until the secret_sync census is green",
+      "backend_status": "partial: buildRunDeps production-assembles all eight tenant-bound outbound pushers and serves sealed-outbox delivery; deeper native Terraform/OpenTofu and Vault KV outbound integrations plus other secrets_residuals remain",
+      "current_frontend_mapping": "partial: Secrets UI serves configured native sync delivery, catalog/status, cloud discovery, Kubernetes/workload injection, and unvaulted posture; deeper provider-specific Terraform/OpenTofu and Vault KV workflows remain residual",
       "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt. Roadmap residual: deeper Terraform/OpenTofu provider-specific APIs and arbitrary webhook-specific managed configuration beyond the served generic JSON/webhook target.",
-      "acceptance_test": "Served tests cover cloud-secret discovery and Kubernetes/workload posture. Each outbound pusher needs shipped-binary runtime acceptance before native secret-sync delivery is claimed.",
+      "acceptance_test": "The secret_sync DoD census drives all eight configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
@@ -10186,7 +10266,7 @@
         "web/src/pages/Secrets.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071; promoted to served GA by TRACE-034 after the residual conditional scope was split into explicit roadmap residual text. CAP-SEC-04 now exposes GET /api/v1/secrets/cloud-secret-managers and trstctl-cli secrets cloud-secret-managers, combining cloud_secret discovery coverage for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox sync coverage for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault. CAP-SECR-03 exposes GET /api/v1/secrets/syncs/targets, native pushers for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes, plus a Secrets UI catalog that shows configured target status. CAP-SECR-04 exposes GET /api/v1/secrets/kubernetes-operator and a TrstctlSecretSync operator path that resolves served trstctl secrets into Kubernetes Secret.data and patches Deployment/StatefulSet/DaemonSet pod-template annotations for reload. CAP-SECR-05 exposes GET /api/v1/secrets/workload-injection and trstctl-cli secrets workload-injection; TrstctlSecretInjection consumes a Kubernetes Secret and patches Deployment/StatefulSet/DaemonSet pod templates with the shipped trstctl-agent --secret-inject sidecar, memory volume, app mounts, optional env valueFrom references, and metadata-only status. CAP-SECR-07 exposes GET /api/v1/secrets/unvaulted and trstctl-cli secrets unvaulted; the route combines repository and third-party leaked-secret scan sources, redacted leaked_secret finding counts, AWS/GCP/Azure/Vault cloud_secret discovery visibility, and configured AWS/GCP/Azure vault-augmentation sync targets. Sync remains target-configured and fail-closed: Vault KV is discovery-only in core, while Terraform Cloud/OpenTofu and arbitrary webhooks still use the generic JSON/webhook shape until deeper provider-specific APIs are configured.",
+      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071. WIRE-SYNC-000/101-108 add validated tenant target configuration, production buildRunDeps construction, immutable ciphertext-only intent, sealed outbox delivery, and a universal external proof for all eight native targets. CAP-SEC-04 exposes GET /api/v1/secrets/cloud-secret-managers and trstctl-cli secrets cloud-secret-managers, combining cloud_secret discovery coverage for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox sync coverage for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault. CAP-SECR-03 exposes GET /api/v1/secrets/syncs/targets, native pushers for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes, plus a Secrets UI catalog that shows configured target status. CAP-SECR-04 exposes GET /api/v1/secrets/kubernetes-operator and a TrstctlSecretSync operator path that resolves served trstctl secrets into Kubernetes Secret.data and patches Deployment/StatefulSet/DaemonSet pod-template annotations for reload. CAP-SECR-05 exposes GET /api/v1/secrets/workload-injection and trstctl-cli secrets workload-injection; TrstctlSecretInjection consumes a Kubernetes Secret and patches Deployment/StatefulSet/DaemonSet pod templates with the shipped trstctl-agent --secret-inject sidecar, memory volume, app mounts, optional env valueFrom references, and metadata-only status. CAP-SECR-07 exposes GET /api/v1/secrets/unvaulted and trstctl-cli secrets unvaulted; the route combines repository and third-party leaked-secret scan sources, redacted leaked_secret finding counts, AWS/GCP/Azure/Vault cloud_secret discovery visibility, and configured AWS/GCP/Azure vault-augmentation sync targets. Sync remains target-configured and fail-closed: Vault KV is discovery-only in core, while Terraform Cloud/OpenTofu and arbitrary webhooks still use the generic JSON/webhook shape until deeper provider-specific APIs are configured.",
       "api_surface": [
         "getCloudSecretManagerIntegration",
         "listSecretSyncTargets",
@@ -10209,13 +10289,13 @@
         "served": {
           "evidence": [
             "GET /api/v1/secrets/cloud-secret-managers serves read-only discovery posture for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV.",
-            "GET /api/v1/secrets/syncs/targets serves the eight-entry provider catalog but reports no production-configured native targets while Deps.SecretSyncTargets is empty.",
-            "POST /api/v1/secrets/syncs fails closed rather than pretending an external write occurred when no target is constructed.",
+            "buildRunDeps constructs TenantSecretSyncTargets from tenant-bound operator configuration; GET /api/v1/secrets/syncs/targets marks those concrete targets configured.",
+            "POST /api/v1/secrets/syncs reads a tenant secret, appends an immutable ciphertext-only intent, atomically projects a sealed outbox row, and lets only the outbox dispatcher perform the external write.",
             "Kubernetes operator, workload-injection, and unvaulted-secret posture remain served independently of outbound native pusher delivery.",
             "served_state=partial",
-            "backend_status=partial: cloud-secret discovery and Kubernetes/workload posture are served; the eight outbound sync pushers are code inventory because buildRunDeps leaves Deps.SecretSyncTargets empty",
+            "backend_status=partial: buildRunDeps production-assembles all eight tenant-bound outbound pushers and serves sealed-outbox delivery; deeper native Terraform/OpenTofu and Vault KV outbound integrations plus other secrets_residuals remain",
             "TrstctlSecretSync and TrstctlSecretInjection controller posture is served independently of outbound pusher construction; unvaulted posture returns redacted leaked_secret evidence.",
-            "Catalog inventory includes GitHub Actions, GitLab CI, Vercel, generic CI JSON, Kubernetes, AWS, GCP, and Azure targets, but none is claimed configured or delivered."
+            "The secret_sync DoD proof requires exact vendor authentication and independent external readback for AWS, GCP, Azure, GitHub sealed boxes, GitLab, Vercel, generic CI JSON, and Kubernetes targets."
           ],
           "commands": [
             "make test"
@@ -10258,10 +10338,13 @@
         "test": {
           "evidence": [
             "Cloud-secret discovery and Kubernetes/workload posture tests exercise their shipped paths.",
-            "Secret-sync tests inject SecretSyncTargets and prove pusher library behavior only; they do not certify production construction.",
-            "Every outbound pusher requires a required+served secret_sync census entry."
+            "Secret-sync unit tests cover vendor create/update semantics, while TestDODSecretSyncProductionAssembly binds every constructor to buildRunDeps and proves authenticated external write/readback.",
+            "Every outbound pusher has a required secret_sync census entry using the same nonce-bound external substrate contract."
           ],
           "refs": [
+            "internal/server/dod_secret_integrations_runtime_test.go",
+            "tools/dodcensus/substrates/secret_integrations.py",
+            "tools/dodcensus/manifest.json",
             "internal/featureparity/feature_facet_coverage_test.go",
             "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/server/secrets_sync_served_test.go",
@@ -10343,13 +10426,12 @@
         }
       },
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_scope_reason": "Native eight-target sync is served when configured; remaining GA residuals are the explicit secrets_residuals rows for deeper Vault, KMIP, and provider-specific Terraform/OpenTofu breadth.",
       "dod_capabilities": [
         "secret_sync",
         "secrets_residuals"
       ],
       "dod_residuals": {
-        "secret_sync": "Fresh repo-native secret_sync census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served.",
         "secrets_residuals": "Fresh repo-native secrets_residuals census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
       }
     },
@@ -10966,16 +11048,21 @@
       "domain": "Policy and governance",
       "phase": "P2",
       "priority": 80,
-      "served_state": "partial",
-      "backend_status": "partial: served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, tenant-authored channel credential-reference lifecycle, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox",
+      "served_state": "served",
+      "backend_status": "served: production dispatcher assembles email/Slack/Teams/SMS/SIEM/webhook plus native PagerDuty Events v2 and OpsGenie Alert v2 delivery, with tenant channel lifecycle, routing policy, channel tests, inbox/dead-letter handling, and outbox-backed retries",
       "current_frontend_mapping": "served: Notifications at /notifications lists configured channel families, authors tenant notification channels with endpoint metadata and redacted credential references, authors severity-to-channel routing policies with owner and digest preview metadata, queues redacted channel tests, shows owner/approver escalation, marks read, and requeues dead letters",
       "target_gui_mapping": "Notification channel UI for Slack, Teams, email, SMS, SIEM, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
-      "acceptance_test": "Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, creates tenant-authored notification channels with redacted credential references, lists configured channels, creates routing policies, queues redacted Slack/webhook channel tests, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
+      "acceptance_test": "Served lifecycle and channel-test mutations enqueue durable notification work; the DoD runtime proof enters through the authenticated channel-test route assembled by buildRunDeps and requires exact PagerDuty/OpsGenie native requests, vendor acceptance envelopes, external readback, and nonce/PID-bound execution receipts.",
       "source_docs": [
         "docs/features/policy-and-governance.md"
       ],
       "source_backend": [
         "internal/notify",
+        "internal/notify/pagerduty",
+        "internal/notify/opsgenie",
+        "internal/config/notifications_incident.go",
+        "internal/server/notifications_incident_config.go",
+        "internal/server/dod_notification_runtime_test.go",
         "internal/server",
         "internal/store",
         "internal/store/notification_channel.go"
@@ -10984,7 +11071,7 @@
         "web/src/pages/Notifications.tsx"
       ],
       "status": "closed",
-      "notes": "TRACE-007 closes F29 by serving tenant notification channel lifecycle through POST/GET/PUT/DELETE /api/v1/notification-channels, CLI notifications channels create/get/update/delete, and the /notifications channel-authoring UI. Channel mutations append notification.channel.* events, project a tenant-scoped RLS table, store endpoint metadata plus credential references only, redact credential references in responses, and resolve enabled tenant channels in the outbox dispatcher. Existing CAP-OBS-05 expiry delivery, routing policy CRUD, channel tests, inbox/dead-letter read/requeue, owner/approver escalation, RBAC, and telemetry remain covered.",
+      "notes": "WIRE-NOTIFY-000/101/102 close the remaining advertised channel breadth. buildRunDeps constructs native PagerDuty and OpsGenie clients from operator configuration, locks and wipes credentials, routes user-created test/lifecycle outbox rows through the same dispatcher, sends deterministic vendor retry identities, validates exact acceptance receipts, and proves delivery against separate nonce-bound vendor emulators with external readback.",
       "api_surface": [
         "createNotificationChannel",
         "listNotificationChannels",
@@ -11032,8 +11119,9 @@
             "TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification proves a signer-issued served cert inside the alert window reaches an HMAC-signed webhook sink.",
             "TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04 proves expiry alerts carry owner contact, approver recipients, severity, threshold days, webhook delivery, and inbox visibility.",
             "TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003 proves routing policy creation, owner/digest metadata, Slack/webhook channel tests, redacted credential references, and one-channel outbox delivery.",
-            "served_state=partial",
-            "backend_status=partial: served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, tenant-authored channel credential-reference lifecycle, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox"
+            "TestDODNativeIncidentNotificationProductionAssembly proves a served authenticated channel-test mutation reaches production-assembled PagerDuty and OpsGenie workers and independently readable vendor state.",
+            "served_state=served",
+            "backend_status=served: production dispatcher assembles email/Slack/Teams/SMS/SIEM/webhook plus native PagerDuty Events v2 and OpsGenie Alert v2 delivery, with tenant channel lifecycle, routing policy, channel tests, inbox/dead-letter handling, and outbox-backed retries"
           ],
           "refs": [
             "internal/api/api.go",
@@ -11042,6 +11130,10 @@
             "internal/server/server.go",
             "internal/server/issuance.go",
             "internal/server/notifications_served_test.go",
+            "internal/server/dod_notification_runtime_test.go",
+            "internal/server/notifications_incident_config.go",
+            "internal/notify/pagerduty/pagerduty.go",
+            "internal/notify/opsgenie/opsgenie.go",
             "internal/store/notification_channel.go",
             "internal/store/lifecycle.go"
           ],
@@ -11090,15 +11182,19 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, creates tenant-authored notification channels with redacted credential references, lists configured channels, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
+            "acceptance_test: Served lifecycle and channel-test mutations enqueue durable notification work; the DoD runtime proof enters through the authenticated channel-test route assembled by buildRunDeps and requires exact PagerDuty/OpsGenie native requests, vendor acceptance envelopes, external readback, and nonce/PID-bound execution receipts.",
+            "TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003 is the default-built, no-skip acceptance test for tenant-authored notification routes and outbox-backed channel delivery.",
             "Focused served tests drive the running server scheduler, outbox drain, email/Slack/Teams/SMS/SIEM sinks, tenant-authored httptest webhook channel, dead-letter list, idempotent requeue, and mark-read projection.",
+            "TestDODNativeIncidentNotificationProductionAssembly uses buildRunDeps and Build, invokes the authenticated served channel-test mutation, drains its durable row, and requires exact external PagerDuty/OpsGenie readback plus a process execution receipt.",
             "C10-3 notification inbox UI test renders configured channel coverage, owner/approver escalation fields, and exercises mark-read plus dead-letter requeue.",
             "DESIGN-003 notification routing UI test creates a tenant channel, creates a routing policy, shows it on /notifications, and queues redacted Slack/webhook tests.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
             "internal/server/notifications_served_test.go",
+            "internal/server/dod_notification_runtime_test.go",
             "internal/notify/dispatch_test.go",
+            "tools/dodcensus/notification_codesign_manifest_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/pages/Notifications.tsx",
             "web/src/__tests__/accept/C10-3.test.tsx",
@@ -11173,14 +11269,12 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "dod_capabilities": [
         "notification_channel"
       ],
-      "dod_residuals": {
-        "notification_channel": "Fresh repo-native notification_channel census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F062",

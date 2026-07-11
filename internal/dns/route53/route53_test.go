@@ -144,16 +144,13 @@ func mustHost(t *testing.T, raw string) string {
 	return u.Host
 }
 
-// TestSignedRequestRoutesThroughCloudhttpBound proves the SIGNING provider shares the
-// same cloudhttp core (CODE-006): the SigV4 signature is still applied (the server
-// observes an Authorization header it can recover), AND the non-2xx error body the
-// provider surfaces is bounded by the SHARED cloudhttp.MaxErrorBytes — not a bespoke
-// per-provider literal. Lowering cloudhttp.MaxErrorBytes changes what route53 (a
-// signing provider) observes, because its bounded read is now central. The request is
-// still SigV4-signed via the cloudhttp request-signer seam — the keyed MAC stays in
-// the provider, behind the crypto boundary (AN-3).
-func TestSignedRequestRoutesThroughCloudhttpBound(t *testing.T) {
-	huge := strings.Repeat("E", cloudhttp.MaxErrorBytes*3)
+// TestSignedRequestRoutesThroughCloudhttpWithoutRetainingErrorBody proves the
+// signing provider shares cloudhttp's request-signer seam and that an attacker-
+// controlled non-2xx body does not escape the bounded mutable buffer cloudhttp wipes
+// before returning (AN-8).
+func TestSignedRequestRoutesThroughCloudhttpWithoutRetainingErrorBody(t *testing.T) {
+	const echoed = "echoed-sensitive-upstream-material"
+	huge := strings.Repeat(echoed, cloudhttp.MaxErrorBytes)
 	var sawSigV4 bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The cloudhttp signer ran iff the request carries the SigV4 Authorization
@@ -181,11 +178,7 @@ func TestSignedRequestRoutesThroughCloudhttpBound(t *testing.T) {
 	if !strings.Contains(msg, "502") {
 		t.Fatalf("error should carry the upstream status: %v", err)
 	}
-	bodyLen := strings.Count(msg, "E")
-	if bodyLen == 0 {
-		t.Fatal("error carried no body snippet; the shared bounded read did not run")
-	}
-	if bodyLen > cloudhttp.MaxErrorBytes {
-		t.Fatalf("error body = %d 'E's, exceeds the shared cloudhttp.MaxErrorBytes cap %d — the bound is not centrally applied to the signing provider (CODE-006)", bodyLen, cloudhttp.MaxErrorBytes)
+	if strings.Contains(msg, echoed) {
+		t.Fatalf("error retained attacker-controlled response body: %v", err)
 	}
 }

@@ -65,6 +65,24 @@ type Info struct {
 	BasicConstraints   bool   // whether basicConstraints is present/valid
 }
 
+// LeafDER returns a copy of the first certificate's canonical DER bytes from a
+// DER value or PEM chain. Inventory/event producers use this boundary helper so
+// crypto/x509 and encoding/pem never leak into business packages (AN-3).
+func LeafDER(raw []byte) ([]byte, error) {
+	der := raw
+	if block, _ := pem.Decode(raw); block != nil {
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("certinfo: PEM block is %q, not CERTIFICATE", block.Type)
+		}
+		der = block.Bytes
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("certinfo: parse certificate: %w", err)
+	}
+	return bytes.Clone(cert.Raw), nil
+}
+
 // Inspect parses a certificate (PEM or DER) and returns its inventory metadata.
 func Inspect(raw []byte) (Info, error) {
 	der := raw

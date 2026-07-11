@@ -92,6 +92,35 @@ func TestDeployRollsBackWhenSDSUpdateFailsAfterRemoteApply(t *testing.T) {
 	}
 }
 
+// An SDS management plane can echo the submitted secret on failure. The
+// connector must drain that body without promoting the private key into an
+// immutable error string.
+func TestDeployRedactsSDSFailureBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			http.NotFound(w, r)
+		case http.MethodPut:
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write(bytes.Join([][]byte{envoyCert, envoyKey}, []byte("|")))
+		default:
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+	}))
+	defer srv.Close()
+
+	conn := envoy.New(srv.URL, "server_cert")
+	_, err := connector.Run(context.Background(), conn, connector.NewHTTPOps(srv.Client()), connector.NewDeployment("edge/envoy", envoyCert, envoyKey))
+	if err == nil {
+		t.Fatal("deploy succeeded despite SDS failure")
+	}
+	for _, forbidden := range []string{string(envoyCert), string(envoyKey)} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("error %q leaked the SDS secret", err)
+		}
+	}
+}
+
 func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 	stub := newSDSStub(t)
 	conn := envoy.New(stub.URL(), "server_cert")

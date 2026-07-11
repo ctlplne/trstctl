@@ -13,6 +13,7 @@ import (
 	agiddelegation "trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/ee/agentid/reach"
 	vdecsigner "trstctl.com/trstctl/ee/decommission/signerwiring"
+	managedkeysigner "trstctl.com/trstctl/ee/managedkeys/signerwiring"
 	eepqc "trstctl.com/trstctl/ee/pqc"
 	xrecdigest "trstctl.com/trstctl/ee/reconcile/digest"
 	xrecplan "trstctl.com/trstctl/ee/reconcile/plan"
@@ -24,6 +25,23 @@ import (
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/signing"
 )
+
+// appendManagedKeyOptions is the only signer composition seam that can attach
+// Enterprise KMS/HSM provider implementations. Keeping it in this tagged file
+// means a trstctl_core signer does not link the provider constructors at all.
+func appendManagedKeyOptions(opts []signing.ServerOption, lic *license.Manager, configPath, journalDir string) ([]signing.ServerOption, error) {
+	if configPath == "" {
+		return opts, nil
+	}
+	if lic == nil || !lic.Has(license.FeatureBYOK) {
+		return opts, fmt.Errorf("--managed-keys-config requires an active license with feature %s", license.FeatureBYOK)
+	}
+	option, err := managedkeysigner.ProviderOption(configPath, journalDir)
+	if err != nil {
+		return opts, err
+	}
+	return append(opts, option), nil
+}
 
 // appendEEOptions attaches the Enterprise signer options. The PCAS succession minter
 // is attached iff the deployment is licensed for PCAS (INT-02/INT-02a). Fail-closed:

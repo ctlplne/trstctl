@@ -7,6 +7,31 @@ import { ErrorState } from "@/components/StatePrimitives";
 
 type Mode = "key" | "keyless";
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function encodeSHA256Digest(input: string): string {
+  const trimmed = input.trim();
+  const hex = trimmed.toLowerCase().startsWith("sha256:") ? trimmed.slice(7) : trimmed;
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error("Artifact digest must be exactly 64 hexadecimal SHA-256 characters, with an optional sha256: prefix.");
+  }
+  const bytes = new Uint8Array(32);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytesToBase64(bytes);
+}
+
+function encodeIdentityPayload(input: string): string {
+  const value = input.trim();
+  if (!value) throw new Error("Identity payload is required for keyless signing.");
+  return bytesToBase64(new TextEncoder().encode(value));
+}
+
 const auditReceipts = [
   "the artifact digest is the signed subject; artifact bytes never enter the browser",
   "approval, policy decision, signer identity, and timestamp become audit evidence",
@@ -22,7 +47,7 @@ export function CodeSigning() {
   const [artifactType, setArtifactType] = useState("container");
   const [digest, setDigest] = useState("");
   const [keyId, setKeyId] = useState("");
-  const [identityMethod, setIdentityMethod] = useState("oidc");
+  const [identityMethod, setIdentityMethod] = useState("github_oidc");
   const [identityPayload, setIdentityPayload] = useState("");
   const [signature, setSignature] = useState<CodeSigningSignature | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,14 +60,15 @@ export function CodeSigning() {
     setError(null);
     setSignature(null);
     try {
+      const encodedDigest = encodeSHA256Digest(digest);
       const result =
         mode === "key"
-          ? await api.signCode({ artifact_type: artifactType, digest: digest.trim(), key_id: keyId.trim() })
+          ? await api.signCode({ artifact_type: artifactType, digest: encodedDigest, key_id: keyId.trim() })
           : await api.signCodeKeyless({
               artifact_type: artifactType,
-              digest: digest.trim(),
+              digest: encodedDigest,
               identity_method: identityMethod,
-              identity_payload: identityPayload.trim(),
+              identity_payload: encodeIdentityPayload(identityPayload),
             });
       setSignature(result);
     } catch (err) {
@@ -90,7 +116,7 @@ export function CodeSigning() {
                 id="codesign-digest"
                 value={digest}
                 onChange={(e) => setDigest(e.target.value)}
-                placeholder="sha256:…"
+                placeholder="sha256:<64 hexadecimal characters>"
                 className="rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
               />
             </label>
@@ -163,6 +189,29 @@ export function CodeSigning() {
                   <dd className="font-mono text-xs">{signature.fulcio_issuer}</dd>
                 </div>
               ) : null}
+              {signature.fulcio_san ? (
+                <div>
+                  <dt className="font-medium text-muted-foreground">Verified Fulcio SAN</dt>
+                  <dd className="break-all font-mono text-xs">{signature.fulcio_san}</dd>
+                </div>
+              ) : null}
+              {signature.transparency_destination ? (
+                <div>
+                  <dt className="font-medium text-muted-foreground">Transparency destination</dt>
+                  <dd className="font-mono text-xs">{signature.transparency_destination}</dd>
+                </div>
+              ) : null}
+              <div className="sm:col-span-2">
+                <dt className="font-medium text-muted-foreground">Signature (base64)</dt>
+                <dd className="break-all font-mono text-xs">{signature.signature}</dd>
+                <a
+                  href={`data:application/octet-stream;base64,${signature.signature}`}
+                  download="artifact.sig"
+                  className="mt-2 inline-flex text-xs font-medium text-primary underline"
+                >
+                  Download signature
+                </a>
+              </div>
               <div className="sm:col-span-2">
                 <dt className="font-medium text-muted-foreground">Public key (DER)</dt>
                 <dd className="break-all font-mono text-xs">{signature.public_key_der}</dd>

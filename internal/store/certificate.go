@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -31,7 +32,10 @@ type Certificate struct {
 	DeploymentLocation     string
 	Source                 string
 	CertificateDER         []byte
+	CertificatePEM         []byte
+	IssuanceResponse       []byte
 	IssuanceIdempotencyKey string
+	IssuanceRequestBinding string
 	CreatedAt              time.Time
 
 	// Lifecycle bookkeeping (S4.5). Status is one of active, superseded,
@@ -43,6 +47,18 @@ type Certificate struct {
 	RevocationReason string
 	RenewedAt        *time.Time
 	AlertedAt        *time.Time
+}
+
+// IssuedCertificateRecovery is the durable public result and authenticated
+// command binding for one external-CA issuance. The certificate chain is public;
+// no key material is stored here.
+type IssuedCertificateRecovery struct {
+	CertificatePEM []byte
+	Response       []byte
+	Serial         string
+	Issuer         string
+	NotAfter       *time.Time
+	RequestBinding string
 }
 
 // CertificateHealthSnapshot is the tenant-scoped estate-wide read model for
@@ -96,28 +112,42 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 	if certDER == nil {
 		certDER = []byte{}
 	}
+	certPEM := c.CertificatePEM
+	if certPEM == nil {
+		certPEM = []byte{}
+	}
+	issuanceResponse := c.IssuanceResponse
+	if issuanceResponse == nil {
+		issuanceResponse = []byte{}
+	}
 	err := s.WithTenant(ctx, c.TenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`INSERT INTO certificates
 			        (id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint,
 			         key_algorithm, not_before, not_after, deployment_location, source,
-			         certificate_der, issuance_idempotency_key)
-			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			         certificate_der, certificate_pem, issuance_response,
+			         issuance_idempotency_key, issuance_request_binding)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 			 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
 			    SET owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, sans = EXCLUDED.sans,
 			        issuer = EXCLUDED.issuer, serial = EXCLUDED.serial, key_algorithm = EXCLUDED.key_algorithm,
 			        not_before = EXCLUDED.not_before, not_after = EXCLUDED.not_after,
 			        deployment_location = EXCLUDED.deployment_location, source = EXCLUDED.source,
-			        certificate_der = EXCLUDED.certificate_der,
-			        issuance_idempotency_key = EXCLUDED.issuance_idempotency_key
+			        certificate_der = CASE WHEN octet_length(EXCLUDED.certificate_der) > 0 THEN EXCLUDED.certificate_der ELSE certificates.certificate_der END,
+			        certificate_pem = CASE WHEN octet_length(EXCLUDED.certificate_pem) > 0 THEN EXCLUDED.certificate_pem ELSE certificates.certificate_pem END,
+			        issuance_response = CASE WHEN octet_length(EXCLUDED.issuance_response) > 0 THEN EXCLUDED.issuance_response ELSE certificates.issuance_response END,
+			        issuance_idempotency_key = CASE WHEN EXCLUDED.issuance_idempotency_key <> '' THEN EXCLUDED.issuance_idempotency_key ELSE certificates.issuance_idempotency_key END,
+			        issuance_request_binding = CASE WHEN EXCLUDED.issuance_request_binding <> '' THEN EXCLUDED.issuance_request_binding ELSE certificates.issuance_request_binding END
 			 RETURNING id::text, created_at`,
 			c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 			c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source,
-			certDER, c.IssuanceIdempotencyKey).
+			certDER, certPEM, issuanceResponse, c.IssuanceIdempotencyKey, c.IssuanceRequestBinding).
 			Scan(&c.ID, &c.CreatedAt)
 	})
 	c.SANs = sans
 	c.CertificateDER = certDER
+	c.CertificatePEM = certPEM
+	c.IssuanceResponse = issuanceResponse
 	return c, err
 }
 
@@ -360,6 +390,43 @@ func (s *Store) ListCertificatesByIssuanceIdempotencyKey(ctx context.Context, te
 			out = append(out, c)
 		}
 		return rows.Err()
+	})
+	return out, err
+}
+
+// GetIssuedCertificateRecovery returns the single projected result for an
+// issuance key. More than one row fails closed because a supposedly idempotent
+// command cannot have two authoritative certificates.
+func (s *Store) GetIssuedCertificateRecovery(ctx context.Context, tenantID, key string) (IssuedCertificateRecovery, error) {
+	var out IssuedCertificateRecovery
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT certificate_pem, issuance_response, serial, issuer, not_after, issuance_request_binding
+			   FROM certificates
+			  WHERE tenant_id = $1 AND issuance_idempotency_key = $2
+			  ORDER BY created_at, id
+			  LIMIT 2`, tenantID, key)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		count := 0
+		for rows.Next() {
+			count++
+			if count > 1 {
+				return fmt.Errorf("%w: issuance key has multiple certificate results", ErrIdempotencyConflict)
+			}
+			if err := rows.Scan(&out.CertificatePEM, &out.Response, &out.Serial, &out.Issuer, &out.NotAfter, &out.RequestBinding); err != nil {
+				return err
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if count == 0 {
+			return pgx.ErrNoRows
+		}
+		return nil
 	})
 	return out, err
 }

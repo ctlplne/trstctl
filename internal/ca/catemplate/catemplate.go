@@ -21,6 +21,7 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Backend is the CA-specific seam a plugin fills in: it submits a CSR to its
@@ -49,6 +50,16 @@ func New(backend Backend) *Plugin { return &Plugin{backend: backend} }
 // Name identifies the authority.
 func (p *Plugin) Name() string { return p.backend.CAName() }
 
+// Destroy releases authority-bearing material retained by a short-lived
+// backend. Backends without credentials need no method. Production external-CA
+// factories call this after every outbox delivery so a provider token lives in
+// memory for one network operation, not for the lifetime of the server (AN-8).
+func (p *Plugin) Destroy() {
+	if d, ok := p.backend.(interface{ Destroy() }); ok {
+		d.Destroy()
+	}
+}
+
 // Issue validates the request, delegates the upstream call to the Backend,
 // parses the issued chain, and returns the certificate with its serial, expiry,
 // and issuer label.
@@ -66,6 +77,10 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 	}
 	info, err := certinfo.Inspect(chain)
 	if err != nil {
+		// A hostile provider can return an echoed credential with a 2xx status.
+		// Once certificate validation rejects it, erase that byte buffer before
+		// returning the closed parse error.
+		secret.Wipe(chain)
 		return ca.Certificate{}, fmt.Errorf("catemplate: %s: parse issued chain: %w", name, err)
 	}
 	return ca.Certificate{

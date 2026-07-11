@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // JWTMethod authenticates a generic signed JWT against an operator-supplied JWKS.
@@ -69,6 +70,7 @@ func (j JWTMethod) Authenticate(_ context.Context, credential []byte) (string, [
 	if err != nil {
 		return "", nil, err
 	}
+	defer v.destroy()
 	return v.principal, v.scopes, nil
 }
 
@@ -109,6 +111,7 @@ func (k KubernetesSATMethod) Authenticate(_ context.Context, credential []byte) 
 	if err != nil {
 		return "", nil, err
 	}
+	defer v.destroy()
 	var c struct {
 		K8s struct {
 			Namespace      string `json:"namespace"`
@@ -180,6 +183,7 @@ func (g GCPMethod) Authenticate(_ context.Context, credential []byte) (string, [
 	if err != nil {
 		return "", nil, err
 	}
+	defer v.destroy()
 	var c struct {
 		Google struct {
 			ComputeEngine struct {
@@ -245,6 +249,7 @@ func (a AzureMethod) Authenticate(_ context.Context, credential []byte) (string,
 	if err != nil {
 		return "", nil, err
 	}
+	defer v.destroy()
 	tid, ok, err := v.claims.string("tid")
 	if err != nil {
 		return "", nil, fmt.Errorf("azure: parse tid claim: %w", err)
@@ -281,6 +286,19 @@ type verifiedJWT struct {
 	scopes    []string
 }
 
+func (v *verifiedJWT) destroy() {
+	if v == nil {
+		return
+	}
+	secret.Wipe(v.raw)
+	for name, raw := range v.claims {
+		secret.Wipe(raw)
+		delete(v.claims, name)
+	}
+	v.raw = nil
+	v.claims = nil
+}
+
 type registeredJWTClaims struct {
 	Iss string   `json:"iss"`
 	Aud audience `json:"aud"`
@@ -299,6 +317,18 @@ func authenticateJWT(credential []byte, opts jwtMethodOptions) (verifiedJWT, err
 	if err != nil {
 		return verifiedJWT{}, fmt.Errorf("%s: %w", methodName, err)
 	}
+	retainRaw := false
+	var claims jwtClaimSet
+	defer func() {
+		if retainRaw {
+			return
+		}
+		secret.Wipe(raw)
+		for name, claim := range claims {
+			secret.Wipe(claim)
+			delete(claims, name)
+		}
+	}()
 	var reg registeredJWTClaims
 	if err := json.Unmarshal(raw, &reg); err != nil {
 		return verifiedJWT{}, fmt.Errorf("%s: parse claims: %w", methodName, err)
@@ -339,7 +369,6 @@ func authenticateJWT(credential []byte, opts jwtMethodOptions) (verifiedJWT, err
 		}
 	}
 
-	var claims jwtClaimSet
 	if err := json.Unmarshal(raw, &claims); err != nil {
 		return verifiedJWT{}, fmt.Errorf("%s: parse claim map: %w", methodName, err)
 	}
@@ -389,6 +418,7 @@ func authenticateJWT(credential []byte, opts jwtMethodOptions) (verifiedJWT, err
 	} else if ok {
 		scopes = fromToken
 	}
+	retainRaw = true
 	return verifiedJWT{raw: raw, claims: claims, principal: principal, scopes: scopes}, nil
 }
 

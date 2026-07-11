@@ -1001,7 +1001,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "unrouted" | "delivered" | "failed" | "test_succeeded" | "rollback_recorded";
+  status: "queued" | "delivered" | "failed" | "test_succeeded" | "rollback_recorded";
   target: string;
   tenant_id: string;
   updated_at: string;

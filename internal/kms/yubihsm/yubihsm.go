@@ -6,22 +6,21 @@
 // private key never leaves the YubiHSM. Digests route through internal/crypto (no crypto/*),
 // so the backend stays inside the AN-3 boundary.
 //
-// YubiHSM 2 behind the AN-3 boundary; the yubihsm-connector/PKCS#11 binding is a deferred
-// follow-up — the backend operates over the Connector seam, validated against a software-backed
-// double. A real binding is environment-specific (it needs the yubihsm-connector daemon or the
-// vendor PKCS#11 module and a physical/emulated device), so this sprint injects the device
-// access as a Go interface and exercises the backend against an in-process double on CI; the
-// concrete connector binding lands later without touching the backend.
+// Production opens Yubico's yubihsm_pkcs11 module through the shipped cgo HSM
+// signer. The Connector seam keeps the backend independent of that vendor ABI;
+// fast tests use a software double and the launched-binary DoD proof exercises the
+// same PKCS#11 object/sign/destroy contract against a vendor-ABI emulator.
 package yubihsm
 
 import (
+	"context"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// Connector is the device-access seam. A real implementation wraps the yubihsm-connector
-// (HTTP to the daemon) or the vendor PKCS#11 module; tests inject a software-backed double.
+// Connector is the device-access seam. Production wraps the vendor PKCS#11 module;
+// tests inject a software-backed double.
 // Handles are opaque, connector-assigned identifiers (e.g. an object ID) for a key whose
 // private material lives on the device. The seam carries no crypto/* types, keeping the
 // binding swappable and the boundary intact (AN-3).
@@ -36,13 +35,34 @@ type Connector interface {
 	Close() error
 }
 
+// LifecycleConnector is implemented by the vendor PKCS#11 binding so a served
+// managed-key can be disabled and destroyed on the YubiHSM 2.
+type LifecycleConnector interface {
+	RevokeKey(handle string) error
+	ZeroizeKey(handle string) error
+}
+
+// OperationLifecycleConnector binds find-or-create and terminal-state readback
+// to the signer's durable operation ID. The production connector forwards this
+// to deterministic PKCS#11 CKA_ID operations on the YubiHSM token.
+type OperationLifecycleConnector interface {
+	GenerateKeyForOperation(operationID string, alg crypto.Algorithm) (handle string, publicDER []byte, err error)
+	RevokeKeyForOperation(operationID, handle string) error
+	ZeroizeKeyForOperation(operationID, handle string) error
+}
+
 // Backend is a YubiHSM 2 crypto.Backend. It owns a Connector to a device session; key
 // material never leaves the device.
 type Backend struct {
 	conn Connector
 }
 
-var _ crypto.Backend = (*Backend)(nil)
+var (
+	_ crypto.Backend                          = (*Backend)(nil)
+	_ crypto.RemoteKeyLifecycle               = (*Backend)(nil)
+	_ crypto.OperationAwareRemoteKeyLifecycle = (*Backend)(nil)
+	_ crypto.RemoteKeyDigestSigner            = (*Backend)(nil)
+)
 
 // Option configures a Backend. It exists so future device options (auth key, domain,
 // capability set) can be added without changing New's signature.
@@ -58,7 +78,7 @@ func New(conn Connector, opts ...Option) *Backend {
 }
 
 // Name identifies the backend.
-func (b *Backend) Name() string { return "yubihsm" }
+func (b *Backend) Name() string { return "yubihsm2" }
 
 // GenerateKey creates an on-device asymmetric signing key and returns a Signer for it.
 func (b *Backend) GenerateKey(alg crypto.Algorithm) (crypto.Signer, error) {
@@ -99,6 +119,130 @@ func (s *hsmSigner) Sign(message []byte, opts crypto.SignOptions) ([]byte, error
 		return nil, fmt.Errorf("yubihsm: sign: %w", err)
 	}
 	return sig, nil
+}
+
+func (b *Backend) GenerateManagedKey(ctx context.Context, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, crypto.KeyRef{}, err
+	}
+	signer, err := b.GenerateKey(alg)
+	if err != nil {
+		return nil, crypto.KeyRef{}, err
+	}
+	hs, ok := signer.(*hsmSigner)
+	if !ok {
+		return nil, crypto.KeyRef{}, fmt.Errorf("yubihsm2: unexpected signer type %T", signer)
+	}
+	return signer, crypto.KeyRef{ID: hs.handle, Algorithm: alg}, nil
+}
+
+func (b *Backend) GenerateManagedKeyForOperation(ctx context.Context, operationID string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+	if err := validateOperation(ctx, operationID); err != nil {
+		return nil, crypto.KeyRef{}, err
+	}
+	connector, ok := b.conn.(OperationLifecycleConnector)
+	if !ok {
+		return nil, crypto.KeyRef{}, fmt.Errorf("yubihsm2: connector does not support durable operation reconciliation")
+	}
+	handle, publicDER, err := connector.GenerateKeyForOperation(operationID, alg)
+	if err != nil {
+		return nil, crypto.KeyRef{}, fmt.Errorf("yubihsm2: reconcile managed-key generation: %w", err)
+	}
+	if handle == "" || len(publicDER) == 0 {
+		return nil, crypto.KeyRef{}, fmt.Errorf("yubihsm2: device returned an incomplete managed key")
+	}
+	signer := &hsmSigner{conn: b.conn, handle: handle, alg: alg, pub: crypto.PublicKey{Algorithm: alg, DER: publicDER}}
+	return signer, crypto.KeyRef{ID: handle, Algorithm: alg}, nil
+}
+
+func (b *Backend) RotateKey(ctx context.Context, ref crypto.KeyRef) (crypto.Signer, crypto.KeyRef, error) {
+	if ref.ID == "" {
+		return nil, crypto.KeyRef{}, fmt.Errorf("yubihsm2: rotate requires a key ref")
+	}
+	return b.GenerateManagedKey(ctx, ref.Algorithm)
+}
+
+func (b *Backend) RotateKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) (crypto.Signer, crypto.KeyRef, error) {
+	if ref.ID == "" {
+		return nil, crypto.KeyRef{}, fmt.Errorf("yubihsm2: rotate requires a key ref")
+	}
+	return b.GenerateManagedKeyForOperation(ctx, operationID, ref.Algorithm)
+}
+
+func (b *Backend) RevokeKey(ctx context.Context, ref crypto.KeyRef) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if ref.ID == "" {
+		return fmt.Errorf("yubihsm2: revoke requires a key ref")
+	}
+	lifecycle, ok := b.conn.(LifecycleConnector)
+	if !ok {
+		return fmt.Errorf("yubihsm2: connector does not support object lifecycle")
+	}
+	return lifecycle.RevokeKey(ref.ID)
+}
+
+func (b *Backend) RevokeKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) error {
+	if err := validateOperation(ctx, operationID); err != nil {
+		return err
+	}
+	if ref.ID == "" {
+		return fmt.Errorf("yubihsm2: revoke requires a key ref")
+	}
+	connector, ok := b.conn.(OperationLifecycleConnector)
+	if !ok {
+		return fmt.Errorf("yubihsm2: connector does not support durable operation reconciliation")
+	}
+	return connector.RevokeKeyForOperation(operationID, ref.ID)
+}
+
+func (b *Backend) ZeroizeKey(ctx context.Context, ref crypto.KeyRef) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if ref.ID == "" {
+		return fmt.Errorf("yubihsm2: zeroize requires a key ref")
+	}
+	lifecycle, ok := b.conn.(LifecycleConnector)
+	if !ok {
+		return fmt.Errorf("yubihsm2: connector does not support object lifecycle")
+	}
+	return lifecycle.ZeroizeKey(ref.ID)
+}
+
+func (b *Backend) ZeroizeKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) error {
+	if err := validateOperation(ctx, operationID); err != nil {
+		return err
+	}
+	if ref.ID == "" {
+		return fmt.Errorf("yubihsm2: zeroize requires a key ref")
+	}
+	connector, ok := b.conn.(OperationLifecycleConnector)
+	if !ok {
+		return fmt.Errorf("yubihsm2: connector does not support durable operation reconciliation")
+	}
+	return connector.ZeroizeKeyForOperation(operationID, ref.ID)
+}
+
+func validateOperation(ctx context.Context, operationID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if operationID == "" || len(operationID) > 256 {
+		return fmt.Errorf("yubihsm2: durable operation id is required and must be at most 256 bytes")
+	}
+	return nil
+}
+
+func (b *Backend) SignManagedDigest(ctx context.Context, ref crypto.KeyRef, digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if ref.ID == "" {
+		return nil, fmt.Errorf("yubihsm2: sign requires a key ref")
+	}
+	return b.conn.SignDigest(ref.ID, digest, opts)
 }
 
 // hashOf defaults an empty hash to SHA-256, matching the software backend.

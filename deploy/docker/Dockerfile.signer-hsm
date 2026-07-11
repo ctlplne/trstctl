@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1.7
+
+# cgo-enabled isolated signer artifact for PKCS#11/YubiHSM custody. It is a
+# separate image because the normal control-plane image remains static and
+# distroless; this signer needs glibc + dlopen for operator/vendor modules.
+
+# Both values are required at the caller and must be repository@sha256:...
+# references. The release workflow and the sealed runtime proof resolve them
+# before invoking BuildKit; a mutable tag can no longer be an implicit input.
+ARG BUILD_IMAGE
+ARG BASE_IMAGE
+
+FROM ${BUILD_IMAGE} AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+
+# BuildKit supplies these automatic platform args for both a native local build
+# and each release buildx target. Defaults would silently cross-compile cgo with
+# the wrong host compiler on arm64 builders.
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+ARG COMMIT=none
+ARG DATE=1970-01-01T00:00:00Z
+ENV CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOFLAGS=-mod=readonly
+ARG LDFLAGS="-s -w -buildid= -X trstctl.com/trstctl/internal/buildinfo.version=${VERSION} -X trstctl.com/trstctl/internal/buildinfo.commit=${COMMIT} -X trstctl.com/trstctl/internal/buildinfo.date=${DATE}"
+RUN go build -trimpath -buildvcs=false -tags=pkcs11cgo -ldflags "${LDFLAGS}" -o /out/trstctl-signer-hsm ./cmd/trstctl-signer
+
+FROM ${BASE_IMAGE}
+# Debian snapshot timestamps are immutable. Replacing the image's moving apt
+# sources pins the exact package universe used by both released and DoD images.
+RUN printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260701T000000Z bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260701T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+ && rm -f /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates libsofthsm2 \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 65532 nonroot \
+ && useradd --system --uid 65532 --gid 65532 --home-dir /nonexistent --shell /usr/sbin/nologin nonroot \
+ && install -d -m 0700 -o 65532 -g 65532 /data/signer /run/trstctl
+
+COPY --from=build /out/trstctl-signer-hsm /usr/local/bin/trstctl-signer-hsm
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/trstctl-signer-hsm"]

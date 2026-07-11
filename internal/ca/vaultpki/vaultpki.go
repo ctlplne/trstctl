@@ -17,8 +17,8 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -28,6 +28,8 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secretjson"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -140,6 +142,14 @@ func normalizeConfig(cfg Config) Config {
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
 
+// Destroy erases the one-shot Vault token and drops idle sockets.
+func (b *backend) Destroy() {
+	secret.Wipe(b.cfg.Token)
+	if b.client != nil {
+		b.client.CloseIdleConnections()
+	}
+}
+
 // Issue submits the CSR to Vault PKI and returns the PEM chain Vault issued.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
 	if b.cfg.BaseURL == "" {
@@ -158,18 +168,20 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		return nil, fmt.Errorf("vaultpki: at least one DNS name is required")
 	}
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: req.CSR})
+	defer secret.Wipe(csrPEM)
 	payload := map[string]any{
-		"csr":         string(csrPEM),
+		"csr":         secretjson.StringBytes(csrPEM),
 		"common_name": req.DNSNames[0],
 		"alt_names":   strings.Join(req.DNSNames, ","),
 		"ttl":         vaultTTL(req.TTL, b.cfg.DefaultTTL),
 	}
 	var env vaultEnvelope
+	defer env.destroy()
 	if err := b.postJSON(ctx, b.signURL(), payload, &env); err != nil {
 		return nil, err
 	}
 	if len(env.Errors) > 0 {
-		return nil, fmt.Errorf("vaultpki: api error: %s", strings.Join(env.Errors, "; "))
+		return nil, errors.New("vaultpki: provider reported an application error")
 	}
 	return assembleChain(env.Data)
 }
@@ -204,9 +216,16 @@ func (b *backend) signURL() string {
 }
 
 type vaultEnvelope struct {
-	Data     signData `json:"data"`
-	Errors   []string `json:"errors,omitempty"`
-	Warnings []string `json:"warnings,omitempty"`
+	Data   signData                 `json:"data"`
+	Errors []secretjson.StringBytes `json:"errors,omitempty"`
+}
+
+func (e *vaultEnvelope) destroy() {
+	for i := range e.Errors {
+		secret.Wipe(e.Errors[i])
+		e.Errors[i] = nil
+	}
+	e.Errors = nil
 }
 
 type signData struct {
@@ -222,6 +241,7 @@ func (b *backend) postJSON(ctx context.Context, url string, body, out any) error
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(buf)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))
 	if err != nil {
 		return err
@@ -231,13 +251,17 @@ func (b *backend) postJSON(ctx context.Context, url string, body, out any) error
 	httpReq.Header.Set("X-Vault-Token", secrettext.String(b.cfg.Token))
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("vaultpki: POST %s: %w", url, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("vaultpki: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := secret.ReadBounded(resp.Body, maxBody)
 	if err != nil {
-		return err
+		return errors.New("vaultpki: read response failed")
 	}
+	defer secret.Wipe(data)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return vaultAPIError(resp.StatusCode, data)
 	}
@@ -249,13 +273,7 @@ func (b *backend) postJSON(ctx context.Context, url string, body, out any) error
 	return nil
 }
 
-func vaultAPIError(status int, data []byte) error {
-	var env struct {
-		Errors []string `json:"errors"`
-	}
-	if err := json.Unmarshal(data, &env); err == nil && len(env.Errors) > 0 {
-		return fmt.Errorf("vaultpki: api error %d: %s", status, strings.Join(env.Errors, "; "))
-	}
+func vaultAPIError(status int, _ []byte) error {
 	return fmt.Errorf("vaultpki: api error %d", status)
 }
 

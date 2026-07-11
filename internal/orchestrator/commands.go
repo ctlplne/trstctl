@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
@@ -21,6 +23,35 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+var connectorRightSizeIdentityNamespace = uuid.MustParse("64ad96b4-b750-5e90-b55b-baf67c779a4a")
+
+// ConnectorRightSizeIdentity is every stable identity derived from the tenant
+// and raw Idempotency-Key. None contains the caller or command in reversible
+// form; RequestBinding separately proves which authenticated command owns them.
+type ConnectorRightSizeIdentity struct {
+	OperationID          string
+	DeliveryID           string
+	RequestedEventID     string
+	OutboxIdempotencyKey string
+	TerminalEventID      string
+}
+
+// ConnectorRightSizeIdentityFor gives retries, reconciliation, and rebuild the
+// same operation/event/outbox/receipt identities without a transient registry.
+func ConnectorRightSizeIdentityFor(tenantID, idempotencyKey string) ConnectorRightSizeIdentity {
+	derive := func(kind string) string {
+		return uuid.NewSHA1(connectorRightSizeIdentityNamespace,
+			[]byte(kind+"\x00"+tenantID+"\x00"+idempotencyKey)).String()
+	}
+	operationID := derive("operation")
+	return ConnectorRightSizeIdentity{
+		OperationID: operationID, DeliveryID: derive("delivery"),
+		RequestedEventID:     derive("requested-event"),
+		OutboxIdempotencyKey: "connector-right-size:" + operationID,
+		TerminalEventID:      derive("terminal-event"),
+	}
+}
 
 // This file holds the served domain commands (AN-2). Each records the mutation
 // as an event (the source of truth), then projects it into the read model
@@ -666,7 +697,10 @@ func deploymentRoute(target store.DeploymentTarget) string {
 	if err := json.Unmarshal(target.Config, &cfg); err != nil {
 		return ""
 	}
-	for _, key := range []string{"target", "route", "deployment_route", "endpoint", "object", "virtual_service"} {
+	// endpoint selects the management API. It is not the remote object that
+	// receives the certificate. Treating it as the deployment route makes HTTP
+	// connectors upload an object literally named after their own URL.
+	for _, key := range []string{"target", "route", "deployment_route", "object", "virtual_service"} {
 		if raw, ok := cfg[key]; ok {
 			if s, ok := raw.(string); ok && strings.TrimSpace(s) != "" {
 				return strings.TrimSpace(s)
@@ -939,13 +973,14 @@ func (o *Orchestrator) ExpireAPITokens(ctx context.Context, now time.Time, limit
 
 // RecordConnectorDelivery records a connector delivery receipt as event-sourced
 // evidence. It is used by served orchestration paths that need to attest to a
-// queued/unrouted connector action before an external connector plugin produces a
-// later worker receipt.
+// queued connector intent before an external connector worker produces a later
+// delivered or failed receipt. A queued intent has zero attempts because no
+// receiver I/O has happened yet.
 func (o *Orchestrator) RecordConnectorDelivery(ctx context.Context, tenantID string, r store.ConnectorDeliveryReceipt) (store.ConnectorDeliveryReceipt, error) {
 	if r.ID == "" {
 		r.ID = uuid.NewString()
 	}
-	if r.Attempts == 0 {
+	if r.Attempts == 0 && r.Status != "queued" {
 		r.Attempts = 1
 	}
 	payload, err := json.Marshal(projections.ConnectorDeliveryRecorded{
@@ -1010,7 +1045,9 @@ func (o *Orchestrator) RecordRemediationPlaybookRun(ctx context.Context, tenantI
 		Reason: r.Reason, Connector: r.Connector, Target: r.Target, OutboxID: r.OutboxID,
 		ConnectorDeliveryID: r.ConnectorDeliveryID, ScopeDelta: r.ScopeDelta,
 		EvidenceRefs: r.EvidenceRefs, RollbackRefs: r.RollbackRefs,
-		IdempotencyKey: r.IdempotencyKey, CreatedBy: r.CreatedBy,
+		IdempotencyKey: r.IdempotencyKey, RequestBinding: r.RequestBinding,
+		InitialHTTPStatus: r.InitialHTTPStatus, InitialResponse: r.InitialResponse,
+		TerminalReason: r.TerminalReason, CreatedBy: r.CreatedBy,
 	})
 	if err != nil {
 		return store.RemediationPlaybookRun{}, err
@@ -1045,6 +1082,62 @@ func (o *Orchestrator) RecordRemediationPlaybookRun(ctx context.Context, tenantI
 	r.CreatedAt = ev.Time
 	r.UpdatedAt = ev.Time
 	return r, nil
+}
+
+// RecordConnectorRightSizeOperation appends and projects the deterministic
+// durable command. The event projector atomically creates the queued run,
+// receipt, and outbox intent. After projection this method reloads the row that
+// won the key and compares it with the caller's command, so concurrent changed
+// callers get a conflict and never inherit another caller's response.
+func (o *Orchestrator) RecordConnectorRightSizeOperation(ctx context.Context, tenantID string, r store.RemediationPlaybookRun) (store.RemediationPlaybookRun, error) {
+	identity := ConnectorRightSizeIdentityFor(tenantID, r.IdempotencyKey)
+	if tenantID == "" || r.IdempotencyKey == "" || r.RequestBinding == "" ||
+		r.ID != identity.OperationID || r.ConnectorDeliveryID == nil ||
+		*r.ConnectorDeliveryID != identity.DeliveryID || r.Action != "right_size" ||
+		r.InitialHTTPStatus == 0 || len(r.InitialResponse) == 0 {
+		return store.RemediationPlaybookRun{}, fmt.Errorf("orchestrator: connector right-size operation is incomplete")
+	}
+	if r.CreatedAt.IsZero() {
+		r.CreatedAt = time.Now().UTC()
+	}
+	r.UpdatedAt = r.CreatedAt
+	payload, err := json.Marshal(projections.RemediationPlaybookRunRecorded{
+		ID: r.ID, PlaybookID: r.PlaybookID, TargetIdentityID: r.TargetIdentityID,
+		InventoryID: r.InventoryID, Status: r.Status, Phase: r.Phase, Action: r.Action,
+		Reason: r.Reason, Connector: r.Connector, Target: r.Target,
+		ConnectorDeliveryID: r.ConnectorDeliveryID, ScopeDelta: r.ScopeDelta,
+		EvidenceRefs: r.EvidenceRefs, RollbackRefs: r.RollbackRefs,
+		IdempotencyKey: r.IdempotencyKey, RequestBinding: r.RequestBinding,
+		InitialHTTPStatus: r.InitialHTTPStatus, InitialResponse: r.InitialResponse,
+		OutboxIdempotencyKey: identity.OutboxIdempotencyKey, CreatedBy: r.CreatedBy,
+	})
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
+	ev, err := o.log.Append(ctx, events.Event{
+		ID: identity.RequestedEventID, Type: projections.EventRemediationPlaybookRunRecorded,
+		TenantID: tenantID, Time: r.CreatedAt, Data: payload,
+	})
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
+	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return o.proj.ApplyTx(ctx, tx, ev)
+	}); err != nil {
+		if errors.Is(err, store.ErrIdempotencyConflict) {
+			return store.RemediationPlaybookRun{}, ErrIdempotencyConflict
+		}
+		return store.RemediationPlaybookRun{}, err
+	}
+	authoritative, err := o.store.GetRemediationPlaybookRunByIdempotencyKey(ctx, tenantID, r.IdempotencyKey)
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
+	if authoritative.ID != identity.OperationID ||
+		!crypto.ConstantTimeEqual([]byte(authoritative.RequestBinding), []byte(r.RequestBinding)) {
+		return store.RemediationPlaybookRun{}, ErrIdempotencyConflict
+	}
+	return authoritative, nil
 }
 
 // RecordIncidentFleetReissuance records a compromised-issuer fleet reissuance

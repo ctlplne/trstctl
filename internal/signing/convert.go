@@ -10,8 +10,13 @@ import (
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
-// maxDigestLen bounds an accepted digest (SHA-512 is 64 bytes).
-const maxDigestLen = 64
+const (
+	// maxDigestLen bounds an accepted digest (SHA-512 is 64 bytes).
+	maxDigestLen = 64
+	// maxSignOperationIDLen bounds journal AAD and request parsing. Durable
+	// control-plane IDs are short UUID-derived strings.
+	maxSignOperationIDLen = 256
+)
 
 func algorithmFromProto(a signerpb.Algorithm) (crypto.Algorithm, error) {
 	switch a {
@@ -383,6 +388,9 @@ func validateSignRequest(req *signerpb.SignRequest) error {
 	}
 	if len(req.GetDigest()) > maxDigestLen {
 		return status.Errorf(codes.InvalidArgument, "digest too long: %d bytes", len(req.GetDigest()))
+	}
+	if len(req.GetOperationId()) > maxSignOperationIDLen {
+		return status.Errorf(codes.InvalidArgument, "operation id too long: %d bytes", len(req.GetOperationId()))
 	}
 	_, wantLen, err := hashFromProto(req.GetHash())
 	if err != nil {

@@ -10,16 +10,16 @@
 // in the GenieKey scheme (Authorization: GenieKey <key>) — the header analogue of
 // Cloudflare's bearer token, not a body-embedded routing key like PagerDuty. The key is
 // opaque to this package, never logged, and sealed at rest by the caller via the platform
-// secret store (AN-8); the error text returned to callers is the API response body, which
-// never echoes the key. No cryptographic operation happens in this package, so it imports
-// no crypto/* (AN-3) — there is nothing to route through the crypto boundary here.
+// secret store (AN-8); remote response bodies are redacted on every error path because a
+// compromised gateway could echo the key. The deterministic retry alias is hashed only
+// through internal/crypto, preserving the single cryptographic boundary (AN-3).
 //
 // A channel does exactly one thing — POST a create-alert request to one endpoint — and
 // makes no other outbound calls (the least-privilege pattern of the connector SDK, S5.5).
 //
-// Delivery is at-least-once (the outbox may retry, AN-6): creating the same alert more
-// than once is acceptable, and the message is rendered with notify.FormatMessage so every
-// channel reuses one plain-text summary.
+// Delivery is at-least-once (the outbox may retry, AN-6). Every request carries a
+// deterministic alias derived from the tenant-scoped alert, so OpsGenie collapses a
+// retry into the same alert rather than opening a duplicate.
 package opsgenie
 
 import (
@@ -28,11 +28,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/secrettext"
@@ -51,10 +52,10 @@ type HTTPDoer interface {
 }
 
 // Channel is an OpsGenie Alert API notification channel bound to one API key. The key is
-// opaque to this package, never logged, and sealed at rest by the caller (AN-8).
+// opaque to this package, never logged, held in locked memory, and wiped by Close (AN-8).
 type Channel struct {
-	apiKey                 []byte // OpsGenie Alert API key; carried as Authorization: GenieKey <key>; never logged (AN-8)
-	endpoint               string // create-alert URL
+	apiKey                 *secret.Buffer // OpsGenie API key; locked, non-dumpable, and wiped (AN-8)
+	endpoint               string         // create-alert URL
 	doer                   HTTPDoer
 	skipEndpointValidation bool
 }
@@ -77,18 +78,52 @@ func WithHTTPClient(d HTTPDoer) Option {
 }
 
 // New returns an OpsGenie channel that creates alerts authenticated with apiKey. The
-// endpoint defaults to the public Alert API create-alert endpoint. The default delivery
-// path accepts only public HTTPS endpoints and uses the shared SSRF-safe HTTP client.
-func New(apiKey []byte, opts ...Option) *Channel {
+// credential is copied into locked, non-dumpable memory and must be released with Close.
+// The endpoint defaults to the public Alert API create-alert endpoint. The default
+// delivery path accepts only public HTTPS endpoints and uses the shared SSRF-safe client.
+func New(apiKey []byte, opts ...Option) (*Channel, error) {
+	if err := validateAPIKey(apiKey); err != nil {
+		return nil, err
+	}
+	key, err := secret.NewFrom(apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("opsgenie: protect API key: %w", err)
+	}
 	c := &Channel{
-		apiKey:   secrettext.Clone(apiKey),
+		apiKey:   key,
 		endpoint: defaultEndpoint,
 		doer:     netsec.SafeClient(10 * time.Second),
 	}
 	for _, o := range opts {
 		o(c)
 	}
-	return c
+	return c, nil
+}
+
+func validateAPIKey(key []byte) error {
+	if len(key) == 0 {
+		return errors.New("opsgenie: API key is required")
+	}
+	if len(key) > 255 {
+		return errors.New("opsgenie: API key is too long")
+	}
+	// OpsGenie API keys are UUID-like opaque ASCII tokens. Restricting the
+	// accepted bytes before the key enters locked memory prevents a credential
+	// from injecting a second HTTP header when it is framed as GenieKey <key>.
+	for _, b := range key {
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '-' || b == '_' {
+			continue
+		}
+		return errors.New("opsgenie: API key contains a non-token byte")
+	}
+	return nil
+}
+
+// Close wipes and releases the API key. It is safe to call more than once.
+func (c *Channel) Close() {
+	if c != nil && c.apiKey != nil {
+		c.apiKey.Destroy()
+	}
 }
 
 // Name identifies the channel.
@@ -96,18 +131,29 @@ func (c *Channel) Name() string { return "opsgenie" }
 
 // Notify creates an OpsGenie alert for the alert. It POSTs a create-alert request whose
 // message is notify.FormatMessage(alert) and whose description is alert.Detail,
-// authenticated with the Authorization: GenieKey <key> header. A 2xx response is success;
-// any other status returns an error carrying the response body (never the API key, AN-8).
-// Creating is safe to repeat, so an outbox retry (AN-6) is harmless.
+// authenticated with the Authorization: GenieKey <key> header. Only the vendor's exact
+// 202 acceptance envelope is success; remote error bodies are discarded (AN-8). The
+// deterministic alias makes an outbox retry (AN-6) address the same alert.
 func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	if !c.skipEndpointValidation {
 		if err := netsec.ValidatePublicHTTPSURL(c.endpoint); err != nil {
 			return fmt.Errorf("opsgenie: validate endpoint: %w", err)
 		}
 	}
+	if c.apiKey == nil || c.apiKey.Len() == 0 {
+		return errors.New("opsgenie: API key is unavailable")
+	}
+	alias, err := alertAlias(alert)
+	if err != nil {
+		return fmt.Errorf("opsgenie: derive alert alias: %w", err)
+	}
 	body, err := json.Marshal(createAlertRequest{
-		Message:     notify.FormatMessage(alert),
-		Description: alert.Detail,
+		Message:     truncateUTF8(notify.FormatMessage(alert), 130),
+		Alias:       alias,
+		Description: truncateUTF8(alert.Detail, 15000),
+		Source:      "trstctl",
+		Entity:      truncateUTF8(nonempty(alert.CertificateID, alert.Subject), 512),
+		Priority:    opsGeniePriority(alert.Severity),
 	})
 	if err != nil {
 		return fmt.Errorf("opsgenie: encode alert: %w", err)
@@ -119,7 +165,7 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	}
 	// The API key is attached here and nowhere else; it is never written to logs or error
 	// text (AN-8).
-	req.Header.Set("Authorization", secrettext.Prefixed("GenieKey ", c.apiKey))
+	req.Header.Set("Authorization", secrettext.Prefixed("GenieKey ", c.apiKey.Bytes()))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.doer.Do(req)
@@ -127,23 +173,95 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 		return fmt.Errorf("opsgenie: create alert: %w", scrubEndpoint(err, c.endpoint))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
+	if resp.StatusCode != http.StatusAccepted {
 		return readError(resp)
 	}
-	drain(resp)
+	responseBody, err := secret.ReadBounded(resp.Body, 1<<20)
+	if err != nil {
+		return errors.New("opsgenie: read accepted alert response (details redacted)")
+	}
+	defer secret.Wipe(responseBody)
+	var accepted struct {
+		Result    json.RawMessage `json:"result"`
+		RequestID json.RawMessage `json:"requestId"`
+	}
+	defer func() {
+		secret.Wipe(accepted.Result)
+		secret.Wipe(accepted.RequestID)
+	}()
+	if err := json.Unmarshal(responseBody, &accepted); err != nil {
+		return errors.New("opsgenie: decode accepted alert response (details redacted)")
+	}
+	if !bytes.Equal(accepted.Result, []byte(`"Request will be processed"`)) || !nonemptyJSONString(accepted.RequestID) {
+		return errors.New("opsgenie: Alert API returned an unexpected acceptance receipt")
+	}
 	return nil
 }
 
-// readError turns a non-2xx response into an apiError whose text is the response body.
-// OpsGenie error bodies describe the rejection and never echo the request API key, so
-// surfacing them does not leak credentials (AN-8).
-func readError(resp *http.Response) error {
-	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
+func alertAlias(alert notify.Alert) (string, error) {
+	encoded, err := json.Marshal(alert)
+	if err != nil {
+		return "", err
+	}
+	return "trstctl-" + crypto.SHA256Hex(encoded), nil
 }
 
-// drain consumes and discards a successful response body so the connection can be reused.
-func drain(resp *http.Response) { _, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) }
+func opsGeniePriority(severity string) string {
+	switch strings.ToLower(strings.TrimSpace(severity)) {
+	case notify.AlertSeverityCritical:
+		return "P1"
+	case notify.AlertSeverityWarning:
+		return "P2"
+	default:
+		return "P3"
+	}
+}
+
+func truncateUTF8(value string, maxCharacters int) string {
+	if maxCharacters <= 0 {
+		return value
+	}
+	count := 0
+	for byteIndex := range value {
+		if count == maxCharacters {
+			return value[:byteIndex]
+		}
+		count++
+	}
+	return value
+}
+
+func nonempty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// nonemptyJSONString checks the vendor request-id receipt without converting
+// attacker-controlled response bytes into an immutable Go string. The exact
+// identifier is not retained; the RawMessage backing bytes are wiped by Notify.
+func nonemptyJSONString(value []byte) bool {
+	if len(value) < 3 || value[0] != '"' || value[len(value)-1] != '"' {
+		return false
+	}
+	for _, b := range value[1 : len(value)-1] {
+		if b != ' ' && b != '\t' && b != '\r' && b != '\n' {
+			return true
+		}
+	}
+	return false
+}
+
+// readError deliberately does not surface the remote body. A compromised gateway
+// could echo the API key; returning only the status keeps authority material out of
+// logs while retaining the retryable failure signal.
+func readError(resp *http.Response) error {
+	_ = secret.DrainBounded(resp.Body, 4<<10)
+	return &apiError{status: resp.StatusCode}
+}
 
 func scrubEndpoint(err error, endpoint string) error {
 	if err == nil {
@@ -164,16 +282,18 @@ var errRedacted = errors.New("request to opsgenie endpoint failed (details withh
 // of the body — it rides the Authorization header — so it never appears here (AN-8).
 type createAlertRequest struct {
 	Message     string `json:"message"`
+	Alias       string `json:"alias"`
 	Description string `json:"description,omitempty"`
+	Source      string `json:"source"`
+	Entity      string `json:"entity,omitempty"`
+	Priority    string `json:"priority"`
 }
 
-// apiError is a non-2xx OpsGenie response. Its body is the API error text and never
-// carries the request API key (AN-8).
+// apiError is a redacted non-2xx OpsGenie response.
 type apiError struct {
 	status int
-	body   string
 }
 
 func (e *apiError) Error() string {
-	return fmt.Sprintf("opsgenie: status %d: %s", e.status, e.body)
+	return fmt.Sprintf("opsgenie: status %d (response body redacted)", e.status)
 }

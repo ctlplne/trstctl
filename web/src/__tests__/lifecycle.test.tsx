@@ -610,7 +610,7 @@ describe("lifecycle actions from the UI", () => {
           connector: "nginx",
           target: "edge-1",
           fingerprint: "abc123",
-          status: "unrouted",
+          status: "failed",
           attempts: 1,
           reason: "plugin_not_loaded",
           detail: "connector is not owned by a loaded signed plugin",
@@ -626,7 +626,7 @@ describe("lifecycle actions from the UI", () => {
     expect(await screen.findByText(/Delivery and rotation evidence/i)).toBeInTheDocument();
     expect(screen.getByText("plugin_not_loaded")).toBeInTheDocument();
     const row = screen.getByText("issued-svc").closest("tr")!;
-    expect(row).toHaveTextContent(/Delivery receipt unrouted for nginx\/edge-1/i);
+    expect(row).toHaveTextContent(/Delivery failed for nginx\/edge-1/i);
   });
 
   it("renders scheduler-backed rotation evidence without the automation preview", async () => {

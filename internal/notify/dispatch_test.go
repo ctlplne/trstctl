@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,18 @@ type capturingNotifier struct {
 	name string
 	got  []notify.Alert
 	err  error
+}
+
+type contextBlockingNotifier struct {
+	name    string
+	started chan struct{}
+}
+
+func (n *contextBlockingNotifier) Name() string { return n.name }
+func (n *contextBlockingNotifier) Notify(ctx context.Context, _ notify.Alert) error {
+	close(n.started)
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func (c *capturingNotifier) Name() string { return c.name }
@@ -45,6 +58,44 @@ func (r *routingResolver) ResolveNotificationPolicy(_ context.Context, tenantID,
 
 type memoryThresholdLedger struct {
 	sent map[string]bool
+}
+
+type memoryDeliveryLedger struct {
+	mu       sync.Mutex
+	receipts map[string]notify.NotificationDeliveryReceipt
+}
+
+func newMemoryDeliveryLedger() *memoryDeliveryLedger {
+	return &memoryDeliveryLedger{receipts: make(map[string]notify.NotificationDeliveryReceipt)}
+}
+
+func (l *memoryDeliveryLedger) HasNotificationDelivery(_ context.Context, want notify.NotificationDeliveryReceipt) (bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	got, ok := l.receipts[want.ID]
+	if !ok {
+		return false, nil
+	}
+	if got.TenantID != want.TenantID || got.Destination != want.Destination ||
+		got.NotificationKeyDigest != want.NotificationKeyDigest || got.PayloadDigest != want.PayloadDigest ||
+		got.Channel != want.Channel {
+		return false, errors.New("receipt binding differs")
+	}
+	return true, nil
+}
+
+func (l *memoryDeliveryLedger) RecordNotificationDelivery(_ context.Context, rec notify.NotificationDeliveryReceipt) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if got, ok := l.receipts[rec.ID]; ok {
+		if got.Destination != rec.Destination || got.NotificationKeyDigest != rec.NotificationKeyDigest ||
+			got.PayloadDigest != rec.PayloadDigest || got.Channel != rec.Channel {
+			return errors.New("receipt binding differs")
+		}
+		return nil
+	}
+	l.receipts[rec.ID] = rec
+	return nil
 }
 
 func newMemoryThresholdLedger() *memoryThresholdLedger {
@@ -88,6 +139,96 @@ func TestDispatchAccumulatesErrors(t *testing.T) {
 	}
 	if len(good.got) != 1 {
 		t.Error("a failing channel suppressed delivery to a healthy one")
+	}
+}
+
+func TestDispatchMessageReceiptsSkipSuccessfulSiblingOnPartialRetry(t *testing.T) {
+	good := &capturingNotifier{name: "good"}
+	bad := &capturingNotifier{name: "bad", err: errors.New("temporary failure")}
+	d := notify.NewDispatcher(good, bad)
+	d.SetDeliveryReceiptLedger(newMemoryDeliveryLedger())
+	payload, _ := json.Marshal(notify.Alert{Kind: notify.KindUnexpectedIssuance, TenantID: "t1", Subject: "cn=partial"})
+	message := notify.DeliveryMessage{
+		TenantID: "t1", Destination: notify.DestinationCTLog,
+		IdempotencyKey: "partial-fanout-1", Payload: payload, OutboxID: 41, Attempts: 1,
+	}
+	if err := d.DispatchMessage(context.Background(), message); err == nil {
+		t.Fatal("first partial fan-out unexpectedly succeeded")
+	}
+	if len(good.got) != 1 || len(bad.got) != 1 {
+		t.Fatalf("first fan-out calls good=%d bad=%d, want 1/1", len(good.got), len(bad.got))
+	}
+
+	bad.err = nil
+	message.Attempts = 2
+	if err := d.DispatchMessage(context.Background(), message); err != nil {
+		t.Fatalf("retry partial fan-out: %v", err)
+	}
+	if len(good.got) != 1 || len(bad.got) != 2 {
+		t.Fatalf("retry calls good=%d bad=%d, want 1/2 (successful sibling skipped)", len(good.got), len(bad.got))
+	}
+}
+
+func TestDispatchMessageReceiptSurvivesCrashBeforeOutboxAck(t *testing.T) {
+	channel := &capturingNotifier{name: "slack"}
+	d := notify.NewDispatcher(channel)
+	d.SetDeliveryReceiptLedger(newMemoryDeliveryLedger())
+	payload, _ := json.Marshal(notify.Alert{Kind: notify.KindNotificationChannelTest, TenantID: "t1", TargetChannel: "slack"})
+	message := notify.DeliveryMessage{
+		TenantID: "t1", Destination: notify.DestinationTest,
+		IdempotencyKey: "notification.test:crash-replay", Payload: payload, OutboxID: 52, Attempts: 1,
+	}
+	// The first call represents the worker reaching receiver success and durable
+	// receipt projection, then dying before the generic outbox ACK.
+	if err := d.DispatchMessage(context.Background(), message); err != nil {
+		t.Fatalf("first delivery: %v", err)
+	}
+	message.Attempts = 2
+	if err := d.DispatchMessage(context.Background(), message); err != nil {
+		t.Fatalf("lease replay: %v", err)
+	}
+	if len(channel.got) != 1 {
+		t.Fatalf("receiver calls after crash replay = %d, want 1", len(channel.got))
+	}
+}
+
+func TestDispatchMessageReceiptRejectsPayloadDrift(t *testing.T) {
+	channel := &capturingNotifier{name: "slack"}
+	d := notify.NewDispatcher(channel)
+	d.SetDeliveryReceiptLedger(newMemoryDeliveryLedger())
+	first, _ := json.Marshal(notify.Alert{Kind: notify.KindUnexpectedIssuance, TenantID: "t1", Subject: "first"})
+	message := notify.DeliveryMessage{TenantID: "t1", Destination: notify.DestinationCTLog, IdempotencyKey: "same-key", Payload: first}
+	if err := d.DispatchMessage(context.Background(), message); err != nil {
+		t.Fatalf("first delivery: %v", err)
+	}
+	changed, _ := json.Marshal(notify.Alert{Kind: notify.KindUnexpectedIssuance, TenantID: "t1", Subject: "changed"})
+	message.Payload = changed
+	if err := d.DispatchMessage(context.Background(), message); err == nil || !strings.Contains(err.Error(), "receipt") {
+		t.Fatalf("changed payload error = %v, want receipt binding conflict", err)
+	}
+	if len(channel.got) != 1 {
+		t.Fatalf("changed payload reached receiver %d times, want 1 total", len(channel.got))
+	}
+}
+
+func TestDispatchStartsHealthyChannelWhileAnotherChannelIsHung(t *testing.T) {
+	hung := &contextBlockingNotifier{name: "hung", started: make(chan struct{})}
+	healthy := &capturingNotifier{name: "healthy"}
+	d := notify.NewDispatcher(hung, healthy)
+	payload, _ := json.Marshal(notify.Alert{Kind: notify.KindCertificateExpiry, TenantID: "t1"})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err := d.Dispatch(ctx, payload)
+	if err == nil || !strings.Contains(err.Error(), "hung") {
+		t.Fatalf("Dispatch error = %v, want the timed-out channel", err)
+	}
+	select {
+	case <-hung.started:
+	default:
+		t.Fatal("hung channel was not attempted")
+	}
+	if len(healthy.got) != 1 {
+		t.Fatalf("healthy channel calls = %d, want 1 despite the hung peer", len(healthy.got))
 	}
 }
 
@@ -195,6 +336,33 @@ func TestDispatchRejectsMalformed(t *testing.T) {
 	d := notify.NewDispatcher(&capturingNotifier{name: "a"})
 	if err := d.Dispatch(context.Background(), []byte("not json")); err == nil {
 		t.Fatal("Dispatch accepted a malformed payload")
+	}
+}
+
+func TestDispatchRejectsUnknownRequestedTestChannel(t *testing.T) {
+	d := notify.NewDispatcher(&capturingNotifier{name: "pagerduty"})
+	payload, _ := json.Marshal(notify.Alert{
+		Kind:          notify.KindNotificationChannelTest,
+		TenantID:      "t1",
+		TargetChannel: "opsgenie",
+	})
+	err := d.Dispatch(context.Background(), payload)
+	if err == nil || !strings.Contains(err.Error(), `channel "opsgenie" is not configured`) {
+		t.Fatalf("unknown requested channel was ACKed, want a retryable configuration error: %v", err)
+	}
+}
+
+func TestDispatchRejectsMissingPolicyChannel(t *testing.T) {
+	d := notify.NewDispatcher(&capturingNotifier{name: "pagerduty"})
+	d.SetDefaultRoutingPolicy(notify.RoutingPolicy{
+		ChannelsBySeverity: map[string][]string{notify.AlertSeverityCritical: {"pagerduty", "opsgenie"}},
+	})
+	payload, _ := json.Marshal(notify.Alert{
+		Kind: notify.KindUnexpectedIssuance, TenantID: "t1", Severity: notify.AlertSeverityCritical,
+	})
+	err := d.Dispatch(context.Background(), payload)
+	if err == nil || !strings.Contains(err.Error(), "opsgenie") {
+		t.Fatalf("partially configured route was ACKed, want missing-channel error: %v", err)
 	}
 }
 

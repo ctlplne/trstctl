@@ -5,6 +5,7 @@ package orchestrator_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +29,154 @@ func enqueue(t *testing.T, s *store.Store, ob *orchestrator.Outbox, e orchestrat
 		t.Fatalf("enqueue: %v", err)
 	}
 	return id
+}
+
+// Two READ COMMITTED transactions can both evaluate NOT EXISTS before either
+// commits. EnqueueIfAbsent must serialize the tenant/key pair so exactly one
+// durable intent wins, even when both transactions reach the statement together.
+func TestOutboxEnqueueIfAbsentIsAtomicAcrossConcurrentTransactions(t *testing.T) {
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	ob := orchestrator.NewOutbox(s)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	entry := orchestrator.Entry{
+		TenantID: tenantA, Destination: "connector.deploy", IdempotencyKey: "concurrent-enqueue-1", Payload: []byte(`{"sealed":true}`),
+	}
+
+	type result struct {
+		inserted bool
+		err      error
+	}
+	const workers = 2
+	ready := make(chan struct{}, workers)
+	release := make(chan struct{})
+	results := make(chan result, workers)
+	for range workers {
+		go func() {
+			var inserted bool
+			err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				ready <- struct{}{}
+				<-release
+				var err error
+				inserted, err = ob.EnqueueIfAbsent(ctx, tx, entry)
+				return err
+			})
+			results <- result{inserted: inserted, err: err}
+		}()
+	}
+	for range workers {
+		<-ready
+	}
+	close(release)
+
+	inserted := 0
+	for range workers {
+		result := <-results
+		if result.err != nil {
+			t.Fatalf("concurrent enqueue: %v", result.err)
+		}
+		if result.inserted {
+			inserted++
+		}
+	}
+	if inserted != 1 {
+		t.Fatalf("inserted transactions = %d, want exactly 1", inserted)
+	}
+	var rows int
+	if err := s.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+		tenantA, entry.IdempotencyKey).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Fatalf("durable outbox rows = %d, want exactly 1", rows)
+	}
+}
+
+func TestOutboxEnqueueIfAbsentRejectsCrossSubsystemAndPayloadCollisions(t *testing.T) {
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	ob := orchestrator.NewOutbox(s)
+	ctx := context.Background()
+	first := orchestrator.Entry{
+		TenantID: tenantA, Destination: "external-ca.issue",
+		IdempotencyKey: "shared-raw-key", Payload: []byte(`{"authority_id":"ca-one"}`),
+	}
+	apply := func(entry orchestrator.Entry) (bool, error) {
+		var inserted bool
+		err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			var err error
+			inserted, err = ob.EnqueueIfAbsent(ctx, tx, entry)
+			return err
+		})
+		return inserted, err
+	}
+	if inserted, err := apply(first); err != nil || !inserted {
+		t.Fatalf("initial enqueue = (%v, %v), want inserted", inserted, err)
+	}
+	if inserted, err := apply(first); err != nil || inserted {
+		t.Fatalf("exact replay = (%v, %v), want existing exact command", inserted, err)
+	}
+	for label, changed := range map[string]orchestrator.Entry{
+		"destination": {TenantID: tenantA, Destination: "notification.test", IdempotencyKey: first.IdempotencyKey, Payload: first.Payload},
+		"payload":     {TenantID: tenantA, Destination: first.Destination, IdempotencyKey: first.IdempotencyKey, Payload: []byte(`{"authority_id":"ca-two"}`)},
+	} {
+		if inserted, err := apply(changed); inserted || !errors.Is(err, store.ErrIdempotencyConflict) {
+			t.Fatalf("changed %s = (%v, %v), want durable idempotency conflict", label, inserted, err)
+		}
+	}
+}
+
+func TestOutboxEffectLanesLetUnrelatedReceiversWithOneDestinationProgress(t *testing.T) {
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
+		orchestrator.WithRetryJitter(func(time.Duration) time.Duration { return 0 }),
+	)
+	for _, entry := range []orchestrator.Entry{
+		{TenantID: tenantA, Destination: "connector.deploy", EffectLane: "connector.deploy:nginx:edge-a", IdempotencyKey: "lane-a", Payload: []byte(`{}`)},
+		{TenantID: tenantA, Destination: "connector.deploy", EffectLane: "connector.deploy:f5:edge-b", IdempotencyKey: "lane-b", Payload: []byte(`{}`)},
+	} {
+		enqueue(t, s, ob, entry)
+	}
+	started := make(chan string, 2)
+	release := make(chan struct{})
+	handler := orchestrator.HandlerFunc(func(ctx context.Context, message orchestrator.Message) error {
+		started <- message.EffectLane
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := ob.DispatchScoped(context.Background(), handler, orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}})
+			results <- err
+		}()
+	}
+	seen := map[string]bool{}
+	deadline := time.NewTimer(3 * time.Second)
+	defer deadline.Stop()
+	for len(seen) < 2 {
+		select {
+		case lane := <-started:
+			seen[lane] = true
+		case <-deadline.C:
+			close(release)
+			t.Fatalf("same-destination effect lanes started = %#v, want both", seen)
+		}
+	}
+	close(release)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("lane dispatch: %v", err)
+		}
+	}
 }
 
 // TestOutboxDeadLettersAtMaxAttempts is the dead-letter boundary (SPINE-012): an
@@ -81,6 +230,42 @@ func TestOutboxDeadLettersAtMaxAttempts(t *testing.T) {
 	}
 	if attempts != before {
 		t.Fatalf("a failed entry was re-dispatched (attempts %d -> %d); dead-letter must be terminal", before, attempts)
+	}
+}
+
+type terminalFailureFixture struct {
+	called bool
+}
+
+func (*terminalFailureFixture) Deliver(context.Context, orchestrator.Message) error {
+	return errors.New("provider echoed sensitive body")
+}
+
+func (f *terminalFailureFixture) DeliverTerminalFailure(_ context.Context, _ orchestrator.Message, _ error) error {
+	f.called = true
+	return nil
+}
+
+func TestOutboxProjectsTerminalFailureBeforeDeadLetterWithSanitizedError(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s, orchestrator.WithMaxAttempts(1))
+	id := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "secret.sync.test", IdempotencyKey: "terminal-1", Payload: []byte(`{}`),
+	})
+	handler := &terminalFailureFixture{}
+	if n, err := ob.Dispatch(ctx, handler); err != nil || n != 1 {
+		t.Fatalf("Dispatch = (%d, %v), want (1, nil)", n, err)
+	}
+	if !handler.called {
+		t.Fatal("terminal domain callback was not called before dead-letter finalization")
+	}
+	record, err := ob.Get(ctx, tenantA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Status != "failed" || record.LastError != "external_delivery_failed" {
+		t.Fatalf("dead letter = status %q error %q, want failed/sanitized code", record.Status, record.LastError)
 	}
 }
 
@@ -220,6 +405,81 @@ func TestOutboxOpenCircuitPreventsClaimsUntilHalfOpenProbe(t *testing.T) {
 	snapshots = ob.CircuitStates()
 	if len(snapshots) != 1 || snapshots[0].State != orchestrator.CircuitClosed || snapshots[0].Failures != 0 {
 		t.Fatalf("circuit snapshots after successful probe = %+v, want closed/reset circuit", snapshots)
+	}
+}
+
+func TestOutboxScopedCircuitUsesReceiverLaneWithoutEscapingItsFamily(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Add(time.Hour).Truncate(time.Millisecond)
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithNow(func() time.Time { return now }),
+		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
+		orchestrator.WithRetryJitter(func(time.Duration) time.Duration { return 0 }),
+		orchestrator.WithCircuitBreaker(1, time.Minute),
+	)
+	const lane = "dynsecret.provider:postgresql"
+	for index, destination := range []string{"dynsecret.issue", "dynsecret.revoke"} {
+		enqueue(t, s, ob, orchestrator.Entry{
+			TenantID: tenantA, Destination: destination, EffectLane: lane,
+			IdempotencyKey: fmt.Sprintf("dynsecret-circuit-%d", index), Payload: []byte(`{}`),
+		})
+	}
+	calls := 0
+	failing := orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
+		calls++
+		return errors.New("provider unavailable")
+	})
+	scope := orchestrator.DestinationScope{IncludePrefixes: []string{"dynsecret."}}
+	if n, err := ob.DispatchScoped(ctx, failing, scope); err != nil || n != 1 {
+		t.Fatalf("first dynamic-secret dispatch n=%d err=%v, want one failed receiver call", n, err)
+	}
+	if n, err := ob.DispatchScoped(ctx, failing, scope); err != nil || n != 0 {
+		t.Fatalf("open receiver-lane circuit dispatch n=%d err=%v, want no claim", n, err)
+	}
+	if calls != 1 {
+		t.Fatalf("dynamic-secret provider calls=%d, want one before its lane circuit opens", calls)
+	}
+}
+
+func TestManagedKeyEffectLanesKeepOneKeyCircuitFromStarvingAnother(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Add(time.Hour).Truncate(time.Millisecond)
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithNow(func() time.Time { return now }),
+		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
+		orchestrator.WithRetryJitter(func(time.Duration) time.Duration { return 0 }),
+		orchestrator.WithCircuitBreaker(1, time.Minute),
+	)
+	const (
+		blockedLane = "managedkey.command:aws-kms:key-blocked"
+		healthyLane = "managedkey.command:aws-kms:key-healthy"
+	)
+	for index, lane := range []string{blockedLane, healthyLane} {
+		enqueue(t, s, ob, orchestrator.Entry{
+			TenantID: tenantA, Destination: "managedkey.command", EffectLane: lane,
+			IdempotencyKey: fmt.Sprintf("managed-key-lane-%d", index), Payload: []byte(`{}`),
+		})
+	}
+	seen := make([]string, 0, 2)
+	handler := orchestrator.HandlerFunc(func(_ context.Context, message orchestrator.Message) error {
+		seen = append(seen, message.EffectLane)
+		if message.EffectLane == blockedLane {
+			return errors.New("one managed key is unavailable")
+		}
+		return nil
+	})
+	scope := orchestrator.DestinationScope{IncludePrefixes: []string{"managedkey."}}
+	if n, err := ob.DispatchScoped(ctx, handler, scope); err != nil || n != 2 {
+		t.Fatalf("managed-key lane dispatch n=%d err=%v, want failed lane plus healthy lane", n, err)
+	}
+	if len(seen) != 2 || seen[0] != blockedLane || seen[1] != healthyLane {
+		t.Fatalf("managed-key lane delivery order=%v, want blocked then independently healthy", seen)
+	}
+	snapshots := ob.CircuitStates()
+	if len(snapshots) != 1 || snapshots[0].TenantID != tenantA || snapshots[0].Destination != blockedLane || snapshots[0].State != orchestrator.CircuitOpen {
+		t.Fatalf("managed-key circuit snapshots=%+v, want only blocked key lane open", snapshots)
 	}
 }
 
@@ -466,8 +726,8 @@ func TestOutboxDeliveryTimeoutRetriesAndDrainsUnrelatedDestination(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if slow.Status != "pending" || slow.Attempts != 1 || !strings.Contains(slow.LastError, "context deadline exceeded") {
-		t.Fatalf("slow row = {status:%q attempts:%d last_error:%q}, want pending/1/context deadline exceeded",
+	if slow.Status != "pending" || slow.Attempts != 1 || slow.LastError != "external_delivery_timeout" {
+		t.Fatalf("slow row = {status:%q attempts:%d last_error:%q}, want pending/1/external_delivery_timeout",
 			slow.Status, slow.Attempts, slow.LastError)
 	}
 
@@ -581,6 +841,325 @@ func TestIdempotencyDoRunsOnceCachesResult(t *testing.T) {
 	}
 	if string(first) != "result-v1" || string(second) != "result-v1" {
 		t.Fatalf("results = %q / %q, want both result-v1", first, second)
+	}
+}
+
+func TestIdempotencyDoBoundReplaysOnlyMatchingAuthenticatedCommand(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	idem := orchestrator.NewIdempotency(s)
+	const (
+		key          = "bound-transactional-sensitive"
+		binding      = "sha256:issuer-a-post-exact-path"
+		otherBinding = "sha256:issuer-b-or-other-path"
+		secretResult = "credential-sentinel-must-not-leak"
+	)
+
+	runs := 0
+	first, err := idem.DoBound(ctx, tenantA, key, binding, func(context.Context) ([]byte, error) {
+		runs++
+		return []byte(secretResult), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, err := idem.DoBound(ctx, tenantA, key, binding, func(context.Context) ([]byte, error) {
+		t.Fatal("matching replay executed callback")
+		return nil, nil
+	})
+	if err != nil || string(first) != secretResult || string(replay) != secretResult || runs != 1 {
+		t.Fatalf("bound replay first=%q replay=%q runs=%d err=%v", first, replay, runs, err)
+	}
+	changedRan := false
+	changed, err := idem.DoBound(ctx, tenantA, key, otherBinding, func(context.Context) ([]byte, error) {
+		changedRan = true
+		return []byte("wrong-effect"), nil
+	})
+	if !errors.Is(err, orchestrator.ErrIdempotencyConflict) || changedRan || len(changed) != 0 {
+		t.Fatalf("changed binding result=%q err=%v callback=%v, want empty conflict", changed, err, changedRan)
+	}
+
+	const legacyKey = "legacy-unbound-credential-cache"
+	if _, err := idem.Do(ctx, tenantA, legacyKey, func(context.Context) ([]byte, error) {
+		return []byte(secretResult), nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	legacyRan := false
+	legacyResult, err := idem.DoBound(ctx, tenantA, legacyKey, binding, func(context.Context) ([]byte, error) {
+		legacyRan = true
+		return []byte("must-not-run"), nil
+	})
+	if !errors.Is(err, orchestrator.ErrIdempotencyConflict) || legacyRan || len(legacyResult) != 0 {
+		t.Fatalf("legacy unbound collision result=%q err=%v callback=%v, want empty conflict", legacyResult, err, legacyRan)
+	}
+}
+
+func TestBoundCredentialCacheIsOpaqueToEveryLegacyUnboundReader(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	idem := orchestrator.NewIdempotency(s)
+	const (
+		binding = "sha256:authenticated-api-command"
+		secret  = "bound-credential-sentinel-must-not-open"
+	)
+	tests := []struct {
+		name string
+		call func(string, func(context.Context) ([]byte, error)) ([]byte, error)
+	}{
+		{name: "Do", call: func(key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+			return idem.Do(ctx, tenantA, key, fn)
+		}},
+		{name: "DoDurableEffect", call: func(key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+			return idem.DoDurableEffect(ctx, tenantA, key, fn)
+		}},
+		{name: "DoAtMostOnceEffect", call: func(key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+			return idem.DoAtMostOnceEffect(ctx, tenantA, key, fn)
+		}},
+		{name: "Result", call: func(key string, _ func(context.Context) ([]byte, error)) ([]byte, error) {
+			return idem.Result(ctx, tenantA, key)
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			key := "bound-to-legacy-" + test.name
+			if _, err := idem.DoBound(ctx, tenantA, key, binding, func(context.Context) ([]byte, error) {
+				return []byte(secret), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			called := false
+			result, err := test.call(key, func(context.Context) ([]byte, error) {
+				called = true
+				return []byte("legacy-effect-must-not-run"), nil
+			})
+			if !errors.Is(err, orchestrator.ErrIdempotencyConflict) || called || len(result) != 0 {
+				t.Fatalf("bound->legacy result=%q err=%v callback=%v, want empty conflict", result, err, called)
+			}
+			if strings.Contains(string(result), secret) || strings.Contains(err.Error(), secret) {
+				t.Fatalf("bound->legacy conflict disclosed secret result=%q err=%v", result, err)
+			}
+		})
+	}
+}
+
+func TestIdempotencyDoBoundConcurrentSameBindingSingleFlight(t *testing.T) {
+	s := newStore(t)
+	idem := orchestrator.NewIdempotency(s)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	const result = "transactional-single-flight-result"
+
+	var callsMu sync.Mutex
+	calls := 0
+	countCall := func() {
+		callsMu.Lock()
+		calls++
+		callsMu.Unlock()
+	}
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	type callResult struct {
+		result []byte
+		err    error
+	}
+	firstDone := make(chan callResult, 1)
+	go func() {
+		got, err := idem.DoBound(ctx, tenantA, "bound-transactional-concurrent", "same-authenticated-command", func(context.Context) ([]byte, error) {
+			countCall()
+			close(entered)
+			<-release
+			return []byte(result), nil
+		})
+		firstDone <- callResult{result: got, err: err}
+	}()
+	<-entered
+
+	secondStarted := make(chan struct{})
+	secondDone := make(chan callResult, 1)
+	go func() {
+		close(secondStarted)
+		got, err := idem.DoBound(ctx, tenantA, "bound-transactional-concurrent", "same-authenticated-command", func(context.Context) ([]byte, error) {
+			countCall()
+			return []byte("second-effect-must-not-win"), nil
+		})
+		secondDone <- callResult{result: got, err: err}
+	}()
+	<-secondStarted
+	deadline := time.Now().Add(2 * time.Second)
+	for s.SystemPool().Stat().AcquiredConns() < 2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	close(release)
+	first, second := <-firstDone, <-secondDone
+	if first.err != nil || second.err != nil || string(first.result) != result || string(second.result) != result {
+		t.Fatalf("single-flight first=%q/%v second=%q/%v", first.result, first.err, second.result, second.err)
+	}
+	callsMu.Lock()
+	defer callsMu.Unlock()
+	if calls != 1 {
+		t.Fatalf("concurrent bound callback ran %d times, want 1", calls)
+	}
+}
+
+// TestIdempotencyDoDurableEffectReleasesTenantTransactionBeforeEffect is the
+// AN-6/AN-7 regression: a slow receiver must not pin an RLS transaction or one of
+// the bounded PostgreSQL connections while it is doing external work. The result
+// is still cached, so a replay does not call the receiver again.
+func TestIdempotencyDoDurableEffectReleasesTenantTransactionBeforeEffect(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	idem := orchestrator.NewIdempotency(s)
+	baseline := s.SystemPool().Stat().AcquiredConns()
+
+	calls := 0
+	fn := func(context.Context) ([]byte, error) {
+		calls++
+		if got := s.SystemPool().Stat().AcquiredConns(); got != baseline {
+			t.Fatalf("outbox effect runs with %d acquired database connections, baseline %d; tenant transaction was not released", got, baseline)
+		}
+		// A fresh query must remain usable while the effect callback is active.
+		var one int
+		if err := s.SystemPool().QueryRow(ctx, "SELECT 1").Scan(&one); err != nil || one != 1 {
+			return nil, fmt.Errorf("probe database while outbox effect runs: value=%d err=%w", one, err)
+		}
+		return []byte("external-result-v1"), nil
+	}
+
+	first, err := idem.DoDurableEffect(ctx, tenantA, "external:k1", fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := idem.DoDurableEffect(ctx, tenantA, "external:k1", fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || string(first) != "external-result-v1" || string(second) != "external-result-v1" {
+		t.Fatalf("calls=%d results=%q/%q, want one receiver call and two identical cached results", calls, first, second)
+	}
+}
+
+func TestIdempotencyDoDurableEffectBoundRejectsChangedCommandAcrossCrashGap(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	idem := orchestrator.NewIdempotency(s)
+	const (
+		key          = "dynamic-issue-bound-crash"
+		firstBinding = "sha256:first-principal-provider-role-ttl"
+		otherBinding = "sha256:changed-principal-provider-role-ttl"
+	)
+
+	receiverCalls := 0
+	receiverCreated := false
+	crash := errors.New("injected crash after durable receiver commit")
+	if _, err := idem.DoDurableEffectBound(ctx, tenantA, key, firstBinding, func(context.Context) ([]byte, error) {
+		receiverCalls++
+		receiverCreated = true
+		return nil, crash
+	}); !errors.Is(err, crash) {
+		t.Fatalf("first bound durable effect error = %v, want injected crash", err)
+	}
+	if !receiverCreated || receiverCalls != 1 {
+		t.Fatalf("receiver created=%v calls=%d, want one committed receiver effect", receiverCreated, receiverCalls)
+	}
+	if _, err := idem.BoundResult(ctx, tenantA, key, firstBinding); !errors.Is(err, orchestrator.ErrInProgress) {
+		t.Fatalf("bound result during reconciliation = %v, want ErrInProgress", err)
+	}
+	if _, err := idem.BoundResult(ctx, tenantA, key, otherBinding); !errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+		t.Fatalf("changed caller bound result = %v, want ErrIdempotencyConflict", err)
+	}
+
+	changedRan := false
+	if _, err := idem.DoDurableEffectBound(ctx, tenantA, key, otherBinding, func(context.Context) ([]byte, error) {
+		changedRan = true
+		return []byte("must-not-run"), nil
+	}); !errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+		t.Fatalf("changed binding error = %v, want ErrIdempotencyConflict", err)
+	}
+	if changedRan {
+		t.Fatal("changed authenticated command reached the durable receiver")
+	}
+
+	result, err := idem.DoDurableEffectBound(ctx, tenantA, key, firstBinding, func(context.Context) ([]byte, error) {
+		receiverCalls++
+		if !receiverCreated {
+			t.Fatal("retry lost durable receiver state")
+		}
+		return []byte("sealed-original-result"), nil
+	})
+	if err != nil {
+		t.Fatalf("identical retry after crash: %v", err)
+	}
+	if string(result) != "sealed-original-result" || receiverCalls != 2 {
+		t.Fatalf("retry result=%q receiver calls=%d, want reconciled result and two callback attempts", result, receiverCalls)
+	}
+	boundResult, err := idem.BoundResult(ctx, tenantA, key, firstBinding)
+	if err != nil || string(boundResult) != "sealed-original-result" {
+		t.Fatalf("completed bound result=%q err=%v", boundResult, err)
+	}
+
+	replay, err := idem.DoDurableEffectBound(ctx, tenantA, key, firstBinding, func(context.Context) ([]byte, error) {
+		t.Fatal("completed identical replay called receiver")
+		return nil, nil
+	})
+	if err != nil || string(replay) != "sealed-original-result" {
+		t.Fatalf("completed replay result=%q err=%v", replay, err)
+	}
+}
+
+func TestIdempotencyDoDurableEffectBoundBlocksConcurrentChangedCaller(t *testing.T) {
+	s := newStore(t)
+	idem := orchestrator.NewIdempotency(s)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	firstDone := make(chan error, 1)
+
+	go func() {
+		_, err := idem.DoDurableEffectBound(ctx, tenantA, "bound-concurrent", "caller-a-command", func(context.Context) ([]byte, error) {
+			close(entered)
+			<-release
+			return []byte("caller-a-result"), nil
+		})
+		firstDone <- err
+	}()
+	<-entered
+	changedRan := false
+	if _, err := idem.DoDurableEffectBound(ctx, tenantA, "bound-concurrent", "caller-b-command", func(context.Context) ([]byte, error) {
+		changedRan = true
+		return nil, nil
+	}); !errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+		close(release)
+		t.Fatalf("concurrent changed caller error = %v, want ErrIdempotencyConflict", err)
+	}
+	if changedRan {
+		close(release)
+		t.Fatal("concurrent changed caller reached callback")
+	}
+	close(release)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first bound caller: %v", err)
+	}
+}
+
+func TestIdempotencyDoAtMostOnceEffectNeverBlindlyRetriesAmbiguousReceiver(t *testing.T) {
+	s := newStore(t)
+	idem := orchestrator.NewIdempotency(s)
+	ctx := context.Background()
+	calls := 0
+	fn := func(context.Context) ([]byte, error) {
+		calls++
+		return nil, errors.New("connection lost after request write")
+	}
+	if _, err := idem.DoAtMostOnceEffect(ctx, tenantA, "external-ca:ambiguous", fn); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
+		t.Fatalf("first ambiguous result = %v, want ErrEffectIndeterminate", err)
+	}
+	if _, err := idem.DoAtMostOnceEffect(ctx, tenantA, "external-ca:ambiguous", fn); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
+		t.Fatalf("replay ambiguous result = %v, want ErrEffectIndeterminate", err)
+	}
+	if calls != 1 {
+		t.Fatalf("non-idempotent receiver called %d times, want exactly once", calls)
 	}
 }
 

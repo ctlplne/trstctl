@@ -327,6 +327,24 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	if err != nil {
 		return Event{}, fmt.Errorf("events: append: %w", err)
 	}
+	if ack.Duplicate {
+		// WithMsgID suppressed this retry, so the caller must project the bytes that
+		// are actually authoritative in JetStream, not the retry's freshly-built
+		// payload/time. This matters for sealed commands whose ciphertext is
+		// intentionally randomized on each construction.
+		raw, err := l.stream.GetMsg(ctx, ack.Sequence)
+		if err != nil {
+			return Event{}, fmt.Errorf("events: read duplicate canonical event: %w", err)
+		}
+		canonical, err := decodeStored(raw.Data, raw.Sequence)
+		if err != nil {
+			return Event{}, err
+		}
+		if canonical.ID != e.ID {
+			return Event{}, fmt.Errorf("events: duplicate id %q resolved to canonical id %q", e.ID, canonical.ID)
+		}
+		return canonical, nil
+	}
 	e.Sequence = ack.Sequence
 	return e, nil
 }

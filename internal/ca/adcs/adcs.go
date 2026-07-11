@@ -5,16 +5,12 @@
 // (internal/ca/catemplate): it implements only the CA-specific Backend and the
 // template contributes the rest.
 //
-// ADCS enrolls over MS-WCCE (the Windows Client Certificate Enrollment Protocol)
-// via DCOM/RPC — ICertRequestD2::Request2 to submit a PKCS#10 under a CA config
-// ("HOST\CAName") and certificate template, returning a disposition and request
-// id, then ICertRequest::RetrievePending to collect a request held for manager
-// approval. That DCOM/RPC wire transport is Windows-specific and cannot run in a
-// Linux CI, so this package separates the *enrollment semantics* (which are the
-// CA-specific logic — dispositions, request ids, the under-submission poll, and
-// denial handling) from the *wire transport*, behind the Transport seam. An
-// in-process faithful double exercises the semantics in CI (internal/ca/adcs/
-// adcsfake); the production DCOM/RPC Transport is the integration follow-up.
+// ADCS exposes the request/disposition state machine over several transports.
+// Windows clients commonly use MS-WCCE/DCOM; the production, cross-platform
+// WebEnrollmentTransport in this package uses IIS /certsrv over HTTPS, submitting
+// a PKCS#10 under a certificate template and retrieving the resulting request id.
+// The Transport seam keeps the wire choice separate from disposition/poll logic
+// and permits a Kerberos/NTLM-capable reverse-proxy client.
 //
 // The package holds no crypto/* (AN-3) and custodies no signing key — ADCS does —
 // so AN-4 is not implicated; on the platform it runs behind ca.IssuanceService
@@ -76,10 +72,8 @@ type Submission struct {
 	StatusMessage string
 }
 
-// Transport performs the MS-WCCE operations against an ADCS CA. The production
-// implementation speaks ICertRequestD2 over DCOM/RPC; tests use an in-process
-// double. Implementations format the PKCS#10 and request attributes (certificate
-// template, SANs) for the wire and decode the issued certificate to a PEM chain.
+// Transport performs submission/retrieval against an ADCS CA. Production uses
+// WebEnrollmentTransport; tests may use an in-process double.
 type Transport interface {
 	// Submit submits csrDER under the CA config "HOST\CAName" with the given
 	// certificate template (ICertRequestD2::Request2).
@@ -136,6 +130,13 @@ func New(cfg Config, transport Transport, opts ...Option) *catemplate.Plugin {
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
 
+// Destroy releases credentials retained by a short-lived production transport.
+func (b *backend) Destroy() {
+	if d, ok := b.transport.(interface{ Destroy() }); ok {
+		d.Destroy()
+	}
+}
+
 // Issue submits the CSR and resolves the request to an issued chain, polling
 // through any under-submission (manager-approval) state.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
@@ -175,11 +176,9 @@ func (b *backend) resolve(ctx context.Context, sub Submission) ([]byte, error) {
 			}
 			sub = next
 		default:
-			msg := sub.StatusMessage
-			if msg == "" {
-				msg = "no disposition message"
-			}
-			return nil, fmt.Errorf("adcs: request %d not issued (%s): %s", sub.RequestID, sub.Disposition, msg)
+			// StatusMessage comes from an upstream/free-form transport field. Never
+			// let it escape: IIS/proxies can echo submitted credentials in it.
+			return nil, fmt.Errorf("adcs: request %d not issued (%s)", sub.RequestID, sub.Disposition)
 		}
 	}
 }

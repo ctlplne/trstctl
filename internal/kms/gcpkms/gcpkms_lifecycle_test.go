@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -55,11 +56,94 @@ func TestRemoteKeyLifecycle(t *testing.T) {
 	}
 }
 
+func TestOperationAwareLifecycleReconcilesAmbiguousProviderEffects(t *testing.T) {
+	doer := newLifecycleDoer(t, "gcp-token")
+	b := New("projects/p/locations/us/keyRings/trstctl", Credentials{BearerToken: []byte("gcp-token")},
+		WithEndpoint("https://cloudkms.test/v1"), WithHTTPClient(doer), WithOpTimeout(0))
+	var lifecycle crypto.OperationAwareRemoteKeyLifecycle = b
+	ctx := context.Background()
+
+	doer.loseCreateResponse = true
+	if _, _, err := lifecycle.GenerateManagedKeyForOperation(ctx, "gcp-generate-op", crypto.RSA2048); err == nil {
+		t.Fatal("generate returned success after the provider response was lost")
+	}
+	createdID := doer.lastCreatedID()
+	if doer.createEffects != 1 {
+		t.Fatalf("create effects after ambiguous response = %d, want 1", doer.createEffects)
+	}
+	signer, ref, err := lifecycle.GenerateManagedKeyForOperation(ctx, "gcp-generate-op", crypto.RSA2048)
+	if err != nil {
+		t.Fatalf("reconcile generated key: %v", err)
+	}
+	_, replay, err := lifecycle.GenerateManagedKeyForOperation(ctx, "gcp-generate-op", crypto.RSA2048)
+	if err != nil {
+		t.Fatalf("replay generated key: %v", err)
+	}
+	if ref.ID != createdID || replay != ref || doer.createEffects != 1 {
+		t.Fatalf("generate refs/effects = %+v/%+v/%d, provider created %q", ref, replay, doer.createEffects, createdID)
+	}
+	if len(signer.Public().DER) == 0 {
+		t.Fatal("reconciled signer returned no provider public key")
+	}
+
+	doer.loseCreateResponse = true
+	if _, _, err := lifecycle.RotateKeyForOperation(ctx, "gcp-rotate-op", ref); err == nil {
+		t.Fatal("rotate returned success after the provider response was lost")
+	}
+	rotatedID := doer.lastCreatedID()
+	_, rotated, err := lifecycle.RotateKeyForOperation(ctx, "gcp-rotate-op", ref)
+	if err != nil {
+		t.Fatalf("reconcile rotated key: %v", err)
+	}
+	_, rotatedReplay, err := lifecycle.RotateKeyForOperation(ctx, "gcp-rotate-op", ref)
+	if err != nil {
+		t.Fatalf("replay rotated key: %v", err)
+	}
+	if rotated.ID != rotatedID || rotatedReplay != rotated || doer.createEffects != 2 {
+		t.Fatalf("rotate refs/effects = %+v/%+v/%d, provider created %q", rotated, rotatedReplay, doer.createEffects, rotatedID)
+	}
+
+	doer.loseDisableResponse = true
+	if err := lifecycle.RevokeKeyForOperation(ctx, "gcp-revoke-op", rotated); err == nil {
+		t.Fatal("revoke returned success after the provider response was lost")
+	}
+	if err := lifecycle.RevokeKeyForOperation(ctx, "gcp-revoke-op", rotated); err != nil {
+		t.Fatalf("reconcile revoked key: %v", err)
+	}
+	if err := lifecycle.RevokeKeyForOperation(ctx, "gcp-revoke-op", rotated); err != nil {
+		t.Fatalf("replay revoked key: %v", err)
+	}
+	if doer.disableEffects != 1 {
+		t.Fatalf("disable effects = %d, want 1", doer.disableEffects)
+	}
+
+	doer.loseDestroyResponse = true
+	if err := lifecycle.ZeroizeKeyForOperation(ctx, "gcp-zeroize-op", rotated); err == nil {
+		t.Fatal("zeroize returned success after the provider response was lost")
+	}
+	if err := lifecycle.ZeroizeKeyForOperation(ctx, "gcp-zeroize-op", rotated); err != nil {
+		t.Fatalf("reconcile zeroized key: %v", err)
+	}
+	if err := lifecycle.ZeroizeKeyForOperation(ctx, "gcp-zeroize-op", rotated); err != nil {
+		t.Fatalf("replay zeroized key: %v", err)
+	}
+	if doer.destroyEffects != 1 {
+		t.Fatalf("destroy effects = %d, want 1", doer.destroyEffects)
+	}
+}
+
 type lifecycleDoer struct {
-	t     *testing.T
-	token string
-	mu    sync.Mutex
-	keys  map[string]*lifecycleKey
+	t                   *testing.T
+	token               string
+	mu                  sync.Mutex
+	keys                map[string]*lifecycleKey
+	lastVersion         string
+	createEffects       int
+	disableEffects      int
+	destroyEffects      int
+	loseCreateResponse  bool
+	loseDisableResponse bool
+	loseDestroyResponse bool
 }
 
 type lifecycleKey struct {
@@ -93,13 +177,29 @@ func (d *lifecycleDoer) Do(req *http.Request) (*http.Response, error) {
 	path = strings.TrimPrefix(path, "/")
 	switch {
 	case req.Method == http.MethodPost && strings.HasSuffix(path, "/cryptoKeys"):
-		return d.create(req, path, body), nil
+		response := d.create(req, path, body)
+		if response.StatusCode/100 == 2 && d.consumeLostCreateResponse() {
+			return nil, fmt.Errorf("gcp emulator: response lost after create effect")
+		}
+		return response, nil
 	case req.Method == http.MethodGet && strings.HasSuffix(path, "/publicKey"):
 		return d.publicKey(req, path), nil
+	case req.Method == http.MethodGet && strings.Contains(path, "/cryptoKeyVersions/"):
+		return d.versionState(req, path), nil
+	case req.Method == http.MethodGet && strings.Contains(path, "/cryptoKeys/"):
+		return d.cryptoKey(req, path), nil
 	case req.Method == http.MethodPatch && strings.Contains(path, "/cryptoKeyVersions/"):
-		return d.disable(req, path), nil
+		response := d.disable(req, path)
+		if response.StatusCode/100 == 2 && d.consumeLostDisableResponse() {
+			return nil, fmt.Errorf("gcp emulator: response lost after disable effect")
+		}
+		return response, nil
 	case req.Method == http.MethodPost && strings.HasSuffix(path, ":destroy"):
-		return d.destroy(req, path), nil
+		response := d.destroy(req, path)
+		if response.StatusCode/100 == 2 && d.consumeLostDestroyResponse() {
+			return nil, fmt.Errorf("gcp emulator: response lost after destroy effect")
+		}
+		return response, nil
 	default:
 		return jsonResponse(req, http.StatusNotFound, map[string]any{"error": map[string]any{"code": 404, "status": "NOT_FOUND"}}), nil
 	}
@@ -128,8 +228,37 @@ func (d *lifecycleDoer) create(req *http.Request, path string, body []byte) *htt
 	versionName := cryptoKey + "/cryptoKeyVersions/1"
 	d.mu.Lock()
 	d.keys[versionName] = &lifecycleKey{signer: signer}
+	d.lastVersion = versionName
+	d.createEffects++
 	d.mu.Unlock()
 	return jsonResponse(req, http.StatusOK, map[string]string{"name": cryptoKey})
+}
+
+func (d *lifecycleDoer) cryptoKey(req *http.Request, path string) *http.Response {
+	d.mu.Lock()
+	key := d.keys[path+"/cryptoKeyVersions/1"]
+	d.mu.Unlock()
+	if key == nil {
+		return jsonResponse(req, http.StatusNotFound, map[string]any{"error": map[string]any{"code": 404, "status": "NOT_FOUND"}})
+	}
+	return jsonResponse(req, http.StatusOK, map[string]string{"name": path})
+}
+
+func (d *lifecycleDoer) versionState(req *http.Request, path string) *http.Response {
+	d.mu.Lock()
+	key := d.keys[path]
+	d.mu.Unlock()
+	if key == nil {
+		return jsonResponse(req, http.StatusNotFound, map[string]any{"error": map[string]any{"code": 404, "status": "NOT_FOUND"}})
+	}
+	state := "ENABLED"
+	if key.disabled {
+		state = "DISABLED"
+	}
+	if key.destroyed {
+		state = "DESTROY_SCHEDULED"
+	}
+	return jsonResponse(req, http.StatusOK, map[string]string{"name": path, "state": state})
 }
 
 func (d *lifecycleDoer) publicKey(req *http.Request, path string) *http.Response {
@@ -152,6 +281,7 @@ func (d *lifecycleDoer) disable(req *http.Request, path string) *http.Response {
 		return jsonResponse(req, http.StatusNotFound, map[string]any{"error": map[string]any{"code": 404, "status": "NOT_FOUND"}})
 	}
 	key.disabled = true
+	d.disableEffects++
 	return jsonResponse(req, http.StatusOK, map[string]string{"name": path, "state": "DISABLED"})
 }
 
@@ -164,7 +294,38 @@ func (d *lifecycleDoer) destroy(req *http.Request, path string) *http.Response {
 		return jsonResponse(req, http.StatusNotFound, map[string]any{"error": map[string]any{"code": 404, "status": "NOT_FOUND"}})
 	}
 	key.destroyed = true
+	d.destroyEffects++
 	return jsonResponse(req, http.StatusOK, map[string]string{"name": versionName, "state": "DESTROY_SCHEDULED"})
+}
+
+func (d *lifecycleDoer) consumeLostCreateResponse() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	lost := d.loseCreateResponse
+	d.loseCreateResponse = false
+	return lost
+}
+
+func (d *lifecycleDoer) consumeLostDisableResponse() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	lost := d.loseDisableResponse
+	d.loseDisableResponse = false
+	return lost
+}
+
+func (d *lifecycleDoer) consumeLostDestroyResponse() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	lost := d.loseDestroyResponse
+	d.loseDestroyResponse = false
+	return lost
+}
+
+func (d *lifecycleDoer) lastCreatedID() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.lastVersion
 }
 
 func (d *lifecycleDoer) disabled(id string) bool {

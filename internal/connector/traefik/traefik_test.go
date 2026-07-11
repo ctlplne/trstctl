@@ -10,10 +10,22 @@ import (
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/traefik"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 var (
-	certA = []byte("-----BEGIN CERTIFICATE-----\ntraefik-cert-a\n-----END CERTIFICATE-----\n")
+	certA = []byte(`-----BEGIN CERTIFICATE-----
+MIIBiDCCAS2gAwIBAgIBATAKBggqhkjOPQQDAjAlMSMwIQYDVQQDExpjb25mb3Jt
+YW5jZS5jb25uZWN0b3IudGVzdDAeFw0yNTAxMDEwMDAwMDBaFw0zNTAxMDEwMDAw
+MDBaMCUxIzAhBgNVBAMTGmNvbmZvcm1hbmNlLmNvbm5lY3Rvci50ZXN0MFkwEwYH
+KoZIzj0CAQYIKoZIzj0DAQcDQgAE4TYNtNbbVlPcVpyznJuujANXTbsaRNL5D41K
+VfB5GdJEG372Pgtn59Mp7+1+PUbyHTbaKJ1RU0n6vgW5/BCC1aNOMEwwDgYDVR0P
+AQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMBMCUGA1UdEQQeMByCGmNvbmZv
+cm1hbmNlLmNvbm5lY3Rvci50ZXN0MAoGCCqGSM49BAMCA0kAMEYCIQD2NqiRyoq8
+T1vJogCsCMRDiEMMsA04Qhbs5uF149egpgIhALTX3I6Xe4dQk3GMTEaXC5GWXkaj
+O9xXOtFRqPTY0dXn
+-----END CERTIFICATE-----
+`)
 	keyA  = []byte("-----BEGIN PRIVATE KEY-----\ntraefik-key-a\n-----END PRIVATE KEY-----\n")
 	certB = []byte("-----BEGIN CERTIFICATE-----\ntraefik-cert-b\n-----END CERTIFICATE-----\n")
 	keyB  = []byte("-----BEGIN PRIVATE KEY-----\ntraefik-key-b\n-----END PRIVATE KEY-----\n")
@@ -24,6 +36,7 @@ func TestDeployWritesIdempotently(t *testing.T) {
 	ops := &countingOps{MemoryOps: base}
 	c := traefik.New("/etc/traefik/certs/site.pem", "/etc/traefik/certs/site.key")
 	dep := connector.NewDeployment("edge", certA, keyA)
+	assertShippedFingerprint(t, dep.Fingerprint, certA)
 
 	if _, err := connector.Run(context.Background(), c, ops, dep); err != nil {
 		t.Fatalf("first Deploy: %v", err)
@@ -39,6 +52,17 @@ func TestDeployWritesIdempotently(t *testing.T) {
 	}
 	if ops.writes != 2 {
 		t.Fatalf("idempotent deploy writes = %d, want still 2", ops.writes)
+	}
+}
+
+func assertShippedFingerprint(t *testing.T, got string, cert []byte) {
+	t.Helper()
+	info, err := certinfo.Inspect(cert)
+	if err != nil {
+		t.Fatalf("inspect certificate fixture: %v", err)
+	}
+	if got != info.SHA256Fingerprint {
+		t.Fatalf("deployment fingerprint = %q, want shipped DER fingerprint %q", got, info.SHA256Fingerprint)
 	}
 }
 

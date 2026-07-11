@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 var b64 = base64.RawURLEncoding
@@ -294,13 +296,33 @@ func (k *SigningKey) PublicJWKS() ([]byte, error) {
 
 // ---- HS256 (symmetric, for session tokens) --------------------------------
 
-// SignHS256 produces a compact JWS over payload using an HMAC-SHA256 secret.
-func SignHS256(secret, payload []byte) string {
+// SignHS256Bytes produces a compact JWS in an erasable byte buffer. Callers that
+// use the JWS as a short-lived authority credential should prefer this form so
+// the compact token never needs to exist as an immutable Go string (AN-8).
+func SignHS256Bytes(key, payload []byte) []byte {
 	hdr, _ := json.Marshal(jwsHeader{Alg: "HS256", Typ: "JWT"})
-	signingInput := encodeSegment(hdr) + "." + encodeSegment(payload)
-	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte(signingInput))
-	return signingInput + "." + encodeSegment(mac.Sum(nil))
+	encodedLen := b64.EncodedLen(len(hdr)) + 1 + b64.EncodedLen(len(payload))
+	signingInput := make([]byte, 0, encodedLen+1+b64.EncodedLen(sha256.Size))
+	signingInput = b64.AppendEncode(signingInput, hdr)
+	signingInput = append(signingInput, '.')
+	signingInput = b64.AppendEncode(signingInput, payload)
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write(signingInput)
+	signature := mac.Sum(nil)
+	signingInput = append(signingInput, '.')
+	signingInput = b64.AppendEncode(signingInput, signature)
+	secret.Wipe(signature)
+	return signingInput
+}
+
+// SignHS256 produces a compact JWS string for existing APIs that retain a
+// session token as text. New short-lived credential paths should use
+// SignHS256Bytes instead.
+func SignHS256(key, payload []byte) string {
+	token := SignHS256Bytes(key, payload)
+	out := string(token)
+	secret.Wipe(token)
+	return out
 }
 
 // VerifyHS256 verifies a compact HS256 JWS and returns the payload.

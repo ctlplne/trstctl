@@ -3,20 +3,76 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"golang.org/x/crypto/nacl/box"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secretsync"
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestDurableSecretSyncReplayDoesNotReadRotatedSourceAfterRecorderGC(t *testing.T) {
+	pusher := &outboxSyncPusher{}
+	h := newServedHarness(t, config.Protocols{},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) {
+			d.TenantSecretSyncTargets = SecretSyncTargetRegistry{servedTestTenant: {
+				"durable-target": secretsync.NewTarget("durable-target", pusher),
+			}}
+		},
+	)
+	token := seedScopedTokenSubject(t, h.store, h.tenant, "durable-sync-caller", "secrets:read", "secrets:write")
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token,
+		map[string]any{"name": "sync/rotating-source", "value": "source-v1"})
+	if status != http.StatusCreated {
+		t.Fatalf("create source status=%d body=%s", status, body)
+	}
+	const rawKey = "sync-replay-after-recorder-gc"
+	command := map[string]any{"name": "sync/rotating-source", "target": "durable-target", "remote_key": "DEPLOY_TOKEN"}
+	status, original := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", token, rawKey, command)
+	if status != http.StatusOK {
+		t.Fatalf("first durable sync status=%d body=%s", status, original)
+	}
+	job, err := h.store.GetSecretSyncJob(context.Background(), h.tenant, store.DurableSecretSyncJobID(h.tenant, rawKey))
+	if err != nil || job.SecretVersion != 1 || job.RequestBinding == "" {
+		t.Fatalf("durable original job=%+v err=%v", job, err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPut, "/api/v1/secrets/store/sync/rotating-source", token,
+		map[string]any{"value": "source-v2"})
+	if status != http.StatusOK {
+		t.Fatalf("rotate source status=%d body=%s", status, body)
+	}
+	if _, err := h.store.SystemPool().Exec(context.Background(),
+		`DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, h.tenant, rawKey); err != nil {
+		t.Fatal(err)
+	}
+	status, replay := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", token, rawKey, command)
+	if status != http.StatusOK || !bytes.Equal(replay, original) {
+		t.Fatalf("durable replay status=%d body=%s, original=%s", status, replay, original)
+	}
+	job, err = h.store.GetSecretSyncJob(context.Background(), h.tenant, store.DurableSecretSyncJobID(h.tenant, rawKey))
+	if err != nil || job.SecretVersion != 1 {
+		t.Fatalf("replay rebound to rotated source: job=%+v err=%v", job, err)
+	}
+	if len(pusher.values) != 0 {
+		t.Fatalf("request path performed %d external writes", len(pusher.values))
+	}
+}
 
 // TestServedSecretSyncPushesBroadCatalogCAPSECR03 is the SEC-06/CAP-SECR-03 proof:
 // a stored secret changes once in trstctl, then the served sync API pushes it through
@@ -86,7 +142,7 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) {
-			d.SecretSyncTargets = map[string]*secretsync.Target{
+			d.TenantSecretSyncTargets = SecretSyncTargetRegistry{servedTestTenant: {
 				"github-actions":      secretsync.NewGitHubActionsTarget(ghPusher),
 				"aws-secrets-manager": secretsync.NewAWSSecretsManagerTarget(awsPusher),
 				"gcp-secret-manager":  secretsync.NewGCPSecretManagerTarget(gcpPusher),
@@ -95,10 +151,11 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 				"vercel-netlify":      secretsync.NewVercelTarget(vercelPusher),
 				"ci":                  secretsync.NewCITarget(ciPusher),
 				"kubernetes":          secretsync.NewKubernetesTarget(k8sPusher),
-			}
+			}}
 		},
 	)
-	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+	tok := seedScopedTokenSubject(t, h.store, h.tenant, "secret-sync-requester-a", "secrets:read", "secrets:write")
+	otherTok := seedScopedTokenSubject(t, h.store, h.tenant, "secret-sync-requester-b", "secrets:read", "secrets:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
 		map[string]any{"name": "sync/source", "value": "sync-v1"})
@@ -170,7 +227,8 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 	assertCatalogTargetsConfigured(t, catalog.Targets, syncCases)
 
 	for _, tc := range syncCases {
-		status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", tok, "sec06-"+tc.target,
+		idempotencyKey := "sec06-" + tc.target
+		status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", tok, idempotencyKey,
 			map[string]any{"name": "sync/source", "target": tc.target, "remote_key": tc.remote})
 		if status != http.StatusOK {
 			t.Fatalf("%s sync: status %d body %s", tc.target, status, body)
@@ -185,11 +243,22 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 		if err := json.Unmarshal(body, &resp); err != nil {
 			t.Fatalf("decode %s response: %v (%s)", tc.target, err, body)
 		}
-		if resp.Name != "sync/source" || resp.Target != tc.target || resp.RemoteKey != tc.remote || !resp.Enqueued || !resp.Delivered {
-			t.Fatalf("%s sync response = %+v", tc.target, resp)
+		if resp.Name != "sync/source" || resp.Target != tc.target || resp.RemoteKey != tc.remote || !resp.Enqueued || resp.Delivered {
+			t.Fatalf("%s durable queue response = %+v, want enqueued and not request-path delivered", tc.target, resp)
 		}
 		if strings.Contains(string(body), "sync-v1") {
 			t.Fatalf("%s sync response leaked the secret value: %s", tc.target, body)
+		}
+		drainCtx, cancelDrain := context.WithTimeout(t.Context(), 10*time.Second)
+		drainErr := h.srv.Drain(drainCtx)
+		cancelDrain()
+		if drainErr != nil {
+			t.Fatalf("drain %s durable sync: %v", tc.target, drainErr)
+		}
+		job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant, store.DurableSecretSyncJobID(h.tenant, idempotencyKey))
+		if err != nil || job.Status != store.SecretSyncJobDelivered {
+			outboxRecord, outboxErr := h.srv.outbox.Get(t.Context(), h.tenant, job.OutboxID)
+			t.Fatalf("%s durable sync job = status %q err %v, outbox=%+v outbox_err=%v, want delivered", tc.target, job.Status, err, outboxRecord, outboxErr)
 		}
 		if got := tc.read(); got != "sync-v1" {
 			t.Fatalf("%s destination readback = %q, want sync-v1", tc.target, got)
@@ -206,6 +275,22 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 	}
 	if after := gh.count("ctlplne", "payments", "DB_PASSWORD"); after != before {
 		t.Fatalf("idempotent replay wrote GitHub %d times, want unchanged %d", after, before)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", tok, "sec06-github-actions",
+		map[string]any{"name": "sync/source", "target": "github-actions", "remote_key": "CHANGED_PASSWORD"})
+	if status != http.StatusConflict || strings.Contains(string(body), "sync-v1") {
+		t.Fatalf("same key/changed destination command status=%d body=%s, want metadata-only 409", status, body)
+	}
+	if got := gh.value("ctlplne", "payments", "CHANGED_PASSWORD"); got != "" {
+		t.Fatalf("changed idempotency collision created a second external value %q", got)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", otherTok, "sec06-github-actions",
+		map[string]any{"name": "sync/source", "target": "github-actions", "remote_key": "DB_PASSWORD"})
+	if status != http.StatusConflict || strings.Contains(string(body), "sync-v1") {
+		t.Fatalf("same key/changed caller status=%d body=%s, want metadata-only 409", status, body)
+	}
+	if after := gh.count("ctlplne", "payments", "DB_PASSWORD"); after != before {
+		t.Fatalf("collision retries wrote GitHub %d times, want unchanged %d", after, before)
 	}
 	if !h.hasEvent(t, "secret.sync.delivered") {
 		t.Fatal("no secret.sync.delivered event recorded")
@@ -284,11 +369,11 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 				"env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN",
 				"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
 			}
-			d.SecretSyncTargets = map[string]*secretsync.Target{
+			d.TenantSecretSyncTargets = SecretSyncTargetRegistry{servedTestTenant: {
 				"aws-secrets-manager": secretsync.NewAWSSecretsManagerTarget(awsPusher),
 				"gcp-secret-manager":  secretsync.NewGCPSecretManagerTarget(gcpPusher),
 				"azure-key-vault":     secretsync.NewAzureKeyVaultTarget(azurePusher),
-			}
+			}}
 		},
 	)
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write", string(authz.PrivateEgress))
@@ -421,13 +506,32 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 		{target: "gcp-secret-manager", remote: "cap-sec-04-gcp", read: func() string { return gcpSync.value("trstctl-prod", "cap-sec-04-gcp") }},
 		{target: "azure-key-vault", remote: "cap-sec-04-azure", read: func() string { return azureSync.value("cap-sec-04-azure") }},
 	} {
-		status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", tok, "cap-sec-04-"+tc.target,
+		idempotencyKey := "cap-sec-04-" + tc.target
+		status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", tok, idempotencyKey,
 			map[string]any{"name": "cap-sec-04/source", "target": tc.target, "remote_key": tc.remote})
 		if status != http.StatusOK {
 			t.Fatalf("%s CAP-SEC-04 sync: status %d body %s", tc.target, status, body)
 		}
 		if strings.Contains(string(body), "cloud-sync-v1") {
 			t.Fatalf("%s CAP-SEC-04 sync leaked secret value: %s", tc.target, body)
+		}
+		var queuedSync struct {
+			Enqueued  bool `json:"enqueued"`
+			Delivered bool `json:"delivered"`
+		}
+		if err := json.Unmarshal(body, &queuedSync); err != nil || !queuedSync.Enqueued || queuedSync.Delivered {
+			t.Fatalf("%s CAP-SEC-04 durable queue response = %+v err %v", tc.target, queuedSync, err)
+		}
+		drainCtx, cancelDrain := context.WithTimeout(t.Context(), 10*time.Second)
+		drainErr := h.srv.Drain(drainCtx)
+		cancelDrain()
+		if drainErr != nil {
+			t.Fatalf("drain %s CAP-SEC-04 durable sync: %v", tc.target, drainErr)
+		}
+		job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant, store.DurableSecretSyncJobID(h.tenant, idempotencyKey))
+		if err != nil || job.Status != store.SecretSyncJobDelivered {
+			outboxRecord, outboxErr := h.srv.outbox.Get(t.Context(), h.tenant, job.OutboxID)
+			t.Fatalf("%s CAP-SEC-04 durable job = status %q err %v, outbox=%+v outbox_err=%v, want delivered", tc.target, job.Status, err, outboxRecord, outboxErr)
 		}
 		if got := tc.read(); got != "cloud-sync-v1" {
 			t.Fatalf("%s CAP-SEC-04 sync readback = %q, want cloud-sync-v1", tc.target, got)
@@ -588,16 +692,29 @@ func assertCatalogTargetsConfigured(t *testing.T, targets []struct {
 }
 
 type gitHubActionsSyncFixture struct {
-	t      *testing.T
-	server *httptest.Server
-	mu     sync.Mutex
-	values map[string]string
-	counts map[string]int
+	t          *testing.T
+	server     *httptest.Server
+	mu         sync.Mutex
+	publicKey  *[32]byte
+	privateKey *[32]byte
+	values     map[string]string
+	counts     map[string]int
 }
 
 func newGitHubActionsSyncFixture(t *testing.T) *gitHubActionsSyncFixture {
 	t.Helper()
-	f := &gitHubActionsSyncFixture{t: t, values: map[string]string{}, counts: map[string]int{}}
+	// This deterministic pair belongs only to the high-fidelity GitHub emulator.
+	// The production pusher must fetch the repository public key and emit the
+	// libsodium sealed-box wire format; opening it here proves the served binary did
+	// not merely base64-wrap plaintext.
+	publicKey, privateKey, err := box.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{0x47}, 32)))
+	if err != nil {
+		t.Fatalf("generate GitHub fixture key: %v", err)
+	}
+	f := &gitHubActionsSyncFixture{
+		t: t, publicKey: publicKey, privateKey: privateKey,
+		values: map[string]string{}, counts: map[string]int{},
+	}
 	f.server = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.server.Close)
 	return f
@@ -607,10 +724,6 @@ func (f *gitHubActionsSyncFixture) URL() string          { return f.server.URL }
 func (f *gitHubActionsSyncFixture) Client() *http.Client { return f.server.Client() }
 
 func (f *gitHubActionsSyncFixture) handle(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "method", http.StatusMethodNotAllowed)
-		return
-	}
 	if got := r.Header.Get("Authorization"); got != "Bearer github-token" {
 		http.Error(w, "auth", http.StatusUnauthorized)
 		return
@@ -620,22 +733,40 @@ func (f *gitHubActionsSyncFixture) handle(w http.ResponseWriter, r *http.Request
 		http.Error(w, "path", http.StatusNotFound)
 		return
 	}
+	if r.Method == http.MethodGet && parts[5] == "public-key" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"key_id": "fixture-key-v1",
+			"key":    base64.StdEncoding.EncodeToString(f.publicKey[:]),
+		})
+		return
+	}
+	if r.Method != http.MethodPut || parts[5] == "public-key" {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
 	raw, _ := io.ReadAll(r.Body)
 	var req struct {
-		EncodedValue string `json:"encoded_value"`
+		EncryptedValue []byte `json:"encrypted_value"`
+		KeyID          string `json:"key_id"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
 		http.Error(w, "json", http.StatusBadRequest)
 		return
 	}
-	decoded, err := base64.StdEncoding.DecodeString(req.EncodedValue)
-	if err != nil {
-		http.Error(w, "encoded_value", http.StatusBadRequest)
+	if req.KeyID != "fixture-key-v1" {
+		http.Error(w, "key_id", http.StatusBadRequest)
 		return
 	}
+	opened, ok := box.OpenAnonymous(nil, req.EncryptedValue, f.publicKey, f.privateKey)
+	if !ok {
+		http.Error(w, "encrypted_value", http.StatusBadRequest)
+		return
+	}
+	defer secret.Wipe(opened)
 	key := parts[1] + "/" + parts[2] + "/" + parts[5]
 	f.mu.Lock()
-	f.values[key] = string(decoded)
+	f.values[key] = string(opened)
 	f.counts[key]++
 	f.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
@@ -724,16 +855,26 @@ func (f *gcpSecretManagerSyncFixture) URL() string          { return f.server.UR
 func (f *gcpSecretManagerSyncFixture) Client() *http.Client { return f.server.Client() }
 
 func (f *gcpSecretManagerSyncFixture) handle(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method", http.StatusMethodNotAllowed)
-		return
-	}
 	if got := r.Header.Get("Authorization"); got != "Bearer gcp-token" {
 		http.Error(w, "auth", http.StatusUnauthorized)
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) != 5 || parts[0] != "v1" || parts[1] != "projects" || parts[3] != "secrets" || !strings.HasSuffix(parts[4], ":addVersion") {
+	if len(parts) == 7 && r.Method == http.MethodGet && parts[0] == "v1" && parts[1] == "projects" && parts[3] == "secrets" && parts[5] == "versions" && parts[6] == "latest:access" {
+		f.mu.Lock()
+		value, ok := f.values[parts[2]+"/"+parts[4]]
+		f.mu.Unlock()
+		if !ok {
+			http.Error(w, "missing", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"payload": map[string]string{"data": base64.StdEncoding.EncodeToString([]byte(value))},
+		})
+		return
+	}
+	if r.Method != http.MethodPost || len(parts) != 5 || parts[0] != "v1" || parts[1] != "projects" || parts[3] != "secrets" || !strings.HasSuffix(parts[4], ":addVersion") {
 		http.Error(w, "path", http.StatusNotFound)
 		return
 	}
@@ -784,10 +925,6 @@ func (f *azureKeyVaultSyncFixture) URL() string          { return f.server.URL }
 func (f *azureKeyVaultSyncFixture) Client() *http.Client { return f.server.Client() }
 
 func (f *azureKeyVaultSyncFixture) handle(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "method", http.StatusMethodNotAllowed)
-		return
-	}
 	if got := r.Header.Get("Authorization"); got != "Bearer azure-token" {
 		http.Error(w, "auth", http.StatusUnauthorized)
 		return
@@ -795,6 +932,24 @@ func (f *azureKeyVaultSyncFixture) handle(w http.ResponseWriter, r *http.Request
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) != 2 || parts[0] != "secrets" || r.URL.Query().Get("api-version") == "" {
 		http.Error(w, "path", http.StatusNotFound)
+		return
+	}
+	if r.Method == http.MethodGet {
+		f.mu.Lock()
+		value, ok := f.values[parts[1]]
+		f.mu.Unlock()
+		if !ok {
+			http.Error(w, "missing", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"value": base64.StdEncoding.EncodeToString([]byte(value)),
+		})
+		return
+	}
+	if r.Method != http.MethodPut {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
 		return
 	}
 	raw, _ := io.ReadAll(r.Body)
@@ -879,37 +1034,52 @@ func (f *gitLabCISyncFixture) URL() string          { return f.server.URL }
 func (f *gitLabCISyncFixture) Client() *http.Client { return f.server.Client() }
 
 func (f *gitLabCISyncFixture) handle(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "method", http.StatusMethodNotAllowed)
-		return
-	}
 	if got := r.Header.Get("PRIVATE-TOKEN"); got != "gitlab-token" {
 		http.Error(w, "auth", http.StatusUnauthorized)
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) != 6 || parts[0] != "api" || parts[1] != "v4" || parts[2] != "projects" || parts[4] != "variables" {
+	if len(parts) < 5 || len(parts) > 6 || parts[0] != "api" || parts[1] != "v4" || parts[2] != "projects" || parts[4] != "variables" {
 		http.Error(w, "path", http.StatusNotFound)
 		return
 	}
 	raw, _ := io.ReadAll(r.Body)
 	var req struct {
+		Key   string `json:"key"`
 		Value string `json:"value"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
 		http.Error(w, "json", http.StatusBadRequest)
 		return
 	}
-	decoded, err := base64.StdEncoding.DecodeString(req.Value)
-	if err != nil {
-		http.Error(w, "value", http.StatusBadRequest)
+	project, key := parts[3], req.Key
+	if len(parts) == 6 {
+		key = parts[5]
+	}
+	if key == "" {
+		http.Error(w, "key", http.StatusBadRequest)
 		return
 	}
+	recordKey := project + "/" + key
 	f.mu.Lock()
-	f.values[parts[3]+"/"+parts[5]] = string(decoded)
+	_, exists := f.values[recordKey]
+	if r.Method == http.MethodPut && !exists {
+		f.mu.Unlock()
+		http.Error(w, "missing", http.StatusNotFound)
+		return
+	}
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		f.mu.Unlock()
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	f.values[recordKey] = req.Value
 	f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"key":"` + parts[5] + `"}`))
+	if r.Method == http.MethodPost {
+		w.WriteHeader(http.StatusCreated)
+	}
+	_, _ = w.Write([]byte(`{"key":"` + key + `"}`))
 }
 
 func (f *gitLabCISyncFixture) value(project, key string) string {
@@ -922,11 +1092,12 @@ type vercelSyncFixture struct {
 	server *httptest.Server
 	mu     sync.Mutex
 	values map[string]string
+	ids    map[string]string
 }
 
 func newVercelSyncFixture(t *testing.T) *vercelSyncFixture {
 	t.Helper()
-	f := &vercelSyncFixture{values: map[string]string{}}
+	f := &vercelSyncFixture{values: map[string]string{}, ids: map[string]string{}}
 	f.server = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.server.Close)
 	return f
@@ -936,17 +1107,27 @@ func (f *vercelSyncFixture) URL() string          { return f.server.URL }
 func (f *vercelSyncFixture) Client() *http.Client { return f.server.Client() }
 
 func (f *vercelSyncFixture) handle(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method", http.StatusMethodNotAllowed)
-		return
-	}
 	if got := r.Header.Get("Authorization"); got != "Bearer vercel-token" {
 		http.Error(w, "auth", http.StatusUnauthorized)
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) != 4 || parts[0] != "v10" || parts[1] != "projects" || parts[3] != "env" {
+	if len(parts) < 4 || len(parts) > 5 || parts[1] != "projects" || parts[3] != "env" {
 		http.Error(w, "path", http.StatusNotFound)
+		return
+	}
+	if r.Method == http.MethodGet && parts[0] == "v9" && len(parts) == 4 {
+		f.mu.Lock()
+		envs := make([]map[string]string, 0, len(f.ids))
+		for recordKey, id := range f.ids {
+			projectAndKey := strings.SplitN(recordKey, "/", 2)
+			if len(projectAndKey) == 2 && projectAndKey[0] == parts[2] {
+				envs = append(envs, map[string]string{"id": id, "key": projectAndKey[1]})
+			}
+		}
+		f.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"envs": envs})
 		return
 	}
 	raw, _ := io.ReadAll(r.Body)
@@ -958,16 +1139,33 @@ func (f *vercelSyncFixture) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "json", http.StatusBadRequest)
 		return
 	}
-	decoded, err := base64.StdEncoding.DecodeString(req.Value)
-	if err != nil {
-		http.Error(w, "value", http.StatusBadRequest)
+	recordKey := parts[2] + "/" + req.Key
+	f.mu.Lock()
+	_, exists := f.values[recordKey]
+	switch {
+	case r.Method == http.MethodPost && parts[0] == "v10" && len(parts) == 4:
+		if exists {
+			f.mu.Unlock()
+			http.Error(w, "conflict", http.StatusConflict)
+			return
+		}
+		f.ids[recordKey] = "env-" + req.Key
+	case r.Method == http.MethodPatch && parts[0] == "v9" && len(parts) == 5:
+		if f.ids[recordKey] != parts[4] {
+			f.mu.Unlock()
+			http.Error(w, "missing", http.StatusNotFound)
+			return
+		}
+	default:
+		f.mu.Unlock()
+		http.Error(w, "method", http.StatusMethodNotAllowed)
 		return
 	}
-	f.mu.Lock()
-	f.values[parts[2]+"/"+req.Key] = string(decoded)
+	f.values[recordKey] = req.Value
+	id := f.ids[recordKey]
 	f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"key":"` + req.Key + `"}`))
+	_, _ = w.Write([]byte(`{"id":"` + id + `","key":"` + req.Key + `"}`))
 }
 
 func (f *vercelSyncFixture) value(project, key string) string {
@@ -1034,14 +1232,15 @@ func (f *ciSyncFixture) value(provider, key string) string {
 }
 
 type kubernetesSecretSyncFixture struct {
-	server *httptest.Server
-	mu     sync.Mutex
-	values map[string]string
+	server  *httptest.Server
+	mu      sync.Mutex
+	values  map[string]string
+	version map[string]int
 }
 
 func newKubernetesSecretSyncFixture(t *testing.T) *kubernetesSecretSyncFixture {
 	t.Helper()
-	f := &kubernetesSecretSyncFixture{values: map[string]string{}}
+	f := &kubernetesSecretSyncFixture{values: map[string]string{}, version: map[string]int{}}
 	f.server = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.server.Close)
 	return f
@@ -1051,21 +1250,40 @@ func (f *kubernetesSecretSyncFixture) URL() string          { return f.server.UR
 func (f *kubernetesSecretSyncFixture) Client() *http.Client { return f.server.Client() }
 
 func (f *kubernetesSecretSyncFixture) handle(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "method", http.StatusMethodNotAllowed)
-		return
-	}
 	if got := r.Header.Get("Authorization"); got != "Bearer k8s-token" {
 		http.Error(w, "auth", http.StatusUnauthorized)
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) != 6 || parts[0] != "api" || parts[1] != "v1" || parts[2] != "namespaces" || parts[4] != "secrets" {
+	if len(parts) < 5 || len(parts) > 6 || parts[0] != "api" || parts[1] != "v1" || parts[2] != "namespaces" || parts[4] != "secrets" {
 		http.Error(w, "path", http.StatusNotFound)
+		return
+	}
+	if r.Method == http.MethodGet && len(parts) == 6 {
+		recordKey := parts[3] + "/" + parts[5]
+		f.mu.Lock()
+		value, ok := f.values[recordKey]
+		version := f.version[recordKey]
+		f.mu.Unlock()
+		if !ok {
+			http.Error(w, "missing", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"kind": "Secret", "apiVersion": "v1",
+			"metadata": map[string]string{"name": parts[5], "namespace": parts[3], "resourceVersion": strconv.Itoa(version)},
+			"data":     map[string]string{"value": base64.StdEncoding.EncodeToString([]byte(value))},
+		})
 		return
 	}
 	raw, _ := io.ReadAll(r.Body)
 	var req struct {
+		Metadata struct {
+			Name            string `json:"name"`
+			Namespace       string `json:"namespace"`
+			ResourceVersion string `json:"resourceVersion"`
+		} `json:"metadata"`
 		Data map[string]string `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil || req.Data == nil {
@@ -1077,11 +1295,48 @@ func (f *kubernetesSecretSyncFixture) handle(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "data.value", http.StatusBadRequest)
 		return
 	}
+	name := req.Metadata.Name
+	if len(parts) == 6 {
+		name = parts[5]
+	}
+	if name == "" || req.Metadata.Namespace != parts[3] {
+		http.Error(w, "metadata", http.StatusBadRequest)
+		return
+	}
+	recordKey := parts[3] + "/" + name
 	f.mu.Lock()
-	f.values[parts[3]+"/"+parts[5]] = string(decoded)
+	version, exists := f.version[recordKey]
+	switch {
+	case r.Method == http.MethodPost && len(parts) == 5:
+		if exists {
+			f.mu.Unlock()
+			http.Error(w, "conflict", http.StatusConflict)
+			return
+		}
+		version = 1
+	case r.Method == http.MethodPut && len(parts) == 6:
+		if !exists || req.Metadata.ResourceVersion != strconv.Itoa(version) {
+			f.mu.Unlock()
+			http.Error(w, "resourceVersion", http.StatusConflict)
+			return
+		}
+		version++
+	default:
+		f.mu.Unlock()
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	f.values[recordKey] = string(decoded)
+	f.version[recordKey] = version
 	f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"kind":"Secret","apiVersion":"v1"}`))
+	if r.Method == http.MethodPost {
+		w.WriteHeader(http.StatusCreated)
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"kind": "Secret", "apiVersion": "v1",
+		"metadata": map[string]string{"name": name, "namespace": parts[3], "resourceVersion": strconv.Itoa(version)},
+	})
 }
 
 func (f *kubernetesSecretSyncFixture) value(namespace, name string) string {

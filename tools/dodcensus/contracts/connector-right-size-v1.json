@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "name": "trstctl connector right-size entitlement mutation contract",
+  "request": {
+    "method": "PATCH",
+    "path": "/v1/entitlements/{target}",
+    "authentication": "tenant secret-store bearer token",
+    "idempotency": "Idempotency-Key is mandatory",
+    "body": "tenant, connector, target, usage-backed remove_scopes, and recommended_scopes"
+  },
+  "effect": {
+    "mutation": "remove exactly the requested unused scopes",
+    "response": "mutation id, removed scopes, and rollback reference",
+    "readback": "GET of the same entitlement must return the effective recommended scopes"
+  },
+  "security": {
+    "process": "out-of-process, nonce/entry/PID bound",
+    "tenant_isolation": "endpoint and token are selected by tenant plus connector",
+    "completion": "passed only after authenticated mutation and independent effective-scope readback"
+  }
+}

@@ -1733,7 +1733,7 @@ function remediationRunTone(status: string | undefined): StatusTone {
 function connectorDeliveryTone(status: NonNullable<RemediationPlaybookRun["connector_delivery"]>["status"]): StatusTone {
   if (status === "delivered" || status === "test_succeeded") return "success";
   if (status === "failed") return "critical";
-  if (status === "unrouted") return "warning";
+  if (status === "queued") return "warning";
   return "neutral";
 }
 

@@ -15,3 +15,15 @@ type Idempotency struct{}
 func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
 	return fn(ctx)
 }
+
+// DoBound is the canonical transactional sink with an authenticated command
+// digest in addition to the raw idempotency key.
+func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	return fn(ctx)
+}
+
+// DoDurableEffectBound is the canonical durable sink with an authenticated
+// command digest in addition to the raw idempotency key.
+func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, binding string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	return fn(ctx)
+}

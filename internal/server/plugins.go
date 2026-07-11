@@ -40,7 +40,7 @@ const (
 // and NO signer handle — a plugin fault is contained to its own wazero runtime
 // (the containment the host guarantees). It is wired into the served outbox
 // handler so a served `connector.deploy` whose connector names a loaded plugin is
-// pushed through the sandbox instead of being acknowledged unrouted.
+// pushed through the sandbox; missing or declining plugins leave the row pending.
 //
 // Tenancy (AN-1): the manager itself is shared infrastructure (a plugin is code,
 // not data), but every deploy it runs is invoked under the message's tenant and
@@ -402,7 +402,7 @@ func (c *wasmCA) emit(ctx context.Context, tenantID, evType, detail string) {
 // Deploy runs the connector plugin named by the deploy payload, capability-
 // sandboxed, for the given tenant. It returns (handled=false) when no plugin owns
 // the named connector, so the caller can fall through to the in-process connector
-// path or the unrouted ack. On a handled deploy it invokes the plugin's
+// path or fail the row closed. On a handled deploy it invokes the plugin's
 // entrypoint on the bounded pool (AN-7), treats a non-zero return OR any grant-
 // denied privileged op as a deployment failure (so an out-of-grant plugin cannot
 // silently "succeed"), and emits a tenant-scoped connector.deployed / .denied
@@ -421,7 +421,9 @@ func (pm *PluginManager) Deploy(ctx context.Context, tenantID string, payload co
 
 	switch {
 	case invErr != nil:
-		pm.emit(ctx, tenantID, "connector.plugin_failed", payload, fmt.Sprintf("invoke: %v", invErr))
+		// A host/plugin error can include attacker-controlled text. Persist only a
+		// closed diagnostic; return the original error to retry machinery below.
+		pm.emit(ctx, tenantID, "connector.plugin_failed", payload, "invoke_failed")
 		return true, fmt.Errorf("server: plugin %q deploy: %w", payload.Connector, invErr)
 	case deniedDelta > 0:
 		// The plugin attempted a privileged operation its grant forbids: the

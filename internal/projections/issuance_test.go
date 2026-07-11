@@ -12,7 +12,9 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/dependents"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 func issuanceCSR(t *testing.T) []byte {
@@ -131,6 +133,7 @@ func TestExternalCAIssueRedeliveryRecordsDependentOnce(t *testing.T) {
 		CSR:                    issuanceCSR(t),
 		TTLNanos:               int64(24 * time.Hour),
 		ProviderIdempotencyKey: ca.ProviderIdempotencyKey("external-issue-1"),
+		RequestBinding:         "projection-test-external-issue-1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -157,4 +160,59 @@ func TestExternalCAIssueRedeliveryRecordsDependentOnce(t *testing.T) {
 	if dep.IdempotencyKey != "external-issue-1" || dep.Source != "ca.issue" {
 		t.Fatalf("dependent idempotency/source = %q/%q, want external-issue-1/ca.issue", dep.IdempotencyKey, dep.Source)
 	}
+}
+
+func TestExternalCAIssuedCertificateInventoryRebuildsFromEventLog(t *testing.T) {
+	const authorityID = "a1000000-0000-4000-8000-000000000001"
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	registered, err := log.Append(ctx, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		Data: tenantRegistered("external-ca-event-tenant"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(s).Apply(ctx, registered); err != nil {
+		t.Fatal(err)
+	}
+	builtin, err := ca.NewBuiltin("external-event-ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := ca.NewIssuanceService(
+		builtin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s,
+		ca.WithAuditLog(log), ca.WithOutboxIssueWorker(authorityID, nil),
+	)
+	payload, err := json.Marshal(ca.ExternalIssuePayload{
+		AuthorityID: authorityID, TenantID: tenantA, CSR: issuanceCSR(t),
+		TTLNanos: int64(24 * time.Hour), ProviderIdempotencyKey: ca.ProviderIdempotencyKey("external-event-1"),
+		RequestBinding: "projection-test-external-event-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := orchestrator.Message{
+		TenantID: tenantA, Destination: ca.DestinationExternalCAIssue,
+		IdempotencyKey: "external-event-1", Payload: payload,
+	}
+	if err := svc.DeliverExternalIssue(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	assertInventory := func(where string) {
+		t.Helper()
+		rows, err := s.ListCertificatesByIssuanceIdempotencyKey(ctx, tenantA, "external-event-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 || len(rows[0].CertificateDER) == 0 || rows[0].Source != "external-ca:"+authorityID {
+			t.Fatalf("%s inventory = %+v, want one event-sourced external certificate", where, rows)
+		}
+	}
+	assertInventory("live")
+	if err := projections.New(s).Rebuild(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	assertInventory("rebuilt")
 }

@@ -59,12 +59,15 @@ func TestApprovalIdentityActionAcceptsRotate(t *testing.T) {
 	}
 }
 
-func TestOpenAPIIdentityApprovalAdvertisesRotate(t *testing.T) {
+func TestOpenAPIIdentityApprovalAdvertisesRotateAndCodeSign(t *testing.T) {
 	schemas := New(nil, nil, nil).Spec().Components.Schemas
 	for _, schema := range []string{"ApprovalRequest", "Approval"} {
 		action := schemas[schema].Properties["action"]
 		if !stringSliceContains(action.Enum, "rotate") {
 			t.Fatalf("%s.action enum = %v, want rotate", schema, action.Enum)
+		}
+		if !stringSliceContains(action.Enum, "sign") {
+			t.Fatalf("%s.action enum = %v, want sign", schema, action.Enum)
 		}
 	}
 }

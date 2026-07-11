@@ -104,12 +104,18 @@ func TestImportPreservesEnvelopeAndSuppressesDuplicateRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Import: %v", err)
 	}
-	retry, err := log.Import(ctx, source)
+	changedRetry := source
+	changedRetry.Time = sourceTime.Add(time.Hour)
+	changedRetry.Data = []byte(`{"id":"attacker-changed-retry"}`)
+	retry, err := log.Import(ctx, changedRetry)
 	if err != nil {
 		t.Fatalf("retry Import: %v", err)
 	}
 	if retry.Sequence != imported.Sequence {
 		t.Fatalf("duplicate import sequence = %d, want original sequence %d", retry.Sequence, imported.Sequence)
+	}
+	if !retry.Time.Equal(imported.Time) || !reflect.DeepEqual(retry.Data, imported.Data) {
+		t.Fatalf("duplicate append returned retry bytes/time instead of canonical event: %+v", retry)
 	}
 
 	got := collect(t, log, 0)

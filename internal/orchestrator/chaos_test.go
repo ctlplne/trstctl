@@ -18,7 +18,6 @@ package orchestrator_test
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -92,8 +91,8 @@ func TestChaosSignerSIGKILLMidIssueLeavesIntentRetryable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rec.Status != "pending" || rec.Attempts != 1 || !strings.Contains(rec.LastError, "signal killed") {
-		t.Fatalf("after signer death row = status=%q attempts=%d last_error=%q; want pending retry with signer-kill evidence",
+	if rec.Status != "pending" || rec.Attempts != 1 || rec.LastError != "external_delivery_failed" {
+		t.Fatalf("after signer death row = status=%q attempts=%d last_error=%q; want pending retry with sanitized failure evidence",
 			rec.Status, rec.Attempts, rec.LastError)
 	}
 

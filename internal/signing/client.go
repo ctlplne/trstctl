@@ -176,6 +176,7 @@ const (
 	PurposeSSHCert     = signerpb.KeyPurpose_KEY_PURPOSE_SSH_CERT
 	PurposeCodeSign    = signerpb.KeyPurpose_KEY_PURPOSE_CODE_SIGN
 	PurposeGeneric     = signerpb.KeyPurpose_KEY_PURPOSE_GENERIC
+	PurposeACMEAccount = signerpb.KeyPurpose_KEY_PURPOSE_ACME_ACCOUNT
 )
 
 // SignTokenProvider mints the per-request authorization token for a
@@ -351,14 +352,30 @@ func (r *RemoteSigner) Purpose() KeyPurpose { return r.purpose }
 // asserts the signer's bound purpose; if the key is purpose-constrained and the
 // purpose is not permitted, the signer refuses with FailedPrecondition.
 func (r *RemoteSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	return r.signDigest("", digest, opts)
+}
+
+// SignDigestForOperation asks the persistent signer to journal the exact result
+// under operationID before returning it. A redelivered durable outbox command
+// therefore receives byte-identical ECDSA/RSA output; reusing operationID for a
+// different tuple is rejected inside the isolated signer.
+func (r *RemoteSigner) SignDigestForOperation(operationID string, digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	if operationID == "" {
+		return nil, fmt.Errorf("signing: operation id is required for durable signing")
+	}
+	return r.signDigest(operationID, digest, opts)
+}
+
+func (r *RemoteSigner) signDigest(operationID string, digest []byte, opts crypto.SignOptions) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	req := &signerpb.SignRequest{
-		Handle:     r.handle,
-		Digest:     digest,
-		Hash:       hashToProto(opts.Hash),
-		RsaPadding: paddingToProto(opts.RSAPadding),
-		Purpose:    r.purpose,
+		Handle:      r.handle,
+		Digest:      digest,
+		Hash:        hashToProto(opts.Hash),
+		RsaPadding:  paddingToProto(opts.RSAPadding),
+		Purpose:     r.purpose,
+		OperationId: operationID,
 	}
 	// For a dual-control key, mint and attach the authorization token over the exact
 	// signing tuple as byte-native request material (RED-003). The token commits to

@@ -18,9 +18,10 @@ import (
 // keys, AN-8), so the conformance harness's public-key verification actually passes — the
 // same role fakeKMS plays for the AWS KMS backend. No crypto/* is imported here.
 type softSession struct {
-	mu   sync.Mutex
-	keys map[string]*softKey
-	n    int
+	mu         sync.Mutex
+	keys       map[string]*softKey
+	operations map[string]string
+	n          int
 }
 
 type softKey struct {
@@ -30,7 +31,7 @@ type softKey struct {
 }
 
 func newSoftSession() *softSession {
-	return &softSession{keys: map[string]*softKey{}}
+	return &softSession{keys: map[string]*softKey{}, operations: map[string]string{}}
 }
 
 func (s *softSession) GenerateKey(alg crypto.Algorithm) (string, []byte, error) {
@@ -43,6 +44,31 @@ func (s *softSession) GenerateKey(alg crypto.Algorithm) (string, []byte, error) 
 	handle := "obj-" + hex.EncodeToString([]byte{byte(s.n)})
 	s.keys[handle] = &softKey{signer: ls}
 	s.mu.Unlock()
+	return handle, ls.Public().DER, nil
+}
+
+func (s *softSession) GenerateKeyForOperation(operationID string, alg crypto.Algorithm) (string, []byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if handle := s.operations[operationID]; handle != "" {
+		key := s.keys[handle]
+		if key == nil {
+			return "", nil, errUnknownHandle
+		}
+		return handle, key.signer.Public().DER, nil
+	}
+	digest, err := crypto.Digest(crypto.SHA256, []byte("trstctl:pkcs11:managed-key:"+operationID))
+	if err != nil {
+		return "", nil, err
+	}
+	ls, err := crypto.GenerateLockedKey(alg)
+	if err != nil {
+		return "", nil, err
+	}
+	handle := hex.EncodeToString(digest[:16])
+	s.n++
+	s.keys[handle] = &softKey{signer: ls}
+	s.operations[operationID] = handle
 	return handle, ls.Public().DER, nil
 }
 
@@ -81,12 +107,20 @@ func (s *softSession) ZeroizeKey(handle string) error {
 	defer s.mu.Unlock()
 	key := s.keys[handle]
 	if key == nil {
-		return errUnknownHandle
+		return nil
 	}
 	key.zeroized = true
 	key.signer.Destroy()
 	delete(s.keys, handle)
 	return nil
+}
+
+func (s *softSession) RevokeKeyForOperation(_ string, handle string) error {
+	return s.RevokeKey(handle)
+}
+
+func (s *softSession) ZeroizeKeyForOperation(_ string, handle string) error {
+	return s.ZeroizeKey(handle)
 }
 
 func (s *softSession) Close() error {
@@ -197,5 +231,56 @@ func TestPKCS11RemoteKeyLifecycle(t *testing.T) {
 	}
 	if _, err := successor.Sign(msg, opts); err == nil {
 		t.Fatal("zeroized PKCS#11 key still signed")
+	}
+}
+
+func TestPKCS11OperationIdentityReconcilesCreateRevokeAndZeroize(t *testing.T) {
+	sess := newSoftSession()
+	t.Cleanup(func() { _ = sess.Close() })
+	backend := pkcs11.New(sess)
+	var lifecycle crypto.OperationAwareRemoteKeyLifecycle = backend
+	ctx := context.Background()
+
+	first, firstRef, err := lifecycle.GenerateManagedKeyForOperation(ctx, "pkcs11-create-op", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A fresh backend models signer restart while the token remains authoritative.
+	replayed, replayedRef, err := pkcs11.New(sess).GenerateManagedKeyForOperation(ctx, "pkcs11-create-op", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayedRef != firstRef || sess.n != 1 || !crypto.ConstantTimeEqual(replayed.Public().DER, first.Public().DER) {
+		t.Fatalf("create reconciliation refs=%+v/%+v token effects=%d", firstRef, replayedRef, sess.n)
+	}
+	if err := lifecycle.RevokeKeyForOperation(ctx, "pkcs11-revoke-op", firstRef); err != nil {
+		t.Fatal(err)
+	}
+	if err := lifecycle.RevokeKeyForOperation(ctx, "pkcs11-revoke-op", firstRef); err != nil {
+		t.Fatalf("reconcile revoke: %v", err)
+	}
+	if _, err := first.Sign([]byte("revoked"), crypto.SignOptions{Hash: crypto.SHA256}); err == nil {
+		t.Fatal("reconciled revoke still signs")
+	}
+
+	successor, successorRef, err := lifecycle.RotateKeyForOperation(ctx, "pkcs11-rotate-op", firstRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayedSuccessor, replayedSuccessorRef, err := lifecycle.RotateKeyForOperation(ctx, "pkcs11-rotate-op", firstRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayedSuccessorRef != successorRef || sess.n != 2 || !crypto.ConstantTimeEqual(successor.Public().DER, replayedSuccessor.Public().DER) {
+		t.Fatalf("rotate reconciliation refs=%+v/%+v token effects=%d", successorRef, replayedSuccessorRef, sess.n)
+	}
+	if err := lifecycle.ZeroizeKeyForOperation(ctx, "pkcs11-zeroize-op", successorRef); err != nil {
+		t.Fatal(err)
+	}
+	if err := lifecycle.ZeroizeKeyForOperation(ctx, "pkcs11-zeroize-op", successorRef); err != nil {
+		t.Fatalf("reconcile zeroize: %v", err)
+	}
+	if _, err := successor.Sign([]byte("zeroized"), crypto.SignOptions{Hash: crypto.SHA256}); err == nil {
+		t.Fatal("reconciled zeroize still signs")
 	}
 }

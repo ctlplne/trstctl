@@ -74,8 +74,8 @@ func TestDeliversCard(t *testing.T) {
 	}
 }
 
-// TestWebhookNotLeakedOnError (AN-8): a non-2xx response must surface the service's
-// error body but never the secret webhook URL, even on the failure path.
+// TestWebhookNotLeakedOnError (AN-8): a non-2xx response surfaces only its status;
+// neither the untrusted response body nor the secret webhook URL may escape.
 func TestWebhookNotLeakedOnError(t *testing.T) {
 	srv := newFakeTeams()
 	srv.FailNext(http.StatusBadRequest, "Bad payload received by the webhook.")
@@ -95,8 +95,8 @@ func TestWebhookNotLeakedOnError(t *testing.T) {
 	if !strings.Contains(err.Error(), "400") {
 		t.Errorf("want a 400 status in the error, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "Bad payload") {
-		t.Errorf("error should surface the Teams response body, got: %v", err)
+	if strings.Contains(err.Error(), "Bad payload") {
+		t.Errorf("error surfaced the untrusted Teams response body: %v", err)
 	}
 	if strings.Contains(err.Error(), secret) {
 		t.Fatalf("error leaked the webhook URL secret: %v", err)
@@ -131,9 +131,9 @@ func TestDefaultClientRejectsUnsafeWebhookEndpoints(t *testing.T) {
 // A real Teams incoming webhook accepts a POSTed MessageCard and replies 200 with the
 // literal body "1" on success, or a 4xx with a plain-text error on a bad payload. This
 // double captures the last posted card so a test can assert its shape, counts posts, and
-// can be told to fail the next post (to exercise the error path). It never echoes the
-// request URL in any response, so surfacing its body as the channel's error text cannot
-// leak the webhook URL (AN-8). No crypto/* (AN-3) — there is nothing to sign.
+// can be told to fail the next post (to exercise the error path). The failure body is
+// intentionally attacker-controlled so the channel can prove it discards it (AN-8).
+// No crypto/* (AN-3) — there is nothing to sign.
 
 type fakeTeams struct {
 	srv *httptest.Server

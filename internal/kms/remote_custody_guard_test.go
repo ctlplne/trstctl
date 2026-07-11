@@ -85,14 +85,18 @@ func TestAWSKMSRemoteLifecycleStaysProviderOwned(t *testing.T) {
 
 func TestCloudKMSProviderCallsStayContextBound(t *testing.T) {
 	cases := []struct {
-		name     string
-		rel      string
-		snippets []string
+		name              string
+		rel               string
+		credentialBuffers int
+		snippets          []string
 	}{
 		{
-			name: "aws-kms",
-			rel:  "awskms/awskms.go",
+			name:              "aws-kms",
+			rel:               "awskms/awskms.go",
+			credentialBuffers: 3,
 			snippets: []string{
+				"secretAccessKey *secret.Buffer",
+				"sessionToken    *secret.Buffer",
 				"_ crypto.ContextKeyGenerator = (*Backend)(nil)",
 				"_ crypto.ContextSigner       = (*kmsSigner)(nil)",
 				"return b.GenerateKeyContext(context.Background(), alg)",
@@ -107,9 +111,11 @@ func TestCloudKMSProviderCallsStayContextBound(t *testing.T) {
 			},
 		},
 		{
-			name: "azure-key-vault",
-			rel:  "azurekv/azurekv.go",
+			name:              "azure-key-vault",
+			rel:               "azurekv/azurekv.go",
+			credentialBuffers: 1,
 			snippets: []string{
+				"token     *secret.Buffer",
 				"_ crypto.ContextKeyGenerator = (*Backend)(nil)",
 				"_ crypto.ContextSigner       = (*kvSigner)(nil)",
 				"return b.GenerateKeyContext(context.Background(), alg)",
@@ -123,9 +129,11 @@ func TestCloudKMSProviderCallsStayContextBound(t *testing.T) {
 			},
 		},
 		{
-			name: "gcp-kms",
-			rel:  "gcpkms/gcpkms.go",
+			name:              "gcp-kms",
+			rel:               "gcpkms/gcpkms.go",
+			credentialBuffers: 1,
 			snippets: []string{
+				"token     *secret.Buffer",
 				"_ crypto.ContextKeyGenerator = (*Backend)(nil)",
 				"_ crypto.ContextSigner       = (*kmsSigner)(nil)",
 				"return b.GenerateKeyContext(context.Background(), alg)",
@@ -144,10 +152,14 @@ func TestCloudKMSProviderCallsStayContextBound(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			src := readSource(t, tc.rel)
 			assertContains(t, tc.name, src, tc.snippets...)
+			if got := strings.Count(src, "secret.Buffer"); got != tc.credentialBuffers {
+				t.Fatalf("%s: secret.Buffer occurrences = %d, want exactly %d credential buffers", tc.name, got, tc.credentialBuffers)
+			}
 			assertNotContains(t, tc.name, src,
 				"GenerateLockedKey(",
 				"NewLockedSigner",
-				"secret.Buffer")
+				"privateDER",
+				"privateKey")
 		})
 	}
 }

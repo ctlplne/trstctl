@@ -15,11 +15,14 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // ManagedKey is the key-material-free result contract returned by the licensed
@@ -44,14 +47,15 @@ var (
 // The API depends only on this minimal interface
 // so it never links a concrete KMS backend; the composition root wires the backend,
 // event sink, dual-control gate, and optional service-level idempotency into the
-// service. The served HTTP path already wraps every handler in a.mutate (AN-5), so
-// these handlers pass an empty service idempotency key and let the API idempotency
-// recorder own request replay exactly once.
+// service. The served HTTP path binds every handler's canonical command and
+// authenticated principal before invoking the durable service (AN-5). The same raw
+// Idempotency-Key reaches both layers so the API owns byte-for-byte HTTP replay and
+// the durable receiver owns collapse of the event/outbox effect.
 type ManagedKeyService interface {
-	Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, idempotencyKey string) (ManagedKey, error)
-	Rotate(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (ManagedKey, error)
-	Revoke(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (ManagedKey, error)
-	Zeroize(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (ManagedKey, error)
+	Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (ManagedKey, error)
+	Rotate(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
+	Revoke(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
+	Zeroize(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
 }
 
 // WithManagedKeys mounts the served managed-key lifecycle surface (CRYPTO-005). When
@@ -116,6 +120,8 @@ func requesterFor(ctx context.Context) (string, error) {
 // mapManagedKeyError maps service-layer errors to problem+json statuses.
 func mapManagedKeyError(err error) error {
 	switch {
+	case errors.Is(err, orchestrator.ErrIdempotencyConflict):
+		return errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request")
 	case errors.Is(err, ErrManagedKeyNotApproved):
 		return errStatus(http.StatusForbidden, "dual control: "+err.Error())
 	case errors.Is(err, ErrManagedKeyUnknown):
@@ -141,15 +147,36 @@ func (a *API) generateManagedKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req managedKeyGenerateRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		if req.Algorithm == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "algorithm is required")
-		}
-		res, err := a.managedKeys.Generate(ctx, tenantID, crypto.Algorithm(req.Algorithm), "")
+	if idempotencyKey == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	var req managedKeyGenerateRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if req.Algorithm == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "algorithm is required"))
+		return
+	}
+	alg, err := parseManagedKeyAlgorithm(req.Algorithm)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	requester, err := requesterFor(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, err := managedKeyRequestBinding("generate", requester, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		res, err := a.managedKeys.Generate(ctx, tenantID, alg, idempotencyKey, binding)
 		if err != nil {
 			return 0, nil, mapManagedKeyError(err)
 		}
@@ -168,9 +195,7 @@ func (a *API) rotateManagedKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return managedKeyMutation(ctx, r, tenantID, a.managedKeys.Rotate)
-	})
+	a.managedKeyAction(w, r, idempotencyKey, "rotate", a.managedKeys.Rotate)
 }
 
 // revokeManagedKey disables a managed key at the provider (it refuses further
@@ -183,9 +208,7 @@ func (a *API) revokeManagedKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return managedKeyMutation(ctx, r, tenantID, a.managedKeys.Revoke)
-	})
+	a.managedKeyAction(w, r, idempotencyKey, "revoke", a.managedKeys.Revoke)
 }
 
 // zeroizeManagedKey schedules destruction of a managed key's material at the
@@ -199,31 +222,68 @@ func (a *API) zeroizeManagedKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return managedKeyMutation(ctx, r, tenantID, a.managedKeys.Zeroize)
+	a.managedKeyAction(w, r, idempotencyKey, "zeroize", a.managedKeys.Zeroize)
+}
+
+// managedKeyAction is the shared body of the destructive handlers. It decodes and
+// validates the command and authenticated requester before the recorder can return
+// a cached response, then binds both to the raw tenant-global idempotency key. A
+// changed key, action, or caller therefore receives 409 without reaching approval
+// or the durable service.
+func (a *API) managedKeyAction(w http.ResponseWriter, r *http.Request, idempotencyKey, operation string, op func(ctx context.Context, tenantID, keyID, requester, idem, requestBinding string) (ManagedKey, error)) {
+	if idempotencyKey == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	var req managedKeyActionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if req.KeyID == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "key_id is required"))
+		return
+	}
+	requester, err := requesterFor(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, err := managedKeyRequestBinding(operation, requester, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		res, err := op(ctx, tenantID, req.KeyID, requester, idempotencyKey, binding)
+		if err != nil {
+			return 0, nil, mapManagedKeyError(err)
+		}
+		return http.StatusOK, toManagedKeyResponse(res), nil
 	})
 }
 
-// managedKeyMutation is the shared closure body of the three destructive handlers:
-// it decodes the key id, resolves the requester, and invokes the service op (which
-// enforces dual control before any provider side effect). Request idempotency is
-// already handled by a.mutate at the HTTP boundary, so the service receives an empty
-// idempotency key and does not open a nested recorder transaction.
-func managedKeyMutation(ctx context.Context, r *http.Request, tenantID string, op func(ctx context.Context, tenantID, keyID, requester, idem string) (ManagedKey, error)) (int, any, error) {
-	var req managedKeyActionRequest
-	if err := decodeJSON(r, &req); err != nil {
-		return 0, nil, errWithStatus(http.StatusBadRequest, err)
+func parseManagedKeyAlgorithm(raw string) (crypto.Algorithm, error) {
+	alg := crypto.Algorithm(raw)
+	switch alg {
+	case crypto.RSA2048, crypto.RSA3072, crypto.RSA4096,
+		crypto.ECDSAP256, crypto.ECDSAP384, crypto.ECDSAP521:
+		return alg, nil
+	default:
+		return "", errStatus(http.StatusBadRequest, "unsupported managed-key algorithm")
 	}
-	if req.KeyID == "" {
-		return 0, nil, errStatus(http.StatusBadRequest, "key_id is required")
-	}
-	requester, err := requesterFor(ctx)
+}
+
+func managedKeyRequestBinding(operation, principal string, request any) (string, error) {
+	encoded, err := json.Marshal(struct {
+		Domain    string `json:"domain"`
+		Operation string `json:"operation"`
+		Principal string `json:"principal"`
+		Request   any    `json:"request"`
+	}{Domain: "trstctl.api.managed-key-binding.v1", Operation: operation, Principal: principal, Request: request})
 	if err != nil {
-		return 0, nil, err
+		return "", err
 	}
-	res, err := op(ctx, tenantID, req.KeyID, requester, "")
-	if err != nil {
-		return 0, nil, mapManagedKeyError(err)
-	}
-	return http.StatusOK, toManagedKeyResponse(res), nil
+	defer secret.Wipe(encoded)
+	return crypto.SHA256Hex(encoded), nil
 }

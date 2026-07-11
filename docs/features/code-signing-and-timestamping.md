@@ -21,9 +21,9 @@ pipeline. Signing every artifact and verifying signatures before you run them cl
 door. But signing has two operational hazards: the signing key is extremely valuable (so
 it must never sit in a build script), and signatures normally become unverifiable once
 the signing certificate expires (so long-lived artifacts "rot"). trstctl addresses both
-— keys stay in an [HSM](../glossary.md)/the isolated signer, every signature is policy-
-and approval-gated, and the TSA provides the timestamps that give signatures long-term
-validity.
+— keys stay in an [HSM](../glossary.md)/the isolated signer, the shipped signing path
+composes with the live policy and distinct-approver gates when those controls are
+enabled, and the TSA provides the timestamps that give signatures long-term validity.
 
 ## How it works
 
@@ -32,26 +32,42 @@ validity.
 The service signs the *digest* (hash) of an artifact, never the artifact itself, so it
 works for anything — a 4 KB manifest or a 4 GB image. Two modes:
 
-- **Key-based signing.** Every request first passes a **gate**: a policy + just-in-time
-  [approval](incident-and-jit.md) check (`MaySign(tenant, principal, key, digest)`). A
-  denial is audited (`codesign.refused`) and signs nothing. On approval, the key is
+- **Key-based signing.** The API first seals the complete command with tenant- and
+  operation-bound AAD, appends `codesign.commanded`, and projects the command plus
+  `codesign.command` outbox row in one PostgreSQL transaction. Only the bounded outbox
+  worker opens it and passes it through the **gate** when `ca.policy.enabled` and/or
+  `ca.policy.require_approval` is configured: the same live, bulkheaded OPA evaluator
+  and PostgreSQL distinct-approver store used by the served lifecycle gate evaluate
+  `MaySign(tenant, principal, key, digest)`. A denial is audited (`codesign.refused`)
+  and signs nothing. On approval, the key is
   resolved to a signer handle and the digest is signed through the single crypto path —
-  an HSM/PKCS#11-backed resolver in production, or a software resolver for eval/test
-  deployments. The private key lives behind the resolver/signer boundary and never
+  a persistent, purpose-constrained signer-local resolver in production, or an
+  explicitly configured ephemeral software resolver for eval/test deployments. The
+  private key lives behind the resolver/signer boundary and never
   appears in the request, response, logs, or API process memory. The signature, public
   key, and algorithm come back; the act is recorded as an immutable `codesign.signed`
-  event. The transparency-log publication is queued as an outbox row
-  (`transparency.rekor` by default), so the request thread never calls Rekor inline.
+  event. Before replying, the isolated signer journals the operation ID, exact signing
+  tuple, and exact signature under its sealed persistent store. A crash after a
+  randomized ECDSA operation therefore replays the original bytes instead of signing
+  twice. `codesign.completed` projects the exact API response and queues the
+  transparency-log publication (`transparency.rekor` by default) atomically. The
+  request thread only wakes the dispatcher and polls its exact operation; it calls
+  neither the signer nor Rekor inline and holds no database transaction while waiting.
 - **Keyless signing (Sigstore/Fulcio style).** Instead of a long-lived key, the caller
   presents a verified [attestation](workload-identity.md) (for example, a CI job's OIDC
-  identity). The served API verifies that proof through the configured Fulcio-style
-  attestor, generates a fresh ephemeral key, signs the digest, and binds the signature
+  identity). The identity payload is inside the sealed command, never plaintext in the
+  event log, PostgreSQL, or outbox. The outbox worker verifies that proof through the
+  configured Fulcio-style attestor, binds or creates a deterministic operation-scoped
+  ephemeral signer handle, signs the digest, and binds the signature
   to the **verified** identity: the Fulcio SAN and issuer are **derived from the
   attestation** (its verified subject and issuer), not taken from caller-supplied
   strings. A request whose claimed SAN/issuer contradicts the attestation is refused
   (`codesign.keyless.refused`), and a request with no verified attestation is rejected
-  outright. The signed bundle is queued to Rekor through outbox, just like key-based
-  signing.
+  outright. Completion atomically queues both the Rekor bundle and a durable
+  `codesign.cleanup` command. The handle is deterministically derived from the durable
+  operation ID, including when a crash loses the in-memory return value before the
+  completion event. Cleanup is idempotent and records `codesign.ephemeral.destroyed`,
+  so a process crash cannot silently strand an ephemeral handle.
 
 Verification (`Verify`, `VerifyKeyless`) also routes through the single crypto path. The
 service keeps each tenant's data isolated at the database layer and holds
@@ -81,11 +97,13 @@ private keys and artifact bytes never enter the browser. See
 
 ## Use it
 
-The served code-signing API is disabled unless the deployment composition supplies a
-`CodeSigningConfig` with a key resolver, optional signing gate, Fulcio-style attestors,
-and a Rekor/transparency outbox handler. When it is enabled, sign an artifact digest
-through the REST API or CLI. The authenticated token subject becomes the signer
-principal; there is no trusted `principal` field in the request body.
+The served code-signing API is disabled unless the operator enables the shipped
+`code_signing` configuration. That configuration tenant-binds signer handles and
+Fulcio-style attestors and pins the Rekor log public key. When enabled, sign exactly one
+32-byte SHA-256 artifact digest through the REST API or CLI. trstctl signs those exact
+digest bytes; it does not hash the digest a second time. The authenticated token subject
+becomes the signer principal; there is no trusted `principal` field in the request body.
+See [Configuration](../configuration.md#code-signing) for a complete production example.
 
 Key-based signing:
 
@@ -109,9 +127,7 @@ cat > code-sign-keyless.json <<'JSON'
   "artifact_type": "oci-image",
   "digest": "4EW4IfBBkDngEwN3v+ChO06PV2er4tF7nEVmFev3x1g=",
   "identity_method": "github_oidc",
-  "identity_payload": "eyJqd3QiOiJleGFtcGxlIn0=",
-  "fulcio_san": "repo:acme/payments:ref:refs/heads/main",
-  "fulcio_issuer": "https://token.actions.githubusercontent.com"
+  "identity_payload": "eyJqd3QiOiJleGFtcGxlIn0="
 }
 JSON
 
@@ -122,8 +138,28 @@ Both responses return `algorithm`, `signature`, `public_key_der`,
 `artifact_type`, and `transparency_destination`; key-based responses include `key_id`,
 and keyless responses include the verified `fulcio_san` and `fulcio_issuer`. The
 `signature` and `public_key_der` fields are base64 JSON bytes. A verifier checks the
-signature over the same digest, then uses the Rekor inclusion record once the outbox
-worker has delivered the transparency entry.
+signature over the same digest. The outbox worker submits an official Rekor v1
+HashedRekord, verifies that the returned body binds the digest, signature, and public
+key, and verifies the signed-entry timestamp with the operator-pinned log key before it
+acknowledges delivery. On an idempotent `409`, it follows only the same-origin Rekor
+`Location`, reads the existing entry, and applies the same verification.
+
+`Idempotency-Key` is bound to the canonical command. An identical replay returns the
+persisted original response byte-for-byte without another signature. Reusing the same
+key for a different digest, key, artifact type, principal, or identity proof is rejected;
+a terminal worker failure is projected as an immutable `codesign.failed` fact before the
+outbox dead-letters it, even when the original HTTP caller disconnected. Failure values
+are closed-form codes (never an upstream error string that could echo identity material).
+
+When `ca.policy.require_approval` is enabled, the first denied signing response is `403`
+and includes a non-secret `approval_required:codesign:<sha256>` resource. A distinct
+approver records `{"action":"sign"}` for that exact resource through
+`POST /api/v1/identities/{resource}/approvals`; the requester then submits the same
+principal/key/digest with a **new** `Idempotency-Key`. The approval resource binds the
+tenant-scoped authenticated principal, key (or verified keyless identity), and exact
+artifact digest, so an approval cannot authorize another caller or artifact. The
+approval route requires `certs:issue`; the signing request itself still requires
+`keys:write`.
 
 For long-term validity, timestamp the returned signature through the TSA:
 
@@ -139,10 +175,15 @@ curl -sS -H 'Content-Type: application/timestamp-query' \
 
 - **Serving status:** code signing is served at `POST /api/v1/code-signing/sign` and
   `POST /api/v1/code-signing/keyless`, with matching `trstctl-cli code-signing sign`
-  and `trstctl-cli code-signing keyless` commands. The surface is fail-closed with
-  `501` until the deployment wires `CodeSigningConfig`; mutations require
-  `Idempotency-Key` and the `keys:write` permission. The TSA is served by the running
-  control plane at `/tsa` when `protocols.tsa.enabled` plus
+  and `trstctl-cli code-signing keyless` commands. The shipped binary constructs the
+  service from `code_signing`; the surface is fail-closed with `501` while that
+  configuration is disabled. Startup fails closed if an enabled configuration lacks
+  an isolated signer, tenant-bound keys/attestors, or pinned Rekor log trust. Mutations
+  require `Idempotency-Key` and the `keys:write` permission. Policy and distinct-
+  approver enforcement engage when the shared `ca.policy.enabled` /
+  `ca.policy.require_approval` controls are enabled; without those optional controls,
+  RBAC plus signer purpose constraints remain the authorization boundary. The TSA is served by the
+  running control plane at `/tsa` when `protocols.tsa.enabled` plus
   `protocols.tsa.tenant_id` are set; it returns `application/timestamp-reply`
   `TimeStampResp` bodies.
 - **TSA wire format is real RFC 3161; code-signing bundle is pragmatic JSON plus
@@ -155,8 +196,12 @@ curl -sS -H 'Content-Type: application/timestamp-query' \
   through outbox. The Rekor payload contains digest, signature, public key, key id or
   Fulcio identity, and no private material or artifact bytes. If you need byte-level
   cosign bundle interchange, validate that bundle encoding in your deployment.
-- **Keys belong in the signer.** Use HSM/KMS-backed keys (see
-  [Issuance & CAs](issuance-and-cas.md)) so signing keys never live in a build agent.
+- **Keys belong in the signer.** The shipped code-signing resolver uses persistent,
+  purpose-constrained keys inside the isolated `trstctl-signer`, so signing keys
+  never live in a build agent. The separately served HSM/KMS managed-key and CA
+  custody paths are not currently a code-signing key resolver; do not describe a
+  configured code-signing handle as hardware-backed unless that bridge is added and
+  independently proven.
 - **Keyless still needs a real attestation** — it's only as strong as the OIDC identity
   you verify, and that identity is enforced: the served keyless path derives the signed
   SAN/issuer from the verified attestation and refuses a request that supplies a
@@ -169,8 +214,10 @@ curl -sS -H 'Content-Type: application/timestamp-query' \
   `trstctl-cli code-signing keyless`, `Service.Sign`, `Service.SignKeyless`,
   `Verify`, `VerifyKeyless`.
 - **Timestamping:** `Authority.Timestamp`, `Verify`, `VerifyLongTermValidity` (RFC 3161).
-- **Events:** `codesign.signed`, `codesign.refused`, `codesign.keyless.signed`,
-  `attestation.verified`, `tsa.timestamp.issued`; Rekor publication uses the
+- **Events:** `codesign.commanded`, `codesign.completed`, `codesign.failed`,
+  `codesign.ephemeral.destroyed`, `codesign.signed`, `codesign.refused`,
+  `codesign.keyless.signed`, `attestation.verified`, `tsa.timestamp.issued`; worker
+  execution uses `codesign.command`/`codesign.cleanup`, and Rekor publication uses the
   `transparency.rekor` outbox destination.
 - **Related:** the signing key lives behind the separate, isolated
   [signing service](../design/signing-service.md), never in the API process; the

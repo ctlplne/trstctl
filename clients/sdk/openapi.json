@@ -1132,7 +1132,8 @@
             "enum": [
               "issue",
               "rotate",
-              "revoke"
+              "revoke",
+              "sign"
             ],
             "type": "string"
           },
@@ -1160,7 +1161,8 @@
             "enum": [
               "issue",
               "rotate",
-              "revoke"
+              "revoke",
+              "sign"
             ],
             "type": "string"
           }
@@ -3807,7 +3809,7 @@
           },
           "status": {
             "enum": [
-              "unrouted",
+              "queued",
               "delivered",
               "failed",
               "test_succeeded",

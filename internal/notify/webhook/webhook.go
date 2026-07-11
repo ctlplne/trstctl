@@ -39,11 +39,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 )
@@ -157,24 +157,21 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	return nil
 }
 
-// readError turns a non-2xx response into a postError whose text is the response body.
-// The receiver's error body is its own message and never carries the HMAC key (the key
-// never leaves this process), so surfacing it does not leak the secret (AN-8).
+// readError bounds and discards the untrusted receiver body. Receivers can echo the
+// submitted alert, so the body must never become an immutable error string (AN-8).
 func readError(resp *http.Response) error {
-	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return &postError{status: resp.StatusCode, body: string(bytes.TrimSpace(msg))}
+	_ = secret.DrainBounded(resp.Body, 4096)
+	return &postError{status: resp.StatusCode}
 }
 
 // drain consumes and discards a successful response body so the connection can be reused.
-func drain(resp *http.Response) { _, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) }
+func drain(resp *http.Response) { _ = secret.DrainBounded(resp.Body, 1<<20) }
 
-// postError is a non-2xx webhook response. Its body is the receiver's error text and
-// never carries the HMAC key (AN-8).
+// postError is a body-free non-2xx webhook response (AN-8).
 type postError struct {
 	status int
-	body   string
 }
 
 func (e *postError) Error() string {
-	return fmt.Sprintf("webhook: status %d: %s", e.status, e.body)
+	return fmt.Sprintf("webhook: status %d (response body redacted)", e.status)
 }

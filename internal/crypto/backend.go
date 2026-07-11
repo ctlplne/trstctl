@@ -67,6 +67,38 @@ type RemoteKeyLifecycle interface {
 	ZeroizeKey(ctx context.Context, ref KeyRef) error
 }
 
+// OperationAwareRemoteKeyLifecycle is the crash-reconciling extension used by
+// the isolated signer for served managed-key commands. operationID is the
+// durable command identity written to the signer journal before provider I/O.
+// Repeating any method with the same operationID and command MUST find or
+// reconcile the original provider effect; it must never create a second key or
+// repeat an unsafe destructive transition.
+//
+// RemoteKeyLifecycle remains the library contract for callers that do not own a
+// durable operation identity. Shipped signer providers implement both contracts;
+// the signer prefers this one whenever it is available.
+type OperationAwareRemoteKeyLifecycle interface {
+	// GenerateManagedKeyForOperation creates or finds the key deterministically
+	// owned by operationID.
+	GenerateManagedKeyForOperation(ctx context.Context, operationID string, algorithm Algorithm) (Signer, KeyRef, error)
+	// RotateKeyForOperation creates or finds the successor deterministically owned
+	// by operationID while leaving ref intact.
+	RotateKeyForOperation(ctx context.Context, operationID string, ref KeyRef) (Signer, KeyRef, error)
+	// RevokeKeyForOperation ensures ref is disabled/retired and confirms provider
+	// state when operationID is replayed.
+	RevokeKeyForOperation(ctx context.Context, operationID string, ref KeyRef) error
+	// ZeroizeKeyForOperation ensures provider destruction is scheduled/completed
+	// and confirms that terminal state when operationID is replayed.
+	ZeroizeKeyForOperation(ctx context.Context, operationID string, ref KeyRef) error
+}
+
+// RemoteKeyDigestSigner is the signer-process-only operation for an existing
+// provider key reference. Implementations must perform the private-key
+// operation at the provider/device and return only the signature.
+type RemoteKeyDigestSigner interface {
+	SignManagedDigest(ctx context.Context, ref KeyRef, digest []byte, opts SignOptions) ([]byte, error)
+}
+
 // ConformBackend is the backend conformance harness. For each algorithm it generates a
 // key, signs a probe message, verifies the signature against the returned public key,
 // confirms the reported algorithm, and confirms that a wrong message and a tampered

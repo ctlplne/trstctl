@@ -211,6 +211,22 @@ trstctl incidents executions list --identity_id 11111111-1111-1111-1111-11111111
 trstctl incidents executions get 22222222-2222-2222-2222-222222222222
 ```
 
+`right-size.json` names the identity whose usage-backed posture finding supplies the
+allowed scope delta. The `connector` must match an operator
+`connectors.right_size` binding, and `target` is the entitlement resource at that
+provider:
+
+```json
+{
+  "target_identity_id": "11111111-1111-1111-1111-111111111111",
+  "reason": "remove the unused deployment grant",
+  "connector": "least-privilege",
+  "target": "payments-deployer",
+  "remove_scopes": ["deploy:write"],
+  "recommended_scopes": ["deploy:read"]
+}
+```
+
 ```json
 {
   "identity_id": "11111111-1111-1111-1111-111111111111",
@@ -386,7 +402,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   `/api/v1/remediation/owner-actions/{id}/accept`,
   `trstctl remediation owner-actions *`, and the `/incidents` console; NHI
   right-size runs require usage-backed CAP-POST-01 posture evidence and queue
-  `connector.right_size` through the outbox;
+  `connector.right_size` through the outbox. A configured tenant/connector binding
+  applies the least-privilege scope removal to the external entitlement API, reads
+  the effective scopes back, and records a delivered/failed connector receipt;
   CA-compromise fleet re-issuance (F32) is served through
   `/api/v1/incidents/fleet-reissuance-runs`,
   `trstctl incidents fleet-reissuance *`, and the `/incidents` console;
@@ -418,8 +436,10 @@ notifications use the [notification integrations](policy-and-governance.md).
   `Workflow.Preview`, `Workflow.Remediate` (replacement→deploy→revoke).
 - **Playbooks:** `/api/v1/remediation/playbooks`,
   `/api/v1/remediation/playbooks/{id}/runs`, `remediation.playbook_run.recorded`,
-  and `connector.right_size` outbox delivery for right-size; revoke/rotate use the
-  lifecycle state machine.
+  and `connector.right_size` outbox delivery plus authenticated entitlement readback
+  for right-size; revoke/rotate use the lifecycle state machine. The operator binding
+  is under `connectors.right_size` in
+  [Configuration](../configuration.md#native-connector-and-external-ca-assembly).
 - **ITSM:** `/api/v1/itsm/servicenow/tickets`, `itsm.ticket.requested`,
   `itsm.servicenow` outbox delivery; token material by `token_ref` only.
 - **Response integrations:** `/api/v1/incidents/response-integrations/dispatch`,

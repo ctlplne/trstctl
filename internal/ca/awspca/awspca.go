@@ -7,12 +7,10 @@
 // AWS Private CA issues asynchronously over a two-call flow: IssueCertificate
 // submits the CSR and returns a certificate ARN, then GetCertificate is polled —
 // it raises RequestInProgressException until the certificate is ready, then
-// returns the leaf and chain (PEM). That API is reached through the AWS SDK with
-// SigV4/IAM authentication, which (like ADCS's DCOM/RPC) cannot run in a Linux
-// CI; so this package drives the acm-pca *operation semantics* — the part that is
-// CA-specific logic — over the awspca.API seam, with a faithful in-process double
-// for CI (internal/ca/awspca/awspcafake). The production AWS-SDK transport is the
-// integration follow-up.
+// returns the leaf and chain (PEM). HTTPAPI is the production AWS JSON 1.1
+// transport and signs every call with SigV4/IAM credentials. The API seam keeps
+// issue/poll semantics testable with the faithful in-process double in
+// internal/ca/awspca/awspcafake.
 //
 // The package holds no crypto/* (AN-3) and custodies no signing key — AWS does —
 // so AN-4 is not implicated; on the platform it runs behind ca.IssuanceService
@@ -70,10 +68,8 @@ type GetCertificateOutput struct {
 	CertificateChain string // PEM chain to the root
 }
 
-// API is the subset of the AWS Private CA (acm-pca) API the plugin uses. The
-// production implementation is the AWS SDK (SigV4/IAM auth); CI uses an
-// in-process double. GetCertificate returns ErrRequestInProgress while the
-// certificate is still being issued.
+// API is the subset of AWS Private CA used by the plugin. HTTPAPI is the
+// production SigV4 implementation; tests may use an in-process double.
 type API interface {
 	IssueCertificate(ctx context.Context, in IssueCertificateInput) (IssueCertificateOutput, error)
 	GetCertificate(ctx context.Context, in GetCertificateInput) (GetCertificateOutput, error)
@@ -126,6 +122,13 @@ func New(cfg Config, api API, opts ...Option) *catemplate.Plugin {
 
 // CAName identifies the authority.
 func (b *backend) CAName() string { return b.cfg.Name }
+
+// Destroy releases credentials retained by a short-lived production API.
+func (b *backend) Destroy() {
+	if d, ok := b.api.(interface{ Destroy() }); ok {
+		d.Destroy()
+	}
+}
 
 // Issue submits the CSR with IssueCertificate and polls GetCertificate for the
 // issued chain.

@@ -4,6 +4,7 @@ package letsencrypt_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -13,6 +14,21 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
+
+func newRemoteAccountPlugin(t *testing.T, name, directoryURL string) *letsencrypt.Plugin {
+	t.Helper()
+	account, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(account.Destroy)
+	plugin, err := letsencrypt.NewPluginWithRemoteAccountSigner(name, directoryURL, http.DefaultClient, account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(plugin.Destroy)
+	return plugin
+}
 
 func buildCSR(t *testing.T, cn string, dnsNames []string) []byte {
 	t.Helper()
@@ -37,10 +53,7 @@ func TestPluginIssuesRealCertEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 
-	p, err := letsencrypt.NewPlugin("lets-encrypt", srv.DirectoryURL())
-	if err != nil {
-		t.Fatalf("NewPlugin: %v", err)
-	}
+	p := newRemoteAccountPlugin(t, "lets-encrypt", srv.DirectoryURL())
 	if p.Name() != "lets-encrypt" {
 		t.Errorf("Name = %q", p.Name())
 	}

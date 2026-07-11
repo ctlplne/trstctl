@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 // grant and caches it, so repeated deploys do not re-hit the token endpoint.
 func TestClientCredentialsAcquiresAndCaches(t *testing.T) {
 	var hits int32
+	const clientSecret = "s3 cr+%&="
 	var gotGrant, gotClient, gotSecret, gotScope string
 	aad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&hits, 1)
@@ -29,7 +31,8 @@ func TestClientCredentialsAcquiresAndCaches(t *testing.T) {
 	}))
 	defer aad.Close()
 
-	p := azurekv.NewClientCredentials(aad.URL, "client-123", []byte("s3cr3t"), azurekv.WithHTTPClient(aad.Client()))
+	p := azurekv.NewClientCredentials(aad.URL, "client-123", []byte(clientSecret), azurekv.WithHTTPClient(aad.Client()))
+	t.Cleanup(p.Destroy)
 
 	tok, err := p.Token(context.Background())
 	if err != nil {
@@ -38,7 +41,7 @@ func TestClientCredentialsAcquiresAndCaches(t *testing.T) {
 	if string(tok) != "abc.def.ghi" {
 		t.Errorf("token = %q, want abc.def.ghi", tok)
 	}
-	if gotGrant != "client_credentials" || gotClient != "client-123" || gotSecret != "s3cr3t" {
+	if gotGrant != "client_credentials" || gotClient != "client-123" || gotSecret != clientSecret {
 		t.Errorf("form = grant=%q client=%q secret=%q", gotGrant, gotClient, gotSecret)
 	}
 	if gotScope != "https://vault.azure.net/.default" {
@@ -57,14 +60,18 @@ func TestClientCredentialsAcquiresAndCaches(t *testing.T) {
 // A non-200 from the token endpoint is surfaced as an error, not a silent empty
 // token.
 func TestClientCredentialsTokenEndpointError(t *testing.T) {
+	const secret = "AZURE-CLIENT-SECRET-DO-NOT-LOG"
 	aad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"error":"invalid_client"}`))
+		_, _ = w.Write([]byte(`{"error":"invalid_client","echo":"` + secret + `"}`))
 	}))
 	defer aad.Close()
 
-	p := azurekv.NewClientCredentials(aad.URL, "client", []byte("bad"), azurekv.WithHTTPClient(aad.Client()))
+	p := azurekv.NewClientCredentials(aad.URL, "client", []byte(secret), azurekv.WithHTTPClient(aad.Client()))
+	t.Cleanup(p.Destroy)
 	if _, err := p.Token(context.Background()); err == nil {
 		t.Fatal("expected an error from a 401 token endpoint, got nil")
+	} else if strings.Contains(err.Error(), secret) {
+		t.Fatalf("token endpoint error leaked the client secret: %q", err)
 	}
 }

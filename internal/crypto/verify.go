@@ -3,6 +3,7 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
@@ -17,6 +18,51 @@ import (
 
 	"github.com/smallstep/pkcs7"
 )
+
+// ParsePublicKeyPEM decodes exactly one PEM-wrapped PKIX public key and returns
+// the boundary's algorithm-tagged representation. Trust configuration uses this
+// helper so callers never parse RSA/ECDSA/Ed25519 material outside internal/crypto
+// (AN-3), and so an unsupported key fails at startup rather than at first use.
+func ParsePublicKeyPEM(pemBytes []byte) (PublicKey, error) {
+	blk, rest := pem.Decode(bytes.TrimSpace(pemBytes))
+	if blk == nil || blk.Type != "PUBLIC KEY" {
+		return PublicKey{}, fmt.Errorf("crypto: expected one PUBLIC KEY PEM block")
+	}
+	if len(bytes.TrimSpace(rest)) != 0 {
+		return PublicKey{}, fmt.Errorf("crypto: trailing data after public key PEM")
+	}
+	parsed, err := x509.ParsePKIXPublicKey(blk.Bytes)
+	if err != nil {
+		return PublicKey{}, fmt.Errorf("crypto: parse public key: %w", err)
+	}
+	var algorithm Algorithm
+	switch key := parsed.(type) {
+	case *rsa.PublicKey:
+		switch key.N.BitLen() {
+		case 2048:
+			algorithm = RSA2048
+		case 3072:
+			algorithm = RSA3072
+		case 4096:
+			algorithm = RSA4096
+		}
+	case *ecdsa.PublicKey:
+		switch key.Curve.Params().BitSize {
+		case 256:
+			algorithm = ECDSAP256
+		case 384:
+			algorithm = ECDSAP384
+		case 521:
+			algorithm = ECDSAP521
+		}
+	case ed25519.PublicKey:
+		algorithm = Ed25519
+	}
+	if algorithm == "" {
+		return PublicKey{}, fmt.Errorf("crypto: unsupported public key type or parameters %T", parsed)
+	}
+	return PublicKey{Algorithm: algorithm, DER: append([]byte(nil), blk.Bytes...)}, nil
+}
 
 // VerifyMessage verifies a SHA-256 signature over msg by the public key in
 // pubDER (PKIX). It supports ECDSA (ASN.1 signatures) and RSA PKCS#1 v1.5 — the

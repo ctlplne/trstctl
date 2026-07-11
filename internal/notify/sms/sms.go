@@ -12,11 +12,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/secrettext"
@@ -117,8 +117,8 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 }
 
 func readError(resp *http.Response) error {
-	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
+	_ = secret.DrainBounded(resp.Body, 4096)
+	return &apiError{status: resp.StatusCode}
 }
 
 func scrubEndpoint(err error, endpoint string) error {
@@ -136,7 +136,7 @@ func scrubEndpoint(err error, endpoint string) error {
 
 var errRedacted = errors.New("request to sms endpoint failed (details withheld to avoid leaking the endpoint URL)")
 
-func drain(resp *http.Response) { _, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) }
+func drain(resp *http.Response) { _ = secret.DrainBounded(resp.Body, 1<<20) }
 
 type request struct {
 	From      string    `json:"from,omitempty"`
@@ -153,9 +153,8 @@ type request struct {
 
 type apiError struct {
 	status int
-	body   string
 }
 
 func (e *apiError) Error() string {
-	return fmt.Sprintf("sms: status %d: %s", e.status, e.body)
+	return fmt.Sprintf("sms: status %d (response body redacted)", e.status)
 }

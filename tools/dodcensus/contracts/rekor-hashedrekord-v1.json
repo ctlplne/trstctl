@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "contract": "sigstore.rekor.hashedrekord.v1",
+  "method": "POST",
+  "path": "/api/v1/log/entries",
+  "request": {
+    "apiVersion": "0.0.1",
+    "kind": "hashedrekord",
+    "required": [
+      "spec.data.hash.algorithm=sha256",
+      "spec.data.hash.value",
+      "spec.signature.content",
+      "spec.signature.publicKey.content"
+    ]
+  },
+  "artifact_verification": "OpenSSL independently verifies the exact pre-hashed SHA-256 artifact digest before acceptance",
+  "log_trust": {
+    "public_key": "operator-pinned code_signing.rekor.log_public_key_file (the DoD test pins the public half of its per-run external emulator key before launch)",
+    "signed_entry_timestamp_payload": ["body", "integratedTime", "logID", "logIndex"],
+    "canonicalization": "RFC 8785 JSON canonicalization (Rekor v1 SET bundle)"
+  },
+  "entry_identity": "UUID is the RFC 6962 SHA-256 leaf hash: SHA256(0x00 || canonicalizedBody)",
+  "success": {
+    "status": [201, 409],
+    "required": ["uuid", "body", "integratedTime", "logID", "logIndex", "verification.signedEntryTimestamp"],
+    "duplicate": "409 Location points to same-origin GET /api/v1/log/entries/{uuid}; the fetched entry must pass the identical binding and SET checks"
+  }
+}

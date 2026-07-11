@@ -181,8 +181,8 @@ func (p *Provider) list(ctx context.Context, name, value string) ([]txtRecord, e
 // response into out (out may be nil to drain it). The bearer token is attached here
 // and nowhere else; it is never written to logs or error text (AN-8). The round-trip
 // — bounded read, non-2xx normalisation, JSON decode/drain — is the shared
-// internal/cloudhttp (CODE-006); a non-2xx *StatusError is translated to the package's
-// *apiError so the "cloudflare: status N: body" contract is unchanged.
+// internal/cloudhttp (CODE-006); a non-2xx *StatusError is translated to a status-only
+// *apiError so attacker-controlled response bytes cannot escape (AN-8).
 func (p *Provider) do(ctx context.Context, method, path string, body []byte, out any) error {
 	var rdr io.Reader
 	if body != nil {
@@ -199,7 +199,7 @@ func (p *Provider) do(ctx context.Context, method, path string, body []byte, out
 	if err := cloudhttp.JSON(p.doer, req, out); err != nil {
 		var se *cloudhttp.StatusError
 		if errors.As(err, &se) {
-			return &apiError{status: se.StatusCode, body: se.Body}
+			return &apiError{status: se.StatusCode}
 		}
 		return err
 	}
@@ -221,13 +221,13 @@ type listResponse struct {
 	Result []txtRecord `json:"result"`
 }
 
-// apiError is a non-2xx Cloudflare response. Its body is the API error text and never
-// carries the request token (AN-8).
+// apiError is a non-2xx Cloudflare response. It deliberately retains only the
+// status: an upstream body is attacker-controlled and may echo submitted material
+// (AN-8).
 type apiError struct {
 	status int
-	body   string
 }
 
 func (e *apiError) Error() string {
-	return fmt.Sprintf("cloudflare: status %d: %s", e.status, e.body)
+	return fmt.Sprintf("cloudflare: status %d", e.status)
 }

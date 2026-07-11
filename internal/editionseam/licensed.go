@@ -62,13 +62,21 @@ type KEMCustody interface {
 	ZeroizeKey(ctx context.Context, handle string) error
 }
 
+// ManagedKeyCustody is the isolated signer command surface for cloud/HSM key
+// lifecycle operations. The control plane's outbox handler uses it; no API
+// handler or provider constructor receives private-key capability directly.
+type ManagedKeyCustody interface {
+	ManageKey(context.Context, signing.ManagedKeyCommand) (signing.ManagedKeyResult, error)
+}
+
 // Compile-time proof the out-of-process signer client satisfies both licensed-outbox
 // signer seams, so internal/server can wire *signing.Client into LicensedOutboxDeps.Minter
 // and LicensedOutboxDeps.IssuanceGate directly (a signature drift is a build error).
 var (
-	_ SuccessionMinter = (*signing.Client)(nil)
-	_ IssuanceGate     = (*signing.Client)(nil)
-	_ KEMCustody       = (*signing.Client)(nil)
+	_ SuccessionMinter  = (*signing.Client)(nil)
+	_ IssuanceGate      = (*signing.Client)(nil)
+	_ KEMCustody        = (*signing.Client)(nil)
+	_ ManagedKeyCustody = (*signing.Client)(nil)
 )
 
 type LicensedOutboxDeps struct {
@@ -97,6 +105,9 @@ type LicensedOutboxDeps struct {
 	// generates the private key inside the signer, decapsulates only through the
 	// signer RPC, and zeroizes on retirement. nil means KEM re-wrap fails closed.
 	KEMCustody KEMCustody
+	// ManagedKeyCustody is the same out-of-process signer client narrowed to the
+	// managed-key lifecycle RPC. nil makes managedkey.command fail closed.
+	ManagedKeyCustody ManagedKeyCustody
 	// Transit is the core envelope/transit service. Licensed outbox handlers may use
 	// it for public ciphertext re-wrap operations; nil means those operations fail
 	// closed instead of inventing a non-durable substitute.
@@ -105,4 +116,11 @@ type LicensedOutboxDeps struct {
 
 type LicensedOutboxHandler interface {
 	DeliverLicensed(context.Context, orchestrator.Message) (handled bool, err error)
+}
+
+// LicensedOutboxTerminalFailureHandler is an optional seam for edition-owned
+// destinations whose event-sourced read model needs a terminal failure fact.
+// Keeping it separate preserves compatibility for handlers with no domain state.
+type LicensedOutboxTerminalFailureHandler interface {
+	DeliverLicensedTerminalFailure(context.Context, orchestrator.Message, error) (handled bool, err error)
 }

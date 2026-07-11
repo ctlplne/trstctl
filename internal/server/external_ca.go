@@ -15,16 +15,51 @@ import (
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
+
+// ExternalCAFactory constructs one short-lived upstream CA client for one outbox
+// delivery. cleanup MUST destroy every credential buffer and close idle network
+// connections. The registry stores the factory, never the authority-bearing
+// material used by the client (AN-8).
+type ExternalCAFactory func(context.Context) (implementation ca.CA, cleanup func(), err error)
 
 // ExternalCA is one configured upstream CA registry entry served by the control
 // plane. ID is the operator-facing stable selector; Type is the integration kind
-// (for example "letsencrypt", "digicert", "adcs", "awspca"). CA is the already
-// constructed built-in integration and may hold provider credentials internally.
+// (for example "letsencrypt", "digicert", "adcs", "awspca"). Production wiring
+// uses Name+Factory so credentials are loaded just in time. CA remains as a
+// deliberate injection seam for already-constructed test and signed-WASM CAs.
 type ExternalCA struct {
-	ID   string
-	Type string
-	CA   ca.CA
+	ID       string
+	Type     string
+	Name     string
+	TenantID string
+	CA       ca.CA
+	Factory  ExternalCAFactory
+	// ReplaySafety may opt a custom adapter into retry-after-ambiguous-failure
+	// only when its receiver enforces ca.ProviderIdempotencyKey.
+	ReplaySafety ca.ExternalIssueReplaySafety
+}
+
+type factoryExternalCA struct {
+	name    string
+	factory ExternalCAFactory
+}
+
+func (c factoryExternalCA) Name() string { return c.name }
+
+func (c factoryExternalCA) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate, error) {
+	implementation, cleanup, err := c.factory(ctx)
+	if err != nil {
+		return ca.Certificate{}, err
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if implementation == nil {
+		return ca.Certificate{}, errors.New("external CA factory returned no implementation")
+	}
+	return implementation.Issue(ctx, req)
 }
 
 type externalCARegistry struct {
@@ -33,8 +68,9 @@ type externalCARegistry struct {
 }
 
 type externalCAEntry struct {
-	meta api.ExternalCA
-	svc  *ca.IssuanceService
+	meta     api.ExternalCA
+	tenantID string
+	svc      *ca.IssuanceService
 }
 
 func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) (api.ExternalCAService, error) {
@@ -54,26 +90,35 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 		if id == "" {
 			return nil, fmt.Errorf("server: external CA registry entry has empty id")
 		}
-		if cfg.CA == nil {
-			return nil, fmt.Errorf("server: external CA %q has no CA implementation", id)
+		if (cfg.CA == nil) == (cfg.Factory == nil) {
+			return nil, fmt.Errorf("server: external CA %q must configure exactly one CA implementation or factory", id)
 		}
 		if _, exists := reg.byID[id]; exists {
 			return nil, fmt.Errorf("server: duplicate external CA id %q", id)
 		}
+		implementation := cfg.CA
+		name := strings.TrimSpace(cfg.Name)
+		if cfg.Factory != nil {
+			if name == "" {
+				return nil, fmt.Errorf("server: external CA %q factory has no display name", id)
+			}
+			implementation = factoryExternalCA{name: name, factory: cfg.Factory}
+		} else if name == "" {
+			name = cfg.CA.Name()
+		}
 		typ := strings.TrimSpace(cfg.Type)
 		if typ == "" {
-			typ = cfg.CA.Name()
+			typ = implementation.Name()
 		}
-		drain := func(ctx context.Context) error {
-			if s.obHandler == nil {
-				return fmt.Errorf("server: external CA outbox handler is not configured")
-			}
-			return s.Drain(ctx)
+		meta := api.ExternalCA{ID: id, Type: typ, Name: name, Status: "available"}
+		replaySafety := cfg.ReplaySafety
+		if externalCATypeHasReceiverIdempotency(typ) {
+			replaySafety = ca.ExternalIssueReconciled
 		}
-		meta := api.ExternalCA{ID: id, Type: typ, Name: cfg.CA.Name(), Status: "available"}
 		reg.byID[id] = externalCAEntry{
-			meta: meta,
-			svc:  ca.NewIssuanceService(cfg.CA, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log), ca.WithOutboxIssueWorker(id, drain)),
+			meta: meta, tenantID: strings.TrimSpace(cfg.TenantID),
+			svc: ca.NewIssuanceService(implementation, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log),
+				ca.WithOutboxIssueWorker(id, s.wakeOutbox), ca.WithExternalIssueReplaySafety(replaySafety)),
 		}
 		reg.items = append(reg.items, meta)
 	}
@@ -82,16 +127,33 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 	return reg, nil
 }
 
-func (r *externalCARegistry) ListExternalCAs(_ context.Context, _ string) ([]api.ExternalCA, error) {
-	out := make([]api.ExternalCA, len(r.items))
-	copy(out, r.items)
+func externalCATypeHasReceiverIdempotency(typ string) bool {
+	switch strings.ToLower(strings.TrimSpace(typ)) {
+	case "awspca", "aws-pca", "gcpcas", "gcp-cas":
+		return true
+	default:
+		return false
+	}
+}
+
+func (r *externalCARegistry) ListExternalCAs(_ context.Context, tenantID string) ([]api.ExternalCA, error) {
+	out := make([]api.ExternalCA, 0, len(r.items))
+	for _, item := range r.items {
+		entry := r.byID[item.ID]
+		if entry.tenantID == "" || entry.tenantID == tenantID {
+			out = append(out, item)
+		}
+	}
 	return out, nil
 }
 
-func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, idempotencyKey string, req api.ExternalCAIssueRequest) (api.ExternalCAIssuedCertificate, error) {
+func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, idempotencyKey, requestBinding string, req api.ExternalCAIssueRequest) (api.ExternalCAIssuedCertificate, error) {
 	id = strings.TrimSpace(id)
 	entry, ok := r.byID[id]
 	if !ok {
+		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %s", api.ErrExternalCANotFound, id)
+	}
+	if entry.tenantID != "" && entry.tenantID != tenantID {
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %s", api.ErrExternalCANotFound, id)
 	}
 	if tenantID == "" {
@@ -99,6 +161,9 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 	}
 	if idempotencyKey == "" {
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: missing idempotency key", api.ErrExternalCAInvalid)
+	}
+	if requestBinding == "" {
+		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: missing authenticated request binding", api.ErrExternalCAInvalid)
 	}
 	if len(req.CSRDER) == 0 {
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: csr_pem is required", api.ErrExternalCAInvalid)
@@ -111,15 +176,19 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: ttl_seconds cannot be negative", api.ErrExternalCAInvalid)
 	}
 	cert, err := entry.svc.Issue(ctx, ca.IssueRequest{
-		TenantID:      tenantID,
-		CSR:           req.CSRDER,
-		DNSNames:      req.DNSNames,
-		TTL:           ttl,
-		ProfileName:   req.ProfileName,
-		Protocol:      "api",
-		RequestedEKUs: req.RequestedEKUs,
+		TenantID:       tenantID,
+		CSR:            req.CSRDER,
+		DNSNames:       req.DNSNames,
+		TTL:            ttl,
+		ProfileName:    req.ProfileName,
+		Protocol:       "api",
+		RequestedEKUs:  req.RequestedEKUs,
+		RequestBinding: requestBinding,
 	}, idempotencyKey+":external-ca:"+id)
 	if err != nil {
+		if errors.Is(err, store.ErrIdempotencyConflict) || errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+			return api.ExternalCAIssuedCertificate{}, orchestrator.ErrIdempotencyConflict
+		}
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %s", api.ErrExternalCAUpstream, externalCAUpstreamDetail(err))
 	}
 	return api.ExternalCAIssuedCertificate{
@@ -138,6 +207,9 @@ func (r *externalCARegistry) DeliverExternalCAIssue(ctx context.Context, m orche
 	entry, ok := r.byID[payload.AuthorityID]
 	if !ok {
 		return fmt.Errorf("server: external CA outbox authority %q is not configured", payload.AuthorityID)
+	}
+	if entry.tenantID != "" && entry.tenantID != m.TenantID {
+		return fmt.Errorf("server: external CA outbox tenant is not bound to authority %q", payload.AuthorityID)
 	}
 	return entry.svc.DeliverExternalIssue(ctx, m)
 }

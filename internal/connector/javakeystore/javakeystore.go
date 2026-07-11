@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/jks"
 	"trstctl.com/trstctl/internal/crypto/pfx"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -44,7 +45,7 @@ const (
 // Connector writes a renewed credential into a Java keystore file.
 type Connector struct {
 	keystorePath string
-	password     string
+	password     []byte
 	alias        string
 	format       Format
 }
@@ -67,10 +68,10 @@ func WithFormat(f Format) Option {
 // New returns a connector that writes the renewed credential into the keystore
 // at keystorePath, under alias, protected by password. The format is inferred
 // from the file extension unless WithFormat is given.
-func New(keystorePath, password, alias string, opts ...Option) *Connector {
+func New(keystorePath string, password []byte, alias string, opts ...Option) *Connector {
 	c := &Connector{
 		keystorePath: keystorePath,
-		password:     password,
+		password:     append([]byte(nil), password...),
 		alias:        alias,
 		format:       inferFormat(keystorePath),
 	}
@@ -78,6 +79,12 @@ func New(keystorePath, password, alias string, opts ...Option) *Connector {
 		o(c)
 	}
 	return c
+}
+
+// Close destroys the keystore password copy owned by this one-shot connector.
+func (c *Connector) Close() {
+	secret.Wipe(c.password)
+	c.password = nil
 }
 
 func inferFormat(p string) Format {
@@ -104,13 +111,14 @@ func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connecto
 	var err error
 	switch c.format {
 	case FormatJKS:
-		blob, err = jks.EncodeDeterministic(dep.KeyPEM, dep.CertPEM, c.password, c.alias)
+		blob, err = jks.EncodeDeterministicBytes(dep.KeyPEM, dep.CertPEM, c.password, c.alias)
 	default:
-		blob, err = pfx.EncodeDeterministic(dep.KeyPEM, dep.CertPEM, c.password)
+		blob, err = pfx.EncodeDeterministicBytes(dep.KeyPEM, dep.CertPEM, c.password)
 	}
 	if err != nil {
 		return fmt.Errorf("java-keystore: encode %s: %w", c.format, err)
 	}
+	defer secret.Wipe(blob)
 	if err := sb.WriteFile(c.keystorePath, blob); err != nil {
 		return fmt.Errorf("java-keystore: write keystore: %w", err)
 	}

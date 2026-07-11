@@ -4,10 +4,13 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // CodeSigningService is the served code-signing backend. The API owns transport,
@@ -65,9 +68,13 @@ func mapCodeSigningError(err error) error {
 	}
 	msg := err.Error()
 	switch {
-	case strings.Contains(msg, "not permitted"), strings.Contains(msg, "attest:"):
+	case strings.Contains(msg, "idempotency key was already used"):
+		return errStatus(http.StatusConflict, msg)
+	case strings.Contains(msg, "not permitted"), strings.Contains(msg, "attest:"),
+		strings.Contains(msg, "policy_denied"), strings.Contains(msg, "approval_required:codesign:"),
+		strings.Contains(msg, "identity_attestation_failed"):
 		return errStatus(http.StatusForbidden, msg)
-	case strings.Contains(msg, "required"), strings.Contains(msg, "empty"), strings.Contains(msg, "mismatch"):
+	case strings.Contains(msg, "required"), strings.Contains(msg, "empty"), strings.Contains(msg, "mismatch"), strings.Contains(msg, "idempotency key"):
 		return errStatus(http.StatusBadRequest, msg)
 	case strings.Contains(msg, "no key"), strings.Contains(msg, "unknown key"), strings.Contains(msg, "resolve key"):
 		return errStatus(http.StatusNotFound, msg)
@@ -83,19 +90,32 @@ func (a *API) signCodeArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req CodeSigningRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		if err := validateCodeSigningRequest(req); err != nil {
-			return 0, nil, err
-		}
-		principal, err := requestPrincipalSubject(ctx)
-		if err != nil {
-			return 0, nil, err
-		}
-		req.Principal = principal
+	if idempotencyKey == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	var req CodeSigningRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	defer secret.Wipe(req.Digest)
+	if err := validateCodeSigningRequest(req); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	req.Principal = principal
+	binding, err := codeSigningRequestBinding("key", principal, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		res, err := a.codeSigning.SignCode(ctx, tenantID, idempotencyKey, req)
 		if err != nil {
 			return 0, nil, mapCodeSigningError(err)
@@ -111,25 +131,55 @@ func (a *API) signCodeArtifactKeyless(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req CodeSigningKeylessRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		if err := validateCodeSigningKeylessRequest(req); err != nil {
-			return 0, nil, err
-		}
-		principal, err := requestPrincipalSubject(ctx)
-		if err != nil {
-			return 0, nil, err
-		}
-		req.Principal = principal
+	if idempotencyKey == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	var req CodeSigningKeylessRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	defer secret.Wipe(req.Digest)
+	defer secret.Wipe(req.IdentityPayload)
+	if err := validateCodeSigningKeylessRequest(req); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	req.Principal = principal
+	binding, err := codeSigningRequestBinding("keyless", principal, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		res, err := a.codeSigning.SignKeylessCode(ctx, tenantID, idempotencyKey, req)
 		if err != nil {
 			return 0, nil, mapCodeSigningError(err)
 		}
 		return http.StatusOK, res, nil
 	})
+}
+
+func codeSigningRequestBinding(operation, principal string, request any) (string, error) {
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(encoded)
+	material := make([]byte, 0, len(operation)+len(principal)+2+len(encoded))
+	material = append(material, operation...)
+	material = append(material, 0)
+	material = append(material, principal...)
+	material = append(material, 0)
+	material = append(material, encoded...)
+	defer secret.Wipe(material)
+	return crypto.SHA256Hex(material), nil
 }
 
 func requestPrincipalSubject(ctx context.Context) (string, error) {
@@ -147,8 +197,8 @@ func validateCodeSigningRequest(req CodeSigningRequest) error {
 	if strings.TrimSpace(req.ArtifactType) == "" {
 		return errStatus(http.StatusBadRequest, "artifact_type is required")
 	}
-	if len(req.Digest) == 0 {
-		return errStatus(http.StatusBadRequest, "digest is required")
+	if len(req.Digest) != 32 {
+		return errStatus(http.StatusBadRequest, "digest must be exactly 32 bytes (SHA-256)")
 	}
 	return nil
 }
@@ -157,8 +207,8 @@ func validateCodeSigningKeylessRequest(req CodeSigningKeylessRequest) error {
 	if strings.TrimSpace(req.ArtifactType) == "" {
 		return errStatus(http.StatusBadRequest, "artifact_type is required")
 	}
-	if len(req.Digest) == 0 {
-		return errStatus(http.StatusBadRequest, "digest is required")
+	if len(req.Digest) != 32 {
+		return errStatus(http.StatusBadRequest, "digest must be exactly 32 bytes (SHA-256)")
 	}
 	if strings.TrimSpace(req.IdentityMethod) == "" {
 		return errStatus(http.StatusBadRequest, "identity_method is required")

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/enroll"
@@ -28,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/broker"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/codesign"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
@@ -312,15 +314,18 @@ type Deps struct {
 	// connectors (CLM-05/F7/F27). When set, connector.deploy outbox rows whose
 	// connector name is registered here are delivered by the running binary through
 	// the connector SDK sandbox and recorded as event-sourced delivery receipts.
-	// Empty preserves the prior behavior: plugin-owned rows may run through the
-	// signed WASM plugin surface; otherwise they are acknowledged as unrouted.
+	// Empty leaves plugin-owned rows to the signed WASM surface; any row without a
+	// loaded owner fails closed and stays pending.
 	ConnectorRegistry *connector.Registry
+	// ConnectorRightSize applies usage-backed entitlement reductions through a
+	// tenant-bound external connector and verifies the effective scopes by readback.
+	ConnectorRightSize RightSizeMutator
 
 	// Plugins configures the served WASM-plugin surface (EXC-WIRE-05, closing
 	// ARCH-007/SUPPLY-004): the directory of operator-supplied connector plugins, the
 	// trusted Ed25519 keys that admit a signed module, optional content-digest pins,
 	// and the capability grant they run under. The zero value leaves the surface OFF
-	// (a connector.deploy is acknowledged unrouted, as before). When configured, Build
+	// (an otherwise unowned connector.deploy fails closed). When configured, Build
 	// loads and PROVENANCE-VERIFIES every plugin at startup — an unsigned, wrong-key,
 	// tampered, or unpinned module makes Build fail closed, so the binary never serves
 	// an unverified plugin. Run fills this from config.Plugins.
@@ -383,12 +388,19 @@ type Deps struct {
 	// DynamicSecretProviders are the configured dynamic-secret providers exposed by
 	// /api/v1/secrets/leases (F65). Empty keeps the route fail-closed.
 	DynamicSecretProviders []dynsecret.Provider
+	// TenantDynamicSecretProviders is the production tenant-bound registry. When
+	// present it takes precedence over the legacy static slice above, which remains
+	// for embedded compositions and existing tests.
+	TenantDynamicSecretProviders DynamicSecretProviderRegistry
 	// SecretRotators are the configured rollback-safe static secret rotators exposed
 	// by /api/v1/secrets/rotations (F37). Empty keeps the route fail-closed.
 	SecretRotators map[string]rotation.Rotator
 	// SecretSyncTargets are the configured external secret-sync destinations exposed
 	// by /api/v1/secrets/syncs (F68). Empty keeps the route fail-closed.
 	SecretSyncTargets map[string]*secretsync.Target
+	// TenantSecretSyncTargets is the production tenant-bound registry. It prevents
+	// target names and upstream credentials from crossing tenant boundaries.
+	TenantSecretSyncTargets SecretSyncTargetRegistry
 	// SecretScanGitleaksBin points at the pinned Gitleaks binary used by
 	// POST /api/v1/secrets/scans (SEC-07/F39). Empty resolves
 	// TRSTCTL_GITLEAKS_BIN/tools/bin/gitleaks/PATH at request time.
@@ -463,18 +475,22 @@ type Deps struct {
 
 // Server is the assembled control plane.
 type Server struct {
-	store     *store.Store
-	log       *events.Log
-	outbox    *orchestrator.Outbox
-	idemGC    *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
-	outboxGC  *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
-	obHandler orchestrator.Handler
-	handler   http.Handler
-	acmeDNS01 *servedACMEDNS01Automation
-	transit   *transitpkg.Service
-	codeSign  *servedCodeSigningService
-	ctSubmit  *servedCTSubmissionService
-	kmip      KMIPRuntime
+	store      *store.Store
+	log        *events.Log
+	outbox     *orchestrator.Outbox
+	outboxWake chan struct{}
+	idemGC     *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
+	outboxGC   *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
+	obHandler  orchestrator.Handler
+	handler    http.Handler
+	acmeDNS01  *servedACMEDNS01Automation
+	transit    *transitpkg.Service
+	// codeSignGate is the production adapter over the live OPA evaluator and
+	// distinct-approver store assembled by configurePolicyGate.
+	codeSignGate codesign.Gate
+	codeSign     *servedCodeSigningService
+	ctSubmit     *servedCTSubmissionService
+	kmip         KMIPRuntime
 	// complianceSigner is a generated locked key used only when the deployment did
 	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
 	complianceSigner *crypto.LockedSigner
@@ -557,8 +573,8 @@ type Server struct {
 	// supplied connector plugins loaded from a directory, each only after its
 	// detached signature verifies against the configured trust policy, and run
 	// capability-sandboxed on the plugin host's bounded pool (AN-7). It is nil when
-	// the plugin surface is not configured (the prior behavior — a connector.deploy
-	// is acknowledged unrouted). Wired into the issuance dispatcher's deploy path.
+	// the plugin surface is not configured, in which case an otherwise unowned
+	// connector.deploy fails closed. Wired into the issuance dispatcher's deploy path.
 	plugins *PluginManager
 
 	// connectorRegistry is the trusted native connector registry (CLM-05/F7/F27).
@@ -696,6 +712,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	s := &Server{
 		store:                     d.Store,
 		log:                       d.Log,
+		outboxWake:                make(chan struct{}, 1),
 		signer:                    d.Signer,
 		signAuthz:                 signProvider,
 		signTO:                    d.SignTimeout,
@@ -920,7 +937,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if transitSvc := s.buildTransitService(d); transitSvc != nil {
 		defaults = append(defaults, api.WithTransit(transitSvc))
 	}
-	if cs, err := newServedCodeSigningService(d.CodeSigning, d.Store, d.Log, s.outbox); err != nil {
+	codeSigningConfig := d.CodeSigning
+	if codeSigningConfig.Gate == nil {
+		codeSigningConfig.Gate = s.codeSignGate
+	}
+	if cs, err := newServedCodeSigningService(codeSigningConfig, d.Store, d.Log, d.KEK, s.outbox, s.wakeOutbox); err != nil {
 		return nil, nil, fmt.Errorf("server: configure code-signing: %w", err)
 	} else if cs != nil {
 		s.codeSign = cs
@@ -994,6 +1015,7 @@ func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
 		return err
 	}
 	*defaults = append(*defaults, api.WithMutationGate(gate))
+	s.codeSignGate = codeSigningGateFromMutationGate(gate)
 	if gate.ABAC != nil {
 		*defaults = append(*defaults, api.WithABACDenyOverlay(gate.ABAC, gate.ABACEnvironment, gate.ABACNow))
 	}
@@ -1094,6 +1116,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			s.notifications.SetPolicyResolver(notify.NewStorePolicyResolver(d.Store))
 			s.notifications.SetChannelResolver(notify.NewStoreChannelResolver(d.Store))
 			s.notifications.SetThresholdDedupLedger(notify.NewStoreThresholdDedupLedger(d.Store, d.Log))
+			s.notifications.SetDeliveryReceiptLedger(notify.NewStoreDeliveryReceiptLedger(d.Store, d.Log))
 		}
 	}
 	var licensed LicensedOutboxHandler
@@ -1107,18 +1130,27 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			Minter:            s.successionMinter(),
 			IssuanceGate:      s.issuanceGate(),
 			KEMCustody:        s.kemCustody(),
+			ManagedKeyCustody: s.managedKeyCustody(),
 			Transit:           s.transit,
 		})
 		if err != nil {
 			return err
 		}
 	}
+	secretIntegrations := &secretIntegrationOutboxDispatcher{
+		dynamicProviders: d.TenantDynamicSecretProviders,
+		syncTargets:      d.TenantSecretSyncTargets,
+		kek:              d.KEK,
+		store:            d.Store,
+		log:              d.Log,
+	}
+	connectorPlugins := connectorPluginDeployerFromManager(s.plugins)
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations}
 	}
 	return nil
 }
@@ -1135,6 +1167,13 @@ func (s *Server) featureObserver() func(feature, action, outcome string, seconds
 // case a PCAS handler mints nothing and fails closed. The control plane never obtains
 // key material: minting crosses the signer transport (claims 1/12/49).
 func (s *Server) successionMinter() SuccessionMinter {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+func (s *Server) managedKeyCustody() ManagedKeyCustody {
 	if s.signer == nil {
 		return nil
 	}
@@ -1722,6 +1761,35 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // entries.
 const dispatchInterval = time.Second
 
+// outboxDispatchFamily maps one disjoint destination family to its own bounded
+// worker pool. The last entry is the compatibility/"other" lane: it excludes
+// every named prefix, so one row can never be claimed by two family sweeps.
+type outboxDispatchFamily struct {
+	pool  string
+	scope orchestrator.DestinationScope
+}
+
+var outboxDispatchFamilies = func() []outboxDispatchFamily {
+	named := []outboxDispatchFamily{
+		{pool: bulkhead.SubsystemOutboxExternalCA, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"external-ca."}}},
+		{pool: bulkhead.SubsystemOutboxConnectors, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}}},
+		{pool: bulkhead.SubsystemOutboxSecrets, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"dynsecret."}}},
+		{pool: bulkhead.SubsystemOutboxSecretSync, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"secret.sync"}}},
+		{pool: bulkhead.SubsystemOutboxManagedKeys, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"managedkey."}}},
+		{pool: bulkhead.SubsystemOutboxTransparency, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"transparency."}}},
+		{pool: bulkhead.SubsystemOutboxCodeSigning, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"codesign."}}},
+		{pool: bulkhead.SubsystemOutboxNotifications, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"notification."}}},
+	}
+	excluded := make([]string, 0, 8)
+	for _, family := range named {
+		excluded = append(excluded, family.scope.IncludePrefixes...)
+	}
+	return append(named, outboxDispatchFamily{
+		pool:  bulkhead.SubsystemOutbox,
+		scope: orchestrator.DestinationScope{ExcludePrefixes: excluded},
+	})
+}()
+
 // RunDispatcher runs the outbox dispatcher continuously until ctx is cancelled,
 // delivering due entries (issuance, deployment, notifications) on a short
 // interval — so external effects happen while the process runs, not only at
@@ -1737,22 +1805,95 @@ func (s *Server) RunDispatcher(ctx context.Context) {
 			return
 		case <-t.C:
 			s.dispatchOnce(ctx)
+		case <-s.outboxWake:
+			s.dispatchOnce(ctx)
 		}
 	}
 }
 
-// dispatchOnce sweeps the outbox once, routed through the outbox bulkhead pool so
-// delivery participates in backpressure (a saturated pool sheds the tick rather
-// than piling up sweeps) and is drained on shutdown (AN-7). Concurrent sweeps are
-// safe — the outbox claims rows FOR UPDATE SKIP LOCKED. With no outbox pool
-// configured it sweeps directly.
-func (s *Server) dispatchOnce(ctx context.Context) {
-	run := func() { _, _ = s.outbox.Dispatch(ctx, s.obHandler) }
-	if s.bulk == nil || s.bulk.Pool(bulkhead.SubsystemOutbox) == nil {
-		run()
+// wakeOutbox asks the normal bounded dispatcher worker to sweep promptly after a
+// request persists new outbox work. It never performs delivery on the request
+// goroutine, and the single buffered signal coalesces bursts without backpressure.
+func (s *Server) wakeOutbox() {
+	if s == nil || s.outboxWake == nil {
 		return
 	}
-	_ = s.bulk.Submit(bulkhead.SubsystemOutbox, run)
+	select {
+	case s.outboxWake <- struct{}{}:
+	default:
+	}
+}
+
+// dispatchOnce submits one scoped sweep per external-effect family. Each family
+// has its own bounded worker pool, so blocked connector calls shed only connector
+// ticks while external-CA, secret, managed-key, transparency/code-signing,
+// notification, and unrelated work keep moving (AN-7). Concurrent sweeps are safe
+// because the scopes are disjoint and claims use FOR UPDATE SKIP LOCKED.
+//
+// Older embedded compositions and focused tests may provide only the legacy
+// SubsystemOutbox pool. In that case retain the old one-task/unscoped behavior;
+// production Configs always installs every family pool.
+func (s *Server) dispatchOnce(ctx context.Context) {
+	if !s.hasOutboxFamilyPool() {
+		run := func() { _, _ = s.outbox.Dispatch(ctx, s.obHandler) }
+		if s.bulk == nil || s.bulk.Pool(bulkhead.SubsystemOutbox) == nil {
+			run()
+			return
+		}
+		_ = s.bulk.Submit(bulkhead.SubsystemOutbox, run)
+		return
+	}
+
+	for _, family := range outboxDispatchFamilies {
+		family := family
+		for range s.outboxFamilyConcurrency(family) {
+			run := func() { _, _ = s.outbox.DispatchScoped(ctx, s.obHandler, family.scope) }
+			pool := family.pool
+			if s.bulk.Pool(pool) == nil {
+				pool = bulkhead.SubsystemOutbox
+			}
+			if s.bulk.Pool(pool) == nil {
+				run()
+				continue
+			}
+			_ = s.bulk.Submit(pool, run)
+		}
+	}
+}
+
+// outboxFamilyConcurrency is the single source of truth for live and shutdown
+// delivery fan-out. Deployment configuration may set a family to one worker; a
+// hard-coded sweep count would silently bypass that receiver's AN-7 limit during
+// Drain. Missing family pools inherit the compatibility outbox pool, and a
+// pool-less focused composition remains serial.
+func (s *Server) outboxFamilyConcurrency(family outboxDispatchFamily) int {
+	if s == nil || s.bulk == nil {
+		return 1
+	}
+	pool := s.bulk.Pool(family.pool)
+	if pool == nil {
+		pool = s.bulk.Pool(bulkhead.SubsystemOutbox)
+	}
+	if pool == nil {
+		return 1
+	}
+	workers := pool.Stats().Workers
+	if workers < 1 {
+		return 1
+	}
+	return workers
+}
+
+func (s *Server) hasOutboxFamilyPool() bool {
+	if s.bulk == nil {
+		return false
+	}
+	for _, family := range outboxDispatchFamilies[:len(outboxDispatchFamilies)-1] {
+		if s.bulk.Pool(family.pool) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // retentionInterval is how often the audit retention worker sweeps for records
@@ -2461,18 +2602,66 @@ func (s *Server) RunPrivacyRetentionOnce(ctx context.Context) (orchestrator.Priv
 	return sum, nil
 }
 
-// Drain delivers any pending outbox entries through the configured handler — the
-// shutdown step that guarantees no enqueued external effect is lost (AN-6).
+// Drain delivers pending outbox entries through the configured handler. Families
+// sweep concurrently during shutdown as well: a slow connector cannot delay the
+// final notification or external-CA sweep until its own family deadline expires.
+// Each DispatchScoped call still delivers serially within its family and preserves
+// tenant/destination fairness, leases, delivery timeouts, and terminal callbacks.
+// A legacy composition with no family pools keeps its historical serial drain.
 func (s *Server) Drain(ctx context.Context) error {
+	if !s.hasOutboxFamilyPool() {
+		for {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			n, err := s.outbox.Dispatch(ctx, s.obHandler)
+			if err != nil {
+				return err
+			}
+			if n == 0 {
+				return nil
+			}
+		}
+	}
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		n, err := s.outbox.Dispatch(ctx, s.obHandler)
-		if err != nil {
-			return err
+		type dispatchResult struct {
+			n   int
+			err error
 		}
-		if n == 0 {
+		resultCapacity := 0
+		for _, family := range outboxDispatchFamilies {
+			resultCapacity += s.outboxFamilyConcurrency(family)
+		}
+		results := make(chan dispatchResult, resultCapacity)
+		var wg sync.WaitGroup
+		for _, family := range outboxDispatchFamilies {
+			family := family
+			for range s.outboxFamilyConcurrency(family) {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					n, err := s.outbox.DispatchScoped(ctx, s.obHandler, family.scope)
+					results <- dispatchResult{n: n, err: err}
+				}()
+			}
+		}
+		wg.Wait()
+		close(results)
+
+		processed := 0
+		var dispatchErr error
+		for result := range results {
+			processed += result.n
+			dispatchErr = errors.Join(dispatchErr, result.err)
+		}
+		if dispatchErr != nil {
+			return dispatchErr
+		}
+		if processed == 0 {
 			return nil
 		}
 	}
@@ -2490,6 +2679,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if err := s.Drain(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("drain outbox: %w", err))
+	}
+	if s.notifications != nil {
+		s.notifications.Close()
 	}
 	// Release the WASM plugin runtimes and their bounded pool (ARCH-007).
 	if s.plugins != nil {

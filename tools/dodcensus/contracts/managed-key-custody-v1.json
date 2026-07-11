@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "name": "trstctl managed-key KMS/HSM custody runtime contract",
+  "served_path": {
+    "entry": "authenticated POST /api/v1/managed-keys on the shipped control-plane binary",
+    "flow": "HTTP mutation -> tenant event -> PostgreSQL outbox -> separate signer ManageKey gRPC -> provider/device",
+    "lifecycle": ["generate", "sign self-test", "rotate", "sign self-test", "revoke", "zeroize"],
+    "idempotency": "HTTP and signer operation identifiers are durable; an executing signer intent is reconciled against provider state after response loss or restart",
+    "effect_lanes": "managedkey.command is partitioned by provider plus current key, or provider plus durable operation before a key exists"
+  },
+  "cloud_protocols": {
+    "aws-kms": "AWS JSON 1.1 KMS API with complete canonical SigV4 HMAC verification, atomic operation tag lookup, and terminal-state readback",
+    "azure-key-vault": "Azure Key Vault/Managed HSM keys API with exact constant-time bearer authentication, deterministic operation key identity, and terminal-state readback",
+    "gcp-kms": "Google Cloud KMS REST API with exact constant-time bearer authentication, deterministic operation resource identity, and terminal-state readback"
+  },
+  "hardware_protocols": {
+    "pkcs11": "cgo signer artifact plus deterministic operation CKA_ID and SoftHSM PKCS#11 object/sign/state readback",
+    "tpm2": "go-tpm TPM 2.0 command transport plus swtpm full Public.AuthPolicy operation tag, foreign-handle collision, sign, and terminal absence readback",
+    "yubihsm2": "Yubico PKCS#11 connector contract plus deterministic operation CKA_ID and independent PKCS#11 object/sign/state readback"
+  },
+  "completion": "requires one receiver effect per durable operation across ambiguous response replay, two distinct provider keys, valid signatures, active/revoked/zeroized independent readback, and explicit private-key export denial"
+}

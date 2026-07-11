@@ -71,7 +71,9 @@ func newStore(t *testing.T) *store.Store {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if _, err := s.SystemPool().Exec(ctx, `TRUNCATE tenants, outbox RESTART IDENTITY CASCADE`); err != nil {
+	if _, err := s.SystemPool().Exec(ctx,
+		`TRUNCATE code_signing_operations, managed_key_operations, managed_keys,
+		          tenants, outbox RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })
@@ -86,6 +88,18 @@ func seedDelivered(t *testing.T, s *store.Store, key string, deliveredAt time.Ti
 		tenantA, []byte("p"), key, deliveredAt); err != nil {
 		t.Fatalf("seed delivered %s: %v", key, err)
 	}
+}
+
+func seedDeliveredID(t *testing.T, s *store.Store, key string, deliveredAt time.Time) int64 {
+	t.Helper()
+	var id int64
+	if err := s.SystemPool().QueryRow(context.Background(),
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, delivered_at)
+		 VALUES ($1, 'durable-command', $2, $3, 'delivered', $4)
+		 RETURNING id`, tenantA, []byte("sealed-command"), key, deliveredAt).Scan(&id); err != nil {
+		t.Fatalf("seed delivered %s: %v", key, err)
+	}
+	return id
 }
 
 // TestOutboxPurgeBoundsTable is the SPINE-003 acceptance: the retention sweep
@@ -165,6 +179,73 @@ func TestOutboxPurgeBoundsTable(t *testing.T) {
 	}
 	if r2 != 0 {
 		t.Fatalf("second sweep reclaimed %d, want 0", r2)
+	}
+}
+
+// Lifecycle projections keep numeric outbox ids as historical evidence. They do
+// not own delivered queue rows: otherwise an FK makes retention GC fail forever
+// and the supposedly bounded outbox grows without limit.
+func TestOutboxPurgeReclaimsCompletedManagedKeyAndCodeSigningCommands(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().UTC().Add(-72 * time.Hour)
+	managedOutboxID := seedDeliveredID(t, s, "managed-key-completed", old)
+	codeSignOutboxID := seedDeliveredID(t, s, "code-signing-completed", old)
+	created := old.Add(-time.Minute)
+	if _, err := s.SystemPool().Exec(ctx,
+		`INSERT INTO managed_key_operations
+		        (tenant_id, operation_id, provider, action, key_id, algorithm,
+		         status, result_key_id, public_der, result_state, outbox_id,
+		         created_at, updated_at)
+		 VALUES ($1, 'managed-op-completed', 'aws-kms', 'generate', '', 'rsa-2048',
+		         'completed', 'kms-key-1', $2, 'active', $3, $4, $5)`,
+		tenantA, []byte("public-der"), managedOutboxID, created, old); err != nil {
+		t.Fatalf("seed completed managed-key operation: %v", err)
+	}
+	if _, err := s.SystemPool().Exec(ctx,
+		`INSERT INTO code_signing_operations
+		        (tenant_id, operation_id, idempotency_key, mode, request_hash,
+		         sealed_command, status, response, cleanup_status,
+		         command_outbox_id, created_at, updated_at)
+		 VALUES ($1, 'codesign-op-completed', 'codesign-request-completed', 'key',
+		         'request-hash', $2, 'completed', $3, 'not_required', $4, $5, $6)`,
+		tenantA, []byte("sealed-sign-command"), []byte("signed-response"),
+		codeSignOutboxID, created, old); err != nil {
+		t.Fatalf("seed completed code-signing operation: %v", err)
+	}
+
+	sweeper := outboxgc.New(s, 24*time.Hour)
+	reclaimed, err := sweeper.Sweep(ctx)
+	if err != nil {
+		t.Fatalf("Sweep with completed lifecycle references: %v", err)
+	}
+	if reclaimed != 2 {
+		t.Fatalf("reclaimed %d rows, want both completed command rows", reclaimed)
+	}
+	if remaining, err := sweeper.Count(ctx); err != nil || remaining != 0 {
+		t.Fatalf("bounded outbox count=(%d, %v), want (0, nil)", remaining, err)
+	}
+
+	var managedRows, codeSignRows int
+	var retainedManagedID, retainedCodeSignID int64
+	if err := s.SystemPool().QueryRow(ctx,
+		`SELECT count(*), COALESCE(max(outbox_id), 0)
+		   FROM managed_key_operations WHERE tenant_id = $1 AND operation_id = 'managed-op-completed'`,
+		tenantA).Scan(&managedRows, &retainedManagedID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SystemPool().QueryRow(ctx,
+		`SELECT count(*), COALESCE(max(command_outbox_id), 0)
+		   FROM code_signing_operations WHERE tenant_id = $1 AND operation_id = 'codesign-op-completed'`,
+		tenantA).Scan(&codeSignRows, &retainedCodeSignID); err != nil {
+		t.Fatal(err)
+	}
+	if managedRows != 1 || codeSignRows != 1 || retainedManagedID != managedOutboxID || retainedCodeSignID != codeSignOutboxID {
+		t.Fatalf("historical projections changed: managed=(rows:%d id:%d) codesign=(rows:%d id:%d)",
+			managedRows, retainedManagedID, codeSignRows, retainedCodeSignID)
 	}
 }
 

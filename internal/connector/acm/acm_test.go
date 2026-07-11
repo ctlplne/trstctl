@@ -63,6 +63,22 @@ func TestDeployImportsCertificate(t *testing.T) {
 	}
 }
 
+// Temporary AWS credentials add x-amz-security-token to the signed canonical
+// request. The faithful server recomputes SigV4, so success proves the token was
+// signed without relying on a string-backed canonical-request copy.
+func TestDeploySignsTemporarySessionToken(t *testing.T) {
+	srv := acmtest.New(accessKey, secretKey)
+	defer srv.Close()
+
+	temporary := creds()
+	temporary.SessionToken = []byte("SESSION-TOKEN-DO-NOT-LOG")
+	c := acm.New(region, temporary, acm.WithEndpoint(srv.URL()))
+	t.Cleanup(c.Close)
+	if _, err := connector.Run(context.Background(), c, connector.NewHTTPOps(srv.Client()), connector.NewDeployment(targetARN, leafPEM(), keyPEM())); err != nil {
+		t.Fatalf("deploy with temporary credentials: %v", err)
+	}
+}
+
 // A leaf+intermediate CertPEM is split: the leaf goes to Certificate, the
 // remainder to CertificateChain (ACM requires them separated).
 func TestDeploySplitsLeafAndChain(t *testing.T) {

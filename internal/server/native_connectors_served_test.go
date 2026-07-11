@@ -468,7 +468,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 		}
 	})
 	reg.Register(nginx.New(nginxCertPath, nginxKeyPath))
-	reg.Register(javakeystore.New(javaStorePath, "changeit", "payments"))
+	reg.Register(javakeystore.New(javaStorePath, []byte("changeit"), "payments"))
 	reg.Register(kemp.New(kempSrv.URL(), []byte(kempToken)))
 
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
