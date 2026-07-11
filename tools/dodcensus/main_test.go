@@ -26,6 +26,11 @@ type scriptedRunner struct {
 	hook    func(commandCall)
 }
 
+func (r *scriptedRunner) PrepareRuntime(_ context.Context, _ string, profile BuildProfile) (BuildProfile, error) {
+	profile.RuntimeRunnerImage = "sha256:" + strings.Repeat("a", 64)
+	return profile, nil
+}
+
 func (r *scriptedRunner) Run(_ context.Context, dir string, profile BuildProfile, name string, args ...string) commandResult {
 	call := commandCall{Dir: dir, Profile: profile, Name: name, Args: append([]string(nil), args...)}
 	r.calls = append(r.calls, call)
@@ -193,6 +198,11 @@ func TestLaunchedRuntimeReceiptRequiresExactProcessWitness(t *testing.T) {
 	valid.MAC = ""
 	if err := validateRuntimeReceiptBody(expected, valid, false, nil); err != nil {
 		t.Fatalf("valid launched process receipt rejected: %v", err)
+	}
+	missingRunner := expected
+	missingRunner.RuntimeRunnerImage = ""
+	if err := validateRuntimeReceiptBody(missingRunner, valid, false, nil); err == nil {
+		t.Fatal("runtime receipt passed without a content-addressed runner image expectation")
 	}
 	tests := []struct {
 		name   string
@@ -670,12 +680,23 @@ func TestRuntimeExecutionAlwaysAddsReservedProofTag(t *testing.T) {
 	}
 }
 
-func TestOSRunnerFailsClosedOnRuntimePlatformMismatch(t *testing.T) {
-	profile := BuildProfile{CGOEnabled: "0", GOOS: "definitely-not-" + runtime.GOOS, GOARCH: runtime.GOARCH, RuntimeExecution: true}
-	result := (osRunner{CacheDir: t.TempDir()}).Run(context.Background(), t.TempDir(), profile,
+func TestOSRunnerRequiresPinnedRuntimeEvenOnNativeLinuxProfile(t *testing.T) {
+	profile := BuildProfile{CGOEnabled: "0", GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, RuntimeExecution: true}
+	runner := osRunner{CacheDir: t.TempDir()}
+	if _, err := runner.PrepareRuntime(context.Background(), t.TempDir(), profile); err == nil || !strings.Contains(err.Error(), "pinned Linux runner") {
+		t.Fatalf("native-matching runtime profile bypassed pinned preparation: %v", err)
+	}
+	result := runner.Run(context.Background(), t.TempDir(), profile,
 		"go", "test", "-tags=trstctl_dodproof", "-json", "-count=1", "-run", "^TestDODExample$", "./internal/server")
-	if result.Err == nil || !strings.Contains(result.Err.Error(), "does not match shipped profile") {
-		t.Fatalf("platform mismatch did not fail closed: %+v", result)
+	if result.Err == nil || !strings.Contains(result.Err.Error(), "pinned Linux runner") {
+		t.Fatalf("native-matching runtime proof fell back to host Go: %+v", result)
+	}
+
+	profile.GOOS = "definitely-not-" + runtime.GOOS
+	result = runner.Run(context.Background(), t.TempDir(), profile,
+		"go", "test", "-tags=trstctl_dodproof", "-json", "-count=1", "-run", "^TestDODExample$", "./internal/server")
+	if result.Err == nil || !strings.Contains(result.Err.Error(), "pinned Linux runner") {
+		t.Fatalf("cross-host runtime profile bypassed pinned runner: %+v", result)
 	}
 }
 
@@ -1064,8 +1085,10 @@ RUN printf '%s\n' 'snapshot.debian.org/archive/debian/20260701T000000Z' 'snapsho
  && apt-get update \
  && apt-get install -y ca-certificates docker.io git openssl python3
 COPY go.mod go.sum /runtime-modules/
-RUN cd /runtime-modules && GOFLAGS=-mod=readonly go mod download
-ENTRYPOINT ["go"]
+RUN cd /runtime-modules && GOFLAGS=-mod=readonly go mod download all \
+ && chown -R 0:0 /go \
+ && chmod -R a-w /go
+ENTRYPOINT ["/usr/local/go/bin/go"]
 `
 }
 
@@ -1076,7 +1099,8 @@ func testExpectation(path string) runtimeExpectation {
 		SubstrateKind: "vendor-emulator", SubstrateIdentity: "vendor/emulator@sha256:" + strings.Repeat("b", 64),
 		ContractDigest: "sha256:" + strings.Repeat("c", 64), Verifier: "external-write", ReceiptFile: path,
 		EvidenceFile: path + ".evidence", RuntimeRunnerIdentity: "runner@sha256:" + strings.Repeat("e", 64),
-		ReceiptMACKey: []byte("0123456789abcdef0123456789abcdef"),
+		RuntimeRunnerImage: "sha256:" + strings.Repeat("a", 64),
+		ReceiptMACKey:      []byte("0123456789abcdef0123456789abcdef"),
 	}
 }
 

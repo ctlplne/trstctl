@@ -81,6 +81,7 @@ func inspectRuntimeRunnerProof(repo string, profile BuildProfile) checkEvidence 
 		return evidence
 	}
 	source := string(raw)
+	instructions := dockerInstructions(source)
 	if err := requireNoDefaultDockerArg(source, "BASE_IMAGE"); err != nil {
 		evidence.Detail = "runtime runner base: " + err.Error()
 		return evidence
@@ -92,11 +93,22 @@ func inspectRuntimeRunnerProof(repo string, profile BuildProfile) checkEvidence 
 	for _, fragment := range []string{
 		"ca-certificates docker.io git openssl python3",
 		"COPY go.mod go.sum /runtime-modules/",
-		"GOFLAGS=-mod=readonly go mod download",
+		"GOFLAGS=-mod=readonly go mod download all",
+		"chown -R 0:0 /go",
+		"chmod -R a-w /go",
+		`ENTRYPOINT ["/usr/local/go/bin/go"]`,
+	} {
+		if !dockerInstructionsContain(instructions, fragment) {
+			evidence.Detail = fmt.Sprintf("runtime runner omits required native proof input %q", fragment)
+			return evidence
+		}
+	}
+	for _, forbidden := range []string{
+		"chown -R 65532:65532 /go",
 		`ENTRYPOINT ["go"]`,
 	} {
-		if !strings.Contains(source, fragment) {
-			evidence.Detail = fmt.Sprintf("runtime runner omits required native proof input %q", fragment)
+		if dockerInstructionsContain(instructions, forbidden) {
+			evidence.Detail = fmt.Sprintf("runtime runner retains mutable/ambient toolchain input %q", forbidden)
 			return evidence
 		}
 	}
@@ -104,6 +116,20 @@ func inspectRuntimeRunnerProof(repo string, profile BuildProfile) checkEvidence 
 	evidence.Found = append([]string(nil), required...)
 	evidence.Detail = "runtime runner base, package snapshot, module bytes, platform, and identity closure are pinned"
 	return evidence
+}
+
+func dockerInstructionsContain(instructions []string, fragment string) bool {
+	for _, instruction := range instructions {
+		start := strings.Index(instruction, fragment)
+		if start < 0 {
+			continue
+		}
+		comment := strings.Index(instruction, " #")
+		if comment < 0 || comment >= start {
+			return true
+		}
+	}
+	return false
 }
 
 type linuxRuntimeExecutor struct {
@@ -114,7 +140,55 @@ type linuxRuntimeExecutor struct {
 const runtimeRunnerPreflightScript = `import os
 import pathlib
 import socket
+import stat
+import subprocess
 import urllib.request
+
+if os.geteuid() == 0:
+    raise RuntimeError("runtime runner unexpectedly has root privileges")
+
+version = subprocess.run(
+    ["/usr/local/go/bin/go", "version"],
+    check=True,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    env={"PATH": "/usr/local/go/bin:/usr/bin:/bin"},
+).stdout.strip()
+if version != "go version go1.26.4 linux/amd64":
+    raise RuntimeError("runtime runner toolchain identity is %r" % version)
+
+module_root = pathlib.Path("/go/pkg/mod")
+for parent in (pathlib.Path("/go"), pathlib.Path("/go/pkg"), module_root):
+    metadata = os.lstat(parent)
+    if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_mode & 0o222:
+        raise RuntimeError("baked module-cache parent is not root-owned and non-writable: %s" % parent)
+
+checked = 0
+write_probe = None
+def fail_walk(error):
+    raise error
+
+for current, directories, files in os.walk(module_root, topdown=True, onerror=fail_walk, followlinks=False):
+    for name in [""] + directories + files:
+        path = pathlib.Path(current) if name == "" else pathlib.Path(current) / name
+        metadata = os.lstat(path)
+        if stat.S_ISLNK(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_mode & 0o222:
+            raise RuntimeError("baked module-cache entry is mutable, foreign-owned, or a symlink: %s" % path)
+        checked += 1
+        if checked > 250000:
+            raise RuntimeError("baked module cache exceeds the reviewed entry bound")
+        if write_probe is None and stat.S_ISREG(metadata.st_mode) and path.suffix == ".go":
+            write_probe = path
+if checked < 2 or write_probe is None:
+    raise RuntimeError("baked module cache is empty or has no Go source")
+try:
+    descriptor = os.open(write_probe, os.O_WRONLY)
+except PermissionError:
+    pass
+else:
+    os.close(descriptor)
+    raise RuntimeError("runtime UID can mutate baked module source: %s" % write_probe)
 
 for variable in ("TRSTCTL_DOD_PREFLIGHT_CACHE", "TRSTCTL_DOD_PREFLIGHT_RECEIPTS"):
     directory = pathlib.Path(os.environ[variable])
@@ -205,25 +279,25 @@ func (r *linuxRuntimeExecutor) prepare(ctx context.Context, repo string, profile
 
 func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, profile BuildProfile, args []string) commandResult {
 	if r == nil || profile.RuntimeRunnerImage == "" {
-		return commandResult{Err: fmt.Errorf("cross-host runtime runner was not prepared"), ExitCode: -1}
+		return commandResult{Err: fmt.Errorf("pinned runtime runner was not prepared"), ExitCode: -1}
 	}
 	if _, err := parseContentImageID(profile.RuntimeRunnerImage); err != nil {
-		return commandResult{Err: fmt.Errorf("cross-host runtime runner image: %w", err), ExitCode: -1}
+		return commandResult{Err: fmt.Errorf("pinned runtime runner image: %w", err), ExitCode: -1}
 	}
 	receiptDir := profile.RuntimeScratchDir
 	if receiptDir == "" {
-		return commandResult{Err: fmt.Errorf("cross-host runtime has no scoped receipt directory"), ExitCode: -1}
+		return commandResult{Err: fmt.Errorf("pinned runtime has no scoped receipt directory"), ExitCode: -1}
 	}
 	uid, gid, userSpec, err := runtimeRunnerHostUser(os.Getuid(), os.Getgid())
 	if err != nil {
 		return commandResult{Err: err, ExitCode: -1}
 	}
 	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
-		return commandResult{Err: fmt.Errorf("create cross-host runtime cache: %w", err), ExitCode: -1}
+		return commandResult{Err: fmt.Errorf("create pinned runtime cache: %w", err), ExitCode: -1}
 	}
 	for name, path := range map[string]string{"cache": cacheDir, "receipt": receiptDir} {
 		if err := validateRuntimeRunnerWritableDir(path, uid); err != nil {
-			return commandResult{Err: fmt.Errorf("cross-host runtime %s directory: %w", name, err), ExitCode: -1}
+			return commandResult{Err: fmt.Errorf("pinned runtime %s directory: %w", name, err), ExitCode: -1}
 		}
 	}
 	socket, _, err := runtimeDockerSocket(ctx, repo)
@@ -249,11 +323,11 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 	}
 	dockerArgs := []string{
 		"run", "--rm", "--pull=never", "--platform", profile.RuntimeRunner.Platform,
-		"--network", "bridge",
 	}
 	dockerArgs = append(dockerArgs, hostArgs...)
+	dockerArgs = append(dockerArgs, runtimeRunnerIsolationArgs()...)
 	dockerArgs = append(dockerArgs,
-		"--security-opt", "no-new-privileges", "--group-add", strconv.FormatUint(uint64(socketGID), 10),
+		"--group-add", strconv.FormatUint(uint64(socketGID), 10),
 		"--user", userSpec,
 		"--workdir", repo,
 		"--mount", "type=bind,src="+repo+",dst="+repo+",readonly",
@@ -262,11 +336,9 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 		"--mount", "type=bind,src="+socket+",dst=/var/run/docker.sock",
 		"--mount", "type=bind,src="+passwdFile+",dst=/etc/passwd,readonly",
 		"--mount", "type=bind,src="+groupFile+",dst=/etc/group,readonly",
-		"--env", "CGO_ENABLED="+profile.CGOEnabled,
-		"--env", "GOOS="+profile.GOOS,
-		"--env", "GOARCH="+profile.GOARCH,
-		"--env", "GOCACHE="+cacheDir,
-		"--env", "GOFLAGS=",
+	)
+	dockerArgs = append(dockerArgs, runtimeRunnerGoEnvironment(profile, cacheDir)...)
+	dockerArgs = append(dockerArgs,
 		"--env", "HOME="+receiptDir,
 		"--env", "TMPDIR="+receiptDir,
 		"--env", "DOCKER_HOST=unix:///var/run/docker.sock",
@@ -281,7 +353,7 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 		dockerArgs = append(dockerArgs, "--env", key+"="+profile.RuntimeEnv[key])
 	}
 	if profile.RuntimeBroker == nil || profile.RuntimeBroker.clientEndpoint() == "" || profile.RuntimeBroker.token == "" {
-		return commandResult{Err: fmt.Errorf("cross-host runtime has no authenticated parent broker"), ExitCode: -1}
+		return commandResult{Err: fmt.Errorf("pinned runtime has no authenticated parent broker"), ExitCode: -1}
 	}
 	preflightArgs := append([]string(nil), dockerArgs...)
 	preflightArgs = append(preflightArgs,
@@ -296,12 +368,42 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 	if preflight.Err != nil {
 		return commandResult{
 			Stdout: preflight.Stdout, Stderr: preflight.Stderr, ExitCode: preflight.ExitCode,
-			Err: fmt.Errorf("cross-host runtime write/Docker/broker preflight: %w", preflight.Err),
+			Err: fmt.Errorf("pinned runtime module-cache/write/Docker/broker preflight: %w", preflight.Err),
 		}
 	}
 	dockerArgs = append(dockerArgs, profile.RuntimeRunnerImage)
 	dockerArgs = append(dockerArgs, args...)
 	return runHostCommand(ctx, repo, "docker", dockerArgs...)
+}
+
+func runtimeRunnerIsolationArgs() []string {
+	return []string{"--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"}
+}
+
+func runtimeRunnerGoEnvironment(profile BuildProfile, cacheDir string) []string {
+	values := []string{
+		"CGO_ENABLED=" + profile.CGOEnabled,
+		"GOOS=" + profile.GOOS,
+		"GOARCH=" + profile.GOARCH,
+		"GOCACHE=" + cacheDir,
+		"GOMODCACHE=/go/pkg/mod",
+		"GOPROXY=off",
+		"GOSUMDB=off",
+		"GOPRIVATE=",
+		"GONOPROXY=",
+		"GONOSUMDB=",
+		"GOENV=off",
+		"GOTELEMETRY=off",
+		"GOTOOLCHAIN=local",
+		"GOWORK=off",
+		"GOFLAGS=-mod=readonly",
+		"PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+	}
+	args := make([]string, 0, len(values)*2)
+	for _, value := range values {
+		args = append(args, "--env", value)
+	}
+	return args
 }
 
 func runtimeRunnerPreflightProgram() string {
@@ -388,11 +490,15 @@ func runtimeRunnerDockerHostArgs(hostOS string) ([]string, error) {
 		// Docker Desktop owns the host.docker.internal DNS record. Overriding it
 		// with Linux's host-gateway token can resolve it inside the VM rather than
 		// back to the macOS parent broker.
-		return nil, nil
+		return []string{"--network", "bridge"}, nil
 	case "linux":
-		return []string{"--add-host", "host.docker.internal:host-gateway"}, nil
+		// Native Linux has no Desktop proxy from the bridge gateway to host
+		// loopback. Host networking plus an exact hosts entry preserves the
+		// broker/emulator loopback boundary while making the container use the
+		// same endpoints as the parent-owned proof processes.
+		return []string{"--network", "host", "--add-host", "host.docker.internal:127.0.0.1"}, nil
 	default:
-		return nil, fmt.Errorf("cross-host runtime runner does not support Docker host routing on %s", hostOS)
+		return nil, fmt.Errorf("pinned runtime runner does not support Docker host routing on %s", hostOS)
 	}
 }
 

@@ -54,6 +54,7 @@ func TestStartCompleteWritesUnsignedEvidenceForParentGate(t *testing.T) {
 		ContractDigest:    "sha256:" + internalcrypto.SHA256Hex([]byte("contract")),
 		Verifier:          "external-write", ReceiptFile: receiptFile, EvidenceFile: evidenceFile,
 		RuntimeRunnerIdentity: "runner@sha256:" + strings.Repeat("c", 64),
+		RuntimeRunnerImage:    "sha256:" + strings.Repeat("d", 64),
 		BrokerEndpoint:        "http://127.0.0.1:1", BrokerToken: "parent-broker-token",
 	}
 	payload, err := json.Marshal([]expectation{expected})

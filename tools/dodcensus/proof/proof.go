@@ -30,6 +30,12 @@ import (
 
 const maxEvidenceBody = 1 << 20
 
+func validSHA256Digest(value string) bool {
+	algorithm, encoded, ok := strings.Cut(value, ":")
+	digest, err := hex.DecodeString(encoded)
+	return ok && algorithm == "sha256" && err == nil && len(digest) == 32 && encoded == strings.ToLower(encoded)
+}
+
 var sentinelFragments = [][]byte{
 	[]byte("not configured"),
 	[]byte("not implemented"),
@@ -607,7 +613,7 @@ func Start(t *testing.T, id string, handler http.Handler, request *http.Request)
 	if expected.RuntimeMode != "assembled-handler" {
 		t.Fatalf("DOD-CENSUS: %s launched-binary expectation cannot use an in-process Handler", id)
 	}
-	if expected.SchemaVersion != 1 || expected.Nonce == "" || expected.BuildProfile == "" || expected.RuntimeMode == "" || expected.SubstrateID == "" || expected.SubstrateIdentity == "" || expected.ContractDigest == "" || expected.Verifier == "" || expected.ReceiptFile == "" || expected.EvidenceFile == "" || expected.RuntimeRunnerIdentity == "" || expected.BrokerEndpoint == "" || expected.BrokerToken == "" {
+	if expected.SchemaVersion != 1 || expected.Nonce == "" || expected.BuildProfile == "" || expected.RuntimeMode == "" || expected.SubstrateID == "" || expected.SubstrateIdentity == "" || expected.ContractDigest == "" || expected.Verifier == "" || expected.ReceiptFile == "" || expected.EvidenceFile == "" || expected.RuntimeRunnerIdentity == "" || !validSHA256Digest(expected.RuntimeRunnerImage) || expected.BrokerEndpoint == "" || expected.BrokerToken == "" {
 		t.Fatalf("DOD-CENSUS: expectation for %s is incomplete", id)
 	}
 	if request.Method != expected.Method || request.URL == nil || request.URL.Path != expected.Path {
@@ -669,21 +675,16 @@ func validLaunchedWitnessShape(witness launchedProcessReceipt) bool {
 		parsed, err := strconv.ParseUint(value, 10, 64)
 		return err == nil && parsed > 0 && strconv.FormatUint(parsed, 10) == value
 	}
-	validDigest := func(value string) bool {
-		algorithm, encoded, ok := strings.Cut(value, ":")
-		digest, err := hex.DecodeString(encoded)
-		return ok && algorithm == "sha256" && err == nil && len(digest) == 32 && encoded == strings.ToLower(encoded)
-	}
 	if !positiveDecimal(witness.ProcessStartTicks) || !positiveDecimal(witness.BinaryDevice) || !positiveDecimal(witness.BinaryInode) ||
 		!positiveDecimal(witness.ListenerInode) || !positiveDecimal(witness.AcceptedConnectionInode) ||
-		witness.ListenerInode == witness.AcceptedConnectionInode || !validDigest(witness.BinaryDigest) {
+		witness.ListenerInode == witness.AcceptedConnectionInode || !validSHA256Digest(witness.BinaryDigest) {
 		return false
 	}
 	switch witness.ProcessMode {
 	case processModeNative:
 		return witness.InterpreterDigest == "" && witness.InterpreterDevice == "" && witness.InterpreterInode == ""
 	case processModeBinfmt:
-		return validDigest(witness.InterpreterDigest) && positiveDecimal(witness.InterpreterDevice) && positiveDecimal(witness.InterpreterInode)
+		return validSHA256Digest(witness.InterpreterDigest) && positiveDecimal(witness.InterpreterDevice) && positiveDecimal(witness.InterpreterInode)
 	default:
 		return false
 	}

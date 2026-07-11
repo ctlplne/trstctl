@@ -1389,6 +1389,9 @@ func readRuntimeReceipt(path, label string) (runtimeReceipt, error) {
 }
 
 func validateRuntimeReceiptBody(expected runtimeExpectation, receipt runtimeReceipt, signed bool, parentReceipt []byte) error {
+	if _, err := parseContentImageID(expected.RuntimeRunnerImage); err != nil {
+		return fmt.Errorf("runtime expectation has no exact content-addressed runner image: %w", err)
+	}
 	if receipt.SchemaVersion != 1 || receipt.Nonce != expected.Nonce || receipt.ID != expected.ID || receipt.BuildProfile != expected.BuildProfile || receipt.Method != expected.Method || receipt.Path != expected.Path || receipt.RuntimeMode != expected.RuntimeMode || receipt.SubstrateID != expected.SubstrateID || receipt.SubstrateKind != expected.SubstrateKind || receipt.SubstrateIdentity != expected.SubstrateIdentity || receipt.ContractDigest != expected.ContractDigest || receipt.Verifier != expected.Verifier || receipt.RuntimeRunnerIdentity != expected.RuntimeRunnerIdentity || receipt.RuntimeRunnerImage != expected.RuntimeRunnerImage {
 		return fmt.Errorf("runtime receipt identity/nonce/route/profile/substrate/runner/digest does not exactly match the gate expectation")
 	}

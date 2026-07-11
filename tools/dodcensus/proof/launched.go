@@ -116,6 +116,9 @@ func BuildShippedProcess(t *testing.T, id string, licensePublicKey []byte) *Ship
 	if expected.RuntimeMode != "launched-binary" {
 		t.Fatalf("DOD-CENSUS: %s is not a launched-binary expectation", id)
 	}
+	if !validSHA256Digest(expected.RuntimeRunnerImage) {
+		t.Fatalf("DOD-CENSUS: %s has no exact content-addressed runtime runner image", id)
+	}
 	if len(licensePublicKey) == 0 || len(licensePublicKey) > 4096 {
 		t.Fatalf("DOD-CENSUS: launched binary license public PEM size %d is invalid", len(licensePublicKey))
 	}
@@ -874,11 +877,6 @@ func parseTranslatorFDInfo(raw []byte) (uint64, string, error) {
 		return 0, "", fmt.Errorf("descriptor info omits position/flags")
 	}
 	return position, flags, nil
-}
-
-func sameExecutableFile(left, right executableIdentity) bool {
-	return left.Device == right.Device && left.Inode == right.Inode && left.Links == right.Links &&
-		left.UID == right.UID && left.Size == right.Size && left.Mode == right.Mode
 }
 
 func processLoopbackListener(pid, port int) (string, error) {

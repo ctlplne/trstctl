@@ -20,7 +20,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -275,11 +274,8 @@ type osRunner struct {
 }
 
 func (r osRunner) PrepareRuntime(ctx context.Context, repo string, profile BuildProfile) (BuildProfile, error) {
-	if runtime.GOOS == profile.GOOS && runtime.GOARCH == profile.GOARCH {
-		return profile, nil
-	}
 	if r.LinuxRunner == nil {
-		return profile, fmt.Errorf("DoD runtime host %s/%s does not match shipped profile %s/%s and no reviewed Linux runner is configured", runtime.GOOS, runtime.GOARCH, profile.GOOS, profile.GOARCH)
+		return profile, fmt.Errorf("DoD runtime has no reviewed pinned Linux runner")
 	}
 	image, err := r.LinuxRunner.prepare(ctx, repo, profile)
 	if err != nil {
@@ -297,9 +293,12 @@ func (r osRunner) Run(ctx context.Context, dir string, profile BuildProfile, nam
 	if err := validateDODGoInvocation(name, args); err != nil {
 		return commandResult{Err: err, ExitCode: -1}
 	}
-	if profile.RuntimeExecution && (runtime.GOOS != profile.GOOS || runtime.GOARCH != profile.GOARCH) {
+	if profile.RuntimeExecution {
 		if r.LinuxRunner == nil {
-			return commandResult{Err: fmt.Errorf("DoD runtime host %s/%s does not match shipped profile %s/%s and no reviewed Linux runner is configured", runtime.GOOS, runtime.GOARCH, profile.GOOS, profile.GOARCH), ExitCode: -1}
+			return commandResult{Err: fmt.Errorf("DoD runtime has no reviewed pinned Linux runner"), ExitCode: -1}
+		}
+		if profile.RuntimeRunnerImage == "" {
+			return commandResult{Err: fmt.Errorf("DoD runtime pinned Linux runner was not prepared"), ExitCode: -1}
 		}
 		return r.LinuxRunner.run(ctx, dir, r.CacheDir, profile, args)
 	}

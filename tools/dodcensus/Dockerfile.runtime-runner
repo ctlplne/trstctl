@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
-# Native Linux executor for shipped-profile DoD tests when the harness runs on
-# another OS/architecture (for example Darwin/arm64). The caller must pass a
+# Hermetic Linux executor for every shipped-profile DoD runtime test. Native
+# Linux and cross-host runs use these same bytes. The caller must pass a
 # golang@sha256:... base; no mutable fallback is accepted.
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
@@ -17,14 +17,19 @@ RUN printf '%s\n' \
  && apt-get install -y --no-install-recommends ca-certificates docker.io git openssl python3 \
  && rm -rf /var/lib/apt/lists/*
 
-# Cache only modules whose checksums are committed in the runner identity.
+# Cache only modules whose checksums are committed in the runner identity. The
+# runtime UID may read this cache but cannot replace already-verified source and
+# trick a fresh Go build into compiling bytes that differ from go.sum.
 COPY go.mod go.sum /runtime-modules/
-RUN cd /runtime-modules && GOFLAGS=-mod=readonly go mod download
+RUN cd /runtime-modules \
+ && GOFLAGS=-mod=readonly go mod download all \
+ && chown -R 0:0 /go \
+ && chmod -R a-w /go
 
 RUN groupadd --system --gid 65532 nonroot \
  && useradd --system --uid 65532 --gid 65532 --home-dir /home/nonroot --create-home --shell /usr/sbin/nologin nonroot \
- && chown -R 65532:65532 /go /home/nonroot
+ && chown -R 65532:65532 /home/nonroot
 
 USER 65532:65532
 ENV HOME=/home/nonroot
-ENTRYPOINT ["go"]
+ENTRYPOINT ["/usr/local/go/bin/go"]

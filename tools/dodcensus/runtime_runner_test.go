@@ -9,19 +9,35 @@ import (
 	"testing"
 )
 
+func TestCommittedRuntimeRunnerIdentityMatchesExactClosure(t *testing.T) {
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := loadManifest(filepath.Join(repo, "tools", "dodcensus", "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, profile := range manifest.BuildProfiles {
+		if evidence := inspectRuntimeRunnerProof(repo, profile); !evidence.OK {
+			t.Errorf("build profile %s runtime runner: %s", name, evidence.Detail)
+		}
+	}
+}
+
 func TestRuntimeRunnerDockerHostArgsPreserveDesktopDNS(t *testing.T) {
 	got, err := runtimeRunnerDockerHostArgs("darwin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 0 {
-		t.Fatalf("Darwin Docker host args = %v, want Docker Desktop DNS unchanged", got)
+	if strings.Join(got, " ") != "--network bridge" {
+		t.Fatalf("Darwin Docker host args = %v, want Docker Desktop bridge/DNS", got)
 	}
 	got, err = runtimeRunnerDockerHostArgs("linux")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(got, " ") != "--add-host host.docker.internal:host-gateway" {
+	if strings.Join(got, " ") != "--network host --add-host host.docker.internal:127.0.0.1" {
 		t.Fatalf("Linux Docker host args = %v", got)
 	}
 	if _, err := runtimeRunnerDockerHostArgs("windows"); err == nil {
@@ -39,6 +55,39 @@ func TestRuntimeRunnerHostUserStaysNonRoot(t *testing.T) {
 	}
 	if _, _, _, err := runtimeRunnerHostUser(501, -1); err == nil {
 		t.Fatal("negative runtime runner group passed")
+	}
+}
+
+func TestRuntimeRunnerRootFilesystemIsReadOnlyAndCapabilitiesAreDropped(t *testing.T) {
+	want := []string{"--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"}
+	if got := runtimeRunnerIsolationArgs(); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("runtime runner isolation args = %v, want exact %v", got, want)
+	}
+}
+
+func TestRuntimeRunnerGoEnvironmentIsClosedAndOffline(t *testing.T) {
+	profile := BuildProfile{CGOEnabled: "0", GOOS: "linux", GOARCH: "amd64"}
+	got := runtimeRunnerGoEnvironment(profile, "/private/cache")
+	want := []string{
+		"--env", "CGO_ENABLED=0",
+		"--env", "GOOS=linux",
+		"--env", "GOARCH=amd64",
+		"--env", "GOCACHE=/private/cache",
+		"--env", "GOMODCACHE=/go/pkg/mod",
+		"--env", "GOPROXY=off",
+		"--env", "GOSUMDB=off",
+		"--env", "GOPRIVATE=",
+		"--env", "GONOPROXY=",
+		"--env", "GONOSUMDB=",
+		"--env", "GOENV=off",
+		"--env", "GOTELEMETRY=off",
+		"--env", "GOTOOLCHAIN=local",
+		"--env", "GOWORK=off",
+		"--env", "GOFLAGS=-mod=readonly",
+		"--env", "PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("pinned runner Go environment = %v, want exact closed environment %v", got, want)
 	}
 }
 
@@ -94,6 +143,17 @@ func TestHostDockerCommandBoundaryIsClosed(t *testing.T) {
 
 func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing.T) {
 	for _, required := range []string{
+		"os.geteuid() == 0",
+		`["/usr/local/go/bin/go", "version"]`,
+		`go version go1.26.4 linux/amd64`,
+		`module_root = pathlib.Path("/go/pkg/mod")`,
+		"metadata.st_uid != 0",
+		"metadata.st_mode & 0o222",
+		"stat.S_ISLNK",
+		"checked > 250000",
+		"onerror=fail_walk",
+		"os.open(write_probe, os.O_WRONLY)",
+		"except PermissionError",
 		"TRSTCTL_DOD_PREFLIGHT_CACHE",
 		"TRSTCTL_DOD_PREFLIGHT_RECEIPTS",
 		"TRSTCTL_DOD_PREFLIGHT_BROKER",
@@ -113,6 +173,50 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 	}
 	if err := validateHostCommand("docker", []string{"run", "python3", "-c", program}); err != nil {
 		t.Fatalf("encoded runner preflight was rejected: %v", err)
+	}
+}
+
+func TestRuntimeRunnerClosureRejectsRehashedMutableModuleCache(t *testing.T) {
+	tests := []struct {
+		name        string
+		old         string
+		replacement string
+	}{
+		{name: "runtime owns module cache", old: "chown -R 0:0 /go", replacement: "chown -R 65532:65532 /go"},
+		{name: "runtime can write module cache", old: "chmod -R a-w /go", replacement: "chmod -R u+w /go"},
+		{name: "ambient Go entrypoint", old: `ENTRYPOINT ["/usr/local/go/bin/go"]`, replacement: `ENTRYPOINT ["go"]`},
+		{name: "comment-spoofed module download", old: "GOFLAGS=-mod=readonly go mod download all", replacement: "true # GOFLAGS=-mod=readonly go mod download all"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repo := t.TempDir()
+			manifest := validManifest(t, repo, enforcementRequired)
+			profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
+			path := filepath.Join(repo, filepath.FromSlash(profile.RuntimeRunner.Dockerfile))
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutated := strings.Replace(string(raw), test.old, test.replacement, 1)
+			if mutated == string(raw) {
+				t.Fatalf("mutation anchor %q is absent", test.old)
+			}
+			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			digest, err := commandIdentityDigest(repo, profile.RuntimeRunner.IdentityFiles)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prefix, _, ok := strings.Cut(profile.RuntimeRunner.Identity, "@")
+			if !ok {
+				t.Fatal("fixture runner identity has no digest separator")
+			}
+			profile.RuntimeRunner.Identity = prefix + "@" + digest
+			if evidence := inspectRuntimeRunnerProof(repo, profile); evidence.OK {
+				t.Fatalf("rehashed mutable runtime runner passed: %+v", evidence)
+			}
+		})
 	}
 }
 
