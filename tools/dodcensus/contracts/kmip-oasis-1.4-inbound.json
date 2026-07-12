@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "protocol": "OASIS KMIP Specification 1.4 TTLV over TLS 1.3 mutual TLS",
+  "entry": "secrets_residuals.kmip_wrapping_profile_negotiation",
+  "required_interoperability": [
+    "Query advertises Register and DiscoverVersions plus Symmetric Key Lifecycle Server 1.4 and Symmetric Key Foundry Server 1.4 profiles",
+    "DiscoverVersions returns only the supported 1.4 intersection",
+    "Register accepts an OASIS Raw AES-256 SymmetricKey object",
+    "Get with KeyWrappingSpecification returns AES-GCM Encrypt wrapping data with a 12-byte nonce and 16-byte authentication tag",
+    "Register unwraps the wrapped SymmetricKey and a raw Get reproduces the exact key material",
+    "all frames obey the 1 MiB, 4096-field, 16-level TTLV bounds",
+    "TLS 1.3 mutual authentication completes with no HTTP/2 ALPN coupling",
+    "envelope-sealed event replay preserves active, revoked, and destroyed object state across a fresh shipped runtime"
+  ],
+  "oasis_enumerations": {
+    "Register": 3,
+    "Get": 10,
+    "Query": 24,
+    "DiscoverVersions": 30,
+    "SymmetricKeyLifecycleServer14": 130,
+    "SymmetricKeyFoundryServer14": 142
+  }
+}

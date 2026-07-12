@@ -317,6 +317,16 @@ type KeyCeremony struct {
 	CreatedAt time.Time
 }
 
+// KeyCeremonyApprovalEvidence is one distinct custodian approval that is bound
+// to an immutable ca.ceremony.approved event. Rows without both event id and
+// sequence are deliberately absent from this view and have no quorum power.
+type KeyCeremonyApprovalEvidence struct {
+	Custodian    string
+	EventID      string
+	EventSequence uint64
+	ApprovedAt   time.Time
+}
+
 // ErrSelfApproval is returned when a ceremony's opener attempts to approve their
 // own ceremony, violating opener != approver separation of duties (PKIGOV-006).
 var ErrSelfApproval = errors.New("store: ceremony opener may not approve their own ceremony (separation of duties)")
@@ -537,6 +547,41 @@ func (s *Store) GetKeyCeremony(ctx context.Context, tenantID, id string) (KeyCer
 	return c, err
 }
 
+// ListKeyCeremonyApprovalEvidence returns only event-backed, tenant-scoped
+// approvals for a ceremony. Command handlers use it together with the immutable
+// event stream when an operation has an explicit operator roster: a caller-owned
+// list of names can never substitute for authenticated approval evidence.
+func (s *Store) ListKeyCeremonyApprovalEvidence(ctx context.Context, tenantID, id string) ([]KeyCeremonyApprovalEvidence, error) {
+	var out []KeyCeremonyApprovalEvidence
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT custodian, approval_event_id, approval_event_sequence, approved_at
+			   FROM ca_ceremony_approvals
+			  WHERE tenant_id = $1 AND ceremony_id = $2
+			    AND approval_event_id IS NOT NULL
+			    AND approval_event_sequence IS NOT NULL
+			  ORDER BY custodian`, tenantID, id)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item KeyCeremonyApprovalEvidence
+			var sequence int64
+			if err := rows.Scan(&item.Custodian, &item.EventID, &sequence, &item.ApprovedAt); err != nil {
+				return err
+			}
+			if sequence <= 0 {
+				return errors.New("store: ceremony approval evidence has an invalid event sequence")
+			}
+			item.EventSequence = uint64(sequence)
+			out = append(out, item)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // CompleteKeyCeremony marks a ceremony completed once it has fulfilled its
 // purpose (the CA key has been created).
 func (s *Store) CompleteKeyCeremony(ctx context.Context, tenantID, id string) error {
@@ -560,6 +605,16 @@ func (s *Store) CompleteKeyCeremony(ctx context.Context, tenantID, id string) er
 // row write and the ceremony status change commit or roll back together, and a
 // completed ceremony cannot be reused.
 func (s *Store) ConsumeKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, id, expectedPurpose string) (KeyCeremony, error) {
+	c, _, err := s.ConsumeKeyCeremonyWithApprovalEvidenceTx(ctx, tx, tenantID, id, expectedPurpose)
+	return c, err
+}
+
+// ConsumeKeyCeremonyWithApprovalEvidenceTx locks and consumes a ceremony while
+// returning the exact immutable-event-backed approvals that gave it quorum. The
+// evidence query runs under the same tenant transaction and row lock as the
+// single-use status transition, so an online signer cannot race a separate
+// approval read or accidentally bind a different set of custodians.
+func (s *Store) ConsumeKeyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx, tenantID, id, expectedPurpose string) (KeyCeremony, []KeyCeremonyApprovalEvidence, error) {
 	var c KeyCeremony
 	if err := tx.QueryRow(ctx,
 		`SELECT c.id::text, c.tenant_id::text, c.purpose, c.threshold, c.status, c.opener, c.created_at,
@@ -571,16 +626,49 @@ func (s *Store) ConsumeKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, i
 		  FOR UPDATE`,
 		tenantID, id).
 		Scan(&c.ID, &c.TenantID, &c.Purpose, &c.Threshold, &c.Status, &c.Opener, &c.CreatedAt, &c.Approvals); err != nil {
-		return c, err
+		return c, nil, err
 	}
 	if c.Status != "pending" {
-		return c, ErrKeyCeremonyNotPending
+		return c, nil, ErrKeyCeremonyNotPending
 	}
 	if c.Purpose != expectedPurpose {
-		return c, ErrKeyCeremonyPurposeMismatch
+		return c, nil, ErrKeyCeremonyPurposeMismatch
 	}
 	if c.Approvals < c.Threshold {
-		return c, ErrKeyCeremonyQuorumNotMet
+		return c, nil, ErrKeyCeremonyQuorumNotMet
+	}
+	rows, err := tx.Query(ctx,
+		`SELECT custodian, approval_event_id, approval_event_sequence, approved_at
+		   FROM ca_ceremony_approvals
+		  WHERE tenant_id = $1 AND ceremony_id = $2
+		    AND approval_event_id IS NOT NULL
+		    AND approval_event_sequence IS NOT NULL
+		  ORDER BY custodian`, tenantID, id)
+	if err != nil {
+		return c, nil, err
+	}
+	var evidence []KeyCeremonyApprovalEvidence
+	for rows.Next() {
+		var item KeyCeremonyApprovalEvidence
+		var sequence int64
+		if err := rows.Scan(&item.Custodian, &item.EventID, &sequence, &item.ApprovedAt); err != nil {
+			rows.Close()
+			return c, nil, err
+		}
+		if sequence <= 0 {
+			rows.Close()
+			return c, nil, errors.New("store: ceremony approval evidence has an invalid event sequence")
+		}
+		item.EventSequence = uint64(sequence)
+		evidence = append(evidence, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return c, nil, err
+	}
+	rows.Close()
+	if len(evidence) != c.Approvals {
+		return c, nil, errors.New("store: ceremony approval evidence count changed while locked")
 	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE ca_key_ceremonies
@@ -588,11 +676,11 @@ func (s *Store) ConsumeKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, i
 		  WHERE tenant_id = $1 AND id = $2 AND status = 'pending'`,
 		tenantID, id)
 	if err != nil {
-		return c, err
+		return c, nil, err
 	}
 	if tag.RowsAffected() != 1 {
-		return c, ErrKeyCeremonyNotPending
+		return c, nil, ErrKeyCeremonyNotPending
 	}
 	c.Status = "completed"
-	return c, nil
+	return c, evidence, nil
 }

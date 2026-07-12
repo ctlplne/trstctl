@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
@@ -36,11 +38,13 @@ type LicensedAPIOptionsFactory func(LicensedAPIOptionsDeps) ([]api.Option, error
 type LicensedOutboxFactory func(LicensedOutboxDeps) (LicensedOutboxHandler, error)
 
 type LicensedAPIOptionsDeps struct {
-	Store             *store.Store
-	Log               *events.Log
-	Outbox            *orchestrator.Outbox
-	SignerKeyStoreDir string
-	KEMCustody        KEMCustody
+	Store              *store.Store
+	Log                *events.Log
+	Outbox             *orchestrator.Outbox
+	TLSPostureDeployer connector.TLSPostureDeployer
+	OutboxIntegrityKey seal.KeyWrapper
+	SignerKeyStoreDir  string
+	KEMCustody         KEMCustody
 }
 
 type ProtocolLeafIssuer func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte) ([]byte, error)
@@ -92,10 +96,12 @@ var (
 )
 
 type LicensedOutboxDeps struct {
-	Store             *store.Store
-	Log               *events.Log
-	Idempotency       *orchestrator.Idempotency
-	IssueProtocolLeaf ProtocolLeafIssuer
+	Store              *store.Store
+	Log                *events.Log
+	Idempotency        *orchestrator.Idempotency
+	IssueProtocolLeaf  ProtocolLeafIssuer
+	TLSPostureDeployer connector.TLSPostureDeployer
+	OutboxIntegrityKey seal.KeyWrapper
 	// FeatureObserver records low-cardinality feature/action/outcome/duration signals
 	// on served licensed outbox hot paths. Labels must be closed, non-tenant, and
 	// non-secret so the shared metrics endpoint never leaks AN-1/AN-8 material.

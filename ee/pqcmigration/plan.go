@@ -4,15 +4,18 @@ package pqcmigration
 
 import (
 	"fmt"
+	"strings"
 
 	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/connector"
 )
 
 const (
 	TargetMLDSA65      = string(eepqc.MLDSA65)
 	EffectiveHybridTLS = eepqc.HybridMLDSA44ECDSAP256Algorithm
 	ProtocolACME       = "acme"
+	HybridTLSGroup     = "X25519MLKEM768"
 )
 
 type Asset struct {
@@ -35,6 +38,16 @@ type Request struct {
 	TargetAlgorithm   string
 	Protocol          string
 	RollbackOnFailure bool
+	TLSBindings       []TLSBinding
+}
+
+// TLSBinding is operator-authored intent binding exactly one selected TLS
+// protocol/cipher finding to one approved deployment target and desired native
+// receiver posture.
+type TLSBinding struct {
+	AssetID  string
+	TargetID string
+	Desired  connector.TLSPosture
 }
 
 type Reissue struct {
@@ -46,8 +59,17 @@ type Reissue struct {
 }
 
 type Plan struct {
-	Reissues  []Reissue
-	Residuals []Residual
+	Reissues    []Reissue
+	TLSRollouts []TLSRollout
+	Residuals   []Residual
+}
+
+type TLSRollout struct {
+	Asset             Asset
+	FindingKind       string
+	TargetID          string
+	Desired           connector.TLSPosture
+	RollbackOnFailure bool
 }
 
 type Residual struct {
@@ -79,46 +101,111 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 	for _, asset := range assets {
 		byID[asset.ID] = asset
 	}
+	bindings := make(map[string]TLSBinding, len(req.TLSBindings))
+	for _, binding := range req.TLSBindings {
+		if binding.AssetID == "" || binding.TargetID == "" {
+			return Plan{}, fmt.Errorf("pqcmigration: TLS binding requires asset_id and target_id")
+		}
+		if _, duplicate := bindings[binding.AssetID]; duplicate {
+			return Plan{}, fmt.Errorf("pqcmigration: TLS finding %s has more than one target binding", binding.AssetID)
+		}
+		if err := validateDesiredPQCPosture(binding.Desired); err != nil {
+			return Plan{}, fmt.Errorf("pqcmigration: TLS binding for %s: %w", binding.AssetID, err)
+		}
+		bindings[binding.AssetID] = binding
+	}
 	plan := Plan{Residuals: ResidualDenominator()}
+	selected := make(map[string]bool, len(req.AssetIDs))
 	for _, id := range req.AssetIDs {
+		if id == "" || selected[id] {
+			return Plan{}, fmt.Errorf("pqcmigration: selected asset ids must be non-empty and unique")
+		}
+		selected[id] = true
 		asset, ok := byID[id]
 		if !ok {
 			return Plan{}, AssetNotFoundError{ID: id}
 		}
-		if asset.Kind != string(cbom.AssetCertKey) {
-			return Plan{}, fmt.Errorf("pqcmigration: asset %s is %s, want certificate-key", id, asset.Kind)
+		switch asset.Kind {
+		case string(cbom.AssetCertKey):
+			if _, bound := bindings[id]; bound {
+				return Plan{}, fmt.Errorf("pqcmigration: certificate-key asset %s must not have a TLS target binding", id)
+			}
+			if !asset.QuantumVulnerable {
+				return Plan{}, fmt.Errorf("pqcmigration: asset %s is already post-quantum-ready", id)
+			}
+			plan.Reissues = append(plan.Reissues, Reissue{
+				Asset:              cloneAsset(asset),
+				TargetAlgorithm:    req.TargetAlgorithm,
+				EffectiveAlgorithm: EffectiveHybridTLS,
+				Protocol:           protocol,
+				RollbackOnFailure:  req.RollbackOnFailure,
+			})
+		case string(cbom.AssetTLSEndpoint), string(cbom.AssetHostConfig):
+			if !asset.QuantumVulnerable && !asset.OutOfPolicy {
+				return Plan{}, fmt.Errorf("pqcmigration: TLS asset %s is already policy-compliant", id)
+			}
+			binding, bound := bindings[id]
+			if !bound {
+				return Plan{}, fmt.Errorf("pqcmigration: selected TLS finding %s has no operator target binding", id)
+			}
+			kind, err := tlsFindingKind(asset)
+			if err != nil {
+				return Plan{}, err
+			}
+			plan.TLSRollouts = append(plan.TLSRollouts, TLSRollout{
+				Asset: cloneAsset(asset), FindingKind: kind, TargetID: binding.TargetID,
+				Desired: clonePosture(binding.Desired), RollbackOnFailure: req.RollbackOnFailure,
+			})
+		default:
+			return Plan{}, fmt.Errorf("pqcmigration: asset %s has unsupported kind %s", id, asset.Kind)
 		}
-		if !asset.QuantumVulnerable {
-			return Plan{}, fmt.Errorf("pqcmigration: asset %s is already post-quantum-ready", id)
+	}
+	for assetID := range bindings {
+		if !selected[assetID] {
+			return Plan{}, fmt.Errorf("pqcmigration: TLS binding for unselected asset %s is not allowed", assetID)
 		}
-		plan.Reissues = append(plan.Reissues, Reissue{
-			Asset:              cloneAsset(asset),
-			TargetAlgorithm:    req.TargetAlgorithm,
-			EffectiveAlgorithm: EffectiveHybridTLS,
-			Protocol:           protocol,
-			RollbackOnFailure:  req.RollbackOnFailure,
-		})
+	}
+	if len(plan.Reissues)+len(plan.TLSRollouts) != len(req.AssetIDs) {
+		return Plan{}, fmt.Errorf("pqcmigration: every selected asset must produce exactly one migration action")
 	}
 	return plan, nil
 }
 
+func tlsFindingKind(asset Asset) (string, error) {
+	hasProtocol := strings.TrimSpace(asset.Protocol) != ""
+	hasCipher := strings.TrimSpace(asset.Cipher) != ""
+	if hasProtocol == hasCipher {
+		return "", fmt.Errorf("pqcmigration: TLS asset %s must describe exactly one protocol or cipher finding", asset.ID)
+	}
+	if hasProtocol {
+		return "protocol", nil
+	}
+	return "cipher", nil
+}
+
+func validateDesiredPQCPosture(posture connector.TLSPosture) error {
+	if err := connector.ValidateTLSPosture(posture); err != nil {
+		return err
+	}
+	if posture.MinimumVersion != connector.TLSVersion13 {
+		return fmt.Errorf("desired PQC rollout must set minimum_version to %s", connector.TLSVersion13)
+	}
+	for _, group := range posture.KeyExchangeGroups {
+		if strings.EqualFold(group, HybridTLSGroup) {
+			return nil
+		}
+	}
+	return fmt.Errorf("desired PQC rollout must include the %s key-exchange group", HybridTLSGroup)
+}
+
+func clonePosture(posture connector.TLSPosture) connector.TLSPosture {
+	posture.CipherSuites = append([]string(nil), posture.CipherSuites...)
+	posture.KeyExchangeGroups = append([]string(nil), posture.KeyExchangeGroups...)
+	return posture
+}
+
 func ResidualDenominator() []Residual {
 	return []Residual{
-		{
-			ID:     "pure_mldsa_subject_certificates",
-			Status: "not_served",
-			Reason: "stock X.509 clients still require classical subject public keys; the served path uses a hybrid transition leaf with an ML-DSA binding",
-		},
-		{
-			ID:     "spiffe_multi_key_workload_response",
-			Status: "not_served",
-			Reason: "the served SPIFFE Workload API returns the standard single private key per X509-SVID response; hybrid multi-key SVID delivery remains protocol/client work",
-		},
-		{
-			ID:     "fleetwide_tls_cipher_rollout",
-			Status: "not_served",
-			Reason: "CBOM TLS protocol and cipher findings are classified and targeted, but automatic deployment rollout is served first for certificate-key assets",
-		},
 		{
 			ID:     "hybrid_to_pure_pqc_cutover",
 			Status: "planned_gated",

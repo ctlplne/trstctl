@@ -4,12 +4,15 @@ package pqcmigration
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/editionseam"
 )
 
@@ -21,24 +24,44 @@ const (
 type Service interface {
 	Start(ctx context.Context, tenantID string, req APIRequest) (Response, error)
 	Rollback(ctx context.Context, tenantID, runID string, req RollbackRequest) (RollbackResponse, error)
+	Progress(ctx context.Context, tenantID, runID string) (RunProgressResponse, error)
 }
 
 type APIRequest struct {
-	AssetIDs          []string `json:"asset_ids"`
-	TargetAlgorithm   string   `json:"target_algorithm"`
-	Protocol          string   `json:"protocol"`
-	RollbackOnFailure bool     `json:"rollback_on_failure"`
+	AssetIDs          []string        `json:"asset_ids"`
+	TargetAlgorithm   string          `json:"target_algorithm"`
+	Protocol          string          `json:"protocol"`
+	RollbackOnFailure bool            `json:"rollback_on_failure"`
+	TLSBindings       []APITLSBinding `json:"tls_bindings,omitempty"`
+}
+
+type APITLSBinding struct {
+	AssetID  string               `json:"asset_id"`
+	TargetID string               `json:"target_id"`
+	Desired  connector.TLSPosture `json:"desired"`
 }
 
 type Response struct {
-	RunID              string                 `json:"run_id"`
-	Queued             int                    `json:"queued"`
-	TargetAlgorithm    string                 `json:"target_algorithm"`
-	EffectiveAlgorithm string                 `json:"effective_algorithm"`
-	Protocol           string                 `json:"protocol"`
-	RollbackConfigured bool                   `json:"rollback_configured"`
-	MigrationProgress  cbom.MigrationProgress `json:"migration_progress"`
-	QueuedAt           time.Time              `json:"queued_at"`
+	RunID                     string                 `json:"run_id"`
+	Queued                    int                    `json:"queued"`
+	CertificateReissuesQueued int                    `json:"certificate_reissues_queued"`
+	TLSFindingsQueued         int                    `json:"tls_findings_queued"`
+	TargetAlgorithm           string                 `json:"target_algorithm"`
+	EffectiveAlgorithm        string                 `json:"effective_algorithm"`
+	Protocol                  string                 `json:"protocol"`
+	RollbackConfigured        bool                   `json:"rollback_configured"`
+	MigrationProgress         cbom.MigrationProgress `json:"migration_progress"`
+	QueuedAt                  time.Time              `json:"queued_at"`
+}
+
+type RunProgressResponse struct {
+	RunID      string            `json:"run_id"`
+	Total      int               `json:"total"`
+	Queued     int               `json:"queued"`
+	Applied    int               `json:"applied"`
+	Failed     int               `json:"failed"`
+	RolledBack int               `json:"rolled_back"`
+	Findings   []FindingProgress `json:"findings"`
 }
 
 type RollbackRequest struct {
@@ -54,9 +77,16 @@ type RollbackResponse struct {
 	QueuedAt          time.Time              `json:"queued_at"`
 }
 
-func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
+func NewAPIOptionsFactory(projection *ProgressProjection) editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
-		svc := &pqcMigrationService{store: d.Store, log: d.Log, outbox: d.Outbox}
+		if projection == nil {
+			return nil, errors.New("pqcmigration: API requires the shared runtime progress projection")
+		}
+		svc := &pqcMigrationService{
+			store: d.Store, log: d.Log, outbox: d.Outbox,
+			deployer: d.TLSPostureDeployer, progress: projection,
+			integrityKey: d.OutboxIntegrityKey,
+		}
 		return []api.Option{
 			api.WithLicensedRoutes(routes(svc)...),
 			api.WithLicensedSchemas(schemas()),
@@ -66,6 +96,13 @@ func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 
 func routes(svc Service) []api.LicensedRoute {
 	return []api.LicensedRoute{
+		{
+			Method: "GET", Path: "/api/v1/pqc/migrations/{run_id}", OperationID: "getPQCMigrationProgress",
+			Summary:        "Read projected per-finding PQC TLS rollout progress and receiver evidence",
+			Handler:        func(a *api.API) http.HandlerFunc { return progressHandler(a, svc) },
+			PathParams:     []api.RouteParam{api.PathStringParam("run_id", "PQC migration run id")},
+			ResponseSchema: "PQCMigrationProgress", SuccessCode: "200", Permission: authz.CertsRead,
+		},
 		{
 			Method: "POST", Path: "/api/v1/pqc/migrations", OperationID: "startPQCMigration",
 			Summary:       "Queue PQC re-issuance for CBOM assets through the served protocol path",
@@ -82,6 +119,39 @@ func routes(svc Service) []api.LicensedRoute {
 			SuccessCode: "202", Mutation: true, Permission: authz.CertsIssue,
 		},
 	}
+}
+
+func progressHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProgressProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		runID := r.PathValue("run_id")
+		if runID == "" {
+			writeProgressProblem(w, http.StatusBadRequest, "run_id is required")
+			return
+		}
+		start := time.Now()
+		resp, err := svc.Progress(r.Context(), tenantID, runID)
+		a.ObserveFeature("pqc_migration", "progress", start, err)
+		if err != nil {
+			writeProgressProblem(w, http.StatusNotFound, "PQC migration run not found")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func writeProgressProblem(w http.ResponseWriter, status int, detail string) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"type": "about:blank", "title": http.StatusText(status), "status": status, "detail": detail,
+	})
 }
 
 func startHandler(a *api.API, svc Service) http.HandlerFunc {
@@ -158,17 +228,41 @@ func schemas() map[string]*api.Schema {
 			"target_algorithm":    api.StringSchema(),
 			"protocol":            api.StringSchema(),
 			"rollback_on_failure": api.BooleanSchema(),
+			"tls_bindings":        api.ArraySchema(api.SchemaRef("PQCMigrationTLSBinding")),
 		}, "asset_ids", "target_algorithm"),
+		"PQCMigrationTLSPosture": api.ObjectSchema(map[string]*api.Schema{
+			"minimum_version":     api.StringSchema(),
+			"cipher_suites":       api.ArraySchema(api.StringSchema()),
+			"key_exchange_groups": api.ArraySchema(api.StringSchema()),
+		}, "minimum_version", "cipher_suites", "key_exchange_groups"),
+		"PQCMigrationTLSBinding": api.ObjectSchema(map[string]*api.Schema{
+			"asset_id": api.StringSchema(), "target_id": api.StringSchema(),
+			"desired": api.SchemaRef("PQCMigrationTLSPosture"),
+		}, "asset_id", "target_id", "desired"),
 		"PQCMigration": api.ObjectSchema(map[string]*api.Schema{
-			"run_id":              api.StringSchema(),
-			"queued":              api.IntegerSchema(),
-			"target_algorithm":    api.StringSchema(),
-			"effective_algorithm": api.StringSchema(),
-			"protocol":            api.StringSchema(),
-			"rollback_configured": api.BooleanSchema(),
-			"migration_progress":  api.SchemaRef("CBOMMigrationProgress"),
-			"queued_at":           api.TimestampSchema(),
-		}, "run_id", "queued", "target_algorithm", "effective_algorithm", "protocol", "rollback_configured", "migration_progress", "queued_at"),
+			"run_id":                      api.StringSchema(),
+			"queued":                      api.IntegerSchema(),
+			"certificate_reissues_queued": api.IntegerSchema(),
+			"tls_findings_queued":         api.IntegerSchema(),
+			"target_algorithm":            api.StringSchema(),
+			"effective_algorithm":         api.StringSchema(),
+			"protocol":                    api.StringSchema(),
+			"rollback_configured":         api.BooleanSchema(),
+			"migration_progress":          api.SchemaRef("CBOMMigrationProgress"),
+			"queued_at":                   api.TimestampSchema(),
+		}, "run_id", "queued", "certificate_reissues_queued", "tls_findings_queued", "target_algorithm", "effective_algorithm", "protocol", "rollback_configured", "migration_progress", "queued_at"),
+		"PQCMigrationFindingProgress": api.ObjectSchema(map[string]*api.Schema{
+			"run_id": api.StringSchema(), "asset_id": api.StringSchema(), "finding_kind": api.StringSchema(),
+			"target_id": api.StringSchema(), "target_revision": api.StringSchema(), "connector": api.StringSchema(),
+			"desired": api.SchemaRef("PQCMigrationTLSPosture"), "previous": api.SchemaRef("PQCMigrationTLSPosture"),
+			"observed": api.SchemaRef("PQCMigrationTLSPosture"), "status": api.StringSchema(),
+			"failure": api.StringSchema(), "updated_at": api.TimestampSchema(),
+		}, "run_id", "asset_id", "finding_kind", "target_id", "target_revision", "connector", "desired", "status", "updated_at"),
+		"PQCMigrationProgress": api.ObjectSchema(map[string]*api.Schema{
+			"run_id": api.StringSchema(), "total": api.IntegerSchema(), "queued": api.IntegerSchema(),
+			"applied": api.IntegerSchema(), "failed": api.IntegerSchema(), "rolled_back": api.IntegerSchema(),
+			"findings": api.ArraySchema(api.SchemaRef("PQCMigrationFindingProgress")),
+		}, "run_id", "total", "queued", "applied", "failed", "rolled_back", "findings"),
 		"PQCMigrationRollbackRequest": api.ObjectSchema(map[string]*api.Schema{
 			"asset_ids": api.ArraySchema(api.StringSchema()),
 			"reason":    api.StringSchema(),

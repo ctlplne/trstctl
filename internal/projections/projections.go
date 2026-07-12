@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/store"
@@ -867,14 +868,45 @@ type CBOMAssetObserved struct {
 // re-issue CBOM assets toward a proprietary crypto target. The side effect
 // itself is still an outbox row; this event is the immutable request fact.
 type LicensedCryptoMigrationStarted struct {
-	RunID              string                           `json:"run_id"`
-	AssetIDs           []string                         `json:"asset_ids"`
-	TargetAlgorithm    string                           `json:"target_algorithm"`
-	EffectiveAlgorithm string                           `json:"effective_algorithm"`
-	Protocol           string                           `json:"protocol"`
-	RollbackOnFailure  bool                             `json:"rollback_on_failure"`
-	Queued             int                              `json:"queued"`
-	Reissues           []LicensedCryptoMigrationReissue `json:"reissues,omitempty"`
+	RunID              string                              `json:"run_id"`
+	AssetIDs           []string                            `json:"asset_ids"`
+	TargetAlgorithm    string                              `json:"target_algorithm"`
+	EffectiveAlgorithm string                              `json:"effective_algorithm"`
+	Protocol           string                              `json:"protocol"`
+	RollbackOnFailure  bool                                `json:"rollback_on_failure"`
+	Queued             int                                 `json:"queued"`
+	Reissues           []LicensedCryptoMigrationReissue    `json:"reissues,omitempty"`
+	TLSPostures        []LicensedCryptoMigrationTLSPosture `json:"tls_postures,omitempty"`
+}
+
+// LicensedCryptoMigrationTLSPosture is the replayable, secret-free external
+// mutation intent for one selected CBOM protocol/cipher finding. The deployment
+// target revision and config are immutable event-derived facts; reconciliation
+// can recreate the same sealed outbox row without consulting mutable target
+// state.
+type LicensedCryptoMigrationTLSPosture struct {
+	RunID               string               `json:"run_id"`
+	AssetID             string               `json:"asset_id"`
+	Kind                string               `json:"kind"`
+	FindingKind         string               `json:"finding_kind"`
+	Location            string               `json:"location"`
+	Algorithm           string               `json:"algorithm,omitempty"`
+	KeyBits             int                  `json:"key_bits,omitempty"`
+	AssetProtocol       string               `json:"asset_protocol,omitempty"`
+	Cipher              string               `json:"cipher,omitempty"`
+	Library             string               `json:"library,omitempty"`
+	Strength            string               `json:"strength"`
+	QuantumVulnerable   bool                 `json:"quantum_vulnerable"`
+	OutOfPolicy         bool                 `json:"out_of_policy"`
+	Reasons             []string             `json:"reasons,omitempty"`
+	TargetID            string               `json:"target_id"`
+	TargetRevision      string               `json:"target_revision"`
+	Connector           string               `json:"connector"`
+	Target              string               `json:"target"`
+	TargetConfig        json.RawMessage      `json:"target_config"`
+	Desired             connector.TLSPosture `json:"desired"`
+	RollbackOnFailure   bool                 `json:"rollback_on_failure"`
+	SealedOutboxPayload json.RawMessage      `json:"sealed_outbox_payload,omitempty"`
 }
 
 // LicensedCryptoMigrationReissue is the replayable side-effect payload for a migration

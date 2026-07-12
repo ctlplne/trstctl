@@ -3,12 +3,33 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// KubernetesPostureReader is the narrow production seam for the two served
+// controller-posture routes. Keeping it separate from API.store makes binary
+// assembly explicit: a generic datastore no longer makes these routes appear
+// wired unless buildRunDeps deliberately attaches both readers.
+type KubernetesPostureReader interface {
+	ListKubernetesControllerPosture(context.Context, string, string) ([]store.KubernetesControllerPosture, error)
+}
+
+// WithKubernetesCSRPosture wires real CertificateSigningRequest controller
+// projections into the served CAP-K8S-04 route.
+func WithKubernetesCSRPosture(reader KubernetesPostureReader) Option {
+	return func(c *config) { c.kubernetesCSRPosture = reader }
+}
+
+// WithKubernetesTrustBundlePosture wires real TrustBundle controller projections
+// into the served CAP-K8S-07 route.
+func WithKubernetesTrustBundlePosture(reader KubernetesPostureReader) Option {
+	return func(c *config) { c.kubernetesTrustPosture = reader }
+}
 
 // KubernetesCSRSupportRule remains in the response for wire compatibility with
 // pre-posture clients. These structural Kubernetes permissions are not the source
@@ -98,7 +119,7 @@ type KubernetesTrustBundleDistribution struct {
 }
 
 func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
-	rows, ok := a.kubernetesPostureRows(w, r, store.KubernetesPostureCertificateSigningRequests)
+	rows, ok := a.kubernetesPostureRows(w, r, a.kubernetesCSRPosture, store.KubernetesPostureCertificateSigningRequests)
 	if !ok {
 		return
 	}
@@ -120,7 +141,7 @@ func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *http.Request) {
-	rows, ok := a.kubernetesPostureRows(w, r, store.KubernetesPostureTrustBundles)
+	rows, ok := a.kubernetesPostureRows(w, r, a.kubernetesTrustPosture, store.KubernetesPostureTrustBundles)
 	if !ok {
 		return
 	}
@@ -141,17 +162,17 @@ func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *htt
 	})
 }
 
-func (a *API) kubernetesPostureRows(w http.ResponseWriter, r *http.Request, capability string) ([]store.KubernetesControllerPosture, bool) {
+func (a *API) kubernetesPostureRows(w http.ResponseWriter, r *http.Request, reader KubernetesPostureReader, capability string) ([]store.KubernetesControllerPosture, bool) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
 		a.writeProblem(w, problemUnauthorized())
 		return nil, false
 	}
-	if a.store == nil {
+	if reader == nil {
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "Kubernetes controller posture store is not configured"))
 		return nil, false
 	}
-	rows, err := a.store.ListKubernetesControllerPosture(r.Context(), tenantID, capability)
+	rows, err := reader.ListKubernetesControllerPosture(r.Context(), tenantID, capability)
 	if err != nil {
 		a.writeError(w, err)
 		return nil, false

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "protocol": "Vault/OpenBao HTTP API v1 compatibility",
+  "entry": "secrets_residuals.vault_shim_acl_transit",
+  "required_interoperability": [
+    "X-Vault-Token authentication through the shipped principal resolver",
+    "tenant-isolated event-replayed sys/mounts enable, list, discovery, and disable metadata",
+    "Vault ACL HCL path/capabilities authoring, read/list/delete, and enforced denial after native RBAC/ABAC",
+    "independently namespaced KV v2 data paths for built-in and tenant-authored mounts",
+    "tenant-authored transit mount with create, v1 encrypt, rotate, v2 encrypt, v1-to-v2 rewrap/decrypt, SHA2-256 HMAC, ECDSA sign, and successful verify wire values",
+    "tenant-authored PKI mount issuing a PEM certificate/private key through the signer process",
+    "no transit plaintext or PKI private key in the event transcript"
+  ],
+  "bounds": {
+    "http_body_bytes": 1048576,
+    "acl_policy_bytes": 262144
+  }
+}

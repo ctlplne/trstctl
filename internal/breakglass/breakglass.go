@@ -27,11 +27,61 @@ type Quorum = bgquorum.Quorum
 
 // EmergencyRequest is a request to issue a certificate under break-glass.
 type EmergencyRequest struct {
+	CeremonyID string
 	ID        string
 	Subject   string
 	CSRDer    []byte
 	Reason    string
 	Approvals []string // operator ids authorizing this issuance (m-of-n)
+}
+
+// IssuePurpose binds one tenant-scoped ceremony to the exact online emergency
+// request. Approver identities are intentionally absent: they are derived from
+// immutable ca.ceremony.approved events when the operation is consumed.
+func IssuePurpose(tenantID string, req EmergencyRequest, ttl time.Duration) string {
+	payload, err := json.Marshal(struct {
+		TenantID string `json:"tenant_id"`
+		RequestID string `json:"request_id"`
+		Subject string `json:"subject"`
+		CSRHash string `json:"csr_sha256"`
+		Reason string `json:"reason"`
+		TTLSeconds int64 `json:"ttl_seconds"`
+	}{tenantID, req.ID, req.Subject, crypto.SHA256Hex(req.CSRDer), req.Reason, int64(ttl / time.Second)})
+	if err != nil {
+		panic(fmt.Sprintf("breakglass: canonical issue purpose: %v", err))
+	}
+	return "breakglass-issue:" + crypto.SHA256Hex(payload)
+}
+
+// RotationPurpose binds a ceremony to the exact active signer/certificate and
+// requested successor lifetime. A rotation approval cannot be replayed after a
+// different rotation has advanced the active CA.
+func RotationPurpose(tenantID, signerHandle string, currentCertDER []byte, reason string, ttl time.Duration) string {
+	payload, err := json.Marshal(struct {
+		TenantID string `json:"tenant_id"`
+		SignerHandle string `json:"signer_handle"`
+		CurrentCAHash string `json:"current_ca_sha256"`
+		Reason string `json:"reason"`
+		TTLSeconds int64 `json:"ttl_seconds"`
+	}{tenantID, signerHandle, crypto.SHA256Hex(currentCertDER), reason, int64(ttl / time.Second)})
+	if err != nil {
+		panic(fmt.Sprintf("breakglass: canonical rotation purpose: %v", err))
+	}
+	return "breakglass-rotate:" + crypto.SHA256Hex(payload)
+}
+
+// CrossSignPurpose binds a ceremony to the exact active break-glass CA and
+// target public certificate.
+func CrossSignPurpose(tenantID, signerHandle string, targetCertDER []byte) string {
+	payload, err := json.Marshal(struct {
+		TenantID string `json:"tenant_id"`
+		SignerHandle string `json:"signer_handle"`
+		TargetHash string `json:"target_ca_sha256"`
+	}{tenantID, signerHandle, crypto.SHA256Hex(targetCertDER)})
+	if err != nil {
+		panic(fmt.Sprintf("breakglass: canonical cross-sign purpose: %v", err))
+	}
+	return "breakglass-cross-sign:" + crypto.SHA256Hex(payload)
 }
 
 // Bundle is a signed emergency credential produced offline. Its Signature is over

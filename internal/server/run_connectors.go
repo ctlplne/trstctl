@@ -76,9 +76,20 @@ func connectorRegistryFromConfig(cfg config.Connectors, st *store.Store, kek sea
 		if err := registry.RegisterFactoryWithReplaySafety(name, factory, nativeConnectorReplaySafety(name)); err != nil {
 			return nil, err
 		}
+		if nativeConnectorSupportsTLSPosture(name) {
+			if err := registry.MarkTLSPostureCapable(name); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return registry, nil
 }
+
+// nativeConnectorSupportsTLSPosture is the closed production wiring census for
+// receiver APIs that implement protocol/cipher/group mutation plus read-back.
+// Envoy is the first high-fidelity native target; every other connector fails
+// binding preflight until it implements the same contract.
+func nativeConnectorSupportsTLSPosture(name string) bool { return name == "envoy" }
 
 // nativeConnectorReplaySafety is a closed audit of the shipped receivers. A
 // connector is replay-safe only when the same credential converges on the same

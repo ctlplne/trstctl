@@ -121,6 +121,89 @@ func TestDeployRedactsSDSFailureBody(t *testing.T) {
 	}
 }
 
+func TestTLSPostureMutationReadsBackProtocolCipherAndHybridGroup(t *testing.T) {
+	legacy := connector.TLSPosture{
+		MinimumVersion:    "TLSv1.0",
+		CipherSuites:      []string{"TLS_RSA_WITH_AES_128_CBC_SHA"},
+		KeyExchangeGroups: []string{"secp256r1"},
+	}
+	emulator := newPostureEmulator(t, legacy)
+	conn := envoy.New(emulator.URL(), "server_cert")
+	registry := connector.NewRegistry(func(string) connector.Ops { return emulator.Ops() })
+	registry.Register(conn)
+	if err := registry.MarkTLSPostureCapable("envoy"); err != nil {
+		t.Fatal(err)
+	}
+	desired := connector.TLSPosture{
+		MinimumVersion:    connector.TLSVersion13,
+		CipherSuites:      []string{"TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"},
+		KeyExchangeGroups: []string{"X25519MLKEM768", "X25519"},
+	}
+	receipt, err := registry.ApplyTLSPosture(context.Background(), connector.TLSPostureMutation{
+		RunID: "run-1", FindingID: "protocol-finding", FindingKind: "protocol",
+		TargetID: "target-1", TargetRevision: "revision-1", Connector: "envoy",
+		Target: "edge-listener", TenantID: "tenant-1", Desired: desired,
+	})
+	if err != nil {
+		t.Fatalf("ApplyTLSPosture: %v", err)
+	}
+	if !receipt.Applied || !connector.EqualTLSPosture(receipt.Previous, legacy) || !connector.EqualTLSPosture(receipt.Observed, desired) {
+		t.Fatalf("receipt = %#v, want exact prior and observed desired posture", receipt)
+	}
+	if got := emulator.Current(); !connector.EqualTLSPosture(got, desired) {
+		t.Fatalf("emulator posture = %#v, want %#v", got, desired)
+	}
+	if got := emulator.PutCount(); got != 1 {
+		t.Fatalf("PUT count = %d, want one mutation", got)
+	}
+	noop, err := registry.ApplyTLSPosture(context.Background(), connector.TLSPostureMutation{
+		RunID: "run-2", FindingID: "cipher-finding", FindingKind: "cipher",
+		TargetID: "target-1", TargetRevision: "revision-1", Connector: "envoy",
+		Target: "edge-listener", TenantID: "tenant-1", Desired: desired,
+	})
+	if err != nil {
+		t.Fatalf("idempotent ApplyTLSPosture: %v", err)
+	}
+	if noop.Applied || emulator.PutCount() != 1 {
+		t.Fatalf("idempotent receipt=%#v PUTs=%d, want no receiver mutation", noop, emulator.PutCount())
+	}
+}
+
+func TestTLSPostureMutationRollsBackAndVerifiesReceiverMismatch(t *testing.T) {
+	legacy := connector.TLSPosture{
+		MinimumVersion:    "TLSv1.1",
+		CipherSuites:      []string{"TLS_RSA_WITH_AES_128_CBC_SHA"},
+		KeyExchangeGroups: []string{"secp256r1"},
+	}
+	emulator := newPostureEmulator(t, legacy)
+	emulator.MismatchNextApply()
+	conn := envoy.New(emulator.URL(), "server_cert")
+	registry := connector.NewRegistry(func(string) connector.Ops { return emulator.Ops() })
+	registry.Register(conn)
+	if err := registry.MarkTLSPostureCapable("envoy"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := registry.ApplyTLSPosture(context.Background(), connector.TLSPostureMutation{
+		RunID: "run-rollback", FindingID: "cipher-finding", FindingKind: "cipher",
+		TargetID: "target-1", TargetRevision: "revision-1", Connector: "envoy",
+		Target: "edge-listener", TenantID: "tenant-1",
+		Desired: connector.TLSPosture{
+			MinimumVersion:    connector.TLSVersion13,
+			CipherSuites:      []string{"TLS_AES_256_GCM_SHA384"},
+			KeyExchangeGroups: []string{"X25519MLKEM768", "X25519"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "rollback verified") {
+		t.Fatalf("error = %v, want verified rollback", err)
+	}
+	if got := emulator.Current(); !connector.EqualTLSPosture(got, legacy) {
+		t.Fatalf("post-failure posture = %#v, want exact legacy rollback %#v", got, legacy)
+	}
+	if got := emulator.PutCount(); got != 2 {
+		t.Fatalf("PUT count = %d, want mismatched update plus rollback", got)
+	}
+}
+
 func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 	stub := newSDSStub(t)
 	conn := envoy.New(stub.URL(), "server_cert")
@@ -317,4 +400,93 @@ type tlsCertificate struct {
 
 type dataSource struct {
 	InlineBytes []byte `json:"inline_bytes"`
+}
+
+type postureEmulator struct {
+	mu                sync.Mutex
+	posture           connector.TLSPosture
+	putCount          int
+	mismatchNextApply bool
+}
+
+func newPostureEmulator(t *testing.T, initial connector.TLSPosture) *postureEmulator {
+	t.Helper()
+	return &postureEmulator{posture: initial}
+}
+
+func (e *postureEmulator) URL() string { return "https://envoy-posture.test" }
+
+func (e *postureEmulator) Ops() connector.Ops { return postureOps{emulator: e} }
+
+func (e *postureEmulator) Current() connector.TLSPosture {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return connector.TLSPosture{
+		MinimumVersion:    e.posture.MinimumVersion,
+		CipherSuites:      append([]string(nil), e.posture.CipherSuites...),
+		KeyExchangeGroups: append([]string(nil), e.posture.KeyExchangeGroups...),
+	}
+}
+
+func (e *postureEmulator) PutCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.putCount
+}
+
+func (e *postureEmulator) MismatchNextApply() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.mismatchNextApply = true
+}
+
+func (e *postureEmulator) handlePosture(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/v1/tls-posture/edge-listener" {
+		http.NotFound(w, r)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		_ = json.NewEncoder(w).Encode(e.Current())
+	case http.MethodPut:
+		var desired connector.TLSPosture
+		if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&desired); err != nil {
+			http.Error(w, "bad posture", http.StatusBadRequest)
+			return
+		}
+		e.mu.Lock()
+		e.putCount++
+		if e.mismatchNextApply {
+			e.mismatchNextApply = false
+			desired.CipherSuites = []string{"TLS_AES_128_GCM_SHA256"}
+		}
+		e.posture = desired
+		e.mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+type postureOps struct{ emulator *postureEmulator }
+
+var (
+	_ connector.Ops       = postureOps{}
+	_ connector.Requester = postureOps{}
+)
+
+func (o postureOps) Request(req *http.Request) (*http.Response, error) {
+	rec := httptest.NewRecorder()
+	o.emulator.handlePosture(rec, req)
+	return rec.Result(), nil
+}
+
+func (postureOps) Send(string, []byte) error {
+	return fmt.Errorf("posture emulator does not support Send")
+}
+func (postureOps) WriteFile(string, []byte) error {
+	return fmt.Errorf("posture emulator does not support WriteFile")
+}
+func (postureOps) Exec(string, []string) error {
+	return fmt.Errorf("posture emulator does not support Exec")
 }

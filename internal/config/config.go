@@ -657,8 +657,13 @@ type ABAC struct {
 // before reconciling them into the audit chain.
 type Breakglass struct {
 	Enabled       bool   `json:"enabled,omitempty"`
+	OnlineEnabled bool   `json:"online_enabled,omitempty"`
 	CACertFile    string `json:"ca_cert_file,omitempty"`
 	PublicKeyFile string `json:"public_key_file,omitempty"`
+	TenantID      string   `json:"tenant_id,omitempty"`
+	SignerHandle  string   `json:"signer_handle,omitempty"`
+	Operators     []string `json:"operators,omitempty"`
+	Threshold     int      `json:"threshold,omitempty"`
 }
 
 // TenantMapping binds an OIDC user (by subject, by tenant-claim value, or by IdP
@@ -1900,8 +1905,13 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
 	setBool(getenv, "TRSTCTL_BREAKGLASS_ENABLED", &c.Breakglass.Enabled)
+	setBool(getenv, "TRSTCTL_BREAKGLASS_ONLINE_ENABLED", &c.Breakglass.OnlineEnabled)
 	setString(getenv, "TRSTCTL_BREAKGLASS_CA_CERT_FILE", &c.Breakglass.CACertFile)
 	setString(getenv, "TRSTCTL_BREAKGLASS_PUBLIC_KEY_FILE", &c.Breakglass.PublicKeyFile)
+	setString(getenv, "TRSTCTL_BREAKGLASS_TENANT_ID", &c.Breakglass.TenantID)
+	setString(getenv, "TRSTCTL_BREAKGLASS_SIGNER_HANDLE", &c.Breakglass.SignerHandle)
+	setCSV(getenv, "TRSTCTL_BREAKGLASS_OPERATORS", &c.Breakglass.Operators)
+	setInt(getenv, "TRSTCTL_BREAKGLASS_THRESHOLD", &c.Breakglass.Threshold)
 	applyPrivacyEnv(getenv, &c.Privacy)
 	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &c.Backup.EncryptionKeyFile)
 	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &c.Backup.AllowUnencrypted)
@@ -2867,7 +2877,7 @@ func validateServedSurfaces(c *Config) []error {
 	if c.Auth.ABAC.Enabled {
 		errs = append(errs, c.Auth.ABAC.validate()...)
 	}
-	if c.Breakglass.Enabled {
+	if c.Breakglass.Enabled || c.Breakglass.OnlineEnabled {
 		errs = append(errs, c.Breakglass.validate()...)
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
@@ -3588,6 +3598,36 @@ func (b Breakglass) validate() []error {
 	}
 	if strings.TrimSpace(b.PublicKeyFile) == "" {
 		errs = append(errs, errors.New("breakglass.public_key_file is required when breakglass.enabled is true"))
+	}
+	if !b.OnlineEnabled {
+		return errs
+	}
+	if !b.Enabled {
+		errs = append(errs, errors.New("breakglass.enabled must be true when breakglass.online_enabled is true"))
+	}
+	if strings.TrimSpace(b.TenantID) == "" {
+		errs = append(errs, errors.New("breakglass.tenant_id is required when breakglass.enabled is true"))
+	}
+	if strings.TrimSpace(b.SignerHandle) == "" {
+		errs = append(errs, errors.New("breakglass.signer_handle is required when breakglass.enabled is true"))
+	}
+	if b.Threshold < 2 {
+		errs = append(errs, errors.New("breakglass.threshold must be at least 2 when breakglass.enabled is true"))
+	}
+	seen := map[string]bool{}
+	for i, operator := range b.Operators {
+		operator = strings.TrimSpace(operator)
+		if operator == "" {
+			errs = append(errs, fmt.Errorf("breakglass.operators[%d] must be non-empty", i))
+			continue
+		}
+		if seen[operator] {
+			errs = append(errs, fmt.Errorf("breakglass.operators contains duplicate %q", operator))
+		}
+		seen[operator] = true
+	}
+	if len(seen) < b.Threshold {
+		errs = append(errs, fmt.Errorf("breakglass.operators must contain at least threshold=%d distinct operators", b.Threshold))
 	}
 	return errs
 }

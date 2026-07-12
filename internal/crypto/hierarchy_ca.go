@@ -10,7 +10,9 @@ import (
 	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -227,6 +229,267 @@ func VerifyImportedCAChain(chainDER [][]byte, signerPublic PublicKey, profile Hi
 		return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported CA chain root is not self-signed: %w", err)
 	}
 	return hierarchyResultFromCert(certs[0]), "intermediate", nil
+}
+
+// VerifyCertificateSigner proves that certDER names the exact public key held by
+// signerPublic. It is used at production assembly boundaries before a configured
+// CA certificate is paired with an isolated signer handle; accepting two
+// unrelated values would make startup look healthy and every later signature
+// fail (or, worse, attest the wrong custody key).
+func VerifyCertificateSigner(certDER []byte, signerPublic PublicKey) error {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return fmt.Errorf("crypto: parse signer-backed CA certificate: %w", err)
+	}
+	if err := verifyCAUsable(cert, "signer-backed CA"); err != nil {
+		return err
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
+	if err != nil {
+		return fmt.Errorf("crypto: marshal signer-backed CA public key: %w", err)
+	}
+	if !bytes.Equal(publicDER, signerPublic.DER) {
+		return fmt.Errorf("crypto: configured CA public key does not match signer-held key")
+	}
+	return nil
+}
+
+// HierarchyCAProfileFromCertificate extracts the public policy lane from a CA
+// certificate. Callers may override only the lifetime: rotation preserves name,
+// path-length, DNS, and EKU constraints instead of accepting a caller-authored
+// broader profile.
+func HierarchyCAProfileFromCertificate(certDER []byte, ttl time.Duration) (HierarchyCAProfile, error) {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return HierarchyCAProfile{}, fmt.Errorf("crypto: parse CA rotation predecessor: %w", err)
+	}
+	if err := verifyCAUsable(cert, "CA rotation predecessor"); err != nil {
+		return HierarchyCAProfile{}, err
+	}
+	result := hierarchyResultFromCert(cert)
+	return HierarchyCAProfile{
+		CommonName: result.CommonName, PermittedDNSDomains: result.PermittedDNSDomains,
+		MaxPathLen: result.MaxPathLen, EKUs: result.EKUs, TTL: ttl,
+	}, nil
+}
+
+// CrossSignHierarchyCA re-issues targetCertDER's subject and public key under the
+// isolated issuerSigner. The target's constraints are carried forward and
+// clamped to the issuer's lane, so a cross-certificate cannot widen DNS scope or
+// subordinate-CA depth.
+func CrossSignHierarchyCA(issuerCertDER []byte, issuerSigner DigestSigner, targetCertDER []byte) (IssuedHierarchyCA, error) {
+	issuer, err := x509.ParseCertificate(issuerCertDER)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse cross-sign issuer: %w", err)
+	}
+	if err := verifyCAUsable(issuer, "cross-sign issuer"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	if err := VerifyCertificateSigner(issuerCertDER, issuerSigner.Public()); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	target, err := x509.ParseCertificate(targetCertDER)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse cross-sign target: %w", err)
+	}
+	if err := verifyCAUsable(target, "cross-sign target"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	pathLen, hasPathLen := hierarchyCrossPathLen(target)
+	issuerPathLen, issuerHasPathLen := hierarchyCrossPathLen(issuer)
+	if issuerHasPathLen && (!hasPathLen || issuerPathLen < pathLen) {
+		pathLen, hasPathLen = issuerPathLen, true
+	}
+	permitted := hierarchyIntersectDNS(target.PermittedDNSDomains, issuer.PermittedDNSDomains)
+	ekus, err := hierarchyIntersectEKUs(target.ExtKeyUsage, issuer.ExtKeyUsage)
+	if err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	serial, err := randomSerial()
+	if err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	notBefore := target.NotBefore
+	if issuer.NotBefore.After(notBefore) {
+		notBefore = issuer.NotBefore
+	}
+	notAfter := target.NotAfter
+	if issuer.NotAfter.Before(notAfter) {
+		notAfter = issuer.NotAfter
+	}
+	if !notAfter.After(notBefore) {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: cross-sign issuer and target validity windows do not overlap")
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: serial, Subject: target.Subject,
+		NotBefore: notBefore, NotAfter: notAfter,
+		KeyUsage:              target.KeyUsage,
+		BasicConstraintsValid: true, IsCA: true,
+		PermittedDNSDomains: permitted, PermittedDNSDomainsCritical: len(permitted) > 0,
+		ExtKeyUsage:    ekus,
+		SubjectKeyId:   append([]byte(nil), target.SubjectKeyId...),
+		AuthorityKeyId: append([]byte(nil), issuer.SubjectKeyId...),
+	}
+	if hasPathLen {
+		tmpl.MaxPathLen = pathLen
+		tmpl.MaxPathLenZero = pathLen == 0
+	}
+	adapter, err := newX509Signer(issuerSigner)
+	if err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, issuer, target.PublicKey, adapter)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: cross-sign CA: %w", err)
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse issued cross-certificate: %w", err)
+	}
+	return hierarchyResultFromCert(cert), nil
+}
+
+// VerifyCrossSignedCA verifies public-only cross-sign material imported from an
+// offline root. No private key enters the caller: the cross-certificate must be
+// signed by issuerCertDER and must retain targetCertDER's subject and public key.
+func VerifyCrossSignedCA(issuerCertDER, targetCertDER, crossCertDER []byte) error {
+	issuer, err := x509.ParseCertificate(issuerCertDER)
+	if err != nil {
+		return fmt.Errorf("crypto: parse cross-sign issuer: %w", err)
+	}
+	target, err := x509.ParseCertificate(targetCertDER)
+	if err != nil {
+		return fmt.Errorf("crypto: parse cross-sign target: %w", err)
+	}
+	cross, err := x509.ParseCertificate(crossCertDER)
+	if err != nil {
+		return fmt.Errorf("crypto: parse imported cross-certificate: %w", err)
+	}
+	if err := verifyCAUsable(issuer, "cross-sign issuer"); err != nil {
+		return err
+	}
+	if err := verifyCAUsable(target, "cross-sign target"); err != nil {
+		return err
+	}
+	if err := verifyCAUsable(cross, "imported cross-certificate"); err != nil {
+		return err
+	}
+	if err := cross.CheckSignatureFrom(issuer); err != nil {
+		return fmt.Errorf("crypto: imported cross-certificate is not signed by the declared issuer: %w", err)
+	}
+	if !bytes.Equal(cross.RawSubject, target.RawSubject) || !bytes.Equal(cross.RawSubjectPublicKeyInfo, target.RawSubjectPublicKeyInfo) {
+		return fmt.Errorf("crypto: imported cross-certificate does not retain target subject and public key")
+	}
+	issuerPath, issuerHasPath := hierarchyCrossPathLen(issuer)
+	crossPath, crossHasPath := hierarchyCrossPathLen(cross)
+	if issuerHasPath && (!crossHasPath || crossPath > issuerPath) {
+		return fmt.Errorf("crypto: imported cross-certificate widens issuer path-length")
+	}
+	if !hierarchyDNSWithin(cross.PermittedDNSDomains, issuer.PermittedDNSDomains) ||
+		!hierarchyDNSWithin(cross.PermittedDNSDomains, target.PermittedDNSDomains) {
+		return fmt.Errorf("crypto: imported cross-certificate widens DNS constraints")
+	}
+	return nil
+}
+
+func hierarchyCrossPathLen(cert *x509.Certificate) (int, bool) {
+	if cert.MaxPathLen > 0 || cert.MaxPathLenZero {
+		return cert.MaxPathLen, true
+	}
+	return 0, false
+}
+
+func hierarchyIntersectDNS(target, issuer []string) []string {
+	if len(issuer) == 0 {
+		return append([]string(nil), target...)
+	}
+	if len(target) == 0 {
+		return append([]string(nil), issuer...)
+	}
+	var out []string
+	for _, candidate := range target {
+		for _, allowed := range issuer {
+			if dnsConstraintWithin(candidate, allowed) {
+				out = append(out, candidate)
+				break
+			}
+			if dnsConstraintWithin(allowed, candidate) {
+				out = append(out, allowed)
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return compactSortedStrings(out)
+}
+
+func hierarchyIntersectEKUs(target, issuer []x509.ExtKeyUsage) ([]x509.ExtKeyUsage, error) {
+	targetUnrestricted := len(target) == 0 || slices.Contains(target, x509.ExtKeyUsageAny)
+	issuerUnrestricted := len(issuer) == 0 || slices.Contains(issuer, x509.ExtKeyUsageAny)
+	switch {
+	case targetUnrestricted && issuerUnrestricted:
+		return nil, nil
+	case targetUnrestricted:
+		return append([]x509.ExtKeyUsage(nil), issuer...), nil
+	case issuerUnrestricted:
+		return append([]x509.ExtKeyUsage(nil), target...), nil
+	}
+
+	allowed := make(map[x509.ExtKeyUsage]struct{}, len(issuer))
+	for _, usage := range issuer {
+		allowed[usage] = struct{}{}
+	}
+	intersection := make([]x509.ExtKeyUsage, 0, len(target))
+	for _, usage := range target {
+		if _, ok := allowed[usage]; ok {
+			intersection = append(intersection, usage)
+		}
+	}
+	if len(intersection) == 0 {
+		return nil, fmt.Errorf("crypto: cross-sign issuer and target EKU constraints do not overlap")
+	}
+	return intersection, nil
+}
+
+func hierarchyDNSWithin(values, allowed []string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	if len(values) == 0 {
+		return false
+	}
+	for _, value := range values {
+		matched := false
+		for _, parent := range allowed {
+			if dnsConstraintWithin(value, parent) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+func dnsConstraintWithin(value, parent string) bool {
+	value = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), ".")
+	parent = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(parent)), ".")
+	return value == parent || strings.HasSuffix(value, "."+parent)
+}
+
+func compactSortedStrings(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+	out := values[:1]
+	for _, value := range values[1:] {
+		if value != out[len(out)-1] {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.Certificate, profile HierarchyCAProfile) (IssuedHierarchyCA, error) {

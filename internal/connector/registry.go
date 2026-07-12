@@ -70,6 +70,7 @@ type Registry struct {
 	opsFor       func(connectorName string) Ops
 	factories    map[string]Factory
 	replaySafety map[string]ReplaySafety
+	tlsPosture   map[string]bool
 }
 
 // ReplaySafety describes the receiver guarantee a connector offers across the
@@ -105,6 +106,7 @@ func NewRegistry(opsFor ...func(connectorName string) Ops) *Registry {
 		connectors:   map[string]Connector{},
 		factories:    map[string]Factory{},
 		replaySafety: map[string]ReplaySafety{},
+		tlsPosture:   map[string]bool{},
 		opsFor:       provider,
 	}
 }
@@ -180,6 +182,142 @@ func (r *Registry) ReplaySafetyFor(name string) ReplaySafety {
 		return safety
 	}
 	return ReplaySafetyAtMostOnce
+}
+
+// MarkTLSPostureCapable explicitly advertises that the named shipped connector
+// implements the read/mutate/read-back TLS posture contract. Registration is
+// deliberately separate from the structural type assertion: production
+// composition must make an auditable, closed claim rather than accidentally
+// serving a partial method set.
+func (r *Registry) MarkTLSPostureCapable(name string) error {
+	if r == nil || name == "" {
+		return fmt.Errorf("connector: TLS posture capability requires registry and connector name")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.connectors[name] == nil && r.factories[name] == nil {
+		return fmt.Errorf("connector: cannot mark unregistered connector %q TLS-posture capable", name)
+	}
+	r.tlsPosture[name] = true
+	return nil
+}
+
+// SupportsTLSPosture reports the explicit production registration claim.
+func (r *Registry) SupportsTLSPosture(name string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.tlsPosture[name] && (r.connectors[name] != nil || r.factories[name] != nil)
+}
+
+// ApplyTLSPosture drives a target-scoped native connector through read, mutate,
+// and read-back. A failed or mismatched update restores the exact prior policy
+// and verifies that rollback before returning an error.
+func (r *Registry) ApplyTLSPosture(ctx context.Context, p TLSPostureMutation) (TLSPostureReceipt, error) {
+	return r.applyTLSPosture(ctx, p, false)
+}
+
+// RestoreTLSPosture uses the same read/mutate/read-back and verified rollback
+// machinery, but permits a structurally valid legacy desired state because an
+// operator rollback must restore the exact observed pre-migration posture.
+func (r *Registry) RestoreTLSPosture(ctx context.Context, p TLSPostureMutation) (TLSPostureReceipt, error) {
+	return r.applyTLSPosture(ctx, p, true)
+}
+
+func (r *Registry) applyTLSPosture(ctx context.Context, p TLSPostureMutation, allowLegacyDesired bool) (TLSPostureReceipt, error) {
+	receipt := TLSPostureReceipt{
+		RunID: p.RunID, FindingID: p.FindingID, FindingKind: p.FindingKind,
+		TargetID: p.TargetID, TargetRevision: p.TargetRevision, Connector: p.Connector,
+	}
+	if r == nil {
+		return receipt, fmt.Errorf("connector: registry is not configured")
+	}
+	if p.RunID == "" || p.FindingID == "" || p.TargetID == "" || p.TargetRevision == "" || p.Connector == "" || p.Target == "" || p.TenantID == "" {
+		return receipt, fmt.Errorf("connector: TLS posture mutation requires run, finding, target, revision, connector, target name, and authoritative tenant")
+	}
+	validateDesired := ValidateTLSPosture
+	if allowLegacyDesired {
+		validateDesired = ValidateObservedTLSPosture
+	}
+	if err := validateDesired(p.Desired); err != nil {
+		return receipt, err
+	}
+	r.mu.RLock()
+	c := r.connectors[p.Connector]
+	factory := r.factories[p.Connector]
+	opsFor := r.opsFor
+	capable := r.tlsPosture[p.Connector]
+	r.mu.RUnlock()
+	if !capable || (c == nil && factory == nil) {
+		return receipt, fmt.Errorf("connector: %q does not support TLS posture mutation", p.Connector)
+	}
+	var (
+		ops     Ops
+		cleanup func()
+		err     error
+	)
+	if factory != nil {
+		c, ops, cleanup, err = factory(ctx, DeployPayload{
+			TargetID: p.TargetID, TargetRevision: p.TargetRevision, Connector: p.Connector,
+			Target: p.Target, TargetConfig: append(json.RawMessage(nil), p.TargetConfig...), TenantID: p.TenantID,
+		})
+		if err != nil {
+			return receipt, fmt.Errorf("connector: build TLS posture target %q: %w", p.Connector, err)
+		}
+		if cleanup != nil {
+			defer cleanup()
+		}
+	} else if opsFor != nil {
+		ops = opsFor(p.Connector)
+	}
+	postureConnector, ok := c.(TLSPostureConnector)
+	if !ok || postureConnector == nil {
+		return receipt, fmt.Errorf("connector: %q advertised TLS posture without implementing the contract", p.Connector)
+	}
+	if ops == nil {
+		return receipt, fmt.Errorf("connector: no ops configured for %q", p.Connector)
+	}
+	sb := &sandbox{ctx: ctx, grant: c.Capabilities(), ops: ops}
+	previous, err := postureConnector.ReadTLSPosture(ctx, sb, p.Target)
+	if err != nil {
+		return receipt, fmt.Errorf("connector: read current TLS posture: %w", err)
+	}
+	if err := ValidateObservedTLSPosture(previous); err != nil {
+		return receipt, fmt.Errorf("connector: current TLS posture is malformed: %w", err)
+	}
+	receipt.Previous = cloneTLSPosture(previous)
+	if EqualTLSPosture(previous, p.Desired) {
+		receipt.Observed = cloneTLSPosture(previous)
+		return receipt, nil
+	}
+	rollback := func(cause error) (TLSPostureReceipt, error) {
+		if rbErr := postureConnector.ApplyTLSPosture(ctx, sb, p.Target, previous); rbErr != nil {
+			return receipt, fmt.Errorf("connector: TLS posture update failed and rollback failed: update=%v rollback=%w", cause, rbErr)
+		}
+		restored, rbErr := postureConnector.ReadTLSPosture(ctx, sb, p.Target)
+		if rbErr != nil || !EqualTLSPosture(restored, previous) {
+			return receipt, fmt.Errorf("connector: TLS posture update failed and rollback read-back did not match: update=%v rollback=%v", cause, rbErr)
+		}
+		return receipt, fmt.Errorf("connector: TLS posture update failed; rollback verified: %w", cause)
+	}
+	if err := postureConnector.ApplyTLSPosture(ctx, sb, p.Target, p.Desired); err != nil {
+		return rollback(err)
+	}
+	observed, err := postureConnector.ReadTLSPosture(ctx, sb, p.Target)
+	if err != nil {
+		return rollback(fmt.Errorf("read-back: %w", err))
+	}
+	if err := ValidateObservedTLSPosture(observed); err != nil {
+		return rollback(fmt.Errorf("malformed read-back: %w", err))
+	}
+	if !EqualTLSPosture(observed, p.Desired) {
+		return rollback(fmt.Errorf("read-back differs from desired posture"))
+	}
+	receipt.Observed = cloneTLSPosture(observed)
+	receipt.Applied = true
+	return receipt, nil
 }
 
 // Deploy routes an already decoded payload to the named connector.

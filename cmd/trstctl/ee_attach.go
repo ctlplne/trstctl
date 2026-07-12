@@ -108,6 +108,19 @@ func (c chainedOutboxHandler) DeliverLicensed(ctx context.Context, m orchestrato
 	return false, nil
 }
 
+func (c chainedOutboxHandler) DeliverLicensedTerminalFailure(ctx context.Context, m orchestrator.Message, cause error) (bool, error) {
+	for _, h := range c {
+		terminal, ok := h.(editionseam.LicensedOutboxTerminalFailureHandler)
+		if !ok || terminal == nil {
+			continue
+		}
+		if handled, err := terminal.DeliverLicensedTerminalFailure(ctx, m, cause); handled || err != nil {
+			return handled, err
+		}
+	}
+	return false, nil
+}
+
 // attachEE is the single sanctioned open-core seam. S-E0 attaches no features:
 // the table is empty and behavior stays Community. Later cards add exactly one
 // lic.Has(feature) block per gated capability here.
@@ -187,8 +200,10 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		}
 	}
 	if lic != nil && lic.Has(license.FeaturePQC) {
-		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eepqcmigration.NewAPIOptionsFactory())
-		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eepqcmigration.NewOutboxFactory())
+		pqcRuntime := eepqcmigration.NewRuntime(deps.Store)
+		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, pqcRuntime.APIOptionsFactory)
+		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, pqcRuntime.OutboxFactory)
+		deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, pqcRuntime.ProjectionOptions...)
 		deps.LicensedLeafSigner = eepqc.SignLicensedLeafFromCSRWithProfile
 		deps.LicensedCSRInspector = eepqc.InspectHybridCSR
 		deps.LicensedCSRParser = eepqc.ParsePureMLDSACSR

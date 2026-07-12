@@ -79,6 +79,8 @@ type API struct {
 	approvals                 ApprovalRecorder
 	breakglass                BreakglassReconciler
 	breakglassIssuer          BreakglassIssuer
+	breakglassCeremonies      BreakglassCeremonyService
+	breakglassRotation        BreakglassRotationService
 	breakglassAdmin           *breakglass.AdminService
 	caHierarchy               CAHierarchyService
 	externalCAs               ExternalCAService
@@ -110,6 +112,8 @@ type API struct {
 	acmeCAAResolver           acmesrv.CAAResolver
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
+	kubernetesCSRPosture      KubernetesPostureReader
+	kubernetesTrustPosture    KubernetesPostureReader
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
@@ -146,6 +150,8 @@ type config struct {
 	approvals                 ApprovalRecorder
 	breakglass                BreakglassReconciler
 	breakglassIssuer          BreakglassIssuer
+	breakglassCeremonies      BreakglassCeremonyService
+	breakglassRotation        BreakglassRotationService
 	breakglassAdmin           *breakglass.AdminService
 	caHierarchy               CAHierarchyService
 	externalCAs               ExternalCAService
@@ -176,6 +182,8 @@ type config struct {
 	acmeCAAResolver           acmesrv.CAAResolver
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
+	kubernetesCSRPosture      KubernetesPostureReader
+	kubernetesTrustPosture    KubernetesPostureReader
 	featureObserver           func(feature, action, outcome string, seconds float64)
 }
 
@@ -549,6 +557,8 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		approvals:                 cfg.approvals,
 		breakglass:                cfg.breakglass,
 		breakglassIssuer:          cfg.breakglassIssuer,
+		breakglassCeremonies:      cfg.breakglassCeremonies,
+		breakglassRotation:        cfg.breakglassRotation,
 		breakglassAdmin:           cfg.breakglassAdmin,
 		caHierarchy:               cfg.caHierarchy,
 		externalCAs:               cfg.externalCAs,
@@ -581,6 +591,8 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		featureObserver:           cfg.featureObserver,
 		privacyRetentionPolicy:    policy.WithDefaults(),
 		privacyRetentionSource:    cfg.privacyRetentionSource,
+		kubernetesCSRPosture:      cfg.kubernetesCSRPosture,
+		kubernetesTrustPosture:    cfg.kubernetesTrustPosture,
 	}
 	if a.auth != nil {
 		a.oidcPreLogin = newOIDCPreLoginStore(a.auth.PreLoginTTL, specialAbuseLimits.preLoginLimits())

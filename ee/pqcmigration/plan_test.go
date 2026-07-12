@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/connector"
 )
 
 func TestPQCPlannerTargetsMLDSA65WithHybridEffectiveLeaf(t *testing.T) {
@@ -65,21 +66,63 @@ func TestMLDSAPlannerRejectsUnsupportedOrAlreadyReadyAssets(t *testing.T) {
 	}
 }
 
-func TestSPIFFEMultiKeyResidualStaysExplicit(t *testing.T) {
+func TestPlannerBindsEverySelectedProtocolAndCipherFinding(t *testing.T) {
+	desired := connector.TLSPosture{
+		MinimumVersion:    connector.TLSVersion13,
+		CipherSuites:      []string{"TLS_AES_256_GCM_SHA384"},
+		KeyExchangeGroups: []string{HybridTLSGroup, "X25519"},
+	}
+	plan, err := BuildPlan([]Asset{
+		{ID: "protocol-1", Kind: string(cbom.AssetTLSEndpoint), Location: "edge:443", Protocol: "TLSv1.0", Strength: "broken", QuantumVulnerable: true, OutOfPolicy: true},
+		{ID: "cipher-1", Kind: string(cbom.AssetHostConfig), Location: "/etc/envoy.yaml", Cipher: "TLS_RSA_WITH_3DES_EDE_CBC_SHA", Strength: "broken", QuantumVulnerable: true, OutOfPolicy: true},
+	}, Request{
+		AssetIDs: []string{"protocol-1", "cipher-1"}, TargetAlgorithm: TargetMLDSA65, Protocol: ProtocolACME,
+		TLSBindings: []TLSBinding{
+			{AssetID: "protocol-1", TargetID: "envoy-edge", Desired: desired},
+			{AssetID: "cipher-1", TargetID: "envoy-edge", Desired: desired},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if len(plan.TLSRollouts) != 2 || len(plan.Reissues) != 0 {
+		t.Fatalf("plan = %+v, want two TLS rollouts and no certificate reissue", plan)
+	}
+	if plan.TLSRollouts[0].FindingKind != "protocol" || plan.TLSRollouts[1].FindingKind != "cipher" {
+		t.Fatalf("finding kinds = %q/%q, want protocol/cipher", plan.TLSRollouts[0].FindingKind, plan.TLSRollouts[1].FindingKind)
+	}
+
+	_, err = BuildPlan([]Asset{{
+		ID: "protocol-1", Kind: string(cbom.AssetTLSEndpoint), Protocol: "TLSv1.0", QuantumVulnerable: true,
+	}}, Request{AssetIDs: []string{"protocol-1"}, TargetAlgorithm: TargetMLDSA65, Protocol: ProtocolACME})
+	if err == nil {
+		t.Fatal("planner accepted an unbound selected TLS finding")
+	}
+	bad := desired
+	bad.KeyExchangeGroups = []string{"X25519"}
+	_, err = BuildPlan([]Asset{{
+		ID: "protocol-1", Kind: string(cbom.AssetTLSEndpoint), Protocol: "TLSv1.0", QuantumVulnerable: true,
+	}}, Request{
+		AssetIDs: []string{"protocol-1"}, TargetAlgorithm: TargetMLDSA65, Protocol: ProtocolACME,
+		TLSBindings: []TLSBinding{{AssetID: "protocol-1", TargetID: "envoy-edge", Desired: bad}},
+	})
+	if err == nil {
+		t.Fatal("planner accepted a desired posture without the hybrid ML-KEM group")
+	}
+}
+
+func TestCompletedCapabilitiesLeaveOnlyEvidenceGatedPureCutoverResidual(t *testing.T) {
 	residuals := ResidualDenominator()
-	var sawSPIFFE, sawPureMLDSA bool
+	var sawCutover bool
 	for _, residual := range residuals {
-		if residual.ID == "spiffe_multi_key_workload_response" && residual.Status == "not_served" {
-			sawSPIFFE = true
-		}
-		if residual.ID == "pure_mldsa_subject_certificates" && residual.Status == "not_served" {
-			sawPureMLDSA = true
+		switch residual.ID {
+		case "pure_mldsa_subject_certificates", "spiffe_multi_key_workload_response", "fleetwide_tls_cipher_rollout":
+			t.Fatalf("completed capability remains falsely listed as residual: %+v", residual)
+		case "hybrid_to_pure_pqc_cutover":
+			sawCutover = residual.Status == "planned_gated"
 		}
 	}
-	if !sawSPIFFE {
-		t.Fatal("residual denominator must keep SPIFFE multi-key response honest")
-	}
-	if !sawPureMLDSA {
-		t.Fatal("residual denominator must keep pure ML-DSA subject certificates honest")
+	if !sawCutover {
+		t.Fatal("residual denominator must retain the evidence-gated hybrid-to-pure cutover")
 	}
 }

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "contract": "trstctl.kubernetes.controller-posture.kind.v1",
+  "kind": {
+    "version": "v0.31.0",
+    "node_image": "kindest/node:v1.31.14@sha256:6f86cf509dbb42767b6e79debc3f2c32e4ee01386f0489b3b2be24b0a55aac2b",
+    "topology": "one disposable control-plane node",
+    "verification": "the substrate rejects a running node whose Docker Config.Image is not the exact digest-pinned reference"
+  },
+  "fixtures": {
+    "authentication": "a short-lived TokenRequest credential for a least-privilege service account",
+    "issuer": "one real trstctl.com/v1alpha1 ClusterIssuer",
+    "certificate_signing_request": "one approved certificates.k8s.io/v1 CertificateSigningRequest backed by that ClusterIssuer",
+    "trust_bundle": "one trstctl.com/v1alpha1 TrustBundle targeting a ConfigMap in a second namespace"
+  },
+  "production_flow": [
+    "internal/agent/k8s.IssuerController reconciles the real API server",
+    "the signer-backed control plane issues the CSR certificate",
+    "the controller converts its exact reconcile result into a bounded posture report",
+    "an agent certificate authenticated by the signer-custodied agent CA reports posture over the served mTLS gRPC channel",
+    "the event projection updates tenant-scoped PostgreSQL read state",
+    "an authenticated GET reads the production-wired API option for the selected route"
+  ],
+  "independent_readback": {
+    "certificate_signing_requests": "the substrate reads status.certificate and Ready from the real CSR, verifies its chain with OpenSSL, and binds name/UID/CSR hash to the served route",
+    "trust_bundles": "the substrate reads TrustBundle Ready/targets/hash and the independently written ConfigMap, then binds name/UID/bundle hash to the served route",
+    "report_binding": "route controller_id, cluster_id, and report_id must identify the authenticated mTLS report produced from that reconcile"
+  },
+  "completion": "passed requires exact kind image identity, real controller mutations, authenticated mTLS event projection, served HTTP readback, and independent Kubernetes/OpenSSL verification"
+}

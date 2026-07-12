@@ -178,6 +178,10 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 		CACertFile:     caFile,
 		KEK:            kekW,
 		Protocols:      protocols,
+		APIOptions: []api.Option{
+			api.WithKubernetesCSRPosture(st),
+			api.WithKubernetesTrustBundlePosture(st),
+		},
 	}
 	for _, o := range opts {
 		o(&deps)

@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,16 @@ import (
 
 	"trstctl.com/trstctl/internal/store"
 )
+
+type fakeKubernetesPostureReader struct {
+	rows  map[string][]store.KubernetesControllerPosture
+	calls []string
+}
+
+func (f *fakeKubernetesPostureReader) ListKubernetesControllerPosture(_ context.Context, tenantID, capability string) ([]store.KubernetesControllerPosture, error) {
+	f.calls = append(f.calls, tenantID+"/"+capability)
+	return append([]store.KubernetesControllerPosture(nil), f.rows[capability]...), nil
+}
 
 func TestKubernetesPostureBuildsCountsLastSyncAndPerObjectState(t *testing.T) {
 	now := time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)
@@ -64,5 +75,51 @@ func TestKubernetesPostureRoutesFailHonestlyWithoutControllerReport(t *testing.T
 		if strings.Contains(body, `"served":true`) || strings.Contains(body, "controller_flow") {
 			t.Fatalf("%s returned static served descriptor: %s", path, rec.Body.String())
 		}
+	}
+}
+
+func TestKubernetesPostureRoutesRequireAndUseExplicitProductionReaders(t *testing.T) {
+	now := time.Now().UTC()
+	csr := &fakeKubernetesPostureReader{rows: map[string][]store.KubernetesControllerPosture{
+		store.KubernetesPostureCertificateSigningRequests: {{
+			ControllerID: "11111111-1111-1111-1111-111111111111", ClusterID: "sha256:" + strings.Repeat("a", 64),
+			ReportID: "33333333-3333-3333-3333-333333333333", ReconcileComplete: true,
+			ReconcileIntervalSeconds: 30, ReportedAt: now,
+			Resources: []store.KubernetesPostureResource{{Name: "real-csr", UID: "csr-uid", ResourceVersion: "7", State: "ready", Reason: "signed"}},
+		}},
+	}}
+	trust := &fakeKubernetesPostureReader{rows: map[string][]store.KubernetesControllerPosture{
+		store.KubernetesPostureTrustBundles: {{
+			ControllerID: "11111111-1111-1111-1111-111111111111", ClusterID: "sha256:" + strings.Repeat("a", 64),
+			ReportID: "44444444-4444-4444-4444-444444444444", ReconcileComplete: true,
+			ReconcileIntervalSeconds: 30, ReportedAt: now,
+			Resources: []store.KubernetesPostureResource{{Name: "real-bundle", UID: "bundle-uid", ResourceVersion: "8", State: "ready", Reason: "distributed"}},
+		}},
+	}}
+	handler := New(nil, nil, nil,
+		WithInsecureHeaderResolver(),
+		WithKubernetesCSRPosture(csr),
+		WithKubernetesTrustBundlePosture(trust),
+	)
+	for _, tc := range []struct {
+		path, object string
+	}{
+		{path: "/api/v1/kubernetes/certificate-signing-requests", object: "real-csr"},
+		{path: "/api/v1/kubernetes/trust-bundles", object: "real-bundle"},
+	} {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		req.Header.Set("X-Tenant-ID", "99999999-9999-4999-8999-999999999999")
+		req.Header.Set("X-Roles", "admin")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"`+tc.object+`"`) {
+			t.Fatalf("%s status=%d body=%s, want explicit projected object %s", tc.path, rec.Code, rec.Body.String(), tc.object)
+		}
+	}
+	if len(csr.calls) != 1 || !strings.HasSuffix(csr.calls[0], "/"+store.KubernetesPostureCertificateSigningRequests) {
+		t.Fatalf("CSR reader calls=%v", csr.calls)
+	}
+	if len(trust.calls) != 1 || !strings.HasSuffix(trust.calls[0], "/"+store.KubernetesPostureTrustBundles) {
+		t.Fatalf("TrustBundle reader calls=%v", trust.calls)
 	}
 }

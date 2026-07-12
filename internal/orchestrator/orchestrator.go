@@ -17,11 +17,26 @@ import (
 )
 
 const (
-	ctSubmissionEventQueued                   = "ct.submission.queued"
-	ctSubmissionDestination                   = "ct.submit"
-	ctSubmissionCapability                    = "CAP-REV-06"
-	licensedCryptoMigrationReissueDestination = "licensed_crypto.migration.reissue"
+	ctSubmissionEventQueued                          = "ct.submission.queued"
+	ctSubmissionDestination                          = "ct.submit"
+	ctSubmissionCapability                           = "CAP-REV-06"
+	licensedCryptoMigrationReissueDestination        = "licensed_crypto.migration.reissue"
+	licensedCryptoMigrationTLSPostureDestination     = "licensed_crypto.migration.tls_posture"
+	licensedCryptoMigrationTLSRollbackDestination    = "licensed_crypto.migration.tls_posture.rollback"
+	licensedCryptoMigrationTLSRollbackRequestedEvent = "licensed_crypto.migration.tls_posture.rollback_requested"
 )
+
+type licensedCryptoMigrationTLSRollbackIntent struct {
+	TargetID       string          `json:"target_id"`
+	AssetIDs       []string        `json:"asset_ids"`
+	IdempotencyKey string          `json:"idempotency_key"`
+	Payload        json.RawMessage `json:"payload"`
+}
+
+type licensedCryptoMigrationTLSRollbackRequested struct {
+	RunID   string                                     `json:"run_id"`
+	Intents []licensedCryptoMigrationTLSRollbackIntent `json:"intents"`
+}
 
 // Orchestrator is the command (write) side of the event-sourced spine. It drives
 // an identity through its lifecycle state machine and records every served
@@ -389,6 +404,36 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == licensedCryptoMigrationTLSRollbackRequestedEvent {
+			var requested licensedCryptoMigrationTLSRollbackRequested
+			if err := json.Unmarshal(ev.Data, &requested); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if requested.RunID == "" || len(requested.Intents) == 0 {
+				return fmt.Errorf("orchestrator: reconcile %s (seq %d): run_id and intents are required", ev.Type, ev.Sequence)
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				for _, intent := range requested.Intents {
+					if intent.TargetID == "" || len(intent.AssetIDs) == 0 || intent.IdempotencyKey == "" || len(intent.Payload) == 0 {
+						return fmt.Errorf("orchestrator: reconcile %s (seq %d): complete sealed rollback intent is required", ev.Type, ev.Sequence)
+					}
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+						TenantID: ev.TenantID, Destination: licensedCryptoMigrationTLSRollbackDestination,
+						IdempotencyKey: intent.IdempotencyKey, Payload: append([]byte(nil), intent.Payload...),
+					})
+					if err != nil {
+						return err
+					}
+					if inserted {
+						healed++
+					}
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventLicensedCryptoMigrationStarted {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err
@@ -397,7 +442,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			if err := json.Unmarshal(ev.Data, &pl); err != nil {
 				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
 			}
-			if len(pl.Reissues) == 0 {
+			if len(pl.Reissues) == 0 && len(pl.TLSPostures) == 0 {
 				// Older start events carried only an audit summary; their inline
 				// outbox rows were already the only delivery source.
 				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
@@ -415,6 +460,26 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 						TenantID:       ev.TenantID,
 						Destination:    licensedCryptoMigrationReissueDestination,
 						IdempotencyKey: "licensed-crypto-migration:" + reissue.RunID + ":" + reissue.AssetID,
+						Payload:        body,
+					})
+					if err != nil {
+						return err
+					}
+					if inserted {
+						healed++
+					}
+				}
+				for _, posture := range pl.TLSPostures {
+					if posture.RunID == "" || posture.AssetID == "" || posture.TargetID == "" || posture.TargetRevision == "" || posture.Connector == "" {
+						return fmt.Errorf("orchestrator: reconcile %s (seq %d): TLS posture requires run_id, asset_id, target_id, revision, and connector", ev.Type, ev.Sequence)
+					}
+					body := []byte(posture.SealedOutboxPayload)
+					if len(body) == 0 {
+						return fmt.Errorf("orchestrator: reconcile %s (seq %d): TLS posture is missing sealed outbox payload", ev.Type, ev.Sequence)
+					}
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+						TenantID: ev.TenantID, Destination: licensedCryptoMigrationTLSPostureDestination,
+						IdempotencyKey: "licensed-crypto-migration-tls:" + posture.RunID + ":" + posture.AssetID,
 						Payload:        body,
 					})
 					if err != nil {

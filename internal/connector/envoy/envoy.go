@@ -39,6 +39,7 @@ type Connector struct {
 }
 
 var _ connector.Connector = (*Connector)(nil)
+var _ connector.TLSPostureConnector = (*Connector)(nil)
 
 // Option configures a Connector.
 type Option func(*Connector)
@@ -106,6 +107,78 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 		return fmt.Errorf("envoy: SDS update failed: %w", err)
 	}
 	c.observe(dep.Target, "deployed")
+	return nil
+}
+
+// ReadTLSPosture observes the native listener policy from the Envoy management
+// plane. A missing resource is an error: migration cannot produce a truthful
+// rollback receipt without knowing the exact prior state.
+func (c *Connector) ReadTLSPosture(ctx context.Context, sb connector.Sandbox, target string) (connector.TLSPosture, error) {
+	if err := c.validate(); err != nil {
+		return connector.TLSPosture{}, err
+	}
+	if strings.TrimSpace(target) == "" {
+		return connector.TLSPosture{}, fmt.Errorf("envoy: TLS posture target is required")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.postureURL(target), nil)
+	if err != nil {
+		return connector.TLSPosture{}, err
+	}
+	resp, err := sb.Request(req)
+	if err != nil {
+		return connector.TLSPosture{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		return connector.TLSPosture{}, responseError(resp)
+	}
+	data, err := secret.ReadBounded(resp.Body, 64<<10)
+	if err != nil {
+		return connector.TLSPosture{}, fmt.Errorf("envoy: read TLS posture (details redacted)")
+	}
+	defer secret.Wipe(data)
+	var posture connector.TLSPosture
+	if err := json.Unmarshal(data, &posture); err != nil {
+		return connector.TLSPosture{}, fmt.Errorf("envoy: decode TLS posture failed (details redacted)")
+	}
+	if err := connector.ValidateObservedTLSPosture(posture); err != nil {
+		return connector.TLSPosture{}, fmt.Errorf("envoy: invalid TLS posture response: %w", err)
+	}
+	return posture, nil
+}
+
+// ApplyTLSPosture writes one native listener policy. Desired-state safety is
+// checked by Registry; this method accepts structurally valid legacy state too
+// so Registry can restore an exact weak/old posture during rollback.
+func (c *Connector) ApplyTLSPosture(ctx context.Context, sb connector.Sandbox, target string, posture connector.TLSPosture) error {
+	if err := c.validate(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf("envoy: TLS posture target is required")
+	}
+	if err := connector.ValidateObservedTLSPosture(posture); err != nil {
+		return fmt.Errorf("envoy: invalid TLS posture request: %w", err)
+	}
+	body, err := json.Marshal(posture)
+	if err != nil {
+		return fmt.Errorf("envoy: encode TLS posture: %w", err)
+	}
+	defer secret.Wipe(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.postureURL(target), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := sb.Request(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		return responseError(resp)
+	}
+	_ = secret.DrainBounded(resp.Body, 64<<10)
 	return nil
 }
 
@@ -180,6 +253,10 @@ func (c *Connector) put(ctx context.Context, sb connector.Sandbox, res sdsResour
 
 func (c *Connector) secretURL() string {
 	return c.baseURL + "/v1/sds/secrets/" + url.PathEscape(c.secretName)
+}
+
+func (c *Connector) postureURL(target string) string {
+	return c.baseURL + "/v1/tls-posture/" + url.PathEscape(target)
 }
 
 func responseError(resp *http.Response) error {

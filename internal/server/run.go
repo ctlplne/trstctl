@@ -457,6 +457,8 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
+	kubernetesCSRPosture := kubernetesCSRPostureFromConfig(st)
+	kubernetesTrustBundlePosture := kubernetesTrustBundlePostureFromConfig(st)
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:         cfg.Signer.KeyStoreDir,
@@ -464,7 +466,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		ServiceNowBindings:        serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
 		TelemetryReporter:         telemetryReporter,
-		CACertFile:                cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
+		APIOptions: []api.Option{
+			kubernetesCSRPosture,
+			kubernetesTrustBundlePosture,
+		},
+		CACertFile: cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
 		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER,
@@ -488,7 +494,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       protocols, Plugins: pluginCfg,
 		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, SCIM: cfg.Auth.SCIM,
-		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: sec.kek, SecretsAuthSecret: sec.authSecret, MachineAuthMethods: machineAuthMethods,
+		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek, SecretsAuthSecret: sec.authSecret, MachineAuthMethods: machineAuthMethods,
 		SecretScanGitleaksBin: cfg.Secrets.GitleaksBin,
 		EnableAISurface:       cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
@@ -496,6 +502,34 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
+}
+
+// vaultCompatRuntimeFromConfig binds Vault/OpenBao compatibility to the same
+// production switch as the native secrets API. The explicit assembly seam lets
+// the DoD census prove that compatibility routes are reachable from the shipped
+// binary instead of accepting a registry assembled only by a test.
+func vaultCompatRuntimeFromConfig(cfg *config.Config) bool {
+	return cfg != nil && cfg.Secrets.EnableAPI
+}
+
+// kubernetesCSRPostureFromConfig deliberately returns an API option instead of
+// relying on API.New's generic store argument. The shipped binary therefore has
+// an auditable production edge from buildRunDeps to the real projected
+// CertificateSigningRequest controller state.
+func kubernetesCSRPostureFromConfig(st *store.Store) api.Option {
+	if st == nil {
+		return api.WithKubernetesCSRPosture(nil)
+	}
+	return api.WithKubernetesCSRPosture(st)
+}
+
+// kubernetesTrustBundlePostureFromConfig is the equivalent explicit production
+// edge for the TrustBundle controller-state route.
+func kubernetesTrustBundlePostureFromConfig(st *store.Store) api.Option {
+	if st == nil {
+		return api.WithKubernetesTrustBundlePosture(nil)
+	}
+	return api.WithKubernetesTrustBundlePosture(st)
 }
 
 // evalProtocolProfileFromConfig resolves the explicit shipped eval preset at the
