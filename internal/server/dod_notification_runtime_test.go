@@ -29,13 +29,21 @@ import (
 // Build. A user-reachable, authenticated served mutation creates the durable
 // outbox work; each row owns a separate nonce/PID-bound vendor emulator process.
 func TestDODNativeIncidentNotificationProductionAssembly(t *testing.T) {
-	dispatchExternal := proof.StartCommand(t, "notification_channel.dispatch")
-	pagerDutyExternal := proof.StartCommand(t, "notification_channel.pagerduty")
-	opsGenieExternal := proof.StartCommand(t, "notification_channel.opsgenie")
-
-	dodRunNativeNotification(t, "notification_channel.dispatch", "pagerduty", dispatchExternal)
-	dodRunNativeNotification(t, "notification_channel.pagerduty", "pagerduty", pagerDutyExternal)
-	dodRunNativeNotification(t, "notification_channel.opsgenie", "opsgenie", opsGenieExternal)
+	only := dodRuntimeSelection(t,
+		"notification_channel.dispatch", "notification_channel.pagerduty", "notification_channel.opsgenie",
+	)
+	if only == "" || only == "notification_channel.dispatch" {
+		external := proof.StartCommand(t, "notification_channel.dispatch")
+		dodRunNativeNotification(t, "notification_channel.dispatch", "pagerduty", external)
+	}
+	if only == "" || only == "notification_channel.pagerduty" {
+		external := proof.StartCommand(t, "notification_channel.pagerduty")
+		dodRunNativeNotification(t, "notification_channel.pagerduty", "pagerduty", external)
+	}
+	if only == "" || only == "notification_channel.opsgenie" {
+		external := proof.StartCommand(t, "notification_channel.opsgenie")
+		dodRunNativeNotification(t, "notification_channel.opsgenie", "opsgenie", external)
+	}
 }
 
 func dodRunNativeNotification(t *testing.T, entryID, channelName string, external *proof.ExternalSubstrate) {

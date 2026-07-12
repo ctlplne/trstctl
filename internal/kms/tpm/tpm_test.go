@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -82,7 +83,7 @@ func (d *softDevice) CreateKeyForOperation(operationID string, alg crypto.Algori
 	}
 	const (
 		minHandle = uint64(0x81010100)
-		maxHandle = uint64(0x81ffffff)
+		maxHandle = uint64(0x817fffff)
 	)
 	rangeSize := maxHandle - minHandle + 1
 	start := binary.BigEndian.Uint64(tag[:8]) % rangeSize
@@ -238,7 +239,7 @@ func TestTPMOperationIdentityProbesPastForeignSameAlgorithmHandle(t *testing.T) 
 	}
 	const (
 		minHandle = uint64(0x81010100)
-		maxHandle = uint64(0x81ffffff)
+		maxHandle = uint64(0x817fffff)
 	)
 	firstValue := minHandle + (binary.BigEndian.Uint64(tag[:8]) % (maxHandle - minHandle + 1))
 	firstHandle := "0x" + hex.EncodeToString([]byte{byte(firstValue >> 24), byte(firstValue >> 16), byte(firstValue >> 8), byte(firstValue)})
@@ -266,5 +267,38 @@ func TestTPMOperationIdentityProbesPastForeignSameAlgorithmHandle(t *testing.T) 
 	}
 	if replayedRef != ref || !crypto.ConstantTimeEqual(replayed.Public().DER, created.Public().DER) || device.n != 1 {
 		t.Fatalf("collision restart refs=%+v/%+v provider effects=%d", ref, replayedRef, device.n)
+	}
+}
+
+func TestTPMOperationIdentityNeverSelectsPlatformPersistentHandle(t *testing.T) {
+	device := newSoftDevice(t)
+	const operationID = "managedkey:f33ac9bf481b73ddbe76e35b7cdaaea2c591394475d895912ceb23dba3d07123"
+	tag, err := crypto.Digest(crypto.SHA256, []byte("trstctl:tpm2:managed-key:"+operationID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const minHandle = uint64(0x81010100)
+	legacyCandidate := minHandle + (binary.BigEndian.Uint64(tag[:8]) % (uint64(0x81ffffff) - minHandle + 1))
+	if legacyCandidate < 0x81800000 {
+		t.Fatalf("regression fixture legacy candidate = 0x%08x, want platform-persistent range", legacyCandidate)
+	}
+
+	created, ref, err := tpm.New(device).GenerateManagedKeyForOperation(context.Background(), operationID, crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handle, err := strconv.ParseUint(strings.TrimPrefix(ref.ID, "0x"), 16, 32)
+	if err != nil {
+		t.Fatalf("parse operation handle %q: %v", ref.ID, err)
+	}
+	if handle >= 0x81800000 {
+		t.Fatalf("owner-authorized operation selected platform-persistent handle %q", ref.ID)
+	}
+	replayed, replayedRef, err := tpm.New(device).GenerateManagedKeyForOperation(context.Background(), operationID, crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayedRef != ref || !crypto.ConstantTimeEqual(replayed.Public().DER, created.Public().DER) || device.n != 1 {
+		t.Fatalf("owner-range replay refs=%+v/%+v provider effects=%d", ref, replayedRef, device.n)
 	}
 }

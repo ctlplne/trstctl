@@ -306,14 +306,14 @@ export interface AlertRecipient {
 }
 
 export interface Approval {
-  action: "issue" | "rotate" | "revoke";
+  action: "issue" | "rotate" | "revoke" | "sign";
   approvals: number;
   approver: string;
   resource: string;
 }
 
 export interface ApprovalRequest {
-  action: "issue" | "rotate" | "revoke";
+  action: "issue" | "rotate" | "revoke" | "sign";
 }
 
 export interface Attestation {
@@ -1970,6 +1970,18 @@ export interface ManagedKey {
 }
 
 export interface ManagedKeyActionRequest {
+  key_id: string;
+}
+
+export interface ManagedKeyApproval {
+  action: "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+  approvals: number;
+  approver: string;
+  resource: string;
+}
+
+export interface ManagedKeyApprovalRequest {
+  action: "rotate" | "revoke" | "zeroize";
   key_id: string;
 }
 

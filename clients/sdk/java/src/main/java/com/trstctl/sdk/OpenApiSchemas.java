@@ -225,6 +225,8 @@ public final class OpenApiSchemas {
       "MachineLoginResponse",
       "ManagedKey",
       "ManagedKeyActionRequest",
+      "ManagedKeyApproval",
+      "ManagedKeyApprovalRequest",
       "ManagedKeyGenerateRequest",
       "ManagedOfferingStatus",
       "ManagedTenant",

@@ -74,11 +74,14 @@ const (
 
 	// Managed-key (BYOK/HSM) lifecycle permissions (CRYPTO-005 / EXC-CRYPTO-01).
 	// KeysRead lists managed keys; KeysWrite drives the remote-custody lifecycle
-	// (generate/rotate/revoke/zeroize). The destructive transitions additionally
-	// require a distinct-approver approval (dual control) enforced by the served
-	// gate — KeysWrite alone never authorizes a one-person rotate/revoke/zeroize.
-	KeysRead  Permission = "keys:read"
-	KeysWrite Permission = "keys:write"
+	// (generate/rotate/revoke/zeroize). KeysApprove records one principal's vote for
+	// a pending destructive managed-key transition. Keeping approval separate from
+	// write lets operators grant four-eyes authority without granting provider
+	// mutation authority. The store still rejects requester self-approval even when
+	// a principal deliberately holds both permissions.
+	KeysRead    Permission = "keys:read"
+	KeysWrite   Permission = "keys:write"
+	KeysApprove Permission = "keys:approve"
 )
 
 // Wildcard is a permission that allows every action; it is held by admin.
@@ -98,7 +101,7 @@ func allResourcePermissions() []Permission {
 		AccessRead, AccessWrite, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
-		KeysRead, KeysWrite,
+		KeysRead, KeysWrite, KeysApprove,
 	}
 }
 

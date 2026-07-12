@@ -380,25 +380,19 @@ func TestCodeSigningTransientSignerFailureStaysQueuedThenSucceeds(t *testing.T) 
 		}
 	})
 	const idempotencyKey = "codesign-transient-signer-retry"
-	requestCtx, cancel := context.WithTimeout(context.Background(), 75*time.Millisecond)
-	defer cancel()
-	_, err = h.srv.codeSign.SignCode(requestCtx, h.tenant, idempotencyKey, api.CodeSigningRequest{
-		Principal: "release-bot", KeyID: "release-key", ArtifactType: "blob",
-		Digest: crypto.SHA256Sum([]byte("retryable signer artifact")),
+	op := submitQueuedCodeSigning(t, h, idempotencyKey, func(ctx context.Context) error {
+		_, submitErr := h.srv.codeSign.SignCode(ctx, h.tenant, idempotencyKey, api.CodeSigningRequest{
+			Principal: "release-bot", KeyID: "release-key", ArtifactType: "blob",
+			Digest: crypto.SHA256Sum([]byte("retryable signer artifact")),
+		})
+		return submitErr
 	})
-	if err == nil {
-		t.Fatal("queued signing request unexpectedly completed without a dispatcher")
-	}
-	op, found, err := h.store.CodeSigningOperationByIdempotency(context.Background(), h.tenant, idempotencyKey)
-	if err != nil || !found {
-		t.Fatalf("load queued signing operation = found %v err %v", found, err)
-	}
 	command := loadCodeSigningOutboxMessage(t, h.store, h.tenant, op.CommandOutboxID)
 	firstErr := h.srv.obHandler.Deliver(context.Background(), command)
 	if status.Code(firstErr) != codes.Unavailable {
 		t.Fatalf("first transient signer delivery = %v (code %s), want Unavailable", firstErr, status.Code(firstErr))
 	}
-	op, found, err = h.store.CodeSigningOperationByID(context.Background(), h.tenant, op.OperationID)
+	op, found, err := h.store.CodeSigningOperationByID(context.Background(), h.tenant, op.OperationID)
 	if err != nil || !found || op.Status != "queued" || op.LastError != "" {
 		t.Fatalf("transient signer failure changed durable operation = found %v err %v op %+v", found, err, op)
 	}
@@ -426,25 +420,19 @@ func TestCodeSigningTransientKeyResolverFailureStaysQueuedThenSucceeds(t *testin
 		d.CodeSigning = CodeSigningConfig{Keys: resolver}
 	})
 	const idempotencyKey = "codesign-transient-key-resolver-retry"
-	requestCtx, cancel := context.WithTimeout(context.Background(), 75*time.Millisecond)
-	defer cancel()
-	_, err = h.srv.codeSign.SignCode(requestCtx, h.tenant, idempotencyKey, api.CodeSigningRequest{
-		Principal: "release-bot", KeyID: "release-key", ArtifactType: "blob",
-		Digest: crypto.SHA256Sum([]byte("retryable resolver artifact")),
+	op := submitQueuedCodeSigning(t, h, idempotencyKey, func(ctx context.Context) error {
+		_, submitErr := h.srv.codeSign.SignCode(ctx, h.tenant, idempotencyKey, api.CodeSigningRequest{
+			Principal: "release-bot", KeyID: "release-key", ArtifactType: "blob",
+			Digest: crypto.SHA256Sum([]byte("retryable resolver artifact")),
+		})
+		return submitErr
 	})
-	if err == nil {
-		t.Fatal("queued signing request unexpectedly completed without a dispatcher")
-	}
-	op, found, err := h.store.CodeSigningOperationByIdempotency(context.Background(), h.tenant, idempotencyKey)
-	if err != nil || !found {
-		t.Fatalf("load queued resolver operation = found %v err %v", found, err)
-	}
 	command := loadCodeSigningOutboxMessage(t, h.store, h.tenant, op.CommandOutboxID)
 	firstErr := h.srv.obHandler.Deliver(context.Background(), command)
 	if status.Code(firstErr) != codes.Unavailable {
 		t.Fatalf("first transient key resolution = %v (code %s), want Unavailable", firstErr, status.Code(firstErr))
 	}
-	op, found, err = h.store.CodeSigningOperationByID(context.Background(), h.tenant, op.OperationID)
+	op, found, err := h.store.CodeSigningOperationByID(context.Background(), h.tenant, op.OperationID)
 	if err != nil || !found || op.Status != "queued" || op.LastError != "" {
 		t.Fatalf("transient key resolution changed durable operation = found %v err %v op %+v", found, err, op)
 	}
@@ -479,24 +467,18 @@ func TestCodeSigningPolicyFailureProjectsTerminalWithoutRetry(t *testing.T) {
 		}
 	})
 	const idempotencyKey = "codesign-terminal-policy-denial"
-	requestCtx, cancel := context.WithTimeout(context.Background(), 75*time.Millisecond)
-	defer cancel()
-	_, err = h.srv.codeSign.SignCode(requestCtx, h.tenant, idempotencyKey, api.CodeSigningRequest{
-		Principal: "release-bot", KeyID: "release-key", ArtifactType: "blob",
-		Digest: crypto.SHA256Sum([]byte("policy-denied artifact")),
+	op := submitQueuedCodeSigning(t, h, idempotencyKey, func(ctx context.Context) error {
+		_, submitErr := h.srv.codeSign.SignCode(ctx, h.tenant, idempotencyKey, api.CodeSigningRequest{
+			Principal: "release-bot", KeyID: "release-key", ArtifactType: "blob",
+			Digest: crypto.SHA256Sum([]byte("policy-denied artifact")),
+		})
+		return submitErr
 	})
-	if err == nil {
-		t.Fatal("queued policy-denied request unexpectedly completed without a dispatcher")
-	}
-	op, found, err := h.store.CodeSigningOperationByIdempotency(context.Background(), h.tenant, idempotencyKey)
-	if err != nil || !found {
-		t.Fatalf("load policy-denied operation = found %v err %v", found, err)
-	}
 	command := loadCodeSigningOutboxMessage(t, h.store, h.tenant, op.CommandOutboxID)
 	if err := h.srv.obHandler.Deliver(context.Background(), command); err != nil {
 		t.Fatalf("terminal policy delivery should be acknowledged after projection: %v", err)
 	}
-	op, found, err = h.store.CodeSigningOperationByID(context.Background(), h.tenant, op.OperationID)
+	op, found, err := h.store.CodeSigningOperationByID(context.Background(), h.tenant, op.OperationID)
 	if err != nil || !found || op.Status != "failed" || op.LastError != "policy_denied" {
 		t.Fatalf("terminal policy operation = found %v err %v op %+v", found, err, op)
 	}
@@ -658,20 +640,14 @@ func TestCodeSigningDeadLetterProjectsFailureAndCleansLostKeylessHandle(t *testi
 		}
 	})
 	const idempotencyKey = "codesign-keyless-lost-handle"
-	requestCtx, cancel := context.WithTimeout(context.Background(), 75*time.Millisecond)
-	defer cancel()
-	_, err := h.srv.codeSign.SignKeylessCode(requestCtx, h.tenant, idempotencyKey, api.CodeSigningKeylessRequest{
-		Principal: "release-bot", ArtifactType: "oci-image",
-		Digest:         crypto.SHA256Sum([]byte("keyless crash artifact")),
-		IdentityMethod: "fulcio_fixture", IdentityPayload: []byte("short-lived-proof"),
+	op := submitQueuedCodeSigning(t, h, idempotencyKey, func(ctx context.Context) error {
+		_, submitErr := h.srv.codeSign.SignKeylessCode(ctx, h.tenant, idempotencyKey, api.CodeSigningKeylessRequest{
+			Principal: "release-bot", ArtifactType: "oci-image",
+			Digest:         crypto.SHA256Sum([]byte("keyless crash artifact")),
+			IdentityMethod: "fulcio_fixture", IdentityPayload: []byte("short-lived-proof"),
+		})
+		return submitErr
 	})
-	if err == nil {
-		t.Fatal("queued keyless request unexpectedly completed without a dispatcher")
-	}
-	op, found, err := h.store.CodeSigningOperationByIdempotency(context.Background(), h.tenant, idempotencyKey)
-	if err != nil || !found {
-		t.Fatalf("load queued keyless operation = found %v err %v", found, err)
-	}
 	// Simulate the real crash window: the deterministic signer key was created, but
 	// the process died before codesign.completed persisted its handle.
 	_, lostHandle, err := h.srv.codeSign.cfg.NewEphemeralSigner(context.Background(), op.OperationID, crypto.ECDSAP256)
@@ -692,7 +668,7 @@ func TestCodeSigningDeadLetterProjectsFailureAndCleansLostKeylessHandle(t *testi
 	if err := terminal.DeliverTerminalFailure(context.Background(), command, errors.New("signer retry budget exhausted")); err != nil {
 		t.Fatalf("project code-signing terminal failure: %v", err)
 	}
-	op, found, err = h.store.CodeSigningOperationByID(context.Background(), h.tenant, op.OperationID)
+	op, found, err := h.store.CodeSigningOperationByID(context.Background(), h.tenant, op.OperationID)
 	if err != nil || !found {
 		t.Fatalf("reload terminal keyless operation = found %v err %v", found, err)
 	}
@@ -714,6 +690,67 @@ func TestCodeSigningDeadLetterProjectsFailureAndCleansLostKeylessHandle(t *testi
 	defer mu.Unlock()
 	if op.CleanupStatus != "completed" || len(destroyed) != 1 || destroyed[0] != lostHandle || len(created) != 0 {
 		t.Fatalf("cleanup convergence = status %q destroyed %v remaining %d", op.CleanupStatus, destroyed, len(created))
+	}
+}
+
+// submitQueuedCodeSigning gives command append/projection its own bounded setup
+// phase, then cancels only after the durable row is observable. A tiny request
+// deadline makes these tests race the database under -race/-cover; merely making
+// that deadline larger would keep the same timing bug.
+func submitQueuedCodeSigning(
+	t *testing.T,
+	h *servedHarness,
+	idempotencyKey string,
+	submit func(context.Context) error,
+) store.CodeSigningOperation {
+	t.Helper()
+
+	submitCtx, cancelSubmit := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelSubmit()
+	result := make(chan error, 1)
+	go func() { result <- submit(submitCtx) }()
+
+	projectionCtx, cancelProjection := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelProjection()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		op, found, err := h.store.CodeSigningOperationByIdempotency(projectionCtx, h.tenant, idempotencyKey)
+		if err != nil {
+			t.Fatalf("load queued code-signing operation: %v", err)
+		}
+		if found {
+			if op.Status != "queued" {
+				t.Fatalf("code-signing operation reached %q without a dispatcher", op.Status)
+			}
+			cancelSubmit()
+			returnCtx, cancelReturn := context.WithTimeout(context.Background(), time.Second)
+			defer cancelReturn()
+			select {
+			case submitErr := <-result:
+				if submitErr == nil {
+					t.Fatal("queued code-signing request unexpectedly completed without a dispatcher")
+				}
+				if !errors.Is(submitErr, context.Canceled) {
+					t.Fatalf("cancel queued code-signing wait: %v", submitErr)
+				}
+			case <-returnCtx.Done():
+				t.Fatalf("queued code-signing request did not return after cancellation: %v", returnCtx.Err())
+			}
+			return op
+		}
+
+		select {
+		case submitErr := <-result:
+			if submitErr == nil {
+				t.Fatal("code-signing request completed before its durable command was observable")
+			}
+			t.Fatalf("code-signing submission ended before command projection: %v", submitErr)
+		case <-projectionCtx.Done():
+			t.Fatalf("wait for queued code-signing projection: %v", projectionCtx.Err())
+		case <-ticker.C:
+		}
 	}
 }
 

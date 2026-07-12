@@ -353,8 +353,9 @@ var commandTable = []Command{
 
 	// BYOK/HSM managed-key lifecycle (CRYPTO-005). Generate mints provider-resident
 	// material; rotate/revoke/zeroize are destructive and require a distinct-approver
-	// approval (dual control) recorded out of band before the command succeeds.
+	// approval (dual control) recorded through the dedicated served approval route.
 	{Name: []string{"managed-keys", "generate"}, Method: "POST", Path: "/api/v1/managed-keys", Body: bodyFile, Summary: "Generate a BYOK/HSM-resident managed key"},
+	{Name: []string{"managed-keys", "approve"}, Method: "POST", Path: "/api/v1/managed-keys/approvals", Body: bodyFile, Summary: "Approve an exact managed-key rotate, revoke, or zeroize action"},
 	{Name: []string{"managed-keys", "rotate"}, Method: "POST", Path: "/api/v1/managed-keys/rotate", Body: bodyFile, Summary: "Rotate a managed key (requires dual-control approval)"},
 	{Name: []string{"managed-keys", "revoke"}, Method: "POST", Path: "/api/v1/managed-keys/revoke", Body: bodyFile, Summary: "Revoke a managed key at the provider (requires dual-control approval)"},
 	{Name: []string{"managed-keys", "zeroize"}, Method: "POST", Path: "/api/v1/managed-keys/zeroize", Body: bodyFile, Summary: "Zeroize a managed key's material at the provider (requires dual-control approval)"},

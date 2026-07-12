@@ -37,8 +37,11 @@ GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAG
 GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...
 GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...
 GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
-PERFGATE_PACKAGE := ./scripts/perf/cmd/perfgate
-PERFGATE_IMPORT := $(MODULE)/scripts/perf/cmd/perfgate
+# These packages boot real embedded PostgreSQL/JetStream spines. Run them in a
+# serial lane so the all-package race/coverage gate does not make independent
+# database bootstraps contend for the same host resources. No test is skipped.
+LIVE_PERF_PACKAGES := ./scripts/perf/cmd/capacitycalibrate ./scripts/perf/cmd/perfgate ./scripts/perf/cmd/soakcapture ./scripts/perf/cmd/spineburst
+LIVE_PERF_IMPORT_RE := $(MODULE)/scripts/perf/cmd/(capacitycalibrate|perfgate|soakcapture|spineburst)
 PCAS_E2E_RUN ?= TestINT20_FullStackPCASUserJourneys|TestINT20_PCASWASMParity_NoSkip|TestINT21_PCASOpsSLOBackpressureAndCrash
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
@@ -58,7 +61,7 @@ WEB_NPM ?= npm --prefix web
 COVERAGE_MIN ?= 70
 COVERPROFILE := cover.out
 COVERPROFILE_MAIN := $(COVERPROFILE).main
-COVERPROFILE_PERFGATE := $(COVERPROFILE).perfgate
+COVERPROFILE_LIVE_PERF := $(COVERPROFILE).liveperf
 AUDIT_OUTPUTS ?= ../trustctl-audit/outputs
 
 # Minimum coverage (percent) for the assembled control plane's core lifecycle
@@ -130,11 +133,11 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> go test (race + merged first-party coverage)"
-	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(PERFGATE_IMPORT)$$' )"; \
+	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
 	$(GO) test -race -count=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
-	@echo ">> go test live perf gate (serial)"
-	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_PERFGATE) $(PERFGATE_PACKAGE)
-	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_PERFGATE); } > $(COVERPROFILE)
+	@echo ">> go test live perf packages (serial)"
+	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
+	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
 	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \
@@ -161,6 +164,8 @@ DOD_CENSUS_OUT ?= wiring-census.json
 .PHONY: dod-gate
 dod-gate: ## Prove every required capability is compiled, production-assembled, and non-sentinel served
 	@echo ">> definition-of-done wiring census (manifest-pinned shipped profiles)"
+	@set -eu; cache="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}"; \
+		if [ ! -e "$$cache" ]; then (umask 077; mkdir -p "$$cache"); fi
 	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) test ./tools/dodcensus/... -count=1
 	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) test ./internal/server -run '^TestDODGateProductionAssemblyCanary$$' -count=1
 	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) run ./tools/dodcensus \
@@ -346,10 +351,10 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 		exit 1; \
 	fi
 	@echo ">> trstctl_core tests over non-ee packages"
-	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(PERFGATE_IMPORT)$$' )"; \
+	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
 	$(GO) test -tags trstctl_core $$pkgs
-	@echo ">> trstctl_core live perf gate (serial)"
-	@$(GO) test -tags trstctl_core -p=1 $(PERFGATE_PACKAGE)
+	@echo ">> trstctl_core live perf packages (serial)"
+	@$(GO) test -tags trstctl_core -p=1 $(LIVE_PERF_PACKAGES)
 
 .PHONY: pcas-caller-gate
 pcas-caller-gate: ## PCAS production-caller gate (INT-23): every delivered mechanism has a non-test caller

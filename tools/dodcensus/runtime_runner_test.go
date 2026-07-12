@@ -58,10 +58,54 @@ func TestRuntimeRunnerHostUserStaysNonRoot(t *testing.T) {
 	}
 }
 
-func TestRuntimeRunnerRootFilesystemIsReadOnlyAndCapabilitiesAreDropped(t *testing.T) {
-	want := []string{"--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"}
+func TestRuntimeRunnerRootFilesystemIsReadOnlyAndPrivilegeBootstrapIsBounded(t *testing.T) {
+	want := []string{
+		"--read-only",
+		"--cap-drop", "ALL",
+		"--cap-add", "CHECKPOINT_RESTORE",
+		"--cap-add", "SETUID",
+		"--cap-add", "SETGID",
+		"--cap-add", "SETPCAP",
+		"--security-opt", "no-new-privileges",
+		"--user", "0:0",
+	}
 	if got := runtimeRunnerIsolationArgs(); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("runtime runner isolation args = %v, want exact %v", got, want)
+	}
+	dropWant := []string{
+		"--reuid=501",
+		"--regid=20",
+		"--groups=1234",
+		"--inh-caps=+checkpoint_restore,+setgid",
+		"--ambient-caps=+checkpoint_restore,+setgid",
+		"--bounding-set=-all,+checkpoint_restore,+setgid",
+	}
+	if got := runtimeRunnerPrivilegeDropArgs(501, 20, 1234); strings.Join(got, "\n") != strings.Join(dropWant, "\n") {
+		t.Fatalf("runtime runner privilege-drop args = %v, want exact %v", got, dropWant)
+	}
+}
+
+func TestRuntimeRunnerScratchMountsBoundedTmpfsAndShortReceiptAlias(t *testing.T) {
+	receiptDir := "/private/tmp/" + strings.Repeat("very-long-host-receipt-path-", 8)
+	got := runtimeRunnerScratchArgs(receiptDir)
+	want := []string{
+		"--mount", "type=bind,src=" + receiptDir + ",dst=" + receiptDir,
+		"--mount", "type=bind,src=" + receiptDir + ",dst=/dod-tmp",
+		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777",
+		"--env", "HOME=/dod-tmp",
+		"--env", "TMPDIR=/dod-tmp",
+		"--env", "TRSTCTL_DOD_HOST_RECEIPT_ROOT=" + receiptDir,
+		"--env", "TRSTCTL_DOD_RUNTIME_TEMP_ROOT=/dod-tmp",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("runtime scratch argv = %v, want exact %v", got, want)
+	}
+	if socket := filepath.Join("/dod-tmp", "TestDODManagedKeyProductionAssembly", "001", "signer.sock"); len(socket) >= 108 {
+		t.Fatalf("short-alias signer socket path is %d bytes: %s", len(socket), socket)
+	}
+	joined := strings.Join(got, "\n")
+	if strings.Contains(joined, "HOME="+receiptDir) || strings.Contains(joined, "TMPDIR="+receiptDir) {
+		t.Fatal("long host receipt path leaked back into HOME/TMPDIR")
 	}
 }
 
@@ -121,7 +165,7 @@ func TestRuntimeRunnerWritableDirRequiresPrivateHostOwnership(t *testing.T) {
 }
 
 func TestHostDockerCommandBoundaryIsClosed(t *testing.T) {
-	for _, command := range []string{"build", "buildx", "context", "image", "network", "run"} {
+	for _, command := range []string{"build", "context", "image", "network", "run"} {
 		if err := validateHostCommand("docker", []string{command, "reviewed-argument"}); err != nil {
 			t.Errorf("reviewed Docker command %s rejected: %v", command, err)
 		}
@@ -131,6 +175,7 @@ func TestHostDockerCommandBoundaryIsClosed(t *testing.T) {
 		args []string
 	}{
 		{name: "bash", args: []string{"-c", "docker run"}},
+		{name: "docker", args: []string{"buildx", "imagetools", "inspect", "golang:latest"}},
 		{name: "docker", args: []string{"exec", "container", "command"}},
 		{name: "docker", args: []string{"run", "unsafe\nargument"}},
 		{name: "docker"},
@@ -141,9 +186,168 @@ func TestHostDockerCommandBoundaryIsClosed(t *testing.T) {
 	}
 }
 
+func TestRuntimeRunnerBaseReferenceIsExactAndToolchainBound(t *testing.T) {
+	repo := t.TempDir()
+	writeFile(t, repo, "go.mod", "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.4\n", 0o600)
+	valid := "golang:1.26.4-bookworm@sha256:" + strings.Repeat("a", 64) + "\n"
+	writeFile(t, repo, runtimeRunnerBaseFile, valid, 0o600)
+	if got, err := runtimeRunnerBaseReference(repo); err != nil || got != strings.TrimSuffix(valid, "\n") {
+		t.Fatalf("valid committed runner base = %q err=%v", got, err)
+	}
+
+	invalid := []string{
+		"golang:1.26.4-bookworm\n",
+		"golang@sha256:" + strings.Repeat("a", 64) + "\n",
+		"golang:1.26.3-bookworm@sha256:" + strings.Repeat("a", 64) + "\n",
+		"golang:latest@sha256:" + strings.Repeat("a", 64) + "\n",
+		"golang:1.26.4-alpine@sha256:" + strings.Repeat("a", 64) + "\n",
+		"docker.io/library/golang:1.26.4-bookworm@sha256:" + strings.Repeat("a", 64) + "\n",
+		"golang:1.26.4-bookworm@sha256:" + strings.Repeat("A", 64) + "\n",
+		"golang:1.26.4-bookworm@sha256:" + strings.Repeat("a", 64),
+		"golang:1.26.4-bookworm@sha256:" + strings.Repeat("a", 64) + "\n\n",
+	}
+	for index, value := range invalid {
+		if err := os.WriteFile(filepath.Join(repo, filepath.FromSlash(runtimeRunnerBaseFile)), []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := runtimeRunnerBaseReference(repo); err == nil {
+			t.Errorf("invalid base[%d] passed as %q", index, got)
+		}
+	}
+}
+
+func TestRuntimeRunnerGoVersionRejectsCommentSpoofAndMalformedToolchain(t *testing.T) {
+	repo := t.TempDir()
+	path := filepath.Join(repo, "go.mod")
+	valid := "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.4\n"
+	if err := os.WriteFile(path, []byte(valid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := runtimeRunnerGoVersion(repo); err != nil || got != "1.26.4" {
+		t.Fatalf("valid toolchain version = %q err=%v", got, err)
+	}
+	for index, value := range []string{
+		"module fixture.example/runtime\n\ngo 1.26\n// toolchain go1.26.4\n",
+		"module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.4\ntoolchain go1.26.5\n",
+		"module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26\n",
+		"module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.4rc1\n",
+		"module fixture.example/runtime\n\ngo 1.26\ntoolchain default\n",
+	} {
+		if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := runtimeRunnerGoVersion(repo); err == nil {
+			t.Errorf("invalid go.mod[%d] passed with version %q", index, got)
+		}
+	}
+}
+
+func TestRuntimeRunnerClosureRejectsMissingAndRehashedInvalidBasePin(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		value string
+	}{
+		{name: "missing digest", value: "golang:1.26.4-bookworm\n"},
+		{name: "wrong version", value: "golang:1.26.3-bookworm@sha256:" + strings.Repeat("c", 64) + "\n"},
+		{name: "moving tag", value: "golang:latest@sha256:" + strings.Repeat("c", 64) + "\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo := t.TempDir()
+			manifest := validManifest(t, repo, enforcementRequired)
+			profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
+			if err := os.WriteFile(filepath.Join(repo, filepath.FromSlash(runtimeRunnerBaseFile)), []byte(test.value), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			digest, err := commandIdentityDigest(repo, profile.RuntimeRunner.IdentityFiles)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prefix, _, _ := strings.Cut(profile.RuntimeRunner.Identity, "@")
+			profile.RuntimeRunner.Identity = prefix + "@" + digest
+			if evidence := inspectRuntimeRunnerProof(repo, profile); evidence.OK {
+				t.Fatalf("rehashed invalid base pin passed: %+v", evidence)
+			}
+		})
+	}
+
+	repo := t.TempDir()
+	manifest := validManifest(t, repo, enforcementRequired)
+	profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
+	if err := os.Remove(filepath.Join(repo, filepath.FromSlash(runtimeRunnerBaseFile))); err != nil {
+		t.Fatal(err)
+	}
+	if evidence := inspectRuntimeRunnerProof(repo, profile); evidence.OK {
+		t.Fatalf("missing base pin passed: %+v", evidence)
+	}
+
+	repo = t.TempDir()
+	manifest = validManifest(t, repo, enforcementRequired)
+	profile = manifest.BuildProfiles[manifest.DefaultBuildProfile]
+	basePath := filepath.Join(repo, filepath.FromSlash(runtimeRunnerBaseFile))
+	raw, err := os.ReadFile(basePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := strings.Replace(string(raw), strings.Repeat("b", 64), strings.Repeat("d", 64), 1)
+	if err := os.WriteFile(basePath, []byte(mutated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if evidence := inspectRuntimeRunnerProof(repo, profile); evidence.OK {
+		t.Fatalf("unrehashed base digest mutation passed: %+v", evidence)
+	}
+}
+
+func TestRuntimeRunnerPrepareUsesOnlyCommittedBaseAndExactPlatform(t *testing.T) {
+	raw, err := os.ReadFile("runtime_runner.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(raw)
+	for _, required := range []string{
+		`baseReference, err := runtimeRunnerBaseReference(repo)`,
+		`"docker", "build", "--platform", profile.RuntimeRunner.Platform`,
+		`"BASE_IMAGE="+baseReference`,
+		`"docker", "image", "inspect", "--format={{.Id}} {{.Os}}/{{.Architecture}}"`,
+		`fields[1] != profile.RuntimeRunner.Platform`,
+	} {
+		if !strings.Contains(source, required) {
+			t.Errorf("runner prepare omits committed-base/platform binding %q", required)
+		}
+	}
+	for _, forbidden := range []string{`"buildx"`, `"imagetools"`, `baseTag :=`} {
+		if strings.Contains(source, forbidden) {
+			t.Errorf("runner prepare retains mutable base resolution %q", forbidden)
+		}
+	}
+	repo := t.TempDir()
+	manifest := validManifest(t, repo, enforcementRequired)
+	profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
+	profile.GOARCH = "arm64"
+	profile.RuntimeRunner.Platform = "linux/arm64"
+	if evidence := inspectRuntimeRunnerProof(repo, profile); evidence.OK {
+		t.Fatalf("self-consistent but unsupported arm64 runner profile passed: %+v", evidence)
+	}
+}
+
 func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing.T) {
 	for _, required := range []string{
 		"os.geteuid() == 0",
+		`TRSTCTL_DOD_PREFLIGHT_UID`,
+		`TRSTCTL_DOD_PREFLIGHT_GID`,
+		`TRSTCTL_DOD_PREFLIGHT_SOCKET_UID`,
+		`TRSTCTL_DOD_PREFLIGHT_SOCKET_GID`,
+		`expected_socket_uid == expected_uid or expected_socket_gid == expected_gid`,
+		`os.getgroups() != [expected_socket_gid]`,
+		`expected_capability = "0000010000000040"`,
+		`("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")`,
+		`process_status.get("NoNewPrivs") != "1"`,
+		`process_status.get("Seccomp") != "2"`,
+		`subprocess.Popen(["/usr/bin/sleep", "10"])`,
+		`map_deadline = time.monotonic() + 2`,
+		`map_probe.poll() is not None`,
+		`pathlib.Path("/proc/%d/map_files/%s"`,
+		`os.open(map_file, os.O_RDONLY)`,
+		`os.read(descriptor, 4) != b"\x7fELF"`,
 		`["/usr/local/go/bin/go", "version"]`,
 		`go version go1.26.4 linux/amd64`,
 		`module_root = pathlib.Path("/go/pkg/mod")`,
@@ -154,6 +358,12 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		"onerror=fail_walk",
 		"os.open(write_probe, os.O_WRONLY)",
 		"except PermissionError",
+		"TRSTCTL_DOD_PREFLIGHT_SHORT_TMP",
+		"os.path.samefile(receipt_directory, short_directory)",
+		"short runtime path does not share receipt bytes",
+		`system_tmp = pathlib.Path("/tmp")`,
+		"stat.S_IMODE(metadata.st_mode) != 0o1777",
+		"capacity > 64 * 1024 * 1024",
 		"TRSTCTL_DOD_PREFLIGHT_CACHE",
 		"TRSTCTL_DOD_PREFLIGHT_RECEIPTS",
 		"TRSTCTL_DOD_PREFLIGHT_BROKER",
@@ -161,6 +371,9 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		"Authorization",
 		"os.O_EXCL",
 		"/var/run/docker.sock",
+		`stat.S_ISSOCK(socket_metadata.st_mode)`,
+		`socket_metadata.st_uid != expected_socket_uid`,
+		`socket_metadata.st_gid != expected_socket_gid`,
 		"GET /_ping HTTP/1.0",
 	} {
 		if !strings.Contains(runtimeRunnerPreflightScript, required) {
@@ -220,23 +433,23 @@ func TestRuntimeRunnerClosureRejectsRehashedMutableModuleCache(t *testing.T) {
 	}
 }
 
-func TestRuntimeSocketGroupUsesMountedContainerMetadata(t *testing.T) {
+func TestRuntimeSocketIdentityUsesMountedContainerMetadata(t *testing.T) {
 	for _, test := range []struct {
-		raw  string
-		want uint32
+		raw              string
+		wantUID, wantGID uint32
 	}{
-		{raw: "0 660 socket\n", want: 0},
-		{raw: "20 660 socket", want: 20},
-		{raw: "4294967295 660 socket", want: ^uint32(0)},
+		{raw: "0 0 660 socket\n", wantUID: 0, wantGID: 0},
+		{raw: "501 20 660 socket", wantUID: 501, wantGID: 20},
+		{raw: "4294967295 4294967295 660 socket", wantUID: ^uint32(0), wantGID: ^uint32(0)},
 	} {
-		got, err := parseRuntimeSocketGID(test.raw)
-		if err != nil || got != test.want {
-			t.Errorf("parse socket GID %q = %d err=%v, want %d", test.raw, got, err, test.want)
+		uid, gid, err := parseRuntimeSocketIdentity(test.raw)
+		if err != nil || uid != test.wantUID || gid != test.wantGID {
+			t.Errorf("parse socket identity %q = %d:%d err=%v, want %d:%d", test.raw, uid, gid, err, test.wantUID, test.wantGID)
 		}
 	}
-	for _, invalid := range []string{"", "-1 660 socket", "4294967296 660 socket", "root 660 socket", "1 640 socket", "1 662 socket", "1 660 regular file"} {
-		if _, err := parseRuntimeSocketGID(invalid); err == nil {
-			t.Errorf("invalid mounted socket GID %q passed", invalid)
+	for _, invalid := range []string{"", "-1 0 660 socket", "0 -1 660 socket", "4294967296 0 660 socket", "root 0 660 socket", "0 root 660 socket", "0 1 640 socket", "0 1 662 socket", "0 1 660 regular file"} {
+		if _, _, err := parseRuntimeSocketIdentity(invalid); err == nil {
+			t.Errorf("invalid mounted socket identity %q passed", invalid)
 		}
 	}
 }

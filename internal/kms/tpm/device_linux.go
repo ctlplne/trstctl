@@ -53,10 +53,11 @@ var _ OperationDevice = (*goTPMDevice)(nil)
 // OpenDevice opens a real TPM 2.0 transport. An empty path uses go-tpm's Linux
 // defaults; a Unix socket path reaches swtpm through the same command protocol.
 func OpenDevice(cfg DeviceConfig) (Device, error) {
-	var (
-		rw  io.ReadWriteCloser
-		err error
-	)
+	base, err := configuredPersistentHandleBase(cfg.PersistentHandleBase)
+	if err != nil {
+		return nil, err
+	}
+	var rw io.ReadWriteCloser
 	if strings.TrimSpace(cfg.Path) == "" {
 		rw, err = gotpm.OpenTPM()
 	} else {
@@ -64,10 +65,6 @@ func OpenDevice(cfg DeviceConfig) (Device, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("tpm: open TPM 2.0 device: %w", err)
-	}
-	base := cfg.PersistentHandleBase
-	if base == 0 {
-		base = defaultPersistentHandleBase
 	}
 	ownerAuth, err := lockTPMAuth(cfg.OwnerAuth)
 	if err != nil {
@@ -85,6 +82,23 @@ func OpenDevice(cfg DeviceConfig) (Device, error) {
 	return &goTPMDevice{
 		rw: rw, ownerAuth: ownerAuth, keyAuth: keyAuth, base: base,
 	}, nil
+}
+
+func configuredPersistentHandleBase(configured uint32) (uint32, error) {
+	base := configured
+	if base == 0 {
+		base = defaultPersistentHandleBase
+	}
+	first := uint64(gotpm.PersistentFirst)
+	platformFirst := uint64(gotpm.PlatformPersistent)
+	lastCreateKeyHandle := uint64(base) + 0xff
+	if uint64(base) < first || lastCreateKeyHandle >= platformFirst {
+		return 0, fmt.Errorf(
+			"tpm: persistent handle base 0x%08x must keep its 256-key range inside owner-persistent handles 0x%08x..0x%08x",
+			base, first, platformFirst-1,
+		)
+	}
+	return base, nil
 }
 
 func lockTPMAuth(value []byte) (*secret.Buffer, error) {
@@ -175,10 +189,9 @@ func (d *goTPMDevice) CreateKeyForOperation(operationID string, alg crypto.Algor
 	if err != nil {
 		return "", nil, fmt.Errorf("tpm: derive operation identity: %w", err)
 	}
-	minHandle := uint64(d.base) + 0x100 // CreateKey owns the first 256 legacy slots.
-	const maxHandle = uint64(0x81ffffff)
-	if minHandle > maxHandle {
-		return "", nil, fmt.Errorf("tpm: configured persistent handle base leaves no operation handle range")
+	minHandle, maxHandle, err := ownerOperationHandleRange(d.base)
+	if err != nil {
+		return "", nil, err
 	}
 
 	d.mu.Lock()
@@ -265,6 +278,18 @@ func (d *goTPMDevice) CreateKeyForOperation(operationID string, alg crypto.Algor
 		return handle, der, nil
 	}
 	return "", nil, fmt.Errorf("tpm: no free persistent operation handle in configured range")
+}
+
+// ownerOperationHandleRange keeps every operation key in the owner-persistent
+// namespace. Handles beginning at PlatformPersistent require platform hierarchy
+// authorization; this backend deliberately accepts only owner authorization.
+func ownerOperationHandleRange(base uint32) (uint64, uint64, error) {
+	minHandle := uint64(base) + 0x100 // CreateKey owns the first 256 legacy slots.
+	maxHandle := uint64(gotpm.PlatformPersistent) - 1
+	if minHandle > maxHandle {
+		return 0, 0, fmt.Errorf("tpm: configured persistent handle base leaves no owner-authorized operation handle range")
+	}
+	return minHandle, maxHandle, nil
 }
 
 func formatTPMHandle(handle tpmutil.Handle) string {

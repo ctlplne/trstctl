@@ -673,7 +673,7 @@ func (a *API) routeEnabled(r route) bool {
 		"listOwnerRemediationActions", "acceptOwnerRemediationAction",
 		"dispatchResponseIntegrations":
 		return a.remediation
-	case "generateManagedKey", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
+	case "generateManagedKey", "approveManagedKeyAction", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
 		return a.managedKeys != nil
 	case "getComplianceEvidencePack":
 		return a.complianceEvidence != nil
@@ -1301,6 +1301,7 @@ func (a *API) routes() []route {
 		// require a distinct-approver approval (dual control) enforced by the service.
 		// All four are idempotent (AN-5) and event-sourced (AN-2).
 		{method: "POST", path: "/api/v1/managed-keys", opID: "generateManagedKey", summary: "Generate a BYOK/HSM-resident managed key (private material stays in the provider)", handler: a.generateManagedKey, reqSchema: "ManagedKeyGenerateRequest", resSchema: "ManagedKey", successCode: "201", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/managed-keys/approvals", opID: "approveManagedKeyAction", summary: "Approve an exact managed-key rotate, revoke, or zeroize action", handler: a.approveManagedKeyAction, reqSchema: "ManagedKeyApprovalRequest", resSchema: "ManagedKeyApproval", successCode: "200", mutation: true, perm: authz.KeysApprove},
 		{method: "POST", path: "/api/v1/managed-keys/rotate", opID: "rotateManagedKey", summary: "Rotate a managed key (mint a successor; requires dual-control approval)", handler: a.rotateManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/managed-keys/revoke", opID: "revokeManagedKey", summary: "Revoke a managed key at the provider (requires dual-control approval)", handler: a.revokeManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/managed-keys/zeroize", opID: "zeroizeManagedKey", summary: "Zeroize a managed key's material at the provider (requires dual-control approval)", handler: a.zeroizeManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},

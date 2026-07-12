@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +30,95 @@ import (
 )
 
 const maxEvidenceBody = 1 << 20
+
+// RuntimeTempDir is the gate-owned short alias for the private receipt mount.
+// Linux Unix-domain socket paths are limited to 108 bytes; host receipt paths
+// can be much longer and remain mounted separately for parent receipt access.
+const RuntimeTempDir = "/dod-tmp"
+
+const (
+	HostReceiptRootEnv = "TRSTCTL_DOD_HOST_RECEIPT_ROOT"
+	RuntimeTempRootEnv = "TRSTCTL_DOD_RUNTIME_TEMP_ROOT"
+)
+
+// DockerHostMountSource translates a path under RuntimeTempDir back to the
+// same private receipt path visible to the parent Docker daemon. Callers cannot
+// translate arbitrary paths: both mounted roots and the selected object must
+// be the same inode, and symlink/traversal paths fail closed.
+func DockerHostMountSource(t *testing.T, candidate string) string {
+	t.Helper()
+	hostRoot := os.Getenv(HostReceiptRootEnv)
+	aliasRoot := os.Getenv(RuntimeTempRootEnv)
+	if aliasRoot != RuntimeTempDir {
+		t.Fatalf("DOD-CENSUS: runtime temporary root %q is not gate-owned %q", aliasRoot, RuntimeTempDir)
+	}
+	hostSource, err := translateMountSuffix(hostRoot, aliasRoot, candidate)
+	if err != nil {
+		t.Fatalf("DOD-CENSUS: translate Docker host mount source: %v", err)
+	}
+	if err := validateMountTranslationIdentity(hostRoot, aliasRoot, hostSource, candidate); err != nil {
+		t.Fatalf("DOD-CENSUS: validate Docker host mount source: %v", err)
+	}
+	return hostSource
+}
+
+func translateMountSuffix(hostRoot, aliasRoot, candidate string) (string, error) {
+	for label, path := range map[string]string{"host receipt root": hostRoot, "runtime alias root": aliasRoot, "candidate": candidate} {
+		if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, ",\r\n\x00") {
+			return "", fmt.Errorf("%s %q is not a clean absolute mount path", label, path)
+		}
+	}
+	relative, err := filepath.Rel(aliasRoot, candidate)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("candidate %q is not a scoped child of %q", candidate, aliasRoot)
+	}
+	hostSource := filepath.Join(hostRoot, relative)
+	hostRelative, err := filepath.Rel(hostRoot, hostSource)
+	if err != nil || hostRelative != relative || hostRelative == "." || strings.HasPrefix(hostRelative, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("translated host mount escaped its private receipt root")
+	}
+	return hostSource, nil
+}
+
+func validateMountTranslationIdentity(hostRoot, aliasRoot, hostSource, candidate string) error {
+	inspect := func(label, path string, requireDirectory bool) (os.FileInfo, error) {
+		info, err := os.Lstat(path)
+		if err != nil {
+			return nil, fmt.Errorf("inspect %s: %w", label, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || (requireDirectory && !info.IsDir()) {
+			return nil, fmt.Errorf("%s is a symlink or not a directory", label)
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil || resolved != path {
+			return nil, fmt.Errorf("%s contains a symlink: %w", label, err)
+		}
+		return info, nil
+	}
+	hostRootInfo, err := inspect("host receipt root", hostRoot, true)
+	if err != nil {
+		return err
+	}
+	aliasRootInfo, err := inspect("runtime alias root", aliasRoot, true)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(hostRootInfo, aliasRootInfo) {
+		return fmt.Errorf("host receipt and runtime alias roots are not the same mount")
+	}
+	hostInfo, err := inspect("translated host source", hostSource, false)
+	if err != nil {
+		return err
+	}
+	candidateInfo, err := inspect("runtime candidate", candidate, false)
+	if err != nil {
+		return err
+	}
+	if hostInfo.IsDir() != candidateInfo.IsDir() || !os.SameFile(hostInfo, candidateInfo) {
+		return fmt.Errorf("translated host source and runtime candidate are not the same object")
+	}
+	return nil
+}
 
 func validSHA256Digest(value string) bool {
 	algorithm, encoded, ok := strings.Cut(value, ":")
@@ -65,6 +155,11 @@ type expectation struct {
 	EvidenceFile          string            `json:"evidence_file"`
 	RuntimeRunnerIdentity string            `json:"runtime_runner_identity"`
 	RuntimeRunnerImage    string            `json:"runtime_runner_image,omitempty"`
+	RuntimeTestPackage    string            `json:"runtime_test_package"`
+	RuntimeCGOEnabled     string            `json:"runtime_cgo_enabled"`
+	RuntimeGOOS           string            `json:"runtime_goos"`
+	RuntimeGOARCH         string            `json:"runtime_goarch"`
+	RuntimeTags           []string          `json:"runtime_tags,omitempty"`
 	LaunchedModulePath    string            `json:"launched_module_path"`
 	LaunchedBinaryPackage string            `json:"launched_binary_package"`
 	LaunchedCompanions    []string          `json:"launched_companions,omitempty"`
@@ -101,19 +196,24 @@ type receipt struct {
 }
 
 type launchedProcessReceipt struct {
-	PID                     int    `json:"pid"`
-	ProcessStartTicks       string `json:"process_start_ticks"`
-	ProcessMode             string `json:"process_mode"`
-	BinaryPackage           string `json:"binary_package"`
-	BinaryDigest            string `json:"binary_digest"`
-	BinaryDevice            string `json:"binary_device"`
-	BinaryInode             string `json:"binary_inode"`
-	InterpreterDigest       string `json:"interpreter_digest,omitempty"`
-	InterpreterDevice       string `json:"interpreter_device,omitempty"`
-	InterpreterInode        string `json:"interpreter_inode,omitempty"`
-	Address                 string `json:"address"`
-	ListenerInode           string `json:"listener_inode"`
-	AcceptedConnectionInode string `json:"accepted_connection_inode"`
+	PID                     int      `json:"pid"`
+	ProcessStartTicks       string   `json:"process_start_ticks"`
+	ProcessMode             string   `json:"process_mode"`
+	BinaryModulePath        string   `json:"binary_module_path"`
+	BinaryPackage           string   `json:"binary_package"`
+	BinaryCGOEnabled        string   `json:"binary_cgo_enabled"`
+	BinaryGOOS              string   `json:"binary_goos"`
+	BinaryGOARCH            string   `json:"binary_goarch"`
+	BinaryTags              []string `json:"binary_tags,omitempty"`
+	BinaryDigest            string   `json:"binary_digest"`
+	BinaryDevice            string   `json:"binary_device"`
+	BinaryInode             string   `json:"binary_inode"`
+	InterpreterDigest       string   `json:"interpreter_digest,omitempty"`
+	InterpreterDevice       string   `json:"interpreter_device,omitempty"`
+	InterpreterInode        string   `json:"interpreter_inode,omitempty"`
+	Address                 string   `json:"address"`
+	ListenerInode           string   `json:"listener_inode"`
+	AcceptedConnectionInode string   `json:"accepted_connection_inode"`
 }
 
 // Evidence is intentionally sealed by the unexported dodEvidence method. Code
@@ -613,7 +713,7 @@ func Start(t *testing.T, id string, handler http.Handler, request *http.Request)
 	if expected.RuntimeMode != "assembled-handler" {
 		t.Fatalf("DOD-CENSUS: %s launched-binary expectation cannot use an in-process Handler", id)
 	}
-	if expected.SchemaVersion != 1 || expected.Nonce == "" || expected.BuildProfile == "" || expected.RuntimeMode == "" || expected.SubstrateID == "" || expected.SubstrateIdentity == "" || expected.ContractDigest == "" || expected.Verifier == "" || expected.ReceiptFile == "" || expected.EvidenceFile == "" || expected.RuntimeRunnerIdentity == "" || !validSHA256Digest(expected.RuntimeRunnerImage) || expected.BrokerEndpoint == "" || expected.BrokerToken == "" {
+	if expected.SchemaVersion != 1 || expected.Nonce == "" || expected.BuildProfile == "" || expected.RuntimeMode == "" || expected.SubstrateID == "" || expected.SubstrateIdentity == "" || expected.ContractDigest == "" || expected.Verifier == "" || expected.ReceiptFile == "" || expected.EvidenceFile == "" || expected.RuntimeRunnerIdentity == "" || !validSHA256Digest(expected.RuntimeRunnerImage) || !runtimeProfileExpectationComplete(*expected) || expected.BrokerEndpoint == "" || expected.BrokerToken == "" {
 		t.Fatalf("DOD-CENSUS: expectation for %s is incomplete", id)
 	}
 	if request.Method != expected.Method || request.URL == nil || request.URL.Path != expected.Path {
@@ -625,6 +725,23 @@ func Start(t *testing.T, id string, handler http.Handler, request *http.Request)
 		t.Fatalf("DOD-CENSUS: %s assembled route is not served: %v", id, err)
 	}
 	return &Session{t: t, expect: *expected, statusCode: capture.status, body: append([]byte(nil), capture.body.Bytes()...)}
+}
+
+func runtimeProfileExpectationComplete(expected expectation) bool {
+	return strings.HasPrefix(expected.RuntimeTestPackage, "./") && !strings.Contains(expected.RuntimeTestPackage, "..") &&
+		(expected.RuntimeCGOEnabled == "0" || expected.RuntimeCGOEnabled == "1") && expected.RuntimeGOOS != "" && expected.RuntimeGOARCH != ""
+}
+
+// LaunchedResponseStatusCode exposes only the status needed to attach a
+// subsystem-specific failure diagnostic before StartResponse fails the proof.
+// It does not expose or construct a response, witness, session, or receipt;
+// successful proofs must still pass through StartResponse and Complete.
+func LaunchedResponseStatusCode(t *testing.T, id string, launched *launchedResponse) int {
+	t.Helper()
+	if launched == nil || launched.response == nil || launched.id != id {
+		t.Fatalf("DOD-CENSUS: %s has no matching gate-owned launched response", id)
+	}
+	return launched.response.StatusCode
 }
 
 // StartResponse accepts only the opaque result of ShippedProcess.Do. The result
@@ -641,7 +758,11 @@ func StartResponse(t *testing.T, id string, launched *launchedResponse) *Session
 	}
 	expected := expectationFor(t, id)
 	if expected.RuntimeMode != "launched-binary" || launched.witness.PID <= 0 ||
+		launched.witness.BinaryModulePath != expected.LaunchedModulePath ||
 		launched.witness.BinaryPackage != expected.LaunchedBinaryPackage ||
+		launched.witness.BinaryCGOEnabled != expected.LaunchedCGOEnabled ||
+		launched.witness.BinaryGOOS != expected.LaunchedGOOS || launched.witness.BinaryGOARCH != expected.LaunchedGOARCH ||
+		!slices.Equal(launched.witness.BinaryTags, expected.LaunchedTags) ||
 		!strings.HasPrefix(launched.witness.BinaryDigest, "sha256:") ||
 		launched.witness.Address != response.Request.URL.Host ||
 		!validLaunchedWitnessShape(launched.witness) {
@@ -661,7 +782,7 @@ func StartResponse(t *testing.T, id string, launched *launchedResponse) *Session
 		response.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	if err := responseIsServed(response.StatusCode, body); err != nil {
-		t.Fatalf("DOD-CENSUS: %s launched route is not served: %v", id, err)
+		t.Fatalf("DOD-CENSUS: %s launched route is not served: %v body=%q", id, err, boundedResponseDiagnostic(body))
 	}
 	witness := launched.witness
 	return &Session{
@@ -670,12 +791,46 @@ func StartResponse(t *testing.T, id string, launched *launchedResponse) *Session
 	}
 }
 
+func boundedResponseDiagnostic(body []byte) string {
+	type problem struct {
+		Type   string `json:"type"`
+		Title  string `json:"title"`
+		Status int    `json:"status"`
+		Detail string `json:"detail"`
+		Code   string `json:"code"`
+	}
+	var value problem
+	if json.Unmarshal(body, &value) != nil || (value.Type == "" && value.Title == "" && value.Detail == "" && value.Code == "") {
+		return fmt.Sprintf("non-problem body size=%d sha256:%s", len(body), internalcrypto.SHA256Hex(body))
+	}
+	sanitize := func(input string) string {
+		const limit = 512
+		if len(input) > limit {
+			input = input[:limit]
+		}
+		return strings.Map(func(character rune) rune {
+			switch {
+			case character == '\n' || character == '\r' || character == '\t':
+				return ' '
+			case character < 0x20 || character == 0x7f:
+				return -1
+			default:
+				return character
+			}
+		}, input)
+	}
+	return fmt.Sprintf("type=%q title=%q status=%d code=%q detail=%q",
+		sanitize(value.Type), sanitize(value.Title), value.Status, sanitize(value.Code), sanitize(value.Detail))
+}
+
 func validLaunchedWitnessShape(witness launchedProcessReceipt) bool {
 	positiveDecimal := func(value string) bool {
 		parsed, err := strconv.ParseUint(value, 10, 64)
 		return err == nil && parsed > 0 && strconv.FormatUint(parsed, 10) == value
 	}
-	if !positiveDecimal(witness.ProcessStartTicks) || !positiveDecimal(witness.BinaryDevice) || !positiveDecimal(witness.BinaryInode) ||
+	if witness.BinaryModulePath == "" || witness.BinaryPackage == "" ||
+		(witness.BinaryCGOEnabled != "0" && witness.BinaryCGOEnabled != "1") || witness.BinaryGOOS == "" || witness.BinaryGOARCH == "" ||
+		!positiveDecimal(witness.ProcessStartTicks) || !positiveDecimal(witness.BinaryDevice) || !positiveDecimal(witness.BinaryInode) ||
 		!positiveDecimal(witness.ListenerInode) || !positiveDecimal(witness.AcceptedConnectionInode) ||
 		witness.ListenerInode == witness.AcceptedConnectionInode || !validSHA256Digest(witness.BinaryDigest) {
 		return false

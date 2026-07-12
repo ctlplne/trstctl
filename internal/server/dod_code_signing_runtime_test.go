@@ -35,6 +35,7 @@ import (
 // and exposes its accepted log entry through authenticated process-bound
 // readback before the proof can pass.
 func TestDODCodeSigningProductionAssembly(t *testing.T) {
+	_ = dodRuntimeSelection(t, "code_signing.default")
 	ctx := context.Background()
 	dir := t.TempDir()
 	rekorPublicKeyFile := dodConfigureRekorLogKey(t, dir)

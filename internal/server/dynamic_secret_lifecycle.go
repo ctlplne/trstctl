@@ -137,10 +137,14 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 		if maxTTL <= 0 || ttl > maxTTL {
 			return dynsecret.Lease{}, nil, fmt.Errorf("dynsecret: requested TTL %s exceeds provider maximum %s", ttl, maxTTL)
 		}
-		now := time.Now().UTC()
+		// PostgreSQL timestamptz persists microseconds. Canonicalize the immutable
+		// command before it enters the event log/outbox so its binding has one
+		// representation across append, projection, restart, and worker delivery.
+		now := time.Now().UTC().Truncate(time.Microsecond)
 		pending := projections.DynamicSecretLeasePending{
 			ID: leaseID, IdempotencyKey: idempotencyKey, RequestBinding: requestBinding, Provider: providerID, Role: role,
-			ExpiresAt: now.Add(ttl), HardExpiresAt: now.Add(maxTTL),
+			ExpiresAt:     now.Add(ttl).Truncate(time.Microsecond),
+			HardExpiresAt: now.Add(maxTTL).Truncate(time.Microsecond),
 		}
 		if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, "issue-requested", operationID), projections.EventDynamicSecretLeasePending, pending); err != nil {
 			return dynsecret.Lease{}, nil, err

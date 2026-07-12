@@ -15,11 +15,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -36,12 +38,16 @@ import (
 )
 
 const (
-	dodManagedKeyProbe                  = "independent managed-key device signature proof"
-	dodManagedKeySignTokenHelperEnv     = "TRSTCTL_DOD_MANAGED_KEY_SIGN_TOKEN_HELPER"
-	dodManagedKeySignTokenSecretFileEnv = "TRSTCTL_DOD_MANAGED_KEY_SIGN_TOKEN_SECRET_FILE"
-	dodRuntimeDockerHostEnv             = "TRSTCTL_RUNTIME_DOCKER_HOST"
-	dodManagedKeyRuntimePlatform        = "linux/amd64"
-	dodManagedKeyLoopbackProxyPort      = 18080
+	dodManagedKeyProbe                         = "independent managed-key device signature proof"
+	dodManagedKeyRestartProbe                  = "post-restart TPM custody signature proof"
+	dodManagedKeySignTokenHelperEnv            = "TRSTCTL_DOD_MANAGED_KEY_SIGN_TOKEN_HELPER"
+	dodManagedKeySignTokenSecretFileEnv        = "TRSTCTL_DOD_MANAGED_KEY_SIGN_TOKEN_SECRET_FILE"
+	dodRuntimeDockerHostEnv                    = "TRSTCTL_RUNTIME_DOCKER_HOST"
+	dodManagedKeyRuntimePlatform               = "linux/amd64"
+	dodManagedKeyLoopbackProxyPort             = 18080
+	dodTPMOwnerPersistentFirst          uint64 = 0x81000000
+	dodTPMOwnerPersistentLast           uint64 = 0x817fffff
+	dodPKCS11KeyIDHexLength                    = 32
 )
 
 type dodManagedKeyArtifacts struct {
@@ -77,6 +83,11 @@ type dodManagedKeyReadback struct {
 	ExportDenial string `json:"private_export"`
 }
 
+type dodTPMPublicWitness struct {
+	PublicDER []byte
+	Name      []byte
+}
+
 type dodManagedKeySubstrateConfig struct {
 	Endpoint          string `json:"endpoint"`
 	ContainerEndpoint string `json:"container_endpoint"`
@@ -100,6 +111,9 @@ type dodManagedKeyRuntime struct {
 	serverPort              int
 	control                 *proof.ShippedProcess
 	token                   string
+	approvalTokens          []string
+	approvalSubjects        []string
+	controlProviderEndpoint string
 	env                     []string
 	mtlsMaterial            *mtls.SignerPeerMaterial
 	tpmForeignHandle        string
@@ -309,9 +323,13 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 	runtime.waitControlPlane()
 
 	generateResponse := control.Do(dodManagedKeyRequestObject(runtime, http.MethodPost, "/api/v1/managed-keys", "generate", map[string]string{"algorithm": string(crypto.RSA2048)}))
+	if status := proof.LaunchedResponseStatusCode(t, entryID, generateResponse); status/100 != 2 {
+		t.Fatalf("initial managed-key route status=%d durable=%s", status, runtime.durableDiagnostics())
+	}
 	session := proof.StartResponse(t, entryID, generateResponse)
 	generated := dodDecodeManagedKey(t, session.ResponseBody())
 	dodRequireActiveManagedKey(t, generated)
+	runtime.requireHardwareKeyID(generated.KeyID)
 	if generated.Extractable {
 		t.Fatal("managed key was reported extractable")
 	}
@@ -320,20 +338,22 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 	}
 	// Same HTTP idempotency key must return the original provider handle.
 	replayed := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys", "generate", map[string]string{"algorithm": string(crypto.RSA2048)})))
+	runtime.requireHardwareKeyID(replayed.KeyID)
 	if replayed.KeyID != generated.KeyID {
 		t.Fatalf("HTTP idempotency replay minted %q after %q", replayed.KeyID, generated.KeyID)
 	}
+	runtime.approveManagedKeyAction(generated.KeyID, "rotate")
 
 	// Stop the separate signer before submitting rotation. The API request has
 	// already persisted its event/outbox intent; restart lets the dispatcher
 	// redeliver to the same signer journal and provider state.
-	runtime.stopSigner()
+	preRestartTPM := runtime.stopSigner(generated)
 	rotateResult := make(chan *http.Response, 1)
 	go func() {
 		rotateResult <- dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys/rotate", "rotate", map[string]string{"key_id": generated.KeyID})
 	}()
 	time.Sleep(750 * time.Millisecond)
-	runtime.restartSigner()
+	runtime.restartSigner(generated, preRestartTPM)
 	var rotateResponse *http.Response
 	select {
 	case rotateResponse = <-rotateResult:
@@ -342,6 +362,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 	}
 	rotated := dodDecodeManagedKey(t, runtime.responseBody(rotateResponse))
 	dodRequireActiveManagedKey(t, rotated)
+	runtime.requireHardwareKeyID(rotated.KeyID)
 	if rotated.KeyID == generated.KeyID || bytes.Equal(rotated.PublicDER, generated.PublicDER) {
 		t.Fatal("managed-key rotation did not create distinct provider material")
 	}
@@ -356,8 +377,10 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 		exportDenial = []byte("denied: private key is non-exportable device custody")
 	}
 
+	runtime.approveManagedKeyAction(rotated.KeyID, "revoke")
 	revoked := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys/revoke", "revoke", map[string]string{"key_id": rotated.KeyID})))
-	if revoked.State != "revoked" {
+	runtime.requireHardwareKeyID(revoked.KeyID)
+	if revoked.KeyID != rotated.KeyID || revoked.State != "revoked" {
 		t.Fatalf("revoke state = %q", revoked.State)
 	}
 	if provider == config.ManagedKeyProviderAWS || provider == config.ManagedKeyProviderAzureKeyVault || provider == config.ManagedKeyProviderGCPKMS {
@@ -366,8 +389,10 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 		runtime.assertHardwareRevoked(rotated.KeyID)
 	}
 
+	runtime.approveManagedKeyAction(rotated.KeyID, "zeroize")
 	zeroized := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys/zeroize", "zeroize", map[string]string{"key_id": rotated.KeyID})))
-	if zeroized.State != "zeroized" {
+	runtime.requireHardwareKeyID(zeroized.KeyID)
+	if zeroized.KeyID != rotated.KeyID || zeroized.State != "zeroized" {
 		t.Fatalf("zeroize state = %q", zeroized.State)
 	}
 	if provider == config.ManagedKeyProviderAWS || provider == config.ManagedKeyProviderAzureKeyVault || provider == config.ManagedKeyProviderGCPKMS {
@@ -394,6 +419,16 @@ func (r *dodManagedKeyRuntime) configure(endpoint string) {
 	if configResponse.StatusCode != http.StatusOK || json.NewDecoder(configResponse.Body).Decode(&substrate) != nil {
 		r.t.Fatalf("invalid managed-key substrate config status=%d", configResponse.StatusCode)
 	}
+	controlEndpoint := endpoint
+	if r.provider == config.ManagedKeyProviderAWS || r.provider == config.ManagedKeyProviderAzureKeyVault || r.provider == config.ManagedKeyProviderGCPKMS {
+		// The parent broker publishes the emulator through Docker Desktop's
+		// host.docker.internal seam. The shipped control plane intentionally
+		// rejects that hostname for plaintext provider traffic. Keep its endpoint
+		// on the runner's own loopback and relay only to this nonce-bound substrate.
+		// The separate signer container retains its independent loopback relay.
+		controlEndpoint = dodManagedKeyControlEndpoint(r.t, endpoint)
+		r.controlProviderEndpoint = controlEndpoint
+	}
 	containerEndpoint := "http://127.0.0.1:" + strconv.Itoa(dodManagedKeyLoopbackProxyPort)
 	signerConfig := config.ManagedKeys{Enabled: true, Provider: r.provider}
 	control := map[string]string{}
@@ -409,7 +444,7 @@ func (r *dodManagedKeyRuntime) configure(endpoint string) {
 		hostSecret, containerSecret := writeSecret("aws-secret", substrate.AWSSecretKey)
 		signerConfig.AWS = config.ManagedKeysAWSKMS{Region: substrate.AWSRegion, Endpoint: containerEndpoint, AllowInsecureLoopback: true, AccessKeyID: substrate.AWSAccessKey, SecretAccessKeyFile: containerSecret, PrivateEgressCIDRs: []string{"127.0.0.0/8"}}
 		control["TRSTCTL_MANAGED_KEYS_AWS_REGION"] = substrate.AWSRegion
-		control["TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT"] = endpoint
+		control["TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT"] = controlEndpoint
 		control["TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK"] = "true"
 		control["TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID"] = substrate.AWSAccessKey
 		control["TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE"] = hostSecret
@@ -418,7 +453,7 @@ func (r *dodManagedKeyRuntime) configure(endpoint string) {
 		hostToken, containerToken := writeSecret("azure-token", substrate.AzureToken)
 		signerConfig.Azure = config.ManagedKeysAzureKV{VaultURL: "https://dod.managedhsm.azure.net", Endpoint: containerEndpoint, AllowInsecureLoopback: true, BearerTokenFile: containerToken, PrivateEgressCIDRs: []string{"127.0.0.0/8"}}
 		control["TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL"] = "https://dod.managedhsm.azure.net"
-		control["TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT"] = endpoint
+		control["TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT"] = controlEndpoint
 		control["TRSTCTL_MANAGED_KEYS_AZURE_ALLOW_INSECURE_LOOPBACK"] = "true"
 		control["TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE"] = hostToken
 		control["TRSTCTL_MANAGED_KEYS_AZURE_PRIVATE_EGRESS_CIDRS"] = "127.0.0.0/8"
@@ -426,7 +461,7 @@ func (r *dodManagedKeyRuntime) configure(endpoint string) {
 		hostToken, containerToken := writeSecret("gcp-token", substrate.GCPToken)
 		signerConfig.GCP = config.ManagedKeysGCPKMS{Parent: substrate.GCPParent, Endpoint: containerEndpoint + "/v1", AllowInsecureLoopback: true, BearerTokenFile: containerToken, PrivateEgressCIDRs: []string{"127.0.0.0/8"}}
 		control["TRSTCTL_MANAGED_KEYS_GCP_PARENT"] = substrate.GCPParent
-		control["TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT"] = endpoint + "/v1"
+		control["TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT"] = controlEndpoint + "/v1"
 		control["TRSTCTL_MANAGED_KEYS_GCP_ALLOW_INSECURE_LOOPBACK"] = "true"
 		control["TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN_FILE"] = hostToken
 		control["TRSTCTL_MANAGED_KEYS_GCP_PRIVATE_EGRESS_CIDRS"] = "127.0.0.0/8"
@@ -560,6 +595,68 @@ func dodManagedKeySignerAddress(t *testing.T, port int) string {
 	return net.JoinHostPort(host, strconv.Itoa(port))
 }
 
+// dodManagedKeyControlEndpoint gives the shipped control-plane process a real
+// loopback endpoint without teaching production endpoint validation to trust a
+// Docker-only hostname. The relay is bound to 127.0.0.1 and its sole upstream is
+// the exact broker endpoint already selected for this nonce-bound proof run.
+func dodManagedKeyControlEndpoint(t *testing.T, endpoint string) string {
+	t.Helper()
+	host, err := dodRuntimeDockerHost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	upstream, err := dodValidateManagedKeyRelayUpstream(endpoint, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen for managed-key control relay: %v", err)
+	}
+	proxy := httputil.NewSingleHostReverseProxy(upstream)
+	proxy.Transport = &http.Transport{
+		Proxy:                 nil,
+		DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		ForceAttemptHTTP2:     false,
+		MaxIdleConns:          4,
+		MaxIdleConnsPerHost:   4,
+		IdleConnTimeout:       30 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+	}
+	server := &http.Server{
+		Handler:           proxy,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       30 * time.Second,
+	}
+	go func() {
+		_ = server.Serve(listener)
+	}()
+	t.Cleanup(func() {
+		_ = server.Close()
+		proxy.Transport.(*http.Transport).CloseIdleConnections()
+	})
+	return "http://" + listener.Addr().String()
+}
+
+func dodValidateManagedKeyRelayUpstream(endpoint, allowedHost string) (*url.URL, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("parse managed-key substrate endpoint: %w", err)
+	}
+	if parsed.Scheme != "http" || parsed.User != nil || parsed.Hostname() != allowedHost || parsed.Port() == "" ||
+		(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("managed-key substrate endpoint %q is not an exact HTTP endpoint on %q", endpoint, allowedHost)
+	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil || port < 1 || port > 65535 {
+		return nil, fmt.Errorf("managed-key substrate endpoint %q has an invalid port", endpoint)
+	}
+	parsed.Path = ""
+	return parsed, nil
+}
+
 func TestDODManagedKeyControlEnvKeepsSignerStateInsideRuntimeDir(t *testing.T) {
 	runtimeDir := t.TempDir()
 	r := &dodManagedKeyRuntime{
@@ -612,6 +709,154 @@ func TestDODManagedKeyRuntimeDockerHostIsClosed(t *testing.T) {
 	}
 }
 
+func TestDODManagedKeyControlEndpointRelaysThroughRunnerLoopback(t *testing.T) {
+	type observedRequest struct {
+		method, path, query, host, authorization, body string
+	}
+	observed := make(chan observedRequest, 1)
+	upstreamListener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	upstreamServer := &http.Server{Handler: http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		body, _ := io.ReadAll(request.Body)
+		observed <- observedRequest{
+			method: request.Method, path: request.URL.Path, query: request.URL.RawQuery,
+			host: request.Host, authorization: request.Header.Get("Authorization"), body: string(body),
+		}
+		response.WriteHeader(http.StatusCreated)
+		_, _ = response.Write([]byte("relayed"))
+	})}
+	go func() {
+		_ = upstreamServer.Serve(upstreamListener)
+	}()
+	defer func() { _ = upstreamServer.Close() }()
+	upstreamEndpoint := "http://" + upstreamListener.Addr().String()
+	parsedUpstream, err := url.Parse(upstreamEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(dodRuntimeDockerHostEnv, parsedUpstream.Hostname())
+	relayEndpoint := dodManagedKeyControlEndpoint(t, upstreamEndpoint)
+	parsedRelay, err := url.Parse(relayEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsedRelay.Scheme != "http" || parsedRelay.Hostname() != "127.0.0.1" || parsedRelay.Port() == "" {
+		t.Fatalf("managed-key control relay endpoint = %q, want HTTP 127.0.0.1 with an allocated port", relayEndpoint)
+	}
+	request, err := http.NewRequest(http.MethodPost, relayEndpoint+"/v1/keys/key:rotate?proof=nonce", strings.NewReader("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer proof-token")
+	response, err := (&http.Client{Timeout: 5 * time.Second}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusCreated || string(body) != "relayed" {
+		t.Fatalf("relay response status=%d body=%q", response.StatusCode, body)
+	}
+	got := <-observed
+	want := observedRequest{
+		method: http.MethodPost, path: "/v1/keys/key:rotate", query: "proof=nonce",
+		host: parsedRelay.Host, authorization: "Bearer proof-token", body: "payload",
+	}
+	if got != want {
+		t.Fatalf("relayed request = %+v, want %+v", got, want)
+	}
+}
+
+func TestDODManagedKeyControlEndpointRejectsUnscopedUpstreams(t *testing.T) {
+	for _, endpoint := range []string{
+		"https://host.docker.internal:8443",
+		"http://user@host.docker.internal:8443",
+		"http://127.0.0.1:8443",
+		"http://host.docker.internal",
+		"http://host.docker.internal:0",
+		"http://host.docker.internal:65536",
+		"http://host.docker.internal:8443/provider",
+		"http://host.docker.internal:8443?provider=aws",
+		"http://host.docker.internal:8443#provider",
+	} {
+		t.Run(strings.NewReplacer(":", "_", "/", "_", "?", "_", "#", "_").Replace(endpoint), func(t *testing.T) {
+			if parsed, err := dodValidateManagedKeyRelayUpstream(endpoint, "host.docker.internal"); err == nil {
+				t.Fatalf("unscoped upstream %q accepted as %s", endpoint, parsed)
+			}
+		})
+	}
+	for _, endpoint := range []string{"http://host.docker.internal:8443", "http://host.docker.internal:8443/"} {
+		if _, err := dodValidateManagedKeyRelayUpstream(endpoint, "host.docker.internal"); err != nil {
+			t.Fatalf("exact upstream %q rejected: %v", endpoint, err)
+		}
+	}
+}
+
+func TestDODManagedKeyHardwareKeyIDsAreClosedBeforeDeviceExecution(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		provider string
+		keyID    string
+		valid    bool
+	}{
+		{name: "TPM owner first", provider: config.ManagedKeyProviderTPM2, keyID: "0x81000000", valid: true},
+		{name: "TPM owner last", provider: config.ManagedKeyProviderTPM2, keyID: "0x817fffff", valid: true},
+		{name: "TPM configured base", provider: config.ManagedKeyProviderTPM2, keyID: "0x81010000", valid: true},
+		{name: "TPM transient", provider: config.ManagedKeyProviderTPM2, keyID: "0x80000000"},
+		{name: "TPM platform", provider: config.ManagedKeyProviderTPM2, keyID: "0x81800000"},
+		{name: "TPM uppercase", provider: config.ManagedKeyProviderTPM2, keyID: "0x8100000A"},
+		{name: "TPM shell suffix", provider: config.ManagedKeyProviderTPM2, keyID: "0x81000000;true"},
+		{name: "TPM newline", provider: config.ManagedKeyProviderTPM2, keyID: "0x81000000\ntouch /tmp/forged"},
+		{name: "PKCS fixed ID", provider: config.ManagedKeyProviderPKCS11, keyID: strings.Repeat("0a", 16), valid: true},
+		{name: "Yubi fixed ID", provider: config.ManagedKeyProviderYubiHSM2, keyID: strings.Repeat("f0", 16), valid: true},
+		{name: "PKCS short", provider: config.ManagedKeyProviderPKCS11, keyID: strings.Repeat("0a", 15)},
+		{name: "PKCS uppercase", provider: config.ManagedKeyProviderPKCS11, keyID: strings.Repeat("0A", 16)},
+		{name: "PKCS non-hex", provider: config.ManagedKeyProviderPKCS11, keyID: strings.Repeat("0g", 16)},
+		{name: "PKCS shell suffix", provider: config.ManagedKeyProviderPKCS11, keyID: strings.Repeat("0a", 16) + ";true"},
+		{name: "cloud ID is not a device argv", provider: config.ManagedKeyProviderAWS, keyID: "emulator-key/id", valid: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := dodValidateHardwareKeyID(test.provider, test.keyID)
+			if test.valid && err != nil {
+				t.Fatalf("valid identity rejected: %v", err)
+			}
+			if !test.valid && err == nil {
+				t.Fatalf("unsafe identity %q accepted", test.keyID)
+			}
+		})
+	}
+}
+
+func TestDODManagedKeyTPMRestartRequiresSamePublicObject(t *testing.T) {
+	generated := []byte("api-public-der")
+	valid := dodTPMPublicWitness{PublicDER: append([]byte(nil), generated...), Name: []byte("tpm-object-name")}
+	if err := dodValidateTPMPublicSurvival(generated, valid, valid); err != nil {
+		t.Fatalf("same TPM object rejected: %v", err)
+	}
+	for _, test := range []struct {
+		name   string
+		api    []byte
+		before dodTPMPublicWitness
+		after  dodTPMPublicWitness
+	}{
+		{name: "missing witness", api: generated, before: dodTPMPublicWitness{}, after: valid},
+		{name: "pre-restart differs from API", api: []byte("different-api-key"), before: valid, after: valid},
+		{name: "same handle changed public DER", api: generated, before: valid, after: dodTPMPublicWitness{PublicDER: []byte("replacement-public-der"), Name: valid.Name}},
+		{name: "same handle changed object Name", api: generated, before: valid, after: dodTPMPublicWitness{PublicDER: valid.PublicDER, Name: []byte("replacement-object-name")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := dodValidateTPMPublicSurvival(test.api, test.before, test.after); err == nil {
+				t.Fatal("changed TPM object passed restart custody validation")
+			}
+		})
+	}
+}
+
 func (r *dodManagedKeyRuntime) startSigner() {
 	r.t.Helper()
 	uid, gid := os.Getuid(), os.Getgid()
@@ -619,6 +864,9 @@ func (r *dodManagedKeyRuntime) startSigner() {
 		r.t.Fatalf("managed-key verifier requires a non-root runtime owner, got %d:%d", uid, gid)
 	}
 	passwdFile, groupFile := dodManagedKeySignerNSS(r.t, r.dir, uid, gid)
+	runtimeMountSource := proof.DockerHostMountSource(r.t, r.dir)
+	passwdMountSource := proof.DockerHostMountSource(r.t, passwdFile)
+	groupMountSource := proof.DockerHostMountSource(r.t, groupFile)
 	args := []string{
 		"run", "-d", "--name", r.containerName,
 		"--platform", dodManagedKeyRuntimePlatform,
@@ -634,8 +882,9 @@ func (r *dodManagedKeyRuntime) startSigner() {
 		args = append(args, "--add-host", "host.docker.internal:host-gateway")
 	}
 	args = append(args,
-		"-v", r.dir+":/runtime",
-		"-v", passwdFile+":/etc/passwd:ro", "-v", groupFile+":/etc/group:ro",
+		"--mount", "type=bind,src="+runtimeMountSource+",dst=/runtime",
+		"--mount", "type=bind,src="+passwdMountSource+",dst=/etc/passwd,readonly",
+		"--mount", "type=bind,src="+groupMountSource+",dst=/etc/group,readonly",
 		"-e", "TRSTCTL_DOD_PROVIDER="+r.provider,
 		"-e", "TRSTCTL_DOD_CLOUD_UPSTREAM=managed-key-emulator:8080",
 		r.artifacts.runtimeImage,
@@ -715,15 +964,42 @@ func dodManagedKeyShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
-func (r *dodManagedKeyRuntime) stopSigner() {
+func (r *dodManagedKeyRuntime) stopSigner(key dodManagedKeyWire) *dodTPMPublicWitness {
 	r.t.Helper()
+	var before *dodTPMPublicWitness
+	if r.provider == config.ManagedKeyProviderTPM2 {
+		r.requireHardwareKeyID(key.KeyID)
+		observed, ok := r.readTPMPublicWitness(key.KeyID, "before-restart")
+		if !ok {
+			r.t.Fatalf("TPM persistent handle %q is absent before signer restart", key.KeyID)
+		}
+		if err := dodValidateTPMPublicSurvival(key.PublicDER, observed, observed); err != nil {
+			r.t.Fatalf("TPM public material before signer restart: %v", err)
+		}
+		before = &observed
+		r.dockerExecTPM(true, "shutdown TPM emulator before signer restart", "tpm2_shutdown", "-c")
+	}
 	dodRunCommand(r.t, "stop managed-key signer for outbox redelivery", "docker", "stop", "-t", "2", r.containerName)
+	return before
 }
 
-func (r *dodManagedKeyRuntime) restartSigner() {
+func (r *dodManagedKeyRuntime) restartSigner(key dodManagedKeyWire, before *dodTPMPublicWitness) {
 	r.t.Helper()
 	dodRunCommand(r.t, "restart managed-key signer", "docker", "start", r.containerName)
 	r.waitSigner()
+	if r.provider == config.ManagedKeyProviderTPM2 {
+		if before == nil {
+			r.t.Fatal("TPM restart proof omitted the pre-restart public witness")
+		}
+		after, ok := r.readTPMPublicWitness(key.KeyID, "after-restart")
+		if !ok {
+			r.t.Fatalf("TPM persistent handle %q did not survive signer restart", key.KeyID)
+		}
+		if err := dodValidateTPMPublicSurvival(key.PublicDER, *before, after); err != nil {
+			r.t.Fatalf("TPM custody changed across signer restart: %v", err)
+		}
+		r.assertTPMPostRestartSignature(key)
+	}
 }
 
 func (r *dodManagedKeyRuntime) waitSigner() {
@@ -745,9 +1021,17 @@ func (r *dodManagedKeyRuntime) waitSigner() {
 func (r *dodManagedKeyRuntime) bootstrapToken() {
 	r.t.Helper()
 	tenant := dodManagedKeyTenant(r.entryID)
-	r.token = r.control.CreateToken(r.dir, r.env, "token", "create", "--tenant", tenant, "--tenant-name", "DoD managed keys", "--subject", "dod-hsm-operator", "--scopes", "keys:read,keys:write")
+	r.token = r.control.CreateToken(r.dir, r.env, "token", "create", "--tenant", tenant, "--tenant-name", "DoD managed keys", "--subject", "dod-hsm-operator", "--scopes", "keys:read,keys:write,keys:approve")
 	if r.token == "" {
 		r.t.Fatal("bootstrap returned an empty API token")
+	}
+	r.approvalSubjects = []string{"dod-hsm-custodian-one", "dod-hsm-custodian-two"}
+	for index, subject := range r.approvalSubjects {
+		token := r.control.CreateToken(r.dir, r.env, "token", "create", "--tenant", tenant, "--tenant-name", "DoD managed keys", "--subject", subject, "--scopes", "keys:approve")
+		if token == "" {
+			r.t.Fatalf("bootstrap returned an empty API token for approver %d", index+1)
+		}
+		r.approvalTokens = append(r.approvalTokens, token)
 	}
 }
 
@@ -768,6 +1052,10 @@ func (r *dodManagedKeyRuntime) waitControlPlane() {
 }
 
 func dodManagedKeyRequestObject(r *dodManagedKeyRuntime, method, path, idempotency string, value any) *http.Request {
+	return dodManagedKeyRequestObjectWithToken(r, r.token, method, path, idempotency, value)
+}
+
+func dodManagedKeyRequestObjectWithToken(r *dodManagedKeyRuntime, token, method, path, idempotency string, value any) *http.Request {
 	r.t.Helper()
 	body, err := json.Marshal(value)
 	if err != nil {
@@ -777,21 +1065,113 @@ func dodManagedKeyRequestObject(r *dodManagedKeyRuntime, method, path, idempoten
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+r.token)
+	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Idempotency-Key", "dod-"+strings.ReplaceAll(r.entryID, ".", "-")+"-"+idempotency)
 	request.Header.Set("Content-Type", "application/json")
 	return request
 }
 
 func dodManagedKeyRequest(r *dodManagedKeyRuntime, method, path, idempotency string, value any) *http.Response {
+	return dodManagedKeyRequestWithToken(r, r.token, method, path, idempotency, value)
+}
+
+func dodManagedKeyRequestWithToken(r *dodManagedKeyRuntime, token, method, path, idempotency string, value any) *http.Response {
 	r.t.Helper()
-	request := dodManagedKeyRequestObject(r, method, path, idempotency, value)
+	request := dodManagedKeyRequestObjectWithToken(r, token, method, path, idempotency, value)
 	client := &http.Client{Timeout: 35 * time.Second}
 	response, err := client.Do(request)
 	if err != nil {
 		r.t.Fatalf("managed-key %s: %v logs=%s", path, err, r.control.Logs())
 	}
 	return response
+}
+
+func (r *dodManagedKeyRuntime) approveManagedKeyAction(keyID, action string) {
+	r.t.Helper()
+	path := "/api/v1/managed-keys/" + action
+	switch action {
+	case "rotate", "revoke", "zeroize":
+	default:
+		r.t.Fatalf("unsupported managed-key approval action %q", action)
+	}
+	if len(r.approvalTokens) != 2 || len(r.approvalSubjects) != 2 {
+		r.t.Fatalf("managed-key proof has %d approval tokens and %d subjects, want exactly two", len(r.approvalTokens), len(r.approvalSubjects))
+	}
+
+	r.requireManagedKeyCommandAbsent(action)
+	denied := dodManagedKeyRequest(r, http.MethodPost, path, action, map[string]string{"key_id": keyID})
+	deniedBody := r.readManagedKeyResponse(denied)
+	if denied.StatusCode != http.StatusForbidden || !bytes.Contains(deniedBody, []byte("dual control")) {
+		r.t.Fatalf("unapproved managed-key %s status=%d body=%s, want 403 dual-control denial", action, denied.StatusCode, deniedBody)
+	}
+	r.requireManagedKeyCommandAbsent(action)
+
+	approval := map[string]string{"key_id": keyID, "action": action}
+	self := dodManagedKeyRequest(r, http.MethodPost, "/api/v1/managed-keys/approvals", action+"-self-approval", approval)
+	selfBody := r.readManagedKeyResponse(self)
+	if self.StatusCode != http.StatusForbidden || !bytes.Contains(selfBody, []byte("cannot approve")) {
+		r.t.Fatalf("managed-key %s self-approval status=%d body=%s, want 403", action, self.StatusCode, selfBody)
+	}
+
+	for index, token := range r.approvalTokens {
+		response := dodManagedKeyRequestWithToken(r, token, http.MethodPost, "/api/v1/managed-keys/approvals",
+			fmt.Sprintf("%s-approval-%d", action, index+1), approval)
+		body := r.readManagedKeyResponse(response)
+		if response.StatusCode != http.StatusOK {
+			r.t.Fatalf("managed-key %s approval %d status=%d body=%s", action, index+1, response.StatusCode, body)
+		}
+		var recorded struct {
+			Resource  string `json:"resource"`
+			Action    string `json:"action"`
+			Approver  string `json:"approver"`
+			Approvals int    `json:"approvals"`
+		}
+		if err := json.Unmarshal(body, &recorded); err != nil {
+			r.t.Fatalf("decode managed-key %s approval %d: %v body=%s", action, index+1, err, body)
+		}
+		if recorded.Resource != keyID || recorded.Action != "managedkey:"+action || recorded.Approver != r.approvalSubjects[index] || recorded.Approvals != index+1 {
+			r.t.Fatalf("managed-key %s approval %d = %+v", action, index+1, recorded)
+		}
+		if index == 0 {
+			oneApproval := dodManagedKeyRequest(r, http.MethodPost, path, action, map[string]string{"key_id": keyID})
+			oneApprovalBody := r.readManagedKeyResponse(oneApproval)
+			if oneApproval.StatusCode != http.StatusForbidden || !bytes.Contains(oneApprovalBody, []byte("dual control")) {
+				r.t.Fatalf("managed-key %s after one approval status=%d body=%s, want 403", action, oneApproval.StatusCode, oneApprovalBody)
+			}
+			r.requireManagedKeyCommandAbsent(action)
+		}
+	}
+	r.requireManagedKeyCommandAbsent(action)
+}
+
+func (r *dodManagedKeyRuntime) readManagedKeyResponse(response *http.Response) []byte {
+	r.t.Helper()
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return body
+}
+
+func (r *dodManagedKeyRuntime) requireManagedKeyCommandAbsent(idempotencySuffix string) {
+	r.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	connection, err := pgx.Connect(ctx, r.artifacts.postgresDSN)
+	if err != nil {
+		r.t.Fatalf("connect for managed-key denial evidence: %v", err)
+	}
+	defer func() { _ = connection.Close(context.Background()) }()
+	var count int
+	if err := connection.QueryRow(ctx,
+		`SELECT count(*) FROM managed_key_operations WHERE tenant_id = $1 AND operation_id = $2`,
+		dodManagedKeyTenant(r.entryID), dodManagedKeyOperationID(r.entryID, idempotencySuffix)).Scan(&count); err != nil {
+		r.t.Fatalf("query managed-key denial evidence: %v", err)
+	}
+	if count != 0 {
+		r.t.Fatalf("unapproved managed-key %s persisted %d provider commands", idempotencySuffix, count)
+	}
 }
 
 func (r *dodManagedKeyRuntime) responseBody(response *http.Response) []byte {
@@ -802,7 +1182,7 @@ func (r *dodManagedKeyRuntime) responseBody(response *http.Response) []byte {
 		r.t.Fatal(err)
 	}
 	if response.StatusCode/100 != 2 {
-		r.t.Fatalf("managed-key response status=%d body=%s durable=%s logs=%s", response.StatusCode, body, r.durableDiagnostics(), r.control.Logs())
+		r.t.Fatalf("managed-key response status=%d body=%s durable=%s", response.StatusCode, body, r.durableDiagnostics())
 	}
 	return body
 }
@@ -858,11 +1238,148 @@ func (r *dodManagedKeyRuntime) durableDiagnostics() string {
 	journalFiles, _ := filepath.Glob(filepath.Join(r.dir, "keystore", "managed-key-operations", "*.json"))
 	for _, journalFile := range journalFiles {
 		raw, readErr := os.ReadFile(journalFile)
-		if readErr == nil && len(raw) <= 1<<20 {
-			fmt.Fprintf(&out, "signer-journal{%s=%s} ", filepath.Base(journalFile), raw)
+		if readErr == nil {
+			switch filepath.Base(journalFile) {
+			case "ownership.json":
+				out.WriteString(dodManagedKeyOwnershipDiagnostic(raw))
+			case "sign-authorization-nonces.json":
+				out.WriteString(dodManagedKeyNonceDiagnostic(raw))
+			default:
+				out.WriteString(dodManagedKeyJournalDiagnostic(journalFile, raw))
+			}
+			out.WriteByte(' ')
 		}
 	}
+	if r.controlProviderEndpoint != "" {
+		fmt.Fprintf(&out, "emulator-direct=%q emulator-via-control-relay=%q ",
+			dodManagedKeyHTTPDiagnostic(r.external.Endpoint()+"/dod/diagnostics"),
+			dodManagedKeyHTTPDiagnostic(r.controlProviderEndpoint+"/dod/diagnostics"))
+	}
+	fmt.Fprintf(&out, "signer-top=%q signer-logs=%q signer-network=%q ",
+		dodManagedKeyCompactDiagnostic(dodCommandOutput("docker", "top", r.containerName, "-eo", "pid,comm,args")),
+		dodManagedKeyCompactDiagnostic(dodCommandOutput("docker", "logs", "--tail=80", r.containerName)),
+		dodManagedKeyCompactDiagnostic(dodCommandOutput("docker", "network", "inspect", "--format={{range .Containers}}{{.Name}}={{.IPv4Address}} {{end}}", r.artifacts.network)))
 	return out.String()
+}
+
+func dodManagedKeyHTTPDiagnostic(endpoint string) string {
+	client := &http.Client{Timeout: 3 * time.Second}
+	response, err := client.Get(endpoint)
+	if err != nil {
+		return "error=" + err.Error()
+	}
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 4096))
+	if err != nil {
+		return fmt.Sprintf("status=%d read=%v", response.StatusCode, err)
+	}
+	return fmt.Sprintf("status=%d body=%s", response.StatusCode, body)
+}
+
+func dodManagedKeyCompactDiagnostic(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if len(value) > 4096 {
+		return value[:4096] + "..."
+	}
+	return value
+}
+
+func dodManagedKeyJournalDiagnostic(path string, raw []byte) string {
+	type journal struct {
+		Version int `json:"version"`
+		Request struct {
+			TenantID    string           `json:"tenant_id"`
+			Provider    string           `json:"provider"`
+			OperationID string           `json:"operation_id"`
+			Action      int32            `json:"action"`
+			KeyID       string           `json:"key_id"`
+			Algorithm   crypto.Algorithm `json:"algorithm"`
+		} `json:"request"`
+		Status  string `json:"status"`
+		Failure string `json:"failure"`
+		Result  struct {
+			Provider string `json:"provider"`
+			KeyID    string `json:"key_id"`
+			State    string `json:"state"`
+		} `json:"result"`
+	}
+	name := filepath.Base(path)
+	if len(raw) > 1<<20 {
+		return fmt.Sprintf("signer-journal{name=%q invalid=oversize size=%d}", name, len(raw))
+	}
+	var value journal
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return fmt.Sprintf("signer-journal{name=%q invalid=json size=%d}", name, len(raw))
+	}
+	return fmt.Sprintf("signer-journal{name=%q operation=%q action=%d status=%q failure=%q key=%q result_key=%q result_state=%q}",
+		dodManagedKeyDiagnosticField(name), dodManagedKeyDiagnosticField(value.Request.OperationID), value.Request.Action,
+		dodManagedKeyDiagnosticField(value.Status), dodManagedKeyDiagnosticField(value.Failure),
+		dodManagedKeyDiagnosticField(value.Request.KeyID), dodManagedKeyDiagnosticField(value.Result.KeyID), dodManagedKeyDiagnosticField(value.Result.State))
+}
+
+func dodManagedKeyDiagnosticField(input string) string {
+	if len(input) > 256 {
+		input = input[:256]
+	}
+	return strings.Map(func(character rune) rune {
+		if character < 0x20 || character == 0x7f {
+			return -1
+		}
+		return character
+	}, input)
+}
+
+func dodManagedKeyOwnershipDiagnostic(raw []byte) string {
+	type owner struct {
+		TenantID  string           `json:"tenant_id"`
+		Provider  string           `json:"provider"`
+		KeyID     string           `json:"key_id"`
+		Algorithm crypto.Algorithm `json:"algorithm"`
+		State     string           `json:"state"`
+	}
+	if len(raw) > 1<<20 {
+		return fmt.Sprintf("signer-owners{invalid=oversize size=%d}", len(raw))
+	}
+	var owners []owner
+	if err := json.Unmarshal(raw, &owners); err != nil {
+		return fmt.Sprintf("signer-owners{invalid=json size=%d}", len(raw))
+	}
+	summaries := make([]string, 0, len(owners))
+	for _, value := range owners {
+		summaries = append(summaries, fmt.Sprintf("tenant=%q provider=%q key=%q algorithm=%q state=%q",
+			dodManagedKeyDiagnosticField(value.TenantID), dodManagedKeyDiagnosticField(value.Provider),
+			dodManagedKeyDiagnosticField(value.KeyID), value.Algorithm, dodManagedKeyDiagnosticField(value.State)))
+	}
+	sort.Strings(summaries)
+	return fmt.Sprintf("signer-owners{count=%d %s}", len(summaries), strings.Join(summaries, ";"))
+}
+
+func dodManagedKeyNonceDiagnostic(raw []byte) string {
+	if len(raw) > 1<<20 {
+		return fmt.Sprintf("signer-nonces{invalid=oversize size=%d}", len(raw))
+	}
+	var nonces map[string]int64
+	if err := json.Unmarshal(raw, &nonces); err != nil {
+		return fmt.Sprintf("signer-nonces{invalid=json size=%d}", len(raw))
+	}
+	return fmt.Sprintf("signer-nonces{count=%d}", len(nonces))
+}
+
+func TestDODManagedKeyJournalDiagnosticIsClosedAndBounded(t *testing.T) {
+	raw := []byte(`{"version":1,"request":{"tenant_id":"tenant-1","provider":"tpm2","operation_id":"managedkey:op-1","action":2,"key_id":"0x81010000","algorithm":"RSA-2048"},"status":"executing","result":{},"untrusted_secret":"must-not-appear"}`)
+	diagnostic := dodManagedKeyJournalDiagnostic("/runtime/operation.json", raw)
+	for _, required := range []string{`name="operation.json"`, `operation="managedkey:op-1"`, `action=2`, `status="executing"`, `key="0x81010000"`} {
+		if !strings.Contains(diagnostic, required) {
+			t.Fatalf("journal diagnostic %q omits %q", diagnostic, required)
+		}
+	}
+	if strings.Contains(diagnostic, "must-not-appear") || len(diagnostic) > 2048 {
+		t.Fatalf("journal diagnostic is not closed/bounded: %q", diagnostic)
+	}
+	owners := dodManagedKeyOwnershipDiagnostic([]byte(`[{"tenant_id":"tenant-1","provider":"tpm2","key_id":"0x81010000","algorithm":"RSA-2048","public_der":"c2VjcmV0LXB1YmxpYy1ieXRlcw==","state":"active"}]`))
+	if !strings.Contains(owners, `count=1`) || !strings.Contains(owners, `key="0x81010000"`) || strings.Contains(owners, "c2VjcmV0") {
+		t.Fatalf("ownership diagnostic is not closed: %q", owners)
+	}
 }
 
 func (r *dodManagedKeyRuntime) cloudReadback(keyID, state string) dodManagedKeyReadback {
@@ -880,8 +1397,42 @@ func (r *dodManagedKeyRuntime) cloudReadback(keyID, state string) dodManagedKeyR
 	return readback
 }
 
+func (r *dodManagedKeyRuntime) requireHardwareKeyID(keyID string) {
+	r.t.Helper()
+	if err := dodValidateHardwareKeyID(r.provider, keyID); err != nil {
+		r.t.Fatalf("unsafe %s managed-key provider identity: %v", r.provider, err)
+	}
+}
+
+func dodValidateHardwareKeyID(provider, keyID string) error {
+	switch provider {
+	case config.ManagedKeyProviderTPM2:
+		if len(keyID) != 10 || !strings.HasPrefix(keyID, "0x") || keyID != strings.ToLower(keyID) {
+			return fmt.Errorf("TPM handle %q is not canonical 0x plus eight lowercase hex digits", keyID)
+		}
+		handle, err := strconv.ParseUint(keyID[2:], 16, 32)
+		if err != nil {
+			return fmt.Errorf("TPM handle %q is not hexadecimal", keyID)
+		}
+		if handle < dodTPMOwnerPersistentFirst || handle > dodTPMOwnerPersistentLast {
+			return fmt.Errorf("TPM handle %q is outside the owner-persistent range", keyID)
+		}
+	case config.ManagedKeyProviderPKCS11, config.ManagedKeyProviderYubiHSM2:
+		if len(keyID) != dodPKCS11KeyIDHexLength || len(keyID)%2 != 0 || keyID != strings.ToLower(keyID) {
+			return fmt.Errorf("PKCS#11 object ID %q is not exactly %d lowercase hex digits", keyID, dodPKCS11KeyIDHexLength)
+		}
+		decoded, err := hex.DecodeString(keyID)
+		if err != nil || len(decoded) != dodPKCS11KeyIDHexLength/2 {
+			return fmt.Errorf("PKCS#11 object ID %q is not canonical hexadecimal", keyID)
+		}
+	}
+	return nil
+}
+
 func (r *dodManagedKeyRuntime) hardwareSignAndWitness(generated, rotated dodManagedKeyWire, revoked, zeroized bool) []byte {
 	r.t.Helper()
+	r.requireHardwareKeyID(generated.KeyID)
+	r.requireHardwareKeyID(rotated.KeyID)
 	messagePath := filepath.Join(r.dir, "device-message")
 	if err := os.WriteFile(messagePath, []byte(dodManagedKeyProbe), 0o600); err != nil {
 		r.t.Fatal(err)
@@ -889,13 +1440,14 @@ func (r *dodManagedKeyRuntime) hardwareSignAndWitness(generated, rotated dodMana
 	generatedPresent := r.hardwarePresent(generated.KeyID)
 	rotatedPresent := r.hardwarePresent(rotated.KeyID)
 	signaturePath := filepath.Join(r.dir, "device-signature")
-	var command string
-	if r.provider == config.ManagedKeyProviderTPM2 {
-		command = fmt.Sprintf("TPM2TOOLS_TCTI=swtpm:host=127.0.0.1,port=2321 tpm2_sign -c %s -g sha256 -f plain -o /runtime/device-signature /runtime/device-message", rotated.KeyID)
-	} else {
-		command = fmt.Sprintf("SOFTHSM2_CONF=/runtime/softhsm2.conf pkcs11-tool --module /runtime/libsofthsm2.so --login --pin 12345678 --sign --id %s --mechanism SHA256-RSA-PKCS --input-file /runtime/device-message --output-file /runtime/device-signature", rotated.KeyID)
+	if err := os.Remove(signaturePath); err != nil && !os.IsNotExist(err) {
+		r.t.Fatal(err)
 	}
-	r.dockerExecShell(true, "sign independent device message", command)
+	if r.provider == config.ManagedKeyProviderTPM2 {
+		r.dockerExecTPM(true, "sign independent device message", "tpm2_sign", "-c", rotated.KeyID, "-g", "sha256", "-f", "plain", "-o", "/runtime/device-signature", "/runtime/device-message")
+	} else {
+		r.dockerExecPKCS11(true, "sign independent device message", "pkcs11-tool", "--module", "/runtime/libsofthsm2.so", "--login", "--pin", "12345678", "--sign", "--id", rotated.KeyID, "--mechanism", "SHA256-RSA-PKCS", "--input-file", "/runtime/device-message", "--output-file", "/runtime/device-signature")
+	}
 	signature, err := os.ReadFile(signaturePath)
 	if err != nil || len(signature) == 0 {
 		r.t.Fatalf("read independent device signature: %v", err)
@@ -910,15 +1462,85 @@ func (r *dodManagedKeyRuntime) hardwareSignAndWitness(generated, rotated dodMana
 
 func (r *dodManagedKeyRuntime) hardwarePresent(keyID string) bool {
 	r.t.Helper()
+	r.requireHardwareKeyID(keyID)
 	if r.provider == config.ManagedKeyProviderTPM2 {
-		return r.dockerExecShell(false, "read exact TPM public handle", fmt.Sprintf("TPM2TOOLS_TCTI=swtpm:host=127.0.0.1,port=2321 tpm2_readpublic -c %s", keyID))
+		_, ok := r.dockerExecTPM(false, "read exact TPM public handle", "tpm2_readpublic", "-c", keyID)
+		return ok
 	}
 	// OpenSC pkcs11-tool accepts --id with --list-objects but some modules still
 	// enumerate every object in the token. With a predecessor key intentionally
 	// left present after rotation, grepping that output therefore reports a false
 	// positive after the successor has really been destroyed. Reading the public
 	// object is an exact-ID lookup: it exits non-zero when that one object is gone.
-	return r.dockerExecShell(false, "read exact PKCS11 public object", fmt.Sprintf("SOFTHSM2_CONF=/runtime/softhsm2.conf pkcs11-tool --module /runtime/libsofthsm2.so --login --pin 12345678 --read-object --type pubkey --id %s --output-file /runtime/device-public-key >/dev/null 2>&1", keyID))
+	_, ok := r.dockerExecPKCS11(false, "read exact PKCS11 public object", "pkcs11-tool", "--module", "/runtime/libsofthsm2.so", "--login", "--pin", "12345678", "--read-object", "--type", "pubkey", "--id", keyID, "--output-file", "/dev/null")
+	return ok
+}
+
+func (r *dodManagedKeyRuntime) readTPMPublicWitness(keyID, label string) (dodTPMPublicWitness, bool) {
+	r.t.Helper()
+	r.requireHardwareKeyID(keyID)
+	if label == "" || strings.ContainsAny(label, "/\\\x00\r\n") {
+		r.t.Fatalf("invalid TPM public witness label %q", label)
+	}
+	publicName := "tpm-public-" + label + ".der"
+	objectName := "tpm-name-" + label + ".bin"
+	publicPath := filepath.Join(r.dir, publicName)
+	namePath := filepath.Join(r.dir, objectName)
+	for _, path := range []string{publicPath, namePath} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			r.t.Fatal(err)
+		}
+	}
+	_, ok := r.dockerExecTPM(false, "read exact TPM public material "+label, "tpm2_readpublic", "-c", keyID, "-f", "der", "-o", "/runtime/"+publicName, "-n", "/runtime/"+objectName)
+	if !ok {
+		return dodTPMPublicWitness{}, false
+	}
+	publicDER, err := os.ReadFile(publicPath)
+	if err != nil {
+		r.t.Fatalf("read TPM public DER %s: %v", label, err)
+	}
+	name, err := os.ReadFile(namePath)
+	if err != nil {
+		r.t.Fatalf("read TPM object Name %s: %v", label, err)
+	}
+	return dodTPMPublicWitness{PublicDER: publicDER, Name: name}, true
+}
+
+func dodValidateTPMPublicSurvival(generatedDER []byte, before, after dodTPMPublicWitness) error {
+	if len(generatedDER) == 0 || len(before.PublicDER) == 0 || len(before.Name) == 0 || len(after.PublicDER) == 0 || len(after.Name) == 0 {
+		return fmt.Errorf("public witness is incomplete")
+	}
+	if !bytes.Equal(before.PublicDER, generatedDER) {
+		return fmt.Errorf("device public DER does not match the API response")
+	}
+	if !bytes.Equal(after.PublicDER, before.PublicDER) {
+		return fmt.Errorf("public DER changed at the same persistent handle")
+	}
+	if !bytes.Equal(after.Name, before.Name) {
+		return fmt.Errorf("TPM object Name changed at the same persistent handle")
+	}
+	return nil
+}
+
+func (r *dodManagedKeyRuntime) assertTPMPostRestartSignature(key dodManagedKeyWire) {
+	r.t.Helper()
+	r.requireHardwareKeyID(key.KeyID)
+	messagePath := filepath.Join(r.dir, "tpm-restart-message")
+	signaturePath := filepath.Join(r.dir, "tpm-restart-signature")
+	if err := os.WriteFile(messagePath, []byte(dodManagedKeyRestartProbe), 0o600); err != nil {
+		r.t.Fatal(err)
+	}
+	if err := os.Remove(signaturePath); err != nil && !os.IsNotExist(err) {
+		r.t.Fatal(err)
+	}
+	r.dockerExecTPM(true, "sign with exact TPM key after restart", "tpm2_sign", "-c", key.KeyID, "-g", "sha256", "-f", "plain", "-o", "/runtime/tpm-restart-signature", "/runtime/tpm-restart-message")
+	signature, err := os.ReadFile(signaturePath)
+	if err != nil || len(signature) == 0 {
+		r.t.Fatalf("read post-restart TPM signature: %v", err)
+	}
+	if err := crypto.VerifyMessage(key.PublicDER, []byte(dodManagedKeyRestartProbe), signature); err != nil {
+		r.t.Fatalf("post-restart TPM signature did not verify against pre-restart API public key: %v", err)
+	}
 }
 
 func (r *dodManagedKeyRuntime) installTPMForeignOperationCollision() {
@@ -931,19 +1553,22 @@ func (r *dodManagedKeyRuntime) installTPMForeignOperationCollision() {
 	r.tpmGenerateOperationTag = hex.EncodeToString(tag)
 	const (
 		baseHandle = uint64(0x81010000)
-		maxHandle  = uint64(0x81ffffff)
+		maxHandle  = uint64(0x817fffff)
 	)
 	minHandle := baseHandle + 0x100
 	first := minHandle + (binary.BigEndian.Uint64(tag[:8]) % (maxHandle - minHandle + 1))
 	r.tpmForeignHandle = fmt.Sprintf("0x%08x", uint32(first))
-	script := fmt.Sprintf(`set -eu
-export TPM2TOOLS_TCTI=swtpm:host=127.0.0.1,port=2321
-mkdir -p /runtime/tpm-foreign
-rm -f /runtime/tpm-foreign/*
-tpm2_createprimary -C o -G rsa -g sha256 -c /runtime/tpm-foreign/key.ctx >/dev/null
-tpm2_evictcontrol -C o -c /runtime/tpm-foreign/key.ctx %s >/dev/null
-tpm2_readpublic -c %s >/dev/null`, r.tpmForeignHandle, r.tpmForeignHandle)
-	r.dockerExecShell(true, "persist foreign same-algorithm TPM collision", script)
+	foreignDir := filepath.Join(r.dir, "tpm-foreign")
+	if err := os.RemoveAll(foreignDir); err != nil {
+		r.t.Fatal(err)
+	}
+	if err := os.Mkdir(foreignDir, 0o700); err != nil {
+		r.t.Fatal(err)
+	}
+	r.dockerExecTPM(true, "create foreign same-algorithm TPM collision", "tpm2_createprimary", "-C", "o", "-G", "rsa", "-g", "sha256", "-c", "/runtime/tpm-foreign/key.ctx")
+	r.dockerExecTPM(true, "persist foreign same-algorithm TPM collision", "tpm2_evictcontrol", "-C", "o", "-c", "/runtime/tpm-foreign/key.ctx", r.tpmForeignHandle)
+	r.dockerExecTPM(true, "flush foreign transient TPM context", "tpm2_flushcontext", "-t")
+	r.dockerExecTPM(true, "read foreign persistent TPM collision", "tpm2_readpublic", "-c", r.tpmForeignHandle)
 }
 
 func (r *dodManagedKeyRuntime) assertTPMForeignCollisionAndOperationTag(generatedHandle string) {
@@ -954,11 +1579,9 @@ func (r *dodManagedKeyRuntime) assertTPMForeignCollisionAndOperationTag(generate
 	if !r.hardwarePresent(r.tpmForeignHandle) {
 		r.t.Fatalf("TPM operation overwrote or removed foreign first candidate %q", r.tpmForeignHandle)
 	}
-	command := fmt.Sprintf(
-		"TPM2TOOLS_TCTI=swtpm:host=127.0.0.1,port=2321 tpm2_readpublic -c %s | tr -d '[:space:]' | grep -qi %s",
-		generatedHandle, r.tpmGenerateOperationTag,
-	)
-	if !r.dockerExecShell(false, "read TPM durable operation tag", command) {
+	output, ok := r.dockerExecTPM(false, "read TPM durable operation tag", "tpm2_readpublic", "-c", generatedHandle)
+	normalized := strings.ToLower(strings.Join(strings.Fields(string(output)), ""))
+	if !ok || !strings.Contains(normalized, strings.ToLower(r.tpmGenerateOperationTag)) {
 		r.t.Fatalf("TPM generated handle %q did not expose its exact durable operation tag through ReadPublic", generatedHandle)
 	}
 }
@@ -971,8 +1594,11 @@ func (r *dodManagedKeyRuntime) assertHardwareRevoked(keyID string) {
 		}
 		return
 	}
-	command := fmt.Sprintf("SOFTHSM2_CONF=/runtime/softhsm2.conf pkcs11-tool --module /runtime/libsofthsm2.so --login --pin 12345678 --sign --id %s --mechanism SHA256-RSA-PKCS --input-file /runtime/device-message --output-file /runtime/revoked-signature", keyID)
-	if r.dockerExecShell(false, "attempt revoked PKCS11 signature", command) {
+	if err := os.Remove(filepath.Join(r.dir, "revoked-signature")); err != nil && !os.IsNotExist(err) {
+		r.t.Fatal(err)
+	}
+	_, ok := r.dockerExecPKCS11(false, "attempt revoked PKCS11 signature", "pkcs11-tool", "--module", "/runtime/libsofthsm2.so", "--login", "--pin", "12345678", "--sign", "--id", keyID, "--mechanism", "SHA256-RSA-PKCS", "--input-file", "/runtime/device-message", "--output-file", "/runtime/revoked-signature")
+	if ok {
 		r.t.Fatal("revoked HSM key still produced a signature")
 	}
 }
@@ -1002,16 +1628,32 @@ func (r *dodManagedKeyRuntime) finishHardwareWitness(generated, rotated dodManag
 	}
 }
 
-func (r *dodManagedKeyRuntime) dockerExecShell(requireSuccess bool, label, script string) bool {
+func (r *dodManagedKeyRuntime) dockerExec(requireSuccess bool, label, environment, command string, args ...string) ([]byte, bool) {
 	r.t.Helper()
-	command := exec.Command("docker", "exec", r.containerName, "/bin/sh", "-c", script)
-	output, err := command.CombinedOutput()
+	dockerArgs := []string{"exec"}
+	if environment != "" {
+		dockerArgs = append(dockerArgs, "--env", environment)
+	}
+	dockerArgs = append(dockerArgs, r.containerName, command)
+	dockerArgs = append(dockerArgs, args...)
+	process := exec.Command("docker", dockerArgs...)
+	output, err := process.CombinedOutput()
 	if requireSuccess && err != nil {
 		state := dodCommandOutput("docker", "inspect", "--format={{json .State}}", r.containerName)
 		logs := dodCommandOutput("docker", "logs", "--tail=120", r.containerName)
 		r.t.Fatalf("independent device command %q: %v output=%s state=%s logs=%s", label, err, output, state, logs)
 	}
-	return err == nil
+	return output, err == nil
+}
+
+func (r *dodManagedKeyRuntime) dockerExecTPM(requireSuccess bool, label, command string, args ...string) ([]byte, bool) {
+	r.t.Helper()
+	return r.dockerExec(requireSuccess, label, "TPM2TOOLS_TCTI=swtpm:host=127.0.0.1,port=2321", command, args...)
+}
+
+func (r *dodManagedKeyRuntime) dockerExecPKCS11(requireSuccess bool, label, command string, args ...string) ([]byte, bool) {
+	r.t.Helper()
+	return r.dockerExec(requireSuccess, label, "SOFTHSM2_CONF=/runtime/softhsm2.conf", command, args...)
 }
 
 func (r *dodManagedKeyRuntime) close() {

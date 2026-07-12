@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
@@ -293,6 +294,77 @@ func TestValidateConnectorEndpointRestrictsInsecureHTTPToLoopback(t *testing.T) 
 	for _, endpoint := range []string{"http://10.0.0.8:8080", "http://receiver.example.test"} {
 		if err := validateConnectorEndpoint(endpoint, cfg); err == nil {
 			t.Fatalf("non-loopback insecure endpoint %q was accepted", endpoint)
+		}
+	}
+}
+
+func TestBuildHTTPConnectorUsesClosedTargetSchemasAndTenantCredentialRuntime(t *testing.T) {
+	client, err := connectorHTTPClientFromConfig(config.Connectors{AllowInsecureHTTP: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := nativeConnectorRuntime{cfg: config.Connectors{AllowInsecureHTTP: true}, httpClient: client}
+	targets := map[string]map[string]any{
+		"envoy":                   {"endpoint": "https://envoy.example.test", "secret_name": "edge"},
+		"a10":                     {"endpoint": "https://a10.example.test", "username": "admin", "password_ref": "secret://connectors/a10"},
+		"f5":                      {"endpoint": "https://f5.example.test", "client_ssl_profile": "edge", "username": "admin", "password_ref": "secret://connectors/f5"},
+		"netscaler":               {"endpoint": "https://netscaler.example.test", "username": "admin", "password_ref": "secret://connectors/netscaler", "file_location": "/nsconfig/ssl"},
+		"kemp":                    {"endpoint": "https://kemp.example.test", "token_ref": "secret://connectors/kemp"},
+		"cisco":                   {"endpoint": "https://cisco.example.test", "username": "admin", "password_ref": "secret://connectors/cisco"},
+		"fortigate":               {"endpoint": "https://fortigate.example.test", "token_ref": "secret://connectors/fortigate"},
+		"paloalto":                {"endpoint": "https://paloalto.example.test", "api_key_ref": "secret://connectors/paloalto"},
+		"aws-acm":                 {"endpoint": "https://acm.us-east-1.amazonaws.com", "region": "us-east-1", "access_key_id": "AKID", "secret_access_key_ref": "secret://connectors/aws"},
+		"azure-keyvault":          {"endpoint": "https://vault.example.test", "bearer_token_ref": "secret://connectors/azure", "api_version": "7.4"},
+		"gcp-certificate-manager": {"endpoint": "https://certificatemanager.googleapis.com", "project": "project-a", "location": "global", "bearer_token_ref": "secret://connectors/gcp"},
+	}
+	for name, target := range targets {
+		t.Run(name, func(t *testing.T) {
+			raw, err := json.Marshal(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			built, ops, cleanup, err := buildHTTPConnector(runtime, context.Background(), name, connector.DeployPayload{
+				TenantID: "tenant-a", TargetConfig: raw,
+			})
+			if name == "envoy" {
+				if err != nil || built == nil || ops == nil || cleanup == nil {
+					t.Fatalf("credential-free Envoy build = %T, %T, cleanup=%t, err=%v", built, ops, cleanup != nil, err)
+				}
+				cleanup()
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "secret-store runtime is unavailable") {
+				t.Fatalf("%s without tenant secret-store custody = %v", name, err)
+			}
+			if built != nil || ops != nil || cleanup != nil {
+				t.Fatalf("%s returned partial connector after credential failure", name)
+			}
+		})
+	}
+	if got := httpConnectorClient(runtime, "https://envoy.example.test"); got != client {
+		t.Fatal("HTTPS connector did not retain the configured safe client")
+	}
+	if got := httpConnectorClient(runtime, "http://127.0.0.1:18080"); got == client || got.Timeout != client.Timeout {
+		t.Fatal("explicit loopback emulator did not receive an isolated insecure-loopback client")
+	}
+}
+
+func TestParseConnectorSecretRefIsVersionedAndClosed(t *testing.T) {
+	name, version, err := parseConnectorSecretRef(" secret://team/edge-token ")
+	if err != nil || name != "team/edge-token" || version != nil {
+		t.Fatalf("unversioned ref = %q, %v, %v", name, version, err)
+	}
+	name, version, err = parseConnectorSecretRef("secret://team/edge%20token?version=7")
+	if err != nil || name != "team/edge token" || version == nil || *version != 7 {
+		t.Fatalf("versioned ref = %q, %v, %v", name, version, err)
+	}
+	for _, ref := range []string{
+		"literal", "secret://", "secret://user@team/token", "secret://team/../token",
+		"secret://team/token#fragment", "secret://team/token?other=1",
+		"secret://team/token?version=0", "secret://team/token?version=not-a-number",
+	} {
+		if _, _, err := parseConnectorSecretRef(ref); err == nil {
+			t.Fatalf("parseConnectorSecretRef(%q) succeeded", ref)
 		}
 	}
 }

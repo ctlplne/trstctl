@@ -85,7 +85,7 @@ secret injection:
 | `secrets`                         | `login` · `pki` · `cloud-secret-managers` · `kubernetes-operator` · `workload-injection` · `unvaulted`                                                                     |
 | `transit keys`                    | `create` · `rotate`                                                                                                                                                      |
 | `transit`                         | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`                                                                                                            |
-| `managed-keys`                    | `generate` · `rotate` · `revoke` · `zeroize`                                                                                                                             |
+| `managed-keys`                    | `generate` · `approve` · `rotate` · `revoke` · `zeroize`                                                                                                                 |
 | `code-signing`                    | `sign` · `keyless`                                                                                                                                                       |
 | `scale`                           | `orchestration` · `ha-issuance`                                                                                                                                          |
 | `run`                             | child process with fetched secrets injected into its environment                                                                                                         |
@@ -433,7 +433,11 @@ cat > managed-key.json <<'JSON'
 {"algorithm":"RSA-2048"}
 JSON
 trstctl-cli --idempotency-key kms-key-1 managed-keys generate -f managed-key.json
+printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-a managed-keys approve -f -
+printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-b managed-keys approve -f -
 printf '{"key_id":"<key-id>"}' | trstctl-cli --idempotency-key kms-key-1-rotate managed-keys rotate -f -
+printf '{"key_id":"<rotated-key-id>","action":"zeroize"}' | trstctl-cli --idempotency-key kms-key-1-zeroize-approve-a managed-keys approve -f -
+printf '{"key_id":"<rotated-key-id>","action":"zeroize"}' | trstctl-cli --idempotency-key kms-key-1-zeroize-approve-b managed-keys approve -f -
 printf '{"key_id":"<rotated-key-id>"}' | trstctl-cli --idempotency-key kms-key-1-zeroize managed-keys zeroize -f -
 
 # Run rollback-safe static, connector-backed, or dynamic-lease rotation.
@@ -562,6 +566,12 @@ trstctl-cli discovery findings list
 # Run a graph query.
 trstctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"
 ```
+
+Run the two managed-key `approve` commands with tokens for two different
+authenticated principals holding `keys:approve`. The requester cannot approve their
+own action, even if that principal also holds `keys:approve`. Approval bodies keep
+`key_id` in JSON so opaque cloud-KMS URLs and HSM handles containing `/` are
+preserved exactly; `action` is one of `rotate`, `revoke`, or `zeroize`.
 
 `--inventory-private-key-roots` locates and classifies private-key files on the host
 but reports only metadata: path, key format, algorithm, file-mode status, and a

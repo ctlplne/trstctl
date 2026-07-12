@@ -2823,6 +2823,26 @@ ManagedKeyActionRequest = TypedDict(
     total=False,
 )
 
+ManagedKeyApproval = TypedDict(
+    'ManagedKeyApproval',
+    {
+        'action': str,
+        'approvals': int,
+        'approver': str,
+        'resource': str,
+    },
+    total=False,
+)
+
+ManagedKeyApprovalRequest = TypedDict(
+    'ManagedKeyApprovalRequest',
+    {
+        'action': str,
+        'key_id': str,
+    },
+    total=False,
+)
+
 ManagedKeyGenerateRequest = TypedDict(
     'ManagedKeyGenerateRequest',
     {

@@ -3,10 +3,14 @@
 package proof
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,8 +22,631 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	internalcrypto "trstctl.com/trstctl/internal/crypto"
 )
+
+func TestSealDescriptorCloseOnExecClosesForeignInheritance(t *testing.T) {
+	file, err := os.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	descriptor := int(file.Fd())
+	flags, err := unix.FcntlInt(file.Fd(), unix.F_GETFD, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := unix.FcntlInt(file.Fd(), unix.F_SETFD, flags&^unix.FD_CLOEXEC); err != nil {
+		t.Fatal(err)
+	}
+	if err := sealDescriptorCloseOnExec(descriptor); err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := unix.FcntlInt(file.Fd(), unix.F_GETFD, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sealed&unix.FD_CLOEXEC == 0 {
+		t.Fatal("descriptor remains inheritable after sealing")
+	}
+}
+
+func TestValidateObservedSocketOwnersAllowsOnlyParentOrClosedRace(t *testing.T) {
+	const parentPID = 41
+	for name, owners := range map[string]map[int]bool{
+		"parent still owns socket":            {parentPID: true},
+		"socket closed after sealed snapshot": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateObservedSocketOwners(parentPID, owners); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	for name, owners := range map[string]map[int]bool{
+		"foreign owner":            {99: true},
+		"parent and foreign owner": {parentPID: true, 99: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateObservedSocketOwners(parentPID, owners); err == nil {
+				t.Fatal("foreign same-UID socket owner was accepted")
+			}
+		})
+	}
+	if err := validateObservedSocketOwners(0, nil); err == nil {
+		t.Fatal("invalid parent PID was accepted")
+	}
+}
+
+func TestReviewedBinfmtInterpreterIsClosedToExactImmutableRosetta(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	target := executableIdentity{Device: 1, Inode: 10, Links: 1, UID: 501, Size: 4096, Mode: 0o700, Digest: digest}
+	runner := executableIdentity{Device: 1, Inode: 11, Links: 1, UID: 501, Size: 4096, Mode: 0o500, Digest: digest}
+	rosetta := executableIdentity{Device: 2, Inode: 2, Links: 1, UID: 0, Size: 8192, Mode: 0o555, Digest: digest}
+	if err := validateReviewedBinfmtInterpreter("/any/interpreter", runner, runner, target); err != nil {
+		t.Fatalf("same gate-runner interpreter rejected: %v", err)
+	}
+	if err := validateReviewedBinfmtInterpreter(rosettaInterpreterPath, rosetta, runner, target); err != nil {
+		t.Fatalf("exact immutable Rosetta interpreter rejected: %v", err)
+	}
+	for name, test := range map[string]struct {
+		path     string
+		identity executableIdentity
+	}{
+		"target alias":     {path: rosettaInterpreterPath, identity: target},
+		"near path":        {path: rosettaInterpreterPath + "-fake", identity: rosetta},
+		"user owned":       {path: rosettaInterpreterPath, identity: func() executableIdentity { value := rosetta; value.UID = 501; return value }()},
+		"world writable":   {path: rosettaInterpreterPath, identity: func() executableIdentity { value := rosetta; value.Mode = 0o577; return value }()},
+		"multiple links":   {path: rosettaInterpreterPath, identity: func() executableIdentity { value := rosetta; value.Links = 2; return value }()},
+		"unbounded size":   {path: rosettaInterpreterPath, identity: func() executableIdentity { value := rosetta; value.Size = maxShippedBinaryBytes + 1; return value }()},
+		"malformed digest": {path: rosettaInterpreterPath, identity: func() executableIdentity { value := rosetta; value.Digest = "sha256:no"; return value }()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateReviewedBinfmtInterpreter(test.path, test.identity, runner, target); err == nil {
+				t.Fatal("unsafe interpreter identity accepted")
+			}
+		})
+	}
+}
+
+func TestGuestExecutableMapsBindOnlyTheExactCallerExecutable(t *testing.T) {
+	t.Run("exact target maps", func(t *testing.T) {
+		procDir, targetPath, target, _ := guestProcessFixture(t)
+		writeGuestMaps(t, procDir, targetPath, target, "", executableIdentity{})
+		device, err := validateGuestExecutableMapsAt(procDir, targetPath, target)
+		if err != nil {
+			t.Fatalf("exact target mappings rejected: %v", err)
+		}
+		if device != procMapDeviceForTest(target.Device) {
+			t.Fatalf("map device = %q, want %q", device, procMapDeviceForTest(target.Device))
+		}
+	})
+
+	t.Run("target plus foreign caller executable", func(t *testing.T) {
+		procDir, targetPath, target, foreignPath := guestProcessFixture(t)
+		foreign, _, err := inspectExecutable(foreignPath, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeGuestMaps(t, procDir, targetPath, target, foreignPath, foreign)
+		if _, err := validateGuestExecutableMapsAt(procDir, targetPath, target); err == nil || !strings.Contains(err.Error(), "foreign caller-owned executable") {
+			t.Fatalf("foreign caller executable mapping was accepted: %v", err)
+		}
+	})
+
+	t.Run("target plus foreign-owner main executable", func(t *testing.T) {
+		procDir, targetPath, target, foreignPath := guestProcessFixture(t)
+		if err := os.WriteFile(foreignPath, minimalELFExecutable(), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		foreign, _, err := inspectExecutable(foreignPath, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeGuestMaps(t, procDir, targetPath, target, foreignPath, foreign)
+		syntheticRuntimeUID := foreign.UID + 1
+		if syntheticRuntimeUID == foreign.UID {
+			t.Fatal("cannot construct a distinct synthetic runtime UID")
+		}
+		if _, err := validateGuestExecutableMapsAtForUID(procDir, targetPath, target, syntheticRuntimeUID); err == nil || !strings.Contains(err.Error(), "foreign main-executable ELF") {
+			t.Fatalf("foreign-owner main executable mapping was accepted: %v", err)
+		}
+	})
+
+	t.Run("target plus exact reviewed interpreter", func(t *testing.T) {
+		procDir, targetPath, target, interpreterPath := guestProcessFixture(t)
+		if err := os.WriteFile(interpreterPath, minimalELFExecutable(), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		interpreter, _, err := inspectExecutable(interpreterPath, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeGuestMaps(t, procDir, targetPath, target, interpreterPath, interpreter)
+		if _, err := validateGuestExecutableMapsAt(procDir, targetPath, target, interpreter); err != nil {
+			t.Fatalf("exact reviewed interpreter mapping rejected: %v", err)
+		}
+	})
+
+	t.Run("target pathname with foreign map_files object", func(t *testing.T) {
+		procDir, targetPath, target, foreignPath := guestProcessFixture(t)
+		writeGuestMaps(t, procDir, targetPath, target, "", executableIdentity{})
+		mapFile := filepath.Join(procDir, "map_files", "1000-2000")
+		if err := os.Remove(mapFile); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(foreignPath, mapFile); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := validateGuestExecutableMapsAt(procDir, targetPath, target); err == nil || !strings.Contains(err.Error(), "map text disagrees") {
+			t.Fatalf("foreign map_files object behind target pathname was accepted: %v", err)
+		}
+	})
+
+	t.Run("exact target accepts only mount-bound Rosetta device alias", func(t *testing.T) {
+		procDir, targetPath, target, interpreterPath := guestProcessFixture(t)
+		if err := os.WriteFile(interpreterPath, minimalELFExecutable(), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		interpreter, _, err := inspectExecutable(interpreterPath, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeGuestMaps(t, procDir, targetPath, target, interpreterPath, interpreter)
+		mapsPath := filepath.Join(procDir, "maps")
+		raw, err := os.ReadFile(mapsPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		aliased := strings.Replace(string(raw), procMapDeviceForTest(target.Device), "00:dead", 2)
+		if err := os.WriteFile(mapsPath, []byte(aliased), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := validateGuestExecutableMapsAt(procDir, targetPath, target, interpreter); err == nil || !strings.Contains(err.Error(), "outside the reviewed Rosetta boundary") {
+			t.Fatalf("arbitrary device alias passed without Rosetta provenance: %v", err)
+		}
+		mountInfo := fmt.Sprintf("245 233 0:57005 / %s rw,nosuid,nodev - fakeowner /run/host_mark/private rw,fakeowner\n", targetPath)
+		if err := os.WriteFile(filepath.Join(procDir, "mountinfo"), []byte(mountInfo), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		device, err := validateGuestExecutableMapsAtForUIDWithRosettaAlias(procDir, targetPath, target, target.UID, true, interpreter)
+		if err != nil {
+			t.Fatalf("exact kernel object behind Rosetta device alias rejected: %v", err)
+		}
+		if device != procMapDeviceForTest(target.Device) {
+			t.Fatalf("canonical map_files device = %q, want %q", device, procMapDeviceForTest(target.Device))
+		}
+	})
+}
+
+func TestRosettaGuestDescriptorsBindEveryGuestShapeToTheExactTarget(t *testing.T) {
+	t.Run("exact target plus unrelated descriptor", func(t *testing.T) {
+		procDir, targetPath, target, foreignPath := guestProcessFixture(t)
+		writeGuestDescriptor(t, procDir, "7", targetPath, 64, "0400040")
+		writeGuestDescriptor(t, procDir, "8", foreignPath, 0, "0100000")
+		if err := validateRosettaGuestDescriptorsAt(procDir, targetPath, target); err != nil {
+			t.Fatalf("exact target descriptor rejected: %v", err)
+		}
+	})
+
+	t.Run("ordinary read-only data at translator offsets is not a guest executable", func(t *testing.T) {
+		procDir, targetPath, target, dataPath := guestProcessFixture(t)
+		if err := os.Chmod(dataPath, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		writeGuestDescriptor(t, procDir, "7", targetPath, 64, "0400040")
+		writeGuestDescriptor(t, procDir, "8", dataPath, 0, "0400040")
+		if err := validateRosettaGuestDescriptorsAt(procDir, targetPath, target); err != nil {
+			t.Fatalf("ordinary data descriptor was misclassified as a guest executable: %v", err)
+		}
+	})
+
+	t.Run("exact target plus exact reviewed privilege dropper", func(t *testing.T) {
+		procDir, targetPath, target, dropperPath := guestProcessFixture(t)
+		dropper, _, err := inspectExecutable(dropperPath, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeGuestDescriptor(t, procDir, "3", dropperPath, 0, "0400040")
+		writeGuestDescriptor(t, procDir, "4", dropperPath, 64, "0400040")
+		writeGuestDescriptor(t, procDir, "6", targetPath, 0, "0400040")
+		writeGuestDescriptor(t, procDir, "7", targetPath, 64, "0400040")
+		reviewed := reviewedGuestDescriptor{path: dropperPath, identity: dropper}
+		if err := validateRosettaGuestDescriptorsAt(procDir, targetPath, target, reviewed); err != nil {
+			t.Fatalf("exact target/dropper descriptor pairs rejected: %v", err)
+		}
+		if err := os.Remove(filepath.Join(procDir, "fd", "3")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(procDir, "fdinfo", "3")); err != nil {
+			t.Fatal(err)
+		}
+		if err := validateRosettaGuestDescriptorsAt(procDir, targetPath, target, reviewed); err == nil || !strings.Contains(err.Error(), "both exact privilege-dropper descriptors") {
+			t.Fatalf("incomplete privilege-dropper descriptor pair passed: %v", err)
+		}
+	})
+
+	for _, position := range []uint64{0, 64} {
+		position := position
+		t.Run(fmt.Sprintf("target plus foreign shaped position %d", position), func(t *testing.T) {
+			procDir, targetPath, target, foreignPath := guestProcessFixture(t)
+			if err := os.WriteFile(foreignPath, minimalELFExecutable(), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			writeGuestDescriptor(t, procDir, "7", targetPath, 64, "0400040")
+			writeGuestDescriptor(t, procDir, "8", foreignPath, position, "0400040")
+			if err := validateRosettaGuestDescriptorsAt(procDir, targetPath, target); err == nil || !strings.Contains(err.Error(), "neither the exact private binary nor an exact reviewed privilege dropper") {
+				t.Fatalf("foreign Rosetta-shaped descriptor was accepted: %v", err)
+			}
+		})
+	}
+
+	t.Run("target pathname replaced with foreign bytes", func(t *testing.T) {
+		procDir, targetPath, target, _ := guestProcessFixture(t)
+		if err := os.WriteFile(targetPath, []byte("foreign replacement executable bytes"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		writeGuestDescriptor(t, procDir, "7", targetPath, 64, "0400040")
+		if err := validateRosettaGuestDescriptorsAt(procDir, targetPath, target); err == nil || !strings.Contains(err.Error(), "private binary has foreign bytes") {
+			t.Fatalf("foreign object behind exact descriptor pathname was accepted: %v", err)
+		}
+	})
+}
+
+func guestProcessFixture(t *testing.T) (string, string, executableIdentity, string) {
+	t.Helper()
+	root := t.TempDir()
+	procDir := filepath.Join(root, "proc")
+	for _, directory := range []string{"map_files", "fd", "fdinfo"} {
+		if err := os.MkdirAll(filepath.Join(procDir, directory), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	targetPath := filepath.Join(root, "target")
+	foreignPath := filepath.Join(root, "foreign")
+	if err := os.WriteFile(targetPath, []byte("gate-built target executable bytes"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(foreignPath, []byte("caller-owned foreign executable bytes"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target, _, err := inspectExecutable(targetPath, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return procDir, targetPath, target, foreignPath
+}
+
+func writeGuestMaps(t *testing.T, procDir, targetPath string, target executableIdentity, foreignPath string, foreign executableIdentity) {
+	t.Helper()
+	targetDevice := procMapDeviceForTest(target.Device)
+	lines := []string{
+		fmt.Sprintf("1000-2000 r-xp 00000000 %s %d %s", targetDevice, target.Inode, targetPath),
+		fmt.Sprintf("2000-3000 r--p 00001000 %s %d %s", targetDevice, target.Inode, targetPath),
+	}
+	links := map[string]string{"1000-2000": targetPath, "2000-3000": targetPath}
+	if foreignPath != "" {
+		lines = append(lines, fmt.Sprintf("3000-4000 r-xp 00000000 %s %d %s", procMapDeviceForTest(foreign.Device), foreign.Inode, foreignPath))
+		links["3000-4000"] = foreignPath
+	}
+	if err := os.WriteFile(filepath.Join(procDir, "maps"), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, targetPath := range links {
+		if err := os.Symlink(targetPath, filepath.Join(procDir, "map_files", name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func writeGuestDescriptor(t *testing.T, procDir, fd, target string, position uint64, flags string) {
+	t.Helper()
+	if err := os.Symlink(target, filepath.Join(procDir, "fd", fd)); err != nil {
+		t.Fatal(err)
+	}
+	info := fmt.Sprintf("pos:\t%d\nflags:\t%s\n", position, flags)
+	if err := os.WriteFile(filepath.Join(procDir, "fdinfo", fd), []byte(info), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func procMapDeviceForTest(device uint64) string {
+	return fmt.Sprintf("%x:%x", unix.Major(device), unix.Minor(device))
+}
+
+func minimalELFExecutable() []byte {
+	// A complete ELF64 header with no program/section table is sufficient for
+	// debug/elf to classify ET_EXEC. The fixture intentionally has no owner
+	// relationship to the synthetic runtime UID used by the adversarial test.
+	header := make([]byte, 64)
+	copy(header, []byte{0x7f, 'E', 'L', 'F'})
+	header[4], header[5], header[6] = 2, 1, 1 // ELFCLASS64, little endian, v1.
+	header[16], header[18], header[20] = 2, 0x3e, 1
+	header[52] = 64
+	return header
+}
+
+func TestReviewedCompanionStatusRequiresDirectHardenedSignerShape(t *testing.T) {
+	valid := []byte("Name:\ttrstctl-signer\nState:\tS (sleeping)\nPPid:\t42\nNoNewPrivs:\t1\nSeccomp:\t2\n")
+	status, err := parseReviewedCompanionStatus(valid)
+	if err != nil || status.name != "trstctl-signer" || status.state != "S" || status.parentPID != 42 || status.noNewPrivs != "1" || status.seccomp != "2" {
+		t.Fatalf("valid hardened signer status rejected: %+v err=%v", status, err)
+	}
+	for name, replacement := range map[string]string{
+		"missing parent":  "PPid:\t42\n",
+		"missing nnp":     "NoNewPrivs:\t1\n",
+		"missing seccomp": "Seccomp:\t2\n",
+		"invalid state":   "State:\tS (sleeping)\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := strings.Replace(string(valid), replacement, "", 1)
+			if name == "invalid state" {
+				candidate += "State:\tinvalid\n"
+			}
+			if _, err := parseReviewedCompanionStatus([]byte(candidate)); err == nil {
+				t.Fatal("incomplete/invalid companion status accepted")
+			}
+		})
+	}
+}
+
+func TestUnreadableCompanionRequiresPreExecListenerCloseOnExec(t *testing.T) {
+	if err := requireLinuxDescriptorCloseOnExecFlags([]byte("pos:\t0\nflags:\t02000002\n")); err != nil {
+		t.Fatalf("Linux O_CLOEXEC listener flags rejected: %v", err)
+	}
+	for _, raw := range [][]byte{
+		[]byte("pos:\t0\nflags:\t00000002\n"),
+		[]byte("pos:\t0\nflags:\tnot-octal\n"),
+		[]byte("pos:\t0\n"),
+	} {
+		if err := requireLinuxDescriptorCloseOnExecFlags(raw); err == nil {
+			t.Fatalf("inheritable/malformed listener flags accepted: %q", raw)
+		}
+	}
+}
+
+func TestCompanionFDIsolationSourceRejectsInheritanceAndTransfer(t *testing.T) {
+	repo, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateCompanionFDIsolationSource(repo); err != nil {
+		t.Fatalf("committed signer supervisor FD isolation is red: %v", err)
+	}
+	writeFixture := func(t *testing.T, extra string) string {
+		t.Helper()
+		root := t.TempDir()
+		dir := filepath.Join(root, "internal", "signing")
+		for _, path := range []string{dir, filepath.Join(root, "cmd", "trstctl"), filepath.Join(root, "cmd", "trstctl-signer")} {
+			if err := os.MkdirAll(path, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module fixture.example\n\ngo 1.22\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		source := `package signing
+import (
+    "context"
+    "os/exec"
+)
+func run(ctx context.Context, binaryPath string, extraArgs []string) {
+    cmd := exec.CommandContext(ctx, binaryPath, extraArgs...)
+    _ = cmd
+` + extra + "\n}\n"
+		if err := os.WriteFile(filepath.Join(dir, "supervisor.go"), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "cmd", "trstctl", "main.go"), []byte("package main\nimport _ \"fixture.example/internal/signing\"\nfunc main() {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "cmd", "trstctl-signer", "main.go"), []byte("package main\nfunc main() {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+	t.Run("closed launch", func(t *testing.T) {
+		if err := validateCompanionFDIsolationSource(writeFixture(t, "")); err != nil {
+			t.Fatalf("closed os/exec launch rejected: %v", err)
+		}
+	})
+	t.Run("extra files", func(t *testing.T) {
+		if err := validateCompanionFDIsolationSource(writeFixture(t, "cmd.ExtraFiles = nil")); err == nil {
+			t.Fatal("Cmd.ExtraFiles inheritance was accepted")
+		}
+	})
+	t.Run("descriptor transfer", func(t *testing.T) {
+		root := writeFixture(t, "")
+		path := filepath.Join(root, "internal", "signing", "transfer.go")
+		if err := os.WriteFile(path, []byte("package signing\nfunc transfer(conn interface{ WriteMsgUnix([]byte, []byte, any) (int, int, error) }) { _, _, _ = conn.WriteMsgUnix(nil, nil, nil) }\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := validateCompanionFDIsolationSource(root); err == nil {
+			t.Fatal("Unix descriptor-transfer primitive was accepted")
+		}
+	})
+	t.Run("alternate production signer launch with inherited listener", func(t *testing.T) {
+		root := writeFixture(t, "")
+		dir := filepath.Join(root, "internal", "alternate")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		source := `package alternate
+import (
+    "os"
+    "os/exec"
+)
+// Spawn can create the same direct hardened signer child shape as the reviewed
+// supervisor, but explicitly hands it the control-plane listener descriptor.
+func Spawn(binaryPath string, listener *os.File) error {
+    cmd := exec.Command(binaryPath)
+    cmd.ExtraFiles = []*os.File{listener}
+    return cmd.Start()
+}
+`
+		if err := os.WriteFile(filepath.Join(dir, "alternate.go"), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		mainPath := filepath.Join(root, "cmd", "trstctl", "main.go")
+		mainSource := "package main\nimport (\n_ \"fixture.example/internal/signing\"\n_ \"fixture.example/internal/alternate\"\n)\nfunc main() {}\n"
+		if err := os.WriteFile(mainPath, []byte(mainSource), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := validateCompanionFDIsolationSource(root); err == nil || !strings.Contains(err.Error(), "internal/alternate/alternate.go") || !strings.Contains(err.Error(), "ExtraFiles") {
+			t.Fatalf("alternate production signer inheritance escaped exact closure audit: %v", err)
+		}
+	})
+}
+
+func TestCompanionFDPrimitiveAuditRejectsEveryBypassFamily(t *testing.T) {
+	tests := map[string]string{
+		"extra files":          "package p\nfunc f(cmd interface{ Start() error }) { _ = cmd; cmd.ExtraFiles = nil }\n",
+		"proc attr files":      "package p\nimport \"os\"\nvar _ = os.ProcAttr{Files: []*os.File{}}\n",
+		"proc attr assignment": "package p\nimport \"os\"\nfunc f() { var attr os.ProcAttr; attr.Files = nil }\n",
+		"start process":        "package p\nimport \"os\"\nvar _ = os.StartProcess\n",
+		"fork exec":            "package p\nimport \"syscall\"\nvar _ = syscall.ForkExec\n",
+		"unix rights":          "package p\nimport \"syscall\"\nvar _ = syscall.UnixRights\n",
+		"socket method":        "package p\nfunc f(conn interface{ WriteMsgUnix([]byte, []byte, any) (int, int, error) }) { _, _, _ = conn.WriteMsgUnix(nil, nil, nil) }\n",
+		"pidfd":                "package p\nimport unix \"golang.org/x/sys/unix\"\nvar _ = unix.PidfdGetfd\n",
+		"raw syscall":          "package p\nimport \"syscall\"\nvar _ = syscall.RawSyscall\n",
+		"descriptor dup":       "package p\nimport unix \"golang.org/x/sys/unix\"\nvar _ = unix.Dup3\n",
+	}
+	for name, source := range tests {
+		t.Run(name, func(t *testing.T) {
+			parsed, err := parser.ParseFile(token.NewFileSet(), name+".go", source, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := auditCompanionFDPrimitives(parsed, map[*ast.SelectorExpr]bool{}); err == nil {
+				t.Fatal("FD inheritance/transfer bypass primitive was accepted")
+			}
+		})
+	}
+}
+
+func TestBoundedResponseDiagnosticIsSanitizedAndBounded(t *testing.T) {
+	body, err := json.Marshal(map[string]any{
+		"type":   "urn:trstctl:test\nproblem",
+		"title":  "provider failed",
+		"status": 500,
+		"code":   "provider_error",
+		"detail": "with detail\x00" + strings.Repeat("x", 4096),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagnostic := boundedResponseDiagnostic(body)
+	if !strings.Contains(diagnostic, `title="provider failed"`) ||
+		!strings.Contains(diagnostic, `status=500`) ||
+		!strings.Contains(diagnostic, `code="provider_error"`) ||
+		!strings.Contains(diagnostic, `detail="with detail`) ||
+		strings.ContainsAny(diagnostic, "\r\n\x00") {
+		t.Fatalf("response diagnostic was not useful/sanitized: %q", diagnostic)
+	}
+	if len(diagnostic) > 2048 {
+		t.Fatalf("response diagnostic length = %d, want <= 2048", len(diagnostic))
+	}
+
+	nonProblem := []byte("provider secret must not appear")
+	nonProblemDiagnostic := boundedResponseDiagnostic(nonProblem)
+	if strings.Contains(nonProblemDiagnostic, "provider secret") ||
+		!strings.Contains(nonProblemDiagnostic, fmt.Sprintf("size=%d", len(nonProblem))) ||
+		!strings.Contains(nonProblemDiagnostic, internalcrypto.SHA256Hex(nonProblem)) {
+		t.Fatalf("non-problem diagnostic exposed content or omitted its identity: %q", nonProblemDiagnostic)
+	}
+}
+
+func TestLaunchedResponseStatusCodeExposesOnlyGateOwnedStatus(t *testing.T) {
+	response := &launchedResponse{id: "hsm_kms.tpm2", response: &http.Response{StatusCode: http.StatusServiceUnavailable}}
+	if got := LaunchedResponseStatusCode(t, "hsm_kms.tpm2", response); got != http.StatusServiceUnavailable {
+		t.Fatalf("launched response status = %d, want %d", got, http.StatusServiceUnavailable)
+	}
+}
+
+func TestShippedBuildEnvironmentUsesShortRuntimeAlias(t *testing.T) {
+	expected := expectation{LaunchedCGOEnabled: "0", LaunchedGOOS: "linux", LaunchedGOARCH: "amd64"}
+	environment := shippedBuildEnvironment(expected, "/long/host/receipt/shipped-cache", RuntimeTempDir)
+	values := map[string]string{}
+	for _, item := range environment {
+		name, value, ok := strings.Cut(item, "=")
+		if ok {
+			values[name] = value
+		}
+	}
+	if values["HOME"] != "/dod-tmp" || values["TMPDIR"] != "/dod-tmp" {
+		t.Fatalf("shipped build HOME/TMPDIR = %q/%q", values["HOME"], values["TMPDIR"])
+	}
+	if values["GOCACHE"] != "/long/host/receipt/shipped-cache" {
+		t.Fatalf("shipped build GOCACHE = %q", values["GOCACHE"])
+	}
+	if len(filepath.Join(RuntimeTempDir, "go-build1234567890", "b001", "importcfg.link")) >= 108 {
+		t.Fatal("short shipped-build temporary path no longer leaves Unix-socket headroom")
+	}
+}
+
+func TestTranslateMountSuffixIsClosedToShortRuntimeTree(t *testing.T) {
+	hostRoot := "/private/tmp/trstctl-dod-receipts-123"
+	aliasRoot := RuntimeTempDir
+	candidate := filepath.Join(aliasRoot, "TestDODManagedKeyProductionAssembly", "002")
+	want := filepath.Join(hostRoot, "TestDODManagedKeyProductionAssembly", "002")
+	if got, err := translateMountSuffix(hostRoot, aliasRoot, candidate); err != nil || got != want {
+		t.Fatalf("translated mount = %q err=%v, want %q", got, err, want)
+	}
+	for _, invalid := range []struct {
+		hostRoot string
+		alias    string
+		path     string
+	}{
+		{hostRoot: hostRoot, alias: aliasRoot, path: aliasRoot},
+		{hostRoot: hostRoot, alias: aliasRoot, path: "/dod-tmp-other/002"},
+		{hostRoot: hostRoot, alias: aliasRoot, path: "/dod-tmp/../etc"},
+		{hostRoot: hostRoot, alias: aliasRoot, path: "relative/path"},
+		{hostRoot: "relative/root", alias: aliasRoot, path: candidate},
+		{hostRoot: hostRoot + ",forged", alias: aliasRoot, path: candidate},
+	} {
+		if got, err := translateMountSuffix(invalid.hostRoot, invalid.alias, invalid.path); err == nil {
+			t.Errorf("unsafe mount translation passed as %q: %+v", got, invalid)
+		}
+	}
+}
+
+func TestMountTranslationIdentityRejectsSymlinkAndForeignObject(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := filepath.Join(root, "first")
+	second := filepath.Join(root, "second")
+	if err := os.Mkdir(first, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(second, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMountTranslationIdentity(root, root, first, first); err != nil {
+		t.Fatalf("same private object rejected: %v", err)
+	}
+	if err := validateMountTranslationIdentity(root, root, first, second); err == nil {
+		t.Fatal("foreign object passed translated mount identity")
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(first, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMountTranslationIdentity(root, root, link, link); err == nil {
+		t.Fatal("symlink object passed translated mount identity")
+	}
+	rootLink := filepath.Join(filepath.Dir(root), filepath.Base(root)+"-link")
+	if err := os.Symlink(root, rootLink); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(rootLink) })
+	if err := validateMountTranslationIdentity(root, rootLink, first, filepath.Join(rootLink, "first")); err == nil {
+		t.Fatal("symlink runtime root passed translated mount identity")
+	}
+}
 
 const proofCleanupModeEnv = "TRSTCTL_PROOF_CLEANUP_MODE"
 const proofCleanupMarkerEnv = "TRSTCTL_PROOF_CLEANUP_MARKER"
@@ -55,7 +682,8 @@ func TestStartCompleteWritesUnsignedEvidenceForParentGate(t *testing.T) {
 		Verifier:          "external-write", ReceiptFile: receiptFile, EvidenceFile: evidenceFile,
 		RuntimeRunnerIdentity: "runner@sha256:" + strings.Repeat("c", 64),
 		RuntimeRunnerImage:    "sha256:" + strings.Repeat("d", 64),
-		BrokerEndpoint:        "http://127.0.0.1:1", BrokerToken: "parent-broker-token",
+		RuntimeTestPackage:    "./internal/server", RuntimeCGOEnabled: "0", RuntimeGOOS: "linux", RuntimeGOARCH: "amd64",
+		BrokerEndpoint: "http://127.0.0.1:1", BrokerToken: "parent-broker-token",
 	}
 	payload, err := json.Marshal([]expectation{expected})
 	if err != nil {
@@ -236,6 +864,58 @@ func TestExternalSubstrateCleanupAfterFatal(t *testing.T) {
 		t.Fatalf("substrate process %d survived fatal-driver cleanup", pid)
 	} else if !errors.Is(err, syscall.ESRCH) {
 		t.Fatalf("probe cleaned substrate pid %d: %v", pid, err)
+	}
+}
+
+func TestShippedProcessCommandDropsRunnerAuditCapability(t *testing.T) {
+	name, args := shippedProcessCommand("/private/dod-bin/trstctl", "serve")
+	if name != "/usr/bin/setpriv" {
+		t.Fatalf("shipped process dropper = %q", name)
+	}
+	want := []string{
+		"--clear-groups",
+		"--inh-caps=-checkpoint_restore,-setgid",
+		"--ambient-caps=-checkpoint_restore,-setgid",
+		"/private/dod-bin/trstctl",
+		"serve",
+	}
+	if strings.Join(args, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("shipped process argv = %v, want %v", args, want)
+	}
+}
+
+func TestValidateShippedProcessStatusRejectsAuditCapabilityLeak(t *testing.T) {
+	status := func(capEff, capBnd, noNewPrivs, seccomp string) []byte {
+		return []byte(strings.Join([]string{
+			"Uid:\t501\t501\t501\t501",
+			"Gid:\t20\t20\t20\t20",
+			"Groups:\t",
+			"TracerPid:\t0",
+			"CapInh:\t0000000000000000",
+			"CapPrm:\t0000000000000000",
+			"CapEff:\t" + capEff,
+			"CapBnd:\t" + capBnd,
+			"CapAmb:\t0000000000000000",
+			"NoNewPrivs:\t" + noNewPrivs,
+			"Seccomp:\t" + seccomp,
+		}, "\n"))
+	}
+	if err := validateShippedProcessStatus(status("0000000000000000", "0000010000000040", "1", "2"), 501, 20); err != nil {
+		t.Fatalf("bounded unprivileged shipped status rejected: %v", err)
+	}
+	for name, raw := range map[string][]byte{
+		"effective audit capability":  status("0000010000000000", "0000010000000040", "1", "2"),
+		"foreign bounding capability": status("0000000000000000", "0000010000080040", "1", "2"),
+		"new privileges enabled":      status("0000000000000000", "0000010000000040", "0", "2"),
+		"seccomp disabled":            status("0000000000000000", "0000010000000040", "1", "0"),
+		"Docker group retained":       bytes.Replace(status("0000000000000000", "0000010000000040", "1", "2"), []byte("Groups:\t\n"), []byte("Groups:\t20\n"), 1),
+		"tracer attached":             bytes.Replace(status("0000000000000000", "0000010000000040", "1", "2"), []byte("TracerPid:\t0"), []byte("TracerPid:\t99"), 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateShippedProcessStatus(raw, 501, 20); err == nil {
+				t.Fatal("unsafe shipped-process privilege status passed")
+			}
+		})
 	}
 }
 

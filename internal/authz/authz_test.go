@@ -278,6 +278,7 @@ func TestMachineBuiltinRolesPinned(t *testing.T) {
 			authz.SecretsWrite,
 			authz.KeysRead,
 			authz.KeysWrite,
+			authz.KeysApprove,
 		},
 	}
 	roles := authz.BuiltinRoles()

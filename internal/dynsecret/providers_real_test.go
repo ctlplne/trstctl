@@ -292,6 +292,9 @@ func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
 		}},
 		{"redis", redisBackend, func(ref string) {
 			redisSrv.require(t, "ACL SETUSER "+ref)
+			redisSrv.require(t, "~* +@read +ping +select")
+			redisSrv.reject(t, "+@connection")
+			redisSrv.reject(t, "+@all")
 			redisSrv.require(t, "ACL DELUSER "+ref)
 		}},
 		{"kubernetes", k8sBackend, func(ref string) {
@@ -629,6 +632,17 @@ func (s *respServer) require(t *testing.T, want string) {
 		}
 	}
 	t.Fatalf("RESP command containing %q not found in %#v", want, s.seen)
+}
+
+func (s *respServer) reject(t *testing.T, forbidden string) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, got := range s.seen {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("RESP command unexpectedly contains %q: %q", forbidden, got)
+		}
+	}
 }
 
 func parseRESPArray(raw string) []string {

@@ -79,10 +79,24 @@ func incidentNotificationChannelsFromConfig(cfg config.Notifications, guard *egr
 	return channels, nil
 }
 
-func closeNotificationChannelsOnError(channels []notify.Notifier, buildErr error) {
-	if buildErr != nil {
-		closeNotificationChannels(channels)
+// completeRunNotificationChannels creates the ownership token immediately after
+// core notification construction, before PagerDuty/OpsGenie construction can
+// fail. That closes the formerly unowned gap between the two constructors.
+func completeRunNotificationChannels(core []notify.Notifier, buildIncident func() ([]notify.Notifier, error)) (_ []notify.Notifier, _ *notificationChannelOwnership, err error) {
+	deps := Deps{NotificationChannels: core}
+	owner := ensureNotificationChannelOwnership(&deps)
+	defer func() {
+		if err != nil {
+			owner.closeUntransferred()
+		}
+	}()
+	incident, err := buildIncident()
+	if err != nil {
+		return nil, nil, err
 	}
+	deps.NotificationChannels = append(deps.NotificationChannels, incident...)
+	ensureNotificationChannelOwnership(&deps)
+	return deps.NotificationChannels, owner, nil
 }
 
 func closeNotificationChannels(channels []notify.Notifier) {

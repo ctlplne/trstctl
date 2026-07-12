@@ -16,13 +16,23 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	dodproof "trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
 var runtimeRunnerIdentityClosure = []string{
 	"go.mod",
 	"go.sum",
 	"tools/dodcensus/Dockerfile.runtime-runner",
+	"tools/dodcensus/runtime-runner-base.txt",
 }
+
+const runtimeRunnerBaseFile = "tools/dodcensus/runtime-runner-base.txt"
+
+const (
+	runtimeRunnerAuditCapabilities  = "checkpoint_restore,+setgid"
+	runtimeRunnerAuditCapabilityHex = "0000010000000040"
+)
 
 func validateRuntimeRunnerProof(where string, profile BuildProfile) error {
 	proof := profile.RuntimeRunner
@@ -70,6 +80,12 @@ func inspectRuntimeRunnerProof(repo string, profile BuildProfile) checkEvidence 
 		evidence.Detail = fmt.Sprintf("runtime runner identity does not bind closure digest %s", digest)
 		return evidence
 	}
+	baseReference, err := runtimeRunnerBaseReference(repo)
+	if err != nil {
+		evidence.Detail = "runtime runner base pin: " + err.Error()
+		return evidence
+	}
+	evidence.Required = append(evidence.Required, "runtime_runner_base="+baseReference)
 	path, err := safeRepoPath(repo, proof.Dockerfile)
 	if err != nil {
 		evidence.Detail = err.Error()
@@ -113,7 +129,7 @@ func inspectRuntimeRunnerProof(repo string, profile BuildProfile) checkEvidence 
 		}
 	}
 	evidence.OK = true
-	evidence.Found = append([]string(nil), required...)
+	evidence.Found = append([]string(nil), evidence.Required...)
 	evidence.Detail = "runtime runner base, package snapshot, module bytes, platform, and identity closure are pinned"
 	return evidence
 }
@@ -142,10 +158,71 @@ import pathlib
 import socket
 import stat
 import subprocess
+import time
 import urllib.request
 
 if os.geteuid() == 0:
     raise RuntimeError("runtime runner unexpectedly has root privileges")
+
+expected_uid = int(os.environ["TRSTCTL_DOD_PREFLIGHT_UID"])
+expected_gid = int(os.environ["TRSTCTL_DOD_PREFLIGHT_GID"])
+expected_socket_uid = int(os.environ["TRSTCTL_DOD_PREFLIGHT_SOCKET_UID"])
+expected_socket_gid = int(os.environ["TRSTCTL_DOD_PREFLIGHT_SOCKET_GID"])
+if os.geteuid() != expected_uid or os.getegid() != expected_gid:
+    raise RuntimeError("runtime runner identity is %d:%d, want %d:%d" % (
+        os.geteuid(), os.getegid(), expected_uid, expected_gid,
+    ))
+if os.getgroups() != [expected_socket_gid]:
+    raise RuntimeError("runtime runner supplementary groups are %r, want only Docker socket gid %d" % (
+        os.getgroups(), expected_socket_gid,
+    ))
+if expected_socket_uid == expected_uid or expected_socket_gid == expected_gid:
+    raise RuntimeError("Docker socket owner/group overlaps the shipped process primary identity")
+
+process_status = {}
+for line in pathlib.Path("/proc/self/status").read_text().splitlines():
+    key, separator, value = line.partition(":")
+    if separator:
+        process_status[key] = value.strip().split()[0]
+expected_capability = "` + runtimeRunnerAuditCapabilityHex + `"
+for field in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"):
+    if process_status.get(field) != expected_capability:
+        raise RuntimeError("runtime runner %s is %r, want only CAP_CHECKPOINT_RESTORE plus SETGID (%s)" % (
+            field, process_status.get(field), expected_capability,
+        ))
+if process_status.get("NoNewPrivs") != "1":
+    raise RuntimeError("runtime runner did not preserve no-new-privileges")
+if process_status.get("Seccomp") != "2":
+    raise RuntimeError("runtime runner is not confined by a seccomp filter")
+
+# Capability masks alone do not prove that this kernel assigns map_files to
+# CAP_CHECKPOINT_RESTORE. Exercise the exact operation used by the launched
+# binary proof and reject old kernels rather than broadening to SYS_ADMIN.
+map_probe = subprocess.Popen(["/usr/bin/sleep", "10"])
+try:
+    map_deadline = time.monotonic() + 2
+    while True:
+        map_rows = [
+            line.split() for line in pathlib.Path("/proc/%d/maps" % map_probe.pid).read_text().splitlines()
+            if "r-xp" in line and line.endswith("/usr/bin/sleep")
+        ]
+        if len(map_rows) == 1:
+            break
+        if map_probe.poll() is not None:
+            raise RuntimeError("map_files preflight child exited before its executable map appeared")
+        if time.monotonic() >= map_deadline:
+            raise RuntimeError("map_files preflight found %d executable sleep mappings" % len(map_rows))
+        time.sleep(0.01)
+    map_file = pathlib.Path("/proc/%d/map_files/%s" % (map_probe.pid, map_rows[0][0]))
+    descriptor = os.open(map_file, os.O_RDONLY)
+    try:
+        if os.read(descriptor, 4) != b"\x7fELF":
+            raise RuntimeError("map_files preflight did not open the mapped ELF object")
+    finally:
+        os.close(descriptor)
+finally:
+    map_probe.terminate()
+    map_probe.wait(timeout=5)
 
 version = subprocess.run(
     ["/usr/local/go/bin/go", "version"],
@@ -201,6 +278,37 @@ for variable in ("TRSTCTL_DOD_PREFLIGHT_CACHE", "TRSTCTL_DOD_PREFLIGHT_RECEIPTS"
         os.close(descriptor)
         probe.unlink()
 
+receipt_directory = pathlib.Path(os.environ["TRSTCTL_DOD_PREFLIGHT_RECEIPTS"])
+short_directory = pathlib.Path(os.environ["TRSTCTL_DOD_PREFLIGHT_SHORT_TMP"])
+if not os.path.samefile(receipt_directory, short_directory):
+    raise RuntimeError("short runtime path is not the private receipt mount")
+short_probe = short_directory / ".trstctl-dod-short-path-preflight"
+descriptor = os.open(short_probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+try:
+    os.write(descriptor, b"short-runtime-path")
+    os.fsync(descriptor)
+finally:
+    os.close(descriptor)
+if (receipt_directory / short_probe.name).read_bytes() != b"short-runtime-path":
+    raise RuntimeError("short runtime path does not share receipt bytes")
+short_probe.unlink()
+
+system_tmp = pathlib.Path("/tmp")
+metadata = os.stat(system_tmp)
+capacity = os.statvfs(system_tmp).f_blocks * os.statvfs(system_tmp).f_frsize
+if not stat.S_ISDIR(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o1777 or capacity <= 0 or capacity > 64 * 1024 * 1024:
+    raise RuntimeError("/tmp is not the bounded private 01777 tmpfs")
+tmp_probe = system_tmp / ".trstctl-dod-tmpfs-preflight"
+descriptor = os.open(tmp_probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+os.close(descriptor)
+tmp_probe.unlink()
+
+socket_metadata = os.stat("/var/run/docker.sock")
+if (not stat.S_ISSOCK(socket_metadata.st_mode) or
+        socket_metadata.st_uid != expected_socket_uid or
+        socket_metadata.st_gid != expected_socket_gid or
+        socket_metadata.st_mode & 0o020 == 0 or socket_metadata.st_mode & 0o002 != 0):
+    raise RuntimeError("mounted Docker socket identity/mode changed after host inspection")
 daemon = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 daemon.settimeout(5)
 try:
@@ -221,7 +329,6 @@ with urllib.request.urlopen(request, timeout=5) as response:
 
 var reviewedHostDockerCommands = map[string]bool{
 	"build":   true,
-	"buildx":  true,
 	"context": true,
 	"image":   true,
 	"network": true,
@@ -241,23 +348,14 @@ func (r *linuxRuntimeExecutor) prepare(ctx context.Context, repo string, profile
 	if image := r.images[profile.RuntimeRunner.Identity]; image != "" {
 		return image, nil
 	}
-	version, err := runtimeRunnerGoVersion(repo)
+	baseReference, err := runtimeRunnerBaseReference(repo)
 	if err != nil {
 		return "", err
-	}
-	baseTag := "golang:" + version + "-bookworm"
-	resolved := runHostCommand(ctx, repo, "docker", "buildx", "imagetools", "inspect", baseTag, "--format", "{{.Manifest.Digest}}")
-	if resolved.Err != nil {
-		return "", fmt.Errorf("resolve runtime runner base %s: %w: %s", baseTag, resolved.Err, strings.TrimSpace(resolved.Stderr+resolved.Stdout))
-	}
-	baseDigest, err := parseContentImageID(resolved.Stdout)
-	if err != nil {
-		return "", fmt.Errorf("resolve runtime runner base %s: %w", baseTag, err)
 	}
 	identityDigest := strings.TrimPrefix(profile.RuntimeRunner.Identity[strings.LastIndex(profile.RuntimeRunner.Identity, "@")+1:], "sha256:")
 	tag := "trstctl-dod-runtime-runner:" + identityDigest[:16]
 	built := runHostCommand(ctx, repo, "docker", "build", "--platform", profile.RuntimeRunner.Platform,
-		"-f", profile.RuntimeRunner.Dockerfile, "--build-arg", "BASE_IMAGE=golang@"+baseDigest, "-t", tag, ".")
+		"-f", profile.RuntimeRunner.Dockerfile, "--build-arg", "BASE_IMAGE="+baseReference, "-t", tag, ".")
 	if built.Err != nil {
 		return "", fmt.Errorf("build pinned runtime runner: %w: %s", built.Err, strings.TrimSpace(built.Stderr+built.Stdout))
 	}
@@ -313,9 +411,12 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 	if err != nil {
 		return commandResult{Err: err, ExitCode: -1}
 	}
-	socketGID, err := runtimeDockerSocketContainerGID(ctx, repo, profile.RuntimeRunnerImage, profile.RuntimeRunner.Platform, socket, userSpec)
+	socketUID, socketGID, err := runtimeDockerSocketContainerIdentity(ctx, repo, profile.RuntimeRunnerImage, profile.RuntimeRunner.Platform, socket, userSpec)
 	if err != nil {
 		return commandResult{Err: err, ExitCode: -1}
+	}
+	if socketUID == uid || socketGID == gid {
+		return commandResult{Err: fmt.Errorf("docker socket owner/group overlaps the shipped process primary identity"), ExitCode: -1}
 	}
 	passwdFile, groupFile, err := runtimeRunnerNSSFiles(receiptDir, uid, gid)
 	if err != nil {
@@ -327,20 +428,16 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 	dockerArgs = append(dockerArgs, hostArgs...)
 	dockerArgs = append(dockerArgs, runtimeRunnerIsolationArgs()...)
 	dockerArgs = append(dockerArgs,
-		"--group-add", strconv.FormatUint(uint64(socketGID), 10),
-		"--user", userSpec,
 		"--workdir", repo,
 		"--mount", "type=bind,src="+repo+",dst="+repo+",readonly",
 		"--mount", "type=bind,src="+cacheDir+",dst="+cacheDir,
-		"--mount", "type=bind,src="+receiptDir+",dst="+receiptDir,
 		"--mount", "type=bind,src="+socket+",dst=/var/run/docker.sock",
 		"--mount", "type=bind,src="+passwdFile+",dst=/etc/passwd,readonly",
 		"--mount", "type=bind,src="+groupFile+",dst=/etc/group,readonly",
 	)
+	dockerArgs = append(dockerArgs, runtimeRunnerScratchArgs(receiptDir)...)
 	dockerArgs = append(dockerArgs, runtimeRunnerGoEnvironment(profile, cacheDir)...)
 	dockerArgs = append(dockerArgs,
-		"--env", "HOME="+receiptDir,
-		"--env", "TMPDIR="+receiptDir,
 		"--env", "DOCKER_HOST=unix:///var/run/docker.sock",
 		"--env", "TRSTCTL_RUNTIME_DOCKER_HOST=host.docker.internal",
 	)
@@ -359,11 +456,18 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 	preflightArgs = append(preflightArgs,
 		"--env", "TRSTCTL_DOD_PREFLIGHT_CACHE="+cacheDir,
 		"--env", "TRSTCTL_DOD_PREFLIGHT_RECEIPTS="+receiptDir,
+		"--env", "TRSTCTL_DOD_PREFLIGHT_SHORT_TMP="+dodproof.RuntimeTempDir,
 		"--env", "TRSTCTL_DOD_PREFLIGHT_BROKER="+profile.RuntimeBroker.clientEndpoint()+"/healthz",
 		"--env", "TRSTCTL_DOD_PREFLIGHT_TOKEN="+profile.RuntimeBroker.token,
-		"--entrypoint", "/usr/bin/python3",
-		profile.RuntimeRunnerImage, "-c", runtimeRunnerPreflightProgram(),
+		"--env", "TRSTCTL_DOD_PREFLIGHT_UID="+strconv.FormatUint(uint64(uid), 10),
+		"--env", "TRSTCTL_DOD_PREFLIGHT_GID="+strconv.FormatUint(uint64(gid), 10),
+		"--env", "TRSTCTL_DOD_PREFLIGHT_SOCKET_GID="+strconv.FormatUint(uint64(socketGID), 10),
+		"--env", "TRSTCTL_DOD_PREFLIGHT_SOCKET_UID="+strconv.FormatUint(uint64(socketUID), 10),
+		"--entrypoint", "/usr/bin/setpriv",
+		profile.RuntimeRunnerImage,
 	)
+	preflightArgs = append(preflightArgs, runtimeRunnerPrivilegeDropArgs(uid, gid, socketGID)...)
+	preflightArgs = append(preflightArgs, "/usr/bin/python3", "-c", runtimeRunnerPreflightProgram())
 	preflight := runHostCommand(ctx, repo, "docker", preflightArgs...)
 	if preflight.Err != nil {
 		return commandResult{
@@ -371,13 +475,53 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 			Err: fmt.Errorf("pinned runtime module-cache/write/Docker/broker preflight: %w", preflight.Err),
 		}
 	}
-	dockerArgs = append(dockerArgs, profile.RuntimeRunnerImage)
+	dockerArgs = append(dockerArgs, "--entrypoint", "/usr/bin/setpriv", profile.RuntimeRunnerImage)
+	dockerArgs = append(dockerArgs, runtimeRunnerPrivilegeDropArgs(uid, gid, socketGID)...)
+	dockerArgs = append(dockerArgs, "/usr/local/go/bin/go")
 	dockerArgs = append(dockerArgs, args...)
 	return runHostCommand(ctx, repo, "docker", dockerArgs...)
 }
 
 func runtimeRunnerIsolationArgs() []string {
-	return []string{"--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"}
+	// Docker discards capabilities when --user selects a non-root UID. Start the
+	// pinned setpriv entrypoint with only the three capabilities needed to drop
+	// identity/bounds plus CHECKPOINT_RESTORE, then exec the audit itself as the
+	// host UID with CHECKPOINT_RESTORE and SETGID in every capability set. SETGID
+	// exists only so the audit can clear its Docker-socket supplementary group
+	// from the shipped child. The preflight verifies the exact final masks.
+	return []string{
+		"--read-only",
+		"--cap-drop", "ALL",
+		"--cap-add", "CHECKPOINT_RESTORE",
+		"--cap-add", "SETUID",
+		"--cap-add", "SETGID",
+		"--cap-add", "SETPCAP",
+		"--security-opt", "no-new-privileges",
+		"--user", "0:0",
+	}
+}
+
+func runtimeRunnerPrivilegeDropArgs(uid, gid, socketGID uint32) []string {
+	return []string{
+		"--reuid=" + strconv.FormatUint(uint64(uid), 10),
+		"--regid=" + strconv.FormatUint(uint64(gid), 10),
+		"--groups=" + strconv.FormatUint(uint64(socketGID), 10),
+		"--inh-caps=+" + runtimeRunnerAuditCapabilities,
+		"--ambient-caps=+" + runtimeRunnerAuditCapabilities,
+		"--bounding-set=-all,+" + runtimeRunnerAuditCapabilities,
+	}
+}
+
+func runtimeRunnerScratchArgs(receiptDir string) []string {
+	return []string{
+		"--mount", "type=bind,src=" + receiptDir + ",dst=" + receiptDir,
+		"--mount", "type=bind,src=" + receiptDir + ",dst=" + dodproof.RuntimeTempDir,
+		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777",
+		"--env", "HOME=" + dodproof.RuntimeTempDir,
+		"--env", "TMPDIR=" + dodproof.RuntimeTempDir,
+		"--env", dodproof.HostReceiptRootEnv + "=" + receiptDir,
+		"--env", dodproof.RuntimeTempRootEnv + "=" + dodproof.RuntimeTempDir,
+	}
 }
 
 func runtimeRunnerGoEnvironment(profile BuildProfile, cacheDir string) []string {
@@ -414,31 +558,32 @@ func runtimeRunnerPreflightProgram() string {
 	return "import base64;exec(base64.b64decode('" + encoded + "'))"
 }
 
-func runtimeDockerSocketContainerGID(ctx context.Context, repo, image, platform, socket, userSpec string) (uint32, error) {
+func runtimeDockerSocketContainerIdentity(ctx context.Context, repo, image, platform, socket, userSpec string) (uint32, uint32, error) {
 	args := []string{
 		"run", "--rm", "--pull=never", "--platform", platform, "--network", "none",
 		"--security-opt", "no-new-privileges", "--user", userSpec,
 		"--mount", "type=bind,src=" + socket + ",dst=/var/run/docker.sock",
-		"--entrypoint", "/usr/bin/stat", image, "-c", "%g %a %F", "/var/run/docker.sock",
+		"--entrypoint", "/usr/bin/stat", image, "-c", "%u %g %a %F", "/var/run/docker.sock",
 	}
 	result := runHostCommand(ctx, repo, "docker", args...)
 	if result.Err != nil {
-		return 0, fmt.Errorf("inspect mounted Docker socket group: %w: %s", result.Err, strings.TrimSpace(result.Stderr+result.Stdout))
+		return 0, 0, fmt.Errorf("inspect mounted Docker socket identity: %w: %s", result.Err, strings.TrimSpace(result.Stderr+result.Stdout))
 	}
-	return parseRuntimeSocketGID(result.Stdout)
+	return parseRuntimeSocketIdentity(result.Stdout)
 }
 
-func parseRuntimeSocketGID(raw string) (uint32, error) {
+func parseRuntimeSocketIdentity(raw string) (uint32, uint32, error) {
 	fields := strings.Fields(raw)
-	if len(fields) != 3 || fields[2] != "socket" {
-		return 0, fmt.Errorf("mounted Docker endpoint metadata %q is not an exact Unix socket", strings.TrimSpace(raw))
+	if len(fields) != 4 || fields[3] != "socket" {
+		return 0, 0, fmt.Errorf("mounted Docker endpoint metadata %q is not an exact Unix socket", strings.TrimSpace(raw))
 	}
-	parsed, err := strconv.ParseUint(fields[0], 10, 32)
-	mode, modeErr := strconv.ParseUint(fields[1], 8, 12)
-	if err != nil || modeErr != nil || mode&0o020 == 0 || mode&0o002 != 0 {
-		return 0, fmt.Errorf("mounted Docker socket group/mode %q is not a bounded group-write boundary", strings.TrimSpace(raw))
+	uid, uidErr := strconv.ParseUint(fields[0], 10, 32)
+	gid, gidErr := strconv.ParseUint(fields[1], 10, 32)
+	mode, modeErr := strconv.ParseUint(fields[2], 8, 12)
+	if uidErr != nil || gidErr != nil || modeErr != nil || mode&0o020 == 0 || mode&0o002 != 0 {
+		return 0, 0, fmt.Errorf("mounted Docker socket owner/group/mode %q is not a bounded group-write boundary", strings.TrimSpace(raw))
 	}
-	return uint32(parsed), nil
+	return uint32(uid), uint32(gid), nil
 }
 
 func runtimeRunnerNSSFiles(receiptDir string, uid, gid uint32) (string, string, error) {
@@ -538,18 +683,67 @@ func runtimeRunnerGoVersion(repo string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read runtime runner go.mod: %w", err)
 	}
-	fields := strings.Fields(string(raw))
-	for index := 0; index+1 < len(fields); index++ {
-		if fields[index] != "toolchain" {
+	toolchain := ""
+	for _, rawLine := range strings.Split(string(raw), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if !strings.HasPrefix(line, "toolchain") {
 			continue
 		}
-		version := strings.TrimPrefix(fields[index+1], "go")
-		if version == "" || strings.Trim(version, "0123456789.") != "" {
-			return "", fmt.Errorf("toolchain %q is not an exact numeric Go version", fields[index+1])
+		fields := strings.Fields(line)
+		if rawLine != line || len(fields) != 2 || fields[0] != "toolchain" || line != "toolchain "+fields[1] || toolchain != "" {
+			return "", fmt.Errorf("go.mod toolchain directive is duplicated or not one exact active line")
 		}
-		return version, nil
+		toolchain = fields[1]
 	}
-	return "", fmt.Errorf("go.mod has no exact toolchain directive")
+	if !strings.HasPrefix(toolchain, "go") {
+		return "", fmt.Errorf("go.mod has no exact toolchain directive")
+	}
+	version := strings.TrimPrefix(toolchain, "go")
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return "", fmt.Errorf("toolchain %q is not an exact three-component numeric Go version", toolchain)
+	}
+	for _, part := range parts {
+		if part == "" || strings.Trim(part, "0123456789") != "" {
+			return "", fmt.Errorf("toolchain %q is not an exact three-component numeric Go version", toolchain)
+		}
+	}
+	return version, nil
+}
+
+func runtimeRunnerBaseReference(repo string) (string, error) {
+	path, err := safeRepoPath(repo, runtimeRunnerBaseFile)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", fmt.Errorf("inspect committed runtime runner base: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() <= 0 || info.Size() > 256 {
+		return "", fmt.Errorf("committed runtime runner base is not a bounded regular file")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read committed runtime runner base: %w", err)
+	}
+	version, err := runtimeRunnerGoVersion(repo)
+	if err != nil {
+		return "", err
+	}
+	prefix := "golang:" + version + "-bookworm@"
+	if len(raw) <= len(prefix)+1 || raw[len(raw)-1] != '\n' {
+		return "", fmt.Errorf("runtime runner base must be exactly %ssha256:<64 lowercase hex> plus one newline", prefix)
+	}
+	value := string(raw[:len(raw)-1])
+	if !strings.HasPrefix(value, prefix) {
+		return "", fmt.Errorf("runtime runner base must be exactly %ssha256:<64 lowercase hex> plus one newline", prefix)
+	}
+	digest := value[len(prefix):]
+	if !digestPattern.MatchString(digest) || string(raw) != prefix+digest+"\n" {
+		return "", fmt.Errorf("runtime runner base digest %q is not exact lowercase sha256", digest)
+	}
+	return value, nil
 }
 
 func parseContentImageID(raw string) (string, error) {

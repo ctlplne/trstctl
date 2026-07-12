@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	dodproof "trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
 func TestBrokerDynamicInputAllowlistsAreExact(t *testing.T) {
@@ -30,7 +32,7 @@ func TestBrokerDynamicInputAllowlistsAreExact(t *testing.T) {
 }
 
 func TestBrokerDynamicFilesStayInsideReceiptBoundary(t *testing.T) {
-	receiptDir := t.TempDir()
+	receiptDir := privateBrokerTestDir(t)
 	privateFile := writeBrokerTestFile(t, receiptDir, "nested/private.pem", 0o600, []byte("private"))
 	publicFile := writeBrokerTestFile(t, receiptDir, "nested/cert.pem", 0o644, []byte("certificate"))
 	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE", privateFile); err != nil {
@@ -59,10 +61,114 @@ func TestBrokerDynamicFilesStayInsideReceiptBoundary(t *testing.T) {
 	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE", empty); err == nil {
 		t.Fatal("empty dynamic input passed")
 	}
+	hardLink := filepath.Join(receiptDir, "hard-linked.pem")
+	if err := os.Link(privateFile, hardLink); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE", privateFile); err == nil {
+		t.Fatal("multiply linked dynamic input passed")
+	}
+}
+
+func TestBrokerTranslatesExactRuntimeTempFilesToReceiptDirectory(t *testing.T) {
+	receiptDir := privateBrokerTestDir(t)
+	hostFile := writeBrokerTestFile(t, receiptDir, "TestCodeSigning/001/rekor.pem", 0o600, []byte("private key"))
+	runtimeFile := filepath.Join(dodproof.RuntimeTempDir, "TestCodeSigning", "001", "rekor.pem")
+	dynamic := map[string]string{"TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE": runtimeFile}
+	broker := newInMemorySubstrateBroker(t.TempDir(), receiptDir)
+	broker.crossHost = true
+
+	validated, err := broker.validatedDynamicInputs(context.Background(), runtimeExpectation{ID: "code_signing.default"}, dynamic)
+	if err != nil {
+		t.Fatalf("exact runtime temporary path rejected: %v", err)
+	}
+	if got := validated["TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE"]; got != hostFile {
+		t.Fatalf("translated Rekor key = %q, want %q", got, hostFile)
+	}
+	if dynamic["TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE"] != runtimeFile {
+		t.Fatal("broker mutated the child-owned request map")
+	}
+	environment := strings.Join(brokerEnvironment(runtimeExpectation{ID: "code_signing.default"}, receiptDir, validated), "\n")
+	if !strings.Contains(environment, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE="+hostFile) || strings.Contains(environment, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE="+dodproof.RuntimeTempDir) {
+		t.Fatalf("parent substrate environment did not receive only the translated host path:\n%s", environment)
+	}
+
+	entrustFiles := map[string]struct {
+		relative string
+		mode     os.FileMode
+	}{
+		"TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE": {relative: "TestEntrust/001/server.pem", mode: 0o644},
+		"TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE":  {relative: "TestEntrust/001/server-key.pem", mode: 0o600},
+		"TRSTCTL_ENTRUST_MTLS_CLIENT_CA_FILE":   {relative: "TestEntrust/001/client-ca.pem", mode: 0o644},
+	}
+	entrustDynamic := make(map[string]string, len(entrustFiles))
+	entrustHost := make(map[string]string, len(entrustFiles))
+	for name, file := range entrustFiles {
+		entrustHost[name] = writeBrokerTestFile(t, receiptDir, file.relative, file.mode, []byte(name))
+		entrustDynamic[name] = filepath.Join(dodproof.RuntimeTempDir, filepath.FromSlash(file.relative))
+	}
+	validatedEntrust, err := broker.validatedDynamicInputs(context.Background(), runtimeExpectation{ID: "external_ca.entrust"}, entrustDynamic)
+	if err != nil {
+		t.Fatalf("exact Entrust runtime temporary paths rejected: %v", err)
+	}
+	for name, want := range entrustHost {
+		if got := validatedEntrust[name]; got != want {
+			t.Errorf("translated %s = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestBrokerRuntimeTempTranslationRejectsAlternateRootsAndTraversal(t *testing.T) {
+	receiptDir := privateBrokerTestDir(t)
+	hostFile := writeBrokerTestFile(t, receiptDir, "nested/key.pem", 0o600, []byte("key"))
+	broker := newInMemorySubstrateBroker(t.TempDir(), receiptDir)
+	broker.crossHost = true
+	expected := runtimeExpectation{ID: "code_signing.default"}
+
+	for _, supplied := range []string{
+		dodproof.RuntimeTempDir,
+		dodproof.RuntimeTempDir + "-other/nested/key.pem",
+		dodproof.RuntimeTempDir + "/nested/../nested/key.pem",
+		hostFile,
+		"relative/key.pem",
+	} {
+		err := broker.validateDynamicInputs(context.Background(), expected, map[string]string{"TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE": supplied})
+		if err == nil {
+			t.Errorf("unsafe cross-host dynamic path %q passed", supplied)
+		}
+	}
+}
+
+func TestBrokerDynamicFileRejectsSymlinkedAndWritablePathComponents(t *testing.T) {
+	receiptDir := privateBrokerTestDir(t)
+	hostFile := writeBrokerTestFile(t, receiptDir, "private/key.pem", 0o600, []byte("key"))
+	linkDir := filepath.Join(receiptDir, "linked")
+	if err := os.Symlink(filepath.Dir(hostFile), linkDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE", filepath.Join(linkDir, "key.pem")); err == nil {
+		t.Fatal("dynamic input beneath a symlinked directory passed")
+	}
+
+	if err := os.Chmod(filepath.Dir(hostFile), 0o722); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE", hostFile); err == nil {
+		t.Fatal("dynamic input beneath a group/world-writable directory passed")
+	}
+	if err := os.Chmod(filepath.Dir(hostFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(receiptDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE", hostFile); err == nil {
+		t.Fatal("dynamic input beneath a non-private receipt root passed")
+	}
 }
 
 func TestBrokerValidatesEntrustAndRekorInputsBeforeLaunch(t *testing.T) {
-	receiptDir := t.TempDir()
+	receiptDir := privateBrokerTestDir(t)
 	inputs := map[string]string{
 		"TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE": writeBrokerTestFile(t, receiptDir, "server.pem", 0o644, []byte("cert")),
 		"TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE":  writeBrokerTestFile(t, receiptDir, "server-key.pem", 0o600, []byte("key")),
@@ -159,4 +265,13 @@ func writeBrokerTestFile(t *testing.T, root, name string, mode os.FileMode, body
 		t.Fatal(err)
 	}
 	return path
+}
+
+func privateBrokerTestDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }

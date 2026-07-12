@@ -3,6 +3,8 @@
 package server
 
 import (
+	"errors"
+
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
@@ -14,14 +16,19 @@ func buildManagedKeyService(d Deps, idem *orchestrator.Idempotency) (api.Managed
 	if d.ManagedKeyFactory == nil {
 		return nil, nil
 	}
-	var checker api.ApprovalChecker
-	if d.RequireApproval && d.Store != nil {
-		required := d.RequiredApprovals
-		if required <= 0 {
-			required = defaultRequiredApprovals
-		}
-		checker = storeApprovalChecker{store: d.Store, required: required}
+	// Managed-key rotate, revoke, and zeroize are always dual-control actions.
+	// They must not inherit the unrelated CA policy toggle: the public API and EE
+	// lifecycle contract promise a distinct approver even when ordinary CA
+	// issuance approval is disabled. Fail closed if the durable approval store is
+	// unavailable instead of silently constructing an ungated service.
+	if d.Store == nil {
+		return nil, errors.New("server: managed-key dual control requires the approval store")
 	}
+	required := d.RequiredApprovals
+	if required < defaultRequiredApprovals {
+		required = defaultRequiredApprovals
+	}
+	checker := storeApprovalChecker{store: d.Store, required: required}
 	return d.ManagedKeyFactory(ManagedKeyServiceDeps{
 		Store:           d.Store,
 		Log:             d.Log,

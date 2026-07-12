@@ -22,6 +22,7 @@ import (
 	"time"
 
 	internalcrypto "trstctl.com/trstctl/internal/crypto"
+	dodproof "trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
 var dockerObjectNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -210,12 +211,13 @@ func (b *substrateBroker) launch(ctx context.Context, expected runtimeExpectatio
 	if err := validateBrokerCommand(commandPath, expected.Command); err != nil {
 		return nil, brokerReady{}, err
 	}
-	if err := b.validateDynamicInputs(ctx, expected, dynamic); err != nil {
+	validatedDynamic, err := b.validatedDynamicInputs(ctx, expected, dynamic)
+	if err != nil {
 		return nil, brokerReady{}, err
 	}
 	cmd := exec.Command(commandPath, expected.Command[1:]...)
 	cmd.Dir = b.repo
-	cmd.Env = brokerEnvironment(expected, b.receiptDir, dynamic)
+	cmd.Env = brokerEnvironment(expected, b.receiptDir, validatedDynamic)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, brokerReady{}, err
@@ -266,45 +268,59 @@ func (b *substrateBroker) launch(ctx context.Context, expected runtimeExpectatio
 }
 
 func (b *substrateBroker) validateDynamicInputs(ctx context.Context, expected runtimeExpectation, dynamic map[string]string) error {
+	_, err := b.validatedDynamicInputs(ctx, expected, dynamic)
+	return err
+}
+
+func (b *substrateBroker) validatedDynamicInputs(ctx context.Context, expected runtimeExpectation, dynamic map[string]string) (map[string]string, error) {
 	names := brokerDynamicInputNames(expected)
 	if len(dynamic) != len(names) {
-		return fmt.Errorf("substrate %s requires exactly %d reviewed dynamic runtime inputs", expected.ID, len(names))
+		return nil, fmt.Errorf("substrate %s requires exactly %d reviewed dynamic runtime inputs", expected.ID, len(names))
 	}
 	allowed := make(map[string]bool, len(names))
 	for _, name := range names {
 		allowed[name] = true
 		if strings.TrimSpace(dynamic[name]) == "" {
-			return fmt.Errorf("substrate %s is missing reviewed dynamic runtime input %s", expected.ID, name)
+			return nil, fmt.Errorf("substrate %s is missing reviewed dynamic runtime input %s", expected.ID, name)
 		}
 	}
 	for name := range dynamic {
 		if !allowed[name] {
-			return fmt.Errorf("substrate %s supplied unreviewed dynamic runtime input %s", expected.ID, name)
+			return nil, fmt.Errorf("substrate %s supplied unreviewed dynamic runtime input %s", expected.ID, name)
 		}
 	}
 	if expected.SubstrateID != "managed_key_custody" {
+		validated := make(map[string]string, len(names))
 		for _, name := range names {
-			if err := validateBrokerDynamicFile(b.receiptDir, name, dynamic[name]); err != nil {
-				return err
+			hostPath, err := brokerDynamicHostPath(b.receiptDir, dynamic[name], b.crossHost)
+			if err != nil {
+				return nil, fmt.Errorf("dynamic runtime input %s: %w", name, err)
 			}
+			if err := validateBrokerDynamicFile(b.receiptDir, name, hostPath); err != nil {
+				return nil, err
+			}
+			validated[name] = hostPath
 		}
-		return nil
+		return validated, nil
 	}
 	image := dynamic["TRSTCTL_HSM_PROOF_IMAGE"]
 	network := dynamic["TRSTCTL_HSM_PROOF_NETWORK"]
 	if _, err := parseContentImageID(image); err != nil || !dockerObjectNamePattern.MatchString(network) {
-		return fmt.Errorf("managed-key dynamic image/network input is invalid")
+		return nil, fmt.Errorf("managed-key dynamic image/network input is invalid")
 	}
 	inspected := runHostCommand(ctx, b.repo, "docker", "image", "inspect", "--format={{.Id}} {{.Os}}/{{.Architecture}}", image)
 	fields := strings.Fields(inspected.Stdout)
 	if inspected.Err != nil || len(fields) != 2 || fields[0] != image || fields[1] != managedKeyRuntimePlatform {
-		return fmt.Errorf("managed-key dynamic image is not the exact local %s content ID", managedKeyRuntimePlatform)
+		return nil, fmt.Errorf("managed-key dynamic image is not the exact local %s content ID", managedKeyRuntimePlatform)
 	}
 	inspected = runHostCommand(ctx, b.repo, "docker", "network", "inspect", network)
 	if inspected.Err != nil {
-		return fmt.Errorf("managed-key dynamic network does not exist")
+		return nil, fmt.Errorf("managed-key dynamic network does not exist")
 	}
-	return nil
+	return map[string]string{
+		"TRSTCTL_HSM_PROOF_IMAGE":   image,
+		"TRSTCTL_HSM_PROOF_NETWORK": network,
+	}, nil
 }
 
 func brokerDynamicInputNames(expected runtimeExpectation) []string {
@@ -325,15 +341,79 @@ func brokerDynamicInputNames(expected runtimeExpectation) []string {
 	}
 }
 
+func brokerDynamicHostPath(receiptDir, suppliedPath string, crossHost bool) (string, error) {
+	for label, path := range map[string]string{"execution receipt directory": receiptDir, "supplied path": suppliedPath} {
+		if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, ",\r\n\x00") {
+			return "", fmt.Errorf("%s %q is not a clean absolute path", label, path)
+		}
+	}
+	root := filepath.Clean(receiptDir)
+	sourceRoot := root
+	if crossHost {
+		sourceRoot = dodproof.RuntimeTempDir
+	}
+	relative, err := scopedBrokerRelativePath(sourceRoot, suppliedPath)
+	if err != nil {
+		if crossHost {
+			return "", fmt.Errorf("path is not an exact child of runtime temporary root %q: %w", dodproof.RuntimeTempDir, err)
+		}
+		return "", fmt.Errorf("path is outside the execution receipt directory: %w", err)
+	}
+	hostPath := filepath.Join(root, relative)
+	hostRelative, err := scopedBrokerRelativePath(root, hostPath)
+	if err != nil || hostRelative != relative {
+		return "", fmt.Errorf("translated path escaped the execution receipt directory")
+	}
+	return hostPath, nil
+}
+
+func scopedBrokerRelativePath(root, candidate string) (string, error) {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return "", fmt.Errorf("candidate is not a scoped child")
+	}
+	return relative, nil
+}
+
 func validateBrokerDynamicFile(receiptDir, name, path string) error {
-	if !filepath.IsAbs(receiptDir) || !filepath.IsAbs(path) || strings.ContainsAny(path, "\r\n\x00") {
+	if !filepath.IsAbs(receiptDir) || filepath.Clean(receiptDir) != receiptDir || !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(receiptDir+path, ",\r\n\x00") {
 		return fmt.Errorf("dynamic runtime input %s is not an absolute scoped file", name)
 	}
-	root, err := filepath.EvalSymlinks(filepath.Clean(receiptDir))
+	rootInfo, err := os.Lstat(receiptDir)
+	if err != nil {
+		return fmt.Errorf("inspect execution receipt directory for %s: %w", name, err)
+	}
+	rootStat, ok := rootInfo.Sys().(*syscall.Stat_t)
+	if !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 || rootInfo.Mode().Perm() != 0o700 || rootInfo.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !ok || rootStat.Uid != uint32(os.Getuid()) {
+		return fmt.Errorf("execution receipt directory for %s is not a private gate-owned directory", name)
+	}
+	relative, err := scopedBrokerRelativePath(receiptDir, path)
+	if err != nil {
+		return fmt.Errorf("dynamic runtime input %s is outside the execution receipt directory", name)
+	}
+	root, err := filepath.EvalSymlinks(receiptDir)
 	if err != nil {
 		return fmt.Errorf("resolve execution receipt directory for %s: %w", name, err)
 	}
-	resolved, err := filepath.EvalSymlinks(filepath.Clean(path))
+	current := receiptDir
+	parts := strings.Split(relative, string(filepath.Separator))
+	for index, part := range parts {
+		current = filepath.Join(current, part)
+		info, inspectErr := os.Lstat(current)
+		if inspectErr != nil {
+			return fmt.Errorf("inspect dynamic runtime input %s component: %w", name, inspectErr)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("dynamic runtime input %s contains a symlink", name)
+		}
+		if index < len(parts)-1 {
+			stat, statOK := info.Sys().(*syscall.Stat_t)
+			if !info.IsDir() || info.Mode().Perm()&0o022 != 0 || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !statOK || stat.Uid != uint32(os.Getuid()) {
+				return fmt.Errorf("dynamic runtime input %s has an unsafe parent directory", name)
+			}
+		}
+	}
+	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return fmt.Errorf("resolve dynamic runtime input %s: %w", name, err)
 	}
@@ -351,7 +431,7 @@ func validateBrokerDynamicFile(receiptDir, name, path string) error {
 		return fmt.Errorf("dynamic runtime input %s size %d is outside 1..%d bytes", name, info.Size(), maxBrokerDynamicFileBytes)
 	}
 	perm := info.Mode().Perm()
-	if perm&0o400 == 0 || perm&0o111 != 0 || perm&0o022 != 0 {
+	if perm&0o400 == 0 || perm&0o111 != 0 || perm&0o022 != 0 || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
 		return fmt.Errorf("dynamic runtime input %s mode %04o is not bounded read-only material", name, perm)
 	}
 	if brokerSecretFileInputs[name] && perm&0o077 != 0 {

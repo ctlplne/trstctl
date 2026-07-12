@@ -135,8 +135,8 @@ func serveGRPC(ctx context.Context, ln net.Listener, svc *Server, opts ServeOpti
 }
 
 // listenUDS creates the socket directory (0700), removes any stale socket,
-// listens, tightens the socket to 0600, and wraps the listener with peer-uid
-// authentication.
+// creates the socket as 0600, verifies that exact mode, and wraps the listener
+// with peer-uid authentication.
 func listenUDS(socketPath string, opts ServeOptions) (net.Listener, error) {
 	if !peerCredentialsSupported() && !opts.AllowInsecureDevNonLinux {
 		return nil, fmt.Errorf("%w: UDS peer credentials are unavailable; pass the explicit development override only for local non-Linux testing", ErrUnsupportedHardening)
@@ -151,13 +151,45 @@ func listenUDS(socketPath string, opts ServeOptions) (net.Listener, error) {
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("remove stale socket: %w", err)
 	}
-	ln, err := net.Listen("unix", socketPath)
+	ln, err := listenPrivateUnixSocket(socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("listen unix: %w", err)
 	}
-	if err := os.Chmod(socketPath, 0o600); err != nil {
+	if err := enforceExactSocketMode(socketPath, 0o600, os.Chmod); err != nil {
 		_ = ln.Close()
-		return nil, fmt.Errorf("chmod socket: %w", err)
+		return nil, err
 	}
 	return newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux), nil
+}
+
+type socketChmodFunc func(string, os.FileMode) error
+
+// enforceExactSocketMode accepts the atomically-created mode without issuing a
+// redundant chmod. Some bind filesystems (notably Docker Desktop fakeowner)
+// reject mode-changing chmod on a Unix socket even though they honor umask at
+// bind time. A filesystem that did not honor the creation mask gets one strict
+// chmod attempt, followed by an exact type/mode recheck; it never gets a
+// permissions-only fallback.
+func enforceExactSocketMode(socketPath string, want os.FileMode, chmod socketChmodFunc) error {
+	info, err := os.Lstat(socketPath)
+	if err != nil {
+		return fmt.Errorf("inspect socket mode: %w", err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("inspect socket mode: %s is not a Unix socket", socketPath)
+	}
+	if info.Mode().Perm() == want.Perm() {
+		return nil
+	}
+	if err := chmod(socketPath, want.Perm()); err != nil {
+		return fmt.Errorf("chmod socket: %w", err)
+	}
+	info, err = os.Lstat(socketPath)
+	if err != nil {
+		return fmt.Errorf("reinspect socket mode: %w", err)
+	}
+	if info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != want.Perm() {
+		return fmt.Errorf("socket mode = %s, want exact %04o Unix socket", info.Mode(), want.Perm())
+	}
+	return nil
 }

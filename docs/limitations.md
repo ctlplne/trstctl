@@ -1301,7 +1301,8 @@ terminal transition, so a lost response does not repeat the effect. The swtpm ga
 pre-occupies the first deterministic handle with a same-algorithm foreign object and
 proves that object remains untouched.
 
-The handlers at `POST /api/v1/managed-keys` and its rotate, revoke, and zeroize
+The handlers at `POST /api/v1/managed-keys`, its dedicated JSON approval route, and
+its rotate, revoke, and zeroize
 companions return only opaque handles, public DER, algorithm, non-extractable state,
 and lifecycle state. Every mutation requires `Idempotency-Key`; immutable events
 build the tenant/RLS projection, and the provider call comes only from the sealed

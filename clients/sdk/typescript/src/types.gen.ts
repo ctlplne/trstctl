@@ -1928,6 +1928,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/managed-keys/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve an exact managed-key rotate, revoke, or zeroize action */
+        post: operations["approveManagedKeyAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/managed-keys/revoke": {
         parameters: {
             query?: never;
@@ -5720,6 +5737,18 @@ export interface components {
             version: number;
         };
         ManagedKeyActionRequest: {
+            key_id: string;
+        };
+        ManagedKeyApproval: {
+            /** @enum {string} */
+            action: "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+            approvals: number;
+            approver: string;
+            resource: string;
+        };
+        ManagedKeyApprovalRequest: {
+            /** @enum {string} */
+            action: "rotate" | "revoke" | "zeroize";
             key_id: string;
         };
         ManagedKeyGenerateRequest: {
@@ -13658,6 +13687,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedKey"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    approveManagedKeyAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagedKeyApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyApproval"];
                 };
             };
             /** @description client error */

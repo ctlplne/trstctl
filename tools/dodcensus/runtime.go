@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -261,6 +262,7 @@ type runtimeTrace struct {
 	active            map[string]bool
 	functions         map[string]runtimeFunction
 	entryID           string
+	onlyExpectation   string
 	constructor       string
 	commandLiteral    string
 	containerImage    string
@@ -281,11 +283,57 @@ const (
 	taintEndpoint         runtimeTaint = "external-endpoint"
 	taintShippedProcess   runtimeTaint = "gate-built-shipped-process"
 	taintLaunchedResponse runtimeTaint = "pid-listener-bound-http-response"
+	taintGateEnvironment  runtimeTaint = "gate-runtime-environment"
 )
 
 func literalTaint(value string) runtimeTaint { return runtimeTaint("literal:" + value) }
 
 func inspectRuntimeBinding(repo string, entry Entry, substrates map[string]Substrate, profiles ...BuildProfile) checkEvidence {
+	return inspectRuntimeBindingMode(repo, entry, substrates, entry.ID, profiles...)
+}
+
+// inspectRuntimeBindingForGroup audits both concrete values returned by
+// proof.OnlyExpectation. A focused execution receives exactly this entry and
+// returns its ID. A full execution of a shared profile/package/test group
+// receives every sibling and returns empty. Each trace must independently bind
+// production assembly through sealed evidence; proof progress is never merged
+// across the two execution modes.
+func inspectRuntimeBindingForGroup(repo string, entry Entry, substrates map[string]Substrate, fullGroup []Entry, profiles ...BuildProfile) checkEvidence {
+	if len(fullGroup) == 0 {
+		return checkEvidence{Detail: "runtime source has no unfiltered full-manifest execution group"}
+	}
+	found := false
+	for _, grouped := range fullGroup {
+		if grouped.ID == entry.ID {
+			found = true
+		}
+		if grouped.Runtime.Package != entry.Runtime.Package || grouped.Runtime.Test != entry.Runtime.Test {
+			return checkEvidence{Detail: "runtime source full-manifest group mixes package/test executions"}
+		}
+	}
+	if !found {
+		return checkEvidence{Detail: "runtime source full-manifest group omits the inspected entry"}
+	}
+
+	focused := inspectRuntimeBindingMode(repo, entry, substrates, entry.ID, profiles...)
+	if !focused.OK {
+		focused.Detail = "focused runtime source: " + focused.Detail
+		return focused
+	}
+	if len(fullGroup) == 1 {
+		focused.Detail += "; singleton full execution returns the same exact expectation"
+		return focused
+	}
+	full := inspectRuntimeBindingMode(repo, entry, substrates, "", profiles...)
+	if !full.OK {
+		full.Detail = "full-group runtime source: " + full.Detail
+		return full
+	}
+	focused.Detail += "; independent empty-selection full-group trace is also production-bound"
+	return focused
+}
+
+func inspectRuntimeBindingMode(repo string, entry Entry, substrates map[string]Substrate, onlyExpectation string, profiles ...BuildProfile) checkEvidence {
 	proof := entry.Runtime
 	if !runtimeConfigured(proof) {
 		return checkEvidence{Detail: "runtime proof is not configured; compiled/assembled is still a stub until a served test exists"}
@@ -316,13 +364,14 @@ func inspectRuntimeBinding(repo string, entry Entry, substrates map[string]Subst
 		return checkEvidence{Detail: fmt.Sprintf("runtime test %s is not owned by manifest file %s", proof.Test, proof.File)}
 	}
 	trace := &runtimeTrace{
-		visited:        map[string]bool{},
-		active:         map[string]bool{},
-		functions:      functions,
-		entryID:        entry.ID,
-		constructor:    verifierConstructor[substrate.Verifier],
-		commandLiteral: firstString(substrate.Command),
-		containerImage: substrate.Image,
+		visited:         map[string]bool{},
+		active:          map[string]bool{},
+		functions:       functions,
+		entryID:         entry.ID,
+		onlyExpectation: onlyExpectation,
+		constructor:     verifierConstructor[substrate.Verifier],
+		commandLiteral:  firstString(substrate.Command),
+		containerImage:  substrate.Image,
 	}
 	trace.evalFunction(proof.Test, nil, 0)
 	if trace.unsafeConditional {
@@ -810,10 +859,28 @@ func (trace *runtimeTrace) evalExpression(fn runtimeFunction, expression ast.Exp
 			if alias != nil {
 				importPath = fn.imports[alias.Name]
 			}
+			// Only the exact imported gate helper is constant. The caller runs this
+			// trace separately with the focused entry ID and, for a shared full
+			// execution, with empty. This keeps the branch model equal to both real
+			// runtime envelopes without merging proof progress between them.
+			if importPath == "trstctl.com/trstctl/tools/dodcensus/proof" && selector.Sel.Name == "OnlyExpectation" && len(value.Args) == 1 {
+				return []runtimeTaint{literalTaint(trace.onlyExpectation)}
+			}
 			if importPath == "os" && selector.Sel.Name == "Getenv" && len(value.Args) == 1 {
 				name := firstTaint(trace.evalExpression(fn, value.Args[0], env, depth))
-				if strings.HasPrefix(strings.TrimPrefix(string(name), "literal:"), "TRSTCTL_") {
+				variable := strings.TrimPrefix(string(name), "literal:")
+				if variable == "TRSTCTL_HSM_PROOF_ONLY" {
+					// The parent runner strips every ambient TRSTCTL_* value and
+					// injects only its DOD expectation envelope. This legacy selector
+					// is therefore exactly empty; managed-key tests then delegate to
+					// proof.OnlyExpectation.
 					return []runtimeTaint{literalTaint("")}
+				}
+				if strings.HasPrefix(variable, "TRSTCTL_") {
+					// In particular, TRSTCTL_DOD_EXPECTATIONS is nonempty at
+					// runtime. Treat gate/test-set environment as nonconstant so a
+					// proof cannot hide test-only assembly behind its presence.
+					return []runtimeTaint{taintGateEnvironment}
 				}
 			}
 			if importPath == "os/exec" && (selector.Sel.Name == "Command" || selector.Sel.Name == "CommandContext") {
@@ -981,6 +1048,11 @@ type runtimeExpectation struct {
 	EvidenceFile          string            `json:"evidence_file"`
 	RuntimeRunnerIdentity string            `json:"runtime_runner_identity"`
 	RuntimeRunnerImage    string            `json:"runtime_runner_image,omitempty"`
+	RuntimeTestPackage    string            `json:"runtime_test_package"`
+	RuntimeCGOEnabled     string            `json:"runtime_cgo_enabled"`
+	RuntimeGOOS           string            `json:"runtime_goos"`
+	RuntimeGOARCH         string            `json:"runtime_goarch"`
+	RuntimeTags           []string          `json:"runtime_tags,omitempty"`
 	LaunchedModulePath    string            `json:"launched_module_path"`
 	LaunchedBinaryPackage string            `json:"launched_binary_package"`
 	LaunchedCompanions    []string          `json:"launched_companions,omitempty"`
@@ -1018,19 +1090,24 @@ type runtimeReceipt struct {
 }
 
 type launchedProcessReceipt struct {
-	PID                     int    `json:"pid"`
-	ProcessStartTicks       string `json:"process_start_ticks"`
-	ProcessMode             string `json:"process_mode"`
-	BinaryPackage           string `json:"binary_package"`
-	BinaryDigest            string `json:"binary_digest"`
-	BinaryDevice            string `json:"binary_device"`
-	BinaryInode             string `json:"binary_inode"`
-	InterpreterDigest       string `json:"interpreter_digest,omitempty"`
-	InterpreterDevice       string `json:"interpreter_device,omitempty"`
-	InterpreterInode        string `json:"interpreter_inode,omitempty"`
-	Address                 string `json:"address"`
-	ListenerInode           string `json:"listener_inode"`
-	AcceptedConnectionInode string `json:"accepted_connection_inode"`
+	PID                     int      `json:"pid"`
+	ProcessStartTicks       string   `json:"process_start_ticks"`
+	ProcessMode             string   `json:"process_mode"`
+	BinaryModulePath        string   `json:"binary_module_path"`
+	BinaryPackage           string   `json:"binary_package"`
+	BinaryCGOEnabled        string   `json:"binary_cgo_enabled"`
+	BinaryGOOS              string   `json:"binary_goos"`
+	BinaryGOARCH            string   `json:"binary_goarch"`
+	BinaryTags              []string `json:"binary_tags,omitempty"`
+	BinaryDigest            string   `json:"binary_digest"`
+	BinaryDevice            string   `json:"binary_device"`
+	BinaryInode             string   `json:"binary_inode"`
+	InterpreterDigest       string   `json:"interpreter_digest,omitempty"`
+	InterpreterDevice       string   `json:"interpreter_device,omitempty"`
+	InterpreterInode        string   `json:"interpreter_inode,omitempty"`
+	Address                 string   `json:"address"`
+	ListenerInode           string   `json:"listener_inode"`
+	AcceptedConnectionInode string   `json:"accepted_connection_inode"`
 }
 
 type runtimeTestExecution struct {
@@ -1089,9 +1166,12 @@ func runtimeCacheKey(profileName string, entry Entry) string {
 	return strings.Join([]string{profileName, entry.Runtime.Package, entry.Runtime.Test}, "\x00")
 }
 
-func groupRuntimeEntries(manifest Manifest) map[string][]Entry {
+func groupRuntimeEntries(manifest Manifest, selectedID string, selectionActive bool) map[string][]Entry {
 	groups := map[string][]Entry{}
 	for _, entry := range manifest.Entries {
+		if selectionActive && entry.ID != selectedID {
+			continue
+		}
 		if !runtimeConfigured(entry.Runtime) {
 			continue
 		}
@@ -1173,18 +1253,26 @@ func condensedGoTestFailure(raw string) string {
 		Package    string `json:"Package"`
 		ImportPath string `json:"ImportPath"`
 	}
-	const keep = 14
-	messages := make([]string, 0, keep)
+	const (
+		keepFirst = 6
+		keepLast  = 8
+	)
+	firstMessages := make([]string, 0, keepFirst)
+	lastMessages := make([]string, 0, keepLast)
 	appendMessage := func(message string) {
 		message = strings.TrimSpace(message)
 		if message == "" {
 			return
 		}
-		if len(messages) == keep {
-			copy(messages, messages[1:])
-			messages = messages[:keep-1]
+		if len(firstMessages) < keepFirst {
+			firstMessages = append(firstMessages, message)
+			return
 		}
-		messages = append(messages, message)
+		if len(lastMessages) == keepLast {
+			copy(lastMessages, lastMessages[1:])
+			lastMessages = lastMessages[:keepLast-1]
+		}
+		lastMessages = append(lastMessages, message)
 	}
 	scanner := bufio.NewScanner(strings.NewReader(raw))
 	for scanner.Scan() {
@@ -1209,13 +1297,17 @@ func condensedGoTestFailure(raw string) string {
 			appendMessage(label + " failed")
 		}
 	}
+	messages := append(firstMessages, lastMessages...)
 	detail := strings.Join(messages, " | ")
 	if detail == "" {
 		detail = strings.TrimSpace(raw)
 	}
 	const limit = 2048
 	if len(detail) > limit {
-		detail = "..." + detail[len(detail)-limit:]
+		const divider = " ... [bounded crash tail] ... "
+		head := (limit - len(divider)) / 2
+		tail := limit - len(divider) - head
+		detail = detail[:head] + divider + detail[len(detail)-tail:]
 	}
 	return detail
 }
@@ -1276,6 +1368,11 @@ func executeRuntimeTest(ctx context.Context, repo, profileName string, profile B
 			EvidenceFile:          filepath.Join(receiptDir, strings.ReplaceAll(groupedEntry.ID, ".", "_")+".evidence.json"),
 			RuntimeRunnerIdentity: profile.RuntimeRunner.Identity,
 			RuntimeRunnerImage:    profile.RuntimeRunnerImage,
+			RuntimeTestPackage:    groupedEntry.Runtime.Package,
+			RuntimeCGOEnabled:     profile.CGOEnabled,
+			RuntimeGOOS:           profile.GOOS,
+			RuntimeGOARCH:         profile.GOARCH,
+			RuntimeTags:           append([]string(nil), profile.Tags...),
 			LaunchedModulePath:    launched.ModulePath,
 			LaunchedBinaryPackage: launched.BinaryPackage,
 			LaunchedCompanions:    append([]string(nil), launched.CompanionPackages...),
@@ -1397,7 +1494,10 @@ func validateRuntimeReceiptBody(expected runtimeExpectation, receipt runtimeRece
 	}
 	if expected.RuntimeMode == "launched-binary" {
 		process := receipt.LaunchedProcess
-		if process == nil || process.PID <= 0 || process.BinaryPackage != expected.LaunchedBinaryPackage ||
+		if process == nil || process.PID <= 0 || process.BinaryModulePath != expected.LaunchedModulePath ||
+			process.BinaryPackage != expected.LaunchedBinaryPackage || process.BinaryCGOEnabled != expected.LaunchedCGOEnabled ||
+			process.BinaryGOOS != expected.LaunchedGOOS || process.BinaryGOARCH != expected.LaunchedGOARCH ||
+			!slices.Equal(process.BinaryTags, expected.LaunchedTags) ||
 			!validRuntimeLaunchedWitness(*process) || !strings.HasPrefix(process.Address, "127.0.0.1:") {
 			return fmt.Errorf("launched runtime receipt has no exact process lineage/listener witness")
 		}
@@ -1467,7 +1567,9 @@ func validRuntimeLaunchedWitness(process launchedProcessReceipt) bool {
 		parsed, err := strconv.ParseUint(value, 10, 64)
 		return err == nil && parsed > 0 && strconv.FormatUint(parsed, 10) == value
 	}
-	if !digestPattern.MatchString(process.BinaryDigest) || !positiveDecimal(process.ProcessStartTicks) ||
+	if process.BinaryModulePath == "" || process.BinaryPackage == "" ||
+		(process.BinaryCGOEnabled != "0" && process.BinaryCGOEnabled != "1") || process.BinaryGOOS == "" || process.BinaryGOARCH == "" ||
+		!digestPattern.MatchString(process.BinaryDigest) || !positiveDecimal(process.ProcessStartTicks) ||
 		!positiveDecimal(process.BinaryDevice) || !positiveDecimal(process.BinaryInode) ||
 		!positiveDecimal(process.ListenerInode) || !positiveDecimal(process.AcceptedConnectionInode) ||
 		process.ListenerInode == process.AcceptedConnectionInode {

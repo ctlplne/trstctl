@@ -9,7 +9,78 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"trstctl.com/trstctl/internal/perf"
 )
+
+func TestSoakGateDirectInputAndReportLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	inputPath := filepath.Join(dir, "series.json")
+	workload := &perf.SoakInputWorkload{Tenants: 2, Agents: 4, EventEquivalent: 20, OutboxEquivalent: 10}
+	summary := &perf.SoakInputSummary{OK: true, Samples: 3}
+	input := seriesFile{
+		Profile: "direct-soak", Source: "embedded-postgres+embedded-jetstream",
+		MeasurementArtifact: "series.json", MeasurementMethod: "served capture", CapacityTier: "CAP-SMALL",
+		Workload: workload, Summary: summary,
+		Samples: perf.SyntheticHealthySeries(3, time.Minute),
+	}
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(inputPath, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadSeries(inputPath)
+	if err != nil {
+		t.Fatalf("loadSeries: %v", err)
+	}
+	if loaded.Profile != input.Profile || len(loaded.Samples) != 3 {
+		t.Fatalf("loaded series = %+v", loaded)
+	}
+	evidence := loaded.inputEvidence()
+	if evidence == nil || evidence.Source != input.Source || evidence.Workload == nil || evidence.Summary == nil {
+		t.Fatalf("input evidence = %+v", evidence)
+	}
+	if got := (seriesFile{}).inputEvidence(); got != nil {
+		t.Fatalf("empty series evidence = %+v", got)
+	}
+
+	report, err := perf.AnalyzeSoakWithEvidence(loaded.Profile, loaded.Samples, perf.DefaultSoakThresholds(), evidence)
+	if err != nil {
+		t.Fatalf("AnalyzeSoakWithEvidence: %v", err)
+	}
+	outputPath := filepath.Join(dir, "nested", "report.json")
+	writeReport(outputPath, false, report)
+	output, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded perf.SoakReport
+	if err := json.Unmarshal(output, &decoded); err != nil || decoded.Profile != loaded.Profile || decoded.InputEvidence == nil {
+		t.Fatalf("written report decode = %+v, %v", decoded, err)
+	}
+
+	invalidJSON := filepath.Join(dir, "invalid.json")
+	if err := os.WriteFile(invalidJSON, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadSeries(invalidJSON); err == nil {
+		t.Fatal("loadSeries accepted invalid JSON")
+	}
+	oneSample := filepath.Join(dir, "one-sample.json")
+	data, _ := json.Marshal(seriesFile{Samples: []perf.SoakSample{{T: time.Now().UTC()}}})
+	if err := os.WriteFile(oneSample, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadSeries(oneSample); err == nil {
+		t.Fatal("loadSeries accepted fewer than two samples")
+	}
+	if _, err := loadSeries(filepath.Join(dir, "missing.json")); err == nil {
+		t.Fatal("loadSeries accepted a missing input")
+	}
+}
 
 func TestSoakGateCarriesSpineBurstEvidenceIntoTrendReport(t *testing.T) {
 	dir := t.TempDir()

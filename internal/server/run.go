@@ -123,14 +123,14 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	if err != nil {
 		return err
 	}
+	notificationOwner := ensureNotificationChannelOwnership(&deps)
+	// Until Build transfers the channels to its Dispatcher, Run owns their
+	// credential buffers. This catches edition-attach and any other pre-Build
+	// failure. After transfer this is intentionally a no-op.
+	defer notificationOwner.closeUntransferred()
 	deps.License = lic
-	for _, attach := range attachers {
-		if attach == nil {
-			continue
-		}
-		if err := attach(ctx, cfg, logger, lic, &deps); err != nil {
-			return err
-		}
+	if err := applyEditionAttachers(ctx, cfg, logger, lic, &deps, attachers...); err != nil {
+		return err
 	}
 	srv, err := Build(ctx, deps)
 	if err != nil {
@@ -151,6 +151,27 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		return err
 	}
 	return serveRuntime(ctx, cfg, srv, logger, stopBackground)
+}
+
+func applyEditionAttachers(ctx context.Context, cfg *config.Config, logger *slog.Logger, lic *license.Manager, deps *Deps, attachers ...EditionAttach) (err error) {
+	owner := ensureNotificationChannelOwnership(deps)
+	defer func() {
+		if err != nil {
+			// Adopt channels appended by an attacher before it failed, then close
+			// both the original and newly attached credentials through one token.
+			ensureNotificationChannelOwnership(deps).closeUntransferred()
+		}
+	}()
+	for _, attach := range attachers {
+		if attach == nil {
+			continue
+		}
+		if err := attach(ctx, cfg, logger, lic, deps); err != nil {
+			return err
+		}
+		deps.NotificationChannels = owner.adopt(deps.NotificationChannels)
+	}
+	return nil
 }
 
 func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Logger, extraMigrations []fs.FS) (*store.Store, func() error, error) {
@@ -386,15 +407,20 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("notifications: %w", err)
 	}
-	incidentNotificationChannels, err := incidentNotificationChannelsFromConfig(cfg.Notifications, egressGuard)
+	notificationChannels, notificationOwner, err := completeRunNotificationChannels(notificationChannels, func() ([]notify.Notifier, error) {
+		return incidentNotificationChannelsFromConfig(cfg.Notifications, egressGuard)
+	})
 	if err != nil {
 		return Deps{}, fmt.Errorf("incident notifications: %w", err)
 	}
-	notificationChannels = append(notificationChannels, incidentNotificationChannels...)
 	// From this point until the returned Deps is successfully transferred to
 	// Build, buildRunDeps owns every channel credential. Any later constructor
 	// failure must wipe that authority rather than abandoning locked buffers.
-	defer func() { closeNotificationChannelsOnError(notificationChannels, err) }()
+	defer func() {
+		if err != nil {
+			notificationOwner.closeUntransferred()
+		}
+	}()
 	codeSigning, err := codeSigningConfigFromConfig(ctx, cfg.CodeSigning, signer.signer, signer.tokenProvider, egressGuard)
 	if err != nil {
 		return Deps{}, fmt.Errorf("code-signing: %w", err)
@@ -445,6 +471,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		LifecycleRenewBefore:         renewBefore,
 		LifecycleAlertBefore:         alertBefore,
 		NotificationChannels:         notificationChannels,
+		notificationChannelOwner:     notificationOwner,
 		CodeSigning:                  codeSigning,
 		ConnectorRegistry:            connectorRegistry,
 		ConnectorRightSize:           connectorRightSize,

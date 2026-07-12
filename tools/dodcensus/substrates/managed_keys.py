@@ -166,7 +166,7 @@ def verify_sigv4(method: str, raw_path: str, headers, body: bytes) -> bool:
 
 
 class Key:
-    def __init__(self, root: Path, key_id: str) -> None:
+    def __init__(self, root: Path, key_id: str, tags: dict[str, str] | None = None) -> None:
         self.key_id = key_id
         self.private = root / f"{key_id}.pem"
         self.public_pem = root / f"{key_id}.pub.pem"
@@ -176,6 +176,7 @@ class Key:
         self.state = "active"
         self.signature = b""
         self.digest = b""
+        self.tags = dict(tags or {})
 
     def sign_digest(self, digest: bytes) -> bytes:
         if self.state != "active" or len(digest) != 32:
@@ -242,6 +243,8 @@ class State:
         self.zeroize_count = 0
         self.readbacks: set[str] = set()
         self.hardware_verified = False
+        self.provider_requests = 0
+        self.last_provider_request: dict[str, str] = {}
 
     @staticmethod
     def _mode(entry_id: str) -> str:
@@ -253,11 +256,17 @@ class State:
             return "gcp"
         return "hardware"
 
-    def create(self, prefix: str) -> Key:
+    def create(self, prefix: str, tags: dict[str, str] | None = None) -> Key:
         with self.lock:
             self.next_key += 1
             key_id = f"{prefix}-{self.next_key}"
-        key = Key(self.root, key_id)
+        return self.create_named(key_id, tags)
+
+    def create_named(self, key_id: str, tags: dict[str, str] | None = None) -> Key:
+        with self.lock:
+            if key_id in self.keys:
+                raise ValueError("provider key already exists")
+        key = Key(self.root, key_id, tags)
         with self.lock:
             self.keys[key_id] = key
             self.create_count += 1
@@ -270,6 +279,29 @@ class State:
             key_id = key_id.split("/cryptoKeys/", 1)[1].split("/", 1)[0]
         with self.lock:
             return self.keys.get(key_id)
+
+    def observe_provider_request(self, method: str, path: str, target: str = "") -> None:
+        with self.lock:
+            self.provider_requests += 1
+            self.last_provider_request = {
+                "method": method,
+                "path": path[:240],
+                "target": target[:120],
+            }
+
+    def diagnostics(self) -> dict[str, object]:
+        with self.lock:
+            return {
+                "mode": self.mode,
+                "provider_requests": self.provider_requests,
+                "last_provider_request": dict(self.last_provider_request),
+                "auth_failures": self.auth_failures,
+                "create_count": self.create_count,
+                "sign_count": self.sign_count,
+                "revoke_count": self.revoke_count,
+                "zeroize_count": self.zeroize_count,
+                "key_count": len(self.keys),
+            }
 
     def passed(self) -> bool:
         with self.lock:
@@ -351,6 +383,9 @@ def handler_for(state: State):
                     "gcp_parent": GCP_PARENT,
                 })
                 return
+            if parsed.path == "/dod/diagnostics":
+                self.send_json(200, state.diagnostics())
+                return
             if parsed.path == "/dod/readback":
                 query = parse_qs(parsed.query)
                 key = state.key(query.get("key_id", [""])[0])
@@ -368,6 +403,7 @@ def handler_for(state: State):
                     "private_export": "denied: provider custody is non-exportable",
                 })
                 return
+            state.observe_provider_request(self.command, self.path, self.headers.get("X-Amz-Target", ""))
             if state.mode == "azure" and parsed.path.startswith("/keys/"):
                 if not self.authenticated(b""):
                     self.send_json(401, {"error": {"code": "Unauthorized"}})
@@ -377,18 +413,34 @@ def handler_for(state: State):
                 if key is None or key.state == "zeroized":
                     self.send_json(404, {"error": {"code": "KeyNotFound"}})
                     return
-                self.send_json(200, {"key": {"kid": f"https://dod.managedhsm.azure.net/keys/{key.key_id}/v1"}, "der": base64.b64encode(key.public_der).decode()})
+                self.send_json(200, {
+                    "key": {"kid": f"https://dod.managedhsm.azure.net/keys/{key.key_id}/v1"},
+                    "der": base64.b64encode(key.public_der).decode(),
+                    "attributes": {"enabled": key.state == "active"},
+                })
                 return
-            if state.mode == "gcp" and parsed.path.endswith("/publicKey"):
+            if state.mode == "gcp" and "/cryptoKeys/" in parsed.path:
                 if not self.authenticated(b""):
                     self.send_json(401, {"error": {"status": "UNAUTHENTICATED"}})
                     return
                 key_id = parsed.path.split("/cryptoKeys/", 1)[1].split("/", 1)[0]
                 key = state.key(key_id)
-                if key is None or key.state == "zeroized":
+                if key is None:
                     self.send_json(404, {"error": {"status": "NOT_FOUND"}})
                     return
-                self.send_json(200, {"pem": key.public_pem.read_text()})
+                resource = f"{GCP_PARENT}/cryptoKeys/{key.key_id}"
+                if parsed.path.endswith("/publicKey"):
+                    if key.state == "zeroized":
+                        self.send_json(404, {"error": {"status": "NOT_FOUND"}})
+                        return
+                    self.send_json(200, {"pem": key.public_pem.read_text()})
+                elif "/cryptoKeyVersions/" in parsed.path:
+                    version_state = {
+                        "active": "ENABLED", "revoked": "DISABLED", "zeroized": "DESTROY_SCHEDULED",
+                    }[key.state]
+                    self.send_json(200, {"name": resource + "/cryptoKeyVersions/1", "state": version_state})
+                else:
+                    self.send_json(200, {"name": resource, "purpose": "ASYMMETRIC_SIGN"})
                 return
             self.send_json(404, {"error": "not found"})
 
@@ -404,6 +456,7 @@ def handler_for(state: State):
                     state.hardware_verified = valid
                 self.send_json(200 if valid else 400, {"accepted": valid})
                 return
+            state.observe_provider_request(self.command, self.path, self.headers.get("X-Amz-Target", ""))
             if not self.authenticated(body):
                 self.send_json(401, {"error": "cryptographic authentication required"})
                 return
@@ -424,6 +477,7 @@ def handler_for(state: State):
 
         def do_PATCH(self) -> None:  # noqa: N802
             body = self.body()
+            state.observe_provider_request(self.command, self.path, self.headers.get("X-Amz-Target", ""))
             if not self.authenticated(body):
                 self.send_json(401, {"error": {"code": "Unauthorized"}})
                 return
@@ -449,6 +503,7 @@ def handler_for(state: State):
 
         def do_DELETE(self) -> None:  # noqa: N802
             body = self.body()
+            state.observe_provider_request(self.command, self.path, self.headers.get("X-Amz-Target", ""))
             if state.mode != "azure" or not self.authenticated(body):
                 self.send_json(401, {"error": {"code": "Unauthorized"}})
                 return
@@ -464,17 +519,59 @@ def handler_for(state: State):
 
         def aws(self, value: dict) -> None:
             target = self.headers.get("X-Amz-Target", "")
+            if target == "TrentService.ListKeys":
+                with state.lock:
+                    key_ids = sorted(state.keys)
+                self.send_json(200, {
+                    "Keys": [
+                        {"KeyId": key_id, "KeyArn": f"arn:aws:kms:{AWS_REGION}:123456789012:key/{key_id}"}
+                        for key_id in key_ids
+                    ],
+                    "Truncated": False,
+                })
+                return
+            if target == "TrentService.ListResourceTags":
+                key = state.key(value.get("KeyId", ""))
+                if key is None:
+                    self.send_json(400, {"__type": "NotFoundException"})
+                    return
+                self.send_json(200, {
+                    "Tags": [
+                        {"TagKey": name, "TagValue": tag_value}
+                        for name, tag_value in sorted(key.tags.items())
+                    ],
+                    "Truncated": False,
+                })
+                return
             if target == "TrentService.CreateKey":
                 if value.get("KeyUsage") != "SIGN_VERIFY" or value.get("KeySpec") != "RSA_2048":
                     raise ValueError("invalid AWS asymmetric key request")
-                key = state.create("aws-key")
-                self.send_json(200, {"KeyMetadata": {"KeyId": key.key_id}})
+                tags = value.get("Tags", [])
+                if not isinstance(tags, list) or any(
+                    not isinstance(tag, dict) or not isinstance(tag.get("TagKey"), str)
+                    or not isinstance(tag.get("TagValue"), str)
+                    for tag in tags
+                ):
+                    raise ValueError("invalid AWS key tags")
+                key = state.create("aws-key", {tag["TagKey"]: tag["TagValue"] for tag in tags})
+                self.send_json(200, {"KeyMetadata": {
+                    "KeyId": key.key_id, "KeySpec": "RSA_2048", "KeyUsage": "SIGN_VERIFY",
+                    "KeyState": "Enabled", "Enabled": True,
+                }})
                 return
             key = state.key(value.get("KeyId", ""))
             if key is None:
                 self.send_json(400, {"__type": "NotFoundException"})
                 return
-            if target == "TrentService.GetPublicKey":
+            if target == "TrentService.DescribeKey":
+                provider_state = {
+                    "active": "Enabled", "revoked": "Disabled", "zeroized": "PendingDeletion",
+                }[key.state]
+                self.send_json(200, {"KeyMetadata": {
+                    "KeyId": key.key_id, "KeySpec": "RSA_2048", "KeyUsage": "SIGN_VERIFY",
+                    "KeyState": provider_state, "Enabled": provider_state == "Enabled",
+                }})
+            elif target == "TrentService.GetPublicKey":
                 self.send_json(200, {"PublicKey": base64.b64encode(key.public_der).decode()})
             elif target == "TrentService.Sign":
                 digest = base64.b64decode(value["Message"], validate=True)
@@ -500,8 +597,13 @@ def handler_for(state: State):
             if path.endswith("/create"):
                 if value.get("kty") != "RSA" or value.get("key_size") != 2048:
                     raise ValueError("invalid Azure RSA-HSM create request")
-                key = state.create("azure-key")
-                self.send_json(200, {"key": {"kid": f"https://dod.managedhsm.azure.net/keys/{key.key_id}/v1"}, "der": base64.b64encode(key.public_der).decode()})
+                key_name = path.strip("/").split("/")[1]
+                key = state.create_named(key_name)
+                self.send_json(200, {
+                    "key": {"kid": f"https://dod.managedhsm.azure.net/keys/{key.key_id}/v1"},
+                    "der": base64.b64encode(key.public_der).decode(),
+                    "attributes": {"enabled": True},
+                })
                 return
             if path.endswith("/sign"):
                 key_id = path.strip("/").split("/")[1]
@@ -520,9 +622,10 @@ def handler_for(state: State):
             if path.endswith("/cryptoKeys"):
                 query = parse_qs(urlparse(self.path).query)
                 requested = query.get("cryptoKeyId", [""])[0]
-                if not requested or value.get("purpose") != "ASYMMETRIC_SIGN":
+                template = value.get("versionTemplate", {})
+                if not requested or value.get("purpose") != "ASYMMETRIC_SIGN" or not isinstance(template, dict) or template.get("algorithm") != "RSA_SIGN_PKCS1_2048_SHA256":
                     raise ValueError("invalid GCP asymmetric key request")
-                key = state.create(requested)
+                key = state.create_named(requested)
                 self.send_json(200, {"name": f"{GCP_PARENT}/cryptoKeys/{key.key_id}"})
                 return
             if path.endswith(":asymmetricSign"):

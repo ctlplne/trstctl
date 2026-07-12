@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // ManagedKey is the key-material-free result contract returned by the licensed
@@ -83,6 +84,36 @@ type managedKeyGenerateRequest struct {
 
 type managedKeyActionRequest struct {
 	KeyID string `json:"key_id"`
+}
+
+type managedKeyApprovalRequest struct {
+	KeyID  string `json:"key_id"`
+	Action string `json:"action"`
+}
+
+type managedKeyApprovalResponse struct {
+	Resource  string `json:"resource"`
+	Action    string `json:"action"`
+	Approver  string `json:"approver"`
+	Approvals int    `json:"approvals"`
+}
+
+// Managed-key action constants are the canonical approval/service vocabulary.
+// The core recorder and licensed lifecycle both compile against these values, so
+// an approval can never drift onto a lookalike action string.
+const (
+	ManagedKeyActionGenerate = "managedkey:generate"
+	ManagedKeyActionRotate   = "managedkey:rotate"
+	ManagedKeyActionRevoke   = "managedkey:revoke"
+	ManagedKeyActionZeroize  = "managedkey:zeroize"
+)
+
+var managedKeyApprovalActions = []string{"rotate", "revoke", "zeroize"}
+
+var managedKeyCanonicalApprovalActions = []string{
+	ManagedKeyActionRotate,
+	ManagedKeyActionRevoke,
+	ManagedKeyActionZeroize,
 }
 
 // managedKeyResponse is the public view of a managed key: identity, algorithm,
@@ -223,6 +254,82 @@ func (a *API) zeroizeManagedKey(w http.ResponseWriter, r *http.Request) {
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.managedKeyAction(w, r, idempotencyKey, "zeroize", a.managedKeys.Zeroize)
+}
+
+// approveManagedKeyAction records one distinct principal's approval for an exact
+// opaque provider key handle and destructive action. The key id stays in JSON: HSM
+// and cloud-KMS handles routinely contain slashes and must never be reinterpreted
+// as URL path segments. Only this closed-set translation can produce the canonical
+// managedkey:* action strings consulted by the licensed lifecycle service.
+//
+//trstctl:mutation
+func (a *API) approveManagedKeyAction(w http.ResponseWriter, r *http.Request) {
+	if a.managedKeys == nil {
+		a.writeError(w, managedKeysDisabledProblem())
+		return
+	}
+	if a.approvals == nil {
+		a.writeError(w, errStatus(http.StatusNotImplemented, "managed-key dual-control approval is not enabled on this deployment"))
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	if idempotencyKey == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	var req managedKeyApprovalRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if req.KeyID == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "key_id is required"))
+		return
+	}
+	canonicalAction, ok := canonicalManagedKeyApprovalAction(req.Action)
+	if !ok {
+		a.writeError(w, errStatus(http.StatusBadRequest, `action must be "rotate", "revoke", or "zeroize"`))
+		return
+	}
+	approver, err := requesterFor(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, err := managedKeyRequestBinding("approve:"+canonicalAction, approver, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		count, recordErr := a.approvals.RecordApproval(ctx, tenantID, req.KeyID, canonicalAction, approver)
+		if recordErr != nil {
+			switch {
+			case errors.Is(recordErr, store.ErrSelfIssuanceApproval):
+				return 0, nil, errStatus(http.StatusForbidden, "the managed-key requester cannot approve their own destructive action")
+			case errors.Is(recordErr, store.ErrAnonymousIssuanceApproval):
+				return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated managed-key approver is required")
+			default:
+				return 0, nil, recordErr
+			}
+		}
+		return http.StatusOK, managedKeyApprovalResponse{
+			Resource: req.KeyID, Action: canonicalAction, Approver: approver, Approvals: count,
+		}, nil
+	}, false)
+}
+
+func canonicalManagedKeyApprovalAction(action string) (string, bool) {
+	switch action {
+	case "rotate":
+		return ManagedKeyActionRotate, true
+	case "revoke":
+		return ManagedKeyActionRevoke, true
+	case "zeroize":
+		return ManagedKeyActionZeroize, true
+	default:
+		return "", false
+	}
 }
 
 // managedKeyAction is the shared body of the destructive handlers. It decodes and

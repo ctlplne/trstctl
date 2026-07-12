@@ -129,7 +129,7 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 			if err != nil {
 				return true, err
 			}
-			if m.IdempotencyKey != "dynsecret.issue:"+command.ID || record.IssueOutboxID != m.ID || record.IdempotencyKey != command.IdempotencyKey || record.RequestBinding != command.RequestBinding || record.Provider != command.Provider || record.Role != command.Role || !record.ExpiresAt.Equal(command.ExpiresAt) || !record.HardExpiresAt.Equal(command.HardExpiresAt) {
+			if m.IdempotencyKey != "dynsecret.issue:"+command.ID || record.IssueOutboxID != m.ID || record.IdempotencyKey != command.IdempotencyKey || record.RequestBinding != command.RequestBinding || record.Provider != command.Provider || record.Role != command.Role || !dynamicSecretPersistedTimeEqual(record.ExpiresAt, command.ExpiresAt) || !dynamicSecretPersistedTimeEqual(record.HardExpiresAt, command.HardExpiresAt) {
 				return true, errors.New("server: terminal dynamic-secret issuance does not match its projected command")
 			}
 			if record.State != store.DynamicSecretLeasePending {
@@ -203,7 +203,7 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	if record.IdempotencyKey != command.IdempotencyKey || record.RequestBinding != command.RequestBinding || record.Provider != command.Provider || record.Role != command.Role || !record.ExpiresAt.Equal(command.ExpiresAt) || !record.HardExpiresAt.Equal(command.HardExpiresAt) {
+	if record.IdempotencyKey != command.IdempotencyKey || record.RequestBinding != command.RequestBinding || record.Provider != command.Provider || record.Role != command.Role || !dynamicSecretPersistedTimeEqual(record.ExpiresAt, command.ExpiresAt) || !dynamicSecretPersistedTimeEqual(record.HardExpiresAt, command.HardExpiresAt) {
 		return errors.New("server: dynamic-secret issuance command does not match its pending lease")
 	}
 	switch record.State {
@@ -314,6 +314,14 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		Role: command.Role, BackendRef: credential.BackendRef, SealedCredential: sealedCredential,
 		ExpiresAt: command.ExpiresAt, HardExpiresAt: command.HardExpiresAt,
 	})
+}
+
+// PostgreSQL timestamptz persists microseconds, while an immutable event/outbox
+// JSON timestamp may carry nanoseconds. Bind against the exact persisted value:
+// sub-microsecond bits cannot survive the read model, but a difference of one
+// persisted microsecond still fails closed.
+func dynamicSecretPersistedTimeEqual(persisted, command time.Time) bool {
+	return persisted.UTC().Truncate(time.Microsecond).Equal(command.UTC().Truncate(time.Microsecond))
 }
 
 func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Context, m orchestrator.Message) error {

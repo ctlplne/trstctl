@@ -972,7 +972,10 @@ Use the published artifact built by `deploy/docker/Dockerfile.signer-hsm`; its
 release profile enables cgo and installs `/usr/local/bin/trstctl-signer-hsm`.
 
 When the licensed attach seam succeeds, operators with `keys:write` can exercise
-`POST /api/v1/managed-keys` and the rotate/revoke/zeroize API and CLI shapes. Requests
+`POST /api/v1/managed-keys` and the rotate/revoke/zeroize API and CLI shapes. Before
+each destructive action, two different principals with `keys:approve` record the
+exact opaque `key_id` and `rotate`, `revoke`, or `zeroize` action through
+`POST /api/v1/managed-keys/approvals`; the requester cannot self-approve. Requests
 require `Idempotency-Key`; lifecycle events omit private bytes; tenant projections
 use PostgreSQL RLS; and provider work is delivered by the durable outbox to the
 separate signer. The signer writes an fsync-backed operation intent before provider I/O.

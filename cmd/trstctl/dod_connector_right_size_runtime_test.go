@@ -144,7 +144,7 @@ func TestDODConnectorRightSizeProductionAssembly(t *testing.T) {
 	// readback and projects the terminal receipt. Wait on the shipped read model as
 	// well, so observing the external mutation cannot race the user-visible proof.
 	dodRightSizeWaitDelivery(t, client, baseURL, token)
-	deliveryRequest, err := http.NewRequest(http.MethodGet, baseURL+"/api/v1/connectors/deliveries?limit=20", nil)
+	deliveryRequest, err := http.NewRequest(http.MethodGet, baseURL+"/api/v1/connectors/deliveries", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -460,15 +460,20 @@ func (b *RedisBackend) CreateCredential(ctx context.Context, req GenerateRequest
 		return "", nil, err
 	}
 	defer secret.Wipe(password)
-	capability := "+@read"
-	if !readonlyRole(req.Role) {
-		capability = "+@all"
-	}
 	passArg := append([]byte{'>'}, password...)
 	defer secret.Wipe(passArg)
-	if err := b.redisCommands(ctx, [][]byte{
-		[]byte("ACL"), []byte("SETUSER"), []byte(user), []byte("on"), passArg, []byte("~*"), []byte(capability),
-	}); err != nil {
+	command := [][]byte{
+		[]byte("ACL"), []byte("SETUSER"), []byte(user), []byte("on"), passArg, []byte("~*"), []byte("+@all"),
+	}
+	if readonlyRole(req.Role) {
+		// Redis keeps PING and SELECT in the connection category rather than the
+		// read category. Common clients use both while authenticating/selecting the
+		// configured logical DB, so grant only those two safe connection commands
+		// alongside read operations instead of broadening to +@connection/+@all.
+		command[len(command)-1] = []byte("+@read")
+		command = append(command, []byte("+ping"), []byte("+select"))
+	}
+	if err := b.redisCommands(ctx, command); err != nil {
 		return "", nil, err
 	}
 	return user, redisCredential(b.addr, b.db, user, password), nil

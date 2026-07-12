@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
@@ -13,7 +14,7 @@ import (
 )
 
 type closeProbeNotificationChannel struct {
-	closed bool
+	closed atomic.Int32
 }
 
 func TestIncidentNotificationConstructionConsumesInlineCredentialCopies(t *testing.T) {
@@ -42,18 +43,17 @@ func (*closeProbeNotificationChannel) Name() string { return "close-probe" }
 
 func (*closeProbeNotificationChannel) Notify(context.Context, notify.Alert) error { return nil }
 
-func (c *closeProbeNotificationChannel) Close() { c.closed = true }
+func (c *closeProbeNotificationChannel) Close() { c.closed.Add(1) }
 
-func TestNotificationChannelOwnershipClosesAfterPostConstructionFailure(t *testing.T) {
-	failed := &closeProbeNotificationChannel{}
-	closeNotificationChannelsOnError([]notify.Notifier{failed}, errors.New("later constructor failed"))
-	if !failed.closed {
-		t.Fatal("post-construction failure did not close the owned notification channel")
+func TestNotificationOwnershipClosesCoreExactlyOnceWhenIncidentConstructionFails(t *testing.T) {
+	core := &closeProbeNotificationChannel{}
+	_, _, err := completeRunNotificationChannels([]notify.Notifier{core}, func() ([]notify.Notifier, error) {
+		return nil, errors.New("incident constructor failed")
+	})
+	if err == nil {
+		t.Fatal("completeRunNotificationChannels succeeded after incident constructor failure")
 	}
-
-	transferred := &closeProbeNotificationChannel{}
-	closeNotificationChannelsOnError([]notify.Notifier{transferred}, nil)
-	if transferred.closed {
-		t.Fatal("successful Deps transfer prematurely closed the notification channel")
+	if got := core.closed.Load(); got != 1 {
+		t.Fatalf("core notifier close count = %d, want exactly 1", got)
 	}
 }

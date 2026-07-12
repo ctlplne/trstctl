@@ -10,9 +10,51 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/perf"
 )
+
+func TestLiveSoakSamplerCapturesRealSpineMetrics(t *testing.T) {
+	sampler, cleanup, err := newLiveSoakSampler()
+	if err != nil {
+		t.Fatalf("newLiveSoakSampler with embedded PostgreSQL and JetStream: %v", err)
+	}
+	defer cleanup()
+
+	sampler.ObserveSoakBackpressure([]bulkhead.Stats{{
+		Name: "connector-test", Workers: 1, Capacity: 1, Rejected: 2,
+	}})
+	first, err := sampler.CaptureSoakMetrics(3)
+	if err != nil {
+		t.Fatalf("CaptureSoakMetrics(first): %v", err)
+	}
+	second, err := sampler.CaptureSoakMetrics(1)
+	if err != nil {
+		t.Fatalf("CaptureSoakMetrics(second): %v", err)
+	}
+
+	if source := sampler.SoakMetricSource(); source != soakCaptureSource {
+		t.Fatalf("live sampler source = %q, want %q", source, soakCaptureSource)
+	}
+	for i, snapshot := range []perf.SoakMetricSnapshot{first, second} {
+		if snapshot.DBPoolSize <= 0 || snapshot.DBPoolInUse <= 0 {
+			t.Fatalf("snapshot %d did not observe PostgreSQL: %+v", i, snapshot)
+		}
+		if snapshot.OutboxLagItems != 1 {
+			t.Fatalf("snapshot %d outbox backlog = %.0f, want bounded backlog 1: %+v", i, snapshot.OutboxLagItems, snapshot)
+		}
+		if snapshot.ProjectionLagEvents <= 0 || snapshot.StorageBytes <= 0 {
+			t.Fatalf("snapshot %d did not observe JetStream/projection storage: %+v", i, snapshot)
+		}
+		if snapshot.QueueRejects < 2 {
+			t.Fatalf("snapshot %d lost bounded-queue rejection evidence: %+v", i, snapshot)
+		}
+	}
+	if second.StorageBytes < first.StorageBytes {
+		t.Fatalf("storage shrank after appending another event/outbox row: first=%+v second=%+v", first, second)
+	}
+}
 
 func TestSoakCaptureCommandWritesAnalyzerInput(t *testing.T) {
 	dir := t.TempDir()
@@ -103,6 +145,10 @@ func TestConfiguredTestSamplerAndMetricsScrape(t *testing.T) {
 	}
 	if snap.ProjectionLagEvents != 7 || snap.DBPoolSize <= snap.DBPoolInUse || snap.StorageBytes == 0 {
 		t.Fatalf("test sampler returned incomplete metrics: %+v", snap)
+	}
+	normalized := sampler.(*testSoakSampler).NormalizeSoakSample(perf.SoakSample{})
+	if normalized.RSSBytes == 0 || normalized.HeapBytes == 0 || normalized.Goroutines != 128 || normalized.OpenFDs != 64 || normalized.P95MS != 40 || normalized.P99MS != 80 {
+		t.Fatalf("test sampler normalization = %+v", normalized)
 	}
 
 	reg := observ.NewRegistry()

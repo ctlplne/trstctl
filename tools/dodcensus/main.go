@@ -39,6 +39,8 @@ const (
 )
 
 var (
+	errSelectionNoMatch = errors.New("selection matches no exact manifest entry")
+
 	entryIDPattern     = regexp.MustCompile(`^[a-z0-9_]+(?:\.[a-z0-9_]+)+$`)
 	capabilityPattern  = regexp.MustCompile(`^[a-z0-9_]+$`)
 	testNamePattern    = regexp.MustCompile(`^TestDOD[A-Za-z0-9_]+$`)
@@ -409,7 +411,7 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	repoFlag := flags.String("repo", ".", "repository root")
 	manifestFlag := flags.String("manifest", "tools/dodcensus/manifest.json", "versioned capability manifest")
 	outFlag := flags.String("out", "wiring-census.json", "JSON receipt path")
-	capabilityFlag := flags.String("capability", "", "require one entry ID or aggregate capability to be served")
+	capabilityFlag := flags.String("capability", "", "require one exact manifest entry ID to be REQUIRED and SERVED")
 	cardFlag := flags.String("card", "", "require the entry for one DoD card ID to be served")
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -439,18 +441,36 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	report, err := evaluate(ctx, repo, manifest, osRunner{CacheDir: cacheDir, LinuxRunner: newLinuxRuntimeExecutor()}, sel)
 	if err != nil {
+		if errors.Is(err, errSelectionNoMatch) {
+			_, _ = fmt.Fprintln(stderr, "dodcensus: selection matches no exact manifest entry")
+			return 2
+		}
 		_, _ = fmt.Fprintf(stderr, "dodcensus: evaluate: %v\n", err)
 		return 2
 	}
+	// The feature-map, README denominators, and managed-key disclosure must be
+	// checked against this exact in-memory census. Keeping this in the full gate
+	// avoids a second recursive census (and prevents a stale receipt from
+	// certifying product claims). Exact focused runs deliberately have no full
+	// denominator, so they do not evaluate breadth-wide claims.
+	claimsErr := validateClaimsForSelection(repo, manifest, report, sel)
 	outPath := *outFlag
 	if !filepath.IsAbs(outPath) {
 		outPath = filepath.Join(repo, outPath)
 	}
+	return finishCLIReport(outPath, report, sel, claimsErr, stdout, stderr)
+}
+
+func finishCLIReport(outPath string, report Report, sel selection, claimsErr error, stdout, stderr io.Writer) int {
 	if err := writeReport(outPath, report); err != nil {
 		_, _ = fmt.Fprintf(stderr, "dodcensus: write receipt: %v\n", err)
 		return 2
 	}
 	printReport(stdout, report, outPath)
+	if claimsErr != nil {
+		_, _ = fmt.Fprintf(stderr, "dodcensus: product claims do not match the fresh wiring census: %v\n", claimsErr)
+		return 1
+	}
 	if sel.Capability != "" || sel.CardID != "" {
 		matched, served := selectedStatus(report, sel)
 		if !matched {
@@ -695,8 +715,12 @@ func validateRuntime(where string, proof RuntimeProof, substrates map[string]Sub
 	return nil
 }
 
-func evaluate(ctx context.Context, repo string, manifest Manifest, runner commandRunner, _ selection) (Report, error) {
+func evaluate(ctx context.Context, repo string, manifest Manifest, runner commandRunner, sel selection) (Report, error) {
 	if err := validateManifest(manifest); err != nil {
+		return Report{}, err
+	}
+	selectedID, selectionActive, err := resolveSelection(manifest, sel)
+	if err != nil {
 		return Report{}, err
 	}
 	absRepo, err := filepath.Abs(repo)
@@ -719,6 +743,9 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 	}
 	states := map[string]profileState{}
 	for _, entry := range manifest.Entries {
+		if selectionActive && entry.ID != selectedID {
+			continue
+		}
 		name, profile := resolvedProfile(manifest, entry)
 		if _, exists := states[name]; exists {
 			continue
@@ -750,7 +777,11 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 		}
 	}
 	runtimeExecutions := map[string]*runtimeTestExecution{}
-	runtimeGroups := groupRuntimeEntries(manifest)
+	// Static binding must audit the execution shape of the unfocused manifest
+	// even during an exact-card run. The runtime command itself remains filtered
+	// below, but a focused proof may not hide a test-only full-group branch.
+	fullRuntimeGroups := groupRuntimeEntries(manifest, "", false)
+	runtimeGroups := groupRuntimeEntries(manifest, selectedID, selectionActive)
 	launched, err := launchedBinarySpecForManifest(absRepo, manifest)
 	if err != nil {
 		return Report{}, err
@@ -758,6 +789,12 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 	defer cleanupRuntimeExecutions(runtimeExecutions)
 	for _, entry := range manifest.Entries {
 		profileName, profile := resolvedProfile(manifest, entry)
+		if selectionActive && entry.ID != selectedID {
+			result := notEvaluatedEntryResult(entry, profileName, selectedID)
+			report.Entries[entry.ID] = result
+			updateSummary(&report.Summary, result)
+			continue
+		}
 		state := states[profileName]
 		artifactEvidence := inspectArtifactDeclaration(absRepo, profile)
 		dependencyEvidence := inspectDependencies(entry, state.dependencies, state.ok, state.listed)
@@ -772,9 +809,9 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 		case !dependencyEvidence.OK || !assemblyEvidence.OK:
 			status = statusLibraryOnly
 		default:
-			runtimeEvidence = inspectRuntimeBinding(absRepo, entry, manifest.Substrates, profile)
+			cacheKey := runtimeCacheKey(profileName, entry)
+			runtimeEvidence = inspectRuntimeBindingForGroup(absRepo, entry, manifest.Substrates, fullRuntimeGroups[cacheKey], profile)
 			if runtimeEvidence.OK {
-				cacheKey := runtimeCacheKey(profileName, entry)
 				runtimeEvidence = runRuntimeProof(ctx, absRepo, entry, profileName, profile, launched, manifest.Substrates[entry.Runtime.SubstrateID], runner, runtimeGroups[cacheKey], runtimeExecutions)
 			}
 			if runtimeEvidence.OK {
@@ -799,6 +836,38 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 	}
 	report.Total = len(report.Capabilities)
 	return report, nil
+}
+
+// resolveSelection deliberately accepts only a granular manifest entry ID or
+// the unique card which owns that entry. A family name such as "connector" is
+// not a focused proof: treating one green sibling as the family would let the
+// other advertised backends hide behind it.
+func resolveSelection(manifest Manifest, sel selection) (string, bool, error) {
+	if sel.Capability == "" && sel.CardID == "" {
+		return "", false, nil
+	}
+	if sel.Capability != "" && sel.CardID != "" {
+		return "", false, fmt.Errorf("choose only one selection kind")
+	}
+	for _, entry := range manifest.Entries {
+		if (sel.Capability != "" && entry.ID == sel.Capability) || (sel.CardID != "" && entry.CardID == sel.CardID) {
+			return entry.ID, true, nil
+		}
+	}
+	return "", false, errSelectionNoMatch
+}
+
+func notEvaluatedEntryResult(entry Entry, profileName, selectedID string) entryResult {
+	detail := fmt.Sprintf("not evaluated: exact selection %q excludes this row; no proof command ran and the row is non-SERVED", selectedID)
+	notEvaluated := checkEvidence{Detail: detail}
+	return entryResult{
+		CardID: entry.CardID, Capability: entry.Capability, Inventory: *entry.Inventory,
+		Enforcement: entry.Enforcement, BuildProfile: profileName, Status: statusUnknown,
+		Evidence: entryEvidence{
+			Artifact: notEvaluated, Dependency: notEvaluated,
+			Assembly: notEvaluated, Runtime: notEvaluated,
+		},
+	}
 }
 
 func inspectArtifactDeclaration(repo string, profile BuildProfile) checkEvidence {
@@ -1199,10 +1268,7 @@ func selectedStatus(report Report, sel selection) (bool, bool) {
 		return false, false
 	}
 	if entry, ok := report.Entries[sel.Capability]; ok {
-		return true, entry.Status == statusServed
-	}
-	if capability, ok := report.Capabilities[sel.Capability]; ok {
-		return true, capability.Status == statusServed
+		return true, entry.Status == statusServed && entry.Enforcement == enforcementRequired
 	}
 	return false, false
 }

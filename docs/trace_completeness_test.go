@@ -205,10 +205,10 @@ func TestDiscoveryServedControlPlaneAndNetworkScanVsLibraryCollectorsIsHonest(t 
 
 // ---- TRACE-003: managed-key (BYOK/HSM) package path versus DoD-served custody --
 
-// TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest pins TRACE-003 to
-// the repo-native census. Import reachability through the tagged EE attach seam is
-// necessary but not sufficient: each advertised backend also needs production
-// assembly and runtime evidence.
+// TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest keeps the TRACE-003
+// source and disclosure anchors cheap and deterministic. The full unfocused
+// tools/dodcensus run binds these words to fresh production assembly and runtime
+// evidence before make dod-gate can pass.
 func TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest(t *testing.T) {
 	low := strings.Join(strings.Fields(limLower(t)), " ")
 
@@ -229,34 +229,6 @@ func TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest(t *testing.T) {
 		t.Fatalf("internal/crypto/byok no longer exists; the TRACE-003 in-process-BYOK residual disclosure has no code anchor — revisit this reality test: %v", err)
 	}
 
-	manifest, census := liveDoDCensus(t)
-	inventory, served := 0, 0
-	for _, entry := range manifest.Entries {
-		if entry.Capability != "hsm_kms" || !entry.Inventory {
-			continue
-		}
-		inventory++
-		if censusEntryClaimable(census.Entries[entry.ID]) {
-			served++
-		}
-	}
-	if inventory != 6 {
-		t.Fatalf("HSM/KMS census inventory=%d, want six advertised backends", inventory)
-	}
-	if served < inventory {
-		for _, marker := range []string{"/api/v1/managed-keys", "zero of six", "control-plane process constructs", "not production-assembled", "m-of-n"} {
-			if !strings.Contains(low, marker) {
-				t.Errorf("limitations.md must disclose the conditional custody residual (missing %q) — TRACE-003", marker)
-			}
-		}
-		if strings.Contains(low, "hsm/kms-resident ca private keys are supported") {
-			t.Error("limitations.md claims served HSM/KMS custody while the exact backend census is red — TRACE-003")
-		}
-		return
-	}
-	if strings.Contains(low, "zero of six") {
-		t.Error("limitations.md keeps stale zero-served HSM/KMS wording after every backend became census-served — TRACE-003")
-	}
 	for _, marker := range []string{
 		"six of six backends served",
 		"control-plane process does not construct a provider",

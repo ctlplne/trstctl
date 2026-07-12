@@ -3074,6 +3074,13 @@ func componentSchemas() map[string]*Schema {
 	managedKeyActionReq := object(map[string]*Schema{
 		"key_id": str(),
 	}, "key_id")
+	managedKeyApprovalReq := object(map[string]*Schema{
+		"key_id": str(), "action": {Type: "string", Enum: managedKeyApprovalActions},
+	}, "key_id", "action")
+	managedKeyApproval := object(map[string]*Schema{
+		"resource": str(), "action": {Type: "string", Enum: managedKeyCanonicalApprovalActions},
+		"approver": str(), "approvals": {Type: "integer"},
+	}, "resource", "action", "approver", "approvals")
 	managedKey := object(map[string]*Schema{
 		"key_id": str(), "algorithm": str(), "version": {Type: "integer"}, "state": str(),
 		"public_der":  {Type: "string", Format: "byte"},
@@ -3584,6 +3591,8 @@ func componentSchemas() map[string]*Schema {
 		"CodeSigningSignature":                     codeSigningSignature,
 		"ManagedKeyGenerateRequest":                managedKeyGenerateReq,
 		"ManagedKeyActionRequest":                  managedKeyActionReq,
+		"ManagedKeyApprovalRequest":                managedKeyApprovalReq,
+		"ManagedKeyApproval":                       managedKeyApproval,
 		"ManagedKey":                               managedKey,
 		"ShareRequest":                             shareReq,
 		"ShareToken":                               shareToken,

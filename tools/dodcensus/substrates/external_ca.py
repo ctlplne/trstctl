@@ -16,6 +16,7 @@ import signal
 import socketserver
 import ssl
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -25,6 +26,9 @@ from urllib.request import Request, urlopen
 
 
 PEM_CERT_RE = re.compile(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----\s*", re.S)
+AZURE_KEY_NAME_RE = re.compile(r"^trstctl-(?:generate|rotate)-[0-9a-f]{48}$")
+AZURE_KEY_VERSION = "dod-version"
+LOOPBACK_HOST_RE = re.compile(r"^127\.0\.0\.1:([1-9][0-9]{0,4})$")
 
 
 class LoopbackHTTPServer(ThreadingHTTPServer):
@@ -63,7 +67,8 @@ def verify_sigv4(method: str, raw_path: str, headers, body: bytes, *, access_key
         if len(credential) != 5 or credential[0] != access_key or credential[2] != region or credential[3] != service or credential[4] != "aws4_request":
             return False
         signed_names = fields["SignedHeaders"].split(";")
-        if signed_names != sorted(signed_names) or "host" not in signed_names:
+        required_signed_names = ["content-type", "host", "x-amz-date", "x-amz-target"]
+        if signed_names != required_signed_names:
             return False
         amz_date = headers.get("X-Amz-Date", "")
         if len(amz_date) != 16 or credential[1] != amz_date[:8]:
@@ -146,9 +151,11 @@ def _p256_jwk_public_pem(jwk: dict) -> bytes:
     return b"-----BEGIN PUBLIC KEY-----\n" + b"\n".join(encoded[i:i + 64] for i in range(0, len(encoded), 64)) + b"\n-----END PUBLIC KEY-----\n"
 
 
-def verify_acme_jws(state, body: bytes, path: str, *, new_account: bool) -> tuple[bool, dict]:
+def verify_acme_jws(state, body: bytes, path: str, origin: str, *, new_account: bool) -> tuple[bool, dict]:
     """Verify RFC 8555 protected fields, nonce replay, and ES256 signature."""
     try:
+        if not origin:
+            return False, {}
         envelope = json.loads(body)
         protected_raw = envelope["protected"]
         payload_raw = envelope["payload"]
@@ -156,7 +163,7 @@ def verify_acme_jws(state, body: bytes, path: str, *, new_account: bool) -> tupl
         protected = json.loads(base64.urlsafe_b64decode(protected_raw + "=" * (-len(protected_raw) % 4)))
         payload_bytes = base64.urlsafe_b64decode(payload_raw + "=" * (-len(payload_raw) % 4))
         payload = json.loads(payload_bytes) if payload_bytes else {}
-        if protected.get("alg") != "ES256" or protected.get("url") != state.base_url + path:
+        if protected.get("alg") != "ES256" or protected.get("url") != origin + path:
             return False, {}
         nonce = protected.get("nonce", "")
         with state.lock:
@@ -167,7 +174,7 @@ def verify_acme_jws(state, body: bytes, path: str, *, new_account: bool) -> tupl
             if "kid" in protected:
                 return False, {}
             public_pem = _p256_jwk_public_pem(protected["jwk"])
-        elif protected.get("kid") != state.base_url + "/account/1" or not public_pem:
+        elif protected.get("kid") != origin + "/account/1" or not public_pem:
             return False, {}
         signature = _ecdsa_raw_to_der(base64.urlsafe_b64decode(signature_raw + "=" * (-len(signature_raw) % 4)))
         with tempfile.TemporaryDirectory(prefix="acme-jws-", dir=state.root) as directory:
@@ -221,6 +228,11 @@ class State:
         self.issued_nonces: set[str] = set()
         self.used_nonces: set[str] = set()
         self.account_public_pem = b""
+        self.public_origin = ""
+        self.aws_transcript: list[tuple[str, str, str]] = []
+        self.azure_keys: set[str] = set()
+        self.azure_create_count: dict[str, int] = {}
+        self.azure_transcript: list[tuple[str, str, str]] = []
         self.lock = threading.Lock()
         self._make_root()
 
@@ -276,6 +288,42 @@ class State:
             self.requests.append((method, urlparse(path).path))
             self.authenticated = self.authenticated and authenticated
 
+    def bind_public_origin(self, headers) -> str:
+        """Bind redirect/JWS URLs to one exact child-visible loopback origin."""
+        hosts = headers.get_all("Host", [])
+        if len(hosts) != 1:
+            return ""
+        match = LOOPBACK_HOST_RE.fullmatch(hosts[0])
+        if match is None or int(match.group(1)) > 65535:
+            return ""
+        origin = "http://" + hosts[0]
+        with self.lock:
+            if not self.public_origin:
+                self.public_origin = origin
+            if self.public_origin != origin:
+                return ""
+        return origin
+
+    def azure_create(self, name: str) -> bool:
+        with self.lock:
+            self.azure_create_count[name] = self.azure_create_count.get(name, 0) + 1
+            if name in self.azure_keys:
+                return False
+            self.azure_keys.add(name)
+            return True
+
+    def azure_exists(self, name: str) -> bool:
+        with self.lock:
+            return name in self.azure_keys
+
+    def azure_event(self, action: str, name: str, version: str = "") -> None:
+        with self.lock:
+            self.azure_transcript.append((action, name, version))
+
+    def aws_event(self, method: str, path: str, target: str) -> None:
+        with self.lock:
+            self.aws_transcript.append((method, path, target))
+
     def sign(self, csr: bytes) -> bytes:
         with self.lock:
             self.serial += 1
@@ -305,17 +353,39 @@ class State:
     def passed(self) -> bool:
         if not self.chain or not self.authenticated:
             return False
-        paths = set(self.requests)
+        with self.lock:
+            requests = list(self.requests)
         entry = self.entry_id
+        if entry == "external_ca.awspca":
+            with self.lock:
+                transcript = list(self.aws_transcript)
+            return transcript == [
+                ("POST", "/", "ACMPrivateCA.IssueCertificate"),
+                ("POST", "/", "ACMPrivateCA.GetCertificate"),
+            ]
         if entry == "external_ca.azurekv":
-            created = any(method == "POST" and path.startswith("/keys/") and path.endswith("/create") for method, path in paths)
-            signed = any(method == "POST" and path.startswith("/keys/") and path.endswith("/sign") for method, path in paths)
-            return created and signed
+            with self.lock:
+                keys = set(self.azure_keys)
+                create_count = dict(self.azure_create_count)
+                transcript = list(self.azure_transcript)
+            if len(keys) != 1:
+                return False
+            name = next(iter(keys))
+            expected = [
+                ("miss", name, ""),
+                ("create", name, AZURE_KEY_VERSION),
+                ("sign", name, AZURE_KEY_VERSION),
+            ]
+            return (
+                AZURE_KEY_NAME_RE.fullmatch(name) is not None
+                and create_count.get(name) == 1
+                and ordered_transcript_contains(transcript, expected)
+                and all(event_name == name and (not version or version == AZURE_KEY_VERSION) for _, event_name, version in transcript)
+            )
         required: dict[str, list[tuple[str, str]]] = {
-            "external_ca.registry": [("POST", "/services/v2/order/certificate/ssl_plus"), ("GET", "/services/v2/certificate/2/download/format/pem_all")],
+            "external_ca.registry": [("POST", "/services/v2/order/certificate/ssl_plus"), ("GET", "/services/v2/order/certificate/1"), ("GET", "/services/v2/certificate/2/download/format/pem_all")],
             "external_ca.adcs": [("POST", "/certsrv/certfnsh.asp"), ("GET", "/certsrv/certnew.cer")],
-            "external_ca.awspca": [("POST", "/")],
-            "external_ca.digicert": [("POST", "/services/v2/order/certificate/ssl_plus"), ("GET", "/services/v2/certificate/2/download/format/pem_all")],
+            "external_ca.digicert": [("POST", "/services/v2/order/certificate/ssl_plus"), ("GET", "/services/v2/order/certificate/1"), ("GET", "/services/v2/certificate/2/download/format/pem_all")],
             "external_ca.ejbca": [("POST", "/ejbca/ejbca-rest-api/v1/certificate/pkcs10enroll")],
             "external_ca.entrust": [("POST", "/v1/certificate-authorities/dod-ca/enrollments")],
             "external_ca.gcpcas": [("POST", "/v1/projects/dod/locations/us/caPools/dod/certificates")],
@@ -328,7 +398,16 @@ class State:
             "external_ca.venafi": [("POST", "/vedsdk/Certificates/Request"), ("POST", "/vedsdk/Certificates/Retrieve")],
         }
         expected = required.get(entry)
-        return expected is not None and all(item in paths for item in expected)
+        return expected is not None and ordered_transcript_contains(requests, expected)
+
+
+def ordered_transcript_contains(actual: list[tuple], expected: list[tuple]) -> bool:
+    """Return true only when every expected operation appears in wire order."""
+    index = 0
+    for item in actual:
+        if index < len(expected) and item == expected[index]:
+            index += 1
+    return index == len(expected)
 
 
 def pem_parts(chain: bytes) -> tuple[bytes, bytes]:
@@ -392,7 +471,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, self.state.root_pem(), "application/x-pem-file")
             return
         if parsed.path == "/directory":
-            base = self.state.base_url
+            base = self.state.bind_public_origin(self.headers)
+            self.state.record("GET", parsed.path, self.headers, bool(base))
+            if not base:
+                self._json(400, {"type": "urn:ietf:params:acme:error:malformed", "detail": "invalid public origin"})
+                return
             self._json(200, {"newNonce": base + "/new-nonce", "newAccount": base + "/new-account", "newOrder": base + "/new-order", "meta": {"termsOfService": base + "/terms"}})
             return
         self._provider_request("GET")
@@ -431,11 +514,16 @@ class Handler(BaseHTTPRequestHandler):
             self.state.record(method, path, self.headers, authenticated)
             payload = json.loads(body or b"{}")
             target = self.headers.get("X-Amz-Target", "")
-            if target.endswith("IssueCertificate"):
+            if not authenticated:
+                self._json(403, {"__type": "UnrecognizedClientException", "message": "invalid SigV4 authentication"})
+                return
+            if method == "POST" and path == "/" and target == "ACMPrivateCA.IssueCertificate":
+                self.state.aws_event(method, path, target)
                 self.state.sign(base64.b64decode(payload["Csr"]))
                 self._json(200, {"CertificateArn": "arn:aws:acm-pca:us-east-1:123:certificate-authority/dod/certificate/dod"})
                 return
-            if target.endswith("GetCertificate"):
+            if method == "POST" and path == "/" and target == "ACMPrivateCA.GetCertificate":
+                self.state.aws_event(method, path, target)
                 leaf, issuer = pem_parts(self.state.chain)
                 self._json(200, {"Certificate": leaf.decode(), "CertificateChain": issuer.decode()})
                 return
@@ -443,30 +531,57 @@ class Handler(BaseHTTPRequestHandler):
         if effective == "external_ca.azurekv":
             authenticated = self.headers.get("Authorization", "") == "Bearer dod-token"
             payload = json.loads(body or b"{}")
-            if method == "POST" and path.startswith("/keys/") and path.endswith("/create"):
-                valid = payload.get("kty") in {"RSA", "RSA-HSM"} and payload.get("key_size") == 2048
+            create_match = re.fullmatch(r"/keys/([^/]+)/create", path)
+            get_match = re.fullmatch(r"/keys/([^/]+)(?:/([^/]+))?", path)
+            sign_match = re.fullmatch(r"/keys/([^/]+)/([^/]+)/sign", path)
+            if method == "POST" and create_match is not None:
+                name = create_match.group(1)
+                valid = AZURE_KEY_NAME_RE.fullmatch(name) is not None and payload.get("kty") in {"RSA", "RSA-HSM"} and payload.get("key_size") == 2048
                 self.state.record(method, path, self.headers, authenticated and valid)
+                if not authenticated:
+                    self._json(401, {"error": {"code": "Unauthorized", "message": "bearer token required"}})
+                    return
                 if not valid:
                     self._json(400, {"error": {"code": "BadParameter", "message": "RSA-HSM signing key required"}})
                     return
-                name = path.removeprefix("/keys/").removesuffix("/create")
+                if not self.state.azure_create(name):
+                    self._json(409, {"error": {"code": "Conflict", "message": "key already exists"}})
+                    return
+                self.state.azure_event("create", name, AZURE_KEY_VERSION)
                 n, e = self.state.rsa_jwk()
-                self._json(200, {"key": {"kid": f"https://dod.managedhsm.azure.net/keys/{name}/dod-version", "kty": "RSA-HSM", "n": n, "e": e, "key_ops": ["sign", "verify"]}})
+                self._json(200, {"key": {"kid": f"https://dod.managedhsm.azure.net/keys/{name}/{AZURE_KEY_VERSION}", "kty": "RSA-HSM", "n": n, "e": e, "key_ops": ["sign", "verify"]}})
                 return
-            if method == "GET" and path.startswith("/keys/"):
-                self.state.record(method, path, self.headers, authenticated)
-                name = path.removeprefix("/keys/").split("/", 1)[0]
-                n, e = self.state.rsa_jwk()
-                self._json(200, {"key": {"kid": f"https://dod.managedhsm.azure.net/keys/{name}/dod-version", "kty": "RSA-HSM", "n": n, "e": e, "key_ops": ["sign", "verify"]}})
-                return
-            if method == "POST" and path.startswith("/keys/") and path.endswith("/sign"):
-                valid = payload.get("alg") == "RS256" and isinstance(payload.get("value"), str)
+            if method == "GET" and get_match is not None:
+                name, version = get_match.groups()
+                valid = AZURE_KEY_NAME_RE.fullmatch(name) is not None and (version is None or version == AZURE_KEY_VERSION)
                 self.state.record(method, path, self.headers, authenticated and valid)
+                if not authenticated:
+                    self._json(401, {"error": {"code": "Unauthorized", "message": "bearer token required"}})
+                    return
+                if not valid or not self.state.azure_exists(name):
+                    if authenticated and valid:
+                        self.state.azure_event("miss", name)
+                    self._json(404, {"error": {"code": "KeyNotFound", "message": "key not found"}})
+                    return
+                n, e = self.state.rsa_jwk()
+                self._json(200, {"key": {"kid": f"https://dod.managedhsm.azure.net/keys/{name}/{AZURE_KEY_VERSION}", "kty": "RSA-HSM", "n": n, "e": e, "key_ops": ["sign", "verify"]}})
+                return
+            if method == "POST" and sign_match is not None:
+                name, version = sign_match.groups()
+                valid = AZURE_KEY_NAME_RE.fullmatch(name) is not None and version == AZURE_KEY_VERSION and payload.get("alg") == "RS256" and isinstance(payload.get("value"), str)
+                self.state.record(method, path, self.headers, authenticated and valid)
+                if not authenticated:
+                    self._json(401, {"error": {"code": "Unauthorized", "message": "bearer token required"}})
+                    return
                 if not valid:
                     self._json(400, {"error": {"code": "BadParameter", "message": "RS256 required"}})
                     return
+                if not self.state.azure_exists(name):
+                    self._json(404, {"error": {"code": "KeyNotFound", "message": "key not found"}})
+                    return
                 encoded = payload["value"] + "=" * (-len(payload["value"]) % 4)
                 signature = self.state.sign_digest(base64.urlsafe_b64decode(encoded))
+                self.state.azure_event("sign", name, version)
                 self._json(200, {"value": base64.urlsafe_b64encode(signature).rstrip(b"=").decode()})
                 return
             self.state.record(method, path, self.headers, False)
@@ -522,14 +637,14 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if effective == "external_ca.letsencrypt":
+            base = self.state.bind_public_origin(self.headers)
             authenticated, jws_payload = verify_acme_jws(
-                self.state, body, path, new_account=path == "/new-account",
+                self.state, body, path, base, new_account=path == "/new-account",
             )
-            self.state.record(method, path, self.headers, authenticated)
-            if not authenticated:
+            self.state.record(method, path, self.headers, bool(base) and authenticated)
+            if not base or not authenticated:
                 self._json(400, {"type": "urn:ietf:params:acme:error:malformed", "detail": "invalid JWS"})
                 return
-            base = self.state.base_url
             if path == "/new-nonce":
                 self._send(200, b"")
                 return
@@ -572,11 +687,15 @@ class Handler(BaseHTTPRequestHandler):
 
         if effective == "external_ca.smallstep":
             payload = json.loads(body)
+            base = self.state.bind_public_origin(self.headers)
             authenticated = verify_hs256_jwt(
                 payload.get("ott", ""), b"0123456789abcdef0123456789abcdef",
-                issuer="dod-provisioner", audience=self.state.base_url + "/1.0/sign",
+                issuer="dod-provisioner", audience=base + "/1.0/sign",
             )
-            self.state.record(method, path, self.headers, authenticated)
+            self.state.record(method, path, self.headers, bool(base) and authenticated)
+            if not base or not authenticated:
+                self._json(401, {"error": "invalid provisioner token or public origin"})
+                return
             chain = self.state.sign(payload["csr"].encode())
             leaf, issuer = pem_parts(chain)
             self._json(200, {"crt": leaf.decode(), "ca": issuer.decode(), "certChain": [leaf.decode(), issuer.decode()]})
@@ -647,6 +766,17 @@ def serve() -> int:
     server.server_close()
     thread.join(timeout=2)
     passed = state.passed()
+    if not passed:
+        with state.lock:
+            diagnostic = {
+                "entry_id": state.entry_id,
+                "requests": list(state.requests),
+                "authenticated": state.authenticated,
+                "has_chain": bool(state.chain),
+                "aws_transcript": list(state.aws_transcript),
+                "azure_transcript": list(state.azure_transcript),
+            }
+        print("external-CA proof failed: " + json.dumps(diagnostic, sort_keys=True, separators=(",", ":")), file=sys.stderr, flush=True)
     json_line({
         "schema_version": 1, "challenge": challenge, "entry_id": entry_id,
         "identity": identity, "contract_digest": contract, "pid": os.getpid(),

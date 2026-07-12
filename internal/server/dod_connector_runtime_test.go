@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -40,11 +41,223 @@ type dodConnectorTarget struct {
 	readbackPath string
 }
 
+// dodRuntimeSelection makes a shared runtime test fail before starting any
+// substrate when the gate accidentally gives it an entry owned by another
+// group. An empty selection is the deliberate full-group mode.
+func dodRuntimeSelection(t *testing.T, allowed ...string) string {
+	t.Helper()
+	only := proof.OnlyExpectation(t)
+	if err := dodValidateRuntimeSelection(only, allowed); err != nil {
+		t.Fatalf("DOD-CENSUS: %v", err)
+	}
+	return only
+}
+
+func dodValidateRuntimeSelection(only string, allowed []string) error {
+	if len(allowed) == 0 {
+		return fmt.Errorf("runtime proof group has no allowed entries")
+	}
+	seen := make(map[string]struct{}, len(allowed))
+	for _, id := range allowed {
+		if id == "" {
+			return fmt.Errorf("runtime proof group contains an empty entry")
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return fmt.Errorf("runtime proof group contains duplicate entry %q", id)
+		}
+		seen[id] = struct{}{}
+	}
+	if only == "" {
+		return nil
+	}
+	if _, ok := seen[only]; !ok {
+		return fmt.Errorf("selected expectation %q is not owned by this runtime proof group", only)
+	}
+	return nil
+}
+
+func dodRuntimeEntrySelected(only, id string) bool {
+	return only == "" || only == id
+}
+
+func TestRuntimeProofSelectionValidation(t *testing.T) {
+	allowed := []string{"connector.nginx", "connector.apache"}
+	for _, only := range []string{"", "connector.nginx", "connector.apache"} {
+		if err := dodValidateRuntimeSelection(only, allowed); err != nil {
+			t.Errorf("valid selection %q rejected: %v", only, err)
+		}
+	}
+	for name, test := range map[string]struct {
+		only    string
+		allowed []string
+	}{
+		"foreign":   {only: "connector.envoy", allowed: allowed},
+		"empty-set": {only: "connector.nginx"},
+		"empty-id":  {allowed: []string{"connector.nginx", ""}},
+		"duplicate": {allowed: []string{"connector.nginx", "connector.nginx"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := dodValidateRuntimeSelection(test.only, test.allowed); err == nil {
+				t.Fatal("invalid selection accepted")
+			}
+		})
+	}
+	if !dodRuntimeEntrySelected("", "connector.nginx") || !dodRuntimeEntrySelected("", "connector.apache") {
+		t.Fatal("empty selection did not preserve full-group execution")
+	}
+	selected := 0
+	for _, id := range allowed {
+		if dodRuntimeEntrySelected("connector.nginx", id) {
+			selected++
+		}
+	}
+	if selected != 1 {
+		t.Fatalf("focused selection matched %d entries, want exactly one", selected)
+	}
+}
+
 // TestDODNativeConnectorsProductionAssembly is shared by the 25 granular
-// connector census rows. Every literal entry starts its own nonce/entry/PID-bound
-// external process, while one production buildRunDeps -> Build composition routes
-// all deliveries through the real outbox and user-visible receipt API.
+// connector census rows. A focused gate run starts exactly its selected
+// substrate. A direct full-group run preserves the single-composition sweep.
 func TestDODNativeConnectorsProductionAssembly(t *testing.T) {
+	only := dodRuntimeSelection(t,
+		"connector.registry", "connector.nginx", "connector.apache", "connector.caddy",
+		"connector.envoy", "connector.iis", "connector.haproxy", "connector.f5",
+		"connector.netscaler", "connector.a10", "connector.kemp", "connector.cisco",
+		"connector.fortigate", "connector.paloalto", "connector.postfix", "connector.traefik",
+		"connector.acm", "connector.azurekv", "connector.gcpcm", "connector.javakeystore",
+		"connector.postgresql", "connector.mysql", "connector.rabbitmq",
+		"connector.elasticsearch", "connector.tomcat",
+	)
+	if only == "" {
+		dodRunAllNativeConnectorsProductionAssembly(t)
+		return
+	}
+	if only == "connector.registry" {
+		external := proof.StartCommand(t, "connector.registry")
+		dodRunFocusedNativeConnector(t, "connector.registry", "a10", external)
+		return
+	}
+	if only == "connector.nginx" {
+		external := proof.StartCommand(t, "connector.nginx")
+		dodRunFocusedNativeConnector(t, "connector.nginx", "nginx", external)
+		return
+	}
+	if only == "connector.apache" {
+		external := proof.StartCommand(t, "connector.apache")
+		dodRunFocusedNativeConnector(t, "connector.apache", "apache", external)
+		return
+	}
+	if only == "connector.caddy" {
+		external := proof.StartCommand(t, "connector.caddy")
+		dodRunFocusedNativeConnector(t, "connector.caddy", "caddy", external)
+		return
+	}
+	if only == "connector.envoy" {
+		external := proof.StartCommand(t, "connector.envoy")
+		dodRunFocusedNativeConnector(t, "connector.envoy", "envoy", external)
+		return
+	}
+	if only == "connector.iis" {
+		external := proof.StartCommand(t, "connector.iis")
+		dodRunFocusedNativeConnector(t, "connector.iis", "iis", external)
+		return
+	}
+	if only == "connector.haproxy" {
+		external := proof.StartCommand(t, "connector.haproxy")
+		dodRunFocusedNativeConnector(t, "connector.haproxy", "haproxy", external)
+		return
+	}
+	if only == "connector.f5" {
+		external := proof.StartCommand(t, "connector.f5")
+		dodRunFocusedNativeConnector(t, "connector.f5", "f5", external)
+		return
+	}
+	if only == "connector.netscaler" {
+		external := proof.StartCommand(t, "connector.netscaler")
+		dodRunFocusedNativeConnector(t, "connector.netscaler", "netscaler", external)
+		return
+	}
+	if only == "connector.a10" {
+		external := proof.StartCommand(t, "connector.a10")
+		dodRunFocusedNativeConnector(t, "connector.a10", "a10", external)
+		return
+	}
+	if only == "connector.kemp" {
+		external := proof.StartCommand(t, "connector.kemp")
+		dodRunFocusedNativeConnector(t, "connector.kemp", "kemp", external)
+		return
+	}
+	if only == "connector.cisco" {
+		external := proof.StartCommand(t, "connector.cisco")
+		dodRunFocusedNativeConnector(t, "connector.cisco", "cisco", external)
+		return
+	}
+	if only == "connector.fortigate" {
+		external := proof.StartCommand(t, "connector.fortigate")
+		dodRunFocusedNativeConnector(t, "connector.fortigate", "fortigate", external)
+		return
+	}
+	if only == "connector.paloalto" {
+		external := proof.StartCommand(t, "connector.paloalto")
+		dodRunFocusedNativeConnector(t, "connector.paloalto", "paloalto", external)
+		return
+	}
+	if only == "connector.postfix" {
+		external := proof.StartCommand(t, "connector.postfix")
+		dodRunFocusedNativeConnector(t, "connector.postfix", "postfix", external)
+		return
+	}
+	if only == "connector.traefik" {
+		external := proof.StartCommand(t, "connector.traefik")
+		dodRunFocusedNativeConnector(t, "connector.traefik", "traefik", external)
+		return
+	}
+	if only == "connector.acm" {
+		external := proof.StartCommand(t, "connector.acm")
+		dodRunFocusedNativeConnector(t, "connector.acm", "aws-acm", external)
+		return
+	}
+	if only == "connector.azurekv" {
+		external := proof.StartCommand(t, "connector.azurekv")
+		dodRunFocusedNativeConnector(t, "connector.azurekv", "azure-keyvault", external)
+		return
+	}
+	if only == "connector.gcpcm" {
+		external := proof.StartCommand(t, "connector.gcpcm")
+		dodRunFocusedNativeConnector(t, "connector.gcpcm", "gcp-certificate-manager", external)
+		return
+	}
+	if only == "connector.javakeystore" {
+		external := proof.StartCommand(t, "connector.javakeystore")
+		dodRunFocusedNativeConnector(t, "connector.javakeystore", "java-keystore", external)
+		return
+	}
+	if only == "connector.postgresql" {
+		external := proof.StartCommand(t, "connector.postgresql")
+		dodRunFocusedNativeConnector(t, "connector.postgresql", "postgresql", external)
+		return
+	}
+	if only == "connector.mysql" {
+		external := proof.StartCommand(t, "connector.mysql")
+		dodRunFocusedNativeConnector(t, "connector.mysql", "mysql", external)
+		return
+	}
+	if only == "connector.rabbitmq" {
+		external := proof.StartCommand(t, "connector.rabbitmq")
+		dodRunFocusedNativeConnector(t, "connector.rabbitmq", "rabbitmq", external)
+		return
+	}
+	if only == "connector.elasticsearch" {
+		external := proof.StartCommand(t, "connector.elasticsearch")
+		dodRunFocusedNativeConnector(t, "connector.elasticsearch", "elasticsearch", external)
+		return
+	}
+	external := proof.StartCommand(t, "connector.tomcat")
+	dodRunFocusedNativeConnector(t, "connector.tomcat", "tomcat", external)
+}
+
+func dodRunAllNativeConnectorsProductionAssembly(t *testing.T) {
 	registryExternal := proof.StartCommand(t, "connector.registry")
 	nginxExternal := proof.StartCommand(t, "connector.nginx")
 	apacheExternal := proof.StartCommand(t, "connector.apache")
@@ -184,6 +397,141 @@ func TestDODNativeConnectorsProductionAssembly(t *testing.T) {
 	dodRunConnector(t, "connector.rabbitmq", "rabbitmq", rabbitExternal, srv, token, ownerID, dodPairConfig(t, "rabbitmq", roots["rabbitmq"]), "dod-target", filepath.Join(roots["rabbitmq"], "server.crt"))
 	dodRunConnector(t, "connector.elasticsearch", "elasticsearch", elasticExternal, srv, token, ownerID, dodPairConfig(t, "elasticsearch", roots["elasticsearch"]), "dod-target", filepath.Join(roots["elasticsearch"], "server.crt"))
 	dodRunConnector(t, "connector.tomcat", "tomcat", tomcatExternal, srv, token, ownerID, dodPairConfig(t, "tomcat", roots["tomcat"]), "dod-target", filepath.Join(roots["tomcat"], "server.crt"))
+}
+
+func dodRunFocusedNativeConnector(t *testing.T, entryID, connectorName string, external *proof.ExternalSubstrate) {
+	t.Helper()
+	productionEndpoint := dodParentSubstrateLoopbackBridge(t, external.Endpoint())
+	cfg := config.Default()
+	cfg.RateLimit.Enabled = false
+	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
+	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
+	cfg.Connectors.Enabled = append([]string(nil), config.NativeConnectorNames...)
+	cfg.Connectors.AllowPrivateCIDRs = []string{"127.0.0.0/8"}
+	cfg.Connectors.AllowInsecureHTTP = true
+	cfg.Connectors.LocalProfiles = map[string]config.LocalConnectorProfile{}
+
+	target := "dod-target"
+	readbackPath := ""
+	var targetConfig json.RawMessage
+	local := func(profile string, logical []string) string {
+		root := dodConnectorExternalRoot(t, external)
+		endpoint := ""
+		if len(logical) != 0 {
+			endpoint = productionEndpoint
+		}
+		cfg.Connectors.LocalProfiles[profile] = dodConnectorLocalProfile(t, root, endpoint, entryID, logical)
+		return root
+	}
+	switch entryID {
+	case "connector.registry":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "username": "dod-user", "password_ref": "secret://dod/password"})
+	case "connector.nginx":
+		root := local("nginx", []string{"nginx"})
+		targetConfig, readbackPath = dodPairConfig(t, "nginx", root), filepath.Join(root, "server.crt")
+	case "connector.apache":
+		root := local("apache", []string{"apachectl"})
+		targetConfig, readbackPath = dodPairConfig(t, "apache", root), filepath.Join(root, "server.crt")
+	case "connector.caddy":
+		root := local("caddy", []string{"caddy"})
+		targetConfig, readbackPath = dodPairConfig(t, "caddy", root), filepath.Join(root, "server.crt")
+	case "connector.envoy":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "secret_name": "dod-secret"})
+	case "connector.iis":
+		root := local("iis", []string{"powershell", "netsh"})
+		importDir := filepath.Join(root, "import")
+		if err := os.MkdirAll(importDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		targetConfig = dodJSON(t, map[string]any{"profile": "iis", "binding": "0.0.0.0:443", "import_dir": importDir})
+	case "connector.haproxy":
+		root := local("haproxy", []string{"haproxy", "systemctl"})
+		readbackPath = filepath.Join(root, "bundle.pem")
+		targetConfig = dodJSON(t, map[string]any{"profile": "haproxy", "crt_path": readbackPath, "config_path": filepath.Join(root, "haproxy.cfg")})
+	case "connector.f5":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "client_ssl_profile": "dod-profile", "object_name": "dod-object", "username": "dod-user", "password_ref": "secret://dod/password"})
+	case "connector.netscaler":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "username": "dod-user", "password_ref": "secret://dod/password"})
+	case "connector.a10":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "username": "dod-user", "password_ref": "secret://dod/password"})
+	case "connector.kemp":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "token_ref": "secret://dod/token"})
+	case "connector.cisco":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "username": "dod-user", "password_ref": "secret://dod/password"})
+	case "connector.fortigate":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "token_ref": "secret://dod/token"})
+	case "connector.paloalto":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "api_key_ref": "secret://dod/api-key"})
+	case "connector.postfix":
+		root := local("postfix", []string{"postfix", "doveconf", "doveadm"})
+		readbackPath = filepath.Join(root, "postfix.crt")
+		targetConfig = dodJSON(t, map[string]any{"profile": "postfix", "postfix_cert_path": readbackPath, "postfix_key_path": filepath.Join(root, "postfix.key"), "dovecot_cert_path": filepath.Join(root, "dovecot.crt"), "dovecot_key_path": filepath.Join(root, "dovecot.key")})
+	case "connector.traefik":
+		root := local("traefik", nil)
+		targetConfig, readbackPath = dodPairConfig(t, "traefik", root), filepath.Join(root, "server.crt")
+	case "connector.acm":
+		target = "arn:aws:acm:us-east-1:123456789012:certificate/dod"
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "region": "us-east-1", "access_key_id": "AKIADODTEST", "secret_access_key_ref": "secret://dod/aws-secret"})
+	case "connector.azurekv":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "bearer_token_ref": "secret://dod/bearer"})
+	case "connector.gcpcm":
+		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "project": "dod-project", "location": "global", "bearer_token_ref": "secret://dod/bearer", "poll_interval": "1ms"})
+	case "connector.javakeystore":
+		root := local("java-keystore", nil)
+		readbackPath = filepath.Join(root, "keystore.p12")
+		targetConfig = dodJSON(t, map[string]any{"profile": "java-keystore", "keystore_path": readbackPath, "keystore_password_ref": "secret://dod/password", "alias": "dod", "format": "pkcs12"})
+	case "connector.postgresql":
+		root := local("postgresql", []string{"pg_ctl"})
+		targetConfig, readbackPath = dodPairConfig(t, "postgresql", root), filepath.Join(root, "server.crt")
+	case "connector.mysql":
+		root := local("mysql", []string{"mysqladmin"})
+		targetConfig, readbackPath = dodPairConfig(t, "mysql", root), filepath.Join(root, "server.crt")
+	case "connector.rabbitmq":
+		root := local("rabbitmq", []string{"rabbitmqctl"})
+		targetConfig, readbackPath = dodPairConfig(t, "rabbitmq", root), filepath.Join(root, "server.crt")
+	case "connector.elasticsearch":
+		root := local("elasticsearch", nil)
+		targetConfig, readbackPath = dodPairConfig(t, "elasticsearch", root), filepath.Join(root, "server.crt")
+	case "connector.tomcat":
+		root := local("tomcat", []string{"catalina.sh"})
+		targetConfig, readbackPath = dodPairConfig(t, "tomcat", root), filepath.Join(root, "server.crt")
+	default:
+		t.Fatalf("focused connector proof has no configuration for %q", entryID)
+	}
+
+	ctx := context.Background()
+	st := newServerTestStore(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	if err != nil {
+		t.Fatalf("open embedded event log: %v", err)
+	}
+	runSecrets, err := loadRunSecrets(cfg)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("load run secrets: %v", err)
+	}
+	t.Cleanup(runSecrets.Close)
+	dodSeedConnectorSecrets(t, st, runSecrets.kek)
+	guard, err := egressGuardFromConfig(cfg.AirGap)
+	if err != nil {
+		_ = log.Close()
+		t.Fatal(err)
+	}
+	deps, err := buildRunDeps(ctx, cfg, st, log, dodConnectorSigner(t), runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("production buildRunDeps: %v", err)
+	}
+	srv, err := Build(ctx, deps)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("Build production deps: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	token := dodSeedConnectorToken(t, st)
+	ownerID := dodConnectorCreateOwner(t, srv, token)
+	dodRunConnector(t, entryID, connectorName, external, srv, token, ownerID, targetConfig, target, readbackPath)
 }
 
 func manifestConnectorID(name string) string {

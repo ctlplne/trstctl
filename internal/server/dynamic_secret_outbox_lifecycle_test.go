@@ -61,6 +61,97 @@ func (p *issueOutboxProvider) Revocations() []string {
 	return append([]string(nil), p.revoked...)
 }
 
+// PostgreSQL timestamptz stores microseconds, while Go and the immutable event
+// payload retain nanoseconds. The worker must bind the outbox command to the
+// exact value PostgreSQL can persist instead of rejecting its own round trip
+// before the provider call.
+func TestDynamicSecretIssueBindingSurvivesPostgresTimestampPrecision(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111125"
+	ctx := context.Background()
+	st, log, _, outbox, provider, dispatcher := newDynamicSecretOutboxTestStack(t, tenant)
+
+	expiresAt := time.Date(2099, time.July, 12, 4, 5, 6, 123456789, time.UTC)
+	hardExpiresAt := expiresAt.Add(30 * time.Minute)
+	pending := projections.DynamicSecretLeasePending{
+		ID: "lease-postgres-time-precision", IdempotencyKey: "issue-postgres-time-precision",
+		RequestBinding: "sha256:postgres-time-precision", Provider: provider.name, Role: "reader",
+		ExpiresAt: expiresAt, HardExpiresAt: hardExpiresAt,
+	}
+	data, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := log.Append(ctx, events.Event{
+		Type: projections.EventDynamicSecretLeasePending, TenantID: tenant,
+		Time: expiresAt.Add(-time.Hour), Data: data,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Apply(ctx, event); err != nil {
+		t.Fatal(err)
+	}
+	record, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.ExpiresAt.Equal(pending.ExpiresAt) {
+		t.Fatal("test did not exercise PostgreSQL's sub-microsecond timestamp normalization")
+	}
+	message, err := outbox.Get(ctx, tenant, record.IssueOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var changed projections.DynamicSecretIssueCommand
+	if err := json.Unmarshal(message.Payload, &changed); err != nil {
+		t.Fatal(err)
+	}
+	changed.ExpiresAt = changed.ExpiresAt.Add(time.Microsecond)
+	changedPayload, err := json.Marshal(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badHandled, badErr := dispatcher.Deliver(ctx, orchestrator.Message{
+		ID: message.ID, TenantID: tenant, Destination: message.Destination,
+		IdempotencyKey: message.IdempotencyKey, Payload: changedPayload, Attempts: 1,
+	})
+	if !badHandled || badErr == nil || len(provider.Requests()) != 0 {
+		t.Fatalf("one-microsecond command change handled=%t err=%v provider_calls=%d, want fail-closed before provider", badHandled, badErr, len(provider.Requests()))
+	}
+	if err := json.Unmarshal(message.Payload, &changed); err != nil {
+		t.Fatal(err)
+	}
+	changed.HardExpiresAt = changed.HardExpiresAt.Add(time.Microsecond)
+	changedPayload, err = json.Marshal(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badHandled, badErr = dispatcher.Deliver(ctx, orchestrator.Message{
+		ID: message.ID, TenantID: tenant, Destination: message.Destination,
+		IdempotencyKey: message.IdempotencyKey, Payload: changedPayload, Attempts: 1,
+	})
+	if !badHandled || badErr == nil || len(provider.Requests()) != 0 {
+		t.Fatalf("one-microsecond hard-expiry change handled=%t err=%v provider_calls=%d, want fail-closed before provider", badHandled, badErr, len(provider.Requests()))
+	}
+	handled, err := dispatcher.Deliver(ctx, orchestrator.Message{
+		ID: message.ID, TenantID: tenant, Destination: message.Destination,
+		IdempotencyKey: message.IdempotencyKey, Payload: message.Payload, Attempts: 1,
+	})
+	if err != nil || !handled {
+		t.Fatalf("PostgreSQL-normalized command binding handled=%t err=%v", handled, err)
+	}
+	if requests := provider.Requests(); len(requests) != 1 || requests[0].LeaseID != pending.ID {
+		t.Fatalf("provider requests=%+v, want one request for %s", requests, pending.ID)
+	}
+	issued, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issued.State != store.DynamicSecretLeaseActive {
+		t.Fatalf("lease state=%s, want active", issued.State)
+	}
+}
+
 type preparedIssueOutboxProvider struct {
 	*issueOutboxProvider
 	prepares atomic.Int64

@@ -362,12 +362,17 @@ control plane exposes:
 
 - `POST /api/v1/managed-keys` to create a KMS/HSM-resident, non-extractable signing
   key (`extractable: false` in the response; no private material is returned);
+- `POST /api/v1/managed-keys/approvals` to record a distinct custodian's approval
+  for an exact opaque key handle and `rotate`, `revoke`, or `zeroize` action;
 - `POST /api/v1/managed-keys/rotate` to mint a successor key;
 - `POST /api/v1/managed-keys/revoke` to disable the current key at the provider;
 - `POST /api/v1/managed-keys/zeroize` to schedule provider-side destruction.
 
-The CLI mirrors those verbs under `trstctl managed-keys`. Every request is
-tenant-scoped, idempotent, and recorded as a key-material-free lifecycle event before
+The CLI mirrors those verbs under `trstctl managed-keys`, including `approve`.
+Approval requires `keys:approve`; lifecycle mutation requires `keys:write`, and the
+requester never counts as an approver. Every request is
+tenant-scoped and idempotent. Every lifecycle request is recorded as a
+key-material-free event before
 its PostgreSQL outbox command is delivered to the signer. Rotate, revoke, and
 zeroize retain their governance checks. The required DoD gate launches the shipped
 control-plane and cgo signer, exercises all six providers against faithful cloud

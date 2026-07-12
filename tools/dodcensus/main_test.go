@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"go/ast"
 	"go/build"
 	"go/parser"
@@ -90,6 +91,124 @@ func TestPendingServedRowCannotCloseExactCard(t *testing.T) {
 	matched, served := selectedStatus(report, selection{CardID: "WIRE-CONN-101"})
 	if !matched || served {
 		t.Fatalf("pending served row closed card: matched=%v served=%v", matched, served)
+	}
+}
+
+func TestExactSelectionRunsOnlyTargetRuntimeAndMarksEverySiblingUnevaluated(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sel  selection
+	}{
+		{name: "entry id", sel: selection{Capability: "connector.nginx"}},
+		{name: "card id", sel: selection{CardID: "WIRE-CONN-101"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := t.TempDir()
+			writeGateFixture(t, repo, false)
+			manifest := validManifest(t, repo, enforcementRequired)
+			sibling := manifest.Entries[0]
+			sibling.ID = "connector.apache"
+			sibling.CardID = "WIRE-CONN-102"
+			sibling.Runtime.Test = "TestDODMustNeverRun"
+			sibling.Runtime.File = "internal/server/dod_must_never_run_test.go"
+			sibling.Runtime.Path = "/api/v1/connectors/apache"
+			manifest.Entries = append(manifest.Entries, sibling)
+
+			runner := &scriptedRunner{results: []commandResult{
+				{Stdout: "trstctl.com/trstctl/internal/server\ntrstctl.com/trstctl/internal/connector/nginx\n"},
+				{Stdout: goTestPass("TestDODConnectorNginxServed")},
+			}}
+			runner.hook = func(call commandCall) {
+				if len(call.Args) == 0 || call.Args[0] != "test" {
+					return
+				}
+				if containsArg(call.Args, "^TestDODMustNeverRun$") {
+					t.Fatal("nonselected runtime test executed")
+				}
+				var expectations []runtimeExpectation
+				if err := json.Unmarshal([]byte(call.Profile.RuntimeEnv["TRSTCTL_DOD_EXPECTATIONS"]), &expectations); err != nil {
+					t.Fatalf("decode selected runtime expectations: %v", err)
+				}
+				if len(expectations) != 1 || expectations[0].ID != "connector.nginx" {
+					t.Fatalf("selected runtime received nonselected expectations: %+v", expectations)
+				}
+				broker := call.Profile.RuntimeBroker
+				broker.mu.Lock()
+				expected := broker.expect["connector.nginx"]
+				broker.mu.Unlock()
+				candidate := receiptFor(expected)
+				candidate.MAC = ""
+				writeJSON(t, expected.EvidenceFile, candidate)
+				broker.mu.Lock()
+				broker.receipts[expected.ID] = append([]byte(nil), candidate.ExecutionReceipt...)
+				broker.mu.Unlock()
+			}
+
+			report, err := evaluate(context.Background(), repo, manifest, runner, tc.sel)
+			if err != nil {
+				t.Fatalf("evaluate exact selection: %v", err)
+			}
+			selected := report.Entries["connector.nginx"]
+			if selected.Status != statusServed {
+				t.Fatalf("selected exact row did not serve: %+v", selected)
+			}
+			matched, served := selectedStatus(report, tc.sel)
+			if !matched || !served {
+				t.Fatalf("exact REQUIRED+SERVED row did not satisfy selection: matched=%v served=%v", matched, served)
+			}
+			other := report.Entries["connector.apache"]
+			if other.Status != statusUnknown || other.Status == statusServed || !strings.Contains(other.Evidence.Runtime.Detail, "not evaluated") || !strings.Contains(other.Evidence.Runtime.Detail, "non-SERVED") {
+				t.Fatalf("nonselected sibling is not explicitly unevaluated and nonserved: %+v", other)
+			}
+			testCalls := 0
+			for _, call := range runner.calls {
+				if len(call.Args) > 0 && call.Args[0] == "test" {
+					testCalls++
+				}
+			}
+			if testCalls != 1 {
+				t.Fatalf("focused selection executed %d runtime groups, want exactly one: %+v", testCalls, runner.calls)
+			}
+		})
+	}
+}
+
+func TestAggregateCapabilitySelectionIsRejectedBeforeAnyCommand(t *testing.T) {
+	repo := t.TempDir()
+	writeGateFixture(t, repo, false)
+	manifest := validManifest(t, repo, enforcementRequired)
+	sibling := manifest.Entries[0]
+	sibling.ID = "connector.apache"
+	sibling.CardID = "WIRE-CONN-102"
+	sibling.Runtime.Path = "/api/v1/connectors/apache"
+	manifest.Entries = append(manifest.Entries, sibling)
+	runner := &scriptedRunner{}
+
+	if _, err := evaluate(context.Background(), repo, manifest, runner, selection{Capability: "connector"}); !errors.Is(err, errSelectionNoMatch) {
+		t.Fatalf("aggregate family selection error = %v, want exact-entry rejection", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("rejected aggregate family executed proof commands: %+v", runner.calls)
+	}
+	report := Report{
+		Entries: map[string]entryResult{
+			"connector.nginx":  {Status: statusServed, Enforcement: enforcementRequired},
+			"connector.apache": {Status: statusStub, Enforcement: enforcementRequired},
+		},
+		Capabilities: map[string]capabilityResult{"connector": {Status: statusServed}},
+	}
+	if matched, served := selectedStatus(report, selection{Capability: "connector"}); matched || served {
+		t.Fatalf("aggregate family hid a red sibling: matched=%v served=%v", matched, served)
+	}
+}
+
+func TestPendingServedRowCannotCloseExactEntrySelection(t *testing.T) {
+	report := Report{Entries: map[string]entryResult{
+		"connector.nginx": {CardID: "WIRE-CONN-101", Status: statusServed, Enforcement: enforcementPending},
+	}}
+	matched, served := selectedStatus(report, selection{Capability: "connector.nginx"})
+	if !matched || served {
+		t.Fatalf("pending served row closed exact entry selection: matched=%v served=%v", matched, served)
 	}
 }
 
@@ -193,7 +312,12 @@ func TestRuntimeReceiptRejectsStaleWrongIdentityDigestAndLogOnly(t *testing.T) {
 func TestLaunchedRuntimeReceiptRequiresExactProcessWitness(t *testing.T) {
 	expected := testExpectation(filepath.Join(t.TempDir(), "launched.receipt.json"))
 	expected.RuntimeMode = "launched-binary"
+	expected.LaunchedModulePath = "trstctl.com/trstctl"
 	expected.LaunchedBinaryPackage = "./cmd/trstctl"
+	expected.LaunchedCGOEnabled = "0"
+	expected.LaunchedGOOS = "linux"
+	expected.LaunchedGOARCH = "amd64"
+	expected.LaunchedTags = []string{"release-tag"}
 	valid := receiptFor(expected)
 	valid.MAC = ""
 	if err := validateRuntimeReceiptBody(expected, valid, false, nil); err != nil {
@@ -212,7 +336,12 @@ func TestLaunchedRuntimeReceiptRequiresExactProcessWitness(t *testing.T) {
 		{"wrong pid", func(r *runtimeReceipt) { r.LaunchedProcess.PID = 0 }},
 		{"missing start time", func(r *runtimeReceipt) { r.LaunchedProcess.ProcessStartTicks = "" }},
 		{"unknown process mode", func(r *runtimeReceipt) { r.LaunchedProcess.ProcessMode = "unknown" }},
+		{"wrong module", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryModulePath = "example.invalid/fake" }},
 		{"wrong package", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryPackage = "./cmd/fake" }},
+		{"wrong cgo", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryCGOEnabled = "1" }},
+		{"wrong goos", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryGOOS = "darwin" }},
+		{"wrong goarch", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryGOARCH = "arm64" }},
+		{"wrong tags", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryTags = []string{"attacker-tag"} }},
 		{"mutable digest", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryDigest = "trstctl:latest" }},
 		{"missing binary device", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryDevice = "" }},
 		{"missing binary inode", func(r *runtimeReceipt) { r.LaunchedProcess.BinaryInode = "" }},
@@ -315,6 +444,23 @@ func TestRuntimeFailureDetailUsesBoundedGoTestJSONWhenStderrIsEmpty(t *testing.T
 	}
 }
 
+func TestRuntimeFailureDetailRetainsFirstFailureBeforeLongCrashTail(t *testing.T) {
+	var raw strings.Builder
+	raw.WriteString(`{"Action":"run","Test":"TestDODExample"}` + "\n")
+	raw.WriteString(`{"Action":"output","Test":"TestDODExample","Output":"    proof.go:77: signer failed to start: exact first failure\\n"}` + "\n")
+	for range 80 {
+		raw.WriteString(`{"Action":"output","Test":"TestDODExample","Output":"register 0xdeadbeef\\n"}` + "\n")
+	}
+	raw.WriteString(`{"Action":"fail","Test":"TestDODExample"}` + "\n")
+	detail := runtimeFailureDetail(commandResult{Stdout: raw.String()})
+	if !strings.Contains(detail, "exact first failure") || !strings.Contains(detail, "TestDODExample failed") {
+		t.Fatalf("runtime detail discarded the causal failure: %q", detail)
+	}
+	if len(detail) > 2200 {
+		t.Fatalf("runtime failure detail is not bounded: %d bytes", len(detail))
+	}
+}
+
 func TestRuntimeBindingRejectsHTTptestAndHandBuiltDeps(t *testing.T) {
 	repo := t.TempDir()
 	writeGateFixture(t, repo, true)
@@ -348,13 +494,16 @@ func TestCommittedRequiredRuntimeBindingsStayProductionBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fullGroups := groupRuntimeEntries(manifest, "", false)
 	for _, entry := range manifest.Entries {
 		entry := entry
 		if entry.Enforcement != enforcementRequired || !runtimeConfigured(entry.Runtime) {
 			continue
 		}
 		t.Run(entry.ID, func(t *testing.T) {
-			evidence := inspectRuntimeBinding(repo, entry, manifest.Substrates)
+			profileName, profile := resolvedProfile(manifest, entry)
+			group := fullGroups[runtimeCacheKey(profileName, entry)]
+			evidence := inspectRuntimeBindingForGroup(repo, entry, manifest.Substrates, group, profile)
 			if !evidence.OK {
 				t.Fatalf("committed required runtime binding is red: %+v", evidence)
 			}
@@ -443,6 +592,159 @@ func TestRuntimeBindingRejectsProofOnOnlyOneUnknownEnvironmentBranch(t *testing.
 	evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates, manifest.BuildProfiles["static"])
 	if evidence.OK || !strings.Contains(evidence.Detail, "only one viable side") {
 		t.Fatalf("environment-selected proof/forgery branch was accepted: %+v", evidence)
+	}
+}
+
+func TestRuntimeBindingDoesNotModelInjectedDODExpectationAsEmpty(t *testing.T) {
+	repo := t.TempDir()
+	writeGateFixture(t, repo, false)
+	manifest := validManifest(t, repo, enforcementRequired)
+	path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := strings.Replace(string(raw), `"net/http"`, "\"net/http\"\n    \"os\"", 1)
+	const declaration = "func TestDODConnectorNginxServed(t *testing.T) {"
+	source = strings.Replace(source, declaration, declaration+`
+    if os.Getenv("TRSTCTL_DOD_EXPECTATIONS") != "" {
+        dodFakeInjectedExpectation()
+        return
+    }`, 1)
+	source += `
+func dodFakeInjectedExpectation() {
+    _ = Deps{ConnectorRegistry: newRegistry()}
+}
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates, manifest.BuildProfiles["static"])
+	if evidence.OK || !strings.Contains(evidence.Detail, "hand-constructs Deps") {
+		t.Fatalf("gate-injected expectation environment hid test-only assembly: %+v", evidence)
+	}
+}
+
+func TestRuntimeBindingModelsOnlyExpectationAsInspectedEntry(t *testing.T) {
+	t.Run("exact selected entry", func(t *testing.T) {
+		repo := t.TempDir()
+		writeGateFixture(t, repo, false)
+		manifest := validManifest(t, repo, enforcementRequired)
+		path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := strings.Replace(string(raw), "func TestDODConnectorNginxServed(t *testing.T) {", "func TestDODConnectorNginxServed(t *testing.T) {\nif proof.OnlyExpectation(t) == \"connector.nginx\" {", 1)
+		closing := strings.LastIndex(source, "\n}\n")
+		if closing < 0 {
+			t.Fatal("fixture has no root closing brace")
+		}
+		source = source[:closing] + "\n}" + source[closing:]
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if evidence := inspectRuntimeBindingForGroup(repo, manifest.Entries[0], manifest.Substrates, manifest.Entries, manifest.BuildProfiles["static"]); !evidence.OK {
+			t.Fatalf("exact gate-owned expectation branch was rejected: %+v", evidence)
+		}
+	})
+
+	t.Run("different entry remains dead", func(t *testing.T) {
+		repo := t.TempDir()
+		writeGateFixture(t, repo, false)
+		manifest := validManifest(t, repo, enforcementRequired)
+		path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := strings.Replace(string(raw), "func TestDODConnectorNginxServed(t *testing.T) {", "func TestDODConnectorNginxServed(t *testing.T) {\nif proof.OnlyExpectation(t) == \"connector.apache\" {", 1)
+		closing := strings.LastIndex(source, "\n}\n")
+		if closing < 0 {
+			t.Fatal("fixture has no root closing brace")
+		}
+		source = source[:closing] + "\n}" + source[closing:]
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates, manifest.BuildProfiles["static"]); evidence.OK {
+			t.Fatalf("a different entry's expectation branch was accepted: %+v", evidence)
+		}
+	})
+
+	t.Run("shared focused and full modes are independently valid", func(t *testing.T) {
+		repo := t.TempDir()
+		writeSharedRuntimeFixture(t, repo)
+		manifest := validManifest(t, repo, enforcementRequired)
+		manifest.Entries[0].Runtime.Test = "TestDODSharedConnectors"
+		second := manifest.Entries[0]
+		second.ID = "connector.apache"
+		second.CardID = "WIRE-CONN-102"
+		second.Runtime.Path = "/api/v1/connectors/apache"
+		manifest.Entries = append(manifest.Entries, second)
+		group := groupRuntimeEntries(manifest, "", false)[runtimeCacheKey("static", manifest.Entries[0])]
+		for _, entry := range manifest.Entries {
+			evidence := inspectRuntimeBindingForGroup(repo, entry, manifest.Substrates, group, manifest.BuildProfiles["static"])
+			if !evidence.OK || !strings.Contains(evidence.Detail, "full-group trace") {
+				t.Fatalf("shared focused/full trace for %s = %+v", entry.ID, evidence)
+			}
+		}
+	})
+}
+
+func TestRuntimeBindingRejectsFakeFullGroupBranchDuringExactSelection(t *testing.T) {
+	repo := t.TempDir()
+	writeGateFixture(t, repo, false)
+	manifest := validManifest(t, repo, enforcementRequired)
+	second := manifest.Entries[0]
+	second.ID = "connector.apache"
+	second.CardID = "WIRE-CONN-102"
+	second.Runtime.Path = "/api/v1/connectors/apache"
+	manifest.Entries = append(manifest.Entries, second)
+
+	path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const declaration = "func TestDODConnectorNginxServed(t *testing.T) {"
+	source := strings.Replace(string(raw), declaration, declaration+`
+    if proof.OnlyExpectation(t) == "" {
+        dodFakeFullGroup()
+        return
+    }`, 1)
+	source += `
+func dodFakeFullGroup() {
+    _ = Deps{ConnectorRegistry: newRegistry()}
+}
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The focused-only model deliberately demonstrates the former hole: the fake
+	// helper is dead when the gate issues this exact entry ID.
+	if evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates, manifest.BuildProfiles["static"]); !evidence.OK {
+		t.Fatalf("regression fixture's honest focused branch is invalid: %+v", evidence)
+	}
+	group := groupRuntimeEntries(manifest, "", false)[runtimeCacheKey("static", manifest.Entries[0])]
+	if evidence := inspectRuntimeBindingForGroup(repo, manifest.Entries[0], manifest.Substrates, group, manifest.BuildProfiles["static"]); evidence.OK || !strings.Contains(evidence.Detail, "full-group runtime source") || !strings.Contains(evidence.Detail, "hand-constructs Deps") {
+		t.Fatalf("fake full-only branch escaped independent group tracing: %+v", evidence)
+	}
+
+	runner := &scriptedRunner{results: []commandResult{{Stdout: "trstctl.com/trstctl/internal/server\ntrstctl.com/trstctl/internal/connector/nginx\n"}}}
+	report, err := evaluate(context.Background(), repo, manifest, runner, selection{Capability: "connector.nginx"})
+	if err != nil {
+		t.Fatalf("evaluate exact selection: %v", err)
+	}
+	selected := report.Entries["connector.nginx"]
+	if selected.Status == statusServed || !strings.Contains(selected.Evidence.Runtime.Detail, "full-group runtime source") {
+		t.Fatalf("exact selection certified a test-only full branch: %+v", selected)
+	}
+	for _, call := range runner.calls {
+		if len(call.Args) > 0 && call.Args[0] == "test" {
+			t.Fatalf("rejected full-group source still executed a runtime test: %+v", runner.calls)
+		}
 	}
 }
 
@@ -675,6 +977,10 @@ func TestRuntimeExecutionAlwaysAddsReservedProofTag(t *testing.T) {
 			}
 			if runner.calls[0].Profile.HostRuntime || !runner.calls[0].Profile.RuntimeExecution {
 				t.Fatal("dedicated proof test was not configured for shipped-profile execution")
+			}
+			expected := execution.expectations[entry.ID]
+			if expected.RuntimeTestPackage != entry.Runtime.Package || expected.RuntimeCGOEnabled != tc.profile.CGOEnabled || expected.RuntimeGOOS != tc.profile.GOOS || expected.RuntimeGOARCH != tc.profile.GOARCH || strings.Join(expected.RuntimeTags, ",") != strings.Join(tc.profile.Tags, ",") {
+				t.Fatalf("runtime expectation profile = cgo=%q %s/%s tags=%v, want cgo=%q %s/%s tags=%v", expected.RuntimeCGOEnabled, expected.RuntimeGOOS, expected.RuntimeGOARCH, expected.RuntimeTags, tc.profile.CGOEnabled, tc.profile.GOOS, tc.profile.GOARCH, tc.profile.Tags)
 			}
 		})
 	}
@@ -933,7 +1239,8 @@ func validManifest(t *testing.T, repo, enforcement string) Manifest {
 	writeFile(t, repo, "go.mod", "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.4\n", 0o600)
 	writeFile(t, repo, "go.sum", "", 0o600)
 	writeFile(t, repo, "tools/dodcensus/Dockerfile.runtime-runner", runtimeRunnerFixture(), 0o600)
-	runnerFiles := []string{"go.mod", "go.sum", "tools/dodcensus/Dockerfile.runtime-runner"}
+	writeFile(t, repo, runtimeRunnerBaseFile, "golang:1.26.4-bookworm@sha256:"+strings.Repeat("b", 64)+"\n", 0o600)
+	runnerFiles := []string{"go.mod", "go.sum", "tools/dodcensus/Dockerfile.runtime-runner", runtimeRunnerBaseFile}
 	runnerDigest, err := commandIdentityDigest(repo, runnerFiles)
 	if err != nil {
 		t.Fatal(err)
@@ -971,7 +1278,7 @@ func testStaticProfile() BuildProfile {
 		RuntimeRunner: RuntimeRunnerProof{
 			Dockerfile: "tools/dodcensus/Dockerfile.runtime-runner", Platform: "linux/amd64",
 			Identity:      "fixture/runtime-runner@sha256:" + strings.Repeat("a", 64),
-			IdentityFiles: []string{"go.mod", "go.sum", "tools/dodcensus/Dockerfile.runtime-runner"},
+			IdentityFiles: []string{"go.mod", "go.sum", "tools/dodcensus/Dockerfile.runtime-runner", runtimeRunnerBaseFile},
 		},
 	}
 }
@@ -1040,8 +1347,13 @@ func exerciseConnector(t *testing.T, id, path string) {
     session.Complete(proof.ExternalWrite(proof.ExternalWriteProbe{Destination: []byte("connector/configuration/path"), Written: payload, ReadBack: payload, ExecutionReceipt: executionReceipt}))
 }
 func TestDODSharedConnectors(t *testing.T) {
-    exerciseConnector(t, "connector.nginx", "/api/v1/connectors/nginx")
-    exerciseConnector(t, "connector.apache", "/api/v1/connectors/apache")
+    only := proof.OnlyExpectation(t)
+    if only == "" || only == "connector.nginx" {
+        exerciseConnector(t, "connector.nginx", "/api/v1/connectors/nginx")
+    }
+    if only == "" || only == "connector.apache" {
+        exerciseConnector(t, "connector.apache", "/api/v1/connectors/apache")
+    }
 }
 `
 	writeFile(t, repo, "internal/server/dod_nginx_served_test.go", source, 0o600)
@@ -1129,7 +1441,10 @@ func receiptFor(expected runtimeExpectation) runtimeReceipt {
 	if expected.RuntimeMode == "launched-binary" {
 		receipt.LaunchedProcess = &launchedProcessReceipt{
 			PID: os.Getpid() + 2000, ProcessStartTicks: "1234", ProcessMode: "native",
-			BinaryPackage: expected.LaunchedBinaryPackage, BinaryDigest: "sha256:" + strings.Repeat("f", 64),
+			BinaryModulePath: expected.LaunchedModulePath, BinaryPackage: expected.LaunchedBinaryPackage,
+			BinaryCGOEnabled: expected.LaunchedCGOEnabled, BinaryGOOS: expected.LaunchedGOOS,
+			BinaryGOARCH: expected.LaunchedGOARCH, BinaryTags: append([]string(nil), expected.LaunchedTags...),
+			BinaryDigest: "sha256:" + strings.Repeat("f", 64),
 			BinaryDevice: "42", BinaryInode: "84", Address: "127.0.0.1:19443",
 			ListenerInode: "123456", AcceptedConnectionInode: "123457",
 		}

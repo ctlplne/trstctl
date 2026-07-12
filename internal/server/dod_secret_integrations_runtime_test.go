@@ -60,17 +60,117 @@ type dodDynamicLeaseWire struct {
 // granular dynamic-secret census rows. It passes untouched buildRunDeps output
 // to Build and proves independently usable, rotated, then revoked credentials.
 func TestDODSecretIntegrationsProductionAssembly(t *testing.T) {
-	testDODDynamicSecretProductionAssembly(t)
+	only := dodRuntimeSelection(t,
+		"dynamic_secret.registry", "dynamic_secret.postgresql", "dynamic_secret.mysql",
+		"dynamic_secret.mongodb", "dynamic_secret.aws_iam", "dynamic_secret.gcp_iam",
+		"dynamic_secret.azure_entra", "dynamic_secret.kubernetes", "dynamic_secret.redis",
+	)
+	if only == "" {
+		dodRunAllDynamicSecretProductionAssembly(t)
+		return
+	}
+	if only == "dynamic_secret.registry" {
+		external := proof.StartCommand(t, "dynamic_secret.registry")
+		dodRunFocusedDynamicSecret(t, "dynamic_secret.registry", external, dodSecretIntegrationTarget{"dynamic_secret.registry", "registry", "postgresql"})
+		return
+	}
+	if only == "dynamic_secret.postgresql" {
+		external := proof.StartCommand(t, "dynamic_secret.postgresql")
+		dodRunFocusedDynamicSecret(t, "dynamic_secret.postgresql", external, dodSecretIntegrationTarget{"dynamic_secret.postgresql", "postgresql", "postgresql"})
+		return
+	}
+	if only == "dynamic_secret.mysql" {
+		external := proof.StartCommand(t, "dynamic_secret.mysql")
+		dodRunFocusedDynamicSecret(t, "dynamic_secret.mysql", external, dodSecretIntegrationTarget{"dynamic_secret.mysql", "mysql", "mysql"})
+		return
+	}
+	if only == "dynamic_secret.mongodb" {
+		external := proof.StartCommand(t, "dynamic_secret.mongodb")
+		dodRunFocusedDynamicSecret(t, "dynamic_secret.mongodb", external, dodSecretIntegrationTarget{"dynamic_secret.mongodb", "mongodb", "mongodb"})
+		return
+	}
+	if only == "dynamic_secret.aws_iam" {
+		external := proof.StartCommand(t, "dynamic_secret.aws_iam")
+		dodRunFocusedDynamicSecret(t, "dynamic_secret.aws_iam", external, dodSecretIntegrationTarget{"dynamic_secret.aws_iam", "aws-iam", "aws-iam"})
+		return
+	}
+	if only == "dynamic_secret.gcp_iam" {
+		external := proof.StartCommand(t, "dynamic_secret.gcp_iam")
+		dodRunFocusedDynamicSecret(t, "dynamic_secret.gcp_iam", external, dodSecretIntegrationTarget{"dynamic_secret.gcp_iam", "gcp-iam", "gcp-iam"})
+		return
+	}
+	if only == "dynamic_secret.azure_entra" {
+		external := proof.StartCommand(t, "dynamic_secret.azure_entra")
+		dodRunFocusedDynamicSecret(t, "dynamic_secret.azure_entra", external, dodSecretIntegrationTarget{"dynamic_secret.azure_entra", "azure-entra", "azure-entra"})
+		return
+	}
+	if only == "dynamic_secret.kubernetes" {
+		external := proof.StartCommand(t, "dynamic_secret.kubernetes")
+		dodRunFocusedDynamicSecret(t, "dynamic_secret.kubernetes", external, dodSecretIntegrationTarget{"dynamic_secret.kubernetes", "kubernetes", "kubernetes"})
+		return
+	}
+	external := proof.StartCommand(t, "dynamic_secret.redis")
+	dodRunFocusedDynamicSecret(t, "dynamic_secret.redis", external, dodSecretIntegrationTarget{"dynamic_secret.redis", "redis", "redis"})
 }
 
 // TestDODSecretSyncProductionAssembly is shared by the registry and all eight
 // granular secret-sync census rows. It passes untouched buildRunDeps output to
 // Build and proves authenticated external write/readback outside the process.
 func TestDODSecretSyncProductionAssembly(t *testing.T) {
-	testDODSecretSyncProductionAssembly(t)
+	only := dodRuntimeSelection(t,
+		"secret_sync.registry", "secret_sync.aws_secrets_manager", "secret_sync.gcp_secret_manager",
+		"secret_sync.azure_key_vault", "secret_sync.github_actions", "secret_sync.gitlab_ci",
+		"secret_sync.vercel", "secret_sync.generic_ci_json", "secret_sync.kubernetes_secrets",
+	)
+	if only == "" {
+		dodRunAllSecretSyncProductionAssembly(t)
+		return
+	}
+	if only == "secret_sync.registry" {
+		external := proof.StartCommand(t, "secret_sync.registry")
+		dodRunFocusedSecretSync(t, "secret_sync.registry", external, dodSecretIntegrationTarget{"secret_sync.registry", "registry", "generic"})
+		return
+	}
+	if only == "secret_sync.aws_secrets_manager" {
+		external := proof.StartCommand(t, "secret_sync.aws_secrets_manager")
+		dodRunFocusedSecretSync(t, "secret_sync.aws_secrets_manager", external, dodSecretIntegrationTarget{"secret_sync.aws_secrets_manager", "aws-secrets-manager", "aws"})
+		return
+	}
+	if only == "secret_sync.gcp_secret_manager" {
+		external := proof.StartCommand(t, "secret_sync.gcp_secret_manager")
+		dodRunFocusedSecretSync(t, "secret_sync.gcp_secret_manager", external, dodSecretIntegrationTarget{"secret_sync.gcp_secret_manager", "gcp-secret-manager", "gcp"})
+		return
+	}
+	if only == "secret_sync.azure_key_vault" {
+		external := proof.StartCommand(t, "secret_sync.azure_key_vault")
+		dodRunFocusedSecretSync(t, "secret_sync.azure_key_vault", external, dodSecretIntegrationTarget{"secret_sync.azure_key_vault", "azure-key-vault", "azure"})
+		return
+	}
+	if only == "secret_sync.github_actions" {
+		external := proof.StartCommand(t, "secret_sync.github_actions")
+		dodRunFocusedSecretSync(t, "secret_sync.github_actions", external, dodSecretIntegrationTarget{"secret_sync.github_actions", "github-actions", "github"})
+		return
+	}
+	if only == "secret_sync.gitlab_ci" {
+		external := proof.StartCommand(t, "secret_sync.gitlab_ci")
+		dodRunFocusedSecretSync(t, "secret_sync.gitlab_ci", external, dodSecretIntegrationTarget{"secret_sync.gitlab_ci", "gitlab-ci", "gitlab"})
+		return
+	}
+	if only == "secret_sync.vercel" {
+		external := proof.StartCommand(t, "secret_sync.vercel")
+		dodRunFocusedSecretSync(t, "secret_sync.vercel", external, dodSecretIntegrationTarget{"secret_sync.vercel", "vercel", "vercel"})
+		return
+	}
+	if only == "secret_sync.generic_ci_json" {
+		external := proof.StartCommand(t, "secret_sync.generic_ci_json")
+		dodRunFocusedSecretSync(t, "secret_sync.generic_ci_json", external, dodSecretIntegrationTarget{"secret_sync.generic_ci_json", "generic-ci-json", "generic"})
+		return
+	}
+	external := proof.StartCommand(t, "secret_sync.kubernetes_secrets")
+	dodRunFocusedSecretSync(t, "secret_sync.kubernetes_secrets", external, dodSecretIntegrationTarget{"secret_sync.kubernetes_secrets", "kubernetes-secrets", "kubernetes"})
 }
 
-func testDODDynamicSecretProductionAssembly(t *testing.T) {
+func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 	var (
 		dynamicRegistry   *proof.ExternalSubstrate
 		dynamicPostgres   *proof.ExternalSubstrate
@@ -168,6 +268,118 @@ func testDODDynamicSecretProductionAssembly(t *testing.T) {
 	dodProveDynamicSecret(t, "dynamic_secret.redis", dynamicRedis, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.redis", "redis", "redis"})
 }
 
+func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.ExternalSubstrate, target dodSecretIntegrationTarget) {
+	t.Helper()
+	secretDir := t.TempDir()
+	fileRef := func(name string, value []byte) string { return dodSecretIntegrationFile(t, secretDir, name, value) }
+	private, cidrs := true, []string{"127.0.0.0/8"}
+
+	cfg := config.Default()
+	cfg.RateLimit.Enabled = false
+	cfg.Secrets.EnableAPI = true
+	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
+	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	var provider config.DynamicSecretProviderConfig
+	switch entryID {
+	case "dynamic_secret.registry", "dynamic_secret.postgresql":
+		database := dodSecretSubstrateConfig(t, external)
+		provider = config.DynamicSecretProviderConfig{
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "postgresql",
+			AdminDSNRef: fileRef(target.id+"-dsn", []byte(database.AdminDSN)), Database: database.Database,
+			AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_" + target.id,
+		}
+	case "dynamic_secret.mysql":
+		database := dodSecretSubstrateConfig(t, external)
+		provider = config.DynamicSecretProviderConfig{
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "mysql",
+			AdminDSNRef: fileRef("mysql-dsn", []byte(database.AdminDSN)), Database: database.Database,
+			Addr: database.Addr, AccountHost: "%", AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mysql",
+		}
+	case "dynamic_secret.mongodb":
+		database := dodSecretSubstrateConfig(t, external)
+		provider = config.DynamicSecretProviderConfig{
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "mongodb",
+			AdminDSNRef: fileRef("mongo-dsn", []byte(database.AdminDSN)), Database: database.Database,
+			AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mongo",
+		}
+	case "dynamic_secret.aws_iam":
+		provider = config.DynamicSecretProviderConfig{
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "aws-iam",
+			Endpoint: dodParentSubstrateLoopbackBridge(t, external.Endpoint()), Region: "us-east-1", AccessKeyID: "AKIADODADMIN",
+			SecretAccessRef: fileRef("aws-admin-secret", []byte("dod-aws-admin-secret")), AllowedRoles: []string{"reader"},
+			RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:policy/DODReadOnly"}, MaxTTL: "15m",
+			AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod_aws",
+		}
+	case "dynamic_secret.gcp_iam":
+		provider = config.DynamicSecretProviderConfig{
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "gcp-iam",
+			Endpoint: dodParentSubstrateLoopbackBridge(t, external.Endpoint()), Project: "p", ServiceAccount: "dyn@p.iam.gserviceaccount.com",
+			BearerTokenRef: fileRef("gcp-admin-token", []byte("dod-gcp-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m",
+			AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-gcp",
+		}
+	case "dynamic_secret.azure_entra":
+		provider = config.DynamicSecretProviderConfig{
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "azure-entra",
+			Endpoint: dodParentSubstrateLoopbackBridge(t, external.Endpoint()), ApplicationObject: "app-obj", ApplicationClient: "dod-client", AzureTenant: "dod-tenant",
+			BearerTokenRef: fileRef("azure-admin-token", []byte("dod-azure-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m",
+			AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-azure",
+		}
+	case "dynamic_secret.kubernetes":
+		provider = config.DynamicSecretProviderConfig{
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "kubernetes",
+			Endpoint: dodParentSubstrateLoopbackBridge(t, external.Endpoint()), Namespace: "apps",
+			BearerTokenRef: fileRef("kubernetes-admin-token", []byte("dod-k8s-admin-token")), AllowedRoles: []string{"reader"},
+			RoleBindings: map[string]string{"reader": "Role/dod-reader"}, MaxTTL: "15m",
+			AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-k8s",
+		}
+	case "dynamic_secret.redis":
+		database := dodSecretSubstrateConfig(t, external)
+		provider = config.DynamicSecretProviderConfig{
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "redis", Addr: database.Addr,
+			PasswordRef: fileRef("redis-admin-password", []byte(database.Password)), AllowedRoles: []string{"reader"},
+			MaxTTL: "15m", UsernamePrefix: "dod_redis",
+		}
+	default:
+		t.Fatalf("focused dynamic-secret proof has no configuration for %q", entryID)
+	}
+	cfg.SecretIntegrations.DynamicProviders = []config.DynamicSecretProviderConfig{provider}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("secret integration production config: %v", err)
+	}
+
+	ctx := context.Background()
+	st := newServerTestStore(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runSecrets, err := loadRunSecrets(cfg)
+	if err != nil {
+		_ = log.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(runSecrets.Close)
+	guard, err := egressGuardFromConfig(cfg.AirGap)
+	if err != nil {
+		_ = log.Close()
+		t.Fatal(err)
+	}
+	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("production buildRunDeps: %v", err)
+	}
+	srv, err := Build(ctx, deps)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("Build production deps: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	dodStartSecretIntegrationDispatcher(t, srv)
+	token := dodSecretIntegrationToken(t, st)
+	dodProveDynamicSecret(t, entryID, external, srv, st, token, target)
+}
+
 // dodCrashFirstVersioningSyncAfterReceiverCommit forces the exact ambiguous
 // outbox window for the three version-creating cloud targets. Their retry must
 // reuse/reconcile the stable operation instead of creating a second version.
@@ -194,7 +406,7 @@ func dodCrashFirstVersioningSyncAfterReceiverCommit(t *testing.T, srv *Server) {
 	}
 }
 
-func testDODSecretSyncProductionAssembly(t *testing.T) {
+func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	syncRegistry := proof.StartCommand(t, "secret_sync.registry")
 	syncAWS := proof.StartCommand(t, "secret_sync.aws_secrets_manager")
 	syncGCP := proof.StartCommand(t, "secret_sync.gcp_secret_manager")
@@ -284,6 +496,95 @@ func testDODSecretSyncProductionAssembly(t *testing.T) {
 	dodProveSecretSync(t, "secret_sync.vercel", syncVercel, srv, token, dodSecretIntegrationTarget{"secret_sync.vercel", "vercel", "vercel"}, sourceValue)
 	dodProveSecretSync(t, "secret_sync.generic_ci_json", syncGeneric, srv, token, dodSecretIntegrationTarget{"secret_sync.generic_ci_json", "generic-ci-json", "generic"}, sourceValue)
 	dodProveSecretSync(t, "secret_sync.kubernetes_secrets", syncKubernetes, srv, token, dodSecretIntegrationTarget{"secret_sync.kubernetes_secrets", "kubernetes-secrets", "kubernetes"}, sourceValue)
+}
+
+func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.ExternalSubstrate, target dodSecretIntegrationTarget) {
+	t.Helper()
+	secretDir := t.TempDir()
+	fileRef := func(name string, value []byte) string { return dodSecretIntegrationFile(t, secretDir, name, value) }
+	private, cidrs := true, []string{"127.0.0.0/8"}
+	endpoint := dodParentSubstrateLoopbackBridge(t, external.Endpoint())
+
+	cfg := config.Default()
+	cfg.RateLimit.Enabled = false
+	cfg.Secrets.EnableAPI = true
+	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
+	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	base := config.SecretSyncTargetConfig{
+		TenantID: dodSecretIntegrationTenant, ID: target.id, Endpoint: endpoint,
+		AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs,
+	}
+	switch entryID {
+	case "secret_sync.registry":
+		base.Type, base.Provider = "generic-ci-json", "registry"
+		base.TokenRef = fileRef("registry-sync-token", []byte("dod-registry-token"))
+	case "secret_sync.aws_secrets_manager":
+		base.Type, base.Region, base.AccessKeyID = "aws-secrets-manager", "us-east-1", "AKIADODSYNC"
+		base.SecretAccessRef = fileRef("aws-sync-secret", []byte("dod-aws-sync-secret"))
+	case "secret_sync.gcp_secret_manager":
+		base.Type, base.Project = "gcp-secret-manager", "dod-project"
+		base.TokenRef = fileRef("gcp-sync-token", []byte("dod-gcp-sync-token"))
+	case "secret_sync.azure_key_vault":
+		base.Type, base.APIVersion = "azure-key-vault", "7.4"
+		base.TokenRef = fileRef("azure-sync-token", []byte("dod-azure-sync-token"))
+	case "secret_sync.github_actions":
+		base.Type, base.Owner, base.Repo = "github-actions", "dod", "repo"
+		base.TokenRef = fileRef("github-token", []byte("dod-github-token"))
+	case "secret_sync.gitlab_ci":
+		base.Type, base.ProjectID = "gitlab-ci", "123"
+		base.TokenRef = fileRef("gitlab-token", []byte("dod-gitlab-token"))
+	case "secret_sync.vercel":
+		base.Type, base.ProjectID, base.Targets = "vercel", "dod-project", []string{"production"}
+		base.TokenRef = fileRef("vercel-token", []byte("dod-vercel-token"))
+	case "secret_sync.generic_ci_json":
+		base.Type, base.Provider = "generic-ci-json", "generic"
+		base.TokenRef = fileRef("generic-token", []byte("dod-generic-token"))
+	case "secret_sync.kubernetes_secrets":
+		base.Type, base.Namespace = "kubernetes-secrets", "apps"
+		base.TokenRef = fileRef("kubernetes-sync-token", []byte("dod-k8s-sync-token"))
+	default:
+		t.Fatalf("focused secret-sync proof has no configuration for %q", entryID)
+	}
+	cfg.SecretIntegrations.SyncTargets = []config.SecretSyncTargetConfig{base}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("secret integration production config: %v", err)
+	}
+
+	ctx := context.Background()
+	st := newServerTestStore(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runSecrets, err := loadRunSecrets(cfg)
+	if err != nil {
+		_ = log.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(runSecrets.Close)
+	guard, err := egressGuardFromConfig(cfg.AirGap)
+	if err != nil {
+		_ = log.Close()
+		t.Fatal(err)
+	}
+	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("production buildRunDeps: %v", err)
+	}
+	srv, err := Build(ctx, deps)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("Build production deps: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	dodCrashFirstVersioningSyncAfterReceiverCommit(t, srv)
+	dodStartSecretIntegrationDispatcher(t, srv)
+	token := dodSecretIntegrationToken(t, st)
+	sourceValue := []byte("dod-secret-sync-value-2026")
+	defer secret.Wipe(sourceValue)
+	dodCreateSyncSource(t, srv, token, "dod/sync/source", sourceValue)
+	dodProveSecretSync(t, entryID, external, srv, token, target, sourceValue)
 }
 
 func dodStartSecretIntegrationDispatcher(t *testing.T, srv *Server) {
@@ -715,11 +1016,20 @@ func dodRedisCredentialConnection(t *testing.T, credential []byte) net.Conn {
 		t.Fatal("invalid Redis credential host")
 	}
 	addr := string(rest[at+1 : at+1+hostEnd])
+	dbBytes := rest[at+1+hostEnd+1:]
+	if len(dbBytes) == 0 || bytes.IndexAny(dbBytes, "?#") >= 0 {
+		t.Fatal("invalid Redis credential database")
+	}
+	db, err := strconv.Atoi(string(dbBytes))
+	if err != nil || db < 0 {
+		t.Fatal("invalid Redis credential database")
+	}
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeRedis := func(parts ...[]byte) {
+	reader := bufio.NewReader(conn)
+	redisRoundTrip := func(parts ...[]byte) string {
 		var body bytes.Buffer
 		fmt.Fprintf(&body, "*%d\r\n", len(parts))
 		for _, part := range parts {
@@ -730,13 +1040,26 @@ func dodRedisCredentialConnection(t *testing.T, credential []byte) net.Conn {
 		if _, err := conn.Write(body.Bytes()); err != nil {
 			t.Fatal(err)
 		}
-		line, err := bufio.NewReader(conn).ReadString('\n')
-		if err != nil || !strings.HasPrefix(line, "+") {
-			t.Fatalf("Redis credential command response=%q err=%v", line, err)
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("Redis credential command response err=%v", err)
+		}
+		return line
+	}
+	requireRedisPrefix := func(want string, parts ...[]byte) {
+		t.Helper()
+		if line := redisRoundTrip(parts...); !strings.HasPrefix(line, want) {
+			t.Fatalf("Redis credential command response=%q, want prefix %q", line, want)
 		}
 	}
-	writeRedis([]byte("AUTH"), user, password)
-	writeRedis([]byte("PING"))
+	requireRedisPrefix("+", []byte("AUTH"), user, password)
+	requireRedisPrefix("+", []byte("PING"))
+	requireRedisPrefix("+", []byte("SELECT"), []byte(strconv.Itoa(db)))
+	requireRedisPrefix("$-1\r\n", []byte("GET"), []byte("trstctl:dod:read-only-probe"))
+	requireRedisPrefix("-NOPERM", []byte("SET"), []byte("trstctl:dod:write-denied"), []byte("must-not-land"))
+	// A denied write must not poison or close the authenticated connection that
+	// the external active-use/readback and later revocation checks observe.
+	requireRedisPrefix("+", []byte("PING"))
 	return conn
 }
 

@@ -7599,6 +7599,54 @@
         ],
         "type": "object"
       },
+      "ManagedKeyApproval": {
+        "properties": {
+          "action": {
+            "enum": [
+              "managedkey:rotate",
+              "managedkey:revoke",
+              "managedkey:zeroize"
+            ],
+            "type": "string"
+          },
+          "approvals": {
+            "type": "integer"
+          },
+          "approver": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "action",
+          "approver",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyApprovalRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "rotate",
+              "revoke",
+              "zeroize"
+            ],
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "action"
+        ],
+        "type": "object"
+      },
       "ManagedKeyGenerateRequest": {
         "properties": {
           "algorithm": {
@@ -24560,6 +24608,74 @@
         ],
         "summary": "Generate a BYOK/HSM-resident managed key (private material stays in the provider)",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/managed-keys/approvals": {
+      "post": {
+        "operationId": "approveManagedKeyAction",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedKeyApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Approve an exact managed-key rotate, revoke, or zeroize action",
+        "x-trstctl-permission": "keys:approve"
       }
     },
     "/api/v1/managed-keys/revoke": {

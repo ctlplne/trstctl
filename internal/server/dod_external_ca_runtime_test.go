@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -45,6 +46,210 @@ const (
 	dodEntrustTLSClientCAEnv    = "TRSTCTL_ENTRUST_MTLS_CLIENT_CA_FILE"
 )
 
+var dodExternalCAEntryIDs = [...]string{
+	"external_ca.registry",
+	"external_ca.adcs",
+	"external_ca.awspca",
+	"external_ca.azurekv",
+	"external_ca.digicert",
+	"external_ca.ejbca",
+	"external_ca.entrust",
+	"external_ca.gcpcas",
+	"external_ca.globalsign",
+	"external_ca.letsencrypt",
+	"external_ca.sectigo",
+	"external_ca.shellca",
+	"external_ca.smallstep",
+	"external_ca.vaultpki",
+	"external_ca.venafi",
+}
+
+type dodExternalCARuntimeCase struct {
+	entryID  string
+	caID     string
+	external *proof.ExternalSubstrate
+	rootPEM  []byte
+}
+
+type dodExternalCACSRMaterial struct {
+	PEM       []byte
+	DER       []byte
+	PublicDER []byte
+}
+
+func dodExternalCASelection(only string) (map[string]struct{}, error) {
+	all := make(map[string]struct{}, len(dodExternalCAEntryIDs))
+	for _, id := range dodExternalCAEntryIDs {
+		all[id] = struct{}{}
+	}
+	if only == "" {
+		return all, nil
+	}
+	if _, ok := all[only]; !ok {
+		return nil, fmt.Errorf("unknown external-CA census selection %q", only)
+	}
+	return map[string]struct{}{only: {}}, nil
+}
+
+func dodExternalCAEndpointIfSelected(resolve func(*proof.ExternalSubstrate) string, external *proof.ExternalSubstrate) string {
+	if external == nil {
+		return ""
+	}
+	return resolve(external)
+}
+
+func dodExternalCANetworkIfSelected(resolve func(*proof.ExternalSubstrate) config.ExternalCANetworkConfig, external *proof.ExternalSubstrate) config.ExternalCANetworkConfig {
+	if external == nil {
+		return config.ExternalCANetworkConfig{}
+	}
+	return resolve(external)
+}
+
+func TestExternalCARuntimeSelectionIsExactAndClosed(t *testing.T) {
+	all, err := dodExternalCASelection("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != len(dodExternalCAEntryIDs) {
+		t.Fatalf("full external-CA selection has %d unique cases, want %d", len(all), len(dodExternalCAEntryIDs))
+	}
+	for _, id := range dodExternalCAEntryIDs {
+		exact, exactErr := dodExternalCASelection(id)
+		if exactErr != nil {
+			t.Fatalf("select %s: %v", id, exactErr)
+		}
+		if len(exact) != 1 {
+			t.Fatalf("selection %s contains %d cases, want one", id, len(exact))
+		}
+		if _, ok := exact[id]; !ok {
+			t.Fatalf("selection %s omitted its exact case", id)
+		}
+	}
+	if selected, err := dodExternalCASelection("external_ca.unknown"); err == nil || selected != nil {
+		t.Fatalf("unknown external-CA selection returned cases=%v err=%v", selected, err)
+	}
+}
+
+func dodStartExternalCARegistry(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.registry" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.registry")
+}
+
+func dodStartExternalCAADCS(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.adcs" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.adcs")
+}
+
+func dodStartExternalCAAWSPCA(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.awspca" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.awspca")
+}
+
+func dodStartExternalCAAzureKV(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.azurekv" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.azurekv")
+}
+
+func dodStartExternalCADigiCert(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.digicert" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.digicert")
+}
+
+func dodStartExternalCAEJBCA(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.ejbca" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.ejbca")
+}
+
+func dodStartExternalCAEntrust(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.entrust" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.entrust")
+}
+
+func dodStartExternalCAGCPCAS(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.gcpcas" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.gcpcas")
+}
+
+func dodStartExternalCAGlobalSign(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.globalsign" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.globalsign")
+}
+
+func dodStartExternalCALetsEncrypt(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.letsencrypt" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.letsencrypt")
+}
+
+func dodStartExternalCASectigo(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.sectigo" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.sectigo")
+}
+
+func dodStartExternalCAShellCA(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.shellca" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.shellca")
+}
+
+func dodStartExternalCASmallstep(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.smallstep" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.smallstep")
+}
+
+func dodStartExternalCAVaultPKI(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.vaultpki" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.vaultpki")
+}
+
+func dodStartExternalCAVenafi(t *testing.T, only string) *proof.ExternalSubstrate {
+	t.Helper()
+	if only != "" && only != "external_ca.venafi" {
+		return nil
+	}
+	return proof.StartCommand(t, "external_ca.venafi")
+}
+
 // TestDODExternalCAUniversalProductionAssembly is shared by the registry and 14
 // granular external-CA census rows. Every literal entry starts an independent,
 // nonce/entry/PID-bound OpenSSL-backed process. One untouched production
@@ -57,32 +262,46 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 		t.Fatal(err)
 	}
 	dodAssertExternalCANoRepoStateMutation(t, repo)
-	secretDir := t.TempDir()
-	entrustTLS, err := mtls.GenerateSignerPeerMaterial(t.TempDir(), dodEntrustTLSServerName, time.Hour)
+	// Keep the literal empty initialization: the static wiring tracer evaluates
+	// every branch, while the gate-owned runtime envelope replaces it with the
+	// one exact selected ID during a focused census.
+	only := ""
+	only = proof.OnlyExpectation(t)
+	selected, err := dodExternalCASelection(only)
 	if err != nil {
-		t.Fatalf("generate Entrust substrate mTLS material: %v", err)
+		t.Fatalf("select external-CA runtime case: %v", err)
 	}
-	t.Setenv(dodEntrustTLSServerCertEnv, entrustTLS.Signer.CertFile)
-	t.Setenv(dodEntrustTLSServerKeyEnv, entrustTLS.Signer.KeyFile)
-	t.Setenv(dodEntrustTLSClientCAEnv, entrustTLS.Signer.PeerCAFile)
-
-	registryExternal := proof.StartCommand(t, "external_ca.registry")
-	adcsExternal := proof.StartCommand(t, "external_ca.adcs")
-	awsExternal := proof.StartCommand(t, "external_ca.awspca")
-	azureExternal := proof.StartCommand(t, "external_ca.azurekv")
-	digicertExternal := proof.StartCommand(t, "external_ca.digicert")
-	ejbcaExternal := proof.StartCommand(t, "external_ca.ejbca")
-	entrustExternal := proof.StartCommand(t, "external_ca.entrust")
-	gcpExternal := proof.StartCommand(t, "external_ca.gcpcas")
-	globalSignExternal := proof.StartCommand(t, "external_ca.globalsign")
-	letsEncryptExternal := proof.StartCommand(t, "external_ca.letsencrypt")
-	sectigoExternal := proof.StartCommand(t, "external_ca.sectigo")
-	shellExternal := proof.StartCommand(t, "external_ca.shellca")
-	smallstepExternal := proof.StartCommand(t, "external_ca.smallstep")
-	vaultExternal := proof.StartCommand(t, "external_ca.vaultpki")
-	venafiExternal := proof.StartCommand(t, "external_ca.venafi")
+	secretDir := t.TempDir()
+	var entrustTLS *mtls.SignerPeerMaterial
+	if _, ok := selected["external_ca.entrust"]; ok {
+		entrustTLS, err = mtls.GenerateSignerPeerMaterial(t.TempDir(), dodEntrustTLSServerName, time.Hour)
+		if err != nil {
+			t.Fatalf("generate Entrust substrate mTLS material: %v", err)
+		}
+		t.Setenv(dodEntrustTLSServerCertEnv, entrustTLS.Signer.CertFile)
+		t.Setenv(dodEntrustTLSServerKeyEnv, entrustTLS.Signer.KeyFile)
+		t.Setenv(dodEntrustTLSClientCAEnv, entrustTLS.Signer.PeerCAFile)
+	}
+	registryExternal := dodStartExternalCARegistry(t, only)
+	adcsExternal := dodStartExternalCAADCS(t, only)
+	awsExternal := dodStartExternalCAAWSPCA(t, only)
+	azureExternal := dodStartExternalCAAzureKV(t, only)
+	digicertExternal := dodStartExternalCADigiCert(t, only)
+	ejbcaExternal := dodStartExternalCAEJBCA(t, only)
+	entrustExternal := dodStartExternalCAEntrust(t, only)
+	gcpExternal := dodStartExternalCAGCPCAS(t, only)
+	globalSignExternal := dodStartExternalCAGlobalSign(t, only)
+	letsEncryptExternal := dodStartExternalCALetsEncrypt(t, only)
+	sectigoExternal := dodStartExternalCASectigo(t, only)
+	shellExternal := dodStartExternalCAShellCA(t, only)
+	smallstepExternal := dodStartExternalCASmallstep(t, only)
+	vaultExternal := dodStartExternalCAVaultPKI(t, only)
+	venafiExternal := dodStartExternalCAVenafi(t, only)
 	productionEndpoints := map[*proof.ExternalSubstrate]string{}
 	productionEndpoint := func(external *proof.ExternalSubstrate) string {
+		if external == nil {
+			t.Fatal("selected external-CA runtime case has no substrate")
+		}
 		if endpoint := productionEndpoints[external]; endpoint != "" {
 			return endpoint
 		}
@@ -91,34 +310,34 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 		return endpoint
 	}
 
-	dodRejectExternalCAMTLSWithoutClient(t, entrustExternal.Endpoint(), entrustTLS.ControlPlane.PeerCAFile, entrustTLS.ServerName)
-	dodRejectExternalCAMTLSWithUntrustedClient(t, entrustExternal.Endpoint(), entrustTLS.ControlPlane.PeerCAFile, entrustTLS.ServerName)
-	entrustIssuanceRoot := dodExternalCARootWithClient(t, entrustExternal.Endpoint(), dodExternalCAMTLSClient(t, entrustTLS.ControlPlane, entrustTLS.ServerName))
+	var entrustIssuanceRoot []byte
+	if entrustExternal != nil {
+		dodRejectExternalCAMTLSWithoutClient(t, entrustExternal.Endpoint(), entrustTLS.ControlPlane.PeerCAFile, entrustTLS.ServerName)
+		dodRejectExternalCAMTLSWithUntrustedClient(t, entrustExternal.Endpoint(), entrustTLS.ControlPlane.PeerCAFile, entrustTLS.ServerName)
+		entrustIssuanceRoot = dodExternalCARootWithClient(t, entrustExternal.Endpoint(), dodExternalCAMTLSClient(t, entrustTLS.ControlPlane, entrustTLS.ServerName))
+	}
 
-	signer := dodStartExternalCASigner(t, secretDir, productionEndpoint(azureExternal))
-	managedAzure, err := signer.signer.Client().ManageKey(context.Background(), signing.ManagedKeyCommand{
-		TenantID: dodExternalCATenant, Provider: "azure-key-vault", OperationID: "dod-external-ca-azure-key",
-		Action: signing.ManagedKeyGenerate, Algorithm: crypto.RSA2048,
-	})
-	if err != nil {
-		t.Fatalf("provision signer-local Azure CA ref: %v", err)
+	var signer runSigner
+	var managedAzureKeyID string
+	if azureExternal != nil {
+		signer = dodStartExternalCASigner(t, secretDir, productionEndpoint(azureExternal))
+		managedAzure, manageErr := signer.signer.Client().ManageKey(context.Background(), signing.ManagedKeyCommand{
+			TenantID: dodExternalCATenant, Provider: "azure-key-vault", OperationID: "dod-external-ca-azure-key",
+			Action: signing.ManagedKeyGenerate, Algorithm: crypto.RSA2048,
+		})
+		if manageErr != nil {
+			t.Fatalf("provision signer-local Azure CA ref: %v", manageErr)
+		}
+		managedAzureKeyID = managedAzure.KeyID
+	} else {
+		signer = dodStartAuthorizedSoftwareSignerProcess(t, secretDir)
 	}
 	secretRef := dodExternalCASecretFile(t, secretDir, "provider-token", []byte("dod-token"))
 	provisionerRef := dodExternalCASecretFile(t, secretDir, "provisioner-key", []byte("0123456789abcdef0123456789abcdef"))
-	azureCAFile := filepath.Join(secretDir, "azure-managed-hsm-ca.pem")
-	if err := os.WriteFile(azureCAFile, dodExternalCARoot(t, azureExternal.Endpoint()), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	shellCommand := filepath.Join(repo, "tools", "dodcensus", "substrates", "external_ca.py")
 	network := func(external *proof.ExternalSubstrate) config.ExternalCANetworkConfig {
 		return dodExternalCANetwork(t, productionEndpoint(external))
 	}
-	entrustNetwork := dodExternalCANetwork(t, productionEndpoint(entrustExternal))
-	entrustNetwork.AllowInsecureHTTP = false
-	entrustNetwork.RootCAFile = entrustTLS.ControlPlane.PeerCAFile
-	entrustNetwork.ClientCertFile = entrustTLS.ControlPlane.CertFile
-	entrustNetwork.ClientKeyFile = entrustTLS.ControlPlane.KeyFile
-	entrustNetwork.ServerName = entrustTLS.ServerName
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(secretDir, "audit-signing-key.pem")
@@ -127,22 +346,59 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 	cfg.Signer.KeyStoreDir = filepath.Join(secretDir, "control-plane-signer-keys")
 	cfg.Signer.AuthSecretFile = filepath.Join(secretDir, "control-plane-sign-auth.bin")
 	cfg.PCAS.Delegation.SignerStoreDir = filepath.Join(secretDir, "control-plane-pcas")
-	cfg.ExternalCAs = []config.ExternalCAConfig{
-		{ID: "registry", Type: "digicert", Name: "Registry Proof CA", Endpoint: productionEndpoint(registryExternal), APIKeyRef: secretRef, Network: network(registryExternal)},
-		{ID: "adcs", Type: "adcs", Name: "ADCS", Endpoint: productionEndpoint(adcsExternal), CAConfig: `HOST\CA`, Template: "WebServer", Username: "dod-user", PasswordRef: secretRef, PollInterval: "1ms", Network: network(adcsExternal)},
-		{ID: "awspca", Type: "awspca", Name: "AWS PCA", Endpoint: productionEndpoint(awsExternal), Region: "us-east-1", CertificateAuthorityARN: "arn:aws:acm-pca:us-east-1:123:certificate-authority/dod", AccessKeyID: "AKIADOD", SecretAccessKeyRef: secretRef, PollInterval: "1ms", Network: network(awsExternal)},
-		{ID: "azurekv", Type: "azurekv", Name: "Azure Managed HSM CA", TenantID: dodExternalCATenant, Endpoint: productionEndpoint(azureExternal), ManagedKeyRef: managedAzure.KeyID, CACertFile: azureCAFile, Network: network(azureExternal)},
-		{ID: "digicert", Type: "digicert", Name: "DigiCert", Endpoint: productionEndpoint(digicertExternal), APIKeyRef: secretRef, Network: network(digicertExternal)},
-		{ID: "ejbca", Type: "ejbca", Name: "EJBCA", Endpoint: productionEndpoint(ejbcaExternal), BearerTokenRef: secretRef, CAName: "DodCA", CertificateProfile: "TLS", EndEntityProfile: "TLS", Network: network(ejbcaExternal)},
-		{ID: "entrust", Type: "entrust", Name: "Entrust", Endpoint: productionEndpoint(entrustExternal), CAID: "dod-ca", PollInterval: "1ms", Network: entrustNetwork},
-		{ID: "gcpcas", Type: "gcpcas", Name: "GCP CAS", Endpoint: productionEndpoint(gcpExternal), CAPool: "projects/dod/locations/us/caPools/dod", BearerTokenRef: secretRef, Network: network(gcpExternal)},
-		{ID: "globalsign", Type: "globalsign", Name: "GlobalSign", Endpoint: productionEndpoint(globalSignExternal), APIKeyRef: secretRef, APISecretRef: secretRef, PollInterval: "1ms", Network: network(globalSignExternal)},
-		{ID: "letsencrypt", Type: "letsencrypt", Name: "Let's Encrypt", DirectoryURL: productionEndpoint(letsEncryptExternal) + "/directory", Network: network(letsEncryptExternal)},
-		{ID: "sectigo", Type: "sectigo", Name: "Sectigo", Endpoint: productionEndpoint(sectigoExternal), Login: "dod-login", PasswordRef: secretRef, CustomerURI: "dod-customer", OrgID: 1, CertType: 2, PollInterval: "1ms", Network: network(sectigoExternal)},
-		{ID: "shellca", Type: "shellca", Name: "Shell CA", Command: shellCommand, Args: []string{"sign", "--endpoint", productionEndpoint(shellExternal)}, Network: config.ExternalCANetworkConfig{Timeout: "10s"}},
-		{ID: "smallstep", Type: "smallstep", Name: "Smallstep", Endpoint: productionEndpoint(smallstepExternal), ProvisionerName: "dod-provisioner", ProvisionerKeyRef: provisionerRef, Network: network(smallstepExternal)},
-		{ID: "vaultpki", Type: "vaultpki", Name: "Vault PKI", Endpoint: productionEndpoint(vaultExternal), BearerTokenRef: secretRef, Mount: "pki", Role: "dod-role", Network: network(vaultExternal)},
-		{ID: "venafi", Type: "venafi", Name: "Venafi", Endpoint: productionEndpoint(venafiExternal), AccessTokenRef: secretRef, PolicyDN: `\VED\Policy\dod`, PollInterval: "1ms", Network: network(venafiExternal)},
+	cases := make([]dodExternalCARuntimeCase, 0, len(selected))
+	addCase := func(entryID, caID string, external *proof.ExternalSubstrate, caConfig config.ExternalCAConfig, rootPEM []byte) {
+		if external == nil {
+			return
+		}
+		cfg.ExternalCAs = append(cfg.ExternalCAs, caConfig)
+		cases = append(cases, dodExternalCARuntimeCase{entryID: entryID, caID: caID, external: external, rootPEM: rootPEM})
+	}
+	endpoint := func(external *proof.ExternalSubstrate) string {
+		return dodExternalCAEndpointIfSelected(productionEndpoint, external)
+	}
+	selectedNetwork := func(external *proof.ExternalSubstrate) config.ExternalCANetworkConfig {
+		return dodExternalCANetworkIfSelected(network, external)
+	}
+	addCase("external_ca.registry", "registry", registryExternal, config.ExternalCAConfig{ID: "registry", Type: "digicert", Name: "Registry Proof CA", Endpoint: endpoint(registryExternal), APIKeyRef: secretRef, Network: selectedNetwork(registryExternal)}, nil)
+	addCase("external_ca.adcs", "adcs", adcsExternal, config.ExternalCAConfig{ID: "adcs", Type: "adcs", Name: "ADCS", Endpoint: endpoint(adcsExternal), CAConfig: `HOST\CA`, Template: "WebServer", Username: "dod-user", PasswordRef: secretRef, PollInterval: "1ms", Network: selectedNetwork(adcsExternal)}, nil)
+	addCase("external_ca.awspca", "awspca", awsExternal, config.ExternalCAConfig{ID: "awspca", Type: "awspca", Name: "AWS PCA", Endpoint: endpoint(awsExternal), Region: "us-east-1", CertificateAuthorityARN: "arn:aws:acm-pca:us-east-1:123:certificate-authority/dod", AccessKeyID: "AKIADOD", SecretAccessKeyRef: secretRef, PollInterval: "1ms", Network: selectedNetwork(awsExternal)}, nil)
+	if azureExternal != nil {
+		azureCAFile := filepath.Join(secretDir, "azure-managed-hsm-ca.pem")
+		if err := os.WriteFile(azureCAFile, dodExternalCARoot(t, azureExternal.Endpoint()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		addCase("external_ca.azurekv", "azurekv", azureExternal, config.ExternalCAConfig{ID: "azurekv", Type: "azurekv", Name: "Azure Managed HSM CA", TenantID: dodExternalCATenant, Endpoint: productionEndpoint(azureExternal), ManagedKeyRef: managedAzureKeyID, CACertFile: azureCAFile, Network: network(azureExternal)}, nil)
+	}
+	addCase("external_ca.digicert", "digicert", digicertExternal, config.ExternalCAConfig{ID: "digicert", Type: "digicert", Name: "DigiCert", Endpoint: endpoint(digicertExternal), APIKeyRef: secretRef, Network: selectedNetwork(digicertExternal)}, nil)
+	addCase("external_ca.ejbca", "ejbca", ejbcaExternal, config.ExternalCAConfig{ID: "ejbca", Type: "ejbca", Name: "EJBCA", Endpoint: endpoint(ejbcaExternal), BearerTokenRef: secretRef, CAName: "DodCA", CertificateProfile: "TLS", EndEntityProfile: "TLS", Network: selectedNetwork(ejbcaExternal)}, nil)
+	if entrustExternal != nil {
+		entrustNetwork := dodExternalCANetwork(t, productionEndpoint(entrustExternal))
+		entrustNetwork.AllowInsecureHTTP = false
+		entrustNetwork.RootCAFile = entrustTLS.ControlPlane.PeerCAFile
+		entrustNetwork.ClientCertFile = entrustTLS.ControlPlane.CertFile
+		entrustNetwork.ClientKeyFile = entrustTLS.ControlPlane.KeyFile
+		entrustNetwork.ServerName = entrustTLS.ServerName
+		addCase("external_ca.entrust", "entrust", entrustExternal, config.ExternalCAConfig{ID: "entrust", Type: "entrust", Name: "Entrust", Endpoint: productionEndpoint(entrustExternal), CAID: "dod-ca", PollInterval: "1ms", Network: entrustNetwork}, entrustIssuanceRoot)
+	}
+	addCase("external_ca.gcpcas", "gcpcas", gcpExternal, config.ExternalCAConfig{ID: "gcpcas", Type: "gcpcas", Name: "GCP CAS", Endpoint: endpoint(gcpExternal), CAPool: "projects/dod/locations/us/caPools/dod", BearerTokenRef: secretRef, Network: selectedNetwork(gcpExternal)}, nil)
+	addCase("external_ca.globalsign", "globalsign", globalSignExternal, config.ExternalCAConfig{ID: "globalsign", Type: "globalsign", Name: "GlobalSign", Endpoint: endpoint(globalSignExternal), APIKeyRef: secretRef, APISecretRef: secretRef, PollInterval: "1ms", Network: selectedNetwork(globalSignExternal)}, nil)
+	letsEncryptEndpoint := endpoint(letsEncryptExternal)
+	if letsEncryptEndpoint != "" {
+		letsEncryptEndpoint += "/directory"
+	}
+	addCase("external_ca.letsencrypt", "letsencrypt", letsEncryptExternal, config.ExternalCAConfig{ID: "letsencrypt", Type: "letsencrypt", Name: "Let's Encrypt", DirectoryURL: letsEncryptEndpoint, Network: selectedNetwork(letsEncryptExternal)}, nil)
+	addCase("external_ca.sectigo", "sectigo", sectigoExternal, config.ExternalCAConfig{ID: "sectigo", Type: "sectigo", Name: "Sectigo", Endpoint: endpoint(sectigoExternal), Login: "dod-login", PasswordRef: secretRef, CustomerURI: "dod-customer", OrgID: 1, CertType: 2, PollInterval: "1ms", Network: selectedNetwork(sectigoExternal)}, nil)
+	var shellArgs []string
+	if shellExternal != nil {
+		shellArgs = []string{"sign", "--endpoint", productionEndpoint(shellExternal)}
+	}
+	addCase("external_ca.shellca", "shellca", shellExternal, config.ExternalCAConfig{ID: "shellca", Type: "shellca", Name: "Shell CA", Command: shellCommand, Args: shellArgs, Network: config.ExternalCANetworkConfig{Timeout: "10s"}}, nil)
+	addCase("external_ca.smallstep", "smallstep", smallstepExternal, config.ExternalCAConfig{ID: "smallstep", Type: "smallstep", Name: "Smallstep", Endpoint: endpoint(smallstepExternal), ProvisionerName: "dod-provisioner", ProvisionerKeyRef: provisionerRef, Network: selectedNetwork(smallstepExternal)}, nil)
+	addCase("external_ca.vaultpki", "vaultpki", vaultExternal, config.ExternalCAConfig{ID: "vaultpki", Type: "vaultpki", Name: "Vault PKI", Endpoint: endpoint(vaultExternal), BearerTokenRef: secretRef, Mount: "pki", Role: "dod-role", Network: selectedNetwork(vaultExternal)}, nil)
+	addCase("external_ca.venafi", "venafi", venafiExternal, config.ExternalCAConfig{ID: "venafi", Type: "venafi", Name: "Venafi", Endpoint: endpoint(venafiExternal), AccessTokenRef: secretRef, PolicyDN: `\VED\Policy\dod`, PollInterval: "1ms", Network: selectedNetwork(venafiExternal)}, nil)
+	if len(cases) != len(selected) {
+		t.Fatalf("external-CA selection matched %d runtime cases, want %d", len(cases), len(selected))
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("external CA production config: %v", err)
@@ -181,24 +437,54 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 		<-dispatcherDone
 	})
 	token := dodExternalCAAPIToken(t, st)
-	dodAssertExternalCACatalog(t, srv, token)
+	dodAssertExternalCACatalog(t, srv, token, cases)
 	csr := dodExternalCACSR(t, "dod.external-ca.test")
 
-	dodProveExternalCA(t, srv, token, csr, "external_ca.registry", "registry", registryExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.adcs", "adcs", adcsExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.awspca", "awspca", awsExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.azurekv", "azurekv", azureExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.digicert", "digicert", digicertExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.ejbca", "ejbca", ejbcaExternal)
-	dodProveExternalCAWithRoot(t, srv, token, csr, "external_ca.entrust", "entrust", entrustExternal, entrustIssuanceRoot)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.gcpcas", "gcpcas", gcpExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.globalsign", "globalsign", globalSignExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.letsencrypt", "letsencrypt", letsEncryptExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.sectigo", "sectigo", sectigoExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.shellca", "shellca", shellExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.smallstep", "smallstep", smallstepExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.vaultpki", "vaultpki", vaultExternal)
-	dodProveExternalCA(t, srv, token, csr, "external_ca.venafi", "venafi", venafiExternal)
+	if only == "" || only == "external_ca.registry" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.registry", "registry", registryExternal)
+	}
+	if only == "" || only == "external_ca.adcs" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.adcs", "adcs", adcsExternal)
+	}
+	if only == "" || only == "external_ca.awspca" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.awspca", "awspca", awsExternal)
+	}
+	if only == "" || only == "external_ca.azurekv" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.azurekv", "azurekv", azureExternal)
+	}
+	if only == "" || only == "external_ca.digicert" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.digicert", "digicert", digicertExternal)
+	}
+	if only == "" || only == "external_ca.ejbca" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.ejbca", "ejbca", ejbcaExternal)
+	}
+	if only == "" || only == "external_ca.entrust" {
+		dodProveExternalCAWithRoot(t, srv, token, csr, "external_ca.entrust", "entrust", entrustExternal, entrustIssuanceRoot)
+	}
+	if only == "" || only == "external_ca.gcpcas" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.gcpcas", "gcpcas", gcpExternal)
+	}
+	if only == "" || only == "external_ca.globalsign" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.globalsign", "globalsign", globalSignExternal)
+	}
+	if only == "" || only == "external_ca.letsencrypt" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.letsencrypt", "letsencrypt", letsEncryptExternal)
+	}
+	if only == "" || only == "external_ca.sectigo" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.sectigo", "sectigo", sectigoExternal)
+	}
+	if only == "" || only == "external_ca.shellca" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.shellca", "shellca", shellExternal)
+	}
+	if only == "" || only == "external_ca.smallstep" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.smallstep", "smallstep", smallstepExternal)
+	}
+	if only == "" || only == "external_ca.vaultpki" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.vaultpki", "vaultpki", vaultExternal)
+	}
+	if only == "" || only == "external_ca.venafi" {
+		dodProveExternalCA(t, srv, token, csr, "external_ca.venafi", "venafi", venafiExternal)
+	}
 }
 
 type dodExternalCAResponse struct {
@@ -218,8 +504,11 @@ func (w *dodExternalCAResponse) Write(body []byte) (int, error) {
 	return w.body.Write(body)
 }
 
-func dodAssertExternalCACatalog(t *testing.T, srv *Server, token string) {
+func dodAssertExternalCACatalog(t *testing.T, srv *Server, token string, cases []dodExternalCARuntimeCase) {
 	t.Helper()
+	if len(cases) == 0 {
+		t.Fatal("external-CA catalog assertion has no selected runtime case")
+	}
 	request, err := http.NewRequest(http.MethodGet, "/api/v1/external-cas", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -236,12 +525,24 @@ func dodAssertExternalCACatalog(t *testing.T, srv *Server, token string) {
 	if response.status != http.StatusOK || json.Unmarshal(response.body.Bytes(), &catalog) != nil {
 		t.Fatalf("production external-CA catalog status=%d body=%s", response.status, response.body.Bytes())
 	}
+	available := make(map[string]struct{}, len(catalog.Items))
+	registryAvailable := false
 	for _, item := range catalog.Items {
+		if item.Status == "available" {
+			available[item.ID] = struct{}{}
+		}
 		if item.ID == "registry" && item.Status == "available" {
-			return
+			registryAvailable = true
 		}
 	}
-	t.Fatalf("production external-CA catalog omitted configured registry integration: %s", response.body.Bytes())
+	if len(cases) == len(dodExternalCAEntryIDs) && !registryAvailable {
+		t.Fatalf("production external-CA catalog omitted configured registry integration: %s", response.body.Bytes())
+	}
+	for _, runtimeCase := range cases {
+		if _, ok := available[runtimeCase.caID]; !ok {
+			t.Fatalf("production external-CA catalog omitted selected %q integration: %s", runtimeCase.caID, response.body.Bytes())
+		}
+	}
 }
 
 func dodAssertExternalCANoRepoStateMutation(t *testing.T, repo string) {
@@ -290,7 +591,13 @@ func dodStartExternalCASigner(t *testing.T, dir, azureEndpoint string) runSigner
 		Enabled: true, Provider: config.ManagedKeyProviderAzureKeyVault,
 		Azure: config.ManagedKeysAzureKV{
 			VaultURL: dodExternalSignerAzureVault, Endpoint: azureEndpoint,
-			BearerTokenFile: azureTokenFile, PrivateEgressCIDRs: network.PrivateEgressCIDRs,
+			// azureEndpoint is the literal 127.0.0.1 listener created by
+			// dodParentSubstrateLoopbackBridge. The signer deliberately opts in
+			// to plaintext only for that test-owned loopback hop; the helper above
+			// rejects host.docker.internal and every other non-loopback endpoint.
+			AllowInsecureLoopback: true,
+			BearerTokenFile:       azureTokenFile,
+			PrivateEgressCIDRs:    network.PrivateEgressCIDRs,
 		},
 	})
 	if err != nil {
@@ -354,7 +661,7 @@ func dodExternalCAAPIToken(t *testing.T, st *store.Store) string {
 	return token
 }
 
-func dodExternalCACSR(t *testing.T, commonName string) []byte {
+func dodExternalCACSR(t *testing.T, commonName string) dodExternalCACSRMaterial {
 	t.Helper()
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
@@ -365,18 +672,25 @@ func dodExternalCACSR(t *testing.T, commonName string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr})
+	public := key.Public()
+	if len(public.DER) == 0 {
+		t.Fatal("external-CA CSR key returned no public DER")
+	}
+	return dodExternalCACSRMaterial{
+		PEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr}),
+		DER: bytes.Clone(csr), PublicDER: bytes.Clone(public.DER),
+	}
 }
 
-func dodProveExternalCA(t *testing.T, srv *Server, token string, csrPEM []byte, entryID, caID string, external *proof.ExternalSubstrate) {
+func dodProveExternalCA(t *testing.T, srv *Server, token string, csr dodExternalCACSRMaterial, entryID, caID string, external *proof.ExternalSubstrate) {
 	t.Helper()
-	dodProveExternalCAWithRoot(t, srv, token, csrPEM, entryID, caID, external, nil)
+	dodProveExternalCAWithRoot(t, srv, token, csr, entryID, caID, external, nil)
 }
 
-func dodProveExternalCAWithRoot(t *testing.T, srv *Server, token string, csrPEM []byte, entryID, caID string, external *proof.ExternalSubstrate, rootPEM []byte) {
+func dodProveExternalCAWithRoot(t *testing.T, srv *Server, token string, csr dodExternalCACSRMaterial, entryID, caID string, external *proof.ExternalSubstrate, rootPEM []byte) {
 	t.Helper()
 	body, err := json.Marshal(map[string]any{
-		"csr_pem": string(csrPEM), "dns_names": []string{"dod.external-ca.test"}, "ttl_seconds": int64((24 * time.Hour).Seconds()),
+		"csr_pem": string(csr.PEM), "dns_names": []string{"dod.external-ca.test"}, "ttl_seconds": int64((24 * time.Hour).Seconds()),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -400,23 +714,99 @@ func dodProveExternalCAWithRoot(t *testing.T, srv *Server, token string, csrPEM 
 	if err := json.Unmarshal(session.ResponseBody(), &issued); err != nil || issued.CertificatePEM == "" || issued.Serial == "" {
 		t.Fatalf("%s invalid issued certificate: %v body=%s", entryID, err, session.ResponseBody())
 	}
-	leaf, _ := pem.Decode([]byte(issued.CertificatePEM))
+	chain, err := dodExactIssuedCertificatePEMChain([]byte(issued.CertificatePEM))
+	if err != nil {
+		t.Fatalf("%s returned a non-exact certificate chain (certificates=%d): %v", entryID, len(chain), err)
+	}
 	if len(rootPEM) == 0 {
 		rootPEM = dodExternalCARoot(t, external.Endpoint())
 	}
-	root, _ := pem.Decode(rootPEM)
-	if leaf == nil || root == nil {
-		t.Fatalf("%s returned invalid leaf/root PEM", entryID)
+	roots, err := dodExactCertificatePEMChain(rootPEM)
+	if err != nil || len(roots) != 1 {
+		t.Fatalf("%s independent substrate returned a non-exact root PEM (certificates=%d): %v", entryID, len(roots), err)
 	}
-	if err := crypto.VerifyLeafSignedByCA(leaf.Bytes, root.Bytes); err != nil {
+	leaf := chain[0]
+	root := roots[0]
+	if !bytes.Equal(chain[len(chain)-1], root) {
+		t.Fatalf("%s returned chain does not terminate at the independently fetched substrate root", entryID)
+	}
+	if err := crypto.VerifyLeafSignedByCA(leaf, root); err != nil {
 		t.Fatalf("%s chain verification: %v", entryID, err)
+	}
+	leafPublic, err := crypto.PublicKeyDERFromCert(leaf)
+	if err != nil || !bytes.Equal(leafPublic, csr.PublicDER) {
+		t.Fatalf("%s issued leaf public key does not match the caller-owned CSR key: %v", entryID, err)
+	}
+	info, err := certinfo.Inspect(leaf)
+	if err != nil {
+		t.Fatalf("%s inspect issued leaf: %v", entryID, err)
+	}
+	if len(info.DNSNames) != 1 || info.DNSNames[0] != "dod.external-ca.test" || len(info.IPAddresses) != 0 || len(info.EmailAddresses) != 0 || len(info.URIs) != 0 {
+		t.Fatalf("%s issued leaf SANs do not exactly match the request: dns=%v ip=%v email=%v uri=%v", entryID, info.DNSNames, info.IPAddresses, info.EmailAddresses, info.URIs)
+	}
+	if info.SerialNumber != issued.Serial {
+		t.Fatalf("%s response serial %q differs from issued leaf serial %q", entryID, issued.Serial, info.SerialNumber)
 	}
 	executionReceipt := external.StopAndReceipt()
 	session.Complete(proof.CAIssueChain(proof.CAIssueChainProbe{
-		Leaf: leaf.Bytes, Chain: []byte(issued.CertificatePEM),
-		Verification:     []byte(fmt.Sprintf("verified serial %s against independent OpenSSL substrate root", issued.Serial)),
+		Leaf: leaf, Chain: []byte(issued.CertificatePEM),
+		Verification:     []byte(fmt.Sprintf("verified CSR key, exact DNS SAN, serial %s, and exact chain terminus against independent OpenSSL substrate root", issued.Serial)),
 		ExecutionReceipt: executionReceipt,
 	}))
+}
+
+func dodExactCertificatePEMChain(raw []byte) ([][]byte, error) {
+	remaining := raw
+	chain := make([][]byte, 0, 2)
+	for len(bytes.TrimSpace(remaining)) > 0 {
+		remaining = bytes.TrimSpace(remaining)
+		if !bytes.HasPrefix(remaining, []byte("-----BEGIN CERTIFICATE-----")) {
+			return nil, fmt.Errorf("non-certificate data appears in PEM chain")
+		}
+		block, rest := pem.Decode(remaining)
+		if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 || len(block.Bytes) == 0 {
+			return nil, fmt.Errorf("invalid certificate PEM block")
+		}
+		chain = append(chain, bytes.Clone(block.Bytes))
+		remaining = rest
+	}
+	if len(chain) == 0 {
+		return nil, fmt.Errorf("certificate PEM chain is empty")
+	}
+	return chain, nil
+}
+
+func dodExactIssuedCertificatePEMChain(raw []byte) ([][]byte, error) {
+	chain, err := dodExactCertificatePEMChain(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(chain) != 2 {
+		return nil, fmt.Errorf("issued chain contains %d certificates, want exact leaf and root", len(chain))
+	}
+	return chain, nil
+}
+
+func TestExternalCAExactCertificatePEMChainRejectsNonCertificateMaterial(t *testing.T) {
+	certificate := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte{1, 2, 3}})
+	second := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte{4, 5, 6}})
+	exact := append(append([]byte(nil), certificate...), second...)
+	chain, err := dodExactIssuedCertificatePEMChain(exact)
+	if err != nil || len(chain) != 2 {
+		t.Fatalf("exact two-certificate chain rejected: certificates=%d err=%v", len(chain), err)
+	}
+	for name, raw := range map[string][]byte{
+		"empty":              nil,
+		"leading garbage":    append([]byte("garbage\n"), certificate...),
+		"trailing garbage":   append(append([]byte(nil), certificate...), []byte("garbage\n")...),
+		"non-certificate":    pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte{1}}),
+		"certificate header": pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Headers: map[string]string{"X-Test": "bad"}, Bytes: []byte{1}}),
+		"extra certificate":  append(append([]byte(nil), exact...), certificate...),
+	} {
+		if parsed, parseErr := dodExactIssuedCertificatePEMChain(raw); parseErr == nil {
+			t.Errorf("%s parsed as %d certificates", name, len(parsed))
+		}
+	}
 }
 
 func dodExternalCARoot(t *testing.T, endpoint string) []byte {

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -10,6 +11,53 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 )
+
+func TestCaptureBurstExercisesEmbeddedEventAndOutboxSpine(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	cfg := defaultProfile("cap-small")
+	cfg.Tenants = 2
+	cfg.Agents = 3
+	cfg.EventWorkload = 8
+	cfg.OutboxWorkload = 6
+	cfg.Samples = 2
+	cfg.Step = time.Second
+	cfg.SlowUpstream = 0
+	cfg.Timeout = 90 * time.Second
+
+	const generatedAt = "2026-07-11T12:00:00Z"
+	report, err := captureBurst(ctx, cfg, generatedAt, false)
+	if err != nil {
+		t.Fatalf("captureBurst against embedded PostgreSQL and JetStream: %v", err)
+	}
+	if report.Profile != cfg.Name || report.GeneratedAt != generatedAt || report.MeasurementMethod != measurementMethod(cfg) {
+		t.Fatalf("report identity = profile %q generated %q method %q", report.Profile, report.GeneratedAt, report.MeasurementMethod)
+	}
+	if report.Workload.Tenants != cfg.Tenants || report.Workload.Agents != cfg.Agents || !report.Workload.QueueRejectsCaptured || !report.Workload.DBPoolCaptured {
+		t.Fatalf("report workload does not describe exercised spine: %+v", report.Workload)
+	}
+	if got := len(report.Samples); got != cfg.Samples {
+		t.Fatalf("samples = %d, want %d", got, cfg.Samples)
+	}
+	if report.Summary.AppendedEvents != cfg.EventWorkload || report.Summary.OutboxQueued != cfg.OutboxWorkload {
+		t.Fatalf("summary does not account for workload: %+v", report.Summary)
+	}
+	if report.Summary.ReplayedEvents <= 0 {
+		t.Fatalf("event replay did not observe appended events: %+v", report.Summary)
+	}
+	for i, sample := range report.Samples {
+		if sample.DBPoolSize <= 0 || sample.DBPoolInUse <= 0 {
+			t.Fatalf("sample %d did not measure PostgreSQL pool use: %+v", i, sample)
+		}
+		if sample.OutboxLagItems <= 0 {
+			t.Fatalf("sample %d did not retain the bounded slow-upstream backlog: %+v", i, sample)
+		}
+		if sample.StorageBytes <= 0 || sample.P95MS < 0 || sample.P99MS < sample.P95MS {
+			t.Fatalf("sample %d has invalid resource/latency measurements: %+v", i, sample)
+		}
+	}
+}
 
 func TestSpineBurstProfileOverridesAndValidation(t *testing.T) {
 	cfg := defaultProfile("cap-small")

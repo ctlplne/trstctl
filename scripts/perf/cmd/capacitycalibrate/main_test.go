@@ -3,14 +3,52 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/perf"
 )
+
+func TestCapacityCalibrationMeasuresEmbeddedStorage(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	const samples = 4
+	pg, err := measurePostgres(ctx, samples)
+	if err != nil {
+		t.Fatalf("measurePostgres against embedded PostgreSQL: %v", err)
+	}
+	if pg.connections <= 0 || pg.certificateBytesTotal <= 0 || pg.certificateBytesPerRow <= 0 || pg.credentialBytesTotal <= 0 || pg.credentialBytesPerRow <= 0 {
+		t.Fatalf("incomplete PostgreSQL measurement: %+v", pg)
+	}
+	if pg.certificateBytesPerRow != ceilDiv(pg.certificateBytesTotal, samples) || pg.credentialBytesPerRow != ceilDiv(pg.credentialBytesTotal, samples) {
+		t.Fatalf("per-row storage does not match measured totals: %+v", pg)
+	}
+
+	jetstream, err := measureJetStream(ctx, samples)
+	if err != nil {
+		t.Fatalf("measureJetStream against embedded file-backed JetStream: %v", err)
+	}
+	if jetstream.bytesTotal <= 0 || jetstream.bytesPerEvent <= 0 {
+		t.Fatalf("incomplete JetStream measurement: %+v", jetstream)
+	}
+	if jetstream.bytesPerEvent != ceilDiv(jetstream.bytesTotal, samples) {
+		t.Fatalf("per-event storage does not match measured total: %+v", jetstream)
+	}
+
+	auditBytes, err := measureAuditRecordBytes()
+	if err != nil {
+		t.Fatalf("measureAuditRecordBytes: %v", err)
+	}
+	if auditBytes <= 0 {
+		t.Fatalf("audit projection serialized size = %d, want positive", auditBytes)
+	}
+}
 
 func TestMeasureResourcesRejectsSyntheticLiveArtifact(t *testing.T) {
 	path := writeLiveArtifact(t, perf.Report{

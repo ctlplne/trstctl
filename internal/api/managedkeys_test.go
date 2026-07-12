@@ -250,14 +250,15 @@ func TestManagedKeysServedReflectsWiring(t *testing.T) {
 	}
 }
 
-// TestManagedKeyRouteIsRegistered proves all four managed-key operations are in the
+// TestManagedKeyRouteIsRegistered proves all five managed-key operations are in the
 // served route registry (and therefore the OpenAPI surface and the CLI parity set).
 func TestManagedKeyRouteIsRegistered(t *testing.T) {
 	want := map[string]bool{
-		"POST /api/v1/managed-keys":         false,
-		"POST /api/v1/managed-keys/rotate":  false,
-		"POST /api/v1/managed-keys/revoke":  false,
-		"POST /api/v1/managed-keys/zeroize": false,
+		"POST /api/v1/managed-keys":           false,
+		"POST /api/v1/managed-keys/approvals": false,
+		"POST /api/v1/managed-keys/rotate":    false,
+		"POST /api/v1/managed-keys/revoke":    false,
+		"POST /api/v1/managed-keys/zeroize":   false,
 	}
 	for _, rt := range api.New(nil, nil, nil).Routes() {
 		key := rt.Method + " " + rt.Path

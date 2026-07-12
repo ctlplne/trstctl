@@ -17,6 +17,8 @@ func TestDODGateIsARequiredEmittingCICheck(t *testing.T) {
 		"TestDODGateProductionAssemblyCanary",
 		"tools/dodcensus/manifest.json",
 		"wiring-census.json",
+		`cache="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}"`,
+		`(umask 077; mkdir -p "$$cache")`,
 	} {
 		if !strings.Contains(makefile, want) {
 			t.Errorf("Makefile must keep the repo-native DoD gate token %q", want)
@@ -45,5 +47,18 @@ func TestDODGateIsARequiredEmittingCICheck(t *testing.T) {
 	}
 	if !strings.Contains(read(t, "../.gitignore"), "/wiring-census.json") {
 		t.Error("the timestamped local census receipt must be ignored, not committed as stale truth")
+	}
+
+	evaluator := read(t, "../tools/dodcensus/main.go")
+	if !strings.Contains(evaluator, "claimsErr := validateClaimsForSelection(repo, manifest, report, sel)") {
+		t.Error("the full repo-native census must validate product claims against its fresh in-memory report")
+	}
+	for _, name := range []string{"feature_served_state_test.go", "trace_completeness_test.go"} {
+		docsClaimsTests := read(t, name)
+		for _, forbidden := range []string{"liveDoDCensus", "exec.Command(\"go\", \"run\", \"./tools/dodcensus\""} {
+			if strings.Contains(docsClaimsTests, forbidden) {
+				t.Errorf("%s must not recursively launch the heavyweight census (%q)", name, forbidden)
+			}
+		}
 	}
 }

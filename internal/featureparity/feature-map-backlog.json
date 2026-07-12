@@ -3193,6 +3193,7 @@
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
         "generateManagedKey",
+        "approveManagedKeyAction",
         "rotateManagedKey",
         "revokeManagedKey",
         "zeroizeManagedKey",
@@ -3200,6 +3201,7 @@
       ],
       "cli_surface": [
         "managed-keys generate",
+        "managed-keys approve",
         "managed-keys rotate",
         "managed-keys revoke",
         "managed-keys zeroize"
@@ -3241,7 +3243,7 @@
         },
         "cli": {
           "evidence": [
-        "CLI parity exposes managed-keys generate, rotate, revoke, and zeroize against the same licensed/configured API; the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
+        "CLI parity exposes managed-keys generate, approve, rotate, revoke, and zeroize against the same licensed/configured API; approvers hold keys:approve without needing provider-mutation authority, and the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
           ],
           "refs": [
             "internal/cli/command.go",
@@ -3250,7 +3252,7 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI includes the managed-key lifecycle routes and key-material-free response schemas.",
+            "OpenAPI includes the managed-key lifecycle and dedicated approval routes with key-material-free request/response schemas.",
             "ManagedKey includes extractable=false so generated clients and the console can display non-extractable custody without exposing private material.",
             "OpenAPI operation getEditions includes additive FIPS posture fields for the validated-module path without making product certification a required claim."
           ],
@@ -3300,7 +3302,7 @@
         },
         "rbac": {
           "evidence": [
-            "managed-key lifecycle routes require keys:write and authenticated tenant context; the feature authz manifest/test covers generateManagedKey, rotateManagedKey, revokeManagedKey, and zeroizeManagedKey."
+            "managed-key lifecycle routes require keys:write, the dedicated approval route requires keys:approve, and every route requires authenticated tenant context; the feature authz manifest/test covers generateManagedKey, approveManagedKeyAction, rotateManagedKey, revokeManagedKey, and zeroizeManagedKey."
           ],
           "refs": [
             "internal/api/api.go",

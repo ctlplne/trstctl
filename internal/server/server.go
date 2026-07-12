@@ -258,11 +258,16 @@ type Deps struct {
 	// (NOTIF-01/F29). They are driven only by notification.* outbox rows; the
 	// scheduler never calls a channel directly, preserving AN-6 at-least-once delivery.
 	NotificationChannels []notify.Notifier
-	Logger               *slog.Logger    // structured access log sink (R2.2); nil discards
-	TraceExporter        observ.Exporter // completed-span sink (R2.2); nil is a no-op
-	OTLPExporter         *observ.OTLPExporter
-	Bulkhead             *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
-	RateLimiter          api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
+	// notificationChannelOwner follows production-created channel credentials from
+	// buildRunDeps through edition attachment and Build. It is deliberately private:
+	// successful Build transfers ownership to the notification Dispatcher, while
+	// every earlier failure closes through this one token.
+	notificationChannelOwner *notificationChannelOwnership
+	Logger                   *slog.Logger    // structured access log sink (R2.2); nil discards
+	TraceExporter            observ.Exporter // completed-span sink (R2.2); nil is a no-op
+	OTLPExporter             *observ.OTLPExporter
+	Bulkhead                 *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
+	RateLimiter              api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
 	// SecurityHeaders configures the web-hardening response headers + CORS policy
 	// applied to the whole served surface (SEC-003/WIRE-005). The zero value is
 	// safe (headers on, HSTS off, same-origin-only CORS); Run sets TLS from the
@@ -694,7 +699,26 @@ type Server struct {
 // orchestrator and API, mounts /healthz + the API + the web UI, and provisions an
 // issuing CA whose key is generated inside the signer (never in-process). It does
 // not start an HTTP listener — call Handler (tests) or Run (production).
-func Build(ctx context.Context, d Deps) (*Server, error) {
+func Build(ctx context.Context, d Deps) (_ *Server, err error) {
+	notificationOwner := ensureNotificationChannelOwnership(&d)
+	var s *Server
+	defer func() {
+		if err == nil {
+			// configureOutboxHandler always creates the dispatcher for a valid
+			// Store-backed server. It is now the sole successful-path owner.
+			notificationOwner.transferToDispatcher()
+			return
+		}
+		if s != nil && s.notifications != nil {
+			// The dispatcher was constructed before a later Build step failed.
+			// Hand ownership to it, then close it exactly once here because no
+			// Server will be returned for Shutdown to own.
+			notificationOwner.transferToDispatcher()
+			s.notifications.Close()
+			return
+		}
+		notificationOwner.closeUntransferred()
+	}()
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")
 	}
@@ -709,7 +733,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			signProvider = source.SignTokenProvider()
 		}
 	}
-	s := &Server{
+	s = &Server{
 		store:                     d.Store,
 		log:                       d.Log,
 		outboxWake:                make(chan struct{}, 1),
@@ -895,19 +919,8 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if s.plugins != nil {
 		defaults = append(defaults, api.WithACMEDNS01Providers(s.acmeDNS01PluginCatalog()...))
 	}
-	breakglassReconciler, err := buildBreakglassReconciler(d)
-	if err != nil {
+	if err := configureBreakglassAPIOptions(d, &defaults); err != nil {
 		return nil, nil, err
-	}
-	if breakglassReconciler != nil {
-		defaults = append(defaults, api.WithBreakglass(breakglassReconciler))
-	}
-	breakglassIssuer, err := buildBreakglassIssuer(d, breakglassReconciler)
-	if err != nil {
-		return nil, nil, err
-	}
-	if breakglassIssuer != nil {
-		defaults = append(defaults, api.WithBreakglassIssuer(breakglassIssuer))
 	}
 	defaults = append(defaults, api.WithPrivacyRetentionPolicy(d.PrivacyRetentionPolicy))
 	defaults = append(defaults, api.WithPrivacyRetentionPolicySource(d.GovernancePolicySource))
@@ -983,6 +996,24 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil
+}
+
+func configureBreakglassAPIOptions(d Deps, defaults *[]api.Option) error {
+	breakglassReconciler, err := buildBreakglassReconciler(d)
+	if err != nil {
+		return err
+	}
+	if breakglassReconciler != nil {
+		*defaults = append(*defaults, api.WithBreakglass(breakglassReconciler))
+	}
+	breakglassIssuer, err := buildBreakglassIssuer(d, breakglassReconciler)
+	if err != nil {
+		return err
+	}
+	if breakglassIssuer != nil {
+		*defaults = append(*defaults, api.WithBreakglassIssuer(breakglassIssuer))
+	}
+	return nil
 }
 
 func notificationChannelNames(channels []notify.Notifier) []string {
