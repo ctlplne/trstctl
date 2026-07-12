@@ -36,6 +36,30 @@ func TestBreakglassEnabledValidPasses(t *testing.T) {
 	}
 }
 
+func TestBreakglassReconciliationOnlyDoesNotRequireOnlineCustody(t *testing.T) {
+	c := Default()
+	c.Breakglass = fullBreakglass()
+	if err := c.Validate(); err != nil {
+		t.Fatalf("reconciliation-only configuration must remain valid: %v", err)
+	}
+}
+
+func TestBreakglassOnlineLifecycleRequiresExactCustodyAndRoster(t *testing.T) {
+	c := Default()
+	c.Breakglass = fullBreakglass()
+	c.Breakglass.OnlineEnabled = true
+	if err := c.Validate(); err == nil {
+		t.Fatal("online break-glass without tenant, signer handle, and m-of-n roster must fail")
+	}
+	c.Breakglass.TenantID = "11111111-1111-4111-8111-111111111111"
+	c.Breakglass.SignerHandle = "breakglass-prod"
+	c.Breakglass.Operators = []string{"alice", "bob", "carol"}
+	c.Breakglass.Threshold = 2
+	if err := c.Validate(); err != nil {
+		t.Fatalf("complete online break-glass configuration: %v", err)
+	}
+}
+
 func TestBreakglassEnvOverlaysVerifierMaterial(t *testing.T) {
 	env := map[string]string{
 		"TRSTCTL_BREAKGLASS_ENABLED":         "true",

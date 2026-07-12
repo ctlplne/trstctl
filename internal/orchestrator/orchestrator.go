@@ -21,8 +21,8 @@ const (
 	ctSubmissionDestination                          = "ct.submit"
 	ctSubmissionCapability                           = "CAP-REV-06"
 	licensedCryptoMigrationReissueDestination        = "licensed_crypto.migration.reissue"
-	licensedCryptoMigrationTLSPostureDestination     = "licensed_crypto.migration.tls_posture"
-	licensedCryptoMigrationTLSRollbackDestination    = "licensed_crypto.migration.tls_posture.rollback"
+	licensedCryptoMigrationTLSPostureDestination     = "connector.licensed_crypto.migration.tls_posture"
+	licensedCryptoMigrationTLSRollbackDestination    = "connector.licensed_crypto.migration.tls_posture.rollback"
 	licensedCryptoMigrationTLSRollbackRequestedEvent = "licensed_crypto.migration.tls_posture.rollback_requested"
 )
 

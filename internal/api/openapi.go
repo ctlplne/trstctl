@@ -263,8 +263,10 @@ func componentSchemas() map[string]*Schema {
 		"signature_algorithm":   str(),
 	}, "common_name")
 	caCeremonyStartReq := object(map[string]*Schema{
-		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca"}},
-		"parent_id": uuid(), "authority_id": uuid(), "csr_pem": str(), "certificate_pem": str(), "signer_handle": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
+		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root"}},
+		"parent_id": uuid(), "authority_id": uuid(), "csr_pem": str(), "certificate_pem": str(),
+		"target_certificate_pem": str(), "cross_certificate_pem": str(), "reverse_cross_certificate_pem": str(),
+		"reason": str(), "signer_handle": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
 	}, "operation", "threshold", "spec")
 	caCeremony := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
@@ -297,6 +299,16 @@ func componentSchemas() map[string]*Schema {
 	caAuthorityRekeyReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "ttl_seconds": {Type: "integer"}, "reason": str(),
 	}, "ceremony_id")
+	caCrossSignReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "certificate_pem": str(),
+	}, "ceremony_id", "certificate_pem")
+	caOfflineCrossSignImportReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "target_certificate_pem": str(), "cross_certificate_pem": str(),
+	}, "ceremony_id", "target_certificate_pem", "cross_certificate_pem")
+	caOfflineRootRekeyReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "successor_certificate_pem": str(), "new_signed_by_previous_pem": str(),
+		"previous_signed_by_new_pem": str(), "reason": str(), "spec": ref("CASpec"),
+	}, "ceremony_id", "successor_certificate_pem", "new_signed_by_previous_pem", "previous_signed_by_new_pem", "reason", "spec")
 	caIntermediateCSR := object(map[string]*Schema{
 		"ceremony_id": uuid(), "parent_id": uuid(), "csr_pem": str(), "signer_handle": str(),
 	}, "ceremony_id", "parent_id", "csr_pem", "signer_handle")
@@ -319,6 +331,14 @@ func componentSchemas() map[string]*Schema {
 		"active_issue_path": str(),
 		"overlap_issuers":   {Type: "array", Items: ref("CAAuthorityRotationIssuer")},
 	}, "predecessor", "successor", "issue_path", "active_issue_path", "overlap_issuers")
+	caCrossSign := object(map[string]*Schema{
+		"issuer_authority_id": uuid(), "target_sha256": str(), "certificate_pem": str(),
+		"ceremony_id": uuid(), "imported": {Type: "boolean"},
+	}, "issuer_authority_id", "target_sha256", "certificate_pem", "ceremony_id", "imported")
+	caOfflineRootRekey := object(map[string]*Schema{
+		"rotation": ref("CAAuthorityRotation"), "new_signed_by_previous_pem": str(),
+		"previous_signed_by_new_pem": str(), "ceremony_id": uuid(),
+	}, "rotation", "new_signed_by_previous_pem", "previous_signed_by_new_pem", "ceremony_id")
 	caDiscoveryItem := object(map[string]*Schema{
 		"id": str(), "source_id": str(), "source": {Type: "string", Enum: []string{"external_ca_registry", "ca_hierarchy"}},
 		"scope": {Type: "string", Enum: []string{"public", "private"}}, "type": str(), "name": str(), "status": str(),
@@ -424,19 +444,56 @@ func componentSchemas() map[string]*Schema {
 	breakglassReconcileResp := object(map[string]*Schema{
 		"reconciled": {Type: "integer"},
 	}, "reconciled")
-	breakglassIssueReq := object(map[string]*Schema{
+	// BreakglassIssueRequest is retained below as an unreferenced legacy schema so
+	// the additive-only contract checker preserves the historical API shape. Live
+	// operations use the two ceremony schemas and never accept caller-authored
+	// approver names.
+	breakglassLegacyIssueReq := object(map[string]*Schema{
+		"request_id": str(), "subject": str(), "csr_der": {Type: "string", Format: "byte"},
+		"reason": str(), "approvals": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
+	}, "request_id", "subject", "csr_der", "reason", "approvals")
+	breakglassIssueIntentReq := object(map[string]*Schema{
 		"request_id":  str(),
 		"subject":     str(),
 		"csr_der":     {Type: "string", Format: "byte"},
 		"reason":      str(),
-		"approvals":   {Type: "array", Items: str()},
 		"ttl_seconds": {Type: "integer"},
-	}, "request_id", "subject", "csr_der", "reason", "approvals")
+	}, "request_id", "subject", "csr_der", "reason")
+	breakglassIssueExecutionReq := object(map[string]*Schema{
+		"ceremony_id": uuid(),
+		"request_id":  str(),
+		"subject":     str(),
+		"csr_der":     {Type: "string", Format: "byte"},
+		"reason":      str(),
+		"ttl_seconds": {Type: "integer"},
+	}, "ceremony_id", "request_id", "subject", "csr_der", "reason")
 	breakglassIssueResp := object(map[string]*Schema{
 		"bundle":           ref("BreakglassBundle"),
 		"reconciled":       {Type: "integer"},
 		"audit_event_type": str(),
 	}, "bundle", "reconciled", "audit_event_type")
+	breakglassCeremony := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
+		"status": str(), "approvals": {Type: "integer"}, "opener": str(), "created_at": timestamp(),
+	}, "id", "tenant_id", "purpose", "threshold", "status", "approvals", "created_at")
+	breakglassRotationIntent := object(map[string]*Schema{
+		"reason": str(), "ttl_seconds": {Type: "integer"},
+	}, "reason", "ttl_seconds")
+	breakglassRotationReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "reason": str(), "ttl_seconds": {Type: "integer"},
+	}, "ceremony_id", "reason", "ttl_seconds")
+	breakglassRotation := object(map[string]*Schema{
+		"previous_signer_handle": str(), "active_signer_handle": str(),
+		"previous_certificate_pem": str(), "active_certificate_pem": str(),
+		"new_signed_by_previous_pem": str(), "previous_signed_by_new_pem": str(),
+		"ceremony_id": uuid(), "request_digest": str(),
+	}, "previous_signer_handle", "active_signer_handle", "previous_certificate_pem", "active_certificate_pem", "new_signed_by_previous_pem", "previous_signed_by_new_pem", "ceremony_id", "request_digest")
+	breakglassCrossSignReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "certificate_pem": str(),
+	}, "certificate_pem")
+	breakglassCrossSign := object(map[string]*Schema{
+		"issuer_signer_handle": str(), "target_sha256": str(), "certificate_pem": str(), "ceremony_id": uuid(),
+	}, "issuer_signer_handle", "target_sha256", "certificate_pem", "ceremony_id")
 
 	list := func(item string) *Schema {
 		return object(map[string]*Schema{
@@ -3546,8 +3603,13 @@ func componentSchemas() map[string]*Schema {
 		"CAIssueIntermediateRequest":               caIssueIntermediateReq,
 		"CAAuthorityRotationRequest":               caAuthorityRotationReq,
 		"CAAuthorityRekeyRequest":                  caAuthorityRekeyReq,
+		"CACrossSignRequest":                       caCrossSignReq,
+		"CAOfflineCrossSignImportRequest":          caOfflineCrossSignImportReq,
+		"CAOfflineRootRekeyRequest":                caOfflineRootRekeyReq,
 		"CAAuthorityRotationIssuer":                caAuthorityRotationIssuer,
 		"CAAuthorityRotation":                      caAuthorityRotation,
+		"CACrossSign":                              caCrossSign,
+		"CAOfflineRootRekey":                       caOfflineRootRekey,
 		"CAAuthority":                              caAuthority,
 		"CAAuthorityList":                          list("CAAuthority"),
 		"CADiscoveryItem":                          caDiscoveryItem,
@@ -3572,8 +3634,16 @@ func componentSchemas() map[string]*Schema {
 		"SecretApprovalRequest":                    secretApprovalReq,
 		"SecretApproval":                           secretApproval,
 		"BreakglassBundle":                         breakglassBundle,
-		"BreakglassIssueRequest":                   breakglassIssueReq,
+		"BreakglassIssueRequest":                   breakglassLegacyIssueReq,
+		"BreakglassIssueIntentRequest":             breakglassIssueIntentReq,
+		"BreakglassIssueExecutionRequest":          breakglassIssueExecutionReq,
 		"BreakglassIssueResponse":                  breakglassIssueResp,
+		"BreakglassCeremony":                       breakglassCeremony,
+		"BreakglassRotationIntent":                 breakglassRotationIntent,
+		"BreakglassRotationRequest":                breakglassRotationReq,
+		"BreakglassRotation":                       breakglassRotation,
+		"BreakglassCrossSignRequest":               breakglassCrossSignReq,
+		"BreakglassCrossSign":                      breakglassCrossSign,
 		"BreakglassReconcileRequest":               breakglassReconcileReq,
 		"BreakglassReconcileResponse":              breakglassReconcileResp,
 		"SecretRequest":                            secretReq,

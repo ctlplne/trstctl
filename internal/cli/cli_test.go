@@ -416,7 +416,7 @@ func TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 func TestBreakglassIssueCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"reconciled":1,"audit_event_type":"breakglass.issued"}`, &cap)
-	body := `{"request_id":"bg-online-1","subject":"svc.example","csr_der":"Y3Ny","reason":"restore production","approvals":["alice","bob"],"ttl_seconds":900}`
+	body := `{"ceremony_id":"11111111-1111-4111-8111-111111111111","request_id":"bg-online-1","subject":"svc.example","csr_der":"Y3Ny","reason":"restore production","ttl_seconds":900}`
 	code, _, _ := run(t, []string{"breakglass", "issue", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
 	if code != 0 {
 		t.Fatalf("exit = %d", code)

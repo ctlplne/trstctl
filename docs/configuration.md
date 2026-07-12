@@ -695,27 +695,41 @@ auth:
       }
 ```
 
-## Break-glass reconciliation
+## Break-glass lifecycle and reconciliation
 
 Break-glass emergency issuance has two served paths. `POST /api/v1/breakglass/issue`
 performs online m-of-n emergency issuance when a signer-backed break-glass issuer is
-configured; it accepts a CSR, reason, TTL, and operator approvals, returns a
-self-verifying bundle, and records `breakglass.issued` before responding.
+configured. First open the exact CSR/reason/TTL ceremony at
+`POST /api/v1/breakglass/issue-ceremonies`; then distinct configured operators approve
+that ceremony through the shared authenticated CA-approval route. The execution
+request carries `ceremony_id` and no approver names. The server derives quorum only
+from immutable `ca.ceremony.approved` event actors, consumes the ceremony once,
+returns a self-verifying bundle, and records `breakglass.issued` before responding.
+The same signer-backed lifecycle exposes purpose-bound rotation and target-CA
+cross-sign ceremony/execution pairs under `/api/v1/breakglass/*-ceremonies`,
+`/api/v1/breakglass/rotate`, and `/api/v1/breakglass/cross-sign`.
 `POST /api/v1/breakglass/reconcile` handles recovery after an offline ceremony: it
 accepts signed offline bundles, verifies them against trust anchors pinned in process
 config, and records verified facts as `breakglass.issued` events in the hash-chained
 audit log. Requests cannot supply their own verifier keys.
 
-In a config file, the keys are `breakglass.enabled`, `breakglass.ca_cert_file`, and
-`breakglass.public_key_file`. The files may be DER, or PEM with `CERTIFICATE` and
-`PUBLIC KEY` blocks. If `breakglass.enabled=true`, both files are required and startup
-fails closed when either is missing or unreadable.
+`breakglass.enabled` pins reconciliation verifier material. The files may be DER, or
+PEM with `CERTIFICATE` and `PUBLIC KEY` blocks, and startup fails closed when either
+is missing or unreadable. `breakglass.online_enabled` additionally requires one
+tenant, an already-persisted dual-control signer handle whose public key matches both
+files, a distinct operator roster, and a threshold of at least two. Reconciliation-
+only deployments do not need the online fields.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRSTCTL_BREAKGLASS_ENABLED` | `false` | Enables verifier material for `POST /api/v1/breakglass/reconcile` and the audit check used by `POST /api/v1/breakglass/issue`. |
+| `TRSTCTL_BREAKGLASS_ENABLED` | `false` | Enables verifier material for `POST /api/v1/breakglass/reconcile`. |
+| `TRSTCTL_BREAKGLASS_ONLINE_ENABLED` | `false` | Enables signer-backed issue, rotation, and cross-sign routes. Requires `enabled=true` and all custody/quorum fields below. |
 | `TRSTCTL_BREAKGLASS_CA_CERT_FILE` | unset | DER or PEM CA certificate that emergency bundle certificates must chain to. Required when enabled. |
 | `TRSTCTL_BREAKGLASS_PUBLIC_KEY_FILE` | unset | DER or PEM public key that verifies the emergency bundle manifest signature. Required when enabled. |
+| `TRSTCTL_BREAKGLASS_TENANT_ID` | unset | The only tenant allowed to use the online break-glass signer. |
+| `TRSTCTL_BREAKGLASS_SIGNER_HANDLE` | unset | Existing purpose-constrained, dual-control signer handle whose public key must match the configured CA and public-key file. |
+| `TRSTCTL_BREAKGLASS_OPERATORS` | unset | Comma-separated authenticated operator subjects allowed to count toward quorum. |
+| `TRSTCTL_BREAKGLASS_THRESHOLD` | `0` | Required m-of-n threshold; online mode requires at least `2` and no more than the number of distinct configured operators. |
 
 Example break-glass reconciliation config:
 
@@ -725,6 +739,28 @@ breakglass:
   ca_cert_file: /etc/trstctl/breakglass-ca.pem
   public_key_file: /etc/trstctl/breakglass-public-key.pem
 ```
+
+Online lifecycle adds the custody and roster fields:
+
+```yaml
+breakglass:
+  enabled: true
+  online_enabled: true
+  ca_cert_file: /etc/trstctl/breakglass-ca.pem
+  public_key_file: /etc/trstctl/breakglass-public-key.pem
+  tenant_id: 10000000-0000-4000-8000-000000000001
+  signer_handle: recovery-breakglass-ca
+  operators: [recovery-operator-a, recovery-operator-b, recovery-operator-c]
+  threshold: 2
+```
+
+To create that handle without a test-only or library-only path, leave
+`online_enabled=false`, use `trstctl-cli ca ceremonies start` plus distinct
+`ca ceremonies approve` calls, and finish with `ca authorities create-root`. Save
+the returned `certificate_pem` and `signer_handle`; derive the public-key file from
+the certificate (`openssl x509 -pubkey -noout`), set the online fields above, and
+restart. Startup proves the certificate, derived public key, and persisted signer
+handle all name the same key before it exposes any online break-glass route.
 
 ## Secrets (credentials at rest)
 

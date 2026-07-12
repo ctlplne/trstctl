@@ -45,9 +45,13 @@ const (
 	EventCAAuthorityImported                      = "ca.authority.imported"
 	EventCAAuthorityRotated                       = "ca.authority.rotated"
 	EventCAAuthorityRekeyed                       = "ca.authority.rekeyed"
+	EventCACrossSigned                            = "ca.cross_signed"
 	EventCAIntermediateCreated                    = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued                  = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued                        = "ca.endentity.issued"
+	EventBreakglassIssued                         = "breakglass.issued"
+	EventBreakglassCARotated                      = "breakglass.ca.rotated"
+	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"
 	EventOCSPResponderRotated                     = "ca.ocsp_responder.rotated"
 	EventDiscoverySourceUpserted                  = "discovery.source.upserted"
 	EventDiscoveryScheduleUpserted                = "discovery.schedule.upserted"
@@ -190,6 +194,18 @@ var ledger = []FeatureEvent{
 	{"F48", "Private/enterprise CA hierarchy management", "issue_leaf", "issueHierarchyLeaf", []string{EventCAEndEntityIssued}},
 	{"F48", "Private/enterprise CA hierarchy management", "rotate_authority", "rotateCAAuthority", []string{EventCAAuthorityRotated}},
 	{"F48", "Private/enterprise CA hierarchy management", "rekey_authority", "rekeyCAAuthority", []string{EventCAAuthorityRekeyed}},
+	{"F48", "Private/enterprise CA hierarchy management", "cross_sign_authority", "crossSignCAAuthority", []string{EventCACrossSigned}},
+	{"F48", "Private/enterprise CA hierarchy management", "import_offline_cross_sign", "importOfflineRootCrossSign", []string{EventCACrossSigned}},
+	{"F48", "Private/enterprise CA hierarchy management", "rekey_offline_root", "rekeyOfflineRoot", []string{EventCAAuthorityRekeyed}},
+
+	// F34 — exact-ceremony online break-glass lifecycle plus offline reconciliation.
+	{"F34", "Break-glass procedures", "start_issue_ceremony", "startBreakglassIssueCeremony", []string{EventCACeremonyStarted}},
+	{"F34", "Break-glass procedures", "issue", "issueBreakglass", []string{EventBreakglassIssued}},
+	{"F34", "Break-glass procedures", "start_rotation_ceremony", "startBreakglassRotationCeremony", []string{EventCACeremonyStarted}},
+	{"F34", "Break-glass procedures", "rotate", "rotateBreakglass", []string{EventBreakglassCARotated}},
+	{"F34", "Break-glass procedures", "start_cross_sign_ceremony", "startBreakglassCrossSignCeremony", []string{EventCACeremonyStarted}},
+	{"F34", "Break-glass procedures", "cross_sign", "crossSignBreakglass", []string{EventBreakglassCACrossSigned}},
+	{"F34", "Break-glass procedures", "reconcile", "reconcileBreakglass", []string{EventBreakglassIssued}},
 
 	// F7 — Deployment connectors (delivery receipts are event-sourced evidence).
 	{"F7", "Deployment connectors", "upsert_target", "createConnectorTarget", []string{EventDeploymentTargetUpserted}},

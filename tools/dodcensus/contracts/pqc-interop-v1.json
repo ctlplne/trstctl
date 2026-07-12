@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "contract": "trstctl.pqc.end-to-end.interop.v1",
+  "pure_mldsa_leaf": {
+    "client": "stock OpenSSL 3.5 or newer generates and verifies an RFC 9881 ML-DSA-65 PKCS#10 request",
+    "served_path": "the exact licensed cmd/trstctl binary accepts the request through RFC 7030 EST simpleenroll",
+    "verification": "OpenSSL extracts the returned PKCS#7 leaf, verifies its chain, ML-DSA-65 subject algorithm, SAN, CSR proof of possession, and public-key equality"
+  },
+  "multikey_spiffe": {
+    "client": "the SPIFFE Workload API gRPC client fetches one streamed response from the exact licensed cmd/trstctl binary",
+    "response": "exactly two X509-SVID entries carry the same SPIFFE ID, distinct hints, distinct private keys, and classical plus ML-DSA-65 certificates",
+    "verification": "OpenSSL verifies both chains, URI SANs, PKCS#8 private keys, and certificate/private-key public-key equality"
+  },
+  "automated_tls_rollout": {
+    "selection": "every applicable out-of-policy CBOM protocol and cipher finding in the scanned host configuration is selected and has exactly one operator-authored binding",
+    "target": "one immutable tenant-scoped Envoy deployment-target revision receives TLS 1.3, approved ciphers, X25519MLKEM768, and X25519 fallback",
+    "delivery": "the sealed idempotent outbox drives native receiver GET, PUT, and exact read-back through the shipped connector registry",
+    "progress": "every selected finding reaches applied or redacted terminal failure; completion requires zero queued findings",
+    "rollback": "one target-group rollback restores the exact TLS 1.0/legacy-cipher/group posture and projects both findings rolled_back",
+    "emulator": "the independent Envoy management-plane emulator records exactly desired-then-prior PUT history with at least five read operations"
+  },
+  "fail_closed": {
+    "bindings": "unbound, duplicate, extraneous, conflicting, disabled, missing-revision, or unsupported connector targets reject the whole batch before an event or outbox intent",
+    "integrity": "tenant, destination, idempotency key, run, asset, target revision, and ciphertext substitution cannot open a forward or rollback intent",
+    "edition": "all PQC implementation code remains under ee and is reachable only through cmd/trstctl/ee_attach.go"
+  }
+}

@@ -50,6 +50,10 @@ const (
 	EventCAIntermediateCSRSignRequested           = "ca.intermediate_csr.sign_requested"
 	EventCAIntermediateCSRIssued                  = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued                        = "ca.endentity.issued"
+	EventCACrossSigned                            = "ca.cross_signed"
+	EventBreakglassIssued                         = "breakglass.issued"
+	EventBreakglassCARotated                      = "breakglass.ca.rotated"
+	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"
 	EventCRLPublished                             = "ca.crl.published"
 	EventOCSPResponderRotated                     = "ca.ocsp_responder.rotated"
 	EventAgentHeartbeat                           = "agent.heartbeat"
@@ -391,6 +395,13 @@ type CACeremonyApproved struct {
 	Approvals  int    `json:"approvals,omitempty"`
 }
 
+// BreakglassCeremonyCompleted is the projector-owned portion shared by online
+// issue, CA rotation, and CA cross-sign events. The full event retains the public
+// certificate evidence; this minimal shape consumes the exact ceremony on replay.
+type BreakglassCeremonyCompleted struct {
+	CeremonyID string `json:"ceremony_id"`
+}
+
 // CAAuthorityCreated is the v2 payload shared by ca.root.created,
 // ca.intermediate.created, and ca.authority.imported. It carries the complete
 // authority row plus the consumed ceremony id, so replay can rebuild both the CA
@@ -427,22 +438,25 @@ type CAAuthorityRotated struct {
 // successor authority row so event replay creates the same id/certificate/signing
 // handle and then supersedes the predecessor in one projection step.
 type CAAuthorityRekeyed struct {
-	ID                string    `json:"id"`
-	PredecessorCAID   string    `json:"predecessor_ca_id"`
-	ParentID          *string   `json:"parent_id,omitempty"`
-	CommonName        string    `json:"common_name"`
-	Kind              string    `json:"kind"`
-	CertificatePEM    string    `json:"certificate_pem"`
-	SignerHandle      string    `json:"signer_handle"`
-	Serial            string    `json:"serial"`
-	NotAfter          time.Time `json:"not_after"`
-	MaxPathLen        int       `json:"max_path_len"`
-	PermittedDNSNames []string  `json:"permitted_dns_names,omitempty"`
-	EKUs              []string  `json:"extended_key_usages,omitempty"`
-	CeremonyID        string    `json:"ceremony_id"`
-	Reason            string    `json:"reason,omitempty"`
-	IssuePath         string    `json:"issue_path,omitempty"`
-	ActiveIssuePath   string    `json:"active_issue_path,omitempty"`
+	ID                     string    `json:"id"`
+	PredecessorCAID        string    `json:"predecessor_ca_id"`
+	ParentID               *string   `json:"parent_id,omitempty"`
+	CommonName             string    `json:"common_name"`
+	Kind                   string    `json:"kind"`
+	CertificatePEM         string    `json:"certificate_pem"`
+	SignerHandle           string    `json:"signer_handle"`
+	Serial                 string    `json:"serial"`
+	NotAfter               time.Time `json:"not_after"`
+	MaxPathLen             int       `json:"max_path_len"`
+	PermittedDNSNames      []string  `json:"permitted_dns_names,omitempty"`
+	EKUs                   []string  `json:"extended_key_usages,omitempty"`
+	CeremonyID             string    `json:"ceremony_id"`
+	Reason                 string    `json:"reason,omitempty"`
+	IssuePath              string    `json:"issue_path,omitempty"`
+	ActiveIssuePath        string    `json:"active_issue_path,omitempty"`
+	OfflineRoot            bool      `json:"offline_root,omitempty"`
+	NewSignedByPreviousDER []byte    `json:"new_signed_by_previous_der,omitempty"`
+	PreviousSignedByNewDER []byte    `json:"previous_signed_by_new_der,omitempty"`
 }
 
 // CRLPublished is the payload of a ca.crl.published event. V2 carries the full DER
@@ -879,11 +893,12 @@ type LicensedCryptoMigrationStarted struct {
 	TLSPostures        []LicensedCryptoMigrationTLSPosture `json:"tls_postures,omitempty"`
 }
 
-// LicensedCryptoMigrationTLSPosture is the replayable, secret-free external
-// mutation intent for one selected CBOM protocol/cipher finding. The deployment
-// target revision and config are immutable event-derived facts; reconciliation
-// can recreate the same sealed outbox row without consulting mutable target
-// state.
+// LicensedCryptoMigrationTLSPosture is the replayable external-mutation binding
+// for one selected CBOM protocol/cipher finding. TargetConfig is populated only
+// while constructing the sealed outbox plaintext and is cleared before an
+// event is appended. Events retain the public immutable target revision plus
+// SealedOutboxPayload, so reconciliation reproduces exact ciphertext without
+// exposing redirect-capable connector configuration.
 type LicensedCryptoMigrationTLSPosture struct {
 	RunID               string               `json:"run_id"`
 	AssetID             string               `json:"asset_id"`
@@ -903,7 +918,7 @@ type LicensedCryptoMigrationTLSPosture struct {
 	TargetRevision      string               `json:"target_revision"`
 	Connector           string               `json:"connector"`
 	Target              string               `json:"target"`
-	TargetConfig        json.RawMessage      `json:"target_config"`
+	TargetConfig        json.RawMessage      `json:"target_config,omitempty"`
 	Desired             connector.TLSPosture `json:"desired"`
 	RollbackOnFailure   bool                 `json:"rollback_on_failure"`
 	SealedOutboxPayload json.RawMessage      `json:"sealed_outbox_payload,omitempty"`
@@ -1432,6 +1447,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCAEndEntityIssued:                   {1: true},
 	EventCAAuthorityRotated:                  {1: true},
 	EventCAAuthorityRekeyed:                  {1: true},
+	EventCACrossSigned:                       {1: true},
+	EventBreakglassIssued:                    {1: true},
+	EventBreakglassCARotated:                 {1: true},
+	EventBreakglassCACrossSigned:             {1: true},
 	EventCRLPublished:                        {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                {1: true},
 	EventAgentHeartbeat:                      {1: true},
@@ -1781,15 +1800,30 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		if pl.ID == "" || pl.PredecessorCAID == "" || pl.CommonName == "" || pl.Kind == "" ||
-			pl.CertificatePEM == "" || pl.SignerHandle == "" || pl.Serial == "" || pl.NotAfter.IsZero() {
-			return fmt.Errorf("projections: %s requires a complete signer-backed successor authority", e.Type)
+			pl.CertificatePEM == "" || (!pl.OfflineRoot && pl.SignerHandle == "") || pl.Serial == "" || pl.NotAfter.IsZero() {
+			return fmt.Errorf("projections: %s requires a complete signer-backed or explicit offline-root successor authority", e.Type)
+		}
+		if pl.OfflineRoot && (pl.SignerHandle != "" || len(pl.NewSignedByPreviousDER) == 0 || len(pl.PreviousSignedByNewDER) == 0) {
+			return fmt.Errorf("projections: %s offline-root successor requires no signer handle and both public cross-certificates", e.Type)
 		}
 		return p.store.ApplyCAAuthorityRekeyedTx(ctx, tx, store.CAAuthority{
 			ID: pl.ID, TenantID: e.TenantID, ParentID: pl.ParentID, CommonName: pl.CommonName,
 			Kind: pl.Kind, Status: "active", CertificatePEM: pl.CertificatePEM, SignerHandle: pl.SignerHandle,
 			Serial: pl.Serial, NotAfter: &pl.NotAfter, MaxPathLen: pl.MaxPathLen,
 			PermittedDNSNames: pl.PermittedDNSNames, EKUs: pl.EKUs, CreatedAt: e.Time,
-		}, pl.PredecessorCAID)
+		}, pl.PredecessorCAID, pl.CeremonyID)
+	case EventCACrossSigned, EventBreakglassIssued, EventBreakglassCARotated, EventBreakglassCACrossSigned:
+		var pl BreakglassCeremonyCompleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CeremonyID == "" && e.Type == EventBreakglassIssued {
+			return nil // legacy/offline reconciled bundles have no online ceremony
+		}
+		if pl.CeremonyID == "" {
+			return fmt.Errorf("projections: %s requires ceremony_id", e.Type)
+		}
+		return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, e.TenantID, pl.CeremonyID, e.Time)
 	case EventCRLPublished:
 		var pl CRLPublished
 		if err := decode(e, &pl); err != nil {

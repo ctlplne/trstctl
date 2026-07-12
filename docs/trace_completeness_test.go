@@ -392,11 +392,25 @@ func TestIncidentAndFleetReissuanceServingStatusIsHonest(t *testing.T) {
 	if !strings.Contains(read(t, "../internal/api/api.go"), `path: "/api/v1/breakglass/issue"`) {
 		t.Fatal("internal/api/api.go no longer registers /api/v1/breakglass/issue; the TRACE-006 online break-glass disclosure has no code anchor — revisit this reality test")
 	}
+	for _, path := range []string{
+		`path: "/api/v1/breakglass/issue-ceremonies"`,
+		`path: "/api/v1/breakglass/rotate"`,
+		`path: "/api/v1/breakglass/cross-sign"`,
+	} {
+		if !strings.Contains(read(t, "../internal/api/api.go"), path) {
+			t.Fatalf("internal/api/api.go no longer registers %s; revisit the TRACE-006 lifecycle disclosure", path)
+		}
+	}
 	if !strings.Contains(read(t, "../internal/server/breakglass.go"), "ReconcileBreakglass") {
 		t.Fatal("internal/server/breakglass.go no longer wires break-glass reconciliation; revisit this TRACE-006 reality test")
 	}
-	if !strings.Contains(read(t, "../internal/server/breakglass.go"), "IssueBreakglass") {
-		t.Fatal("internal/server/breakglass.go no longer wires online break-glass issue; revisit this TRACE-006 reality test")
+	if !strings.Contains(read(t, "../internal/server/run.go"), "breakglassRotationFromConfig") {
+		t.Fatal("internal/server/run.go no longer production-assembles online break-glass; revisit this TRACE-006 reality test")
+	}
+	rotationSource := read(t, "../internal/server/breakglass_rotation.go")
+	if !strings.Contains(rotationSource, "ValidateKeyCeremonyWithApprovalEvidenceTx") ||
+		!strings.Contains(rotationSource, "EventCACeremonyApproved") {
+		t.Fatal("online break-glass no longer binds signer actions to immutable authenticated ceremony evidence — TRACE-006")
 	}
 
 	// The served single-identity incident half must always be stated.
@@ -406,14 +420,15 @@ func TestIncidentAndFleetReissuanceServingStatusIsHonest(t *testing.T) {
 	if !strings.Contains(low, "/api/v1/incidents/fleet-reissuance-runs") {
 		t.Error("limitations.md must disclose the served fleet re-issuance route — TRACE-006")
 	}
-	if !strings.Contains(low, "/api/v1/breakglass/issue") || !strings.Contains(low, "not production-assembled") || !strings.Contains(low, "not independent authenticated approvals") {
-		t.Error("limitations.md must disclose the unassembled online break-glass route and its non-independent approval input — TRACE-006")
+	if !strings.Contains(low, "/api/v1/breakglass/issue") || !strings.Contains(low, "production-assembled") ||
+		!strings.Contains(low, "authenticated immutable") || !strings.Contains(low, "request carries no approver names") {
+		t.Error("limitations.md must disclose the configured production assembly and immutable-event approval boundary — TRACE-006")
 	}
 	if !strings.Contains(low, "/api/v1/breakglass/reconcile") || !strings.Contains(low, "breakglass.issued") {
 		t.Error("limitations.md must disclose the served break-glass reconciliation route and audit event — TRACE-006")
 	}
-	if strings.Contains(low, "online m-of-n break-glass issuance is served") {
-		t.Error("limitations.md still claims the unassembled online break-glass route is served — TRACE-006")
+	if strings.Contains(low, "online m-of-n break-glass issuance is not production-assembled") || strings.Contains(low, "caller-supplied approver names") {
+		t.Error("limitations.md still carries the superseded unassembled/caller-authored break-glass claim — TRACE-006")
 	}
 }
 

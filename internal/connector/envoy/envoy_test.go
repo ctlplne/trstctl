@@ -121,7 +121,7 @@ func TestDeployRedactsSDSFailureBody(t *testing.T) {
 	}
 }
 
-func TestTLSPostureMutationReadsBackProtocolCipherAndHybridGroup(t *testing.T) {
+func TestTLSPostureMutationReadsBackProtocolCipherAndGroup(t *testing.T) {
 	legacy := connector.TLSPosture{
 		MinimumVersion:    "TLSv1.0",
 		CipherSuites:      []string{"TLS_RSA_WITH_AES_128_CBC_SHA"},
@@ -137,7 +137,7 @@ func TestTLSPostureMutationReadsBackProtocolCipherAndHybridGroup(t *testing.T) {
 	desired := connector.TLSPosture{
 		MinimumVersion:    connector.TLSVersion13,
 		CipherSuites:      []string{"TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"},
-		KeyExchangeGroups: []string{"X25519MLKEM768", "X25519"},
+		KeyExchangeGroups: []string{"receiver-native-group", "X25519"},
 	}
 	receipt, err := registry.ApplyTLSPosture(context.Background(), connector.TLSPostureMutation{
 		RunID: "run-1", FindingID: "protocol-finding", FindingKind: "protocol",
@@ -190,7 +190,7 @@ func TestTLSPostureMutationRollsBackAndVerifiesReceiverMismatch(t *testing.T) {
 		Desired: connector.TLSPosture{
 			MinimumVersion:    connector.TLSVersion13,
 			CipherSuites:      []string{"TLS_AES_256_GCM_SHA384"},
-			KeyExchangeGroups: []string{"X25519MLKEM768", "X25519"},
+			KeyExchangeGroups: []string{"receiver-native-group", "X25519"},
 		},
 	})
 	if err == nil || !strings.Contains(err.Error(), "rollback verified") {

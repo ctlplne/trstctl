@@ -651,15 +651,15 @@ type ABAC struct {
 	Environment map[string]string `json:"environment,omitempty"`
 }
 
-// Breakglass configures the served recovery-side break-glass reconciliation route.
-// Offline issuance still happens outside the control plane; this block pins the CA
-// certificate and break-glass public key the running server uses to verify bundles
-// before reconciling them into the audit chain.
+// Breakglass always pins the CA certificate and public key used by the recovery-side
+// reconciliation route. OnlineEnabled additionally binds that exact public material
+// to a persisted, purpose-constrained signer handle plus an authenticated m-of-n
+// operator roster for served issuance, CA rotation, and cross-signing.
 type Breakglass struct {
-	Enabled       bool   `json:"enabled,omitempty"`
-	OnlineEnabled bool   `json:"online_enabled,omitempty"`
-	CACertFile    string `json:"ca_cert_file,omitempty"`
-	PublicKeyFile string `json:"public_key_file,omitempty"`
+	Enabled       bool     `json:"enabled,omitempty"`
+	OnlineEnabled bool     `json:"online_enabled,omitempty"`
+	CACertFile    string   `json:"ca_cert_file,omitempty"`
+	PublicKeyFile string   `json:"public_key_file,omitempty"`
 	TenantID      string   `json:"tenant_id,omitempty"`
 	SignerHandle  string   `json:"signer_handle,omitempty"`
 	Operators     []string `json:"operators,omitempty"`
@@ -3606,13 +3606,13 @@ func (b Breakglass) validate() []error {
 		errs = append(errs, errors.New("breakglass.enabled must be true when breakglass.online_enabled is true"))
 	}
 	if strings.TrimSpace(b.TenantID) == "" {
-		errs = append(errs, errors.New("breakglass.tenant_id is required when breakglass.enabled is true"))
+		errs = append(errs, errors.New("breakglass.tenant_id is required when breakglass.online_enabled is true"))
 	}
 	if strings.TrimSpace(b.SignerHandle) == "" {
-		errs = append(errs, errors.New("breakglass.signer_handle is required when breakglass.enabled is true"))
+		errs = append(errs, errors.New("breakglass.signer_handle is required when breakglass.online_enabled is true"))
 	}
 	if b.Threshold < 2 {
-		errs = append(errs, errors.New("breakglass.threshold must be at least 2 when breakglass.enabled is true"))
+		errs = append(errs, errors.New("breakglass.threshold must be at least 2 when breakglass.online_enabled is true"))
 	}
 	seen := map[string]bool{}
 	for i, operator := range b.Operators {

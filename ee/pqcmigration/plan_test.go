@@ -109,6 +109,22 @@ func TestPlannerBindsEverySelectedProtocolAndCipherFinding(t *testing.T) {
 	if err == nil {
 		t.Fatal("planner accepted a desired posture without the hybrid ML-KEM group")
 	}
+
+	conflicting := desired
+	conflicting.CipherSuites = []string{"TLS_CHACHA20_POLY1305_SHA256"}
+	_, err = BuildPlan([]Asset{
+		{ID: "protocol-1", Kind: string(cbom.AssetTLSEndpoint), Protocol: "TLSv1.0", QuantumVulnerable: true},
+		{ID: "cipher-1", Kind: string(cbom.AssetHostConfig), Cipher: "TLS_RSA_WITH_3DES_EDE_CBC_SHA", QuantumVulnerable: true},
+	}, Request{
+		AssetIDs: []string{"protocol-1", "cipher-1"}, TargetAlgorithm: TargetMLDSA65, Protocol: ProtocolACME,
+		TLSBindings: []TLSBinding{
+			{AssetID: "protocol-1", TargetID: "envoy-edge", Desired: desired},
+			{AssetID: "cipher-1", TargetID: "envoy-edge", Desired: conflicting},
+		},
+	})
+	if err == nil {
+		t.Fatal("planner accepted conflicting desired postures for findings sharing one target")
+	}
 }
 
 func TestCompletedCapabilitiesLeaveOnlyEvidenceGatedPureCutoverResidual(t *testing.T) {

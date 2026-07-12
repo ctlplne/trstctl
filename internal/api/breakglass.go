@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -102,12 +103,13 @@ type breakglassReconcileResponse struct {
 }
 
 type breakglassIssueRequest struct {
-	CeremonyID string   `json:"ceremony_id"`
-	RequestID  string   `json:"request_id"`
-	Subject    string   `json:"subject"`
-	CSRDer     []byte   `json:"csr_der"`
-	Reason     string   `json:"reason"`
-	TTLSeconds int      `json:"ttl_seconds"`
+	CeremonyID      string          `json:"ceremony_id"`
+	RequestID       string          `json:"request_id"`
+	Subject         string          `json:"subject"`
+	CSRDer          []byte          `json:"csr_der"`
+	Reason          string          `json:"reason"`
+	TTLSeconds      int             `json:"ttl_seconds"`
+	CallerApprovals json.RawMessage `json:"approvals,omitempty"` // rejection sentinel for the retired caller-authored field
 }
 
 type BreakglassCeremony struct {
@@ -133,18 +135,18 @@ type BreakglassRotationRequest struct {
 }
 
 type BreakglassRotation struct {
-	PreviousSignerHandle string `json:"previous_signer_handle"`
-	ActiveSignerHandle   string `json:"active_signer_handle"`
+	PreviousSignerHandle   string `json:"previous_signer_handle"`
+	ActiveSignerHandle     string `json:"active_signer_handle"`
 	PreviousCertificatePEM string `json:"previous_certificate_pem"`
-	ActiveCertificatePEM string `json:"active_certificate_pem"`
+	ActiveCertificatePEM   string `json:"active_certificate_pem"`
 	NewSignedByPreviousPEM string `json:"new_signed_by_previous_pem"`
 	PreviousSignedByNewPEM string `json:"previous_signed_by_new_pem"`
-	CeremonyID string `json:"ceremony_id"`
-	RequestDigest string `json:"request_digest"`
+	CeremonyID             string `json:"ceremony_id"`
+	RequestDigest          string `json:"request_digest"`
 }
 
 type BreakglassCrossSignRequest struct {
-	CeremonyID    string `json:"ceremony_id"`
+	CeremonyID     string `json:"ceremony_id"`
 	CertificatePEM string `json:"certificate_pem"`
 }
 
@@ -161,10 +163,10 @@ type breakglassIssueResponse struct {
 	AuditEventType string            `json:"audit_event_type"`
 }
 
-// issueBreakglass is the online version of the break-glass ceremony: the
-// running control plane accepts a CSR plus a distinct m-of-n operator quorum,
-// asks the configured break-glass issuer to sign through the crypto boundary,
-// and returns only after the resulting bundle is reconciled into audit.
+// issueBreakglass is the online execution half of the break-glass ceremony. The
+// request carries no approver names: the configured issuer derives the m-of-n
+// quorum from authenticated, immutable CA-ceremony approval events, signs
+// through the isolated crypto boundary, and consumes that exact ceremony once.
 //
 //trstctl:mutation
 func (a *API) issueBreakglass(w http.ResponseWriter, r *http.Request) {
@@ -353,6 +355,9 @@ func (a *API) reconcileBreakglass(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateBreakglassIssueRequest(req breakglassIssueRequest, requireCeremony bool) (breakglass.EmergencyRequest, time.Duration, error) {
+	if len(req.CallerApprovals) != 0 {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "approvals must be omitted; authenticated ceremony events supply the operator quorum")
+	}
 	ceremonyID := strings.TrimSpace(req.CeremonyID)
 	if requireCeremony && ceremonyID == "" {
 		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "ceremony_id is required")
@@ -401,16 +406,6 @@ func breakglassCertificateDER(value string) ([]byte, error) {
 		return nil, errStatus(http.StatusBadRequest, "certificate_pem must contain exactly one CERTIFICATE PEM block")
 	}
 	return append([]byte(nil), block.Bytes...), nil
-}
-
-func compactNonEmptyStrings(in []string) []string {
-	out := make([]string, 0, len(in))
-	for _, v := range in {
-		if s := strings.TrimSpace(v); s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
 }
 
 func validateBreakglassBundle(i int, b breakglass.Bundle) error {

@@ -2410,9 +2410,7 @@
         "external_ca",
         "k8s_posture_routes"
       ],
-      "dod_residuals": {
-        "k8s_posture_routes": "Fresh repo-native k8s_posture_routes census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F013",
@@ -3498,9 +3496,7 @@
       "dod_capabilities": [
         "protocol_ergonomics"
       ],
-      "dod_residuals": {
-        "protocol_ergonomics": "Fresh repo-native protocol_ergonomics census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F019",
@@ -4695,9 +4691,7 @@
       "dod_capabilities": [
         "protocol_ergonomics"
       ],
-      "dod_residuals": {
-        "protocol_ergonomics": "Fresh repo-native protocol_ergonomics census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F026",
@@ -4837,9 +4831,7 @@
       "dod_capabilities": [
         "protocol_ergonomics"
       ],
-      "dod_residuals": {
-        "protocol_ergonomics": "Fresh repo-native protocol_ergonomics census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F027",
@@ -4981,9 +4973,7 @@
       "dod_capabilities": [
         "protocol_ergonomics"
       ],
-      "dod_residuals": {
-        "protocol_ergonomics": "Fresh repo-native protocol_ergonomics census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F028",
@@ -5486,9 +5476,7 @@
       "dod_capabilities": [
         "protocol_ergonomics"
       ],
-      "dod_residuals": {
-        "protocol_ergonomics": "Fresh repo-native protocol_ergonomics census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F031",
@@ -6406,9 +6394,7 @@
       "dod_capabilities": [
         "protocol_ergonomics"
       ],
-      "dod_residuals": {
-        "protocol_ergonomics": "Fresh repo-native protocol_ergonomics census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F036",
@@ -7138,9 +7124,7 @@
       "dod_capabilities": [
         "pqc_end_to_end"
       ],
-      "dod_residuals": {
-        "pqc_end_to_end": "Fresh repo-native pqc_end_to_end census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F040",
@@ -7969,9 +7953,7 @@
       "dod_capabilities": [
         "protocol_ergonomics"
       ],
-      "dod_residuals": {
-        "protocol_ergonomics": "Fresh repo-native protocol_ergonomics census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F045",
@@ -8647,8 +8629,8 @@
       "domain": "Incident and JIT",
       "phase": "P2",
       "priority": 74,
-      "served_state": "partial",
-      "backend_status": "partial: served online m-of-n emergency issuance plus signed offline-bundle reconciliation",
+      "served_state": "conditional",
+      "backend_status": "conditional: signer-backed online issue, rotation, cross-signing, and offline-bundle reconciliation are production-assembled behind explicit custody and roster configuration",
       "current_frontend_mapping": "served: Incidents at /incidents can submit online m-of-n break-glass issue requests and reconcile offline bundles, with audit event evidence",
       "target_gui_mapping": "Break-glass UI with emergency declaration, quorum, online issue, offline verification, reconciliation, expiry, and post-incident audit checklist.",
       "acceptance_test": "Served API requires m-of-n quorum, rejects sub-quorum online issue requests, returns a self-verifying bundle, and records breakglass.issued before responding; UI/CLI call the served route with high-risk confirmation/body-file workflows.",
@@ -8656,18 +8638,30 @@
         "docs/features/incident-and-jit.md"
       ],
       "source_backend": [
-        "internal/breakglass"
+        "internal/breakglass",
+        "internal/server/breakglass_rotation.go",
+        "internal/server/ca_hierarchy.go"
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "TRACE-006 closes F34 as served. POST /api/v1/breakglass/issue accepts a CSR, reason, TTL, and m-of-n operator approvals; it signs through the configured break-glass issuer, returns a self-verifying bundle, and reconciles breakglass.issued into the hash-chained audit log before responding. POST /api/v1/breakglass/reconcile remains the recovery path for signed offline bundles.",
+      "notes": "TRACE-006 closes F34 as conditionally served. Production buildRunDeps binds configured verifier material to a persisted purpose-constrained dual-control signer handle. Online issue, rotation, and cross-sign requests are exact-request-bound to tenant-scoped ceremonies; caller-supplied approver names are absent, and only distinct authenticated immutable ca.ceremony.approved actors from the configured roster count. POST /api/v1/breakglass/reconcile remains the recovery path for signed offline bundles.",
       "api_surface": [
+        "startBreakglassIssueCeremony",
         "issueBreakglass",
+        "startBreakglassRotationCeremony",
+        "rotateBreakglass",
+        "startBreakglassCrossSignCeremony",
+        "crossSignBreakglass",
         "reconcileBreakglass"
       ],
       "api_na": "",
       "cli_surface": [
+        "breakglass issue-ceremony",
         "breakglass issue",
+        "breakglass rotation-ceremony",
+        "breakglass rotate",
+        "breakglass cross-sign-ceremony",
+        "breakglass cross-sign",
         "breakglass reconcile"
       ],
       "cli_na": "",
@@ -8675,13 +8669,15 @@
         "served": {
           "evidence": [
             "POST /api/v1/breakglass/issue performs online m-of-n emergency issuance through the configured signer-backed break-glass issuer and reconciles the resulting bundle into audit before returning.",
+            "Online issue, CA rotation, and target cross-signing use exact-request ceremony/execution pairs; approvals are immutable authenticated event actors from the configured roster, not names in the execution body.",
             "POST /api/v1/breakglass/reconcile verifies signed offline break-glass bundles against deployment-pinned verifier material and reconciles them into audit as immutable breakglass.issued events.",
-            "served_state=partial",
-            "backend_status=partial: served online m-of-n emergency issuance plus signed offline-bundle reconciliation"
+            "served_state=conditional",
+            "backend_status=conditional: signer-backed online issue, rotation, cross-signing, and offline-bundle reconciliation are production-assembled behind explicit custody and roster configuration"
           ],
           "refs": [
             "internal/api/breakglass.go",
-            "internal/server/breakglass.go"
+            "internal/server/breakglass.go",
+            "internal/server/breakglass_rotation.go"
           ],
           "commands": [
             "make test"
@@ -8700,6 +8696,7 @@
         "cli": {
           "evidence": [
             "cli_surface: breakglass issue sends POST /api/v1/breakglass/issue with a JSON request body from -f and an Idempotency-Key for safe retries.",
+            "cli_surface: breakglass issue-ceremony, rotation-ceremony/rotate, and cross-sign-ceremony/cross-sign expose the exact request-bound signer lifecycle without caller-authored approver names.",
             "cli_surface: breakglass reconcile sends POST /api/v1/breakglass/reconcile with a JSON request body from -f and an Idempotency-Key for safe retries.",
             "TestBreakglassIssueCommandSendsBodyAndIdempotencyKey and TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey verify the commands' served paths, request bodies, and mutation idempotency headers."
           ],
@@ -8711,8 +8708,9 @@
         "api": {
           "evidence": [
             "api_surface: issueBreakglass is in the served OpenAPI route registry at POST /api/v1/breakglass/issue.",
+            "api_surface: startBreakglassIssueCeremony, startBreakglassRotationCeremony, rotateBreakglass, startBreakglassCrossSignCeremony, and crossSignBreakglass are in the served OpenAPI route registry.",
             "api_surface: reconcileBreakglass is in the served OpenAPI route registry at POST /api/v1/breakglass/reconcile.",
-            "OpenAPI exposes BreakglassIssueRequest, BreakglassIssueResponse, BreakglassBundle, BreakglassReconcileRequest, and BreakglassReconcileResponse schemas."
+            "OpenAPI live operations expose BreakglassIssueIntentRequest and BreakglassIssueExecutionRequest without approvals, plus rotation, cross-sign, bundle, and reconciliation schemas."
           ],
           "refs": [
             "internal/api/api.go",
@@ -8723,12 +8721,15 @@
           "evidence": [
             "internal/server/breakglass_served_test.go posts a real online m-of-n issue request to the running handler, verifies the returned bundle, verifies breakglass.issued is chain-verifiable in the audit surface, and proves sub-quorum online issue fails closed.",
             "internal/server/breakglass_served_test.go also posts a real offline bundle to the running reconcile handler and verifies breakglass.issued is chain-verifiable in the audit surface.",
+            "internal/server/dod_breakglass_rotation_runtime_test.go assembles buildRunDeps, proves exact authenticated ceremony failures, restart replay, bidirectional rotation chains, signer-backed CA cross-signing, and offline-root public re-key/cross-sign import against an independent OpenSSL process.",
             "acceptance_test: served API requires quorum, returns an audited bundle, and CLI/UI call the served route instead of a one-click bypass.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/server/breakglass_served_test.go",
+            "internal/server/dod_breakglass_rotation_runtime_test.go",
+            "tools/dodcensus/breakglass_rotation_manifest_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -8744,7 +8745,7 @@
         },
         "rbac": {
           "evidence": [
-            "The feature authz manifest maps issueBreakglass and reconcileBreakglass to certs:issue, and internal/api/feature_authz_test.go verifies every api_surface operation has permission metadata."
+            "The feature authz manifest maps issue/reconcile to certs:issue and rotation/cross-sign lifecycle operations to issuers:write; internal/api/feature_authz_test.go verifies every api_surface operation has permission metadata."
           ],
           "refs": [
             "internal/api/api.go",
@@ -8754,12 +8755,13 @@
         },
         "audit": {
           "evidence": [
-            "The online issuer signs through the configured break-glass service and immediately reconciles the returned bundle through audit.NewAuditor(log), producing hash-chained breakglass.issued events.",
+            "The online issuer appends breakglass.issued as source truth and projects the same event to consume the exact ceremony; rotation and cross-sign events are likewise replayable.",
             "The served reconciler writes verified offline bundles through audit.NewAuditor(log), producing hash-chained breakglass.issued events.",
             "TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain and TestServedBreakglassReconcileRecordsAuditChain verify the event and audit hash chain through the served API."
           ],
           "refs": [
             "internal/server/breakglass.go",
+            "internal/server/breakglass_rotation.go",
             "internal/server/breakglass_served_test.go"
           ]
         },
@@ -8792,9 +8794,7 @@
       "dod_capabilities": [
         "breakglass_rotation"
       ],
-      "dod_residuals": {
-        "breakglass_rotation": "Fresh repo-native breakglass_rotation census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F049",
@@ -9679,9 +9679,7 @@
       "dod_capabilities": [
         "secrets_residuals"
       ],
-      "dod_residuals": {
-        "secrets_residuals": "Fresh repo-native secrets_residuals census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F054",
@@ -10061,9 +10059,7 @@
       "dod_capabilities": [
         "secrets_residuals"
       ],
-      "dod_residuals": {
-        "secrets_residuals": "Fresh repo-native secrets_residuals census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F056",
@@ -10441,9 +10437,7 @@
         "secret_sync",
         "secrets_residuals"
       ],
-      "dod_residuals": {
-        "secrets_residuals": "Fresh repo-native secrets_residuals census still has non-served granular entries; this feature cannot claim that backend or residual breadth as served."
-      }
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F058",

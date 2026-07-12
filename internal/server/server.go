@@ -200,11 +200,15 @@ type Deps struct {
 	// never trusts verifier material supplied by the caller.
 	BreakglassCACertDER    []byte
 	BreakglassPublicKeyDER []byte
-	// BreakglassIssuer enables the served online m-of-n emergency issuance route.
-	// The signer behind this service must be a crypto.DigestSigner backed by the
-	// isolated signer process in production; nil leaves POST /api/v1/breakglass/issue
-	// unavailable.
-	BreakglassIssuer *breakglass.Service
+	// BreakglassIssuer/Ceremonies/Rotation are the production-assembled online
+	// lifecycle. BreakglassOfflineIssuer is retained only for the standalone
+	// offline service adapter; shipped assembly binds the interfaces below to a
+	// persisted purpose-constrained signer handle.
+	BreakglassIssuer        api.BreakglassIssuer
+	BreakglassCeremonies    api.BreakglassCeremonyService
+	BreakglassRotation      api.BreakglassRotationService
+	BreakglassReconciler    api.BreakglassReconciler
+	BreakglassOfflineIssuer *breakglass.Service
 	// RequireApproval turns on served dual-control for privileged transitions (issue
 	// and revoke): the transition is denied unless a DISTINCT approver has recorded an
 	// approval (the served half of RED-004 / SEC-002). Backed by the store's issuance
@@ -1023,6 +1027,12 @@ func configureBreakglassAPIOptions(d Deps, defaults *[]api.Option) error {
 	}
 	if breakglassIssuer != nil {
 		*defaults = append(*defaults, api.WithBreakglassIssuer(breakglassIssuer))
+	}
+	if d.BreakglassCeremonies != nil {
+		*defaults = append(*defaults, api.WithBreakglassCeremonies(d.BreakglassCeremonies))
+	}
+	if d.BreakglassRotation != nil {
+		*defaults = append(*defaults, api.WithBreakglassRotation(d.BreakglassRotation))
 	}
 	return nil
 }

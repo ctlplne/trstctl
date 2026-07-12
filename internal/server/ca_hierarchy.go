@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
@@ -29,6 +30,15 @@ import (
 )
 
 const hierarchySignerHandlePrefix = "ca-hierarchy-"
+
+type caCrossSignedEvent struct {
+	CAID                 string `json:"ca_id"`
+	CeremonyID           string `json:"ceremony_id"`
+	OfflineRoot          bool   `json:"offline_root,omitempty"`
+	TargetCertificateDER []byte `json:"target_certificate_der"`
+	CrossCertificateDER  []byte `json:"cross_certificate_der"`
+	TargetSHA256         string `json:"target_sha256"`
+}
 
 type caHierarchyService struct {
 	store       *store.Store
@@ -707,6 +717,241 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 	return authorityRotationResponse(predecessor, successor), nil
 }
 
+func (h *caHierarchyService) CrossSignAuthority(ctx context.Context, tenantID, caID string, req api.CACrossSignRequest) (api.CACrossSign, error) {
+	ceremonyID := strings.TrimSpace(req.CeremonyID)
+	if caID == "" || ceremonyID == "" {
+		return api.CACrossSign{}, fmt.Errorf("%w: authority id and ceremony_id are required", api.ErrCAHierarchyInvalid)
+	}
+	targetDER, _, err := singleCertificatePEM(req.CertificatePEM)
+	if err != nil {
+		return api.CACrossSign{}, err
+	}
+	authority, err := h.store.GetCAAuthority(ctx, tenantID, caID)
+	if err != nil {
+		return api.CACrossSign{}, err
+	}
+	if authority.Status != "active" || authority.SignerHandle == "" {
+		return api.CACrossSign{}, fmt.Errorf("%w: cross-sign issuer must be an active signer-backed authority", api.ErrCAHierarchyInvalid)
+	}
+	issuerDER, err := firstCertDER(authority.CertificatePEM)
+	if err != nil {
+		return api.CACrossSign{}, err
+	}
+	signer, err := h.signerForAuthority(ctx, authority)
+	if err != nil {
+		return api.CACrossSign{}, err
+	}
+	purpose := libhierarchy.PurposeCrossSign(caID, targetDER)
+	var crossDER []byte
+	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, _, err := h.store.ValidateKeyCeremonyWithApprovalEvidenceTx(ctx, tx, tenantID, ceremonyID, purpose); err != nil {
+			return err
+		}
+		issued, err := crypto.CrossSignHierarchyCA(issuerDER, signer, targetDER)
+		if err != nil {
+			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		crossDER = issued.CertificateDER
+		payload := caCrossSignedEvent{
+			CAID: caID, CeremonyID: ceremonyID, TargetCertificateDER: targetDER,
+			CrossCertificateDER: crossDER, TargetSHA256: crypto.SHA256Hex(targetDER),
+		}
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		event, err := h.log.Append(ctx, events.Event{ID: "ca-cross-sign-" + ceremonyID, Type: projections.EventCACrossSigned, TenantID: tenantID, Data: raw})
+		if err != nil {
+			return err
+		}
+		var canonical caCrossSignedEvent
+		if err := json.Unmarshal(event.Data, &canonical); err != nil {
+			return err
+		}
+		if canonical.CAID != caID || canonical.CeremonyID != ceremonyID || canonical.OfflineRoot ||
+			canonical.TargetSHA256 != crypto.SHA256Hex(targetDER) || !bytes.Equal(canonical.TargetCertificateDER, targetDER) {
+			return fmt.Errorf("%w: canonical CA cross-sign event does not match request", api.ErrCAHierarchyConflict)
+		}
+		if err := crypto.VerifyCrossSignedCA(issuerDER, targetDER, canonical.CrossCertificateDER); err != nil {
+			return fmt.Errorf("%w: canonical CA cross-sign event: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		crossDER = append([]byte(nil), canonical.CrossCertificateDER...)
+		return projections.New(h.store).ApplyTx(ctx, tx, event)
+	})
+	if err != nil {
+		return api.CACrossSign{}, caHierarchyConflict(err)
+	}
+	return api.CACrossSign{
+		IssuerAuthorityID: caID, TargetSHA256: crypto.SHA256Hex(targetDER),
+		CertificatePEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: crossDER})),
+		CeremonyID:     ceremonyID,
+	}, nil
+}
+
+func (h *caHierarchyService) ImportOfflineRootCrossSign(ctx context.Context, tenantID, caID string, req api.CAOfflineCrossSignImportRequest) (api.CACrossSign, error) {
+	ceremonyID := strings.TrimSpace(req.CeremonyID)
+	if caID == "" || ceremonyID == "" {
+		return api.CACrossSign{}, fmt.Errorf("%w: authority id and ceremony_id are required", api.ErrCAHierarchyInvalid)
+	}
+	targetDER, _, err := singleCertificatePEM(req.TargetCertificatePEM)
+	if err != nil {
+		return api.CACrossSign{}, err
+	}
+	crossDER, crossPEM, err := singleCertificatePEM(req.CrossCertificatePEM)
+	if err != nil {
+		return api.CACrossSign{}, err
+	}
+	authority, err := h.store.GetCAAuthority(ctx, tenantID, caID)
+	if err != nil {
+		return api.CACrossSign{}, err
+	}
+	if authority.Kind != "root" || authority.SignerHandle != "" || authority.Status != "active" {
+		return api.CACrossSign{}, fmt.Errorf("%w: issuer must be an active imported offline root", api.ErrCAHierarchyInvalid)
+	}
+	issuerDER, err := firstCertDER(authority.CertificatePEM)
+	if err != nil {
+		return api.CACrossSign{}, err
+	}
+	if err := crypto.VerifyCrossSignedCA(issuerDER, targetDER, crossDER); err != nil {
+		return api.CACrossSign{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	purpose := offlineCrossSignPurpose(caID, targetDER, crossDER)
+	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, _, err := h.store.ValidateKeyCeremonyWithApprovalEvidenceTx(ctx, tx, tenantID, ceremonyID, purpose); err != nil {
+			return err
+		}
+		raw, err := json.Marshal(caCrossSignedEvent{
+			CAID: caID, CeremonyID: ceremonyID, OfflineRoot: true,
+			TargetCertificateDER: targetDER, CrossCertificateDER: crossDER,
+			TargetSHA256: crypto.SHA256Hex(targetDER),
+		})
+		if err != nil {
+			return err
+		}
+		event, err := h.log.Append(ctx, events.Event{ID: "ca-offline-cross-sign-" + ceremonyID, Type: projections.EventCACrossSigned, TenantID: tenantID, Data: raw})
+		if err != nil {
+			return err
+		}
+		var canonical caCrossSignedEvent
+		if err := json.Unmarshal(event.Data, &canonical); err != nil {
+			return err
+		}
+		if canonical.CAID != caID || canonical.CeremonyID != ceremonyID || !canonical.OfflineRoot ||
+			canonical.TargetSHA256 != crypto.SHA256Hex(targetDER) || !bytes.Equal(canonical.TargetCertificateDER, targetDER) ||
+			!bytes.Equal(canonical.CrossCertificateDER, crossDER) {
+			return fmt.Errorf("%w: canonical offline-root cross-sign event does not match request", api.ErrCAHierarchyConflict)
+		}
+		if err := crypto.VerifyCrossSignedCA(issuerDER, targetDER, canonical.CrossCertificateDER); err != nil {
+			return fmt.Errorf("%w: canonical offline-root cross-sign event: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		crossDER = append([]byte(nil), canonical.CrossCertificateDER...)
+		crossPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: crossDER}))
+		return projections.New(h.store).ApplyTx(ctx, tx, event)
+	})
+	if err != nil {
+		return api.CACrossSign{}, caHierarchyConflict(err)
+	}
+	return api.CACrossSign{IssuerAuthorityID: caID, TargetSHA256: crypto.SHA256Hex(targetDER), CertificatePEM: crossPEM, CeremonyID: ceremonyID, Imported: true}, nil
+}
+
+func (h *caHierarchyService) RekeyOfflineRoot(ctx context.Context, tenantID, caID string, req api.CAOfflineRootRekeyRequest) (api.CAOfflineRootRekey, error) {
+	ceremonyID := strings.TrimSpace(req.CeremonyID)
+	if caID == "" || ceremonyID == "" {
+		return api.CAOfflineRootRekey{}, fmt.Errorf("%w: authority id and ceremony_id are required", api.ErrCAHierarchyInvalid)
+	}
+	successorDER, successorPEM, err := singleCertificatePEM(req.SuccessorCertificatePEM)
+	if err != nil {
+		return api.CAOfflineRootRekey{}, err
+	}
+	newByPreviousDER, newByPreviousPEM, err := singleCertificatePEM(req.NewSignedByPreviousPEM)
+	if err != nil {
+		return api.CAOfflineRootRekey{}, err
+	}
+	previousByNewDER, previousByNewPEM, err := singleCertificatePEM(req.PreviousSignedByNewPEM)
+	if err != nil {
+		return api.CAOfflineRootRekey{}, err
+	}
+	verifiedSuccessor, err := crypto.VerifyImportedOfflineRoot(successorDER, cryptoProfile(req.Spec))
+	if err != nil {
+		return api.CAOfflineRootRekey{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	purpose, err := offlineRootRekeyPurpose(caID, successorDER, newByPreviousDER, previousByNewDER, strings.TrimSpace(req.Reason), req.Spec)
+	if err != nil {
+		return api.CAOfflineRootRekey{}, err
+	}
+	successorID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenantID+":"+ceremonyID+":offline-root-rekey")).String()
+	var predecessor, successor store.CAAuthority
+	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		predecessor, err = h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, caID)
+		if err != nil {
+			return err
+		}
+		if predecessor.Kind != "root" || predecessor.SignerHandle != "" || predecessor.Status != "active" {
+			return fmt.Errorf("%w: predecessor must be an active imported offline root", api.ErrCAHierarchyInvalid)
+		}
+		predecessorDER, err := firstCertDER(predecessor.CertificatePEM)
+		if err != nil {
+			return err
+		}
+		if err := crypto.VerifyCrossSignedCA(predecessorDER, successorDER, newByPreviousDER); err != nil {
+			return fmt.Errorf("%w: new-by-previous cross-certificate: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		if err := crypto.VerifyCrossSignedCA(successorDER, predecessorDER, previousByNewDER); err != nil {
+			return fmt.Errorf("%w: previous-by-new cross-certificate: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		if _, _, err := h.store.ValidateKeyCeremonyWithApprovalEvidenceTx(ctx, tx, tenantID, ceremonyID, purpose); err != nil {
+			return err
+		}
+		notAfter := verifiedSuccessor.NotAfter
+		payload := projections.CAAuthorityRekeyed{
+			ID: successorID, PredecessorCAID: predecessor.ID, CommonName: verifiedSuccessor.CommonName,
+			Kind: "root", CertificatePEM: successorPEM, Serial: verifiedSuccessor.Serial, NotAfter: notAfter,
+			MaxPathLen: verifiedSuccessor.MaxPathLen, PermittedDNSNames: verifiedSuccessor.PermittedDNSDomains, EKUs: verifiedSuccessor.EKUs,
+			CeremonyID: ceremonyID, Reason: strings.TrimSpace(req.Reason), OfflineRoot: true,
+			NewSignedByPreviousDER: newByPreviousDER, PreviousSignedByNewDER: previousByNewDER,
+			IssuePath: caAuthorityIssuePath(predecessor.ID), ActiveIssuePath: caAuthorityIssuePath(successorID),
+		}
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		event, err := h.log.Append(ctx, events.Event{ID: "ca-offline-root-rekey-" + ceremonyID, Type: projections.EventCAAuthorityRekeyed, TenantID: tenantID, Data: raw})
+		if err != nil {
+			return err
+		}
+		var canonical projections.CAAuthorityRekeyed
+		if err := json.Unmarshal(event.Data, &canonical); err != nil {
+			return err
+		}
+		if canonical.ID != successorID || canonical.PredecessorCAID != predecessor.ID || canonical.CeremonyID != ceremonyID ||
+			!canonical.OfflineRoot || canonical.SignerHandle != "" || canonical.CertificatePEM != successorPEM ||
+			!bytes.Equal(canonical.NewSignedByPreviousDER, newByPreviousDER) || !bytes.Equal(canonical.PreviousSignedByNewDER, previousByNewDER) {
+			return fmt.Errorf("%w: canonical offline-root re-key event does not match request", api.ErrCAHierarchyConflict)
+		}
+		if err := projections.New(h.store).ApplyTx(ctx, tx, event); err != nil {
+			return err
+		}
+		predecessor.Status = "superseded"
+		replacesID := predecessor.ID
+		successor = store.CAAuthority{
+			ID: canonical.ID, TenantID: tenantID, CommonName: canonical.CommonName, Kind: "root", Status: "active",
+			CertificatePEM: canonical.CertificatePEM, Serial: canonical.Serial, NotAfter: &canonical.NotAfter,
+			MaxPathLen: canonical.MaxPathLen, PermittedDNSNames: canonical.PermittedDNSNames, EKUs: canonical.EKUs,
+			ReplacesID: &replacesID, CreatedAt: event.Time,
+		}
+		return nil
+	})
+	if err != nil {
+		return api.CAOfflineRootRekey{}, caHierarchyConflict(err)
+	}
+	return api.CAOfflineRootRekey{
+		Rotation:               authorityRotationResponse(predecessor, successor),
+		NewSignedByPreviousPEM: newByPreviousPEM, PreviousSignedByNewPEM: previousByNewPEM,
+		CeremonyID: ceremonyID,
+	}, nil
+}
+
 func (h *caHierarchyService) issueRekeyedCA(ctx context.Context, tx pgx.Tx, tenantID string, predecessor store.CAAuthority, signer *signing.RemoteSigner, spec api.CASpec) (crypto.IssuedHierarchyCA, string, error) {
 	switch predecessor.Kind {
 	case "root":
@@ -895,6 +1140,42 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 		return externalIntermediateCSRPurpose(req.ParentID, csrDER, req.Spec)
 	case "rekey_ca":
 		return rekeyCAPurpose(req.AuthorityID)
+	case "cross_sign_ca":
+		targetDER, _, err := singleCertificatePEM(req.TargetCertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(req.AuthorityID) == "" {
+			return "", fmt.Errorf("%w: authority_id is required for cross_sign_ca", api.ErrCAHierarchyInvalid)
+		}
+		return libhierarchy.PurposeCrossSign(strings.TrimSpace(req.AuthorityID), targetDER), nil
+	case "import_offline_cross_sign":
+		if strings.TrimSpace(req.AuthorityID) == "" {
+			return "", fmt.Errorf("%w: authority_id is required for import_offline_cross_sign", api.ErrCAHierarchyInvalid)
+		}
+		targetDER, _, err := singleCertificatePEM(req.TargetCertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		crossDER, _, err := singleCertificatePEM(req.CrossCertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		return offlineCrossSignPurpose(strings.TrimSpace(req.AuthorityID), targetDER, crossDER), nil
+	case "rekey_offline_root":
+		successorDER, _, err := singleCertificatePEM(req.CertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		newByPreviousDER, _, err := singleCertificatePEM(req.CrossCertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		previousByNewDER, _, err := singleCertificatePEM(req.ReverseCrossCertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		return offlineRootRekeyPurpose(strings.TrimSpace(req.AuthorityID), successorDER, newByPreviousDER, previousByNewDER, strings.TrimSpace(req.Reason), req.Spec)
 	default:
 		return hierarchyPurpose(req.Operation, req.ParentID, req.Spec)
 	}
@@ -950,6 +1231,40 @@ func rekeyCAPurpose(authorityID string) (string, error) {
 		return "", fmt.Errorf("%w: authority_id is required for rekey_ca", api.ErrCAHierarchyInvalid)
 	}
 	return libhierarchy.PurposeRotate(authorityID), nil
+}
+
+func offlineCrossSignPurpose(authorityID string, targetDER, crossDER []byte) string {
+	payload, err := json.Marshal(struct {
+		AuthorityID  string `json:"authority_id"`
+		TargetSHA256 string `json:"target_sha256"`
+		CrossSHA256  string `json:"cross_sha256"`
+	}{authorityID, crypto.SHA256Hex(targetDER), crypto.SHA256Hex(crossDER)})
+	if err != nil {
+		panic(fmt.Sprintf("server: canonical offline cross-sign purpose: %v", err))
+	}
+	return "offline-cross-sign:" + crypto.SHA256Hex(payload)
+}
+
+func offlineRootRekeyPurpose(authorityID string, successorDER, newByPreviousDER, previousByNewDER []byte, reason string, spec api.CASpec) (string, error) {
+	if authorityID == "" {
+		return "", fmt.Errorf("%w: authority_id is required for rekey_offline_root", api.ErrCAHierarchyInvalid)
+	}
+	profilePurpose, err := hierarchyPurpose("create_root", "", spec)
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(struct {
+		AuthorityID         string `json:"authority_id"`
+		SuccessorSHA256     string `json:"successor_sha256"`
+		NewByPreviousSHA256 string `json:"new_by_previous_sha256"`
+		PreviousByNewSHA256 string `json:"previous_by_new_sha256"`
+		Reason              string `json:"reason"`
+		ProfilePurpose      string `json:"profile_purpose"`
+	}{authorityID, crypto.SHA256Hex(successorDER), crypto.SHA256Hex(newByPreviousDER), crypto.SHA256Hex(previousByNewDER), reason, profilePurpose})
+	if err != nil {
+		return "", err
+	}
+	return "offline-root-rekey:" + crypto.SHA256Hex(payload), nil
 }
 
 func flattenDERChain(chain [][]byte) []byte {

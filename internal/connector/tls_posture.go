@@ -37,7 +37,11 @@ type TLSPostureMutation struct {
 	Target         string          `json:"target"`
 	TargetConfig   json.RawMessage `json:"target_config"`
 	Desired        TLSPosture      `json:"desired"`
-	TenantID       string          `json:"-"`
+	// ExpectedPrevious is a durable pre-mutation observation. When present,
+	// Registry applies only if the receiver is still at this posture or already
+	// equals Desired after an ambiguous successful attempt.
+	ExpectedPrevious *TLSPosture `json:"expected_previous,omitempty"`
+	TenantID         string      `json:"-"`
 }
 
 // TLSPostureReceipt is durable read-after-write evidence. Previous is retained
@@ -63,10 +67,11 @@ type TLSPostureConnector interface {
 	ApplyTLSPosture(context.Context, Sandbox, string, TLSPosture) error
 }
 
-// TLSPostureDeployer is the feature-neutral server/edition seam used by the PQC
-// migration worker. Registry is the shipped implementation.
+// TLSPostureDeployer is the feature-neutral server/edition seam used by a
+// licensed policy-rollout worker. Registry is the shipped implementation.
 type TLSPostureDeployer interface {
 	SupportsTLSPosture(connectorName string) bool
+	ReadTLSPosture(context.Context, TLSPostureMutation) (TLSPosture, error)
 	ApplyTLSPosture(context.Context, TLSPostureMutation) (TLSPostureReceipt, error)
 	RestoreTLSPosture(context.Context, TLSPostureMutation) (TLSPostureReceipt, error)
 }

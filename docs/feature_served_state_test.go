@@ -124,7 +124,7 @@ func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T)
 		"F29": "served",      // all advertised channels are production-assembled
 		"F31": "conditional", // Enterprise remediation license and configured connector target gate the served workflow
 		"F32": "conditional", // Enterprise remediation license
-		"F34": "partial",     // issuance works; break-glass rotation residual remains
+		"F34": "conditional", // breakglass.enabled/online_enabled plus custody and roster configuration
 		"F37": "conditional", // secrets.enable_api
 		"F39": "conditional", // secrets.enable_api
 		"F41": "conditional", // Enterprise HA license plus federation.enabled
@@ -171,8 +171,9 @@ func TestHonestyAuthorityRejectsKnownW0Overclaims(t *testing.T) {
 	normalizedLimitations := strings.Join(strings.Fields(limitations), " ")
 	for _, want := range []string{
 		"queued receipt is not external-effect evidence.",
-		"not production-assembled",
-		"not independent authenticated approvals",
+		"production-assembled",
+		"authenticated immutable",
+		"request carries no approver names",
 		"six of six backends served",
 		"fsync-backed journal",
 	} {
@@ -183,7 +184,8 @@ func TestHonestyAuthorityRejectsKnownW0Overclaims(t *testing.T) {
 	for _, forbidden := range []string{
 		"No current `feature-map-backlog.json` row uses `served_state=library`",
 		"it records an unrouted receipt",
-		"online m-of-n break-glass issuance is served",
+		"online m-of-n break-glass issuance is not production-assembled",
+		"caller-supplied approver names",
 		"zero of six backends served",
 		"provider operations and credentials are not yet isolated",
 	} {

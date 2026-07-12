@@ -741,9 +741,9 @@
       "owner": "Incident and JIT",
       "priority": "P2",
       "acceptance_criteria": "Served API requires m-of-n quorum, rejects sub-quorum online issue requests, returns a self-verifying bundle, and records breakglass.issued before responding; UI/CLI call the served route with high-risk confirmation/body-file workflows.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial: served online m-of-n emergency issuance plus signed offline-bundle reconciliation",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: signer-backed online issue, rotation, cross-signing, and offline-bundle reconciliation are production-assembled behind explicit custody and roster configuration",
       "source_docs": [
         "docs/features/incident-and-jit.md"
       ],

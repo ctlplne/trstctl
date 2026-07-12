@@ -26,6 +26,12 @@ from urllib.parse import urlparse
 
 KIND_VERSION = "v0.31.0"
 NODE_IMAGE = "kindest/node:v1.31.14@sha256:6f86cf509dbb42767b6e79debc3f2c32e4ee01386f0489b3b2be24b0a55aac2b"
+KIND_BINARY_SHA256 = {
+    ("Darwin", "amd64"): "a8b3cf77b2ad77aec5bf710d1a2589d9117576132af812885cad41e9dede4d4e",
+    ("Darwin", "arm64"): "88bf554fe9da6311c9f8c2d082613c002911a476f6b5090e9420b35d84e70c5c",
+    ("Linux", "amd64"): "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa",
+    ("Linux", "arm64"): "8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4",
+}
 NAMESPACE = "trstctl-dod"
 TARGET_NAMESPACE = "apps"
 CSR_NAME = "dod-kind-csr"
@@ -46,6 +52,12 @@ def compact(value: object) -> bytes:
 
 
 def run(args: list[str], timeout: float = 180, check: bool = True) -> subprocess.CompletedProcess:
+    command_env = {
+        key: value for key, value in os.environ.items()
+        if key in {"PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "XDG_RUNTIME_DIR"}
+    }
+    command_env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
+    command_env.setdefault("HOME", "/tmp")
     result = subprocess.run(
         args,
         stdin=subprocess.DEVNULL,
@@ -54,7 +66,7 @@ def run(args: list[str], timeout: float = 180, check: bool = True) -> subprocess
         timeout=timeout,
         check=False,
         text=True,
-        env={"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/tmp")},
+        env=command_env,
     )
     if check and result.returncode != 0:
         raise RuntimeError(f"command failed ({' '.join(args[:4])}): {result.stdout[-2000:]}")
@@ -68,11 +80,15 @@ def require_kind() -> str:
     version = run([binary, "version"], timeout=10).stdout.strip()
     if not re.search(r"\bv?0\.31\.0\b", version):
         raise RuntimeError(f"kind binary version is not pinned {KIND_VERSION}: {version}")
-    if platform.system() == "Linux" and platform.machine() in {"x86_64", "amd64"}:
-        digest = hashlib.sha256(Path(binary).read_bytes()).hexdigest()
-        expected = "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa"
-        if digest != expected:
-            raise RuntimeError(f"kind linux/amd64 binary digest {digest} is not the official {KIND_VERSION} digest")
+    machine = platform.machine().lower()
+    architecture = "amd64" if machine in {"x86_64", "amd64"} else "arm64" if machine in {"aarch64", "arm64"} else machine
+    platform_key = (platform.system(), architecture)
+    expected = KIND_BINARY_SHA256.get(platform_key)
+    if expected is None:
+        raise RuntimeError(f"kind proof does not have an official {KIND_VERSION} digest for {platform_key[0]}/{platform_key[1]}")
+    digest = hashlib.sha256(Path(binary).read_bytes()).hexdigest()
+    if digest != expected:
+        raise RuntimeError(f"kind {platform_key[0]}/{platform_key[1]} binary digest {digest} is not the official {KIND_VERSION} digest")
     return binary
 
 
@@ -189,6 +205,7 @@ def prepare_fixtures(api: KubernetesAPI, root: Path) -> tuple[str, str, str]:
             {"apiGroups": ["cert-manager.io"], "resources": ["certificaterequests/status"], "verbs": ["get", "update", "patch"]},
             {"apiGroups": ["certificates.k8s.io"], "resources": ["certificatesigningrequests"], "verbs": ["get", "list", "watch"]},
             {"apiGroups": ["certificates.k8s.io"], "resources": ["certificatesigningrequests/status"], "verbs": ["get", "update", "patch"]},
+            {"apiGroups": ["certificates.k8s.io"], "resources": ["signers"], "resourceNames": [f"trstctl.com/{ISSUER_NAME}"], "verbs": ["sign"]},
             {"apiGroups": [""], "resources": ["secrets", "configmaps"], "verbs": ["get", "list", "watch", "create", "update", "patch"]},
         ],
     })
@@ -228,14 +245,11 @@ def prepare_fixtures(api: KubernetesAPI, root: Path) -> tuple[str, str, str]:
         },
     })
     csr = api.json("GET", "/apis/certificates.k8s.io/v1/certificatesigningrequests/" + CSR_NAME)
-    api.json("PUT", "/apis/certificates.k8s.io/v1/certificatesigningrequests/" + CSR_NAME + "/approval", {
-        "apiVersion": "certificates.k8s.io/v1", "kind": "CertificateSigningRequest",
-        "metadata": {"name": CSR_NAME, "resourceVersion": csr["metadata"]["resourceVersion"]},
-        "status": {"conditions": [{
-            "type": "Approved", "status": "True", "reason": "DODApproved",
-            "message": "approved by the isolated real-kind DoD fixture", "lastUpdateTime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }]},
-    })
+    csr["status"] = {"conditions": [{
+        "type": "Approved", "status": "True", "reason": "DODApproved",
+        "message": "approved by the isolated real-kind DoD fixture", "lastUpdateTime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }]}
+    api.json("PUT", "/apis/certificates.k8s.io/v1/certificatesigningrequests/" + CSR_NAME + "/approval", csr)
 
     bundle_key = root / "bundle-key.pem"
     bundle_cert = root / "bundle.pem"
@@ -269,30 +283,50 @@ class State:
         self.token = ""
         self.csr_hash = ""
         self.bundle_hash = ""
+        self.setup_done = threading.Event()
+        self.setup_error = ""
+        self.setup_thread: threading.Thread | None = None
 
     def start(self) -> None:
-        run([self.kind, "create", "cluster", "--name", self.cluster_name, "--image", NODE_IMAGE, "--kubeconfig", str(self.kubeconfig), "--wait", "180s"], timeout=300)
-        node = self.cluster_name + "-control-plane"
-        image = run(["docker", "inspect", "--format", "{{.Config.Image}}", node], timeout=15).stdout.strip()
-        if image != NODE_IMAGE:
-            raise RuntimeError(f"kind node image {image!r} is not exact pinned {NODE_IMAGE!r}")
-        raw = self.kubeconfig.read_text()
-        server = kubeconfig_value(raw, "server")
-        parsed = urlparse(server)
-        if parsed.scheme != "https" or parsed.hostname not in {"127.0.0.1", "localhost"} or not parsed.port:
-            raise RuntimeError(f"kind kubeconfig server is not loopback HTTPS: {server}")
-        self.api_port = parsed.port
-        self.ca_pem = base64.b64decode(kubeconfig_value(raw, "certificate-authority-data"), validate=True)
-        client_cert = base64.b64decode(kubeconfig_value(raw, "client-certificate-data"), validate=True)
-        client_key = base64.b64decode(kubeconfig_value(raw, "client-key-data"), validate=True)
-        self.api = KubernetesAPI(server, self.ca_pem, client_cert, client_key, self.root)
-        self.token, self.csr_hash, self.bundle_hash = prepare_fixtures(self.api, self.root)
+        try:
+            run([self.kind, "create", "cluster", "--name", self.cluster_name, "--image", NODE_IMAGE, "--kubeconfig", str(self.kubeconfig), "--wait", "180s"], timeout=300)
+            node = self.cluster_name + "-control-plane"
+            image = run(["docker", "inspect", "--format", "{{.Config.Image}}", node], timeout=15).stdout.strip()
+            if image != NODE_IMAGE:
+                raise RuntimeError(f"kind node image {image!r} is not exact pinned {NODE_IMAGE!r}")
+            raw = self.kubeconfig.read_text()
+            server = kubeconfig_value(raw, "server")
+            parsed = urlparse(server)
+            if parsed.scheme != "https" or parsed.hostname not in {"127.0.0.1", "localhost"} or not parsed.port:
+                raise RuntimeError(f"kind kubeconfig server is not loopback HTTPS: {server}")
+            self.api_port = parsed.port
+            self.ca_pem = base64.b64decode(kubeconfig_value(raw, "certificate-authority-data"), validate=True)
+            client_cert = base64.b64decode(kubeconfig_value(raw, "client-certificate-data"), validate=True)
+            client_key = base64.b64decode(kubeconfig_value(raw, "client-key-data"), validate=True)
+            self.api = KubernetesAPI(server, self.ca_pem, client_cert, client_key, self.root)
+            self.token, self.csr_hash, self.bundle_hash = prepare_fixtures(self.api, self.root)
+        except Exception as error:  # surfaced verbatim through the bounded config poll
+            with self.lock:
+                self.setup_error = str(error)
+        finally:
+            self.setup_done.set()
+
+    def start_async(self) -> None:
+        self.setup_thread = threading.Thread(target=self.start, name="trstctl-dod-kind-setup", daemon=True)
+        self.setup_thread.start()
 
     def stop(self) -> None:
+        if self.setup_thread is not None:
+            self.setup_thread.join(timeout=1)
         run([self.kind, "delete", "cluster", "--name", self.cluster_name], timeout=120, check=False)
         shutil.rmtree(self.root, ignore_errors=True)
 
     def config(self) -> bytes:
+        if not self.setup_done.is_set():
+            raise BlockingIOError("real kind cluster is still being prepared")
+        with self.lock:
+            if self.setup_error:
+                raise RuntimeError(self.setup_error)
         with self.lock:
             self.config_read = True
         return compact({
@@ -308,8 +342,10 @@ class State:
         if b"BEGIN CERTIFICATE" not in certificate:
             raise RuntimeError("real-kind CSR has no signed certificate status")
         csr_conditions = csr.get("status", {}).get("conditions", [])
-        if not any(item.get("type") == "Ready" and item.get("status") == "True" for item in csr_conditions):
-            raise RuntimeError("real-kind CSR was not marked Ready")
+        if not any(item.get("type") == "Approved" and item.get("status") == "True" for item in csr_conditions):
+            raise RuntimeError("real-kind CSR lost its Approved condition")
+        if any(item.get("type") == "Ready" for item in csr_conditions):
+            raise RuntimeError("real-kind CSR contains the non-native Ready condition")
         bundle = self.api.json("GET", "/apis/trstctl.com/v1alpha1/trustbundles/" + BUNDLE_NAME)
         bundle_status = bundle.get("status", {})
         if bundle_status.get("targets") != 1 or bundle_status.get("bundleSHA256") != self.bundle_hash:
@@ -350,12 +386,12 @@ class State:
             raise RuntimeError("served HTTP route did not report fresh controller-backed state")
         controllers = route.get("controllers")
         objects = route.get("objects")
-        if not isinstance(controllers, list) or len(controllers) != 1 or controllers[0].get("report_id") != report_id or controllers[0].get("cluster_id") != cluster_id:
+        if not isinstance(controllers, list) or len(controllers) != 1 or controllers[0].get("report_id") != report_id or controllers[0].get("cluster_id") != cluster_id or controllers[0].get("reconcile_complete") is not True:
             raise RuntimeError("served route is not bound to the authenticated mTLS report")
         if not isinstance(objects, list) or len(objects) != 1:
             raise RuntimeError("served route did not expose exactly the reconciled kind object")
         item = objects[0]
-        if item.get("name") != expected["name"] or item.get("uid") != expected["uid"] or item.get("state") != "ready" or item.get("public_hash") != expected["public_hash"]:
+        if item.get("name") != expected["name"] or item.get("uid") != expected["uid"] or item.get("resource_version") != expected["resource_version"] or item.get("state") != "ready" or item.get("public_hash") != expected["public_hash"]:
             raise RuntimeError("served route object does not match independent kind readback")
         ca_file = self.root / "control-plane-ca.pem"
         cert_file = self.root / "issued-csr.pem"
@@ -394,7 +430,15 @@ def handler_for(state: State):
 
         def do_GET(self) -> None:  # noqa: N802
             if self.path == "/dod/config":
-                self.send_body(200, state.config())
+                try:
+                    body = state.config()
+                except BlockingIOError as error:
+                    self.send_body(202, compact({"state": "preparing", "detail": str(error)}))
+                    return
+                except RuntimeError as error:
+                    self.send_body(503, compact({"state": "failed", "detail": str(error)}))
+                    return
+                self.send_body(200, body)
                 return
             if self.path == "/dod/readback":
                 with state.lock:
@@ -432,10 +476,10 @@ def main() -> int:
     if not all((challenge, entry_id, identity, contract_digest)):
         raise SystemExit("missing TRSTCTL_DOD_* environment")
     state = State(entry_id, identity, contract_digest)
-    state.start()
     server = LoopbackHTTPServer(("127.0.0.1", 0), handler_for(state))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
+    state.start_async()
     print(compact({
         "schema_version": 1, "challenge": challenge, "entry_id": entry_id, "identity": identity,
         "contract_digest": contract_digest, "pid": os.getpid(), "ready": True,

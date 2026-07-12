@@ -55,11 +55,15 @@ func (c *IssuerController) reconcileTrustBundles(ctx context.Context) (int, []Po
 		}
 		writes += n
 		current.PublicHash = hash
-		if err := c.markTrustBundleReady(ctx, bundle, n, hash); err != nil {
+		updated, err := c.markTrustBundleReady(ctx, bundle, n, hash)
+		if err != nil {
 			posture = append(posture, failedPosture(current))
 			return writes, posture, err
 		}
-		current = trustBundlePosture(bundle)
+		// Bind posture to the API server's post-status-update object so the
+		// reported resourceVersion is the one independently readable from the
+		// cluster after reconciliation.
+		current = trustBundlePosture(updated)
 		current.State, current.Reason, current.PublicHash = "ready", "distributed", hash
 		posture = append(posture, current)
 	}
@@ -202,7 +206,7 @@ func configMapObject(meta map[string]any, data map[string]string) map[string]any
 	}
 }
 
-func (c *IssuerController) markTrustBundleReady(ctx context.Context, obj map[string]any, targets int, hash string) error {
+func (c *IssuerController) markTrustBundleReady(ctx context.Context, obj map[string]any, targets int, hash string) (map[string]any, error) {
 	name := objectName(obj)
 	status, _ := obj["status"].(map[string]any)
 	if status == nil {
@@ -215,12 +219,16 @@ func (c *IssuerController) markTrustBundleReady(ctx context.Context, obj map[str
 
 	st, body, err := c.client.request(ctx, http.MethodPut, trustBundleCollectionPath()+"/"+name+"/status", obj)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if st/100 != 2 {
-		return fmt.Errorf("k8s: update trstctl TrustBundle %s status: %d: %s", name, st, string(body))
+		return nil, fmt.Errorf("k8s: update trstctl TrustBundle %s status: %d: %s", name, st, string(body))
 	}
-	return nil
+	var updated map[string]any
+	if err := json.Unmarshal(body, &updated); err != nil {
+		return nil, fmt.Errorf("k8s: decode updated trstctl TrustBundle %s: %w", name, err)
+	}
+	return updated, nil
 }
 
 func upsertTrustBundleReady(existing any, targets int) []any {

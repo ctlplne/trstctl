@@ -11,14 +11,14 @@ unilaterally stand up or rotate a CA.
 > certificate, generates a signer-held intermediate CSR, and imports the
 > offline-root-signed intermediate. The served path still keeps online CA private
 > keys in the isolated signer process and stores only signer handles in the control
-> plane; the offline root private key never enters trstctl. Rotation and
-> cross-signing remain split: zero-downtime successor activation is served at
-> `POST /api/v1/ca/authorities/{id}/rotate`, while cross-signing remains an
-> operator procedure. Online m-of-n break-glass issuance is not
-> production-assembled; the existing route has no configured issuer and its
-> caller-supplied names are not independent approval artifacts. Bundle reconciliation is served separately at
-> `POST /api/v1/breakglass/reconcile` so operators can verify signed emergency
-> bundles into the audit chain after recovery.
+> plane; the offline root private key never enters trstctl. Zero-downtime successor
+> activation, signer-backed cross-signing, offline-root public re-key/cross-sign
+> import, and configured online break-glass issue/rotation/cross-sign are all served.
+> Online approvals are derived only from authenticated immutable ceremony-event
+> actors in the configured roster; execution bodies cannot nominate approvers.
+> Bundle reconciliation remains available at `POST /api/v1/breakglass/reconcile`
+> so operators can verify signed emergency bundles into the audit chain after
+> recovery.
 > The **assembled issuing CA's key is now persisted, sealed at rest** (R3.2): the
 > signer reloads it after a restart, so the CA is not silently rotated (see
 > [Configuration -> Signer](../configuration.md#signer-topology--ca-custody) and
@@ -55,6 +55,11 @@ Purpose values are deliberately concrete:
   first certificate.
 - `cross-sign:<ca-id>:<sha256-of-target-cert-der>` authorizes one cross-signature
   from that CA over that exact target certificate.
+- `offline-root-rekey:<sha256-of-authority/successor/both-cross-certs/reason/spec>`
+  authorizes importing one offline-root successor plus both direction-specific
+  cross-certificates. The private keys stay on the disconnected root systems.
+- `offline-cross-sign:<sha256-of-authority/target/cross-cert>` authorizes importing
+  one already-produced offline-root cross-certificate for an exact target.
 
 The mechanism, in the hierarchy manager:
 
@@ -64,8 +69,9 @@ The mechanism, in the hierarchy manager:
   returns the running approval count. Approvals are de-duplicated per custodian.
 - `CreateRoot` / `CreateIntermediate` / `ImportOfflineRoot` /
   `ImportExisting` / `CreateOfflineIntermediateCSR` /
-  `ImportOfflineIntermediate` / `Rotate` / `CrossSign` are **gated on
-  purpose-bound quorum**. CA mutations lock the pending
+  `ImportOfflineIntermediate` / `Rotate` / `CrossSignAuthority` /
+  `RekeyOfflineRoot` / `ImportOfflineRootCrossSign` are **gated on purpose-bound
+  quorum**. CA mutations lock the pending
   ceremony, check quorum and exact purpose, and mark it completed in the same
   database transaction as the mutation. `CreateOfflineIntermediateCSR` checks the
   same quorum and purpose before creating the signer-held key, and
@@ -239,9 +245,10 @@ the predecessor's stable issue URL.
    until their normal expiry or revocation.
 4. If your hierarchy requires cross-signing the new CA, **open a separate
    `cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony** and collect its *m*
-   approvals — `CrossSign` is refused until quorum and exact target-certificate
-   match, exactly like the create/rotate operations. Then distribute the new CA and
-   renew issuance under it.
+   approvals. Submit the ceremony id and the exact target certificate to
+   `POST /api/v1/ca/authorities/{issuer-id}/cross-sign`; the route is refused until
+   quorum and exact target-certificate match. Independently verify the returned
+   certificate against the issuer before distributing the new chain.
 5. Retire the old key per your policy (and per the
    [incident-response runbook](incident-response.md) if the rotation is
    compromise-driven).
@@ -250,8 +257,8 @@ the predecessor's stable issue URL.
 
 Use re-key when the authority should keep the same logical lane but receive a fresh
 CA key and certificate. The served path covers signer-backed online roots and
-intermediates; offline-root key use and cross-sign distribution stay outside the
-binary.
+intermediates. Offline-root private operations stay outside the binary, while the
+served import path verifies their public successor and cross-certificates.
 
 1. Start a ceremony with `POST /api/v1/ca/ceremonies`:
 
@@ -284,6 +291,57 @@ binary.
 4. Verify the stable predecessor issue URL and the fresh successor issue URL both
    return chains signed by the fresh successor CA.
 
+## Procedure: re-keying an offline root
+
+The disconnected root system performs every private operation. trstctl receives
+only public certificates and refuses a private-key PEM block.
+
+1. On the offline systems, create a self-signed successor root with constraints no
+   wider than the predecessor. Produce both cross-certificates: successor signed by
+   predecessor, and predecessor signed by successor.
+2. Start `operation=rekey_offline_root` at `POST /api/v1/ca/ceremonies`. Bind
+   `authority_id`, the successor in `certificate_pem`, the two direction-specific
+   certificates in `cross_certificate_pem` and
+   `reverse_cross_certificate_pem`, the reason, threshold, and exact `CASpec`.
+3. Collect distinct authenticated approvals at
+   `POST /api/v1/ca/ceremonies/{ceremony-id}/approvals`.
+4. POST the same public package plus `ceremony_id` to
+   `/api/v1/ca/authorities/{predecessor-id}/offline-rekey`. trstctl verifies both
+   signatures, overlapping validity, key usages, EKUs, DNS/path constraints,
+   subject/public keys, SKI, and AKI before it supersedes the predecessor and records
+   `ca.authority.rekeyed`.
+5. Verify both returned cross chains with a client independent of trstctl, for
+   example `openssl verify`, before distributing either trust path.
+6. To import a target CA cross-certificate produced by the new offline root, open
+   `operation=import_offline_cross_sign` bound to the successor authority, target,
+   and cross-certificate; collect quorum; then POST the same public values to
+   `/api/v1/ca/authorities/{successor-id}/offline-cross-signs`.
+
+## Procedure: online break-glass issue and CA rotation
+
+Bootstrap the authority through the served `ca ceremonies start` / `ca ceremonies
+approve` / `ca authorities create-root` commands while online break-glass is off.
+Save the returned certificate and signer handle, derive the public-key file from
+that certificate, then enable the online block. Set one tenant, a distinct
+operator-subject roster, and a threshold of at least two; see
+[Configuration](../configuration.md#break-glass-lifecycle-and-reconciliation).
+
+1. Start an issuance ceremony with `trstctl-cli breakglass issue-ceremony -f
+   issue-intent.json`. The intent contains request id, subject, CSR, reason, and TTL,
+   but no approver names.
+2. Have distinct configured operators run `trstctl-cli ca ceremonies approve
+   <ceremony-id>` using their own authenticated tokens.
+3. Add only `ceremony_id` to the exact approved intent and run `trstctl-cli
+   breakglass issue -f issue.json`. Any changed CSR/reason/TTL, sub-quorum, wrong
+   tenant, or reused ceremony fails closed.
+4. Rotate with the same two-phase pattern: `breakglass rotation-ceremony`, approvals,
+   then `breakglass rotate`. Independently validate the returned new-by-previous and
+   previous-by-new cross-certificates and retain both verifier certificates for the
+   overlap window.
+5. Cross-sign an external target with `breakglass cross-sign-ceremony`, approvals,
+   then `breakglass cross-sign`. The target certificate digest is part of the
+   ceremony purpose, so swapping the target after approval fails.
+
 ## Custodian hygiene
 
 - Custodians should be distinct people with independent credentials; do not let one
@@ -293,7 +351,6 @@ binary.
 - Treat every approval as a logged, attributable action (it is recorded against the
   ceremony).
 
-See [Current limitations](../limitations.md) for the remaining rotation,
-cross-signing, non-extractable HSM/KMS-resident CA-key, and online break-glass
-issuance gaps, and [Disaster recovery](../disaster-recovery.md) for CA-key loss
-handling.
+See [Current limitations](../limitations.md) for the remaining local in-process key
+lifecycle and deployment-specific custody qualifications, and
+[Disaster recovery](../disaster-recovery.md) for CA-key loss handling.

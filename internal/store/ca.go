@@ -234,7 +234,7 @@ func (s *Store) ApplyCAAuthorityCreatedTx(ctx context.Context, tx pgx.Tx, author
 // ApplyCAAuthorityRekeyedTx projects a ca.authority.rekeyed event into the CA
 // hierarchy read model. The event owns the successor id and public certificate
 // bytes, so replay never invents a different CA row for the same re-key ceremony.
-func (s *Store) ApplyCAAuthorityRekeyedTx(ctx context.Context, tx pgx.Tx, successor CAAuthority, predecessorID string) error {
+func (s *Store) ApplyCAAuthorityRekeyedTx(ctx context.Context, tx pgx.Tx, successor CAAuthority, predecessorID, ceremonyID string) error {
 	if successor.CreatedAt.IsZero() {
 		successor.CreatedAt = time.Now().UTC()
 	}
@@ -253,7 +253,13 @@ func (s *Store) ApplyCAAuthorityRekeyedTx(ctx context.Context, tx pgx.Tx, succes
 	if tag.RowsAffected() != 1 {
 		return pgx.ErrNoRows
 	}
-	return applyCAAuthorityUpsertTx(ctx, tx, successor)
+	if err := applyCAAuthorityUpsertTx(ctx, tx, successor); err != nil {
+		return err
+	}
+	if ceremonyID != "" {
+		return s.ApplyKeyCeremonyCompletedTx(ctx, tx, successor.TenantID, ceremonyID, successor.CreatedAt)
+	}
+	return nil
 }
 
 func applyCAAuthorityUpsertTx(ctx context.Context, tx pgx.Tx, authority CAAuthority) error {
@@ -321,10 +327,10 @@ type KeyCeremony struct {
 // to an immutable ca.ceremony.approved event. Rows without both event id and
 // sequence are deliberately absent from this view and have no quorum power.
 type KeyCeremonyApprovalEvidence struct {
-	Custodian    string
-	EventID      string
+	Custodian     string
+	EventID       string
 	EventSequence uint64
-	ApprovedAt   time.Time
+	ApprovedAt    time.Time
 }
 
 // ErrSelfApproval is returned when a ceremony's opener attempts to approve their
@@ -600,6 +606,29 @@ func (s *Store) CompleteKeyCeremony(ctx context.Context, tenantID, id string) er
 	})
 }
 
+// ApplyKeyCeremonyCompletedTx projects a result event's ceremony consumption.
+// Pending and already-completed are both accepted so replay is idempotent.
+func (s *Store) ApplyKeyCeremonyCompletedTx(ctx context.Context, tx pgx.Tx, tenantID, id string, completedAt time.Time) error {
+	if id == "" {
+		return errors.New("store: projected ceremony id is required")
+	}
+	if completedAt.IsZero() {
+		completedAt = time.Now().UTC()
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE ca_key_ceremonies
+		    SET status = 'completed', completed_at = $3
+		  WHERE tenant_id = $1 AND id = $2 AND status IN ('pending', 'completed')`,
+		tenantID, id, completedAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrKeyCeremonyNotPending
+	}
+	return nil
+}
+
 // ConsumeKeyCeremonyTx validates and completes a key ceremony on the caller's
 // transaction. This is the atomic governance primitive for CA mutations: the CA
 // row write and the ceremony status change commit or roll back together, and a
@@ -615,6 +644,19 @@ func (s *Store) ConsumeKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, i
 // single-use status transition, so an online signer cannot race a separate
 // approval read or accidentally bind a different set of custodians.
 func (s *Store) ConsumeKeyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx, tenantID, id, expectedPurpose string) (KeyCeremony, []KeyCeremonyApprovalEvidence, error) {
+	return s.keyCeremonyWithApprovalEvidenceTx(ctx, tx, tenantID, id, expectedPurpose, true)
+}
+
+// ValidateKeyCeremonyWithApprovalEvidenceTx locks and validates a ceremony but
+// leaves completion to the event projector. Event-sourced commands use this
+// form: append the immutable result event, then project that same event to
+// consume the ceremony. If SQL commit fails after append, replay still converges
+// the ceremony to completed instead of leaving source truth and read state split.
+func (s *Store) ValidateKeyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx, tenantID, id, expectedPurpose string) (KeyCeremony, []KeyCeremonyApprovalEvidence, error) {
+	return s.keyCeremonyWithApprovalEvidenceTx(ctx, tx, tenantID, id, expectedPurpose, false)
+}
+
+func (s *Store) keyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx, tenantID, id, expectedPurpose string, consume bool) (KeyCeremony, []KeyCeremonyApprovalEvidence, error) {
 	var c KeyCeremony
 	if err := tx.QueryRow(ctx,
 		`SELECT c.id::text, c.tenant_id::text, c.purpose, c.threshold, c.status, c.opener, c.created_at,
@@ -669,6 +711,9 @@ func (s *Store) ConsumeKeyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx
 	rows.Close()
 	if len(evidence) != c.Approvals {
 		return c, nil, errors.New("store: ceremony approval evidence count changed while locked")
+	}
+	if !consume {
+		return c, evidence, nil
 	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE ca_key_ceremonies

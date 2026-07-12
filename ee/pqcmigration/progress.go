@@ -20,10 +20,21 @@ import (
 )
 
 const (
+	EventTLSFindingPrepared          = "licensed_crypto.migration.tls_finding_prepared"
 	EventTLSFindingCompleted         = "licensed_crypto.migration.tls_finding_completed"
 	EventTLSFindingRollbackCompleted = "licensed_crypto.migration.tls_finding_rollback_completed"
 	EventTLSFindingFailed            = "licensed_crypto.migration.tls_finding_failed"
 )
+
+type TLSFindingPrepared struct {
+	RunID          string               `json:"run_id"`
+	AssetID        string               `json:"asset_id"`
+	FindingKind    string               `json:"finding_kind"`
+	TargetID       string               `json:"target_id"`
+	TargetRevision string               `json:"target_revision"`
+	Connector      string               `json:"connector"`
+	Previous       connector.TLSPosture `json:"previous"`
+}
 
 const (
 	TLSFindingQueued         = "queued"
@@ -100,6 +111,11 @@ type ProgressProjection struct {
 	store *store.Store
 	mu    sync.RWMutex
 	items map[progressKey]FindingProgress
+	// Package-private projection hooks let restart/replay tests exercise the
+	// event fold without starting PostgreSQL. Production leaves them nil and
+	// always projects CBOM rows through Store under tenant RLS.
+	projectCompletedHook func(context.Context, eventspec.Event, TLSFindingCompleted) error
+	projectRollbackHook  func(context.Context, eventspec.Event, TLSFindingRollbackCompleted) error
 }
 
 func NewProgressProjection(st *store.Store) *ProgressProjection {
@@ -133,6 +149,12 @@ func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) erro
 			return err
 		}
 		p.applyStarted(ev, started)
+	case EventTLSFindingPrepared:
+		var prepared TLSFindingPrepared
+		if err := json.Unmarshal(ev.Data, &prepared); err != nil {
+			return err
+		}
+		p.applyPrepared(ev, prepared)
 	case EventTLSFindingCompleted:
 		var completed TLSFindingCompleted
 		if err := json.Unmarshal(ev.Data, &completed); err != nil {
@@ -161,6 +183,21 @@ func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) erro
 	return nil
 }
 
+func (p *ProgressProjection) applyPrepared(ev eventspec.Event, prepared TLSFindingPrepared) {
+	previous := clonePosture(prepared.Previous)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	key := progressKey{tenantID: ev.TenantID, runID: prepared.RunID, assetID: prepared.AssetID}
+	item := p.items[key]
+	item.RunID, item.AssetID, item.FindingKind = prepared.RunID, prepared.AssetID, prepared.FindingKind
+	item.TargetID, item.TargetRevision, item.Connector = prepared.TargetID, prepared.TargetRevision, prepared.Connector
+	item.Previous, item.UpdatedAt = &previous, eventTime(ev)
+	if item.Status == "" {
+		item.Status = TLSFindingQueued
+	}
+	p.items[key] = item
+}
+
 func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projections.LicensedCryptoMigrationStarted) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -178,6 +215,9 @@ func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projection
 }
 
 func (p *ProgressProjection) projectCompleted(ctx context.Context, ev eventspec.Event, completed TLSFindingCompleted) error {
+	if p.projectCompletedHook != nil {
+		return p.projectCompletedHook(ctx, ev, completed)
+	}
 	intent := completed.Intent
 	if p.store == nil || intent.RunID == "" || intent.AssetID == "" {
 		return fmt.Errorf("pqcmigration: TLS completion requires store, run_id, and asset_id")
@@ -216,6 +256,9 @@ func (p *ProgressProjection) applyCompleted(ev eventspec.Event, completed TLSFin
 }
 
 func (p *ProgressProjection) projectRollback(ctx context.Context, ev eventspec.Event, completed TLSFindingRollbackCompleted) error {
+	if p.projectRollbackHook != nil {
+		return p.projectRollbackHook(ctx, ev, completed)
+	}
 	if p.store == nil || completed.RunID == "" || len(completed.Restores) == 0 {
 		return fmt.Errorf("pqcmigration: TLS rollback completion requires store, run_id, and restores")
 	}

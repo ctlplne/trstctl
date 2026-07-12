@@ -106,6 +106,7 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			name := nameBeforeStatus(path)
 			var obj map[string]any
 			_ = json.Unmarshal(body, &obj)
+			obj["metadata"].(map[string]any)["resourceVersion"] = "21"
 			f.kubernetesCSRStatus[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
 		case r.Method == http.MethodGet && path == "/apis/trstctl.com/v1alpha1/trustbundles":
@@ -118,6 +119,7 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			name := nameBeforeStatus(path)
 			var obj map[string]any
 			_ = json.Unmarshal(body, &obj)
+			obj["metadata"].(map[string]any)["resourceVersion"] = "31"
 			f.trustBundleStatus[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
 		case r.Method == http.MethodGet && path == "/apis/trstctl.com/v1alpha1/namespaces/apps/certificates":
@@ -465,7 +467,7 @@ func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *te
 		t.Fatalf("Kubernetes CSR posture = %+v complete=%v, want one completed object", result.KubernetesCSRPosture, result.KubernetesCSRComplete)
 	}
 	csrPosture := result.KubernetesCSRPosture[0]
-	if csrPosture.Name != "native-csr" || csrPosture.UID != "csr-uid-native-csr" || csrPosture.ResourceVersion != "20" || csrPosture.State != "ready" || csrPosture.Reason != "signed" || len(csrPosture.PublicHash) != 64 {
+	if csrPosture.Name != "native-csr" || csrPosture.UID != "csr-uid-native-csr" || csrPosture.ResourceVersion != "21" || csrPosture.State != "ready" || csrPosture.Reason != "signed" || len(csrPosture.PublicHash) != 64 {
 		t.Fatalf("Kubernetes CSR posture = %+v, want metadata-only signed receipt", csrPosture)
 	}
 	reportJSON, err := json.Marshal(result.PostureReport(controllerClusterID(), 30*time.Second))
@@ -476,9 +478,13 @@ func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *te
 		t.Fatalf("controller posture report carried CSR bytes instead of its public hash: %s", reportJSON)
 	}
 
-	ready, cert := readyCondition(t, api.kubernetesCSRStatus["native-csr"])
-	if ready != "True" {
-		t.Fatalf("CertificateSigningRequest Ready = %q, want True", ready)
+	statusObject := api.kubernetesCSRStatus["native-csr"]
+	approved, cert := conditionAndCertificate(t, statusObject, "Approved")
+	if approved != "True" {
+		t.Fatalf("CertificateSigningRequest Approved = %q, want preserved True", approved)
+	}
+	if ready, _ := conditionAndCertificate(t, statusObject, "Ready"); ready != "" {
+		t.Fatalf("native CertificateSigningRequest wrote non-Kubernetes Ready condition %q", ready)
 	}
 	decoded, err := base64.StdEncoding.DecodeString(cert)
 	if err != nil {
@@ -487,6 +493,21 @@ func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *te
 	if block, _ := pem.Decode(decoded); block == nil || block.Type != "CERTIFICATE" {
 		t.Fatalf("status.certificate does not contain a PEM certificate")
 	}
+}
+
+func conditionAndCertificate(t *testing.T, obj map[string]any, conditionType string) (string, string) {
+	t.Helper()
+	status, _ := obj["status"].(map[string]any)
+	certificate, _ := status["certificate"].(string)
+	conditions, _ := status["conditions"].([]any)
+	for _, raw := range conditions {
+		condition, _ := raw.(map[string]any)
+		if condition["type"] == conditionType {
+			value, _ := condition["status"].(string)
+			return value, certificate
+		}
+	}
+	return "", certificate
 }
 
 func TestIssuerControllerDistributesTrustBundlesCAPK8S07(t *testing.T) {
@@ -509,7 +530,7 @@ func TestIssuerControllerDistributesTrustBundlesCAPK8S07(t *testing.T) {
 		t.Fatalf("TrustBundle posture = %+v complete=%v, want one completed object", result.TrustBundlePosture, result.TrustBundleComplete)
 	}
 	bundlePosture := result.TrustBundlePosture[0]
-	if bundlePosture.Name != "platform-roots" || bundlePosture.UID != "bundle-uid-platform-roots" || bundlePosture.ResourceVersion != "30" || bundlePosture.State != "ready" || bundlePosture.Reason != "distributed" || len(bundlePosture.PublicHash) != 64 {
+	if bundlePosture.Name != "platform-roots" || bundlePosture.UID != "bundle-uid-platform-roots" || bundlePosture.ResourceVersion != "31" || bundlePosture.State != "ready" || bundlePosture.Reason != "distributed" || len(bundlePosture.PublicHash) != 64 {
 		t.Fatalf("TrustBundle posture = %+v, want metadata-only distribution receipt", bundlePosture)
 	}
 	report := result.PostureReport(controllerClusterID(), 30*time.Second)

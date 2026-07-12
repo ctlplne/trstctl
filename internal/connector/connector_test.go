@@ -149,3 +149,64 @@ func TestConformanceFailsForBrokenOrPowerlessConnector(t *testing.T) {
 		t.Error("a connector with no declared capabilities passed conformance")
 	}
 }
+
+type postureProbeConnector struct {
+	current   connector.TLSPosture
+	mutations int
+}
+
+func (*postureProbeConnector) Name() string { return "posture-probe" }
+func (*postureProbeConnector) Capabilities() pluginhost.Grant {
+	return pluginhost.NewGrant(pluginhost.CapNetDial)
+}
+func (*postureProbeConnector) Deploy(context.Context, connector.Sandbox, connector.Deployment) error {
+	return nil
+}
+func (p *postureProbeConnector) ReadTLSPosture(context.Context, connector.Sandbox, string) (connector.TLSPosture, error) {
+	return p.current, nil
+}
+func (p *postureProbeConnector) ApplyTLSPosture(_ context.Context, _ connector.Sandbox, _ string, desired connector.TLSPosture) error {
+	p.current = desired
+	p.mutations++
+	return nil
+}
+
+func TestTLSPosturePreparedRetryPreservesOriginalAndRejectsDrift(t *testing.T) {
+	legacy := connector.TLSPosture{
+		MinimumVersion: "TLSv1.0", CipherSuites: []string{"TLS_RSA_WITH_AES_128_CBC_SHA"},
+		KeyExchangeGroups: []string{"secp256r1"},
+	}
+	desired := connector.TLSPosture{
+		MinimumVersion: connector.TLSVersion13, CipherSuites: []string{"TLS_AES_256_GCM_SHA384"},
+		KeyExchangeGroups: []string{"receiver-native-group", "X25519"},
+	}
+	probe := &postureProbeConnector{current: legacy}
+	registry := connector.NewRegistry(func(string) connector.Ops { return connector.NewMemoryOps() })
+	registry.Register(probe)
+	if err := registry.MarkTLSPostureCapable(probe.Name()); err != nil {
+		t.Fatal(err)
+	}
+	mutation := connector.TLSPostureMutation{
+		RunID: "run-a", FindingID: "finding-a", FindingKind: "protocol",
+		TargetID: "target-a", TargetRevision: "revision-a", Connector: probe.Name(),
+		Target: "listener-a", Desired: desired, ExpectedPrevious: &legacy, TenantID: "tenant-a",
+	}
+	first, err := registry.ApplyTLSPosture(context.Background(), mutation)
+	if err != nil || !first.Applied || probe.mutations != 1 {
+		t.Fatalf("first apply receipt=%+v mutations=%d err=%v", first, probe.mutations, err)
+	}
+	retry, err := registry.ApplyTLSPosture(context.Background(), mutation)
+	if err != nil || retry.Applied || probe.mutations != 1 || !connector.EqualTLSPosture(retry.Previous, legacy) {
+		t.Fatalf("ambiguous retry receipt=%+v mutations=%d err=%v", retry, probe.mutations, err)
+	}
+	probe.current = connector.TLSPosture{
+		MinimumVersion: connector.TLSVersion12, CipherSuites: []string{"TLS_AES_128_GCM_SHA256"},
+		KeyExchangeGroups: []string{"X25519"},
+	}
+	if _, err := registry.ApplyTLSPosture(context.Background(), mutation); err == nil {
+		t.Fatal("prepared mutation overwrote receiver drift")
+	}
+	if probe.mutations != 1 {
+		t.Fatalf("drift conflict still mutated receiver %d times", probe.mutations)
+	}
+}

@@ -3,6 +3,12 @@
   "contract": "trstctl.kubernetes.controller-posture.kind.v1",
   "kind": {
     "version": "v0.31.0",
+    "binary_sha256": {
+      "darwin_amd64": "a8b3cf77b2ad77aec5bf710d1a2589d9117576132af812885cad41e9dede4d4e",
+      "darwin_arm64": "88bf554fe9da6311c9f8c2d082613c002911a476f6b5090e9420b35d84e70c5c",
+      "linux_amd64": "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa",
+      "linux_arm64": "8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4"
+    },
     "node_image": "kindest/node:v1.31.14@sha256:6f86cf509dbb42767b6e79debc3f2c32e4ee01386f0489b3b2be24b0a55aac2b",
     "topology": "one disposable control-plane node",
     "verification": "the substrate rejects a running node whose Docker Config.Image is not the exact digest-pinned reference"
@@ -22,8 +28,8 @@
     "an authenticated GET reads the production-wired API option for the selected route"
   ],
   "independent_readback": {
-    "certificate_signing_requests": "the substrate reads status.certificate and Ready from the real CSR, verifies its chain with OpenSSL, and binds name/UID/CSR hash to the served route",
-    "trust_bundles": "the substrate reads TrustBundle Ready/targets/hash and the independently written ConfigMap, then binds name/UID/bundle hash to the served route",
+    "certificate_signing_requests": "the substrate reads status.certificate and preserved Approved from the real CSR, rejects a non-native Ready condition, verifies the chain with OpenSSL, and binds name/UID/resourceVersion/CSR hash to the served route",
+    "trust_bundles": "the substrate reads TrustBundle Ready/targets/hash and the independently written ConfigMap, then binds name/UID/resourceVersion/bundle hash to the served route",
     "report_binding": "route controller_id, cluster_id, and report_id must identify the authenticated mTLS report produced from that reconcile"
   },
   "completion": "passed requires exact kind image identity, real controller mutations, authenticated mTLS event projection, served HTTP readback, and independent Kubernetes/OpenSSL verification"

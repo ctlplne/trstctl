@@ -156,10 +156,14 @@ func TestAgentRBACAllowsNativeKubernetesCSRStatusUpdates(t *testing.T) {
 	}{
 		{group: "certificates.k8s.io", resource: "certificatesigningrequests", verbs: []string{"get", "list", "watch"}},
 		{group: "certificates.k8s.io", resource: "certificatesigningrequests/status", verbs: []string{"update", "patch"}},
+		{group: "certificates.k8s.io", resource: "signers", verbs: []string{"sign"}},
 	} {
 		if !hasClusterRoleRule(role, tc.group, tc.resource, tc.verbs...) {
 			t.Fatalf("ClusterRole missing %s %s verbs %v for CAP-K8S-04 native Kubernetes CSR support", tc.group, tc.resource, tc.verbs)
 		}
+	}
+	if !hasNamedClusterRoleRule(role, "certificates.k8s.io", "signers", "trstctl.com/trstctl", "sign") {
+		t.Fatal("ClusterRole signer grant is not bound to the exact shipped trstctl.com/trstctl signerName")
 	}
 }
 
@@ -550,6 +554,27 @@ func clusterRole(t *testing.T) map[string]any {
 func hasClusterRoleRule(role map[string]any, group, resource string, verbs ...string) bool {
 	for _, rule := range asMaps(role["rules"]) {
 		if !contains(asStringSlice(rule["apiGroups"]), group) || !contains(asStringSlice(rule["resources"]), resource) {
+			continue
+		}
+		gotVerbs := asStringSlice(rule["verbs"])
+		all := true
+		for _, verb := range verbs {
+			if !contains(gotVerbs, verb) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+func hasNamedClusterRoleRule(role map[string]any, group, resource, resourceName string, verbs ...string) bool {
+	for _, rule := range asMaps(role["rules"]) {
+		if !contains(asStringSlice(rule["apiGroups"]), group) || !contains(asStringSlice(rule["resources"]), resource) ||
+			!contains(asStringSlice(rule["resourceNames"]), resourceName) {
 			continue
 		}
 		gotVerbs := asStringSlice(rule["verbs"])

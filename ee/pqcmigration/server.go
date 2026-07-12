@@ -3,6 +3,7 @@
 package pqcmigration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,8 +32,8 @@ import (
 const (
 	licensedCryptoMigrationReissueDestination     = "licensed_crypto.migration.reissue"
 	licensedCryptoMigrationRollbackDestination    = "licensed_crypto.migration.rollback"
-	licensedCryptoMigrationTLSPostureDestination  = "licensed_crypto.migration.tls_posture"
-	licensedCryptoMigrationTLSRollbackDestination = "licensed_crypto.migration.tls_posture.rollback"
+	licensedCryptoMigrationTLSPostureDestination  = "connector.licensed_crypto.migration.tls_posture"
+	licensedCryptoMigrationTLSRollbackDestination = "connector.licensed_crypto.migration.tls_posture.rollback"
 	eventTLSRollbackRequested                     = "licensed_crypto.migration.tls_posture.rollback_requested"
 )
 
@@ -66,11 +67,14 @@ type outboxHandler struct {
 	deployer     connector.TLSPostureDeployer
 	progress     *ProgressProjection
 	integrityKey seal.KeyWrapper
-	// The two hooks are package-private crash/retry seams used by adversarial
+	// These hooks are package-private crash/retry seams used by adversarial
 	// tests. Production factories always leave them nil and use the durable
 	// idempotency ledger plus event log/store projector.
-	idempotencyDo func(context.Context, string, string, func(context.Context) ([]byte, error)) ([]byte, error)
-	appendEvent   func(context.Context, string, string, any) error
+	idempotencyDo   func(context.Context, string, string, func(context.Context) ([]byte, error)) ([]byte, error)
+	appendEvent     func(context.Context, string, string, any) error
+	lookupPrepared  func(context.Context, string, pqcMigrationTLSPosturePayload) (connector.TLSPosture, bool, error)
+	lookupCompleted func(context.Context, string, pqcMigrationTLSPosturePayload, []byte) (TLSFindingCompleted, bool, error)
+	afterTLSApply   func() error
 }
 
 func (h *outboxHandler) doIdempotent(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
@@ -219,11 +223,8 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req AP
 		if err != nil {
 			return Response{}, err
 		}
-		if !target.Enabled || target.RevisionID == "" || target.Type == "" || target.Name == "" {
-			return Response{}, fmt.Errorf("pqcmigration: deployment target %s is disabled or incomplete", target.ID)
-		}
-		if !s.deployer.SupportsTLSPosture(target.Type) {
-			return Response{}, fmt.Errorf("pqcmigration: deployment target %s connector %s does not support TLS posture mutation", target.ID, target.Type)
+		if err := validateTLSRolloutTarget(target, s.deployer); err != nil {
+			return Response{}, err
 		}
 		if prior, exists := targetPostures[target.ID]; exists && !connector.EqualTLSPosture(prior, rollout.Desired) {
 			return Response{}, fmt.Errorf("pqcmigration: findings bound to target %s request conflicting TLS postures", target.ID)
@@ -251,6 +252,9 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req AP
 		if err != nil {
 			return Response{}, err
 		}
+		// The event is the crash-recovery owner of the exact ciphertext, never a
+		// second plaintext copy of redirect-capable connector configuration.
+		tlsPayloads[i].TargetConfig = nil
 		tlsPayloads[i].SealedOutboxPayload = append(json.RawMessage(nil), sealedPayload...)
 	}
 	protocol := req.Protocol
@@ -317,6 +321,19 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req AP
 	}, nil
 }
 
+func validateTLSRolloutTarget(target store.DeploymentTarget, deployer connector.TLSPostureDeployer) error {
+	if deployer == nil {
+		return errors.New("pqcmigration: TLS posture deployer is not configured")
+	}
+	if !target.Enabled || target.ID == "" || target.RevisionID == "" || target.Type == "" || target.Name == "" {
+		return fmt.Errorf("pqcmigration: deployment target %s is disabled or incomplete", target.ID)
+	}
+	if !deployer.SupportsTLSPosture(target.Type) {
+		return fmt.Errorf("pqcmigration: deployment target %s connector %s does not support TLS posture mutation", target.ID, target.Type)
+	}
+	return nil
+}
+
 func (s *pqcMigrationService) Progress(ctx context.Context, tenantID, runID string) (RunProgressResponse, error) {
 	if s.log == nil || s.progress == nil || tenantID == "" || runID == "" {
 		return RunProgressResponse{}, pgx.ErrNoRows
@@ -367,17 +384,33 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 	}
 	wanted := make(map[string]bool, len(req.AssetIDs))
 	for _, id := range req.AssetIDs {
+		if id == "" || wanted[id] {
+			return RollbackResponse{}, errors.New("pqcmigration: rollback asset ids must be non-empty and unique")
+		}
 		wanted[id] = true
 	}
 	certCompleted := make(map[string]projections.LicensedCryptoMigrationAssetCompleted)
+	tlsStarted := make(map[string]projections.LicensedCryptoMigrationTLSPosture)
+	tlsPrepared := make(map[string]TLSFindingPrepared)
 	tlsCompleted := make(map[string]TLSFindingCompleted)
 	tlsSequence := make(map[string]uint64)
+	tlsFailed := make(map[string]bool)
 	rolledBack := make(map[string]bool)
 	if err := s.log.Replay(ctx, 0, func(e events.Event) error {
 		if e.TenantID != tenantID {
 			return nil
 		}
 		switch e.Type {
+		case projections.EventLicensedCryptoMigrationStarted:
+			var started projections.LicensedCryptoMigrationStarted
+			if err := json.Unmarshal(e.Data, &started); err != nil {
+				return err
+			}
+			if started.RunID == runID {
+				for _, intent := range started.TLSPostures {
+					tlsStarted[intent.AssetID] = intent
+				}
+			}
 		case projections.EventLicensedCryptoMigrationAssetCompleted:
 			var completed projections.LicensedCryptoMigrationAssetCompleted
 			if err := json.Unmarshal(e.Data, &completed); err != nil {
@@ -403,6 +436,14 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 				tlsCompleted[completed.Intent.AssetID] = completed
 				tlsSequence[completed.Intent.AssetID] = e.Sequence
 			}
+		case EventTLSFindingPrepared:
+			var prepared TLSFindingPrepared
+			if err := json.Unmarshal(e.Data, &prepared); err != nil {
+				return err
+			}
+			if prepared.RunID == runID {
+				tlsPrepared[prepared.AssetID] = prepared
+			}
 		case EventTLSFindingRollbackCompleted:
 			var completed TLSFindingRollbackCompleted
 			if err := json.Unmarshal(e.Data, &completed); err != nil {
@@ -412,6 +453,14 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 				for _, restore := range completed.Restores {
 					rolledBack[restore.AssetID] = true
 				}
+			}
+		case EventTLSFindingFailed:
+			var failed TLSFindingFailure
+			if err := json.Unmarshal(e.Data, &failed); err != nil {
+				return err
+			}
+			if failed.RunID == runID {
+				tlsFailed[failed.AssetID] = true
 			}
 		}
 		return nil
@@ -454,6 +503,9 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 	}
 	tlsPayloads := make([]pqcMigrationTLSRollbackPayload, 0, len(groups))
 	for targetID, group := range groups {
+		if err := validateTLSRollbackTargetReady(targetID, tlsStarted, tlsCompleted, tlsFailed, rolledBack); err != nil {
+			return RollbackResponse{}, err
+		}
 		sort.Slice(group.completed, func(i, j int) bool {
 			return group.completed[i].Intent.AssetID < group.completed[j].Intent.AssetID
 		})
@@ -470,16 +522,27 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 			return RollbackResponse{}, fmt.Errorf("pqcmigration: rollback must include every applied finding bound to target %s", targetID)
 		}
 		first := group.first
+		prepared, ok := tlsPrepared[first.Intent.AssetID]
+		if !ok || prepared.TargetID != first.Intent.TargetID || prepared.TargetRevision != first.Intent.TargetRevision ||
+			!connector.EqualTLSPosture(prepared.Previous, first.Receipt.Previous) {
+			return RollbackResponse{}, fmt.Errorf("pqcmigration: target %s has no matching durable pre-mutation posture", targetID)
+		}
+		forwardIntent, err := openCompletedTLSForwardIntent(s.integrityKey, tenantID, first)
+		if err != nil {
+			return RollbackResponse{}, err
+		}
 		payload := pqcMigrationTLSRollbackPayload{
 			RunID: runID, Reason: req.Reason,
 			Mutation: connector.TLSPostureMutation{
 				RunID: runID, FindingID: "rollback:" + targetID, FindingKind: "rollback",
 				TargetID: first.Intent.TargetID, TargetRevision: first.Intent.TargetRevision,
 				Connector: first.Intent.Connector, Target: first.Intent.Target,
-				TargetConfig: append(json.RawMessage(nil), first.Intent.TargetConfig...),
+				TargetConfig: append(json.RawMessage(nil), forwardIntent.TargetConfig...),
 				Desired:      clonePosture(first.Receipt.Previous),
 			},
 		}
+		expected := clonePosture(first.Receipt.Observed)
+		payload.Mutation.ExpectedPrevious = &expected
 		for _, completed := range group.completed {
 			intent := completed.Intent
 			foundWanted[intent.AssetID] = true
@@ -583,6 +646,58 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 	}, nil
 }
 
+func openCompletedTLSForwardIntent(key seal.KeyWrapper, tenantID string, completed TLSFindingCompleted) (pqcMigrationTLSPosturePayload, error) {
+	intent := completed.Intent
+	if len(intent.SealedOutboxPayload) == 0 {
+		return pqcMigrationTLSPosturePayload{}, errors.New("pqcmigration: applied TLS finding is missing its sealed forward intent")
+	}
+	idempotencyKey := "licensed-crypto-migration-tls:" + intent.RunID + ":" + intent.AssetID
+	var opened pqcMigrationTLSPosturePayload
+	wrapper, err := openTLSPostureOutbox(
+		key, tenantID, licensedCryptoMigrationTLSPostureDestination, idempotencyKey,
+		intent.SealedOutboxPayload, &opened,
+	)
+	if err != nil {
+		return pqcMigrationTLSPosturePayload{}, err
+	}
+	if wrapper.RunID != intent.RunID || wrapper.AssetID != intent.AssetID ||
+		wrapper.TargetRevision != intent.TargetRevision || opened.RunID != intent.RunID ||
+		opened.AssetID != intent.AssetID || opened.TargetID != intent.TargetID ||
+		opened.TargetRevision != intent.TargetRevision || opened.Connector != intent.Connector ||
+		opened.Target != intent.Target || !connector.EqualTLSPosture(opened.Desired, intent.Desired) {
+		return pqcMigrationTLSPosturePayload{}, errors.New("pqcmigration: sealed forward intent does not match completed finding")
+	}
+	if len(opened.TargetConfig) == 0 {
+		return pqcMigrationTLSPosturePayload{}, errors.New("pqcmigration: sealed forward intent has no target configuration")
+	}
+	return opened, nil
+}
+
+func validateTLSRollbackTargetReady(
+	targetID string,
+	started map[string]projections.LicensedCryptoMigrationTLSPosture,
+	completed map[string]TLSFindingCompleted,
+	failed, rolledBack map[string]bool,
+) error {
+	seen := false
+	for assetID, intent := range started {
+		if intent.TargetID != targetID {
+			continue
+		}
+		seen = true
+		if rolledBack[assetID] || failed[assetID] {
+			continue
+		}
+		if _, applied := completed[assetID]; !applied {
+			return fmt.Errorf("pqcmigration: target %s still has unresolved queued finding %s", targetID, assetID)
+		}
+	}
+	if !seen {
+		return fmt.Errorf("pqcmigration: target %s has no bound start intent in the run", targetID)
+	}
+	return nil
+}
+
 func (h *outboxHandler) handlePQCReissue(ctx context.Context, m orchestrator.Message) error {
 	if h.store == nil || h.log == nil || (h.idem == nil && h.idempotencyDo == nil) || h.issue == nil {
 		return errors.New("pqcmigration: outbox handler requires store, event log, idempotency, and protocol issuer")
@@ -642,23 +757,144 @@ func (h *outboxHandler) handleTLSPosture(ctx context.Context, m orchestrator.Mes
 	}
 	payload.SealedOutboxPayload = nil
 	_, err = h.doIdempotent(ctx, m.TenantID, "licensed-crypto-migration-tls:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
-		receipt, err := h.deployer.ApplyTLSPosture(ctx, connector.TLSPostureMutation{
+		recovered, found, err := h.completedTLSFinding(ctx, m.TenantID, payload, m.Payload)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			return json.Marshal(recovered.Receipt)
+		}
+		mutation := connector.TLSPostureMutation{
 			RunID: payload.RunID, FindingID: payload.AssetID, FindingKind: payload.FindingKind,
 			TargetID: payload.TargetID, TargetRevision: payload.TargetRevision,
 			Connector: payload.Connector, Target: payload.Target,
 			TargetConfig: append(json.RawMessage(nil), payload.TargetConfig...),
 			Desired:      clonePosture(payload.Desired), TenantID: m.TenantID,
-		})
+		}
+		previous, prepared, err := h.preparedTLSPosture(ctx, m.TenantID, payload)
 		if err != nil {
 			return nil, err
 		}
-		completed := TLSFindingCompleted{Intent: payload, Receipt: receipt}
+		if !prepared {
+			previous, err = h.deployer.ReadTLSPosture(ctx, mutation)
+			if err != nil {
+				return nil, err
+			}
+			if err := h.appendProjected(ctx, m.TenantID, EventTLSFindingPrepared, TLSFindingPrepared{
+				RunID: payload.RunID, AssetID: payload.AssetID, FindingKind: payload.FindingKind,
+				TargetID: payload.TargetID, TargetRevision: payload.TargetRevision,
+				Connector: payload.Connector, Previous: clonePosture(previous),
+			}); err != nil {
+				return nil, err
+			}
+		}
+		expected := clonePosture(previous)
+		mutation.ExpectedPrevious = &expected
+		receipt, err := h.deployer.ApplyTLSPosture(ctx, mutation)
+		if err != nil {
+			return nil, err
+		}
+		if h.afterTLSApply != nil {
+			if err := h.afterTLSApply(); err != nil {
+				return nil, err
+			}
+		}
+		eventIntent := payload
+		eventIntent.TargetConfig = nil
+		eventIntent.SealedOutboxPayload = append(json.RawMessage(nil), m.Payload...)
+		completed := TLSFindingCompleted{Intent: eventIntent, Receipt: receipt}
 		if err := h.appendProjected(ctx, m.TenantID, EventTLSFindingCompleted, completed); err != nil {
 			return nil, err
 		}
 		return json.Marshal(receipt)
 	})
 	return err
+}
+
+func (h *outboxHandler) completedTLSFinding(ctx context.Context, tenantID string, intent pqcMigrationTLSPosturePayload, sealedPayload []byte) (TLSFindingCompleted, bool, error) {
+	if h.lookupCompleted != nil {
+		return h.lookupCompleted(ctx, tenantID, intent, sealedPayload)
+	}
+	if h.log == nil {
+		// Focused unit handlers supply append/lookup hooks and begin without a
+		// completion. Production always owns the event log.
+		return TLSFindingCompleted{}, false, nil
+	}
+	var completed TLSFindingCompleted
+	found := false
+	err := h.log.Replay(ctx, 0, func(ev events.Event) error {
+		if ev.TenantID != tenantID || ev.Type != EventTLSFindingCompleted {
+			return nil
+		}
+		var candidate TLSFindingCompleted
+		if err := json.Unmarshal(ev.Data, &candidate); err != nil {
+			return err
+		}
+		if candidate.Intent.RunID != intent.RunID || candidate.Intent.AssetID != intent.AssetID {
+			return nil
+		}
+		if err := validateCompletedTLSFinding(intent, sealedPayload, candidate); err != nil {
+			return err
+		}
+		if found && (!connector.EqualTLSPosture(completed.Receipt.Previous, candidate.Receipt.Previous) ||
+			!connector.EqualTLSPosture(completed.Receipt.Observed, candidate.Receipt.Observed)) {
+			return errors.New("pqcmigration: conflicting completed TLS finding events")
+		}
+		completed, found = candidate, true
+		return nil
+	})
+	return completed, found, err
+}
+
+func validateCompletedTLSFinding(intent pqcMigrationTLSPosturePayload, sealedPayload []byte, candidate TLSFindingCompleted) error {
+	if candidate.Intent.RunID != intent.RunID || candidate.Intent.AssetID != intent.AssetID ||
+		candidate.Intent.FindingKind != intent.FindingKind || candidate.Intent.TargetID != intent.TargetID ||
+		candidate.Intent.TargetRevision != intent.TargetRevision || candidate.Intent.Connector != intent.Connector ||
+		candidate.Intent.Target != intent.Target || !connector.EqualTLSPosture(candidate.Intent.Desired, intent.Desired) ||
+		!bytes.Equal(candidate.Intent.SealedOutboxPayload, sealedPayload) ||
+		candidate.Receipt.RunID != intent.RunID || candidate.Receipt.FindingID != intent.AssetID ||
+		candidate.Receipt.FindingKind != intent.FindingKind || candidate.Receipt.TargetID != intent.TargetID ||
+		candidate.Receipt.TargetRevision != intent.TargetRevision || candidate.Receipt.Connector != intent.Connector ||
+		!connector.EqualTLSPosture(candidate.Receipt.Observed, intent.Desired) {
+		return errors.New("pqcmigration: completed TLS finding binding mismatch")
+	}
+	if err := connector.ValidateObservedTLSPosture(candidate.Receipt.Previous); err != nil {
+		return fmt.Errorf("pqcmigration: completed TLS finding previous posture: %w", err)
+	}
+	return nil
+}
+
+func (h *outboxHandler) preparedTLSPosture(ctx context.Context, tenantID string, intent pqcMigrationTLSPosturePayload) (connector.TLSPosture, bool, error) {
+	if h.lookupPrepared != nil {
+		return h.lookupPrepared(ctx, tenantID, intent)
+	}
+	if h.log == nil {
+		return connector.TLSPosture{}, false, errors.New("pqcmigration: prepared TLS posture lookup requires the event log")
+	}
+	var previous connector.TLSPosture
+	found := false
+	err := h.log.Replay(ctx, 0, func(ev events.Event) error {
+		if ev.TenantID != tenantID || ev.Type != EventTLSFindingPrepared {
+			return nil
+		}
+		var prepared TLSFindingPrepared
+		if err := json.Unmarshal(ev.Data, &prepared); err != nil {
+			return err
+		}
+		if prepared.RunID != intent.RunID || prepared.AssetID != intent.AssetID {
+			return nil
+		}
+		if prepared.FindingKind != intent.FindingKind || prepared.TargetID != intent.TargetID ||
+			prepared.TargetRevision != intent.TargetRevision || prepared.Connector != intent.Connector {
+			return errors.New("pqcmigration: prepared TLS posture binding mismatch")
+		}
+		if found && !connector.EqualTLSPosture(previous, prepared.Previous) {
+			return errors.New("pqcmigration: conflicting prepared TLS posture events")
+		}
+		previous, found = clonePosture(prepared.Previous), true
+		return nil
+	})
+	return previous, found, err
 }
 
 func (h *outboxHandler) handleTLSPostureRollback(ctx context.Context, m orchestrator.Message) error {
@@ -679,6 +915,10 @@ func (h *outboxHandler) handleTLSPostureRollback(ctx context.Context, m orchestr
 		mutation.TenantID = m.TenantID
 		mutation.TargetConfig = append(json.RawMessage(nil), mutation.TargetConfig...)
 		mutation.Desired = clonePosture(mutation.Desired)
+		if mutation.ExpectedPrevious != nil {
+			expected := clonePosture(*mutation.ExpectedPrevious)
+			mutation.ExpectedPrevious = &expected
+		}
 		receipt, err := h.deployer.RestoreTLSPosture(ctx, mutation)
 		if err != nil {
 			return nil, err

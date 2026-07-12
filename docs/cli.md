@@ -348,6 +348,28 @@ cat > ca-rekey.json <<'JSON'
 JSON
 trstctl-cli ca authorities rekey <ca-authority-id> -f ca-rekey.json
 
+# Cross-sign one exact public target CA after a cross_sign_ca ceremony reaches quorum.
+printf '{"ceremony_id":"<cross-sign-ceremony-id>","certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"}' > ca-cross-sign.json
+trstctl-cli ca authorities cross-sign <issuer-authority-id> -f ca-cross-sign.json
+
+# Import an offline-root successor and both public cross-certificates. The private
+# root keys never enter these files or trstctl.
+trstctl-cli ca authorities rekey-offline-root <offline-root-authority-id> -f offline-root-rekey.json
+trstctl-cli ca authorities import-offline-cross-sign <successor-authority-id> -f offline-target-cross.json
+
+# Online break-glass uses an exact intent ceremony and authenticated CA approvals;
+# the execution body carries ceremony_id but never approver names.
+trstctl-cli breakglass issue-ceremony -f breakglass-issue-intent.json
+trstctl-cli ca ceremonies approve <breakglass-ceremony-id> # distinct operator token A
+trstctl-cli ca ceremonies approve <breakglass-ceremony-id> # distinct operator token B
+trstctl-cli breakglass issue -f breakglass-issue.json
+
+# Rotation and target cross-signing use the same ceremony -> approvals -> execute pattern.
+trstctl-cli breakglass rotation-ceremony -f breakglass-rotation-intent.json
+trstctl-cli breakglass rotate -f breakglass-rotation.json
+trstctl-cli breakglass cross-sign-ceremony -f breakglass-cross-sign-intent.json
+trstctl-cli breakglass cross-sign -f breakglass-cross-sign.json
+
 # List configured upstream CAs and issue through one of them.
 trstctl-cli external-cas list
 cat > upstream-issue.json <<'JSON'

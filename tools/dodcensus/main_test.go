@@ -1134,7 +1134,7 @@ func TestManifestIsVersionedGranularAndCoversEveryDoDCard(t *testing.T) {
 	}
 }
 
-func TestExactlyTenManifestRuntimeProofFilesUseDedicatedBuildConstraint(t *testing.T) {
+func TestExactlyThirteenManifestRuntimeProofFilesUseDedicatedBuildConstraint(t *testing.T) {
 	manifest, err := loadManifest("manifest.json")
 	if err != nil {
 		t.Fatal(err)
@@ -1153,8 +1153,8 @@ func TestExactlyTenManifestRuntimeProofFilesUseDedicatedBuildConstraint(t *testi
 			t.Errorf("%s: %v", entry.Runtime.File, err)
 		}
 	}
-	if len(seen) != 10 {
-		t.Fatalf("unique manifest runtime proof files = %d, want exactly 10", len(seen))
+	if len(seen) != 13 {
+		t.Fatalf("unique manifest runtime proof files = %d, want exactly 13", len(seen))
 	}
 
 	proofDirs := map[string]bool{}
@@ -1182,8 +1182,8 @@ func TestExactlyTenManifestRuntimeProofFilesUseDedicatedBuildConstraint(t *testi
 			}
 		}
 	}
-	if len(tagged) != 10 {
-		t.Fatalf("manifest proof-package files carrying reserved proof tag = %d, want exactly 10: %v", len(tagged), tagged)
+	if len(tagged) != 13 {
+		t.Fatalf("manifest proof-package files carrying reserved proof tag = %d, want exactly 13: %v", len(tagged), tagged)
 	}
 
 	ordinary := build.Default

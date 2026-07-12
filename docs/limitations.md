@@ -98,6 +98,7 @@ receipt cannot certify it.
 | F27 | Additional deployment connectors | docs/features/deployment-connectors.md |
 | F31 | Credential compromise workflow | docs/features/incident-and-jit.md, docs/features/discovery-and-inventory.md |
 | F32 | Fleet re-issuance for CA compromise | docs/features/incident-and-jit.md |
+| F34 | Break-glass procedures | docs/features/incident-and-jit.md |
 | F37 | Secret rotation engine | docs/features/secrets.md |
 | F39 | Code/CI secret scanning bridge | docs/features/secrets.md |
 | F63 | Native secret store | docs/features/secrets.md |
@@ -120,7 +121,6 @@ receipt cannot certify it.
 | F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
 | F16 | Crypto-agility and PQC readiness | docs/features/lifecycle-and-pqc.md |
 | F57 | PQC migration orchestration | docs/features/lifecycle-and-pqc.md |
-| F34 | Break-glass procedures | docs/features/incident-and-jit.md |
 | F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 | F68 | Secret sync / platform integrations | docs/features/secrets.md |
@@ -251,13 +251,16 @@ never live in the API process. What you can do end to end against the running bi
   `POST /api/v1/incidents/fleet-reissuance-runs` with pause/resume/rollback and
   evidence export routes under `/api/v1/incidents/fleet-reissuance-runs/{id}`,
   matching `trstctl incidents fleet-reissuance *` CLI commands, and the `/incidents`
-  console. `POST /api/v1/breakglass/issue` exists, but production configuration does
-  not assemble a `BreakglassIssuer`, so the shipped route fails closed. Its current
-  request also supplies approver names in the same caller-controlled payload; those
-  names are not independent authenticated approvals and must not be treated as an
-  m-of-n ceremony. Break-glass recovery reconciliation is served separately at
-  `POST /api/v1/breakglass/reconcile`, where signed offline bundles are verified and
-  recorded as `breakglass.issued` audit events.
+  console. Online break-glass at `POST /api/v1/breakglass/issue` is conditionally served when
+  `breakglass.online_enabled=true`: production `buildRunDeps` binds the configured CA
+  and public key to one persisted, purpose-constrained dual-control signer handle.
+  The caller first opens an exact-request-bound ceremony, and distinct approvers use
+  their own authenticated tokens at `/api/v1/ca/ceremonies/{id}/approvals`; the issue
+  request carries no approver names. Only authenticated immutable
+  `ca.ceremony.approved` event actors in the configured roster count toward quorum,
+  and the ceremony is consumed once with `breakglass.issued`. Break-glass recovery
+  reconciliation remains served at `POST /api/v1/breakglass/reconcile`, where signed
+  offline bundles are verified and recorded as `breakglass.issued` audit events.
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and
   records it in inventory. This is exercised end to end in CI.
@@ -449,8 +452,14 @@ integration work.
   renewal/re-key is also served at `/api/v1/ca/authorities/{id}/rekey`: it consumes
   a `rotation:<ca-id>` ceremony, mints fresh CA key/certificate material with the
   same authority policy, records `ca.authority.rekeyed`, and keeps the stable issue
-  URL live. Offline-root re-key and cross-signing remain operator workflows until
-  their served routes ship (see the [key-ceremony runbook](runbooks/key-ceremony.md)).
+  URL live. Signer-backed cross-signing is served at
+  `/api/v1/ca/authorities/{id}/cross-sign`. Offline-root re-key is a public-material
+  import at `/api/v1/ca/authorities/{id}/offline-rekey`, and an offline-root-produced
+  cross-certificate is verified/imported at
+  `/api/v1/ca/authorities/{id}/offline-cross-signs`. Those offline routes never accept
+  a private key: operators create the successor and both cross-certificates on the
+  disconnected root system, then submit only certificates under an exact ceremony
+  purpose (see the [key-ceremony runbook](runbooks/key-ceremony.md)).
 - **All 14 external CA integrations are served when configured.** `buildRunDeps`
   constructs tenant-bound AD CS, AWS PCA, Azure Key Vault, DigiCert, EJBCA, Entrust,
   GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA, Smallstep, Vault PKI,
@@ -1256,13 +1265,13 @@ The conditional managed-key path has required launched-binary receipts for all
 six advertised providers, while the sealed local signer key store remains the
 default when no provider is configured. Helm `externalKMS` separately wraps
 signer key-store DEKs through an operator-supplied AWS KMS, GCP KMS, Azure Key
-Vault, or PKCS#11 adapter instead of mounting the local signer KEK. The online
-`POST /api/v1/breakglass/issue` route is still not
-production-assembled and its caller-supplied approver names are not an independent
-m-of-n proof. Break-glass bundle reconciliation is served separately at
-`POST /api/v1/breakglass/reconcile`.
-Break-glass rotation/cross-sign workflows are still future work. The
-credential-store key-encryption key is a local file by default.
+Vault, or PKCS#11 adapter instead of mounting the local signer KEK. Online
+break-glass issue, signer-backed CA rotation with bidirectional overlap
+cross-certificates, and target-CA cross-signing are production-assembled when the
+online block is configured. Approvals come from authenticated immutable ceremony
+events, not caller-supplied names. Break-glass bundle reconciliation remains served
+at `POST /api/v1/breakglass/reconcile`. The credential-store key-encryption key is a
+local file by default.
 See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md).
@@ -1334,8 +1343,9 @@ plugin engine or a policy-selected algorithm marketplace.
 Still **library-tier** (reachable from no served verb yet): the **in-process** key
 lifecycle for the local CA/issuing signing key and the secrets KEK (generate-or-import
 → rotate → revoke → zeroize is implemented and end-to-end tested but not yet exposed as
-its own served route), plus online break-glass issuance, break-glass rotation, and
-cross-signing. Reconciliation remains served at `POST /api/v1/breakglass/reconcile`.
+its own served route). Break-glass issue/rotation/cross-sign and offline-root public
+re-key/cross-sign import now have served, ceremony-gated verbs; reconciliation remains
+served at `POST /api/v1/breakglass/reconcile`.
 The signer's at-rest CA key is still sealed under a local
 key-encryption file by default. See the
 [key-ceremony runbook](runbooks/key-ceremony.md),
@@ -1468,8 +1478,9 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   real cert-manager from `Certificate` to TLS `Secret`; the native trstctl path is
   proven by the served controller acceptance test from trstctl `Certificate` to
   local CSR, signer, Secret, and Ready status; native Kubernetes CSR support is
-  proven by a controller test that writes `status.certificate` and Ready=True
-  only after Kubernetes approval. It is still a small poll-based controller
+  proven by a controller test that writes `status.certificate` while preserving
+  `Approved` only after Kubernetes approval (native CSRs do not define a Ready
+  condition). It is still a small poll-based controller
   rather than an informer/work-queue controller, and CSR approval policy remains a
   Kubernetes approver responsibility; those are operational/governance
   boundaries, not missing signing functionality.

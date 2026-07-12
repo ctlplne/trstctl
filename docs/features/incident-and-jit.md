@@ -165,8 +165,14 @@ access sessions list`, and `trstctl-cli access sessions get`.
 ### Break-glass procedures (F34)
 
 If the control plane is reachable during an incident, `POST /api/v1/breakglass/issue`
-serves online emergency issuance gated by an **m-of-n operator quorum**: a sub-quorum
-request fails closed. The escrow signing key is a handle into the separate, isolated
+serves online emergency issuance gated by an **m-of-n operator quorum**. The caller
+first opens an exact CSR/reason/TTL ceremony at
+`POST /api/v1/breakglass/issue-ceremonies`; distinct configured operators approve it
+with their own authenticated tokens, and the execution body contains only the
+ceremony id—not approver names. The server matches the roster to immutable
+`ca.ceremony.approved` event actors in the same locked transaction, so sub-quorum,
+cross-tenant, altered-request, and reused-ceremony attempts fail closed. The escrow
+signing key is a persisted purpose-constrained handle into the separate, isolated
 signing service, never caller-supplied key material in the API process. The result is a
 **self-verifying signed bundle** — anyone can verify it offline (signature + chain to
 the CA), and the served route reconciles it into the hash-chained audit log as
@@ -176,6 +182,12 @@ operators can still run the same quorum ceremony offline and later call
 deployment-pinned break-glass verifier material and records the same audit event. A
 bundle that fails verification stops the batch, so a forged emergency issuance can't be
 silently absorbed.
+
+The same configured authority supports ceremony-bound CA rotation at
+`POST /api/v1/breakglass/rotate` and target-CA cross-signing at
+`POST /api/v1/breakglass/cross-sign`. Rotation creates a fresh signer-held key,
+preserves the predecessor policy lane, emits new-by-previous and previous-by-new
+cross-certificates for overlap/rollback, and replays the active handle after restart.
 
 ### In the console
 
@@ -322,11 +334,21 @@ Online break-glass issue is API-served when the signer-backed break-glass issuer
 configured:
 
 ```bash
+curl -X POST "https://trstctl.example.com/api/v1/breakglass/issue-ceremonies" \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Idempotency-Key: incident-2026-06-25-bg-ceremony" \
+  -H "Content-Type: application/json" \
+  -d '{"request_id":"bg-001","subject":"recovery.svc.example.test","csr_der":"...base64-csr...","reason":"regional outage","ttl_seconds":900}'
+
+# Each command uses a different configured operator's token.
+trstctl-cli ca ceremonies approve <ceremony-id>
+trstctl-cli ca ceremonies approve <ceremony-id>
+
 curl -X POST "https://trstctl.example.com/api/v1/breakglass/issue" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: incident-2026-06-25-bg-issue" \
   -H "Content-Type: application/json" \
-  -d '{"request_id":"bg-001","subject":"recovery.svc.example.test","csr_der":"...base64-csr...","reason":"regional outage","approvals":["op1","op2"],"ttl_seconds":900}'
+  -d '{"ceremony_id":"<ceremony-id>","request_id":"bg-001","subject":"recovery.svc.example.test","csr_der":"...base64-csr...","reason":"regional outage","ttl_seconds":900}'
 ```
 
 Break-glass reconciliation remains API-served after an offline ceremony:
@@ -417,8 +439,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   `trstctl incidents response-integrations dispatch`, and `/incidents`;
   ServiceNow / ITSM ticket creation is served through
   `/api/v1/itsm/servicenow/tickets` and the `/incidents` console. JIT issuance is
-  served. Online m-of-n break-glass issuance is not production-assembled at
-  `/api/v1/breakglass/issue`; offline-bundle reconciliation is served at
+  served. Online m-of-n break-glass issue/rotation/cross-signing is conditionally
+  served when its signer handle, tenant, authenticated operator roster, and threshold
+  are configured; offline-bundle reconciliation is served at
   `/api/v1/breakglass/reconcile`.
 - **Order matters in remediation.** The reissue-before-revoke ordering is deliberate;
   don't shortcut it, or you risk an outage mid-incident.
@@ -453,8 +476,11 @@ notifications use the [notification integrations](policy-and-governance.md).
   self-approval blocked.
 - **PAM-lite:** `/api/v1/access/sessions`; Postgres scoped login roles; OpenSSH user
   certificates; `pam.session.started`, `pam.session.expired`.
-- **Break-glass:** `POST /api/v1/breakglass/issue`, `IssueOffline`,
-  `Verify`, `POST /api/v1/breakglass/reconcile`.
+- **Break-glass:** ceremony/execution pairs at
+  `/api/v1/breakglass/issue-ceremonies` + `/issue`,
+  `/api/v1/breakglass/rotation-ceremonies` + `/rotate`, and
+  `/api/v1/breakglass/cross-sign-ceremonies` + `/cross-sign`; `IssueOffline`,
+  `Verify`, and `POST /api/v1/breakglass/reconcile` remain the disconnected path.
 - **Events:** `incident.*`, `response.integration.dispatched`, `fleet.*`, `approval.*`, `pam.session.*`,
   `breakglass.issued`.
 

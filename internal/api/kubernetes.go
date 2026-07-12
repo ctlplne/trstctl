@@ -134,8 +134,9 @@ func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
 		RBACRules: []KubernetesCSRSupportRule{
 			{APIGroup: "certificates.k8s.io", Resource: "certificatesigningrequests", Verbs: []string{"get", "list", "watch"}},
 			{APIGroup: "certificates.k8s.io", Resource: "certificatesigningrequests/status", Verbs: []string{"update", "patch"}},
+			{APIGroup: "certificates.k8s.io", Resource: "signers", Verbs: []string{"sign"}},
 		},
-		StatusFields:   []string{"status.certificate", "status.conditions[type=Ready]"},
+		StatusFields:   []string{"status.certificate", "status.conditions[type=Approved|Denied|Failed]"},
 		ControllerFlow: []string{}, ArchitectureControls: []string{}, EvidenceRefs: []string{}, Residuals: []string{}, RecommendedNextActions: []string{},
 	})
 }

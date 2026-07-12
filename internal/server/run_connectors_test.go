@@ -103,6 +103,21 @@ func TestConnectorRegistryFromConfigBuildsTargetScopedLocalFactory(t *testing.T)
 	}
 }
 
+func TestProductionNativeRegistryAdvertisesTLSPostureOnlyForImplementedReceiver(t *testing.T) {
+	registry, err := connectorRegistryFromConfig(config.Connectors{Enabled: []string{"envoy", "nginx"}}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("connectorRegistryFromConfig: %v", err)
+	}
+	if !registry.SupportsTLSPosture("envoy") {
+		t.Fatal("shipped Envoy factory is not wired to the TLS posture contract")
+	}
+	for _, unsupported := range []string{"nginx", "future-signed-plugin", ""} {
+		if registry.SupportsTLSPosture(unsupported) {
+			t.Fatalf("unsupported connector %q advertised TLS posture mutation", unsupported)
+		}
+	}
+}
+
 func TestProductionNativeConnectorReplaySafetyIsExplicitAndConservative(t *testing.T) {
 	reconciled := []string{
 		"caddy", "postfix", "traefik", "java-keystore",

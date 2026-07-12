@@ -200,17 +200,7 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		}
 	}
 	if lic != nil && lic.Has(license.FeaturePQC) {
-		pqcRuntime := eepqcmigration.NewRuntime(deps.Store)
-		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, pqcRuntime.APIOptionsFactory)
-		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, pqcRuntime.OutboxFactory)
-		deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, pqcRuntime.ProjectionOptions...)
-		deps.LicensedLeafSigner = eepqc.SignLicensedLeafFromCSRWithProfile
-		deps.LicensedCSRInspector = eepqc.InspectHybridCSR
-		deps.LicensedCSRParser = eepqc.ParsePureMLDSACSR
-		deps.LicensedSPIFFESVIDFactory = eepqc.NewSPIFFEHybridSVIDIssuer
-		if log != nil {
-			log.Info("Enterprise PQC attached", slog.String("feature", string(license.FeaturePQC)))
-		}
+		attachPQC(log, deps)
 	}
 	if lic != nil && lic.Has(license.FeatureHASupport) {
 		if err := attachFederation(ctx, cfg, log, deps); err != nil {
@@ -266,6 +256,21 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		}
 	}
 	return nil
+}
+
+func attachPQC(log *slog.Logger, deps *server.Deps) {
+	cryptoRuntime := eepqc.NewRuntime()
+	migrationRuntime := eepqcmigration.NewRuntime(deps.Store)
+	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, migrationRuntime.APIOptionsFactory)
+	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, migrationRuntime.OutboxFactory)
+	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, migrationRuntime.ProjectionOptions...)
+	deps.LicensedLeafSigner = cryptoRuntime.LeafSigner
+	deps.LicensedCSRInspector = cryptoRuntime.CSRInspector
+	deps.LicensedCSRParser = cryptoRuntime.CSRParser
+	deps.LicensedSPIFFESVIDFactory = cryptoRuntime.SPIFFESVIDFactory
+	if log != nil {
+		log.Info("Enterprise PQC attached", slog.String("feature", string(license.FeaturePQC)))
+	}
 }
 
 func attachRemediation(log *slog.Logger, deps *server.Deps) {

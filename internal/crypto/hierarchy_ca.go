@@ -297,10 +297,16 @@ func CrossSignHierarchyCA(issuerCertDER []byte, issuerSigner DigestSigner, targe
 	}
 	pathLen, hasPathLen := hierarchyCrossPathLen(target)
 	issuerPathLen, issuerHasPathLen := hierarchyCrossPathLen(issuer)
+	if issuerHasPathLen && issuerPathLen == 0 {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: cross-sign issuer path-length constraint is exhausted")
+	}
 	if issuerHasPathLen && (!hasPathLen || issuerPathLen < pathLen) {
 		pathLen, hasPathLen = issuerPathLen, true
 	}
 	permitted := hierarchyIntersectDNS(target.PermittedDNSDomains, issuer.PermittedDNSDomains)
+	if len(target.PermittedDNSDomains) > 0 && len(issuer.PermittedDNSDomains) > 0 && len(permitted) == 0 {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: cross-sign issuer and target DNS constraints do not overlap")
+	}
 	ekus, err := hierarchyIntersectEKUs(target.ExtKeyUsage, issuer.ExtKeyUsage)
 	if err != nil {
 		return IssuedHierarchyCA{}, err
@@ -321,7 +327,7 @@ func CrossSignHierarchyCA(issuerCertDER []byte, issuerSigner DigestSigner, targe
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: cross-sign issuer and target validity windows do not overlap")
 	}
 	tmpl := &x509.Certificate{
-		SerialNumber: serial, Subject: target.Subject,
+		SerialNumber: serial, Subject: target.Subject, RawSubject: append([]byte(nil), target.RawSubject...),
 		NotBefore: notBefore, NotAfter: notAfter,
 		KeyUsage:              target.KeyUsage,
 		BasicConstraintsValid: true, IsCA: true,
@@ -345,6 +351,9 @@ func CrossSignHierarchyCA(issuerCertDER []byte, issuerSigner DigestSigner, targe
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse issued cross-certificate: %w", err)
+	}
+	if err := VerifyCrossSignedCA(issuerCertDER, targetCertDER, der); err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: verify issued cross-certificate: %w", err)
 	}
 	return hierarchyResultFromCert(cert), nil
 }
@@ -380,14 +389,40 @@ func VerifyCrossSignedCA(issuerCertDER, targetCertDER, crossCertDER []byte) erro
 	if !bytes.Equal(cross.RawSubject, target.RawSubject) || !bytes.Equal(cross.RawSubjectPublicKeyInfo, target.RawSubjectPublicKeyInfo) {
 		return fmt.Errorf("crypto: imported cross-certificate does not retain target subject and public key")
 	}
+	if cross.NotAfter.After(issuer.NotAfter) || cross.NotAfter.After(target.NotAfter) ||
+		cross.NotBefore.Before(issuer.NotBefore) || cross.NotBefore.Before(target.NotBefore) {
+		return fmt.Errorf("crypto: imported cross-certificate widens a validity window")
+	}
+	if cross.KeyUsage != target.KeyUsage || cross.KeyUsage&x509.KeyUsageCertSign == 0 {
+		return fmt.Errorf("crypto: imported cross-certificate alters CA key usages")
+	}
 	issuerPath, issuerHasPath := hierarchyCrossPathLen(issuer)
+	targetPath, targetHasPath := hierarchyCrossPathLen(target)
 	crossPath, crossHasPath := hierarchyCrossPathLen(cross)
+	if issuerHasPath && issuerPath == 0 {
+		return fmt.Errorf("crypto: imported cross-sign issuer path-length constraint is exhausted")
+	}
 	if issuerHasPath && (!crossHasPath || crossPath > issuerPath) {
 		return fmt.Errorf("crypto: imported cross-certificate widens issuer path-length")
 	}
-	if !hierarchyDNSWithin(cross.PermittedDNSDomains, issuer.PermittedDNSDomains) ||
+	if targetHasPath && (!crossHasPath || crossPath > targetPath) {
+		return fmt.Errorf("crypto: imported cross-certificate widens target path-length")
+	}
+	expectedDNS := hierarchyIntersectDNS(target.PermittedDNSDomains, issuer.PermittedDNSDomains)
+	if !sameStringSet(cross.PermittedDNSDomains, expectedDNS) ||
+		!hierarchyDNSWithin(cross.PermittedDNSDomains, issuer.PermittedDNSDomains) ||
 		!hierarchyDNSWithin(cross.PermittedDNSDomains, target.PermittedDNSDomains) {
 		return fmt.Errorf("crypto: imported cross-certificate widens DNS constraints")
+	}
+	expectedEKUs, err := hierarchyIntersectEKUs(target.ExtKeyUsage, issuer.ExtKeyUsage)
+	if err != nil || !sameExtKeyUsageSet(cross.ExtKeyUsage, expectedEKUs) {
+		return fmt.Errorf("crypto: imported cross-certificate widens or alters extended key usages")
+	}
+	if len(target.SubjectKeyId) == 0 || !bytes.Equal(cross.SubjectKeyId, target.SubjectKeyId) {
+		return fmt.Errorf("crypto: imported cross-certificate has the wrong subject key identifier")
+	}
+	if len(issuer.SubjectKeyId) == 0 || !bytes.Equal(cross.AuthorityKeyId, issuer.SubjectKeyId) {
+		return fmt.Errorf("crypto: imported cross-certificate has the wrong authority key identifier")
 	}
 	return nil
 }
@@ -449,6 +484,23 @@ func hierarchyIntersectEKUs(target, issuer []x509.ExtKeyUsage) ([]x509.ExtKeyUsa
 		return nil, fmt.Errorf("crypto: cross-sign issuer and target EKU constraints do not overlap")
 	}
 	return intersection, nil
+}
+
+func sameExtKeyUsageSet(a, b []x509.ExtKeyUsage) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[x509.ExtKeyUsage]int, len(a))
+	for _, usage := range a {
+		counts[usage]++
+	}
+	for _, usage := range b {
+		if counts[usage] == 0 {
+			return false
+		}
+		counts[usage]--
+	}
+	return true
 }
 
 func hierarchyDNSWithin(values, allowed []string) bool {

@@ -48,12 +48,16 @@ func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers,
 			posture = append(posture, current)
 			continue
 		}
-		if err := c.signKubernetesCSR(ctx, csr); err != nil {
+		updated, err := c.signKubernetesCSR(ctx, csr)
+		if err != nil {
 			posture = append(posture, failedPosture(current))
 			return signed, posture, err
 		}
 		signed++
-		current = kubernetesCSRPosture(csr, true)
+		// Use the API server's update response, not the pre-reconcile list
+		// object. In particular, resourceVersion must describe the exact object
+		// whose status.certificate was persisted.
+		current = kubernetesCSRPosture(updated, true)
 		current.State, current.Reason = "ready", "signed"
 		posture = append(posture, current)
 	}
@@ -112,19 +116,19 @@ func signerNameIssuer(signerName, group string) string {
 	return name
 }
 
-func (c *IssuerController) signKubernetesCSR(ctx context.Context, csr map[string]any) error {
+func (c *IssuerController) signKubernetesCSR(ctx context.Context, csr map[string]any) (map[string]any, error) {
 	spec, _ := csr["spec"].(map[string]any)
 	reqB64, _ := spec["request"].(string)
 	csrDER, err := decodeKubernetesCSRRequest(reqB64)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	chainPEM, err := c.signer.Sign(ctx, csrDER)
 	if err != nil {
-		return fmt.Errorf("k8s: sign CertificateSigningRequest: %w", err)
+		return nil, fmt.Errorf("k8s: sign CertificateSigningRequest: %w", err)
 	}
 	if strings.TrimSpace(string(chainPEM)) == "" {
-		return fmt.Errorf("k8s: sign CertificateSigningRequest: empty certificate chain")
+		return nil, fmt.Errorf("k8s: sign CertificateSigningRequest: empty certificate chain")
 	}
 
 	meta, _ := csr["metadata"].(map[string]any)
@@ -134,17 +138,24 @@ func (c *IssuerController) signKubernetesCSR(ctx context.Context, csr map[string
 		status = map[string]any{}
 	}
 	status["certificate"] = base64.StdEncoding.EncodeToString(chainPEM)
-	status["conditions"] = upsertReady(status["conditions"])
+	// The certificates.k8s.io/v1 contract defines completion through
+	// status.certificate. Its known conditions are Approved, Denied, and Failed;
+	// Ready is a cert-manager/custom-resource convention and must not be written
+	// to a native Kubernetes CSR.
 	csr["status"] = status
 
 	st, body, err := c.client.request(ctx, http.MethodPut, certificateSigningRequestsPath()+"/"+name+"/status", csr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if st/100 != 2 {
-		return fmt.Errorf("k8s: update CertificateSigningRequest %s status: %d: %s", name, st, string(body))
+		return nil, fmt.Errorf("k8s: update CertificateSigningRequest %s status: %d: %s", name, st, string(body))
 	}
-	return nil
+	var updated map[string]any
+	if err := json.Unmarshal(body, &updated); err != nil {
+		return nil, fmt.Errorf("k8s: decode updated CertificateSigningRequest %s: %w", name, err)
+	}
+	return updated, nil
 }
 
 func decodeKubernetesCSRRequest(reqB64 string) ([]byte, error) {

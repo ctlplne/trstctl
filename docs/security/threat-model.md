@@ -79,11 +79,13 @@ architectural guarantees that back those defenses.
 - **CA-key custody at rest.** The issuing CA key is **persisted, sealed at rest** in
   the signer's key store and **preserved across restarts** (R3.2). Helm
   `externalKMS` can wrap the signer key-store DEKs through an operator-supplied
-  KMS/HSM adapter instead of mounting the local signer KEK. Online m-of-n
-  break-glass issuance is not production-assembled; the existing issue route lacks
-  independently authenticated approval artifacts. Recovery reconciliation of signed
-  break-glass bundles is served at `POST /api/v1/breakglass/reconcile` and records
-  `breakglass.issued` audit events ([limitations](../limitations.md),
+  KMS/HSM adapter instead of mounting the local signer KEK. Configured online
+  break-glass issue/rotation/cross-signing binds exact tenant-scoped requests to
+  single-use ceremonies and derives quorum only from authenticated immutable
+  approval-event actors in the configured roster. Private operations stay in the
+  separate signer. Recovery reconciliation of signed break-glass bundles is served
+  at `POST /api/v1/breakglass/reconcile` and records `breakglass.issued` audit events
+  ([limitations](../limitations.md),
   [incident response](../runbooks/incident-response.md)).
 - **Plugin trust model & blast radius.** The shipped first-party CA and connector
   integrations run as **trusted in-process Go code**, not in the WASM sandbox. Their

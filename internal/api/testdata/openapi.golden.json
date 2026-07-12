@@ -1374,6 +1374,145 @@
         ],
         "type": "object"
       },
+      "BreakglassCeremony": {
+        "properties": {
+          "approvals": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "opener": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "threshold": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "purpose",
+          "threshold",
+          "status",
+          "approvals",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "BreakglassCrossSign": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "issuer_signer_handle": {
+            "type": "string"
+          },
+          "target_sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer_signer_handle",
+          "target_sha256",
+          "certificate_pem",
+          "ceremony_id"
+        ],
+        "type": "object"
+      },
+      "BreakglassCrossSignRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_pem": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_pem"
+        ],
+        "type": "object"
+      },
+      "BreakglassIssueExecutionRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "csr_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "request_id",
+          "subject",
+          "csr_der",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "BreakglassIssueIntentRequest": {
+        "properties": {
+          "csr_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "subject",
+          "csr_der",
+          "reason"
+        ],
+        "type": "object"
+      },
       "BreakglassIssueRequest": {
         "properties": {
           "approvals": {
@@ -1449,6 +1588,81 @@
         },
         "required": [
           "reconciled"
+        ],
+        "type": "object"
+      },
+      "BreakglassRotation": {
+        "properties": {
+          "active_certificate_pem": {
+            "type": "string"
+          },
+          "active_signer_handle": {
+            "type": "string"
+          },
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "new_signed_by_previous_pem": {
+            "type": "string"
+          },
+          "previous_certificate_pem": {
+            "type": "string"
+          },
+          "previous_signed_by_new_pem": {
+            "type": "string"
+          },
+          "previous_signer_handle": {
+            "type": "string"
+          },
+          "request_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "previous_signer_handle",
+          "active_signer_handle",
+          "previous_certificate_pem",
+          "active_certificate_pem",
+          "new_signed_by_previous_pem",
+          "previous_signed_by_new_pem",
+          "ceremony_id",
+          "request_digest"
+        ],
+        "type": "object"
+      },
+      "BreakglassRotationIntent": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reason",
+          "ttl_seconds"
+        ],
+        "type": "object"
+      },
+      "BreakglassRotationRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "reason",
+          "ttl_seconds"
         ],
         "type": "object"
       },
@@ -1848,6 +2062,9 @@
           "certificate_pem": {
             "type": "string"
           },
+          "cross_certificate_pem": {
+            "type": "string"
+          },
           "csr_pem": {
             "type": "string"
           },
@@ -1859,7 +2076,10 @@
               "create_intermediate",
               "create_offline_intermediate",
               "issue_intermediate_csr",
-              "rekey_ca"
+              "rekey_ca",
+              "cross_sign_ca",
+              "import_offline_cross_sign",
+              "rekey_offline_root"
             ],
             "type": "string"
           },
@@ -1867,11 +2087,20 @@
             "format": "uuid",
             "type": "string"
           },
+          "reason": {
+            "type": "string"
+          },
+          "reverse_cross_certificate_pem": {
+            "type": "string"
+          },
           "signer_handle": {
             "type": "string"
           },
           "spec": {
             "$ref": "#/components/schemas/CASpec"
+          },
+          "target_certificate_pem": {
+            "type": "string"
           },
           "threshold": {
             "type": "integer"
@@ -1934,6 +2163,51 @@
         "required": [
           "ceremony_id",
           "spec"
+        ],
+        "type": "object"
+      },
+      "CACrossSign": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "imported": {
+            "type": "boolean"
+          },
+          "issuer_authority_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer_authority_id",
+          "target_sha256",
+          "certificate_pem",
+          "ceremony_id",
+          "imported"
+        ],
+        "type": "object"
+      },
+      "CACrossSignRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_pem": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "certificate_pem"
         ],
         "type": "object"
       },
@@ -2254,6 +2528,82 @@
           "status",
           "approvals",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "CAOfflineCrossSignImportRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "cross_certificate_pem": {
+            "type": "string"
+          },
+          "target_certificate_pem": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "target_certificate_pem",
+          "cross_certificate_pem"
+        ],
+        "type": "object"
+      },
+      "CAOfflineRootRekey": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "new_signed_by_previous_pem": {
+            "type": "string"
+          },
+          "previous_signed_by_new_pem": {
+            "type": "string"
+          },
+          "rotation": {
+            "$ref": "#/components/schemas/CAAuthorityRotation"
+          }
+        },
+        "required": [
+          "rotation",
+          "new_signed_by_previous_pem",
+          "previous_signed_by_new_pem",
+          "ceremony_id"
+        ],
+        "type": "object"
+      },
+      "CAOfflineRootRekeyRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "new_signed_by_previous_pem": {
+            "type": "string"
+          },
+          "previous_signed_by_new_pem": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CASpec"
+          },
+          "successor_certificate_pem": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "successor_certificate_pem",
+          "new_signed_by_previous_pem",
+          "previous_signed_by_new_pem",
+          "reason",
+          "spec"
         ],
         "type": "object"
       },
@@ -18573,6 +18923,142 @@
         "x-trstctl-permission": "audit:read"
       }
     },
+    "/api/v1/breakglass/cross-sign": {
+      "post": {
+        "operationId": "crossSignBreakglass",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakglassCrossSignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassCrossSign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Cross-sign a CA certificate with the active break-glass signer",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/breakglass/cross-sign-ceremonies": {
+      "post": {
+        "operationId": "startBreakglassCrossSignCeremony",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakglassCrossSignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassCeremony"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start a target-certificate-bound break-glass cross-sign ceremony",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
     "/api/v1/breakglass/issue": {
       "post": {
         "operationId": "issueBreakglass",
@@ -18591,7 +19077,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BreakglassIssueRequest"
+                "$ref": "#/components/schemas/BreakglassIssueExecutionRequest"
               }
             }
           },
@@ -18637,7 +19123,75 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Issue and audit an online m-of-n break-glass certificate",
+        "summary": "Issue and audit a ceremony-approved online break-glass certificate",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/breakglass/issue-ceremonies": {
+      "post": {
+        "operationId": "startBreakglassIssueCeremony",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakglassIssueIntentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassCeremony"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start an exact-request-bound online break-glass ceremony",
         "x-trstctl-permission": "certs:issue"
       }
     },
@@ -18707,6 +19261,142 @@
         ],
         "summary": "Verify break-glass bundles and reconcile them into audit",
         "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/breakglass/rotate": {
+      "post": {
+        "operationId": "rotateBreakglass",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakglassRotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassRotation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rotate and bidirectionally cross-sign the signer-backed break-glass CA",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/breakglass/rotation-ceremonies": {
+      "post": {
+        "operationId": "startBreakglassRotationCeremony",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakglassRotationIntent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassCeremony"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start an exact-request-bound break-glass CA rotation ceremony",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/broker/agent-identities": {
@@ -19096,6 +19786,83 @@
         "x-trstctl-permission": "issuers:write"
       }
     },
+    "/api/v1/ca/authorities/{id}/cross-sign": {
+      "post": {
+        "operationId": "crossSignCAAuthority",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CACrossSignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CACrossSign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Cross-sign a CA certificate with a signer-backed authority after ceremony quorum",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
     "/api/v1/ca/authorities/{id}/intermediates/csr": {
       "post": {
         "operationId": "issueIntermediateCAFromCSR",
@@ -19250,6 +20017,83 @@
         "x-trstctl-permission": "certs:issue"
       }
     },
+    "/api/v1/ca/authorities/{id}/offline-cross-signs": {
+      "post": {
+        "operationId": "importOfflineRootCrossSign",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAOfflineCrossSignImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CACrossSign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Verify and import a public cross-certificate produced by an offline root",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
     "/api/v1/ca/authorities/{id}/offline-intermediates": {
       "post": {
         "operationId": "importOfflineIntermediateCA",
@@ -19401,6 +20245,83 @@
           }
         ],
         "summary": "Create a signer-backed intermediate CSR for an offline root",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/authorities/{id}/offline-rekey": {
+      "post": {
+        "operationId": "rekeyOfflineRoot",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAOfflineRootRekeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAOfflineRootRekey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Import and activate an offline-root successor with bidirectional cross-signatures",
         "x-trstctl-permission": "issuers:write"
       }
     },

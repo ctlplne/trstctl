@@ -127,7 +127,8 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    `CertificateSigningRequest` with `spec.signerName: trstctl.com/trstctl` (or
    `trstctl.com/<issuer-name>`). Kubernetes or a separate approver must mark the
    CSR `Approved`; the trstctl agent only signs approved requests and writes
-   `status.certificate` plus Ready=True.
+   `status.certificate`. Kubernetes treats that certificate field as completion;
+   the agent preserves `Approved` and does not invent a non-native Ready condition.
 
    ```yaml
    apiVersion: certificates.k8s.io/v1

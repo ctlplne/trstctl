@@ -102,6 +102,7 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 		byID[asset.ID] = asset
 	}
 	bindings := make(map[string]TLSBinding, len(req.TLSBindings))
+	targetPostures := make(map[string]connector.TLSPosture, len(req.TLSBindings))
 	for _, binding := range req.TLSBindings {
 		if binding.AssetID == "" || binding.TargetID == "" {
 			return Plan{}, fmt.Errorf("pqcmigration: TLS binding requires asset_id and target_id")
@@ -112,6 +113,10 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 		if err := validateDesiredPQCPosture(binding.Desired); err != nil {
 			return Plan{}, fmt.Errorf("pqcmigration: TLS binding for %s: %w", binding.AssetID, err)
 		}
+		if prior, exists := targetPostures[binding.TargetID]; exists && !connector.EqualTLSPosture(prior, binding.Desired) {
+			return Plan{}, fmt.Errorf("pqcmigration: findings bound to target %s request conflicting TLS postures", binding.TargetID)
+		}
+		targetPostures[binding.TargetID] = clonePosture(binding.Desired)
 		bindings[binding.AssetID] = binding
 	}
 	plan := Plan{Residuals: ResidualDenominator()}

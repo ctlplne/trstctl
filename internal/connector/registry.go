@@ -226,16 +226,35 @@ func (r *Registry) RestoreTLSPosture(ctx context.Context, p TLSPostureMutation) 
 	return r.applyTLSPosture(ctx, p, true)
 }
 
+// ReadTLSPosture obtains the receiver state through the same immutable target
+// revision, factory, capability grant, and bounded native read used by Apply.
+// A licensed worker durably records this value before the first mutation.
+func (r *Registry) ReadTLSPosture(ctx context.Context, p TLSPostureMutation) (TLSPosture, error) {
+	if err := validateTLSPostureMutationContext(p); err != nil {
+		return TLSPosture{}, err
+	}
+	postureConnector, sb, cleanup, err := r.resolveTLSPostureTarget(ctx, p)
+	if err != nil {
+		return TLSPosture{}, err
+	}
+	defer cleanup()
+	observed, err := postureConnector.ReadTLSPosture(ctx, sb, p.Target)
+	if err != nil {
+		return TLSPosture{}, fmt.Errorf("connector: read current TLS posture: %w", err)
+	}
+	if err := ValidateObservedTLSPosture(observed); err != nil {
+		return TLSPosture{}, fmt.Errorf("connector: current TLS posture is malformed: %w", err)
+	}
+	return cloneTLSPosture(observed), nil
+}
+
 func (r *Registry) applyTLSPosture(ctx context.Context, p TLSPostureMutation, allowLegacyDesired bool) (TLSPostureReceipt, error) {
 	receipt := TLSPostureReceipt{
 		RunID: p.RunID, FindingID: p.FindingID, FindingKind: p.FindingKind,
 		TargetID: p.TargetID, TargetRevision: p.TargetRevision, Connector: p.Connector,
 	}
-	if r == nil {
-		return receipt, fmt.Errorf("connector: registry is not configured")
-	}
-	if p.RunID == "" || p.FindingID == "" || p.TargetID == "" || p.TargetRevision == "" || p.Connector == "" || p.Target == "" || p.TenantID == "" {
-		return receipt, fmt.Errorf("connector: TLS posture mutation requires run, finding, target, revision, connector, target name, and authoritative tenant")
+	if err := validateTLSPostureMutationContext(p); err != nil {
+		return receipt, err
 	}
 	validateDesired := ValidateTLSPosture
 	if allowLegacyDesired {
@@ -244,42 +263,16 @@ func (r *Registry) applyTLSPosture(ctx context.Context, p TLSPostureMutation, al
 	if err := validateDesired(p.Desired); err != nil {
 		return receipt, err
 	}
-	r.mu.RLock()
-	c := r.connectors[p.Connector]
-	factory := r.factories[p.Connector]
-	opsFor := r.opsFor
-	capable := r.tlsPosture[p.Connector]
-	r.mu.RUnlock()
-	if !capable || (c == nil && factory == nil) {
-		return receipt, fmt.Errorf("connector: %q does not support TLS posture mutation", p.Connector)
-	}
-	var (
-		ops     Ops
-		cleanup func()
-		err     error
-	)
-	if factory != nil {
-		c, ops, cleanup, err = factory(ctx, DeployPayload{
-			TargetID: p.TargetID, TargetRevision: p.TargetRevision, Connector: p.Connector,
-			Target: p.Target, TargetConfig: append(json.RawMessage(nil), p.TargetConfig...), TenantID: p.TenantID,
-		})
-		if err != nil {
-			return receipt, fmt.Errorf("connector: build TLS posture target %q: %w", p.Connector, err)
+	if p.ExpectedPrevious != nil {
+		if err := ValidateObservedTLSPosture(*p.ExpectedPrevious); err != nil {
+			return receipt, fmt.Errorf("connector: expected previous TLS posture is malformed: %w", err)
 		}
-		if cleanup != nil {
-			defer cleanup()
-		}
-	} else if opsFor != nil {
-		ops = opsFor(p.Connector)
 	}
-	postureConnector, ok := c.(TLSPostureConnector)
-	if !ok || postureConnector == nil {
-		return receipt, fmt.Errorf("connector: %q advertised TLS posture without implementing the contract", p.Connector)
+	postureConnector, sb, cleanup, err := r.resolveTLSPostureTarget(ctx, p)
+	if err != nil {
+		return receipt, err
 	}
-	if ops == nil {
-		return receipt, fmt.Errorf("connector: no ops configured for %q", p.Connector)
-	}
-	sb := &sandbox{ctx: ctx, grant: c.Capabilities(), ops: ops}
+	defer cleanup()
 	previous, err := postureConnector.ReadTLSPosture(ctx, sb, p.Target)
 	if err != nil {
 		return receipt, fmt.Errorf("connector: read current TLS posture: %w", err)
@@ -287,10 +280,22 @@ func (r *Registry) applyTLSPosture(ctx context.Context, p TLSPostureMutation, al
 	if err := ValidateObservedTLSPosture(previous); err != nil {
 		return receipt, fmt.Errorf("connector: current TLS posture is malformed: %w", err)
 	}
-	receipt.Previous = cloneTLSPosture(previous)
-	if EqualTLSPosture(previous, p.Desired) {
-		receipt.Observed = cloneTLSPosture(previous)
-		return receipt, nil
+	if p.ExpectedPrevious != nil {
+		expected := cloneTLSPosture(*p.ExpectedPrevious)
+		receipt.Previous = expected
+		if EqualTLSPosture(previous, p.Desired) {
+			receipt.Observed = cloneTLSPosture(previous)
+			return receipt, nil
+		}
+		if !EqualTLSPosture(previous, expected) {
+			return receipt, fmt.Errorf("connector: current TLS posture changed after durable preparation")
+		}
+	} else {
+		receipt.Previous = cloneTLSPosture(previous)
+		if EqualTLSPosture(previous, p.Desired) {
+			receipt.Observed = cloneTLSPosture(previous)
+			return receipt, nil
+		}
 	}
 	rollback := func(cause error) (TLSPostureReceipt, error) {
 		if rbErr := postureConnector.ApplyTLSPosture(ctx, sb, p.Target, previous); rbErr != nil {
@@ -318,6 +323,62 @@ func (r *Registry) applyTLSPosture(ctx context.Context, p TLSPostureMutation, al
 	receipt.Observed = cloneTLSPosture(observed)
 	receipt.Applied = true
 	return receipt, nil
+}
+
+func validateTLSPostureMutationContext(p TLSPostureMutation) error {
+	if p.RunID == "" || p.FindingID == "" || p.TargetID == "" || p.TargetRevision == "" || p.Connector == "" || p.Target == "" || p.TenantID == "" {
+		return fmt.Errorf("connector: TLS posture mutation requires run, finding, target, revision, connector, target name, and authoritative tenant")
+	}
+	return nil
+}
+
+func (r *Registry) resolveTLSPostureTarget(ctx context.Context, p TLSPostureMutation) (TLSPostureConnector, Sandbox, func(), error) {
+	if r == nil {
+		return nil, nil, nil, fmt.Errorf("connector: registry is not configured")
+	}
+	r.mu.RLock()
+	c := r.connectors[p.Connector]
+	factory := r.factories[p.Connector]
+	opsFor := r.opsFor
+	capable := r.tlsPosture[p.Connector]
+	r.mu.RUnlock()
+	if !capable || (c == nil && factory == nil) {
+		return nil, nil, nil, fmt.Errorf("connector: %q does not support TLS posture mutation", p.Connector)
+	}
+	var (
+		ops     Ops
+		cleanup func()
+		err     error
+	)
+	if factory != nil {
+		c, ops, cleanup, err = factory(ctx, DeployPayload{
+			TargetID: p.TargetID, TargetRevision: p.TargetRevision, Connector: p.Connector,
+			Target: p.Target, TargetConfig: append(json.RawMessage(nil), p.TargetConfig...), TenantID: p.TenantID,
+		})
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("connector: build TLS posture target %q: %w", p.Connector, err)
+		}
+	} else if opsFor != nil {
+		ops = opsFor(p.Connector)
+	}
+	postureConnector, ok := c.(TLSPostureConnector)
+	if !ok || postureConnector == nil {
+		if cleanup != nil {
+			cleanup()
+		}
+		return nil, nil, nil, fmt.Errorf("connector: %q advertised TLS posture without implementing the contract", p.Connector)
+	}
+	if ops == nil {
+		if cleanup != nil {
+			cleanup()
+		}
+		return nil, nil, nil, fmt.Errorf("connector: no ops configured for %q", p.Connector)
+	}
+	sb := &sandbox{ctx: ctx, grant: c.Capabilities(), ops: ops}
+	if cleanup == nil {
+		cleanup = func() {}
+	}
+	return postureConnector, sb, cleanup, nil
 }
 
 // Deploy routes an already decoded payload to the named connector.

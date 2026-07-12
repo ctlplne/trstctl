@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 type breakglassReconciler struct {
@@ -30,6 +31,9 @@ type breakglassOnlineIssuer struct {
 }
 
 func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
+	if d.BreakglassReconciler != nil {
+		return d.BreakglassReconciler, nil
+	}
 	hasCA := len(d.BreakglassCACertDER) > 0
 	hasPublicKey := len(d.BreakglassPublicKeyDER) > 0
 	switch {
@@ -48,13 +52,16 @@ func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
 }
 
 func buildBreakglassIssuer(d Deps, reconciler api.BreakglassReconciler) (api.BreakglassIssuer, error) {
-	if d.BreakglassIssuer == nil {
+	if d.BreakglassIssuer != nil {
+		return d.BreakglassIssuer, nil
+	}
+	if d.BreakglassOfflineIssuer == nil {
 		return nil, nil
 	}
 	if reconciler == nil {
 		return nil, errors.New("server: online break-glass issuance requires verifier material and an event log for audit reconciliation")
 	}
-	return breakglassOnlineIssuer{svc: d.BreakglassIssuer, reconciler: reconciler}, nil
+	return breakglassOnlineIssuer{svc: d.BreakglassOfflineIssuer, reconciler: reconciler}, nil
 }
 
 func (r breakglassReconciler) ReconcileBreakglass(ctx context.Context, tenantID string, bundles []breakglass.Bundle) (int, error) {
@@ -99,6 +106,13 @@ func breakglassVerifierMaterialFromConfig(cfg config.Breakglass) (caCertDER, pub
 	if err != nil {
 		return nil, nil, fmt.Errorf("breakglass.public_key_file: %w", err)
 	}
+	certificatePublicDER, err := crypto.PublicKeyDERFromCert(caCertDER)
+	if err != nil {
+		return nil, nil, fmt.Errorf("breakglass.ca_cert_file: %w", err)
+	}
+	if !bytes.Equal(certificatePublicDER, publicKeyDER) {
+		return nil, nil, errors.New("breakglass: CA certificate and public-key verifier name different keys")
+	}
 	return caCertDER, publicKeyDER, nil
 }
 
@@ -111,12 +125,15 @@ func readPEMOrDERFile(path, wantType string) ([]byte, error) {
 		return nil, err
 	}
 	trimmed := bytes.TrimSpace(raw)
-	if block, _ := pem.Decode(trimmed); block != nil {
+	if block, rest := pem.Decode(trimmed); block != nil {
 		if block.Type != wantType {
 			return nil, fmt.Errorf("PEM block type %q, want %q", block.Type, wantType)
 		}
 		if len(block.Bytes) == 0 {
 			return nil, fmt.Errorf("PEM block %q is empty", wantType)
+		}
+		if len(bytes.TrimSpace(rest)) != 0 {
+			return nil, fmt.Errorf("%s file must contain exactly one public PEM block", wantType)
 		}
 		return append([]byte(nil), block.Bytes...), nil
 	}

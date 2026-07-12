@@ -39,6 +39,9 @@ type CAHierarchyService interface {
 	IssueLeaf(ctx context.Context, tenantID, caID string, req CAIssueLeafRequest) (CAIssuedLeaf, error)
 	RotateAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotation, error)
 	RekeyAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRekeyRequest) (CAAuthorityRotation, error)
+	CrossSignAuthority(ctx context.Context, tenantID, caID string, req CACrossSignRequest) (CACrossSign, error)
+	ImportOfflineRootCrossSign(ctx context.Context, tenantID, caID string, req CAOfflineCrossSignImportRequest) (CACrossSign, error)
+	RekeyOfflineRoot(ctx context.Context, tenantID, caID string, req CAOfflineRootRekeyRequest) (CAOfflineRootRekey, error)
 }
 
 // WithCAHierarchy wires the served CA hierarchy surface. When unset, the routes
@@ -57,14 +60,18 @@ type CASpec struct {
 }
 
 type CACeremonyStartRequest struct {
-	Operation      string `json:"operation"`
-	ParentID       string `json:"parent_id"`
-	AuthorityID    string `json:"authority_id,omitempty"`
-	CSRPem         string `json:"csr_pem,omitempty"`
-	CertificatePEM string `json:"certificate_pem,omitempty"`
-	SignerHandle   string `json:"signer_handle,omitempty"`
-	Threshold      int    `json:"threshold"`
-	Spec           CASpec `json:"spec"`
+	Operation                  string `json:"operation"`
+	ParentID                   string `json:"parent_id"`
+	AuthorityID                string `json:"authority_id,omitempty"`
+	CSRPem                     string `json:"csr_pem,omitempty"`
+	CertificatePEM             string `json:"certificate_pem,omitempty"`
+	TargetCertificatePEM       string `json:"target_certificate_pem,omitempty"`
+	CrossCertificatePEM        string `json:"cross_certificate_pem,omitempty"`
+	ReverseCrossCertificatePEM string `json:"reverse_cross_certificate_pem,omitempty"`
+	Reason                     string `json:"reason,omitempty"`
+	SignerHandle               string `json:"signer_handle,omitempty"`
+	Threshold                  int    `json:"threshold"`
+	Spec                       CASpec `json:"spec"`
 }
 
 type CACreateRootRequest struct {
@@ -116,6 +123,26 @@ type CAAuthorityRekeyRequest struct {
 	CeremonyID string `json:"ceremony_id"`
 	TTLSeconds int64  `json:"ttl_seconds,omitempty"`
 	Reason     string `json:"reason,omitempty"`
+}
+
+type CACrossSignRequest struct {
+	CeremonyID     string `json:"ceremony_id"`
+	CertificatePEM string `json:"certificate_pem"`
+}
+
+type CAOfflineCrossSignImportRequest struct {
+	CeremonyID           string `json:"ceremony_id"`
+	TargetCertificatePEM string `json:"target_certificate_pem"`
+	CrossCertificatePEM  string `json:"cross_certificate_pem"`
+}
+
+type CAOfflineRootRekeyRequest struct {
+	CeremonyID              string `json:"ceremony_id"`
+	SuccessorCertificatePEM string `json:"successor_certificate_pem"`
+	NewSignedByPreviousPEM  string `json:"new_signed_by_previous_pem"`
+	PreviousSignedByNewPEM  string `json:"previous_signed_by_new_pem"`
+	Reason                  string `json:"reason"`
+	Spec                    CASpec `json:"spec"`
 }
 
 type CAIssueIntermediateRequest struct {
@@ -184,6 +211,21 @@ type CAAuthorityRotation struct {
 	IssuePath       string                      `json:"issue_path"`
 	ActiveIssuePath string                      `json:"active_issue_path"`
 	OverlapIssuers  []CAAuthorityRotationIssuer `json:"overlap_issuers"`
+}
+
+type CACrossSign struct {
+	IssuerAuthorityID string `json:"issuer_authority_id"`
+	TargetSHA256      string `json:"target_sha256"`
+	CertificatePEM    string `json:"certificate_pem"`
+	CeremonyID        string `json:"ceremony_id"`
+	Imported          bool   `json:"imported"`
+}
+
+type CAOfflineRootRekey struct {
+	Rotation               CAAuthorityRotation `json:"rotation"`
+	NewSignedByPreviousPEM string              `json:"new_signed_by_previous_pem"`
+	PreviousSignedByNewPEM string              `json:"previous_signed_by_new_pem"`
+	CeremonyID             string              `json:"ceremony_id"`
 }
 
 type CAIssuedLeaf struct {
@@ -484,6 +526,66 @@ func (a *API) rekeyCAAuthority(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusCreated, rotation, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) crossSignCAAuthority(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CACrossSignRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		result, err := a.caHierarchy.CrossSignAuthority(ctx, tenantID, id, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, result, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) importOfflineRootCrossSign(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAOfflineCrossSignImportRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		result, err := a.caHierarchy.ImportOfflineRootCrossSign(ctx, tenantID, id, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, result, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) rekeyOfflineRoot(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAOfflineRootRekeyRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		result, err := a.caHierarchy.RekeyOfflineRoot(ctx, tenantID, id, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, result, nil
 	})
 }
 

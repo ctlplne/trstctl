@@ -142,11 +142,16 @@ approver must set `Approved`; the trstctl agent never approves requests itself.
 The agent accepts `spec.signerName` values such as `trstctl.com/trstctl` or
 `trstctl.com/<issuer-name>`, optionally disambiguated with the annotations
 `trstctl.com/issuer-name`, `trstctl.com/issuer-kind`, and
-`trstctl.com/issuer-group`. It writes only `status.certificate` and a Ready
-condition to the CSR status subresource. CI proves the cert-manager path against
-a real `kind` cluster with real cert-manager installed, and served controller
+`trstctl.com/issuer-group`. It writes the PEM chain to `status.certificate` while
+preserving Kubernetes' `Approved` condition; native CSR completion is the
+presence of `status.certificate`, not a custom `Ready` condition. CI proves the
+cert-manager path against a real `kind` cluster with real cert-manager installed,
+and served controller
 acceptance proves both the trstctl-native path (`Certificate` -> local CSR ->
 trstctl signer -> TLS `Secret`) and CAP-K8S-04 native CSR support.
+The shipped ClusterRole grants `sign` only for `trstctl.com/trstctl`; if you use a
+named signer such as `trstctl.com/payments`, add that exact signer resource name
+to the ClusterRole rather than granting the agent every Kubernetes signer.
 
 The same agent also serves CAP-K8S-07 trust-bundle distribution. Operators apply a
 cluster-scoped `TrustBundle.trstctl.com` resource with a public PEM CA bundle and a
@@ -188,7 +193,12 @@ The served hierarchy API lives at `/api/v1/ca/ceremonies`,
 `/api/v1/ca/authorities/{id}/offline-intermediates`, and
 `/api/v1/ca/authorities/{id}/issue`, with zero-downtime successor activation at
 `/api/v1/ca/authorities/{id}/rotate` and signer-backed renewal/re-key at
-`/api/v1/ca/authorities/{id}/rekey`. Online root and intermediate private keys are
+`/api/v1/ca/authorities/{id}/rekey`. Signer-backed target-CA cross-signing is served
+at `/api/v1/ca/authorities/{id}/cross-sign`; public offline-root successor and
+bidirectional cross-certificate import is served at
+`/api/v1/ca/authorities/{id}/offline-rekey`; and an offline-root-produced target
+cross-certificate is verified/imported at
+`/api/v1/ca/authorities/{id}/offline-cross-signs`. Online root and intermediate private keys are
 created in the isolated signing service and referenced by signer handles; the control
 plane stores certificates, chains, metadata, and ceremony state, but it never
 receives the CA private key. Existing CA import accepts a public root or
@@ -206,16 +216,21 @@ certificates to the successor. A re-key activation consumes a `rotation:<ca-id>`
 ceremony, creates a fresh signer-backed root or intermediate certificate with the
 same authority policy, marks the predecessor `superseded`, records `replaces_id`,
 and keeps both predecessor and successor issue URLs working while new certificates
-chain to the fresh CA. Offline-root re-key and cross-sign distribution remain
-operator procedures because the offline root key never enters trstctl. Every served
+chain to the fresh CA. Offline-root re-key remains an operator ceremony because the
+offline root key never enters trstctl, but the control plane now verifies and records
+the public successor plus both constrained cross-certificates atomically. Every served
 step (`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
 `ca.authority.imported`, `ca.intermediate_csr.issued`, `ca.intermediate.created`,
-`ca.authority.rotated`, `ca.authority.rekeyed`, `ca.endentity.issued`) is a
+`ca.authority.rotated`, `ca.authority.rekeyed`, `ca.cross_signed`,
+`ca.endentity.issued`) is a
 tenant-scoped event carrying the ceremony/authority context and is recorded
 immutably in the tamper-evident log.
-Cross-signing remains a purpose-bound operator workflow using
-`cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremonies until a served
-cross-sign route ships. The full operator procedure is the [CA key-ceremony
+Cross-signing uses a purpose-bound
+`cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony. The served signer-backed
+route performs the private operation inside the signer. Offline-root routes accept
+only public certificates and verify validity, key usage, EKU, DNS, path length,
+subject/public key, SKI, AKI, and both chain directions before consuming the
+ceremony. The full operator procedure is the [CA key-ceremony
 runbook](../runbooks/key-ceremony.md).
 
 ### Profiles and the registration-authority split (F53)

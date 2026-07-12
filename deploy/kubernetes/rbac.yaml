@@ -36,6 +36,14 @@ rules:
   - apiGroups: ["certificates.k8s.io"]
     resources: ["certificatesigningrequests/status"]
     verbs: ["update", "patch"]
+  # Kubernetes' CertificateSigning admission plugin separately authorizes the
+  # signerName when status.certificate is written. Keep the shipped grant bound
+  # to the default trstctl signer; deployments that add named issuers must add
+  # those exact trstctl.com/<issuer-name> resourceNames.
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["signers"]
+    resourceNames: ["trstctl.com/trstctl"]
+    verbs: ["sign"]
   - apiGroups: ["trstctl.com"]
     resources: ["issuers", "clusterissuers", "certificates", "trustbundles"]
     verbs: ["get", "list", "watch"]

@@ -6,16 +6,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // IAM-06 acceptance: the running control plane serves the recovery-side
@@ -79,24 +82,51 @@ func TestServedBreakglassReconcileRecordsAuditChain(t *testing.T) {
 
 // TRACE-006/F34 acceptance: the served control plane can perform online
 // emergency issuance when a signer-backed break-glass issuer is configured. The
-// request still needs an m-of-n operator quorum, the certificate is returned as a
-// self-verifying bundle, and the served route reconciles the bundle into the
+// execution request cannot nominate approvers: distinct authenticated ceremony
+// events must satisfy the configured m-of-n roster. The certificate is returned as
+// a self-verifying bundle, and the served route records the bundle in the
 // hash-chained audit log before responding.
 func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testing.T) {
-	svc, caDER, pubDER := servedBreakglassService(t)
+	var caDER, pubDER []byte
 	auditKey, err := jose.GenerateRSASigningKey("trace-006-breakglass-audit")
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		const handle = "breakglass-served-online"
+		signer, err := d.Signer.Client().GenerateDualControlKeyHandle(context.Background(), crypto.ECDSAP256, handle,
+			[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, d.SignAuthorizer)
+		if err != nil {
+			t.Fatalf("create persisted break-glass signer: %v", err)
+		}
+		issued, err := crypto.SelfSignedHierarchyCA(signer, crypto.HierarchyCAProfile{
+			CommonName: "Served Breakglass CA", MaxPathLen: 0, TTL: 24 * time.Hour,
+		})
+		if err != nil {
+			t.Fatalf("create signer-backed break-glass CA: %v", err)
+		}
+		caDER = issued.CertificateDER
+		pubDER = append([]byte(nil), signer.Public().DER...)
+		runtime, err := breakglassRotationFromConfig(context.Background(), config.Breakglass{
+			Enabled: true, OnlineEnabled: true, CACertFile: "configured", PublicKeyFile: "configured",
+			TenantID: servedTestTenant, SignerHandle: handle, Operators: []string{"op1", "op2", "op3"}, Threshold: 2,
+		}, d.Store, d.Log, d.Signer, d.SignAuthorizer, caDER, pubDER)
+		if err != nil {
+			t.Fatalf("assemble online break-glass runtime: %v", err)
+		}
 		d.AuditSigningKey = auditKey
 		d.BreakglassCACertDER = caDER
 		d.BreakglassPublicKeyDER = pubDER
-		d.BreakglassIssuer = svc
+		d.BreakglassIssuer = runtime
+		d.BreakglassCeremonies = runtime
+		d.BreakglassRotation = runtime
+		d.BreakglassReconciler = runtime
 	})
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "online-breakglass-commander", []string{
 		string(authz.CertsIssue), string(authz.AuditRead),
 	})
+	op1 := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "op1", []string{string(authz.IssuersWrite)})
+	op2 := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "op2", []string{string(authz.IssuersWrite)})
 	workload, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatalf("generate workload key: %v", err)
@@ -110,14 +140,29 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 		t.Fatalf("create emergency CSR: %v", err)
 	}
 
-	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-issue", map[string]any{
+	request := map[string]any{
 		"request_id":  "trace-006-online-emergency-1",
 		"subject":     "breakglass-online.svc.example.test",
 		"csr_der":     csrDER,
 		"reason":      "regional CA outage while production recovery needs one short-lived certificate",
-		"approvals":   []string{"op1", "op2"},
 		"ttl_seconds": 900,
-	})
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue-ceremonies", token, "trace-006-breakglass-ceremony", request)
+	if code != http.StatusCreated {
+		t.Fatalf("start online break-glass ceremony = %d body=%s", code, body)
+	}
+	var ceremony api.BreakglassCeremony
+	if err := json.Unmarshal(body, &ceremony); err != nil || ceremony.ID == "" || ceremony.Threshold != 2 {
+		t.Fatalf("decode exact break-glass ceremony: %+v err=%v body=%s", ceremony, err, body)
+	}
+	for i, approvalToken := range []string{op1, op2} {
+		code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/"+ceremony.ID+"/approvals", approvalToken, fmt.Sprintf("trace-006-approval-%d", i), nil)
+		if code != http.StatusOK {
+			t.Fatalf("approval %d = %d body=%s", i, code, body)
+		}
+	}
+	request["ceremony_id"] = ceremony.ID
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-issue", request)
 	if code != http.StatusCreated {
 		t.Fatalf("online break-glass issue = %d body=%s; want 201", code, body)
 	}
@@ -160,14 +205,23 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 		t.Fatalf("online break-glass audit record is not chain-verifiable: %v", err)
 	}
 
-	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-subquorum", map[string]any{
+	subquorum := map[string]any{
 		"request_id":  "trace-006-online-emergency-2",
 		"subject":     "breakglass-online.svc.example.test",
 		"csr_der":     csrDER,
 		"reason":      "sub-quorum should fail closed",
-		"approvals":   []string{"op1"},
 		"ttl_seconds": 900,
-	})
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue-ceremonies", token, "trace-006-subquorum-ceremony", subquorum)
+	if code != http.StatusCreated || json.Unmarshal(body, &ceremony) != nil {
+		t.Fatalf("start sub-quorum ceremony = %d body=%s", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/"+ceremony.ID+"/approvals", op1, "trace-006-subquorum-approval", nil)
+	if code != http.StatusOK {
+		t.Fatalf("sub-quorum approval = %d body=%s", code, body)
+	}
+	subquorum["ceremony_id"] = ceremony.ID
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-subquorum", subquorum)
 	if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("quorum not met")) {
 		t.Fatalf("sub-quorum online break-glass issue = %d body=%s; want 422 quorum not met", code, body)
 	}

@@ -304,12 +304,14 @@ up a new CA, re-issue, and distribute the new bundle — see the
 [incident-response runbook](runbooks/incident-response.md) and the m-of-n
 [key-ceremony runbook](runbooks/key-ceremony.md). Helm `externalKMS` is wired for
 signer key-store envelope custody: the chart renders `--kms-*` signer arguments and
-omits the local KEK mount when `externalKMS.enabled=true`. Online m-of-n
-break-glass issuance is not production-assembled: `/api/v1/breakglass/issue` fails
-closed without an issuer and its current caller-supplied names are not independent
-approval artifacts. Recovery reconciliation is served at
-`POST /api/v1/breakglass/reconcile` after operators bring signed emergency bundles
-back to the control plane.
+omits the local KEK mount when `externalKMS.enabled=true`. A separately provisioned
+online break-glass authority can issue and rotate during primary-CA recovery when its
+tenant, persisted dual-control signer handle, authenticated operator roster, and
+threshold are configured. Open an exact ceremony, collect approvals from distinct
+operator tokens, then execute it; requests cannot supply approver names. Rotation
+returns both cross-chain directions for a controlled overlap/rollback window.
+Recovery reconciliation remains served at `POST /api/v1/breakglass/reconcile` after
+operators bring signed emergency bundles back to the control plane.
 
 See [Configuration → Datastores](configuration.md#datastores) and
 [Configuration → Signer](configuration.md#signer-topology--ca-custody) for the
