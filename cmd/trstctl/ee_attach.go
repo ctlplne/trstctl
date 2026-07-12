@@ -21,8 +21,8 @@ import (
 	eegovernance "trstctl.com/trstctl/ee/governance"
 	eekmip "trstctl.com/trstctl/ee/kmip"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
-	eepqc "trstctl.com/trstctl/ee/pqc"
 	eepqcmigration "trstctl.com/trstctl/ee/pqcmigration"
+	eepqcruntime "trstctl.com/trstctl/ee/pqcruntime"
 	eeprovider "trstctl.com/trstctl/ee/provider"
 	eereconcile "trstctl.com/trstctl/ee/reconcile"
 	eereconcileplanremediation "trstctl.com/trstctl/ee/reconcile/plan/remediation"
@@ -259,7 +259,7 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 }
 
 func attachPQC(log *slog.Logger, deps *server.Deps) {
-	cryptoRuntime := eepqc.NewRuntime()
+	cryptoRuntime := eepqcruntime.NewRuntime()
 	migrationRuntime := eepqcmigration.NewRuntime(deps.Store)
 	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, migrationRuntime.APIOptionsFactory)
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, migrationRuntime.OutboxFactory)

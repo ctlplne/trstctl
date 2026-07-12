@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package pqc
+package pqcruntime
 
 import (
+	"bytes"
 	"context"
 	"encoding/pem"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -68,4 +70,28 @@ func TestSPIFFEHybridAdditionalSVIDInteroperatesWithOpenSSL(t *testing.T) {
 	if !strings.Contains(string(text), "ML-DSA-65") || !strings.Contains(string(text), id) {
 		t.Fatalf("OpenSSL did not consume hybrid PQ SVID:\n%s", text)
 	}
+}
+
+func requireOpenSSLMLDSA(t *testing.T) string {
+	t.Helper()
+	path, err := exec.LookPath("openssl")
+	if err != nil {
+		t.Fatalf("stock OpenSSL is required for ML-DSA interoperability: %v", err)
+	}
+	cmd := exec.Command(path, "list", "-signature-algorithms")
+	out, err := cmd.CombinedOutput()
+	if err != nil || !bytes.Contains(out, []byte("ML-DSA-65")) {
+		t.Fatalf("stock OpenSSL lacks ML-DSA-65 support: %v\n%s", err, out)
+	}
+	return path
+}
+
+func runOpenSSL(t *testing.T, openssl string, args ...string) []byte {
+	t.Helper()
+	cmd := exec.Command(openssl, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("openssl %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return out
 }

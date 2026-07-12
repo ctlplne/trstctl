@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package pqc
+package pqcruntime
 
-import "trstctl.com/trstctl/internal/editionseam"
+import (
+	"trstctl.com/trstctl/ee/pqc"
+	"trstctl.com/trstctl/internal/editionseam"
+)
 
 // Runtime is the complete PQC issuance object graph attached by the one AN-9
 // seam. Keeping the construction in one called function gives production and
@@ -17,9 +20,9 @@ type Runtime struct {
 
 func NewRuntime() Runtime {
 	return Runtime{
-		LeafSigner:        SignLicensedLeafFromCSRWithProfile,
-		CSRInspector:      InspectHybridCSR,
-		CSRParser:         ParsePureMLDSACSR,
+		LeafSigner:        pqc.SignLicensedLeafFromCSRWithProfile,
+		CSRInspector:      pqc.InspectHybridCSR,
+		CSRParser:         pqc.ParsePureMLDSACSR,
 		SPIFFESVIDFactory: NewSPIFFEHybridSVIDIssuer,
 	}
 }

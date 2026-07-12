@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package pqc
+package pqcruntime
 
 import (
 	"context"
 	"errors"
 	"time"
 
+	"trstctl.com/trstctl/ee/pqc"
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
@@ -24,7 +25,7 @@ type spiffeHybridIssuer struct {
 // AdditionalX509SVIDIssuer interface.
 func NewSPIFFEHybridSVIDIssuer(caCertDER []byte, caSigner boundarycrypto.DigestSigner) (spiffe.AdditionalX509SVIDIssuer, error) {
 	if len(caCertDER) == 0 || caSigner == nil {
-		return nil, errors.New("pqc: SPIFFE hybrid issuer requires signer-backed CA")
+		return nil, errors.New("pqcruntime: SPIFFE hybrid issuer requires signer-backed CA")
 	}
 	return &spiffeHybridIssuer{caCertDER: append([]byte(nil), caCertDER...), caSigner: caSigner}, nil
 }
@@ -35,9 +36,9 @@ func (s *spiffeHybridIssuer) IssueAdditionalX509SVID(_ context.Context, spiffeID
 	}
 	ttl := time.Until(expiresAt)
 	if ttl <= 0 {
-		return spiffe.AdditionalX509SVID{}, errors.New("pqc: SPIFFE hybrid SVID expiry is not in the future")
+		return spiffe.AdditionalX509SVID{}, errors.New("pqcruntime: SPIFFE hybrid SVID expiry is not in the future")
 	}
-	key, pkcs8, err := GenerateInteroperableMLDSAKey(MLDSA65)
+	key, pkcs8, err := pqc.GenerateInteroperableMLDSAKey(pqc.MLDSA65)
 	if err != nil {
 		return spiffe.AdditionalX509SVID{}, err
 	}
@@ -48,13 +49,13 @@ func (s *spiffeHybridIssuer) IssueAdditionalX509SVID(_ context.Context, spiffeID
 			secret.Wipe(pkcs8)
 		}
 	}()
-	spki, err := boundarycrypto.MarshalOpaqueSubjectPublicKeyInfo(MLDSA65OID, key.Public().DER)
+	spki, err := boundarycrypto.MarshalOpaqueSubjectPublicKeyInfo(pqc.MLDSA65OID, key.Public().DER)
 	if err != nil {
 		return spiffe.AdditionalX509SVID{}, err
 	}
 	certDER, err := boundarycrypto.SignOpaqueLeafFromVerifiedRequestWithProfile(s.caCertDER, s.caSigner, boundarycrypto.OpaqueLeafRequest{
 		Info: boundarycrypto.CSRInfo{
-			KeyAlgorithm: string(MLDSA65), KeyBits: len(key.Public().DER) * 8,
+			KeyAlgorithm: string(pqc.MLDSA65), KeyBits: len(key.Public().DER) * 8,
 			URIs: []string{spiffeID},
 		},
 		SubjectPublicKeyInfoDER: spki,
