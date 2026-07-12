@@ -3,6 +3,9 @@
 package crypto_test
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,30 +31,43 @@ var fuzzFuncNameRE = regexp.MustCompile(`(?m)^func (Fuzz\w+)\(`)
 // Paths are relative to this package directory (internal/crypto), which is the
 // test's working directory.
 func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
-	parsers := map[string]string{
-		".":                    "PKCS#10 CSR (VerifyCertificateRequest)",
-		"certinfo":             "X.509 certificate (Inspect)",
-		"ctlog":                "CT-log RFC 6962 (ParseSTH / ParseEntries)",
-		"sshkeys":              "SSH keys (authorized_keys / known_hosts / .pub)",
-		"jose":                 "JOSE / ACME JWS",
-		"seal":                 "binary seal container (seal.Open)",
-		"../protocols/acme":    "ACME new-order / finalize",
-		"../protocols/ari":     "ARI CertID",
-		"../protocols/est":     "EST enroll body (base64 PKCS#10)",
-		"../tsa":               "RFC 3161 TimeStampReq served by /tsa",
-		"../signing":           "signer SignRequest (protobuf)",
-		"../secretscan":        "scanner-report ingest (untrusted JSON)",
-		"../../ee/kmip":        "KMIP TTLV wire frame parser",
-		"../attest/awsiid":     "AWS IID attester Attest (untrusted CMS pre-verification)",
-		"../attest/azureimds":  "Azure IMDS attester Attest (untrusted CMS pre-verification)",
-		"../attest/gcpmeta":    "GCP IIT attester Attest (untrusted JWT/JSON claims)",
-		"../attest/githuboidc": "GitHub Actions OIDC attester Attest (untrusted JWT/JSON claims)",
-		"../attest/k8ssat":     "Kubernetes projected SAT attester Attest (untrusted JWT/JSON claims)",
-		"../attest/tpmquote":   "TPM 2.0 quote attester Attest (untrusted JSON quote envelope)",
+	// TEST-FUZZASSERT-001: discover untrusted-input parser ENTRY POINTS by AST
+	// rather than a hand-maintained list, so a newly-added parser cannot dodge
+	// the denominator. The walker finds every exported function across the
+	// security-boundary package roots whose first parameter is a raw []byte and
+	// whose name begins with a parse/decode verb — the shape of "turn
+	// attacker-controlled bytes into structure". Each such parser's package must
+	// carry a Go fuzz target.
+	roots := []string{".", "../protocols", "../tsa", "../signing", "../secretscan", "../attest", "../../ee/kmip"}
+	discovered := discoverUntrustedParsers(t, roots)
+
+	// The walker must not silently regress to finding nothing: pin a few
+	// entry points it MUST always surface.
+	for _, sentinel := range []string{"Inspect", "ParseSCEPRequest", "ParseTTLV", "ParseOrderRequest"} {
+		if _, ok := discovered[sentinel]; !ok {
+			t.Fatalf("AST parser discovery did not surface the sentinel entry point %q — the walker is broken or the boundary roots changed", sentinel)
+		}
 	}
-	for dir, what := range parsers {
+
+	// Every discovered parser's package must have a fuzz target.
+	for fn, dir := range discovered {
 		if !dirHasFuzzTarget(t, dir) {
-			t.Errorf("untrusted parser %s (%s) has no Go fuzz target — CLAUDE.md §6 requires every parser that touches untrusted input to be fuzzed", dir, what)
+			t.Errorf("untrusted parser %s (in %s) has no Go fuzz target — CLAUDE.md §6 / TEST-FUZZASSERT-001 require every parser that touches untrusted input to be fuzzed", fn, dir)
+		}
+	}
+
+	// A few boundary parsers take io.Reader / a protobuf message / a string
+	// rather than a leading []byte, so the []byte-first heuristic above cannot
+	// classify them. Pin their packages explicitly so their coverage cannot be
+	// lost (est enroll body reads an io.Reader; the signer parses a protobuf
+	// SignRequest; ARI CertID parses a string path segment).
+	for dir, what := range map[string]string{
+		"../protocols/est": "EST enroll body (io.Reader → base64 PKCS#10)",
+		"../protocols/ari": "ARI CertID (string path segment)",
+		"../signing":       "signer SignRequest (protobuf)",
+	} {
+		if !dirHasFuzzTarget(t, dir) {
+			t.Errorf("untrusted parser package %s (%s) has no Go fuzz target (non-[]byte signature, pinned explicitly)", dir, what)
 		}
 	}
 
@@ -160,6 +176,68 @@ func requireFuzzFuncByName(t *testing.T, dir string, want map[string]string) {
 			t.Errorf("required fuzz target %s (%s) is missing — CLAUDE.md §6 / FUZZ-001/002 require it; do not remove it", name, what)
 		}
 	}
+}
+
+// untrustedParseVerbs prefixes the name of a function that turns
+// attacker-controlled bytes into structure.
+var untrustedParseVerbs = []string{"Parse", "Inspect", "Decode", "Open", "Unmarshal"}
+
+// discoverUntrustedParsers AST-walks the given boundary roots and returns every
+// exported function whose first parameter is a raw []byte and whose name begins
+// with a parse/decode verb, mapped to the directory it lives in. This is the
+// executable denominator for "fuzz every untrusted parser": a newly-added
+// []byte parser is discovered automatically, so it cannot dodge the guard
+// (TEST-FUZZASSERT-001).
+func discoverUntrustedParsers(t *testing.T, roots []string) map[string]string {
+	t.Helper()
+	found := map[string]string{}
+	firstParamIsByteSlice := func(fn *ast.FuncDecl) bool {
+		if fn.Type.Params == nil || len(fn.Type.Params.List) == 0 {
+			return false
+		}
+		at, ok := fn.Type.Params.List[0].Type.(*ast.ArrayType)
+		if !ok || at.Len != nil {
+			return false
+		}
+		id, ok := at.Elt.(*ast.Ident)
+		return ok && id.Name == "byte"
+	}
+	for _, root := range roots {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			fset := token.NewFileSet()
+			file, perr := parser.ParseFile(fset, path, nil, 0)
+			if perr != nil {
+				return nil // unparseable file is not a parser entry point
+			}
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Recv != nil || !fn.Name.IsExported() {
+					continue
+				}
+				verbMatched := false
+				for _, v := range untrustedParseVerbs {
+					if strings.HasPrefix(fn.Name.Name, v) {
+						verbMatched = true
+						break
+					}
+				}
+				if verbMatched && firstParamIsByteSlice(fn) {
+					found[fn.Name.Name] = filepath.Dir(path)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk boundary root %q: %v", root, err)
+		}
+	}
+	if len(found) == 0 {
+		t.Fatal("AST parser discovery found no untrusted parsers — the walker or the boundary roots are broken")
+	}
+	return found
 }
 
 func dirHasFuzzTarget(t *testing.T, dir string) bool {

@@ -48,5 +48,16 @@ func FuzzInspect(f *testing.F) {
 		if err == nil && info.SHA256Fingerprint == "" {
 			t.Fatal("Inspect returned a nil error but an empty fingerprint")
 		}
+		// Round-trip invariant (TEST-FUZZASSERT-001): Inspect is a pure decode, so
+		// re-inspecting the same bytes must be deterministic — same success/failure
+		// and, on success, the same fingerprint. A parser whose result depends on
+		// hidden state or reads past its input would break this.
+		info2, err2 := certinfo.Inspect(raw)
+		if (err == nil) != (err2 == nil) {
+			t.Fatalf("Inspect is non-deterministic: first err=%v, second err=%v", err, err2)
+		}
+		if err == nil && info.SHA256Fingerprint != info2.SHA256Fingerprint {
+			t.Fatalf("Inspect fingerprint is non-deterministic: %q vs %q", info.SHA256Fingerprint, info2.SHA256Fingerprint)
+		}
 	})
 }
