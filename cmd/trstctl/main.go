@@ -417,16 +417,21 @@ func configSummary(cfg *config.Config) string {
 	// Served issuance protocols (EXC-WIRE-02): show which RFC protocols the binary
 	// will mount. They activate only when an issuing CA is provisioned (a signer is
 	// configured), and config validation requires a tenant before startup (AN-1).
-	fmt.Fprintf(&b, "protocols.acme.enabled: %t\n", cfg.Protocols.ACME.Enabled)
-	fmt.Fprintf(&b, "protocols.est.enabled: %t\n", cfg.Protocols.EST.Enabled)
-	fmt.Fprintf(&b, "protocols.scep.enabled: %t\n", cfg.Protocols.SCEP.Enabled)
-	fmt.Fprintf(&b, "protocols.cmp.enabled: %t\n", cfg.Protocols.CMP.Enabled)
-	fmt.Fprintf(&b, "protocols.tsa.enabled: %t\n", cfg.Protocols.TSA.Enabled)
-	fmt.Fprintf(&b, "protocols.spiffe.enabled: %t\n", cfg.Protocols.SPIFFE.Enabled)
-	if cfg.Protocols.SPIFFE.Enabled {
-		fmt.Fprintf(&b, "protocols.spiffe.trust_domain: %s\n", cfg.Protocols.SPIFFE.TrustDomain)
+	protocols, err := cfg.Protocols.Effective()
+	if err != nil {
+		protocols = cfg.Protocols // Load validates first; retain fail-safe diagnostics for direct callers.
 	}
-	fmt.Fprintf(&b, "protocols.ssh.enabled: %t\n", cfg.Protocols.SSH.Enabled)
+	fmt.Fprintf(&b, "protocols.profile: %s\n", protocols.Profile)
+	fmt.Fprintf(&b, "protocols.acme.enabled: %t\n", protocols.ACME.Enabled)
+	fmt.Fprintf(&b, "protocols.est.enabled: %t\n", protocols.EST.Enabled)
+	fmt.Fprintf(&b, "protocols.scep.enabled: %t\n", protocols.SCEP.Enabled)
+	fmt.Fprintf(&b, "protocols.cmp.enabled: %t\n", protocols.CMP.Enabled)
+	fmt.Fprintf(&b, "protocols.tsa.enabled: %t\n", protocols.TSA.Enabled)
+	fmt.Fprintf(&b, "protocols.spiffe.enabled: %t\n", protocols.SPIFFE.Enabled)
+	if protocols.SPIFFE.Enabled {
+		fmt.Fprintf(&b, "protocols.spiffe.trust_domain: %s\n", protocols.SPIFFE.TrustDomain)
+	}
+	fmt.Fprintf(&b, "protocols.ssh.enabled: %t\n", protocols.SSH.Enabled)
 	// Served agent steady-state channel (WIRE-004 / OPS-005): these are
 	// redaction-safe fleet rollout knobs. They contain addresses and public CA paths,
 	// not tokens or private key material.

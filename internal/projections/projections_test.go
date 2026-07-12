@@ -84,7 +84,7 @@ func newStore(t *testing.T) *store.Store {
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox, rate_limits,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
-		          agents, agent_bootstrap_tokens, policy_bindings, tenant_members, attestations, api_tokens, certificates,
+		          agents, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, credentials, certificate_profiles,
 		          notification_test_operations, notification_delivery_receipts,

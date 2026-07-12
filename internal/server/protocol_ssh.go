@@ -222,6 +222,9 @@ func (s *Server) RunSPIFFE(ctx context.Context) {
 	if s.protocols == nil || s.protocols.spiffe == nil {
 		return
 	}
+	if !s.protocols.activation.Wait(ctx) {
+		return
+	}
 	sp := s.protocols.spiffe
 	if err := spiffe.ServeWorkloadAPI(ctx, sp.socket, sp.server); err != nil && ctx.Err() == nil {
 		s.logger.Warn("spiffe workload API server stopped", "error", err.Error())

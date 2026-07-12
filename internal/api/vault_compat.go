@@ -182,9 +182,10 @@ var vaultCompatRoutes = []vaultCompatRoute{
 // state-changing path still goes through the same tenant, RBAC, idempotency, audit,
 // and sealed-at-rest implementation as /api/v1/secrets/*.
 func (a *API) mountVaultCompat(mux *http.ServeMux) {
-	for _, rt := range vaultCompatRoutes {
+	for _, rt := range allVaultCompatRoutes() {
 		mux.HandleFunc(rt.method+" "+rt.pattern, rt.handler(a))
 	}
+	a.mountVaultTransitRoutes(mux)
 }
 
 func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc {
@@ -204,6 +205,16 @@ func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerF
 				writeVaultError(w, vaultStatus(err), err.Error())
 				return
 			}
+		}
+		requestPath := strings.TrimPrefix(strings.Trim(r.URL.Path, "/"), "v1/")
+		allowed, governed, err := a.vaultACLDecision(r.Context(), principal.TenantID, principalRoles(principal), requestPath, vaultRequestCapability(r))
+		if err != nil {
+			writeVaultError(w, http.StatusInternalServerError, "ACL policy projection unavailable")
+			return
+		}
+		if governed && !allowed {
+			writeVaultError(w, http.StatusForbidden, "permission denied by Vault ACL policy")
+			return
 		}
 		if a.rateLimiter != nil {
 			allowed, retryAfter, err := a.rateLimiter.Allow(r.Context(), principal.TenantID)
@@ -295,8 +306,41 @@ func (a *API) vaultMountInfo(w http.ResponseWriter, r *http.Request) {
 			"path": vaultPKIMount + "/",
 			"type": "pki",
 		}))
+	case path == "transit" || strings.HasPrefix(path, "transit/"):
+		if a.transit == nil {
+			writeVaultError(w, http.StatusNotFound, "no handler for route")
+			return
+		}
+		writeVaultJSON(w, http.StatusOK, newVaultEnvelope(map[string]any{
+			"path": "transit/",
+			"type": "transit",
+		}))
 	default:
-		writeVaultError(w, http.StatusNotFound, "no handler for route")
+		if a.tenantFn == nil {
+			writeVaultError(w, http.StatusNotFound, "no handler for route")
+			return
+		}
+		tenantID, ok := a.tenant(r)
+		if !ok {
+			writeVaultError(w, http.StatusForbidden, "permission denied")
+			return
+		}
+		state, err := a.vaultCompat.snapshot(r.Context(), tenantID)
+		if err != nil {
+			writeVaultError(w, http.StatusInternalServerError, "mount projection unavailable")
+			return
+		}
+		mountName, _, _ := strings.Cut(path, "/")
+		mount, exists := state.mounts[mountName]
+		if !exists {
+			writeVaultError(w, http.StatusNotFound, "no handler for route")
+			return
+		}
+		writeVaultJSON(w, http.StatusOK, newVaultEnvelope(map[string]any{
+			"path":    mount.Path + "/",
+			"type":    mount.Type,
+			"options": mount.Options,
+		}))
 	}
 }
 

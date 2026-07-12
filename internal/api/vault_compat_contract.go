@@ -29,7 +29,7 @@ func VaultCompatContract() *Document {
 			},
 		},
 	}
-	for _, rt := range vaultCompatRoutes {
+	for _, rt := range allVaultCompatRoutes() {
 		item := doc.Paths[rt.contractPath]
 		if item == nil {
 			item = PathItem{}
@@ -90,6 +90,12 @@ func vaultCompatParameters(rt vaultCompatRoute) []Parameter {
 			Description: "Vault PKI role label accepted for CLI compatibility; trstctl maps issuance to the requested common name.",
 			Schema:      str(),
 		})
+	default:
+		for _, name := range []string{"mount", "path", "name"} {
+			if strings.Contains(rt.contractPath, "{"+name+"}") {
+				out = append(out, Parameter{Name: name, In: "path", Required: true, Schema: str()})
+			}
+		}
 	}
 	if rt.mutation {
 		out = append(out, Parameter{
@@ -146,6 +152,9 @@ func vaultCompatSchemas() map[string]*Schema {
 	stringArray := &Schema{Type: "array", Items: str()}
 
 	return map[string]*Schema{
+		"VaultGenericRequest":  object(map[string]*Schema{}),
+		"VaultGenericResponse": vaultCompatEnvelope("VaultGenericData", anySchema),
+		"VaultGenericData":     anySchema,
 		"VaultHealthResponse": object(map[string]*Schema{
 			"initialized": boolSchema,
 			"sealed":      boolSchema,

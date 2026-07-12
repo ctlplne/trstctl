@@ -248,6 +248,11 @@ func componentSchemas() map[string]*Schema {
 		"kind": {Type: "string", Enum: []string{"x509_ca", "ssh_ca"}}, "name": str(),
 		"chain": {Type: "array", Items: str()}, "public_key": str(), "internal": {Type: "boolean"},
 	}, "kind", "name")
+	protocolProfileStatus := object(map[string]*Schema{
+		"profile":   {Type: "string", Enum: []string{"eval"}},
+		"active":    {Type: "boolean"},
+		"protocols": {Type: "array", Items: str()},
+	}, "profile", "active", "protocols")
 
 	caSpec := object(map[string]*Schema{
 		"common_name":           str(),
@@ -2893,41 +2898,55 @@ func componentSchemas() map[string]*Schema {
 		"residuals":                {Type: "array", Items: str()},
 		"recommended_next_actions": {Type: "array", Items: str()},
 	}, "capability", "served", "generated_at", "summary", "detection_sources", "vault_providers", "configured_vaults", "configured_sync_targets", "workflow", "secret_handling", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
-	kubernetesCSRSupportRule := object(map[string]*Schema{
-		"api_group": str(), "resource": str(), "verbs": {Type: "array", Items: str()},
-	}, "api_group", "resource", "verbs")
-	kubernetesCSRSupport := object(map[string]*Schema{
-		"capability":               str(),
-		"served":                   {Type: "boolean"},
-		"generated_at":             timestamp(),
-		"api_group":                str(),
-		"api_version":              str(),
-		"resource":                 str(),
-		"signer_names":             {Type: "array", Items: str()},
-		"controller_flow":          {Type: "array", Items: str()},
-		"rbac_rules":               {Type: "array", Items: ref("KubernetesCSRSupportRule")},
-		"status_fields":            {Type: "array", Items: str()},
-		"architecture_controls":    {Type: "array", Items: str()},
-		"evidence_refs":            {Type: "array", Items: str()},
-		"residuals":                {Type: "array", Items: str()},
-		"recommended_next_actions": {Type: "array", Items: str()},
-	}, "capability", "served", "generated_at", "api_group", "api_version", "resource", "signer_names", "controller_flow", "rbac_rules", "status_fields", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
-	kubernetesTrustBundleDistribution := object(map[string]*Schema{
-		"capability":               str(),
-		"served":                   {Type: "boolean"},
-		"generated_at":             timestamp(),
-		"api_group":                str(),
-		"api_version":              str(),
-		"resource":                 str(),
-		"distribution_targets":     {Type: "array", Items: str()},
-		"controller_flow":          {Type: "array", Items: str()},
-		"rbac_rules":               {Type: "array", Items: ref("KubernetesCSRSupportRule")},
-		"status_fields":            {Type: "array", Items: str()},
-		"architecture_controls":    {Type: "array", Items: str()},
-		"evidence_refs":            {Type: "array", Items: str()},
-		"residuals":                {Type: "array", Items: str()},
-		"recommended_next_actions": {Type: "array", Items: str()},
-	}, "capability", "served", "generated_at", "api_group", "api_version", "resource", "distribution_targets", "controller_flow", "rbac_rules", "status_fields", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
+	kubernetesPostureSummary := object(map[string]*Schema{
+		"controllers":          {Type: "integer"},
+		"complete_controllers": {Type: "integer"},
+		"stale_controllers":    {Type: "integer"},
+		"observed":             {Type: "integer"},
+		"ready":                {Type: "integer"},
+		"pending":              {Type: "integer"},
+		"failed":               {Type: "integer"},
+	}, "controllers", "complete_controllers", "stale_controllers", "observed", "ready", "pending", "failed")
+	kubernetesPostureController := object(map[string]*Schema{
+		"controller_id":      str(),
+		"cluster_id":         str(),
+		"report_id":          str(),
+		"reconcile_complete": {Type: "boolean"},
+		"failure_code":       str(),
+		"last_sync":          timestamp(),
+		"stale":              {Type: "boolean"},
+		"observed":           {Type: "integer"},
+		"ready":              {Type: "integer"},
+		"pending":            {Type: "integer"},
+		"failed":             {Type: "integer"},
+	}, "controller_id", "cluster_id", "report_id", "reconcile_complete", "last_sync", "stale", "observed", "ready", "pending", "failed")
+	kubernetesPostureObject := object(map[string]*Schema{
+		"controller_id":    str(),
+		"cluster_id":       str(),
+		"namespace":        str(),
+		"name":             str(),
+		"uid":              str(),
+		"resource_version": str(),
+		"state":            {Type: "string", Enum: []string{"ready", "pending", "failed"}},
+		"reason":           str(),
+		"public_hash":      str(),
+	}, "controller_id", "cluster_id", "name", "uid", "resource_version", "state", "reason")
+	newKubernetesPosture := func() *Schema {
+		return object(map[string]*Schema{
+			"capability":  str(),
+			"served":      {Type: "boolean"},
+			"generated_at": timestamp(),
+			"last_sync":   timestamp(),
+			"api_group":   str(),
+			"api_version": str(),
+			"resource":    str(),
+			"summary":     ref("KubernetesPostureSummary"),
+			"controllers": {Type: "array", Items: ref("KubernetesPostureController")},
+			"objects":     {Type: "array", Items: ref("KubernetesPostureObject")},
+		}, "capability", "served", "generated_at", "last_sync", "api_group", "api_version", "resource", "summary", "controllers", "objects")
+	}
+	kubernetesCSRSupport := newKubernetesPosture()
+	kubernetesTrustBundleDistribution := newKubernetesPosture()
 	secretScanReq := object(map[string]*Schema{
 		"path": str(), "mode": str(), "custom_rules_path": str(),
 	}, "path")
@@ -3482,6 +3501,7 @@ func componentSchemas() map[string]*Schema {
 		"Issuer":                                   issuer,
 		"IssuerRequest":                            issuerReq,
 		"IssuerList":                               list("Issuer"),
+		"ProtocolProfileStatus":                    protocolProfileStatus,
 		"CASpec":                                   caSpec,
 		"CACeremonyStartRequest":                   caCeremonyStartReq,
 		"CAKeyCeremony":                            caCeremony,
@@ -3554,7 +3574,9 @@ func componentSchemas() map[string]*Schema {
 		"UnvaultedSecretDetectionSource":           unvaultedSecretDetectionSource,
 		"UnvaultedSecretVaultProvider":             unvaultedSecretVaultProvider,
 		"UnvaultedSecretPosture":                   unvaultedSecretPosture,
-		"KubernetesCSRSupportRule":                 kubernetesCSRSupportRule,
+		"KubernetesPostureSummary":                 kubernetesPostureSummary,
+		"KubernetesPostureController":              kubernetesPostureController,
+		"KubernetesPostureObject":                  kubernetesPostureObject,
 		"KubernetesCSRSupport":                     kubernetesCSRSupport,
 		"KubernetesTrustBundleDistribution":        kubernetesTrustBundleDistribution,
 		"SecretScanRequest":                        secretScanReq,

@@ -3,13 +3,13 @@
 package transport
 
 // This file defines the served agent steady-state RPC contract (WIRE-004): the
-// two methods an enrolled agent calls on the control plane over the mutual-TLS
+// steady-state methods an enrolled agent calls on the control plane over the mutual-TLS
 // channel, plus a self-contained gRPC wire codec so the contract needs no protoc
 // toolchain in the build. Its committed compatibility contract is
 // agent_service_schema.json plus testdata/agent_service_wire.golden.json; tests fail
 // if service names, method names, JSON tags, metadata keys, or encoded bytes drift.
 //
-// Wire format. The two agent methods carry plain Go structs encoded as JSON under
+// Wire format. The agent methods carry plain Go structs encoded as JSON under
 // a registered gRPC codec named "agent.json" (content-subtype "agent.json"). gRPC
 // selects a message codec by the request's content-subtype, so this codec applies
 // ONLY to calls the agent client tags with it (see Dial wiring in agent.go); the
@@ -49,12 +49,13 @@ const AgentCodecName = "agent.json"
 // metadata, so changing one is a compatibility event even if the JSON messages stay
 // unchanged.
 const (
-	AgentCapabilityHeartbeat = "heartbeat"
-	AgentCapabilityRenew     = "renew"
-	AgentCapabilityInventory = "inventory"
+	AgentCapabilityHeartbeat         = "heartbeat"
+	AgentCapabilityRenew             = "renew"
+	AgentCapabilityInventory         = "inventory"
+	AgentCapabilityKubernetesPosture = "kubernetes-posture"
 )
 
-const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew + "," + AgentCapabilityInventory
+const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew + "," + AgentCapabilityInventory + "," + AgentCapabilityKubernetesPosture
 
 // HeartbeatRequest is what an agent reports on each steady-state beat: its identity
 // and the inventory/status snapshot the control plane records. The authorizing
@@ -148,18 +149,23 @@ type AgentServiceServer interface {
 	// ReportInventory records metadata-only host inventory findings under the
 	// certificate-derived tenant.
 	ReportInventory(ctx context.Context, req *InventoryRequest) (*InventoryResponse, error)
+	// Kubernetes posture reporting is an optional extension described by
+	// KubernetesPostureServiceServer so older service implementations remain
+	// source-compatible while new servers expose the method on this same service.
 }
 
 // agentServiceName / method names are the gRPC routing identifiers. They are fixed
 // strings the client and server both use; changing them is a wire-breaking change.
 const (
-	agentServiceName    = "trstctl.agent.v1.AgentService"
-	methodHeartbeat     = "Heartbeat"
-	methodRenew         = "Renew"
-	methodInventory     = "ReportInventory"
-	fullMethodHeartbeat = "/" + agentServiceName + "/" + methodHeartbeat
-	fullMethodRenew     = "/" + agentServiceName + "/" + methodRenew
-	fullMethodInventory = "/" + agentServiceName + "/" + methodInventory
+	agentServiceName            = "trstctl.agent.v1.AgentService"
+	methodHeartbeat             = "Heartbeat"
+	methodRenew                 = "Renew"
+	methodInventory             = "ReportInventory"
+	methodKubernetesPosture     = "ReportKubernetesPosture"
+	fullMethodHeartbeat         = "/" + agentServiceName + "/" + methodHeartbeat
+	fullMethodRenew             = "/" + agentServiceName + "/" + methodRenew
+	fullMethodInventory         = "/" + agentServiceName + "/" + methodInventory
+	fullMethodKubernetesPosture = "/" + agentServiceName + "/" + methodKubernetesPosture
 )
 
 // RegisterAgentService registers srv on s under the agent service descriptor. The
@@ -176,6 +182,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodHeartbeat, Handler: heartbeatHandler},
 		{MethodName: methodRenew, Handler: renewHandler},
 		{MethodName: methodInventory, Handler: inventoryHandler},
+		{MethodName: methodKubernetesPosture, Handler: kubernetesPostureHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",
@@ -228,7 +235,7 @@ func inventoryHandler(srv any, ctx context.Context, dec func(any) error, interce
 
 func agentProtocolInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	switch info.FullMethod {
-	case fullMethodHeartbeat, fullMethodRenew, fullMethodInventory:
+	case fullMethodHeartbeat, fullMethodRenew, fullMethodInventory, fullMethodKubernetesPosture:
 	default:
 		return handler(ctx, req)
 	}

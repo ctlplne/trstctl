@@ -546,6 +546,9 @@ type Server struct {
 	// disabled. Every protocol mints through the signer-backed, tenant-scoped,
 	// event-sourced, idempotent issuance seam (protocolIssuer).
 	protocols *servedProtocols
+	// protocolProfile is non-nil only for the explicit eval preset. It owns the
+	// event-replayed activation gate exposed to the first-run wizard.
+	protocolProfile *evalProtocolProfileControl
 	// attestedIssuance is the served verifier + short-lived X.509-SVID issuer
 	// (NHI-02/F30). It is nil unless explicitly configured; the API delegate then
 	// returns 503 so upgrades do not silently expose a new minting path.
@@ -782,6 +785,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err := s.configureIssuanceSurfaces(ctx, d, orch, idem); err != nil {
 		return nil, err
 	}
+	a.AttachProtocolProfileControl(s.protocolProfile)
 	if err := s.configureObservability(ctx, d, proj, auditSvc, orch); err != nil {
 		return nil, err
 	}
@@ -1255,6 +1259,11 @@ func (s *Server) configureProtocolSurfaces(ctx context.Context, d Deps) error {
 		return fmt.Errorf("server: build served protocols: %w", err)
 	}
 	s.protocols = protocols
+	profile, err := newEvalProtocolProfileControl(ctx, d.Protocols, protocols, d.Log)
+	if err != nil {
+		return err
+	}
+	s.protocolProfile = profile
 	return nil
 }
 
@@ -1724,7 +1733,7 @@ func (s *Server) RevocationServed() bool { return s.revoc != nil }
 // in a stable order. Empty when no issuing CA is provisioned or all protocols are
 // disabled. It is the EXC-WIRE-02 wiring assertion (and is logged at startup).
 func (s *Server) ServedProtocols() []string {
-	if s.protocols == nil {
+	if s.protocols == nil || (s.protocols.activation != nil && !s.protocols.activation.Active()) {
 		return nil
 	}
 	return append([]string(nil), s.protocols.names...)

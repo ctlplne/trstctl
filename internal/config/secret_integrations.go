@@ -94,6 +94,17 @@ type SecretSyncTargetConfig struct {
 	Provider         string   `json:"provider,omitempty"`
 	EnvironmentScope string   `json:"environment_scope,omitempty"`
 	Targets          []string `json:"targets,omitempty"`
+	// Terraform Cloud/OpenTofu Variables API fields.
+	WorkspaceID      string `json:"workspace_id,omitempty"`
+	VariableCategory string `json:"variable_category,omitempty"`
+	HCL              bool   `json:"hcl,omitempty"`
+	Description      string `json:"description,omitempty"`
+	// Vault KV v2 fields. VaultNamespace is an Enterprise namespace header;
+	// Namespace above remains the Kubernetes namespace.
+	Mount          string `json:"mount,omitempty"`
+	PathPrefix     string `json:"path_prefix,omitempty"`
+	Field          string `json:"field,omitempty"`
+	VaultNamespace string `json:"vault_namespace,omitempty"`
 
 	TokenRef              string   `json:"token_ref,omitempty"`
 	SecretAccessRef       string   `json:"secret_access_key_ref,omitempty"`
@@ -112,6 +123,7 @@ var secretSyncTypes = map[string]struct{}{
 	"aws-secrets-manager": {}, "gcp-secret-manager": {}, "azure-key-vault": {},
 	"github-actions": {}, "gitlab-ci": {}, "vercel": {},
 	"generic-ci-json": {}, "kubernetes-secrets": {},
+	"terraform-cloud-opentofu": {}, "vault-kv-v2": {},
 }
 
 // ValidateSecretIntegrations is exported for config-focused tests and embedders.
@@ -292,8 +304,52 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 	case "kubernetes-secrets":
 		require(c.Namespace, "namespace")
 		ref(c.TokenRef, "token_ref", false)
+	case "terraform-cloud-opentofu":
+		require(c.WorkspaceID, "workspace_id")
+		ref(c.TokenRef, "token_ref", false)
+		category := strings.ToLower(strings.TrimSpace(c.VariableCategory))
+		if category != "" && category != "terraform" && category != "env" {
+			errs = append(errs, fmt.Errorf("%s variable_category must be terraform or env", where))
+		}
+		if category == "env" && c.HCL {
+			errs = append(errs, fmt.Errorf("%s hcl=true is valid only for terraform variables", where))
+		}
+	case "vault-kv-v2":
+		require(c.Mount, "mount")
+		ref(c.TokenRef, "token_ref", false)
+		if err := validateVaultSyncPath(c.Mount, false); err != nil {
+			errs = append(errs, fmt.Errorf("%s mount %w", where, err))
+		}
+		if err := validateVaultSyncPath(c.PathPrefix, true); err != nil {
+			errs = append(errs, fmt.Errorf("%s path_prefix %w", where, err))
+		}
+		if strings.ContainsRune(c.Field, '\x00') {
+			errs = append(errs, fmt.Errorf("%s field must not contain a NUL byte", where))
+		}
 	}
 	return errs
+}
+
+func validateVaultSyncPath(raw string, allowEmpty bool) error {
+	value := strings.Trim(strings.TrimSpace(raw), "/")
+	if value == "" {
+		if allowEmpty {
+			return nil
+		}
+		return errors.New("is required")
+	}
+	for _, part := range strings.Split(value, "/") {
+		if part == "." || part == ".." {
+			return errors.New("must not contain dot path components")
+		}
+		if part == "" {
+			return errors.New("must not contain empty path components")
+		}
+		if strings.ContainsAny(part, "\x00\\") {
+			return errors.New("must not contain a NUL byte or backslash")
+		}
+	}
+	return nil
 }
 
 func validateCredentialRef(raw string) error {

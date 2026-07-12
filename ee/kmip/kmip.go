@@ -109,7 +109,7 @@ func (s *Server) Create(ctx context.Context, clientCertDER []byte, algorithm str
 	if err != nil {
 		return "", err
 	}
-	return s.register(ctx, algorithm, key), nil
+	return s.register(ctx, algorithm, key, "kmip.object.created"), nil
 }
 
 // Register stores a client-supplied key and returns its unique identifier.
@@ -117,16 +117,19 @@ func (s *Server) Register(ctx context.Context, clientCertDER []byte, algorithm s
 	if _, err := s.authClient(ctx, "register", clientCertDER); err != nil {
 		return "", err
 	}
-	return s.register(ctx, algorithm, append([]byte(nil), key...)), nil
+	if algorithm != "AES" || len(key) != 32 {
+		return "", fmt.Errorf("kmip: Register supports only AES-256 key material")
+	}
+	return s.register(ctx, algorithm, append([]byte(nil), key...), "kmip.object.registered"), nil
 }
 
-func (s *Server) register(ctx context.Context, algorithm string, key []byte) string {
+func (s *Server) register(ctx context.Context, algorithm string, key []byte, eventType string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.n++
 	id := fmt.Sprintf("kmip-%d", s.n)
 	s.objects[id] = &ManagedObject{ID: id, Algorithm: algorithm, State: StateActive, Version: 1, key: key}
-	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object.created", s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"alg":%q}`, id, algorithm)))
+	_ = auditsink.Emit(ctx, s.audit, nil, eventType, s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"alg":%q}`, id, algorithm)))
 	return id
 }
 

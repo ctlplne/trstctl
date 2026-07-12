@@ -113,14 +113,16 @@ func TestDODSecretIntegrationsProductionAssembly(t *testing.T) {
 	dodRunFocusedDynamicSecret(t, "dynamic_secret.redis", external, dodSecretIntegrationTarget{"dynamic_secret.redis", "redis", "redis"})
 }
 
-// TestDODSecretSyncProductionAssembly is shared by the registry and all eight
-// granular secret-sync census rows. It passes untouched buildRunDeps output to
-// Build and proves authenticated external write/readback outside the process.
+// TestDODSecretSyncProductionAssembly is shared by the registry, all eight
+// granular secret-sync census rows, and the two provider-native residual cards.
+// It passes untouched buildRunDeps output to Build and proves authenticated
+// external write/readback outside the process.
 func TestDODSecretSyncProductionAssembly(t *testing.T) {
 	only := dodRuntimeSelection(t,
 		"secret_sync.registry", "secret_sync.aws_secrets_manager", "secret_sync.gcp_secret_manager",
 		"secret_sync.azure_key_vault", "secret_sync.github_actions", "secret_sync.gitlab_ci",
 		"secret_sync.vercel", "secret_sync.generic_ci_json", "secret_sync.kubernetes_secrets",
+		"secrets_residuals.terraform_opentofu_native_sync", "secrets_residuals.vault_kv_outbound_sync",
 	)
 	if only == "" {
 		dodRunAllSecretSyncProductionAssembly(t)
@@ -166,8 +168,18 @@ func TestDODSecretSyncProductionAssembly(t *testing.T) {
 		dodRunFocusedSecretSync(t, "secret_sync.generic_ci_json", external, dodSecretIntegrationTarget{"secret_sync.generic_ci_json", "generic-ci-json", "generic"})
 		return
 	}
-	external := proof.StartCommand(t, "secret_sync.kubernetes_secrets")
-	dodRunFocusedSecretSync(t, "secret_sync.kubernetes_secrets", external, dodSecretIntegrationTarget{"secret_sync.kubernetes_secrets", "kubernetes-secrets", "kubernetes"})
+	if only == "secret_sync.kubernetes_secrets" {
+		external := proof.StartCommand(t, "secret_sync.kubernetes_secrets")
+		dodRunFocusedSecretSync(t, "secret_sync.kubernetes_secrets", external, dodSecretIntegrationTarget{"secret_sync.kubernetes_secrets", "kubernetes-secrets", "kubernetes"})
+		return
+	}
+	if only == "secrets_residuals.terraform_opentofu_native_sync" {
+		external := proof.StartCommand(t, "secrets_residuals.terraform_opentofu_native_sync")
+		dodRunFocusedSecretSync(t, only, external, dodSecretIntegrationTarget{only, "terraform-cloud-opentofu", "terraform"})
+		return
+	}
+	external := proof.StartCommand(t, "secrets_residuals.vault_kv_outbound_sync")
+	dodRunFocusedSecretSync(t, only, external, dodSecretIntegrationTarget{only, "vault-kv-v2", "vault"})
 }
 
 func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
@@ -390,9 +402,11 @@ func dodCrashFirstVersioningSyncAfterReceiverCommit(t *testing.T, srv *Server) {
 		t.Fatal("served dispatcher has no secret-integration worker")
 	}
 	remaining := map[string]bool{
-		"aws-secrets-manager": true,
-		"gcp-secret-manager":  true,
-		"azure-key-vault":     true,
+		"aws-secrets-manager":     true,
+		"gcp-secret-manager":      true,
+		"azure-key-vault":         true,
+		"terraform-cloud-opentofu": true,
+		"vault-kv-v2":              true,
 	}
 	var mu sync.Mutex
 	dispatch.secretIntegrations.afterSecretSyncDelivery = func(_ context.Context, payload secretSyncOutboxPayload) error {
@@ -416,6 +430,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	syncVercel := proof.StartCommand(t, "secret_sync.vercel")
 	syncGeneric := proof.StartCommand(t, "secret_sync.generic_ci_json")
 	syncKubernetes := proof.StartCommand(t, "secret_sync.kubernetes_secrets")
+	syncTerraform := proof.StartCommand(t, "secrets_residuals.terraform_opentofu_native_sync")
+	syncVault := proof.StartCommand(t, "secrets_residuals.vault_kv_outbound_sync")
 
 	syncRegistryEndpoint := dodParentSubstrateLoopbackBridge(t, syncRegistry.Endpoint())
 	syncAWSEndpoint := dodParentSubstrateLoopbackBridge(t, syncAWS.Endpoint())
@@ -426,6 +442,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	syncVercelEndpoint := dodParentSubstrateLoopbackBridge(t, syncVercel.Endpoint())
 	syncGenericEndpoint := dodParentSubstrateLoopbackBridge(t, syncGeneric.Endpoint())
 	syncKubernetesEndpoint := dodParentSubstrateLoopbackBridge(t, syncKubernetes.Endpoint())
+	syncTerraformEndpoint := dodParentSubstrateLoopbackBridge(t, syncTerraform.Endpoint())
+	syncVaultEndpoint := dodParentSubstrateLoopbackBridge(t, syncVault.Endpoint())
 
 	secretDir := t.TempDir()
 	fileRef := func(name string, value []byte) string { return dodSecretIntegrationFile(t, secretDir, name, value) }
@@ -447,6 +465,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 		{TenantID: dodSecretIntegrationTenant, ID: "vercel", Type: "vercel", Endpoint: syncVercelEndpoint, ProjectID: "dod-project", TokenRef: fileRef("vercel-token", []byte("dod-vercel-token")), Targets: []string{"production"}, AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 		{TenantID: dodSecretIntegrationTenant, ID: "generic-ci-json", Type: "generic-ci-json", Endpoint: syncGenericEndpoint, Provider: "generic", TokenRef: fileRef("generic-token", []byte("dod-generic-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 		{TenantID: dodSecretIntegrationTenant, ID: "kubernetes-secrets", Type: "kubernetes-secrets", Endpoint: syncKubernetesEndpoint, Namespace: "apps", TokenRef: fileRef("kubernetes-sync-token", []byte("dod-k8s-sync-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
+		{TenantID: dodSecretIntegrationTenant, ID: "terraform-cloud-opentofu", Type: "terraform-cloud-opentofu", Endpoint: syncTerraformEndpoint, WorkspaceID: "ws-dod-opentofu", VariableCategory: "env", Description: "DOD managed variable", TokenRef: fileRef("terraform-sync-token", []byte("dod-terraform-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
+		{TenantID: dodSecretIntegrationTenant, ID: "vault-kv-v2", Type: "vault-kv-v2", Endpoint: syncVaultEndpoint, Mount: "team-secrets", PathPrefix: "apps", Field: "value", VaultNamespace: "platform/team-a", TokenRef: fileRef("vault-sync-token", []byte("dod-vault-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("secret integration production config: %v", err)
@@ -496,6 +516,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	dodProveSecretSync(t, "secret_sync.vercel", syncVercel, srv, token, dodSecretIntegrationTarget{"secret_sync.vercel", "vercel", "vercel"}, sourceValue)
 	dodProveSecretSync(t, "secret_sync.generic_ci_json", syncGeneric, srv, token, dodSecretIntegrationTarget{"secret_sync.generic_ci_json", "generic-ci-json", "generic"}, sourceValue)
 	dodProveSecretSync(t, "secret_sync.kubernetes_secrets", syncKubernetes, srv, token, dodSecretIntegrationTarget{"secret_sync.kubernetes_secrets", "kubernetes-secrets", "kubernetes"}, sourceValue)
+	dodProveSecretSync(t, "secrets_residuals.terraform_opentofu_native_sync", syncTerraform, srv, token, dodSecretIntegrationTarget{"secrets_residuals.terraform_opentofu_native_sync", "terraform-cloud-opentofu", "terraform"}, sourceValue)
+	dodProveSecretSync(t, "secrets_residuals.vault_kv_outbound_sync", syncVault, srv, token, dodSecretIntegrationTarget{"secrets_residuals.vault_kv_outbound_sync", "vault-kv-v2", "vault"}, sourceValue)
 }
 
 func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.ExternalSubstrate, target dodSecretIntegrationTarget) {
@@ -542,6 +564,14 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 	case "secret_sync.kubernetes_secrets":
 		base.Type, base.Namespace = "kubernetes-secrets", "apps"
 		base.TokenRef = fileRef("kubernetes-sync-token", []byte("dod-k8s-sync-token"))
+	case "secrets_residuals.terraform_opentofu_native_sync":
+		base.Type, base.WorkspaceID, base.VariableCategory = "terraform-cloud-opentofu", "ws-dod-opentofu", "env"
+		base.Description = "DOD managed variable"
+		base.TokenRef = fileRef("terraform-sync-token", []byte("dod-terraform-token"))
+	case "secrets_residuals.vault_kv_outbound_sync":
+		base.Type, base.Mount, base.PathPrefix, base.Field = "vault-kv-v2", "team-secrets", "apps", "value"
+		base.VaultNamespace = "platform/team-a"
+		base.TokenRef = fileRef("vault-sync-token", []byte("dod-vault-token"))
 	default:
 		t.Fatalf("focused secret-sync proof has no configuration for %q", entryID)
 	}
@@ -1111,8 +1141,8 @@ func dodProveSecretSync(t *testing.T, entryID string, external *proof.ExternalSu
 	if !bytes.Equal(readback, sourceValue) {
 		t.Fatalf("%s external readback differs from source", target.entryID)
 	}
-	if target.kind == "aws" || target.kind == "gcp" || target.kind == "azure" {
-		dodAssertSecretSyncReconciledOnce(t, endpoint, remoteKey)
+	if target.kind == "aws" || target.kind == "gcp" || target.kind == "azure" || target.kind == "terraform" || target.kind == "vault" {
+		dodAssertSecretSyncReconciledOnce(t, endpoint, remoteKey, target.kind)
 	}
 	executionReceipt := external.StopAndReceipt()
 	session.Complete(proof.ExternalWrite(proof.ExternalWriteProbe{
@@ -1121,13 +1151,18 @@ func dodProveSecretSync(t *testing.T, entryID string, external *proof.ExternalSu
 	}))
 }
 
-func dodAssertSecretSyncReconciledOnce(t *testing.T, endpoint, remoteKey string) {
+func dodAssertSecretSyncReconciledOnce(t *testing.T, endpoint, remoteKey, kind string) {
 	t.Helper()
 	query := url.Values{"key": []string{remoteKey}}
 	deadline := time.Now().Add(15 * time.Second)
 	var last struct {
 		Versions   int  `json:"versions"`
 		Reconciled bool `json:"reconciled"`
+		NativeWire bool `json:"native_wire"`
+		Sensitive  bool `json:"sensitive"`
+		Category   string `json:"category"`
+		CASConflicts int `json:"cas_conflicts"`
+		CASPreserved bool `json:"cas_preserved"`
 	}
 	var lastStatus int
 	var lastErr error
@@ -1137,11 +1172,23 @@ func dodAssertSecretSyncReconciledOnce(t *testing.T, endpoint, remoteKey string)
 			last = struct {
 				Versions   int  `json:"versions"`
 				Reconciled bool `json:"reconciled"`
+				NativeWire bool `json:"native_wire"`
+				Sensitive  bool `json:"sensitive"`
+				Category   string `json:"category"`
+				CASConflicts int `json:"cas_conflicts"`
+				CASPreserved bool `json:"cas_preserved"`
 			}{}
 			lastStatus = response.StatusCode
 			lastErr = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&last)
 			_ = response.Body.Close()
-			if lastStatus == http.StatusOK && lastErr == nil && last.Versions == 1 && last.Reconciled {
+			providerEvidence := true
+			if kind == "terraform" {
+				providerEvidence = last.NativeWire && last.Sensitive && last.Category == "env"
+			}
+			if kind == "vault" {
+				providerEvidence = last.NativeWire && last.CASConflicts == 1 && last.CASPreserved
+			}
+			if lastStatus == http.StatusOK && lastErr == nil && last.Versions == 1 && last.Reconciled && providerEvidence {
 				return
 			}
 		} else {
@@ -1149,8 +1196,9 @@ func dodAssertSecretSyncReconciledOnce(t *testing.T, endpoint, remoteKey string)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatalf("secret sync replay state status=%d decode=%v versions=%d reconciled=%t",
-		lastStatus, lastErr, last.Versions, last.Reconciled)
+	t.Fatalf("secret sync replay state kind=%s status=%d decode=%v versions=%d reconciled=%t native=%t sensitive=%t category=%q cas_conflicts=%d cas_preserved=%t",
+		kind, lastStatus, lastErr, last.Versions, last.Reconciled, last.NativeWire,
+		last.Sensitive, last.Category, last.CASConflicts, last.CASPreserved)
 }
 
 func dodWaitSecretSyncReadback(t *testing.T, endpoint, remoteKey string) []byte {

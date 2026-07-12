@@ -1406,6 +1406,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAgentCertRenewed:                    {1: true},
 	EventAgentCertRevoked:                    {1: true},
 	EventAgentOffboarded:                     {1: true},
+	EventKubernetesControllerPostureReported: {1: true},
 	EventProfileCreated:                      {1: true, 2: true},
 	EventProfileUpdated:                      {1: true, 2: true},
 	EventDiscoverySourceUpserted:             {1: true},
@@ -1534,6 +1535,9 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return err
 	}
 	if handled, err := p.applyCodeSigningTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyKubernetesPostureTx(ctx, tx, e); handled {
 		return err
 	}
 	switch e.Type {

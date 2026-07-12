@@ -25,46 +25,63 @@ const (
 )
 
 const (
-	TagAttribute              uint32 = 0x420008
-	TagAttributeName          uint32 = 0x42000a
-	TagAttributeValue         uint32 = 0x42000b
-	TagBatchCount             uint32 = 0x42000d
-	TagBatchItem              uint32 = 0x42000f
-	TagCryptographicAlgorithm uint32 = 0x420028
-	TagCryptographicLength    uint32 = 0x42002a
-	TagKeyBlock               uint32 = 0x420040
-	TagKeyFormatType          uint32 = 0x420042
-	TagKeyMaterial            uint32 = 0x420043
-	TagKeyValue               uint32 = 0x420045
-	TagOperation              uint32 = 0x42005c
-	TagObjectType             uint32 = 0x420057
-	TagProtocolVersion        uint32 = 0x420069
-	TagProtocolVersionMajor   uint32 = 0x42006a
-	TagProtocolVersionMinor   uint32 = 0x42006b
-	TagRequestHeader          uint32 = 0x420077
-	TagRequestMessage         uint32 = 0x420078
-	TagRequestPayload         uint32 = 0x420079
-	TagResponseHeader         uint32 = 0x42007a
-	TagResponseMessage        uint32 = 0x42007b
-	TagResponsePayload        uint32 = 0x42007c
-	TagResultMessage          uint32 = 0x42007d
-	TagResultReason           uint32 = 0x42007e
-	TagResultStatus           uint32 = 0x42007f
-	TagSymmetricKey           uint32 = 0x42008f
-	TagTemplateAttribute      uint32 = 0x420091
-	TagTimeStamp              uint32 = 0x420092
-	TagUniqueIdentifier       uint32 = 0x420094
+	TagAttribute                uint32 = 0x420008
+	TagAttributeName            uint32 = 0x42000a
+	TagAttributeValue           uint32 = 0x42000b
+	TagBatchCount               uint32 = 0x42000d
+	TagBatchItem                uint32 = 0x42000f
+	TagBlockCipherMode          uint32 = 0x420011
+	TagCryptographicAlgorithm   uint32 = 0x420028
+	TagCryptographicLength      uint32 = 0x42002a
+	TagCryptographicParameters  uint32 = 0x42002b
+	TagEncryptionKeyInformation uint32 = 0x420036
+	TagIVCounterNonce           uint32 = 0x42003d
+	TagKeyBlock                 uint32 = 0x420040
+	TagKeyFormatType            uint32 = 0x420042
+	TagKeyMaterial              uint32 = 0x420043
+	TagKeyValue                 uint32 = 0x420045
+	TagKeyWrappingData          uint32 = 0x420046
+	TagKeyWrappingSpecification uint32 = 0x420047
+	TagMACSignature             uint32 = 0x42004d
+	TagOperation                uint32 = 0x42005c
+	TagObjectType               uint32 = 0x420057
+	TagProtocolVersion          uint32 = 0x420069
+	TagProtocolVersionMajor     uint32 = 0x42006a
+	TagProtocolVersionMinor     uint32 = 0x42006b
+	TagQueryFunction            uint32 = 0x420074
+	TagRequestHeader            uint32 = 0x420077
+	TagRequestMessage           uint32 = 0x420078
+	TagRequestPayload           uint32 = 0x420079
+	TagResponseHeader           uint32 = 0x42007a
+	TagResponseMessage          uint32 = 0x42007b
+	TagResponsePayload          uint32 = 0x42007c
+	TagResultMessage            uint32 = 0x42007d
+	TagResultReason             uint32 = 0x42007e
+	TagResultStatus             uint32 = 0x42007f
+	TagServerInformation        uint32 = 0x420088
+	TagSymmetricKey             uint32 = 0x42008f
+	TagTemplateAttribute        uint32 = 0x420091
+	TagTimeStamp                uint32 = 0x420092
+	TagUniqueIdentifier         uint32 = 0x420094
+	TagVendorIdentification     uint32 = 0x42009d
+	TagWrappingMethod           uint32 = 0x42009e
+	TagEncodingOption           uint32 = 0x4200a3
+	TagProfileInformation       uint32 = 0x4200eb
+	TagProfileName              uint32 = 0x4200ec
 )
 
 // Operation is the KMIP operation enumeration.
 type Operation int32
 
 const (
-	OperationCreate  Operation = 0x00000001
-	OperationLocate  Operation = 0x00000008
-	OperationGet     Operation = 0x0000000a
-	OperationRevoke  Operation = 0x00000013
-	OperationDestroy Operation = 0x00000014
+	OperationCreate           Operation = 0x00000001
+	OperationRegister         Operation = 0x00000003
+	OperationLocate           Operation = 0x00000008
+	OperationGet              Operation = 0x0000000a
+	OperationRevoke           Operation = 0x00000013
+	OperationDestroy          Operation = 0x00000014
+	OperationQuery            Operation = 0x00000018
+	OperationDiscoverVersions Operation = 0x0000001e
 )
 
 const (
@@ -79,6 +96,21 @@ const (
 	resultReasonUnsupported     int32 = 0x00000005
 	resultReasonInvalidField    int32 = 0x00000007
 	resultReasonGeneralFailure  int32 = 0x00000100
+
+	blockCipherModeGCM int32 = 0x00000009
+
+	wrappingMethodEncrypt int32 = 0x00000001
+
+	encodingOptionNoEncoding   int32 = 0x00000001
+	encodingOptionTTLVEncoding int32 = 0x00000002
+
+	queryFunctionOperations        int32 = 0x00000001
+	queryFunctionObjects           int32 = 0x00000002
+	queryFunctionServerInformation int32 = 0x00000003
+	queryFunctionProfiles          int32 = 0x0000000a
+
+	profileSymmetricKeyLifecycleServer14 int32 = 0x00000082
+	profileSymmetricKeyFoundryServer14   int32 = 0x0000008e
 )
 
 // TTLV is one parsed KMIP tag/type/length/value node. Primitive Value bytes are

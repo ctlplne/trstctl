@@ -157,6 +157,11 @@ AUTH=(-H "Authorization: Bearer ${TOKEN}")
 code=$("${Q[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/owners" || true)
 [ "$code" = "200" ] || fail "bootstrapped GET /api/v1/owners returned '$code', want 200"
 
+say "   activate the tenant-bound eval protocol profile through the same first-run API the wizard uses"
+PROTOCOL_PROFILE=$(post "${IDEM_BASE}-protocol-profile" /api/v1/setup/protocols/activate '{}')
+jq -e --argjson want 7 '.profile == "eval" and .active == true and (.protocols | length) == $want' <<<"$PROTOCOL_PROFILE" >/dev/null \
+  || fail "eval protocol activation did not report all seven shipped protocol surfaces: $PROTOCOL_PROFILE"
+
 say "3. event-sourced mutation round-trips (create owner -> read back)"
 OWNER=$(post "${IDEM_BASE}-owner" /api/v1/owners '{"kind":"workload","name":"e2e"}' | jq -r .id)
 [ -n "$OWNER" ] && [ "$OWNER" != "null" ] || fail "owner create returned no id"

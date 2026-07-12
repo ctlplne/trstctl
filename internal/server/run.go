@@ -453,6 +453,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
+	protocols, err := evalProtocolProfileFromConfig(cfg)
+	if err != nil {
+		return Deps{}, err
+	}
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:         cfg.Signer.KeyStoreDir,
@@ -482,7 +486,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		OTLPExporter:    otlpExporter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
-		Protocols:       cfg.Protocols, Plugins: pluginCfg,
+		Protocols:       protocols, Plugins: pluginCfg,
 		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, SCIM: cfg.Auth.SCIM,
 		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: sec.kek, SecretsAuthSecret: sec.authSecret, MachineAuthMethods: machineAuthMethods,
 		SecretScanGitleaksBin: cfg.Secrets.GitleaksBin,
@@ -492,6 +496,25 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
+}
+
+// evalProtocolProfileFromConfig resolves the explicit shipped eval preset at the
+// production assembly boundary. Keeping the call in buildRunDeps makes the named
+// profile part of cmd/trstctl's real dependency graph; tests cannot green the
+// capability by constructing a protocol registry on their own. The config package
+// keeps production default-off and binds the eval profile to one explicit tenant.
+func evalProtocolProfileFromConfig(cfg *config.Config) (config.Protocols, error) {
+	if cfg == nil {
+		return config.Protocols{}, errors.New("protocols: nil config")
+	}
+	protocols, err := cfg.Protocols.Effective()
+	if err != nil {
+		return config.Protocols{}, fmt.Errorf("protocols: resolve profile: %w", err)
+	}
+	if err := errors.Join(protocols.ValidateTenantBindings("")...); err != nil {
+		return config.Protocols{}, fmt.Errorf("protocols: validate profile: %w", err)
+	}
+	return protocols, nil
 }
 
 func serviceNowBindingsFromConfig(sn config.ServiceNowITSM) []api.ServiceNowBinding {

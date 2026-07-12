@@ -24,32 +24,40 @@ func certificateSigningRequestsPath() string {
 	return "/apis/" + kubernetesCSRAPIVersion + "/certificatesigningrequests"
 }
 
-func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers, clusterIssuers map[string]bool) (int, error) {
+func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers, clusterIssuers map[string]bool) (int, []PostureResource, error) {
 	st, body, err := c.client.request(ctx, http.MethodGet, certificateSigningRequestsPath(), nil)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if st/100 != 2 {
-		return 0, fmt.Errorf("k8s: list certificatesigningrequests: status %d: %s", st, string(body))
+		return 0, nil, fmt.Errorf("k8s: list certificatesigningrequests: status %d: %s", st, string(body))
 	}
 	var list struct {
 		Items []map[string]any `json:"items"`
 	}
 	if err := json.Unmarshal(body, &list); err != nil {
-		return 0, fmt.Errorf("k8s: decode certificatesigningrequest list: %w", err)
+		return 0, nil, fmt.Errorf("k8s: decode certificatesigningrequest list: %w", err)
 	}
 
 	signed := 0
+	posture := make([]PostureResource, 0, len(list.Items))
 	for _, csr := range list.Items {
-		if isKubernetesCSRFinished(csr) || !isKubernetesCSRApproved(csr) || !c.csrBackedByIssuer(csr, issuers, clusterIssuers) {
+		backed := c.csrBackedByIssuer(csr, issuers, clusterIssuers)
+		current := kubernetesCSRPosture(csr, backed)
+		if isKubernetesCSRFinished(csr) || !isKubernetesCSRApproved(csr) || !backed {
+			posture = append(posture, current)
 			continue
 		}
 		if err := c.signKubernetesCSR(ctx, csr); err != nil {
-			return signed, err
+			posture = append(posture, failedPosture(current))
+			return signed, posture, err
 		}
 		signed++
+		current = kubernetesCSRPosture(csr, true)
+		current.State, current.Reason = "ready", "signed"
+		posture = append(posture, current)
 	}
-	return signed, nil
+	return signed, posture, nil
 }
 
 func (c *IssuerController) csrBackedByIssuer(csr map[string]any, issuers, clusterIssuers map[string]bool) bool {

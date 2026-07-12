@@ -533,6 +533,46 @@ func TestEnabledProtocolsValidateWithExplicitTenant(t *testing.T) {
 	}
 }
 
+func TestEvalProtocolProfileLoadsFromEnvironment(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_PROTOCOLS_PROFILE":                  ProtocolProfileEval,
+		"TRSTCTL_PROTOCOLS_EVAL_TENANT_ID":           "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_PROTOCOLS_EVAL_SPIFFE_TRUST_DOMAIN": "workloads.eval.example",
+	}
+	cfg, err := Load(func(key string) string { return env[key] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := cfg.Protocols.Effective()
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	if !got.ACME.Enabled || !got.EST.Enabled || !got.SCEP.Enabled || !got.CMP.Enabled || !got.TSA.Enabled || !got.SPIFFE.Enabled || !got.SSH.Enabled {
+		t.Fatalf("eval profile did not enable every served enrollment protocol: %+v", got)
+	}
+	if got.KMIP.Enabled {
+		t.Fatal("eval protocol profile must leave KMIP's separately configured mTLS listener disabled")
+	}
+	if got.SPIFFE.TrustDomain != "workloads.eval.example" {
+		t.Fatalf("SPIFFE trust domain = %q, want environment override", got.SPIFFE.TrustDomain)
+	}
+}
+
+func TestEvalProtocolProfileFailsClosedWithoutTenantOrForUnknownName(t *testing.T) {
+	for name, protocols := range map[string]Protocols{
+		"missing tenant":  {Profile: ProtocolProfileEval},
+		"unknown profile": {Profile: "production-ish", EvalTenantID: "11111111-1111-4111-8111-111111111111"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Protocols = protocols
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("invalid named protocol profile must fail configuration validation")
+			}
+		})
+	}
+}
+
 func TestKMIPRequiresMTLSMaterial(t *testing.T) {
 	c := Default()
 	c.Protocols.KMIP.Enabled = true

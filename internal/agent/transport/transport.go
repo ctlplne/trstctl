@@ -18,8 +18,9 @@ import (
 
 // NewServer builds the agent-facing gRPC server secured by the given mutual-TLS
 // credentials. It registers the standard health service — the agent's liveness
-// check — and, when svc is non-nil, the agent steady-state service (heartbeat +
-// renewal, WIRE-004). The server has no insecure listener; a nil svc serves only
+// check — and, when svc is non-nil, the agent steady-state service (heartbeat,
+// renewal, inventory, and the optional Kubernetes posture report). The server has
+// no insecure listener; a nil svc serves only
 // health (used by the transport-level tests).
 func NewServer(creds credentials.TransportCredentials, svc AgentServiceServer, opts ...grpc.ServerOption) *grpc.Server {
 	serverOpts := []grpc.ServerOption{grpc.Creds(creds), grpc.UnaryInterceptor(agentProtocolInterceptor)}

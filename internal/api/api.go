@@ -89,6 +89,8 @@ type API struct {
 	pam                       PAMService
 	managedKeys               ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
 	transit                   TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
+	vaultCompat               *vaultCompatState
+	protocolProfile           ProtocolProfileControl
 	codeSigning               CodeSigningService
 	ctSubmission              CTSubmissionService
 	secrets                   *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
@@ -154,6 +156,7 @@ type config struct {
 	pam                       PAMService
 	managedKeys               ManagedKeyService
 	transit                   TransitService
+	protocolProfile           ProtocolProfileControl
 	codeSigning               CodeSigningService
 	ctSubmission              CTSubmissionService
 	secrets                   *secretsService
@@ -556,6 +559,8 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		pam:                       cfg.pam,
 		managedKeys:               cfg.managedKeys,
 		transit:                   cfg.transit,
+		vaultCompat:               newVaultCompatState(cfg.eventLog),
+		protocolProfile:           cfg.protocolProfile,
 		codeSigning:               cfg.codeSigning,
 		ctSubmission:              cfg.ctSubmission,
 		secrets:                   cfg.secrets,
@@ -1008,6 +1013,8 @@ func (a *API) routes() []route {
 
 		{method: "POST", path: "/api/v1/issuers", opID: "createIssuer", summary: "Create an issuer", handler: a.createIssuer, reqSchema: "IssuerRequest", resSchema: "Issuer", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/issuers", opID: "listIssuers", summary: "List issuers", handler: a.listIssuers, query: page, resSchema: "IssuerList", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/setup/protocols", opID: "getProtocolProfile", summary: "Get the tenant-bound eval protocol profile status", handler: a.getProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", perm: authz.IssuersRead},
+		{method: "POST", path: "/api/v1/setup/protocols/activate", opID: "activateProtocolProfile", summary: "Activate the tenant-bound eval protocol profile", handler: a.activateProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/ceremonies", opID: "createCACeremony", summary: "Start an m-of-n CA key ceremony", handler: a.createCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CAKeyCeremony", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/ca/ceremonies/{id}", opID: "getCACeremony", summary: "Get a CA key ceremony", handler: a.getCACeremony, pathParams: caCeremonyPath, resSchema: "CAKeyCeremony", successCode: "200", perm: authz.IssuersRead},

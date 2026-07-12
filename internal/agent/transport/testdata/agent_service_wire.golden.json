@@ -18,6 +18,12 @@
       "full_method": "/trstctl.agent.v1.AgentService/ReportInventory",
       "request_json": "{\"source_kind\":\"filesystem\",\"findings\":[{\"kind\":\"secret\",\"ref\":\"k8s://apps/web/tls\",\"provenance\":\"k8s-secret:apps/web/tls\",\"risk_score\":50,\"metadata\":{\"namespace\":\"apps\"}}]}",
       "response_json": "{\"tenant_id\":\"11111111-1111-1111-1111-111111111111\",\"run_id\":\"22222222-2222-2222-2222-222222222222\",\"recorded\":1,\"rejected\":0}"
+    },
+    {
+      "name": "ReportKubernetesPosture",
+      "full_method": "/trstctl.agent.v1.AgentService/ReportKubernetesPosture",
+      "request_json": "{\"report_id\":\"33333333-3333-3333-3333-333333333333\",\"cluster_id\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"reconcile_interval_seconds\":30,\"certificate_signing_requests\":{\"complete\":true,\"resources\":[{\"name\":\"web-csr\",\"uid\":\"csr-uid\",\"resource_version\":\"17\",\"state\":\"ready\",\"reason\":\"signed\",\"public_hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}]},\"trust_bundles\":{\"complete\":true,\"resources\":[{\"name\":\"corp-roots\",\"uid\":\"bundle-uid\",\"resource_version\":\"9\",\"state\":\"ready\",\"reason\":\"distributed\",\"public_hash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}]}}",
+      "response_json": "{\"tenant_id\":\"11111111-1111-1111-1111-111111111111\",\"report_id\":\"33333333-3333-3333-3333-333333333333\",\"recorded_at_unix\":1893456000}"
     }
   ]
 }

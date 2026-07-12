@@ -5,6 +5,7 @@ package secretsync
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -87,9 +88,10 @@ func TestAllSyncTargetsDistinct(t *testing.T) {
 		NewTerraformTarget(mt), NewTerraformCloudTarget(mt), NewVercelTarget(mt),
 		NewAWSParamStoreTarget(mt), NewAWSSecretsManagerTarget(mt), NewGCPSecretManagerTarget(mt),
 		NewAzureKeyVaultTarget(mt), NewCITarget(mt), NewWebhookTarget(mt),
+		NewTerraformCloudOpenTofuTarget(mt), NewVaultKVV2Target(mt),
 	}
-	if len(targets) != 12 {
-		t.Fatalf("expected 12 targets, have %d", len(targets))
+	if len(targets) != 14 {
+		t.Fatalf("expected 14 targets, have %d", len(targets))
 	}
 	names := map[string]bool{}
 	for _, tg := range targets {
@@ -109,6 +111,8 @@ func TestProviderCatalogCoversTableStakesSecretSyncTargets(t *testing.T) {
 		"gitlab-ci",
 		"vercel-netlify",
 		"ci",
+		"terraform-cloud-opentofu",
+		"vault-kv-v2",
 	}
 	got := map[string]ProviderCatalogEntry{}
 	for _, entry := range ProviderCatalog() {
@@ -124,6 +128,38 @@ func TestProviderCatalogCoversTableStakesSecretSyncTargets(t *testing.T) {
 		}
 		if len(entry.Capabilities) == 0 {
 			t.Fatalf("provider catalog entry %s has no capabilities", id)
+		}
+	}
+}
+
+func TestNativeResidualTargetsAreNotCatalogedAsGenericPushers(t *testing.T) {
+	entries := map[string]ProviderCatalogEntry{}
+	for _, entry := range ProviderCatalog() {
+		entries[entry.ID] = entry
+	}
+	tests := []struct {
+		id       string
+		required []string
+	}{
+		{id: "terraform-cloud-opentofu", required: []string{"sensitive-variable", "read-before-write"}},
+		{id: "vault-kv-v2", required: []string{"kv-v2", "cas", "read-before-write"}},
+	}
+	for _, test := range tests {
+		entry, ok := entries[test.id]
+		if !ok {
+			t.Fatalf("native provider catalog missing %q", test.id)
+		}
+		if strings.Contains(strings.ToLower(entry.DeliveryMode+" "+entry.WireFormat), "generic") {
+			t.Fatalf("native provider %q still advertises a generic pusher: %+v", test.id, entry)
+		}
+		capabilities := map[string]bool{}
+		for _, capability := range entry.Capabilities {
+			capabilities[capability] = true
+		}
+		for _, required := range test.required {
+			if !capabilities[required] {
+				t.Errorf("provider %q is missing native capability %q", test.id, required)
+			}
 		}
 	}
 }

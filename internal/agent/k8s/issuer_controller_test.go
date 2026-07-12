@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/k8s"
 	"trstctl.com/trstctl/internal/crypto"
@@ -256,7 +257,7 @@ func kubernetesCSR(name, signerName string, approved bool) map[string]any {
 	csr := map[string]any{
 		"apiVersion": "certificates.k8s.io/v1",
 		"kind":       "CertificateSigningRequest",
-		"metadata":   map[string]any{"name": name, "resourceVersion": "20"},
+		"metadata":   map[string]any{"name": name, "uid": "csr-uid-" + name, "resourceVersion": "20"},
 		"spec": map[string]any{
 			"signerName": signerName,
 			"request":    "",
@@ -279,7 +280,7 @@ func trstctlTrustBundle(name, caBundle string, namespaces ...string) map[string]
 	return map[string]any{
 		"apiVersion": "trstctl.com/v1alpha1",
 		"kind":       "TrustBundle",
-		"metadata":   map[string]any{"name": name, "resourceVersion": "30"},
+		"metadata":   map[string]any{"name": name, "uid": "bundle-uid-" + name, "resourceVersion": "30"},
 		"spec": map[string]any{
 			"caBundlePEM": caBundle,
 			"target": map[string]any{
@@ -443,9 +444,10 @@ func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *te
 	signer, _ := caSigner(t)
 	api := newFakeIssuerAPI()
 	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
+	requestField := csrDERRequestField(t)
 	api.kubernetesCSRs = []map[string]any{func() map[string]any {
 		csr := kubernetesCSR("native-csr", "trstctl.com/trstctl", true)
-		csr["spec"].(map[string]any)["request"] = csrDERRequestField(t)
+		csr["spec"].(map[string]any)["request"] = requestField
 		return csr
 	}()}
 	srv := httptest.NewServer(api.handler())
@@ -458,6 +460,20 @@ func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *te
 	}
 	if result.KubernetesCSRsSigned != 1 {
 		t.Fatalf("KubernetesCSRsSigned = %d, want 1", result.KubernetesCSRsSigned)
+	}
+	if !result.KubernetesCSRComplete || len(result.KubernetesCSRPosture) != 1 {
+		t.Fatalf("Kubernetes CSR posture = %+v complete=%v, want one completed object", result.KubernetesCSRPosture, result.KubernetesCSRComplete)
+	}
+	csrPosture := result.KubernetesCSRPosture[0]
+	if csrPosture.Name != "native-csr" || csrPosture.UID != "csr-uid-native-csr" || csrPosture.ResourceVersion != "20" || csrPosture.State != "ready" || csrPosture.Reason != "signed" || len(csrPosture.PublicHash) != 64 {
+		t.Fatalf("Kubernetes CSR posture = %+v, want metadata-only signed receipt", csrPosture)
+	}
+	reportJSON, err := json.Marshal(result.PostureReport(controllerClusterID(), 30*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(reportJSON), requestField) || strings.Contains(string(reportJSON), `"request":`) {
+		t.Fatalf("controller posture report carried CSR bytes instead of its public hash: %s", reportJSON)
 	}
 
 	ready, cert := readyCondition(t, api.kubernetesCSRStatus["native-csr"])
@@ -488,6 +504,24 @@ func TestIssuerControllerDistributesTrustBundlesCAPK8S07(t *testing.T) {
 	}
 	if result.TrustBundlesDistributed != 2 {
 		t.Fatalf("TrustBundlesDistributed = %d, want 2", result.TrustBundlesDistributed)
+	}
+	if !result.TrustBundleComplete || len(result.TrustBundlePosture) != 1 {
+		t.Fatalf("TrustBundle posture = %+v complete=%v, want one completed object", result.TrustBundlePosture, result.TrustBundleComplete)
+	}
+	bundlePosture := result.TrustBundlePosture[0]
+	if bundlePosture.Name != "platform-roots" || bundlePosture.UID != "bundle-uid-platform-roots" || bundlePosture.ResourceVersion != "30" || bundlePosture.State != "ready" || bundlePosture.Reason != "distributed" || len(bundlePosture.PublicHash) != 64 {
+		t.Fatalf("TrustBundle posture = %+v, want metadata-only distribution receipt", bundlePosture)
+	}
+	report := result.PostureReport(controllerClusterID(), 30*time.Second)
+	if report.CertificateSigning.Complete != result.KubernetesCSRComplete || !report.TrustBundles.Complete || report.ReconcileIntervalSeconds != 30 || report.ReportID == "" {
+		t.Fatalf("controller posture report = %+v", report)
+	}
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(reportJSON), strings.TrimSpace(bundlePEM)) || strings.Contains(string(reportJSON), "BEGIN CERTIFICATE") || strings.Contains(string(reportJSON), "caBundlePEM") {
+		t.Fatalf("controller posture report carried trust-bundle bytes instead of its public hash: %s", reportJSON)
 	}
 
 	for _, namespace := range []string{"apps", "payments"} {
@@ -529,7 +563,7 @@ func TestIssuerControllerRejectsPrivateKeyInTrustBundleCAPK8S07(t *testing.T) {
 	defer srv.Close()
 
 	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
-	_, err := controller.Reconcile(context.Background(), "apps")
+	result, err := controller.Reconcile(context.Background(), "apps")
 	if err == nil || !strings.Contains(err.Error(), "only CERTIFICATE blocks") {
 		t.Fatalf("Reconcile error = %v, want private-key rejection", err)
 	}
@@ -539,6 +573,15 @@ func TestIssuerControllerRejectsPrivateKeyInTrustBundleCAPK8S07(t *testing.T) {
 	if api.trustBundleStatus["bad-roots"] != nil {
 		t.Fatalf("private-key bundle was marked ready: %+v", api.trustBundleStatus["bad-roots"])
 	}
+	if result.TrustBundleComplete || result.TrustBundleFailureCode != "reconcile_failed" || len(result.TrustBundlePosture) != 1 || result.TrustBundlePosture[0].State != "failed" {
+		t.Fatalf("failed TrustBundle posture = %+v complete=%v code=%q", result.TrustBundlePosture, result.TrustBundleComplete, result.TrustBundleFailureCode)
+	}
+}
+
+func controllerClusterID() string {
+	// Tests only need a valid public cluster identity; production obtains this from
+	// Client.ClusterID(), which hashes the cluster trust anchor.
+	return "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }
 
 func gotConfigMapData(t *testing.T, obj map[string]any, key string) string {

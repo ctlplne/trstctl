@@ -14,7 +14,8 @@
     "capabilities": [
       "heartbeat",
       "renew",
-      "inventory"
+      "inventory",
+      "kubernetes-posture"
     ]
   },
   "service": {
@@ -38,6 +39,12 @@
         "full_method": "/trstctl.agent.v1.AgentService/ReportInventory",
         "request": "InventoryRequest",
         "response": "InventoryResponse"
+      },
+      {
+        "name": "ReportKubernetesPosture",
+        "full_method": "/trstctl.agent.v1.AgentService/ReportKubernetesPosture",
+        "request": "KubernetesPostureRequest",
+        "response": "KubernetesPostureResponse"
       }
     ]
   },
@@ -178,6 +185,40 @@
           "go_type": "int",
           "presence": "required"
         }
+      ]
+    },
+    "KubernetesPostureResource": {
+      "fields": [
+        {"name": "namespace", "go_type": "string", "presence": "optional"},
+        {"name": "name", "go_type": "string", "presence": "required"},
+        {"name": "uid", "go_type": "string", "presence": "required"},
+        {"name": "resource_version", "go_type": "string", "presence": "required"},
+        {"name": "state", "go_type": "string", "presence": "required"},
+        {"name": "reason", "go_type": "string", "presence": "required"},
+        {"name": "public_hash", "go_type": "string", "presence": "optional"}
+      ]
+    },
+    "KubernetesPostureSection": {
+      "fields": [
+        {"name": "complete", "go_type": "bool", "presence": "required"},
+        {"name": "failure_code", "go_type": "string", "presence": "optional"},
+        {"name": "resources", "go_type": "[]KubernetesPostureResource", "presence": "required"}
+      ]
+    },
+    "KubernetesPostureRequest": {
+      "fields": [
+        {"name": "report_id", "go_type": "string", "presence": "required"},
+        {"name": "cluster_id", "go_type": "string", "presence": "required"},
+        {"name": "reconcile_interval_seconds", "go_type": "int", "presence": "required"},
+        {"name": "certificate_signing_requests", "go_type": "transport.KubernetesPostureSection", "presence": "required"},
+        {"name": "trust_bundles", "go_type": "transport.KubernetesPostureSection", "presence": "required"}
+      ]
+    },
+    "KubernetesPostureResponse": {
+      "fields": [
+        {"name": "tenant_id", "go_type": "string", "presence": "required"},
+        {"name": "report_id", "go_type": "string", "presence": "required"},
+        {"name": "recorded_at_unix", "go_type": "int64", "presence": "required"}
       ]
     }
   }

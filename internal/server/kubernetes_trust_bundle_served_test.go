@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 func TestServedKubernetesTrustBundleDistributionCAPK8S07(t *testing.T) {
@@ -16,49 +17,51 @@ func TestServedKubernetesTrustBundleDistributionCAPK8S07(t *testing.T) {
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read")
 
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/kubernetes/trust-bundles", tok, nil)
-	if status != http.StatusOK {
-		t.Fatalf("kubernetes trust-bundle support: status %d body %s", status, body)
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("Kubernetes TrustBundle posture before report: status %d body %s, want 503", status, body)
 	}
-	upper := strings.ToUpper(string(body))
-	if strings.Contains(upper, "BEGIN PRIVATE KEY") || strings.Contains(strings.ToLower(string(body)), "bridge-signer-token") || strings.Contains(strings.ToLower(string(body)), "bearer ") {
-		t.Fatalf("kubernetes trust-bundle support leaked credential material: %s", body)
-	}
+	seedKubernetesPosture(t, h, projections.KubernetesControllerPostureReported{
+		ReportID:  "33333333-3333-3333-3333-333333333333",
+		AgentID:   "44444444-4444-4444-4444-444444444444",
+		ClusterID: "sha256:" + strings.Repeat("a", 64), ReconcileIntervalSeconds: 30,
+		CertificateSigning: projections.KubernetesPostureSection{Complete: true, Resources: []projections.KubernetesPostureResource{{
+			Name: "web-csr", UID: "csr-uid", ResourceVersion: "17", State: "ready", Reason: "signed", PublicHash: strings.Repeat("b", 64),
+		}}},
+		TrustBundles: projections.KubernetesPostureSection{Complete: true, Resources: []projections.KubernetesPostureResource{{
+			Name: "corp-roots", UID: "bundle-uid", ResourceVersion: "9", State: "ready", Reason: "distributed", PublicHash: strings.Repeat("c", 64),
+		}}},
+	})
 
-	var support struct {
-		Capability           string   `json:"capability"`
-		Served               bool     `json:"served"`
-		APIGroup             string   `json:"api_group"`
-		APIVersion           string   `json:"api_version"`
-		Resource             string   `json:"resource"`
-		DistributionTargets  []string `json:"distribution_targets"`
-		ControllerFlow       []string `json:"controller_flow"`
-		ArchitectureControls []string `json:"architecture_controls"`
-		EvidenceRefs         []string `json:"evidence_refs"`
-		StatusFields         []string `json:"status_fields"`
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/kubernetes/trust-bundles", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("Kubernetes TrustBundle posture: status %d body %s", status, body)
 	}
-	if err := json.Unmarshal(body, &support); err != nil {
-		t.Fatalf("decode kubernetes trust-bundle support: %v (%s)", err, body)
+	if strings.Contains(strings.ToUpper(string(body)), "BEGIN PRIVATE KEY") || strings.Contains(string(body), "controller_flow") || strings.Contains(string(body), "ca_bundle_pem") {
+		t.Fatalf("Kubernetes TrustBundle posture leaked payload/static descriptor data: %s", body)
 	}
-	if support.Capability != "CAP-K8S-07" || !support.Served {
-		t.Fatalf("kubernetes trust-bundle support = %+v, want served CAP-K8S-07", support)
+	var got struct {
+		Capability string `json:"capability"`
+		Served     bool   `json:"served"`
+		LastSync   string `json:"last_sync"`
+		Summary    struct {
+			Observed int `json:"observed"`
+			Ready    int `json:"ready"`
+		} `json:"summary"`
+		Objects []struct {
+			Name            string `json:"name"`
+			UID             string `json:"uid"`
+			ResourceVersion string `json:"resource_version"`
+			Reason          string `json:"reason"`
+			PublicHash      string `json:"public_hash"`
+		} `json:"objects"`
 	}
-	if support.APIGroup != "trstctl.com" || support.APIVersion != "trstctl.com/v1alpha1" || support.Resource != "trustbundles" {
-		t.Fatalf("bad Kubernetes TrustBundle resource metadata: %+v", support)
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode Kubernetes TrustBundle posture: %v (%s)", err, body)
 	}
-	for _, want := range []string{
-		"internal/agent/k8s/trust_bundle.go",
-		"deploy/kubernetes/certmanager-issuer-crds.yaml",
-		"deploy/kubernetes/rbac.yaml",
-		"internal/agent/k8s/issuer_controller_test.go",
-	} {
-		if !containsKubernetesString(support.EvidenceRefs, want) {
-			t.Fatalf("evidence refs missing %q: %+v", want, support.EvidenceRefs)
-		}
+	if got.Capability != "CAP-K8S-07" || !got.Served || got.LastSync == "" || got.Summary.Observed != 1 || got.Summary.Ready != 1 {
+		t.Fatalf("Kubernetes TrustBundle posture = %+v", got)
 	}
-	if !containsKubernetesString(support.StatusFields, "status.bundleSHA256") {
-		t.Fatalf("status fields missing bundle hash: %+v", support.StatusFields)
-	}
-	if len(support.DistributionTargets) == 0 || !containsKubernetesString(support.ArchitectureControls, "only public PEM CERTIFICATE blocks are accepted; private-key PEM blocks fail closed before any ConfigMap write") {
-		t.Fatalf("kubernetes trust-bundle support missing target/control evidence: %+v", support)
+	if len(got.Objects) != 1 || got.Objects[0].Name != "corp-roots" || got.Objects[0].UID != "bundle-uid" || got.Objects[0].ResourceVersion != "9" || got.Objects[0].Reason != "distributed" || len(got.Objects[0].PublicHash) != 64 {
+		t.Fatalf("Kubernetes TrustBundle objects = %+v", got.Objects)
 	}
 }

@@ -5,172 +5,187 @@ package api
 import (
 	"net/http"
 	"time"
+
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/store"
 )
 
-type KubernetesCSRSupportRule struct {
-	APIGroup string   `json:"api_group"`
-	Resource string   `json:"resource"`
-	Verbs    []string `json:"verbs"`
+type KubernetesPostureSummary struct {
+	Controllers int `json:"controllers"`
+	Complete    int `json:"complete_controllers"`
+	Stale       int `json:"stale_controllers"`
+	Observed    int `json:"observed"`
+	Ready       int `json:"ready"`
+	Pending     int `json:"pending"`
+	Failed      int `json:"failed"`
+}
+
+type KubernetesPostureController struct {
+	ControllerID      string `json:"controller_id"`
+	ClusterID         string `json:"cluster_id"`
+	ReportID          string `json:"report_id"`
+	ReconcileComplete bool   `json:"reconcile_complete"`
+	FailureCode       string `json:"failure_code,omitempty"`
+	LastSync          string `json:"last_sync"`
+	Stale             bool   `json:"stale"`
+	Observed          int    `json:"observed"`
+	Ready             int    `json:"ready"`
+	Pending           int    `json:"pending"`
+	Failed            int    `json:"failed"`
+}
+
+type KubernetesPostureObject struct {
+	ControllerID    string `json:"controller_id"`
+	ClusterID       string `json:"cluster_id"`
+	Namespace       string `json:"namespace,omitempty"`
+	Name            string `json:"name"`
+	UID             string `json:"uid"`
+	ResourceVersion string `json:"resource_version"`
+	State           string `json:"state"`
+	Reason          string `json:"reason"`
+	PublicHash      string `json:"public_hash,omitempty"`
 }
 
 type KubernetesCSRSupport struct {
-	Capability             string                     `json:"capability"`
-	Served                 bool                       `json:"served"`
-	GeneratedAt            string                     `json:"generated_at"`
-	APIGroup               string                     `json:"api_group"`
-	APIVersion             string                     `json:"api_version"`
-	Resource               string                     `json:"resource"`
-	SignerNames            []string                   `json:"signer_names"`
-	ControllerFlow         []string                   `json:"controller_flow"`
-	RBACRules              []KubernetesCSRSupportRule `json:"rbac_rules"`
-	StatusFields           []string                   `json:"status_fields"`
-	ArchitectureControls   []string                   `json:"architecture_controls"`
-	EvidenceRefs           []string                   `json:"evidence_refs"`
-	Residuals              []string                   `json:"residuals"`
-	RecommendedNextActions []string                   `json:"recommended_next_actions"`
+	Capability  string                        `json:"capability"`
+	Served      bool                          `json:"served"`
+	GeneratedAt string                        `json:"generated_at"`
+	LastSync    string                        `json:"last_sync"`
+	APIGroup    string                        `json:"api_group"`
+	APIVersion  string                        `json:"api_version"`
+	Resource    string                        `json:"resource"`
+	Summary     KubernetesPostureSummary      `json:"summary"`
+	Controllers []KubernetesPostureController `json:"controllers"`
+	Objects     []KubernetesPostureObject     `json:"objects"`
 }
 
 type KubernetesTrustBundleDistribution struct {
-	Capability             string                     `json:"capability"`
-	Served                 bool                       `json:"served"`
-	GeneratedAt            string                     `json:"generated_at"`
-	APIGroup               string                     `json:"api_group"`
-	APIVersion             string                     `json:"api_version"`
-	Resource               string                     `json:"resource"`
-	DistributionTargets    []string                   `json:"distribution_targets"`
-	ControllerFlow         []string                   `json:"controller_flow"`
-	RBACRules              []KubernetesCSRSupportRule `json:"rbac_rules"`
-	StatusFields           []string                   `json:"status_fields"`
-	ArchitectureControls   []string                   `json:"architecture_controls"`
-	EvidenceRefs           []string                   `json:"evidence_refs"`
-	Residuals              []string                   `json:"residuals"`
-	RecommendedNextActions []string                   `json:"recommended_next_actions"`
+	Capability  string                        `json:"capability"`
+	Served      bool                          `json:"served"`
+	GeneratedAt string                        `json:"generated_at"`
+	LastSync    string                        `json:"last_sync"`
+	APIGroup    string                        `json:"api_group"`
+	APIVersion  string                        `json:"api_version"`
+	Resource    string                        `json:"resource"`
+	Summary     KubernetesPostureSummary      `json:"summary"`
+	Controllers []KubernetesPostureController `json:"controllers"`
+	Objects     []KubernetesPostureObject     `json:"objects"`
 }
 
-func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, _ *http.Request) {
-	a.writeJSON(w, http.StatusOK, buildKubernetesCSRSupport(time.Now().UTC().Format(time.RFC3339)))
+func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
+	rows, ok := a.kubernetesPostureRows(w, r, store.KubernetesPostureCertificateSigningRequests)
+	if !ok {
+		return
+	}
+	generatedAt := time.Now().UTC()
+	state := buildKubernetesPosture(rows, generatedAt)
+	a.writeJSON(w, http.StatusOK, KubernetesCSRSupport{
+		Capability: "CAP-K8S-04", Served: state.served,
+		GeneratedAt: generatedAt.Format(time.RFC3339), LastSync: state.lastSync,
+		APIGroup: "certificates.k8s.io", APIVersion: "certificates.k8s.io/v1", Resource: "certificatesigningrequests",
+		Summary: state.summary, Controllers: state.controllers, Objects: state.objects,
+	})
 }
 
-func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, _ *http.Request) {
-	a.writeJSON(w, http.StatusOK, buildKubernetesTrustBundleDistribution(time.Now().UTC().Format(time.RFC3339)))
+func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *http.Request) {
+	rows, ok := a.kubernetesPostureRows(w, r, store.KubernetesPostureTrustBundles)
+	if !ok {
+		return
+	}
+	generatedAt := time.Now().UTC()
+	state := buildKubernetesPosture(rows, generatedAt)
+	a.writeJSON(w, http.StatusOK, KubernetesTrustBundleDistribution{
+		Capability: "CAP-K8S-07", Served: state.served,
+		GeneratedAt: generatedAt.Format(time.RFC3339), LastSync: state.lastSync,
+		APIGroup: "trstctl.com", APIVersion: "trstctl.com/v1alpha1", Resource: "trustbundles",
+		Summary: state.summary, Controllers: state.controllers, Objects: state.objects,
+	})
 }
 
-func buildKubernetesCSRSupport(generatedAt string) KubernetesCSRSupport {
-	if generatedAt == "" {
-		generatedAt = "1970-01-01T00:00:00Z"
+func (a *API) kubernetesPostureRows(w http.ResponseWriter, r *http.Request, capability string) ([]store.KubernetesControllerPosture, bool) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return nil, false
 	}
-	return KubernetesCSRSupport{
-		Capability:  "CAP-K8S-04",
-		Served:      true,
-		GeneratedAt: generatedAt,
-		APIGroup:    "certificates.k8s.io",
-		APIVersion:  "certificates.k8s.io/v1",
-		Resource:    "certificatesigningrequests",
-		SignerNames: []string{
-			"trstctl.com/trstctl",
-			"trstctl.com/<clusterissuer-name>",
-			"trstctl.com/<issuer-name> with trstctl.com/issuer-kind=Issuer",
-		},
-		ControllerFlow: []string{
-			"DaemonSet trstctl-agent runs --cert-manager-controller with a mounted certs:issue API token",
-			"controller lists certificates.k8s.io/v1 CertificateSigningRequests",
-			"controller signs only Approved requests whose signerName maps to an existing trstctl Issuer or ClusterIssuer",
-			"CSR DER or PEM bytes are forwarded to the served trstctl issuance endpoint with a stable Idempotency-Key",
-			"issued certificate chain is written to status.certificate and Ready=True is upserted",
-		},
-		RBACRules: []KubernetesCSRSupportRule{
-			{APIGroup: "certificates.k8s.io", Resource: "certificatesigningrequests", Verbs: []string{"get", "list", "watch"}},
-			{APIGroup: "certificates.k8s.io", Resource: "certificatesigningrequests/status", Verbs: []string{"update", "patch"}},
-		},
-		StatusFields: []string{
-			"status.certificate",
-			"status.conditions[type=Ready]",
-		},
-		ArchitectureControls: []string{
-			"only approved CertificateSigningRequests are signed",
-			"signerName must map to an existing trstctl Issuer or ClusterIssuer",
-			"the agent writes the status subresource only and never approves requests itself",
-			"only CSR bytes cross the control-plane boundary; private keys stay with the workload or Kubernetes client",
-			"the HTTP signer uses a stable Idempotency-Key so retries do not mint duplicates",
-		},
-		EvidenceRefs: []string{
-			"internal/agent/k8s/certificate_signing_request.go",
-			"internal/agent/k8s/issuer_controller.go",
-			"internal/agent/k8s/signer.go",
-			"deploy/kubernetes/rbac.yaml",
-			"deploy/kubernetes/daemonset.yaml",
-			"internal/server/kubernetes_csr_served_test.go",
-		},
-		Residuals: []string{
-			"the controller is poll-based rather than informer/workqueue-backed",
-			"approval policy remains a Kubernetes approver responsibility; trstctl signs only requests Kubernetes has already approved",
-			"multi-cluster rollout uses one DaemonSet/install per cluster",
-		},
-		RecommendedNextActions: []string{
-			"move reconciliation to informer-backed queues for very large clusters",
-			"publish sample approver policy for signerName-to-tenant/profile governance",
-			"add per-CSR delivery receipts to the operations queue",
-		},
+	if a.store == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "Kubernetes controller posture store is not configured"))
+		return nil, false
 	}
+	rows, err := a.store.ListKubernetesControllerPosture(r.Context(), tenantID, capability)
+	if err != nil {
+		a.writeError(w, err)
+		return nil, false
+	}
+	if len(rows) == 0 {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "no authenticated Kubernetes controller report has been received for this tenant"))
+		return nil, false
+	}
+	return rows, true
 }
 
-func buildKubernetesTrustBundleDistribution(generatedAt string) KubernetesTrustBundleDistribution {
-	if generatedAt == "" {
-		generatedAt = "1970-01-01T00:00:00Z"
+type kubernetesPostureState struct {
+	served      bool
+	lastSync    string
+	summary     KubernetesPostureSummary
+	controllers []KubernetesPostureController
+	objects     []KubernetesPostureObject
+}
+
+func buildKubernetesPosture(rows []store.KubernetesControllerPosture, now time.Time) kubernetesPostureState {
+	state := kubernetesPostureState{
+		controllers: make([]KubernetesPostureController, 0, len(rows)),
+		objects:     make([]KubernetesPostureObject, 0),
 	}
-	return KubernetesTrustBundleDistribution{
-		Capability:  "CAP-K8S-07",
-		Served:      true,
-		GeneratedAt: generatedAt,
-		APIGroup:    "trstctl.com",
-		APIVersion:  "trstctl.com/v1alpha1",
-		Resource:    "trustbundles",
-		DistributionTargets: []string{
-			"v1 ConfigMap data[ca-bundle.pem] in each declared target namespace",
-			"one trstctl-agent DaemonSet/install per cluster, with the same TrustBundle spec applied per cluster",
-			"status.conditions[type=Ready], status.targets, and status.bundleSHA256 on the TrustBundle resource",
-		},
-		ControllerFlow: []string{
-			"operator applies a cluster-scoped trstctl.com/v1alpha1 TrustBundle with public PEM caBundlePEM and target namespaces",
-			"trstctl-agent lists TrustBundle resources using the service-account token",
-			"the controller validates that caBundlePEM contains only PEM CERTIFICATE blocks",
-			"the controller creates or updates the named ConfigMap in every target namespace with the public CA bundle",
-			"the controller updates TrustBundle status with target count, bundleSHA256, and Ready=True",
-		},
-		RBACRules: []KubernetesCSRSupportRule{
-			{APIGroup: "trstctl.com", Resource: "trustbundles", Verbs: []string{"get", "list", "watch"}},
-			{APIGroup: "trstctl.com", Resource: "trustbundles/status", Verbs: []string{"update", "patch"}},
-			{APIGroup: "", Resource: "configmaps", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
-		},
-		StatusFields: []string{
-			"status.targets",
-			"status.bundleSHA256",
-			"status.conditions[type=Ready]",
-		},
-		ArchitectureControls: []string{
-			"only public PEM CERTIFICATE blocks are accepted; private-key PEM blocks fail closed before any ConfigMap write",
-			"ConfigMaps receive public CA bundles only; no private key or service-account credential is copied",
-			"updates are idempotent create-or-update writes keyed by namespace/name and Kubernetes resourceVersion",
-			"distribution stays in the Kubernetes agent controller and does not add a new control-plane datastore or signer path",
-			"multi-cluster distribution is explicit: apply the same TrustBundle resource to each enrolled cluster/agent install",
-		},
-		EvidenceRefs: []string{
-			"internal/agent/k8s/trust_bundle.go",
-			"internal/agent/k8s/issuer_controller.go",
-			"deploy/kubernetes/certmanager-issuer-crds.yaml",
-			"deploy/kubernetes/rbac.yaml",
-			"internal/agent/k8s/issuer_controller_test.go",
-			"internal/server/kubernetes_trust_bundle_served_test.go",
-		},
-		Residuals: []string{
-			"the controller is poll-based rather than informer/workqueue-backed",
-			"multi-cluster rollout requires applying the TrustBundle CRD and object to each cluster where the agent runs",
-			"the first served target is ConfigMap distribution; Secret, projected volume, and CSI distribution modes are not claimed",
-		},
-		RecommendedNextActions: []string{
-			"move reconciliation to informer-backed queues for very large clusters",
-			"add fleet-level receipts that aggregate TrustBundle propagation across clusters",
-			"add optional namespace label selectors after a policy review for least-privilege rollout blast radius",
-		},
+	var latest time.Time
+	for _, row := range rows {
+		controller := KubernetesPostureController{
+			ControllerID: row.ControllerID, ClusterID: row.ClusterID, ReportID: row.ReportID,
+			ReconcileComplete: row.ReconcileComplete, FailureCode: row.FailureCode,
+			LastSync: row.ReportedAt.UTC().Format(time.RFC3339), Observed: len(row.Resources),
+		}
+		staleAfter := 2 * time.Duration(row.ReconcileIntervalSeconds) * time.Second
+		if staleAfter < time.Minute {
+			staleAfter = time.Minute
+		}
+		controller.Stale = now.Sub(row.ReportedAt) > staleAfter
+		for _, resource := range row.Resources {
+			switch resource.State {
+			case "ready":
+				controller.Ready++
+			case "pending":
+				controller.Pending++
+			case "failed":
+				controller.Failed++
+			}
+			state.objects = append(state.objects, KubernetesPostureObject{
+				ControllerID: row.ControllerID, ClusterID: row.ClusterID,
+				Namespace: resource.Namespace, Name: resource.Name, UID: resource.UID,
+				ResourceVersion: resource.ResourceVersion, State: resource.State,
+				Reason: resource.Reason, PublicHash: resource.PublicHash,
+			})
+		}
+		state.summary.Controllers++
+		if controller.Stale {
+			state.summary.Stale++
+		}
+		if row.ReconcileComplete {
+			state.summary.Complete++
+			if !controller.Stale {
+				state.served = true
+			}
+		}
+		state.summary.Observed += controller.Observed
+		state.summary.Ready += controller.Ready
+		state.summary.Pending += controller.Pending
+		state.summary.Failed += controller.Failed
+		state.controllers = append(state.controllers, controller)
+		if row.ReportedAt.After(latest) {
+			latest = row.ReportedAt
+		}
 	}
+	if !latest.IsZero() {
+		state.lastSync = latest.UTC().Format(time.RFC3339)
+	}
+	return state
 }

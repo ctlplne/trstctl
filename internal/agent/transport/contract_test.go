@@ -130,6 +130,22 @@ func TestAgentSteadyStateWireGoldenFixtures(t *testing.T) {
 			},
 			response: InventoryResponse{TenantID: "11111111-1111-1111-1111-111111111111", RunID: "22222222-2222-2222-2222-222222222222", Recorded: 1, Rejected: 0},
 		},
+		methodKubernetesPosture: {
+			fullMethod: fullMethodKubernetesPosture,
+			request: KubernetesPostureRequest{
+				ReportID: "33333333-3333-3333-3333-333333333333", ClusterID: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				ReconcileIntervalSeconds: 30,
+				CertificateSigning: KubernetesPostureSection{Complete: true, Resources: []KubernetesPostureResource{{
+					Name: "web-csr", UID: "csr-uid", ResourceVersion: "17", State: "ready", Reason: "signed",
+					PublicHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				}}},
+				TrustBundles: KubernetesPostureSection{Complete: true, Resources: []KubernetesPostureResource{{
+					Name: "corp-roots", UID: "bundle-uid", ResourceVersion: "9", State: "ready", Reason: "distributed",
+					PublicHash: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				}}},
+			},
+			response: KubernetesPostureResponse{TenantID: "11111111-1111-1111-1111-111111111111", ReportID: "33333333-3333-3333-3333-333333333333", RecordedAtUnix: 1893456000},
+		},
 	}
 	seen := map[string]bool{}
 	for _, call := range fixture.Calls {
@@ -175,7 +191,7 @@ func currentAgentContract() agentContract {
 			AgentCapabilitiesKey:  protocol.MetadataAgentCapabilities,
 			ServerProtocolKey:     protocol.MetadataServerProtocol,
 			ServerCapabilitiesKey: protocol.MetadataServerCapabilities,
-			Capabilities:          []string{AgentCapabilityHeartbeat, AgentCapabilityRenew, AgentCapabilityInventory},
+			Capabilities:          []string{AgentCapabilityHeartbeat, AgentCapabilityRenew, AgentCapabilityInventory, AgentCapabilityKubernetesPosture},
 		},
 		Service: agentContractService{
 			Name:     agentServiceDesc.ServiceName,
@@ -183,13 +199,17 @@ func currentAgentContract() agentContract {
 			Methods:  methods,
 		},
 		Messages: map[string]agentMessage{
-			"HeartbeatRequest":  {Fields: jsonFieldsOf(HeartbeatRequest{})},
-			"HeartbeatResponse": {Fields: jsonFieldsOf(HeartbeatResponse{})},
-			"RenewRequest":      {Fields: jsonFieldsOf(RenewRequest{})},
-			"RenewResponse":     {Fields: jsonFieldsOf(RenewResponse{})},
-			"InventoryFinding":  {Fields: jsonFieldsOf(InventoryFinding{})},
-			"InventoryRequest":  {Fields: jsonFieldsOf(InventoryRequest{})},
-			"InventoryResponse": {Fields: jsonFieldsOf(InventoryResponse{})},
+			"HeartbeatRequest":          {Fields: jsonFieldsOf(HeartbeatRequest{})},
+			"HeartbeatResponse":         {Fields: jsonFieldsOf(HeartbeatResponse{})},
+			"RenewRequest":              {Fields: jsonFieldsOf(RenewRequest{})},
+			"RenewResponse":             {Fields: jsonFieldsOf(RenewResponse{})},
+			"InventoryFinding":          {Fields: jsonFieldsOf(InventoryFinding{})},
+			"InventoryRequest":          {Fields: jsonFieldsOf(InventoryRequest{})},
+			"InventoryResponse":         {Fields: jsonFieldsOf(InventoryResponse{})},
+			"KubernetesPostureResource": {Fields: jsonFieldsOf(KubernetesPostureResource{})},
+			"KubernetesPostureSection":  {Fields: jsonFieldsOf(KubernetesPostureSection{})},
+			"KubernetesPostureRequest":  {Fields: jsonFieldsOf(KubernetesPostureRequest{})},
+			"KubernetesPostureResponse": {Fields: jsonFieldsOf(KubernetesPostureResponse{})},
 		},
 	}
 }
@@ -202,6 +222,8 @@ func methodMessageTypes(method string) struct{ request, response string } {
 		return struct{ request, response string }{"RenewRequest", "RenewResponse"}
 	case methodInventory:
 		return struct{ request, response string }{"InventoryRequest", "InventoryResponse"}
+	case methodKubernetesPosture:
+		return struct{ request, response string }{"KubernetesPostureRequest", "KubernetesPostureResponse"}
 	default:
 		return struct{ request, response string }{"", ""}
 	}
@@ -233,12 +255,17 @@ func schemaGoType(t reflect.Type) string {
 		return "int64"
 	case reflect.Int:
 		return "int"
+	case reflect.Bool:
+		return "bool"
 	case reflect.Slice:
 		if t.Elem().Kind() == reflect.Uint8 {
 			return "bytes_base64"
 		}
 		if t.Elem() == reflect.TypeOf(InventoryFinding{}) {
 			return "[]InventoryFinding"
+		}
+		if t.Elem() == reflect.TypeOf(KubernetesPostureResource{}) {
+			return "[]KubernetesPostureResource"
 		}
 	case reflect.Map:
 		if t.Key().Kind() == reflect.String && t.Elem().Kind() == reflect.Int64 {

@@ -745,12 +745,25 @@ func (b Breakglass) ValidateEnabled() error { return errors.Join(b.validate()...
 // must never expose a public endpoint that later discovers it has no tenant to mint
 // into or issue evidence under (AN-1).
 type Protocols struct {
-	ACME ProtocolToggle `json:"acme"`
-	EST  ProtocolToggle `json:"est"`
-	SCEP ProtocolToggle `json:"scep"`
-	CMP  ProtocolToggle `json:"cmp"`
-	TSA  ProtocolToggle `json:"tsa"`
-	KMIP KMIPProtocol   `json:"kmip"`
+	// Profile names an explicit operator-selected protocol preset. Empty preserves
+	// the production posture below: every public enrollment surface remains off
+	// until individually configured. "eval" is the only preset and is deliberately
+	// tenant-bound; it exists so the shipped evaluation stack can expose the
+	// already-served protocol implementations without hand-editing seven toggles.
+	Profile string `json:"profile,omitempty"`
+	// EvalTenantID is mandatory for the eval preset. A single value is copied to
+	// every enabled protocol so a convenience profile cannot weaken AN-1 by
+	// spraying enrollment events across implicit/default tenants.
+	EvalTenantID string `json:"eval_tenant_id,omitempty"`
+	// EvalSPIFFETrustDomain optionally replaces the eval preset's non-public trust
+	// domain. Production/default-off configuration never consumes this value.
+	EvalSPIFFETrustDomain string         `json:"eval_spiffe_trust_domain,omitempty"`
+	ACME                  ProtocolToggle `json:"acme"`
+	EST                   ProtocolToggle `json:"est"`
+	SCEP                  ProtocolToggle `json:"scep"`
+	CMP                   ProtocolToggle `json:"cmp"`
+	TSA                   ProtocolToggle `json:"tsa"`
+	KMIP                  KMIPProtocol   `json:"kmip"`
 	// ACMEQuota caps public ACME state retained by the in-process protocol view.
 	// It complements the protocol bulkhead: the bulkhead limits concurrent work,
 	// while these caps bound total nonce/account/order/authz/challenge state.
@@ -771,6 +784,49 @@ type Protocols struct {
 	// certificates. Served SCEP always wires this validator; without anchors the
 	// validator fails closed rather than accepting unauthenticated CSRs.
 	SCEPIntuneChallenge SCEPIntuneChallenge `json:"scep_intune_challenge,omitempty"`
+}
+
+const (
+	// ProtocolProfileEval is the explicit local-evaluation protocol preset. It is
+	// never selected by default and does not enable the separately gated KMIP
+	// listener, which requires its own mTLS appliance material.
+	ProtocolProfileEval = "eval"
+	// DefaultEvalSPIFFETrustDomain is intentionally non-public and evaluation-only.
+	DefaultEvalSPIFFETrustDomain = "eval.trstctl.local"
+)
+
+// Effective returns the protocol configuration the server must assemble. The
+// default/empty profile is an exact copy, keeping production default-off. The
+// eval profile enables every shipped enrollment/timestamp protocol against one
+// explicit tenant and leaves KMIP untouched because KMIP has separate mTLS and
+// key-management prerequisites.
+func (p Protocols) Effective() (Protocols, error) {
+	switch strings.ToLower(strings.TrimSpace(p.Profile)) {
+	case "":
+		return p, nil
+	case ProtocolProfileEval:
+		tenantID := strings.TrimSpace(p.EvalTenantID)
+		if tenantID == "" {
+			return Protocols{}, errors.New("protocols.eval_tenant_id is required when protocols.profile=eval (AN-1)")
+		}
+		p.Profile = ProtocolProfileEval
+		p.ACME = ProtocolToggle{Enabled: true, TenantID: tenantID}
+		p.EST = ProtocolToggle{Enabled: true, TenantID: tenantID}
+		p.SCEP = ProtocolToggle{Enabled: true, TenantID: tenantID}
+		p.CMP = ProtocolToggle{Enabled: true, TenantID: tenantID}
+		p.TSA = ProtocolToggle{Enabled: true, TenantID: tenantID}
+		p.SSH = ProtocolToggle{Enabled: true, TenantID: tenantID}
+		p.SPIFFE.Enabled = true
+		p.SPIFFE.TenantID = tenantID
+		if trustDomain := strings.TrimSpace(p.EvalSPIFFETrustDomain); trustDomain != "" {
+			p.SPIFFE.TrustDomain = trustDomain
+		} else if strings.TrimSpace(p.SPIFFE.TrustDomain) == "" {
+			p.SPIFFE.TrustDomain = DefaultEvalSPIFFETrustDomain
+		}
+		return p, nil
+	default:
+		return Protocols{}, fmt.Errorf("protocols.profile %q is invalid (want empty or %q)", p.Profile, ProtocolProfileEval)
+	}
 }
 
 // ProtocolToggle enables a served protocol endpoint and binds it to a tenant. The
@@ -1745,12 +1801,14 @@ func Default() *Config {
 		// until explicitly tenant-bound. That keeps a fresh binary from exposing
 		// public enrollment routes that later fail or mint into a blank tenant (AN-1).
 		Protocols: Protocols{
-			ACME: ProtocolToggle{Enabled: false},
-			EST:  ProtocolToggle{Enabled: false},
-			SCEP: ProtocolToggle{Enabled: false},
-			CMP:  ProtocolToggle{Enabled: false},
-			TSA:  ProtocolToggle{Enabled: false},
-			KMIP: KMIPProtocol{Enabled: false, Addr: ":5696"},
+			Profile:               "",
+			EvalSPIFFETrustDomain: DefaultEvalSPIFFETrustDomain,
+			ACME:                  ProtocolToggle{Enabled: false},
+			EST:                   ProtocolToggle{Enabled: false},
+			SCEP:                  ProtocolToggle{Enabled: false},
+			CMP:                   ProtocolToggle{Enabled: false},
+			TSA:                   ProtocolToggle{Enabled: false},
+			KMIP:                  KMIPProtocol{Enabled: false, Addr: ":5696"},
 			ACMEQuota: ACMEQuota{
 				MaxNonces:                  4096,
 				MaxAccounts:                2048,
@@ -2110,6 +2168,9 @@ func applyAuthEnv(getenv func(string) string, a *Auth) {
 // within the control-plane startup hotspot budget (CODE-102); behavior is
 // identical to the previous inline block.
 func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
+	setString(getenv, "TRSTCTL_PROTOCOLS_PROFILE", &p.Profile)
+	setString(getenv, "TRSTCTL_PROTOCOLS_EVAL_TENANT_ID", &p.EvalTenantID)
+	setString(getenv, "TRSTCTL_PROTOCOLS_EVAL_SPIFFE_TRUST_DOMAIN", &p.EvalSPIFFETrustDomain)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_ACME_ENABLED", &p.ACME.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_TENANT_ID", &p.ACME.TenantID)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED", &p.ACMEEAB.Required)
@@ -2811,10 +2872,16 @@ func validateServedSurfaces(c *Config) []error {
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
-	// Served enrollment protocols are public protocol endpoints. When one is
-	// enabled, startup must know the tenant it mints into before any route is
-	// exposed; a blank tenant would violate AN-1 and only fail at enrollment time.
-	errs = append(errs, c.Protocols.ValidateTenantBindings("")...)
+	// Served enrollment protocols are public protocol endpoints. Resolve the
+	// explicit eval preset before validation so its convenience never bypasses the
+	// same tenant/material checks as seven hand-written toggles. Production keeps
+	// an empty profile and therefore the exact default-off posture.
+	effectiveProtocols, profileErr := c.Protocols.Effective()
+	if profileErr != nil {
+		errs = append(errs, profileErr)
+	} else {
+		errs = append(errs, effectiveProtocols.ValidateTenantBindings("")...)
+	}
 	errs = append(errs, c.Protocols.ACMEQuota.validate()...)
 	errs = append(errs, validateACMEEAB(c.Protocols.ACMEEAB)...)
 	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must

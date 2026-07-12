@@ -139,6 +139,15 @@ class State:
         self.synced = False
         self.readback = False
         self.reconciled = False
+        self.native_wire = False
+        self.sensitive = False
+        self.category = ""
+        self.cas_conflicts = 0
+        self.cas_preserved = False
+        self.protocol_errors = 0
+        self.terraform_variables: dict[str, dict] = {}
+        self.vault_records: dict[str, dict] = {}
+        self.vault_race_injected: set[str] = set()
         self.counter = 0
         self.github_box_directory = None
         self.github_box_process = None
@@ -280,6 +289,14 @@ class State:
             "secret_sync.azure_key_vault",
         }:
             return self.synced and self.readback and self.reconciled and sum(self.sync_versions.values()) == 1
+        if self.entry_id == "secrets_residuals.terraform_opentofu_native_sync":
+            return (self.synced and self.readback and self.reconciled and self.native_wire and
+                    self.sensitive and self.category == "env" and self.protocol_errors == 0 and
+                    sum(self.sync_versions.values()) == 1)
+        if self.entry_id == "secrets_residuals.vault_kv_outbound_sync":
+            return (self.synced and self.readback and self.reconciled and self.native_wire and
+                    self.cas_conflicts == 1 and self.cas_preserved and self.protocol_errors == 0 and
+                    sum(self.sync_versions.values()) == 1)
         return self.synced and self.readback
 
     def next_id(self, prefix: str) -> str:
@@ -374,6 +391,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/dod/sync-state":
             self._sync_state(parsed)
+            return
+        if (self.state.entry_id == "secrets_residuals.terraform_opentofu_native_sync" and
+                parsed.path == "/api/v2/workspaces/ws-dod-opentofu/vars"):
+            self._terraform_sync_get(parsed)
+            return
+        if (self.state.entry_id == "secrets_residuals.vault_kv_outbound_sync" and
+                parsed.path.startswith("/v1/team-secrets/data/apps/")):
+            self._vault_sync_get(parsed.path)
             return
         if self.state.entry_id == "secret_sync.github_actions" and parsed.path.endswith("/actions/secrets/public-key"):
             if self.headers.get("Authorization") != "Bearer dod-github-token":
@@ -564,7 +589,86 @@ class Handler(BaseHTTPRequestHandler):
         with self.state.lock:
             versions = self.state.sync_versions.get(key, 0)
             reconciled = self.state.reconciled
-        self.send_body(200, json.dumps({"versions": versions, "reconciled": reconciled}).encode())
+            native_wire = self.state.native_wire
+            sensitive = self.state.sensitive
+            category = self.state.category
+            cas_conflicts = self.state.cas_conflicts
+            cas_preserved = self.state.cas_preserved
+        self.send_body(200, json.dumps({
+            "versions": versions,
+            "reconciled": reconciled,
+            "native_wire": native_wire,
+            "sensitive": sensitive,
+            "category": category,
+            "cas_conflicts": cas_conflicts,
+            "cas_preserved": cas_preserved,
+        }).encode())
+
+    def _terraform_sync_get(self, parsed) -> None:
+        operation = self.headers.get("Idempotency-Key", "")
+        query = parse_qs(parsed.query)
+        valid = (
+            self.headers.get("Authorization") == "Bearer dod-terraform-token" and
+            self.headers.get("Accept") == "application/vnd.api+json" and
+            self.headers.get("Content-Type") == "application/vnd.api+json" and
+            bool(operation) and query.get("page[number]") == ["1"] and
+            query.get("page[size]") == ["100"]
+        )
+        if not valid:
+            with self.state.lock:
+                self.state.protocol_errors += 1
+            self.send_body(401)
+            return
+        with self.state.lock:
+            self.state.requests.append(("GET", parsed.path))
+            data = []
+            for variable in self.state.terraform_variables.values():
+                expected = "DOD managed variable; operation-sha256=" + hashlib.sha256(operation.encode()).hexdigest()
+                if variable["operation"] == operation and variable["description"] == expected:
+                    self.state.reconciled = True
+                data.append({
+                    "id": variable["id"],
+                    "type": "vars",
+                    "attributes": {
+                        "key": variable["key"],
+                        "description": variable["description"],
+                        "category": variable["category"],
+                        "hcl": variable["hcl"],
+                        "sensitive": variable["sensitive"],
+                    },
+                })
+        self.send_body(200, json.dumps({
+            "data": data,
+            "meta": {"pagination": {"current-page": 1, "total-pages": 1}},
+        }).encode(), "application/vnd.api+json")
+
+    def _vault_sync_get(self, path: str) -> None:
+        operation = self.headers.get("Idempotency-Key", "")
+        if (self.headers.get("X-Vault-Token") != "dod-vault-token" or
+                self.headers.get("X-Vault-Namespace") != "platform/team-a" or not operation):
+            with self.state.lock:
+                self.state.protocol_errors += 1
+            self.send_body(403)
+            return
+        key = unquote(path.removeprefix("/v1/team-secrets/data/apps/"))
+        if not key:
+            with self.state.lock:
+                self.state.protocol_errors += 1
+            self.send_body(404)
+            return
+        with self.state.lock:
+            self.state.requests.append(("GET", path))
+            record = self.state.vault_records.setdefault(key, {
+                "version": 1,
+                "data": {"owner": b"platform", "value": b"preexisting-value"},
+            })
+            if key in self.state.values and record["data"].get("value") == self.state.values[key]:
+                self.state.reconciled = True
+            encoded = {name: value.decode("utf-8") for name, value in record["data"].items()}
+            version = record["version"]
+        self.send_body(200, json.dumps({
+            "data": {"data": encoded, "metadata": {"version": version}},
+        }).encode())
 
     def _mutate(self, method: str) -> None:
         body = self.body()

@@ -308,14 +308,16 @@ func TestSecretIntegrationFactoriesBuildAllTenantBoundRegistrations(t *testing.T
 		{TenantID: tenantA, ID: "vercel", Type: "vercel", Endpoint: "https://vercel.example.test", ProjectID: "payments", TokenRef: ref},
 		{TenantID: tenantA, ID: "generic", Type: "generic-ci-json", Endpoint: "https://ci.example.test", Provider: "build", TokenRef: ref},
 		{TenantID: tenantA, ID: "k8s-secret", Type: "kubernetes-secrets", Endpoint: "https://kubernetes.example.test", Namespace: "apps", TokenRef: ref},
+		{TenantID: tenantA, ID: "terraform", Type: "terraform-cloud-opentofu", Endpoint: "https://app.terraform.io", WorkspaceID: "ws-payments", TokenRef: ref},
+		{TenantID: tenantA, ID: "vault-kv", Type: "vault-kv-v2", Endpoint: "https://vault.example.test", Mount: "secret", PathPrefix: "trstctl", TokenRef: ref},
 		{TenantID: tenantB, ID: "generic-b", Type: "generic-ci-json", Endpoint: "https://ci-b.example.test", Provider: "build"},
 	}
 	syncRegistry, err := secretSyncTargetsFromConfig(context.Background(), syncEntries, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(syncRegistry.ForTenant(tenantA)); got != 8 {
-		t.Fatalf("tenant A sync targets = %d, want 8", got)
+	if got := len(syncRegistry.ForTenant(tenantA)); got != 10 {
+		t.Fatalf("tenant A sync targets = %d, want 10", got)
 	}
 	if got := syncRegistry.ForTenant(tenantB); len(got) != 1 || got["generic-b"] == nil {
 		t.Fatalf("tenant B sync targets = %#v", got)

@@ -13,6 +13,8 @@ import (
 	"trstctl.com/trstctl/internal/agent"
 	"trstctl.com/trstctl/internal/agent/destination"
 	"trstctl.com/trstctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -58,6 +60,7 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 		CommonName: o.commonName, BootstrapToken: token,
 		KeyPath: o.keyPath, CertPath: o.certPath,
 		ServerName: serverName, ServerCAPEM: caPEM, RefreshBefore: o.rotateEvery,
+		Version: buildinfo.Version(),
 	}, agent.NewHTTPEnroller(o.enrollURL, enrollClient))
 	if err := a.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
@@ -112,33 +115,72 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 		<-ctx.Done()
 		return nil
 	}
+	var postureClient *transport.AgentClient
+	if issuerController != nil {
+		creds, err := a.Credentials()
+		if err != nil {
+			return fmt.Errorf("build Kubernetes posture channel credentials: %w", err)
+		}
+		conn, err := transport.Dial(o.serverAddr, creds)
+		if err != nil {
+			return fmt.Errorf("connect Kubernetes posture channel: %w", err)
+		}
+		defer func() { _ = conn.Close() }()
+		postureClient = transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))
+	}
 	ticker := time.NewTicker(k.reconcileEvery)
 	defer ticker.Stop()
+	reconcile := func() {
+		total := 0
+		if bridge != nil {
+			n, err := bridge.Reconcile(ctx, client.Namespace())
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager bridge reconcile:", err)
+			} else {
+				total += n
+			}
+		}
+		if issuerController != nil {
+			result, reconcileErr := issuerController.Reconcile(ctx, client.Namespace())
+			total += result.SignedRequests + result.NativeCertificatesIssued + result.KubernetesCSRsSigned
+			report := result.PostureReport(client.ClusterID(), k.reconcileEvery)
+			if _, err := postureClient.ReportKubernetesPosture(ctx, transportKubernetesPostureReport(report)); err != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes posture report:", err)
+			}
+			if reconcileErr != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes issuer-controller reconcile:", reconcileErr)
+			}
+		}
+		if total > 0 {
+			fmt.Printf("trstctl-agent: reconciled %d Kubernetes certificate request(s)\n", total)
+		}
+	}
+	reconcile()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			total := 0
-			if bridge != nil {
-				n, err := bridge.Reconcile(ctx, client.Namespace())
-				if err != nil {
-					fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager bridge reconcile:", err)
-				} else {
-					total += n
-				}
-			}
-			if issuerController != nil {
-				result, err := issuerController.Reconcile(ctx, client.Namespace())
-				if err != nil {
-					fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes issuer-controller reconcile:", err)
-				} else {
-					total += result.SignedRequests + result.NativeCertificatesIssued + result.KubernetesCSRsSigned
-				}
-			}
-			if total > 0 {
-				fmt.Printf("trstctl-agent: reconciled %d Kubernetes certificate request(s)\n", total)
-			}
+			reconcile()
 		}
+	}
+}
+
+func transportKubernetesPostureReport(report k8s.ControllerPostureReport) *transport.KubernetesPostureRequest {
+	convert := func(section k8s.PostureSection) transport.KubernetesPostureSection {
+		resources := make([]transport.KubernetesPostureResource, 0, len(section.Resources))
+		for _, resource := range section.Resources {
+			resources = append(resources, transport.KubernetesPostureResource{
+				Namespace: resource.Namespace, Name: resource.Name, UID: resource.UID,
+				ResourceVersion: resource.ResourceVersion, State: resource.State,
+				Reason: resource.Reason, PublicHash: resource.PublicHash,
+			})
+		}
+		return transport.KubernetesPostureSection{Complete: section.Complete, FailureCode: section.FailureCode, Resources: resources}
+	}
+	return &transport.KubernetesPostureRequest{
+		ReportID: report.ReportID, ClusterID: report.ClusterID,
+		ReconcileIntervalSeconds: report.ReconcileIntervalSeconds,
+		CertificateSigning:       convert(report.CertificateSigning), TrustBundles: convert(report.TrustBundles),
 	}
 }

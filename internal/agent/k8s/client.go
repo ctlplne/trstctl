@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
@@ -36,6 +37,7 @@ type Client struct {
 	base       string
 	token      string
 	namespace  string
+	clusterID  string
 	httpClient *http.Client
 }
 
@@ -46,7 +48,8 @@ func New(base, token, namespace string, httpClient *http.Client) *Client {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &Client{base: strings.TrimRight(base, "/"), token: token, namespace: namespace, httpClient: httpClient}
+	base = strings.TrimRight(base, "/")
+	return &Client{base: base, token: token, namespace: namespace, clusterID: "sha256:" + crypto.SHA256Hex([]byte(base)), httpClient: httpClient}
 }
 
 // InCluster builds a client from the standard in-cluster service-account mount
@@ -70,17 +73,23 @@ func InCluster() (*Client, error) {
 		return nil, err
 	}
 	ns, _ := os.ReadFile(saNamespacePath)
-	return New(
+	client := New(
 		fmt.Sprintf("https://%s:%s", host, port),
 		strings.TrimSpace(string(token)),
 		strings.TrimSpace(string(ns)),
 		&http.Client{Transport: transport, Timeout: 30 * time.Second},
-	), nil
+	)
+	client.clusterID = "sha256:" + crypto.SHA256Hex(caPEM)
+	return client, nil
 }
 
 // Namespace returns the client's default namespace (the pod's namespace
 // in-cluster).
 func (c *Client) Namespace() string { return c.namespace }
+
+// ClusterID is a non-secret, stable hash of the cluster's public trust anchor.
+// It distinguishes clusters without reporting API endpoints or CA bytes.
+func (c *Client) ClusterID() string { return c.clusterID }
 
 // request performs an authenticated JSON request and returns the status code
 // and response body. Non-2xx is not an error here — callers interpret the code

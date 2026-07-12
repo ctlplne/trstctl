@@ -75,6 +75,11 @@ type servedProtocols struct {
 	tsaTenant  string
 
 	names []string // protocols actually served (logging / assertions)
+
+	// activation is set only for the explicit eval profile. Its first-run action
+	// opens every HTTP route and the SPIFFE worker together; normal production
+	// protocol toggles leave it nil and retain their existing startup behavior.
+	activation *protocolActivationGate
 }
 
 func (sp *servedProtocols) Close() {
@@ -318,7 +323,9 @@ func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, is
 // the actual mint is already tenant-correct via the Enroller. SPIFFE is not mounted
 // here (a gRPC UDS service).
 func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
-	wrap := func(h http.Handler) http.Handler { return bulkheadHandler(bulk, bulkhead.SubsystemAPI, h) }
+	wrap := func(h http.Handler) http.Handler {
+		return bulkheadHandler(bulk, bulkhead.SubsystemAPI, protocolActivationHandler(sp.activation, h))
+	}
 	if sp.acme != nil {
 		for _, pattern := range protocolHTTPMountPatterns("acme") {
 			mux.Handle(pattern, wrap(sp.acme))

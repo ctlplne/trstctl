@@ -22,39 +22,48 @@ func configMapItemPath(namespace, name string) string {
 	return configMapCollectionPath(namespace) + "/" + name
 }
 
-func (c *IssuerController) reconcileTrustBundles(ctx context.Context) (int, error) {
+func (c *IssuerController) reconcileTrustBundles(ctx context.Context) (int, []PostureResource, error) {
 	st, body, err := c.client.request(ctx, http.MethodGet, trustBundleCollectionPath(), nil)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if st == http.StatusNotFound {
-		return 0, nil
+		return 0, nil, fmt.Errorf("k8s: TrustBundle CRD is not installed")
 	}
 	if st/100 != 2 {
-		return 0, fmt.Errorf("k8s: list trstctl TrustBundle resources: status %d: %s", st, string(body))
+		return 0, nil, fmt.Errorf("k8s: list trstctl TrustBundle resources: status %d: %s", st, string(body))
 	}
 	var list struct {
 		Items []map[string]any `json:"items"`
 	}
 	if err := json.Unmarshal(body, &list); err != nil {
-		return 0, fmt.Errorf("k8s: decode trstctl TrustBundle list: %w", err)
+		return 0, nil, fmt.Errorf("k8s: decode trstctl TrustBundle list: %w", err)
 	}
 
 	writes := 0
+	posture := make([]PostureResource, 0, len(list.Items))
 	for _, bundle := range list.Items {
+		current := trustBundlePosture(bundle)
 		n, hash, err := c.distributeTrustBundle(ctx, bundle)
 		if err != nil {
-			return writes, err
+			posture = append(posture, failedPosture(current))
+			return writes, posture, err
 		}
 		if n == 0 {
+			posture = append(posture, current)
 			continue
 		}
 		writes += n
+		current.PublicHash = hash
 		if err := c.markTrustBundleReady(ctx, bundle, n, hash); err != nil {
-			return writes, err
+			posture = append(posture, failedPosture(current))
+			return writes, posture, err
 		}
+		current = trustBundlePosture(bundle)
+		current.State, current.Reason, current.PublicHash = "ready", "distributed", hash
+		posture = append(posture, current)
 	}
-	return writes, nil
+	return writes, posture, nil
 }
 
 func (c *IssuerController) distributeTrustBundle(ctx context.Context, obj map[string]any) (int, string, error) {

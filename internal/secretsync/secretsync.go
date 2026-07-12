@@ -2,8 +2,9 @@
 
 // Package secretsync pushes trstctl's secrets into external platforms (S19.4,
 // F68): a sync template (push + drift detection) plus targets — Kubernetes,
-// GitHub Actions, GitLab CI, Terraform/OpenTofu, Vercel/Netlify, AWS Parameter
-// Store/Secrets Manager, and a generic webhook. Delivery is via the outbox so it
+// GitHub Actions, GitLab CI, Terraform Cloud/OpenTofu, Vault KV v2,
+// Vercel/Netlify, AWS Parameter Store/Secrets Manager, and a generic webhook.
+// Delivery is via the outbox so it
 // is durable (AN-6) and idempotent / never half-writes (AN-5); syncs are audited
 // (AN-2). (Read-only discovery of existing secrets is S20.1; this pushes outward.)
 package secretsync
@@ -189,6 +190,15 @@ func NewTerraformTarget(p Pusher) *Target { return NewTarget("terraform", p) }
 // NewTerraformCloudTarget syncs secrets to Terraform Cloud/OpenTofu.
 func NewTerraformCloudTarget(p Pusher) *Target { return NewTarget("terraform-cloud", p) }
 
+// NewTerraformCloudOpenTofuTarget syncs sensitive workspace variables through
+// the native Terraform Cloud Variables API used by Terraform and OpenTofu.
+func NewTerraformCloudOpenTofuTarget(p Pusher) *Target {
+	return NewTarget("terraform-cloud-opentofu", p)
+}
+
+// NewVaultKVV2Target syncs secrets through Vault/OpenBao's native KV v2 data API.
+func NewVaultKVV2Target(p Pusher) *Target { return NewTarget("vault-kv-v2", p) }
+
 // NewVercelTarget syncs secrets to Vercel/Netlify.
 func NewVercelTarget(p Pusher) *Target { return NewTarget("vercel-netlify", p) }
 
@@ -285,6 +295,24 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "Opaque Secret data.value base64 payload",
 			Capabilities: []string{"cluster-secret", "namespace-secret", "outbox-delivery"},
+		},
+		{
+			ID:           "terraform-cloud-opentofu",
+			Name:         "Terraform Cloud / OpenTofu workspace variables",
+			Platform:     "terraform-cloud",
+			DeliveryMode: "native workspace Variables API read-before-create/update over HTTPS",
+			AuthMode:     "Bearer team token supplied by operator config",
+			WireFormat:   "JSON:API vars resource with sensitive=true and terraform/env category",
+			Capabilities: []string{"workspace-variable", "opentofu", "sensitive-variable", "read-before-write", "outbox-delivery"},
+		},
+		{
+			ID:           "vault-kv-v2",
+			Name:         "HashiCorp Vault / OpenBao KV v2",
+			Platform:     "vault",
+			DeliveryMode: "KV v2 data API read-before-write with options.cas over HTTPS",
+			AuthMode:     "X-Vault-Token and optional X-Vault-Namespace supplied by operator config",
+			WireFormat:   "KV v2 data field plus check-and-set metadata version",
+			Capabilities: []string{"vault", "openbao", "kv-v2", "cas", "read-before-write", "outbox-delivery"},
 		},
 	}
 	for i := range entries {

@@ -33,6 +33,8 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 			{TenantID: tenant, ID: "vercel", Type: "vercel", Endpoint: "https://vercel.example.test", ProjectID: "project", TokenRef: ref},
 			{TenantID: tenant, ID: "generic", Type: "generic-ci-json", Endpoint: "https://ci.example.test", Provider: "build", TokenRef: ref},
 			{TenantID: tenant, ID: "k8s-secret", Type: "kubernetes-secrets", Endpoint: "https://kubernetes.example.test", Namespace: "default", TokenRef: ref},
+			{TenantID: tenant, ID: "tfc-opentofu", Type: "terraform-cloud-opentofu", Endpoint: "https://app.terraform.io", WorkspaceID: "ws-production", VariableCategory: "env", TokenRef: ref},
+			{TenantID: tenant, ID: "vault-kv", Type: "vault-kv-v2", Endpoint: "https://vault.example.test", Mount: "team-secrets", PathPrefix: "apps/production", Field: "value", VaultNamespace: "platform/team-a", TokenRef: ref},
 		},
 	}
 	if err := ValidateSecretIntegrations(cfg, true); err != nil {
@@ -74,6 +76,18 @@ func TestValidateSecretIntegrationsFailsClosed(t *testing.T) {
 		{
 			name: "unsafe private endpoint policy", on: true, want: "requires private_egress_cidrs",
 			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "gcp", Type: "gcp-secret-manager", Endpoint: "http://127.0.0.1:8080", Project: "p", TokenRef: "secret://gcp-token", AllowPrivate: true}}},
+		},
+		{
+			name: "Terraform invalid category", on: true, want: "variable_category must be terraform or env",
+			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "tfc", Type: "terraform-cloud-opentofu", Endpoint: "https://app.terraform.io", WorkspaceID: "ws-production", VariableCategory: "secret", TokenRef: "secret://tfc-token"}}},
+		},
+		{
+			name: "Terraform environment HCL", on: true, want: "hcl=true is valid only for terraform variables",
+			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "tfc", Type: "terraform-cloud-opentofu", Endpoint: "https://app.terraform.io", WorkspaceID: "ws-production", VariableCategory: "env", HCL: true, TokenRef: "secret://tfc-token"}}},
+		},
+		{
+			name: "Vault traversal path", on: true, want: "path_prefix must not contain dot path components",
+			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "vault", Type: "vault-kv-v2", Endpoint: "https://vault.example.test", Mount: "secret", PathPrefix: "apps/../admin", TokenRef: "secret://vault-token"}}},
 		},
 	}
 	for _, tt := range tests {

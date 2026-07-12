@@ -45,6 +45,7 @@ var TenantScopedTables = []string{
 	"dynamic_secret_leases",
 	"secret_sync_jobs",
 	"managed_key_operations",
+	"kubernetes_controller_posture",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

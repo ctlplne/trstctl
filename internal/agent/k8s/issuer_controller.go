@@ -29,6 +29,12 @@ type IssuerReconcileResult struct {
 	NativeCertificatesIssued int
 	KubernetesCSRsSigned     int
 	TrustBundlesDistributed  int
+	KubernetesCSRComplete    bool
+	KubernetesCSRFailureCode string
+	KubernetesCSRPosture     []PostureResource
+	TrustBundleComplete      bool
+	TrustBundleFailureCode   string
+	TrustBundlePosture       []PostureResource
 }
 
 // IssuerController is the trstctl Kubernetes CRD controller. It marks trstctl
@@ -101,17 +107,25 @@ func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (Iss
 	}
 	result.NativeCertificatesIssued = nativeIssued
 
-	kubernetesCSRs, err := c.reconcileKubernetesCSRs(ctx, issuers, clusterIssuers)
+	result.KubernetesCSRFailureCode = "reconcile_failed"
+	kubernetesCSRs, csrPosture, err := c.reconcileKubernetesCSRs(ctx, issuers, clusterIssuers)
+	result.KubernetesCSRPosture = csrPosture
 	if err != nil {
 		return result, err
 	}
 	result.KubernetesCSRsSigned = kubernetesCSRs
+	result.KubernetesCSRComplete = true
+	result.KubernetesCSRFailureCode = ""
 
-	bundles, err := c.reconcileTrustBundles(ctx)
+	result.TrustBundleFailureCode = "reconcile_failed"
+	bundles, bundlePosture, err := c.reconcileTrustBundles(ctx)
+	result.TrustBundlePosture = bundlePosture
 	if err != nil {
 		return result, err
 	}
 	result.TrustBundlesDistributed = bundles
+	result.TrustBundleComplete = true
+	result.TrustBundleFailureCode = ""
 	return result, nil
 }
 

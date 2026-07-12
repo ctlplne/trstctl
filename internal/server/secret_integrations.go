@@ -654,6 +654,24 @@ func pushConfiguredSecretSync(ctx context.Context, p *configuredSyncPusher, key 
 		concrete, err = secretsync.NewKubernetesPusher(secretsync.KubernetesConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, Namespace: cfg.Namespace, BearerToken: token,
 		})
+	case "terraform-cloud-opentofu":
+		token, resolveErr := resolve(cfg.TokenRef)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		concrete, err = secretsync.NewTerraformCloudOpenTofuPusher(secretsync.TerraformCloudOpenTofuConfig{
+			Endpoint: cfg.Endpoint, HTTPClient: client, WorkspaceID: cfg.WorkspaceID,
+			Token: token, Category: cfg.VariableCategory, HCL: cfg.HCL, Description: cfg.Description,
+		})
+	case "vault-kv-v2":
+		token, resolveErr := resolve(cfg.TokenRef)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		concrete, err = secretsync.NewVaultKVV2Pusher(secretsync.VaultKVV2Config{
+			Endpoint: cfg.Endpoint, HTTPClient: client, Token: token, Mount: cfg.Mount,
+			PathPrefix: cfg.PathPrefix, Field: cfg.Field, Namespace: cfg.VaultNamespace,
+		})
 	default:
 		return fmt.Errorf("server: unsupported secret-sync target type %q", cfg.Type)
 	}
