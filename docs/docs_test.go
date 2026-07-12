@@ -65,6 +65,23 @@ func read(t *testing.T, rel string) string {
 	return string(b)
 }
 
+// requireOrderedTokens binds a reality guard to executable statements in their
+// security-relevant order. Plain presence checks are not enough for sequences
+// such as "inspect, correct once, inspect again" because a refactor could leave
+// every token in the file while moving the fail-closed check off the live path.
+func requireOrderedTokens(t *testing.T, label, body string, wants ...string) {
+	t.Helper()
+	offset := 0
+	for _, want := range wants {
+		at := strings.Index(body[offset:], want)
+		if at < 0 {
+			t.Errorf("%s no longer contains %q after the preceding security step", label, want)
+			return
+		}
+		offset += at + len(want)
+	}
+}
+
 func TestAirGapDocsStayWired(t *testing.T) {
 	page := strings.ToLower(read(t, "airgap.md"))
 	for _, want := range []string{
@@ -3381,12 +3398,53 @@ func TestSecurityPolicyExists(t *testing.T) {
 // as the implemented (no longer deferred) cross-node option — never as the
 // always-on live channel for every deployment.
 func TestSignerChannelDocumentedHonestly(t *testing.T) {
-	// Code reality: the signer still listens on a unix socket and authenticates the
-	// peer uid via SO_PEERCRED for the default/sidecar path.
+	// Code reality: the signer still listens on a Unix socket, creates it as 0600
+	// under a temporary 0177 umask before it can be observed, verifies the exact
+	// socket type/mode, and authenticates the peer uid via SO_PEERCRED for the
+	// default/sidecar path.
 	serve := read(t, "../internal/signing/serve.go")
-	if !strings.Contains(serve, `net.Listen("unix"`) {
-		t.Fatal("signer no longer listens on a unix socket; revisit this reality test")
+	requireOrderedTokens(t, "signer UDS unsupported-platform fail-closed gate", serve,
+		"func listenUDS(socketPath string, opts ServeOptions) (net.Listener, error) {",
+		"if !peerCredentialsSupported() && !opts.AllowInsecureDevNonLinux {",
+		"ErrUnsupportedHardening",
+		"dir := filepath.Dir(socketPath)",
+		"ln, err := listenPrivateUnixSocket(socketPath)",
+	)
+	requireOrderedTokens(t, "signer UDS setup", serve,
+		"ln, err := listenPrivateUnixSocket(socketPath)",
+		"if err := enforceExactSocketMode(socketPath, 0o600, os.Chmod); err != nil {",
+		"_ = ln.Close()",
+		"return nil, err",
+		"return newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux), nil",
+	)
+	for _, want := range []string{
+		"listenPrivateUnixSocket(socketPath)",
+		"enforceExactSocketMode(socketPath, 0o600, os.Chmod)",
+		"newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux)",
+	} {
+		if !strings.Contains(serve, want) {
+			t.Fatalf("signer UDS setup no longer contains %q; revisit this reality test", want)
+		}
 	}
+	socketMode := read(t, "../internal/signing/socket_mode_unix.go")
+	requireOrderedTokens(t, "signer atomic private-socket creation", socketMode,
+		"socketUmaskMu.Lock()",
+		"oldMask := unix.Umask(0o177)",
+		"defer func() {",
+		"unix.Umask(oldMask)",
+		"socketUmaskMu.Unlock()",
+		`return net.Listen("unix", socketPath)`,
+	)
+	requireOrderedTokens(t, "signer exact socket-mode enforcement", serve,
+		"func enforceExactSocketMode(",
+		"info, err := os.Lstat(socketPath)",
+		"if info.Mode()&os.ModeSocket == 0 {",
+		"if info.Mode().Perm() == want.Perm() {",
+		"if err := chmod(socketPath, want.Perm()); err != nil {",
+		"info, err = os.Lstat(socketPath)",
+		"if info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != want.Perm() {",
+		"return nil",
+	)
 	if !strings.Contains(read(t, "../internal/signing/peercred_linux.go"), "SO_PEERCRED") {
 		t.Fatal("signer no longer uses SO_PEERCRED; revisit this reality test")
 	}

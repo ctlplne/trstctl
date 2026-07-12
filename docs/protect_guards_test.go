@@ -2574,6 +2574,13 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/signing", "TestSignerShedsFloodOverUDS", "SIGNER-005"},
 		{"../internal/signing", "TestSignerHealthUnaffectedBySlowKeygen", "SIGNER-005"},
 		{"../internal/signing", "TestSignerMTLSConfigFailsClosed", "SIGNER-005"},
+		{"../internal/signing", "TestPrivateUnixSocketCreatedWithExactModeBeforeChmod", "SIGNER-005"},
+		{"../internal/signing", "TestPrivateUnixSocketRestoresUmaskAfterListenFailure", "SIGNER-005"},
+		{"../internal/signing", "TestExactSocketModeFailsClosedWhenCorrectionIsUnsupported", "SIGNER-005"},
+		{"../internal/signing", "TestExactSocketModeRejectsNonSocketsWithoutChmod", "SIGNER-005"},
+		{"../internal/signing", "TestExactSocketModeCorrectsLooseSocketAndRechecks", "SIGNER-005"},
+		{"../internal/signing", "TestExactSocketModeFailsWhenCorrectionDoesNotTakeEffect", "SIGNER-005"},
+		{"../internal/signing", "TestExactSocketModeRejectsTypeSwapDuringCorrection", "SIGNER-005"},
 		{"../internal/crypto/mtls", "TestSignerMTLSNegotiatesTLS13AEAD", "SIGNER-005"},
 		{"../internal/crypto/mtls", "TestSignerMTLSRejectsUntrustedClientAtHandshake", "SIGNER-005"},
 		{"../internal/crypto", "TestLockedSigner", "SIGNER-006"},
@@ -2637,13 +2644,72 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 		"srv.GracefulStop()",
 		"svc.Shutdown()",
 		"os.MkdirAll(dir, 0o700)",
-		"os.Chmod(socketPath, 0o600)",
+		"listenPrivateUnixSocket(socketPath)",
+		"enforceExactSocketMode(socketPath, 0o600, os.Chmod)",
 		"newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux)",
 	} {
 		if !strings.Contains(serveGo, want) {
 			t.Errorf("SIGNER-005: serve.go no longer contains %q; signer transport isolation/backpressure proof weakened", want)
 		}
 	}
+	requireOrderedTokens(t, "SIGNER-005 serve.go unsupported-platform fail-closed gate", serveGo,
+		"func listenUDS(socketPath string, opts ServeOptions) (net.Listener, error) {",
+		"if !peerCredentialsSupported() && !opts.AllowInsecureDevNonLinux {",
+		"ErrUnsupportedHardening",
+		"dir := filepath.Dir(socketPath)",
+		"ln, err := listenPrivateUnixSocket(socketPath)",
+	)
+	requireOrderedTokens(t, "SIGNER-005 serve.go fail-closed UDS setup", serveGo,
+		"ln, err := listenPrivateUnixSocket(socketPath)",
+		"if err := enforceExactSocketMode(socketPath, 0o600, os.Chmod); err != nil {",
+		"_ = ln.Close()",
+		"return nil, err",
+		"return newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux), nil",
+	)
+	socketModeUnix := read(t, "../internal/signing/socket_mode_unix.go")
+	requireOrderedTokens(t, "SIGNER-005 socket_mode_unix.go atomic private UDS creation", socketModeUnix,
+		"var socketUmaskMu sync.Mutex",
+		"socketUmaskMu.Lock()",
+		"oldMask := unix.Umask(0o177)",
+		"defer func() {",
+		"unix.Umask(oldMask)",
+		"socketUmaskMu.Unlock()",
+		`return net.Listen("unix", socketPath)`,
+	)
+	requireOrderedTokens(t, "SIGNER-005 serve.go exact UDS mode enforcement", serveGo,
+		"func enforceExactSocketMode(",
+		"info, err := os.Lstat(socketPath)",
+		"if info.Mode()&os.ModeSocket == 0 {",
+		"if info.Mode().Perm() == want.Perm() {",
+		"if err := chmod(socketPath, want.Perm()); err != nil {",
+		"info, err = os.Lstat(socketPath)",
+		"if info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != want.Perm() {",
+		"return nil",
+	)
+	socketModeOther := read(t, "../internal/signing/socket_mode_other.go")
+	const nonPOSIXSocketBuildTag = "//go:build js || plan9 || wasip1 || windows"
+	if !strings.Contains(socketModeOther, nonPOSIXSocketBuildTag) || strings.Count(socketModeOther, "//go:build") != 1 {
+		t.Errorf("SIGNER-005: socket_mode_other.go must keep the exact non-POSIX build tag %q", nonPOSIXSocketBuildTag)
+	}
+	requireOrderedTokens(t, "SIGNER-005 socket_mode_other.go explicit fallback", socketModeOther,
+		"func listenPrivateUnixSocket(socketPath string) (net.Listener, error) {",
+		`return net.Listen("unix", socketPath)`,
+		"}",
+	)
+	for _, forbidden := range []string{"unix.Umask", "socketUmaskMu", "os.Chmod"} {
+		if strings.Contains(socketModeOther, forbidden) {
+			t.Errorf("SIGNER-005: socket_mode_other.go unexpectedly contains %q; non-POSIX fallback must rely on the shared exact-mode verifier", forbidden)
+		}
+	}
+	socketModeTests := read(t, "../internal/signing/socket_mode_unix_test.go")
+	requireOrderedTokens(t, "SIGNER-005 atomically-created UDS proof", socketModeTests,
+		"func TestPrivateUnixSocketCreatedWithExactModeBeforeChmod(",
+		"info, err := os.Lstat(socketPath)",
+		"info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != 0o600",
+		"chmodCalled := false",
+		"if chmodCalled {",
+		"if gotMask != 0o022 {",
+	)
 
 	designTests := read(t, "../internal/signing/design_test.go")
 	for _, want := range []string{
@@ -4141,8 +4207,35 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"grpc.Creds(creds)",
 		"os.MkdirAll(dir, 0o700)",
 		"os.Chmod(dir, 0o700)",
-		"os.Chmod(socketPath, 0o600)",
+		"listenPrivateUnixSocket(socketPath)",
+		"enforceExactSocketMode(socketPath, 0o600, os.Chmod)",
 		"newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux)",
+	)
+	signingSocketMode := read(t, "../internal/signing/socket_mode_unix.go")
+	requireOrderedTokens(t, "WIRE PROTECT: internal/signing/socket_mode_unix.go atomic private UDS bind", signingSocketMode,
+		"var socketUmaskMu sync.Mutex",
+		"socketUmaskMu.Lock()",
+		"oldMask := unix.Umask(0o177)",
+		"defer func() {",
+		"unix.Umask(oldMask)",
+		"socketUmaskMu.Unlock()",
+		`return net.Listen("unix", socketPath)`,
+	)
+	requireOrderedTokens(t, "WIRE PROTECT: internal/signing/serve.go exact UDS mode enforcement", signingServe,
+		"func enforceExactSocketMode(",
+		"info, err := os.Lstat(socketPath)",
+		"if info.Mode()&os.ModeSocket == 0 {",
+		"if info.Mode().Perm() == want.Perm() {",
+		"if err := chmod(socketPath, want.Perm()); err != nil {",
+		"info, err = os.Lstat(socketPath)",
+		"if info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != want.Perm() {",
+	)
+	requireOrderedTokens(t, "WIRE PROTECT: internal/signing/serve.go unsupported-platform fail-closed gate", signingServe,
+		"func listenUDS(socketPath string, opts ServeOptions) (net.Listener, error) {",
+		"if !peerCredentialsSupported() && !opts.AllowInsecureDevNonLinux {",
+		"ErrUnsupportedHardening",
+		"dir := filepath.Dir(socketPath)",
+		"ln, err := listenPrivateUnixSocket(socketPath)",
 	)
 	peerAuth := read(t, "../internal/signing/peer.go")
 	check("internal/signing/peer.go peer UID filter", peerAuth,
