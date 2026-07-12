@@ -36,7 +36,7 @@ func TestServedKubernetesTrustBundleDistributionCAPK8S07(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("Kubernetes TrustBundle posture: status %d body %s", status, body)
 	}
-	if strings.Contains(strings.ToUpper(string(body)), "BEGIN PRIVATE KEY") || strings.Contains(string(body), "controller_flow") || strings.Contains(string(body), "ca_bundle_pem") {
+	if strings.Contains(strings.ToUpper(string(body)), "BEGIN PRIVATE KEY") || strings.Contains(string(body), "operator applies a cluster-scoped") || strings.Contains(string(body), "ca_bundle_pem") {
 		t.Fatalf("Kubernetes TrustBundle posture leaked payload/static descriptor data: %s", body)
 	}
 	var got struct {

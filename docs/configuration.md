@@ -1112,8 +1112,20 @@ endpoint must know the tenant it acts for before it is exposed. KMIP is a raw mT
 listener, not an HTTP route, so it additionally requires server certificate/key files
 and a client CA trust anchor.
 
+For the blank evaluation stack, `TRSTCTL_PROTOCOLS_PROFILE=eval` is a bounded shortcut:
+it assembles ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE for exactly
+`TRSTCTL_PROTOCOLS_EVAL_TENANT_ID`. Those responders stay behind a closed runtime gate
+until a tenant-authenticated operator activates them in the first-run wizard or with
+`POST /api/v1/setup/protocols/activate`. Activation appends an immutable tenant event
+before the HTTP routes and SPIFFE socket become reachable, and replay restores the gate
+after restart. The shortcut never enables KMIP. Production can omit `PROFILE` and use
+the individual toggles below.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
+| `TRSTCTL_PROTOCOLS_PROFILE` | — | Set to `eval` only for the guided evaluation profile. Empty keeps the exact individual, default-off production toggles. |
+| `TRSTCTL_PROTOCOLS_EVAL_TENANT_ID` | — | Required with `PROFILE=eval`; binds every eval responder and its activation event to one tenant. |
+| `TRSTCTL_PROTOCOLS_EVAL_SPIFFE_TRUST_DOMAIN` | `trstctl.local` | SPIFFE trust domain used by the eval profile. The explicit SPIFFE setting below remains the production control. |
 | `TRSTCTL_PROTOCOLS_ACME_ENABLED` / `…_TENANT_ID` | `false` / — | Serve ACME at `/directory` + `/acme/...` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED` | `false` | Require RFC 8555 External Account Binding on ACME `newAccount`; `/directory` advertises `externalAccountRequired`. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID` | — | Public EAB `kid` accepted by the ACME server. The single env shortcut configures one key; JSON config can carry multiple `protocols.acme_eab.keys`. |

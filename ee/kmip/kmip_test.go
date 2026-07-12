@@ -227,6 +227,8 @@ func operationName(op Operation) string {
 	switch op {
 	case OperationCreate:
 		return "Create"
+	case OperationRegister:
+		return "Register"
 	case OperationLocate:
 		return "Locate"
 	case OperationGet:
@@ -235,6 +237,10 @@ func operationName(op Operation) string {
 		return "Revoke"
 	case OperationDestroy:
 		return "Destroy"
+	case OperationQuery:
+		return "Query"
+	case OperationDiscoverVersions:
+		return "DiscoverVersions"
 	default:
 		return "Operation"
 	}

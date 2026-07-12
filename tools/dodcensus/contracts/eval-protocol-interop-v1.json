@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "contract": "trstctl.protocols.eval-profile.interop.v1",
+  "activation": {
+    "method": "POST",
+    "path": "/api/v1/setup/protocols/activate",
+    "authentication": "tenant-scoped bearer token with issuers:write and Idempotency-Key",
+    "profile": "eval",
+    "exact_protocols": ["acme", "est", "scep", "cmp", "ssh", "tsa", "spiffe"],
+    "fail_closed": "all HTTP protocol mounts return 503 and the SPIFFE UDS remains absent until activation",
+    "tenant_isolation": "a bearer principal for any tenant other than protocols.eval_tenant_id receives 403 and cannot open the gate",
+    "durability": "one protocol.eval_profile.activated event for the configured tenant reopens the exact profile after buildRunDeps and Build are run again"
+  },
+  "interop": {
+    "acme": "RFC 8555 account registration, order, HTTP-01 authorization, finalize, and certificate download through a digest-signer-backed stock x/crypto/acme client",
+    "est": "RFC 7030 authenticated simpleenroll carrying a PKCS#10 request and returning certs-only PKCS#7",
+    "scep": "RFC 8894 GetCACert plus Intune-challenge-authenticated CMS PKIOperation and decrypted CertRep",
+    "cmp": "RFC 4210/6712 signed p10cr PKIMessage and protected certificate response",
+    "ssh": "OpenSSH user certificate issue plus served CA authority key",
+    "tsa": "RFC 3161 TimeStampReq/TimeStampResp over application/timestamp-query",
+    "spiffe": "SPIFFE Workload API FetchX509SVID over the served Unix-domain gRPC socket with the mandatory security metadata"
+  },
+  "independent_verification": {
+    "x509": "OpenSSL verifies ACME, EST, SCEP, CMP, and SPIFFE leaves against the served signer-backed CA",
+    "est": "OpenSSL parses the returned DER PKCS#7 certificate set",
+    "scep_cmp": "OpenSSL ASN.1 parses both wire requests and responses",
+    "ssh": "ssh-keygen parses the issued user certificate and the served CA key",
+    "tsa": "openssl ts parses and verifies the TimeStampResp against the exact request and served CA",
+    "spiffe": "OpenSSL verifies the URI SAN and trust bundle while the in-process stock client proves the ephemeral private-key field is present without persisting that key in evidence"
+  },
+  "completion": "passed requires all seven post-activation round trips, one-tenant fail-closed behavior, exact event/read-model evidence, independent artifact validation, and all seven post-restart readbacks"
+}

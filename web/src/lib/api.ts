@@ -244,6 +244,7 @@ import type {
   PrivacySubjectExportRequest,
   Profile as GenProfile,
   ProfileRequest,
+  ProtocolProfileStatus,
   RCARequest,
   RemediationPlaybook,
   RemediationPlaybookCatalog,
@@ -535,6 +536,7 @@ export type {
   PolicyVersionActionRequest,
   PolicyVersionList,
   PolicyVersionRequest,
+  ProtocolProfileStatus,
   PrivacyArchiveErasureAttestation,
   PrivacyArchiveErasureAttestationList,
   PrivacyArchiveErasureAttestationRequest,
@@ -987,6 +989,8 @@ export interface Api {
   createOwner(input: OwnerRequest): Promise<Owner>;
   issuers(): Promise<Issuer[]>;
   createIssuer(input: IssuerRequest): Promise<Issuer>;
+  protocolProfileStatus(): Promise<ProtocolProfileStatus>;
+  activateProtocolProfile(): Promise<ProtocolProfileStatus>;
   externalCAs(): Promise<ExternalCA[]>;
   issueExternalCA(id: string, input: ExternalCAIssueRequest): Promise<ExternalCAIssuedCertificate>;
   caDiscoveryInventory(): Promise<CADiscovery>;
@@ -1263,6 +1267,8 @@ export const api: Api = {
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),
   issuers: () => req<{ items: Issuer[] }>("/api/v1/issuers").then((r) => r.items ?? []),
   createIssuer: (input) => mutate<Issuer>("POST", "/api/v1/issuers", input),
+  protocolProfileStatus: () => req<ProtocolProfileStatus>("/api/v1/setup/protocols"),
+  activateProtocolProfile: () => mutate<ProtocolProfileStatus>("POST", "/api/v1/setup/protocols/activate"),
   externalCAs: () => req<ExternalCAList>("/api/v1/external-cas").then((r) => r.items ?? []),
   issueExternalCA: (id, input) => mutate<ExternalCAIssuedCertificate>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/issue`, input),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),

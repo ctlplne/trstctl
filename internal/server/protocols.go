@@ -67,6 +67,7 @@ type protocolIssuer struct {
 	issue              issueFunc                  // Server.IssueLeafWithProfile — signs through the signer (AN-3/AN-4)
 	issueLicensed      issueFunc                  // proprietary edition signer path; nil in MPL core builds
 	inspectLicensedCSR LicensedCSRInspector       // proprietary CSR detector; nil in MPL core builds
+	parseLicensedCSR   LicensedCSRParser          // verified parser for subject algorithms unknown to core; nil in MPL core
 	orch               *orchestrator.Orchestrator // records the cert as an event (AN-2)
 	idem               *orchestrator.Idempotency  // dedupe a retried enrollment (AN-5)
 	store              *store.Store               // tenant-scoped reads/writes under RLS (AN-1)
@@ -126,7 +127,7 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 			}
 			return append([]byte(nil), recovered[0].CertificateDER...), nil
 		}
-		csrInfo, err := crypto.InspectCSR(csrDER)
+		csrInfo, parsedLicensedCSR, err := p.inspectCSR(csrDER)
 		if err != nil {
 			return nil, fmt.Errorf("server: protocol CSR does not parse: %w", err)
 		}
@@ -144,17 +145,18 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		// only by the licensed attach seam; core sees a boolean and never imports the
 		// proprietary implementation.
 		issue := p.issue
-		if p.inspectLicensedCSR != nil {
-			useLicensedSigner, err := p.inspectLicensedCSR(csrDER, csrInfo)
+		useLicensedSigner := parsedLicensedCSR
+		if !useLicensedSigner && p.inspectLicensedCSR != nil {
+			useLicensedSigner, err = p.inspectLicensedCSR(csrDER, csrInfo)
 			if err != nil {
 				return nil, err
 			}
-			if useLicensedSigner {
-				if p.issueLicensed == nil {
-					return nil, errors.New("server: licensed protocol issuance unavailable (fail closed)")
-				}
-				issue = p.issueLicensed
+		}
+		if useLicensedSigner {
+			if p.issueLicensed == nil {
+				return nil, errors.New("server: licensed protocol issuance unavailable (fail closed)")
 			}
+			issue = p.issueLicensed
 		}
 		leafPEM, err := issue(ctx, csrDER, ttl, leafProfile)
 		if err != nil {
@@ -167,6 +169,10 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		info, err := certinfo.Inspect(blk.Bytes)
 		if err != nil {
 			return nil, err
+		}
+		if parsedLicensedCSR {
+			info.KeyAlgorithm = csrInfo.KeyAlgorithm
+			info.PublicKeyBits = csrInfo.KeyBits
 		}
 		// Record the minted cert as an event (AN-2): the inventory read model is a
 		// projection, so a protocol-issued cert is visible, auditable, and survives a
@@ -198,6 +204,37 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		return nil, err
 	}
 	return raw, nil
+}
+
+// inspectCSR is the one served parser decision for every enrollment protocol.
+// Core verifies algorithms it implements first. Only when that fails may the
+// tagged licensed parser claim and verify the request; unrecognized requests
+// retain the original core failure.
+func (p *protocolIssuer) inspectCSR(csrDER []byte) (crypto.CSRInfo, bool, error) {
+	info, coreErr := crypto.InspectCSR(csrDER)
+	if coreErr == nil {
+		return info, false, nil
+	}
+	if p.parseLicensedCSR != nil {
+		licensed, recognized, err := p.parseLicensedCSR(csrDER)
+		if err != nil {
+			return crypto.CSRInfo{}, recognized, err
+		}
+		if recognized {
+			return licensed, true, nil
+		}
+	}
+	return crypto.CSRInfo{}, false, coreErr
+}
+
+func (p *protocolIssuer) verifyCSR(csrDER []byte) error {
+	_, _, err := p.inspectCSR(csrDER)
+	return err
+}
+
+func (p *protocolIssuer) inspectCSRInfo(csrDER []byte) (crypto.CSRInfo, error) {
+	info, _, err := p.inspectCSR(csrDER)
+	return info, err
 }
 
 // RevokeProtocolLeaf records an authorized served-protocol revocation. Protocol

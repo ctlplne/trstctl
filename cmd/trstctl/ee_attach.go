@@ -189,8 +189,10 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 	if lic != nil && lic.Has(license.FeaturePQC) {
 		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eepqcmigration.NewAPIOptionsFactory())
 		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eepqcmigration.NewOutboxFactory())
-		deps.LicensedLeafSigner = eepqc.SignHybridLeafFromCSRWithProfile
+		deps.LicensedLeafSigner = eepqc.SignLicensedLeafFromCSRWithProfile
 		deps.LicensedCSRInspector = eepqc.InspectHybridCSR
+		deps.LicensedCSRParser = eepqc.ParsePureMLDSACSR
+		deps.LicensedSPIFFESVIDFactory = eepqc.NewSPIFFEHybridSVIDIssuer
 		if log != nil {
 			log.Info("Enterprise PQC attached", slog.String("feature", string(license.FeaturePQC)))
 		}

@@ -6239,16 +6239,21 @@
         "/ssh/issue/user",
         "/ssh/issue/host",
         "/ssh/revoke",
-        "/ssh/krl"
+        "/ssh/krl",
+        "internal/api/protocol_profile.go",
+        "internal/server/protocol_eval.go"
       ],
       "source_frontend": [
-        "web/src/pages/SSHTrust.tsx"
+        "web/src/pages/SSHTrust.tsx",
+        "web/src/pages/Wizard.tsx"
       ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence; JOURNEY-002 adds served SSH status/revocation/KRL workflow handoff. Test evidence: internal/server/ssh_journey_served_test.go drives discovery through trust rollout, attested SSH issuance, KRL revocation, and host retirement; web/src/__tests__/ssh_trust.test.tsx covers the console workflow controls; feature coverage tests render the catalog and registered customer routes ledger.",
       "api_surface": [
         "getSSHStatus",
-        "revokeSSHCertificate"
+        "revokeSSHCertificate",
+        "getProtocolProfile",
+        "activateProtocolProfile"
       ],
       "api_na": "",
       "cli_surface": [
@@ -6297,11 +6302,12 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI operationIds: getSSHStatus, revokeSSHCertificate"
+            "OpenAPI operationIds: getSSHStatus, revokeSSHCertificate, getProtocolProfile, activateProtocolProfile"
           ],
           "refs": [
             "internal/api/api.go",
             "internal/api/ssh_workflow.go",
+            "internal/api/protocol_profile.go",
             "internal/api/openapi.go"
           ]
         },
@@ -6339,7 +6345,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps getSSHStatus to certs:read and revokeSSHCertificate to certs:write.",
+            "feature authz manifest maps getSSHStatus to certs:read, revokeSSHCertificate to certs:write, getProtocolProfile to issuers:read, and activateProtocolProfile to issuers:write.",
             "protocol authz manifest maps ssh route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for the guarded SSH workflow operations; public /ssh protocol paths keep their explicit protocol rationale."
           ],
@@ -6354,11 +6360,13 @@
         "audit": {
           "evidence": [
             "served SSH revocation appends ssh.cert.revoked before returning updated KRL status.",
+            "Eval-profile activation appends protocol.eval_profile.activated for the authenticated tenant before the SSH and sibling protocol gates open.",
             "protocol issuance/revocation paths continue to emit protocol audit events or expose an explicit status gate."
           ],
           "refs": [
             "internal/server/ssh_workflow.go",
             "internal/server/protocol_ssh.go",
+            "internal/server/protocol_eval.go",
             "internal/server/protocols.go"
           ]
         },

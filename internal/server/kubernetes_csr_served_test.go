@@ -128,7 +128,7 @@ func TestServedKubernetesCertificateSigningRequestCAPK8S04(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("Kubernetes CSR posture: status %d body %s", status, body)
 	}
-	if strings.Contains(strings.ToUpper(string(body)), "PRIVATE KEY") || strings.Contains(string(body), "controller_flow") || strings.Contains(string(body), "BEGIN CERTIFICATE REQUEST") {
+	if strings.Contains(strings.ToUpper(string(body)), "PRIVATE KEY") || strings.Contains(string(body), "DaemonSet trstctl-agent runs") || strings.Contains(string(body), "BEGIN CERTIFICATE REQUEST") {
 		t.Fatalf("Kubernetes CSR posture leaked payload/static descriptor data: %s", body)
 	}
 	var got struct {

@@ -80,6 +80,28 @@ describe("api error handling (SURFACE-007)", () => {
   });
 });
 
+describe("eval protocol profile client", () => {
+  it("reads and durably activates the served first-run profile", async () => {
+    document.cookie = "trstctl_csrf=csrf-protocols; path=/";
+    mockFetchSequence([
+      { status: 200, body: JSON.stringify({ profile: "eval", active: false, protocols: ["acme", "est"] }) },
+      { status: 200, body: JSON.stringify({ profile: "eval", active: true, protocols: ["acme", "est"] }) },
+    ]);
+
+    expect((await api.protocolProfileStatus()).active).toBe(false);
+    expect((await api.activateProtocolProfile()).active).toBe(true);
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls[0][0]).toBe("/api/v1/setup/protocols");
+    expect(calls[0][1]?.method).toBeUndefined();
+    expect(calls[1][0]).toBe("/api/v1/setup/protocols/activate");
+    expect(calls[1][1]?.method).toBe("POST");
+    const headers = calls[1][1]?.headers as Record<string, string>;
+    expect(headers["Idempotency-Key"]).toBeTruthy();
+    expect(headers["X-CSRF-Token"]).toBe("csrf-protocols");
+  });
+});
+
 describe("api compliance evidence packs", () => {
   it("reads framework evidence packs from the served compliance route", async () => {
     mockFetch(

@@ -172,6 +172,100 @@ export const messages = {
     defaultMessage: "Next: name it",
     description: "Request-credential wizard button from step 1 to step 2.",
   },
+  "wizard.protocols.stepLabel": {
+    defaultMessage: "Enable protocols",
+    description: "First-run wizard protocol activation step label.",
+  },
+  "wizard.protocols.stepDescription": {
+    defaultMessage: "Activate the tenant-bound evaluation profile so standard enrollment clients can reach every shipped protocol.",
+    description: "First-run wizard protocol activation step description.",
+  },
+  "wizard.protocols.heading": {
+    defaultMessage: "Enable enrollment protocols",
+    description: "Heading for the first-run protocol activation step.",
+  },
+  "wizard.protocols.description": {
+    defaultMessage:
+      "The evaluation profile assembles ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE for this tenant. Activating it records durable server state before any responder opens; this is not a browser-only toggle.",
+    description: "Explains the durable server-side effect of enabling the eval protocol profile.",
+  },
+  "wizard.protocols.loading": {
+    defaultMessage: "Reading served protocol status...",
+    description: "Status shown while the first-run wizard reads protocol profile state.",
+  },
+  "wizard.protocols.responders": {
+    defaultMessage: "Shipped responders: {protocols}.",
+    description: "List of protocol responders assembled by the eval profile.",
+  },
+  "wizard.protocols.active": {
+    defaultMessage: "Eval protocol profile is active for this tenant.",
+    description: "Confirmation after the eval profile activation event is recorded.",
+  },
+  "wizard.protocols.activate": {
+    defaultMessage: "Activate eval protocol profile",
+    description: "Button that durably activates the eval enrollment profile.",
+  },
+  "wizard.protocols.unavailable": {
+    defaultMessage:
+      "This deployment did not select the eval profile. Protocol exposure remains under the operator's explicit production configuration, so setup can continue without changing it.",
+    description: "First-run explanation when production uses explicit per-protocol configuration.",
+  },
+  "wizard.protocols.retry": {
+    defaultMessage: "Retry protocol status",
+    description: "Button that retries reading the served protocol profile state.",
+  },
+  "wizard.protocols.statusError": {
+    defaultMessage: "Could not read protocol setup status: {error}",
+    description: "Error shown when the first-run wizard cannot read protocol profile state.",
+  },
+  "wizard.protocols.activationError": {
+    defaultMessage: "Could not activate the eval protocol profile: {error}",
+    description: "Error shown when durable protocol profile activation fails.",
+  },
+  "wizard.protocols.inactiveError": {
+    defaultMessage: "server returned an inactive profile",
+    description: "Diagnostic when an activation response does not report active state.",
+  },
+  "wizard.protocols.summaryActive": {
+    defaultMessage: "Eval profile active",
+    description: "Protocol-profile value in the first-run completion summary.",
+  },
+  "wizard.protocols.summaryOperator": {
+    defaultMessage: "Operator-configured profile",
+    description: "Completion-summary value when production uses explicit protocol configuration.",
+  },
+  "wizard.protocols.next": {
+    defaultMessage: "Next: enable protocols",
+    description: "First-run wizard button from issuer confirmation to protocol activation.",
+  },
+  "wizard.header.description": {
+    defaultMessage: "Connect an issuer, enable standard enrollment protocols, issue a certificate, enroll an agent, and finish.",
+    description: "Description at the top of the first-run wizard.",
+  },
+  "codesign.digest.placeholder": {
+    defaultMessage: "sha256:<64 hexadecimal characters>",
+    description: "Placeholder showing the required code-signing artifact digest format.",
+  },
+  "codesign.receipt.fulcioSAN": {
+    defaultMessage: "Verified Fulcio SAN",
+    description: "Code-signing receipt label for the verified Fulcio identity SAN.",
+  },
+  "codesign.receipt.transparencyDestination": {
+    defaultMessage: "Transparency destination",
+    description: "Code-signing receipt label for the transparency log destination.",
+  },
+  "codesign.receipt.signatureBase64": {
+    defaultMessage: "Signature (base64)",
+    description: "Code-signing receipt label for the base64 signature.",
+  },
+  "codesign.receipt.downloadSignature": {
+    defaultMessage: "Download signature",
+    description: "Link that downloads the returned artifact signature.",
+  },
+  "operations.status.queued": {
+    defaultMessage: "Queued",
+    description: "Operations-page status filter for queued work.",
+  },
   "certificates.ingest.pem.label": {
     defaultMessage: "Paste the certificate",
     description: "Add-certificate wizard step 1 title.",
@@ -6639,6 +6733,32 @@ const esESCatalog = {
   "request.wizard.review.label": "Revisar y enviar",
   "request.wizard.review.description": "Solicitar y aprobar siguen siendo pasos separados: no se emite nada hasta que un aprobador lo autorice.",
   "request.wizard.nextDetails": "Siguiente: nombrarla",
+  "wizard.protocols.stepLabel": "Habilitar protocolos",
+  "wizard.protocols.stepDescription":
+    "Active el perfil de evaluación vinculado al inquilino para que los clientes de inscripción estándar alcancen todos los protocolos publicados.",
+  "wizard.protocols.heading": "Habilitar protocolos de inscripción",
+  "wizard.protocols.description":
+    "El perfil de evaluación prepara ACME, EST, SCEP, CMP, SSH, TSA y SPIFFE para este inquilino. Al activarlo, el servidor registra estado duradero antes de abrir cualquier respondedor; no es un interruptor solo del navegador.",
+  "wizard.protocols.loading": "Leyendo el estado de los protocolos servidos...",
+  "wizard.protocols.responders": "Respondedores publicados: {protocols}.",
+  "wizard.protocols.active": "El perfil de protocolos de evaluación está activo para este inquilino.",
+  "wizard.protocols.activate": "Activar el perfil de protocolos de evaluación",
+  "wizard.protocols.unavailable":
+    "Este despliegue no seleccionó el perfil de evaluación. La exposición de protocolos sigue bajo la configuración explícita del operador, así que la preparación puede continuar sin cambiarla.",
+  "wizard.protocols.retry": "Reintentar el estado de protocolos",
+  "wizard.protocols.statusError": "No se pudo leer el estado de preparación de protocolos: {error}",
+  "wizard.protocols.activationError": "No se pudo activar el perfil de protocolos de evaluación: {error}",
+  "wizard.protocols.inactiveError": "el servidor devolvió un perfil inactivo",
+  "wizard.protocols.summaryActive": "Perfil de evaluación activo",
+  "wizard.protocols.summaryOperator": "Perfil configurado por el operador",
+  "wizard.protocols.next": "Siguiente: habilitar protocolos",
+  "wizard.header.description": "Conecte un emisor, habilite los protocolos de inscripción estándar, emita un certificado, inscriba un agente y termine.",
+  "codesign.digest.placeholder": "sha256:<64 caracteres hexadecimales>",
+  "codesign.receipt.fulcioSAN": "SAN de Fulcio verificado",
+  "codesign.receipt.transparencyDestination": "Destino de transparencia",
+  "codesign.receipt.signatureBase64": "Firma (base64)",
+  "codesign.receipt.downloadSignature": "Descargar firma",
+  "operations.status.queued": "En cola",
   "certificates.ingest.pem.label": "Pegar el certificado",
   "certificates.ingest.pem.description": "Solo PEM de certificado público: las claves privadas nunca pertenecen a este formulario.",
   "certificates.ingest.placement.label": "Asignar propiedad",

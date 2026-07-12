@@ -10,6 +10,15 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// KubernetesCSRSupportRule remains in the response for wire compatibility with
+// pre-posture clients. These structural Kubernetes permissions are not the source
+// of served truth; controller reports below are.
+type KubernetesCSRSupportRule struct {
+	APIGroup string   `json:"api_group"`
+	Resource string   `json:"resource"`
+	Verbs    []string `json:"verbs"`
+}
+
 type KubernetesPostureSummary struct {
 	Controllers int `json:"controllers"`
 	Complete    int `json:"complete_controllers"`
@@ -47,29 +56,45 @@ type KubernetesPostureObject struct {
 }
 
 type KubernetesCSRSupport struct {
-	Capability  string                        `json:"capability"`
-	Served      bool                          `json:"served"`
-	GeneratedAt string                        `json:"generated_at"`
-	LastSync    string                        `json:"last_sync"`
-	APIGroup    string                        `json:"api_group"`
-	APIVersion  string                        `json:"api_version"`
-	Resource    string                        `json:"resource"`
-	Summary     KubernetesPostureSummary      `json:"summary"`
-	Controllers []KubernetesPostureController `json:"controllers"`
-	Objects     []KubernetesPostureObject     `json:"objects"`
+	Capability             string                        `json:"capability"`
+	Served                 bool                          `json:"served"`
+	GeneratedAt            string                        `json:"generated_at"`
+	LastSync               string                        `json:"last_sync"`
+	APIGroup               string                        `json:"api_group"`
+	APIVersion             string                        `json:"api_version"`
+	Resource               string                        `json:"resource"`
+	Summary                KubernetesPostureSummary      `json:"summary"`
+	Controllers            []KubernetesPostureController `json:"controllers"`
+	Objects                []KubernetesPostureObject     `json:"objects"`
+	SignerNames            []string                      `json:"signer_names"`
+	ControllerFlow         []string                      `json:"controller_flow"`
+	RBACRules              []KubernetesCSRSupportRule    `json:"rbac_rules"`
+	StatusFields           []string                      `json:"status_fields"`
+	ArchitectureControls   []string                      `json:"architecture_controls"`
+	EvidenceRefs           []string                      `json:"evidence_refs"`
+	Residuals              []string                      `json:"residuals"`
+	RecommendedNextActions []string                      `json:"recommended_next_actions"`
 }
 
 type KubernetesTrustBundleDistribution struct {
-	Capability  string                        `json:"capability"`
-	Served      bool                          `json:"served"`
-	GeneratedAt string                        `json:"generated_at"`
-	LastSync    string                        `json:"last_sync"`
-	APIGroup    string                        `json:"api_group"`
-	APIVersion  string                        `json:"api_version"`
-	Resource    string                        `json:"resource"`
-	Summary     KubernetesPostureSummary      `json:"summary"`
-	Controllers []KubernetesPostureController `json:"controllers"`
-	Objects     []KubernetesPostureObject     `json:"objects"`
+	Capability             string                        `json:"capability"`
+	Served                 bool                          `json:"served"`
+	GeneratedAt            string                        `json:"generated_at"`
+	LastSync               string                        `json:"last_sync"`
+	APIGroup               string                        `json:"api_group"`
+	APIVersion             string                        `json:"api_version"`
+	Resource               string                        `json:"resource"`
+	Summary                KubernetesPostureSummary      `json:"summary"`
+	Controllers            []KubernetesPostureController `json:"controllers"`
+	Objects                []KubernetesPostureObject     `json:"objects"`
+	DistributionTargets    []string                      `json:"distribution_targets"`
+	ControllerFlow         []string                      `json:"controller_flow"`
+	RBACRules              []KubernetesCSRSupportRule    `json:"rbac_rules"`
+	StatusFields           []string                      `json:"status_fields"`
+	ArchitectureControls   []string                      `json:"architecture_controls"`
+	EvidenceRefs           []string                      `json:"evidence_refs"`
+	Residuals              []string                      `json:"residuals"`
+	RecommendedNextActions []string                      `json:"recommended_next_actions"`
 }
 
 func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
@@ -84,6 +109,13 @@ func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
 		GeneratedAt: generatedAt.Format(time.RFC3339), LastSync: state.lastSync,
 		APIGroup: "certificates.k8s.io", APIVersion: "certificates.k8s.io/v1", Resource: "certificatesigningrequests",
 		Summary: state.summary, Controllers: state.controllers, Objects: state.objects,
+		SignerNames: []string{"trstctl.com/trstctl", "trstctl.com/<clusterissuer-name>", "trstctl.com/<issuer-name>"},
+		RBACRules: []KubernetesCSRSupportRule{
+			{APIGroup: "certificates.k8s.io", Resource: "certificatesigningrequests", Verbs: []string{"get", "list", "watch"}},
+			{APIGroup: "certificates.k8s.io", Resource: "certificatesigningrequests/status", Verbs: []string{"update", "patch"}},
+		},
+		StatusFields:   []string{"status.certificate", "status.conditions[type=Ready]"},
+		ControllerFlow: []string{}, ArchitectureControls: []string{}, EvidenceRefs: []string{}, Residuals: []string{}, RecommendedNextActions: []string{},
 	})
 }
 
@@ -99,6 +131,13 @@ func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *htt
 		GeneratedAt: generatedAt.Format(time.RFC3339), LastSync: state.lastSync,
 		APIGroup: "trstctl.com", APIVersion: "trstctl.com/v1alpha1", Resource: "trustbundles",
 		Summary: state.summary, Controllers: state.controllers, Objects: state.objects,
+		RBACRules: []KubernetesCSRSupportRule{
+			{APIGroup: "trstctl.com", Resource: "trustbundles", Verbs: []string{"get", "list", "watch"}},
+			{APIGroup: "trstctl.com", Resource: "trustbundles/status", Verbs: []string{"update", "patch"}},
+			{APIGroup: "", Resource: "configmaps", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
+		},
+		StatusFields:        []string{"status.targets", "status.bundleSHA256", "status.conditions[type=Ready]"},
+		DistributionTargets: []string{}, ControllerFlow: []string{}, ArchitectureControls: []string{}, EvidenceRefs: []string{}, Residuals: []string{}, RecommendedNextActions: []string{},
 	})
 }
 

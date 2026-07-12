@@ -31,9 +31,23 @@ var vaultCompatCompleteRoutes = []vaultCompatRoute{
 	{method: http.MethodGet, pattern: "/v1/{mount}/data/{name...}", contractPath: "/v1/{mount}/data/{name}", samplePath: "/v1/application-secrets/data/payments/db", operationID: "vaultCompatMountedKVRead", summary: "Read KV v2 data through a tenant-authored mount", successCode: "200", permission: authz.SecretsRead, tokenRequired: true, responseSchema: "VaultKVReadResponse", sensitiveResponse: true, handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsRead, a.vaultMountedKVRead) }},
 	{method: http.MethodPost, pattern: "/v1/{mount}/data/{name...}", contractPath: "/v1/{mount}/data/{name}", samplePath: "/v1/application-secrets/data/payments/db", sampleBody: `{"data":{"username":"payments"}}`, operationID: "vaultCompatMountedKVWrite", summary: "Write KV v2 data through a tenant-authored mount", successCode: "200", permission: authz.SecretsWrite, tokenRequired: true, mutation: true, requestSchema: "VaultKVWriteRequest", responseSchema: "VaultKVWriteResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultMountedKVWrite) }},
 	{method: http.MethodPut, pattern: "/v1/{mount}/data/{name...}", contractPath: "/v1/{mount}/data/{name}", samplePath: "/v1/application-secrets/data/payments/db", sampleBody: `{"data":{"username":"payments"}}`, operationID: "vaultCompatMountedKVWritePut", summary: "Write KV v2 data through a tenant-authored mount", successCode: "200", permission: authz.SecretsWrite, tokenRequired: true, mutation: true, requestSchema: "VaultKVWriteRequest", responseSchema: "VaultKVWriteResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultMountedKVWrite) }},
+	{method: http.MethodPost, pattern: "/v1/{mount}/issue/{role}", contractPath: "/v1/{mount}/issue/{role}", samplePath: "/v1/application-pki/issue/default", sampleBody: `{"common_name":"svc.example.test","ttl":"1h"}`, operationID: "vaultCompatMountedPKIIssue", summary: "Issue PKI material through a tenant-authored mount", successCode: "200", permission: authz.SecretsWrite, tokenRequired: true, mutation: true, requestSchema: "VaultPKIIssueRequest", responseSchema: "VaultPKIIssueResponse", sensitiveResponse: true, handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultMountedPKIIssue) }},
+	{method: http.MethodPut, pattern: "/v1/{mount}/issue/{role}", contractPath: "/v1/{mount}/issue/{role}", samplePath: "/v1/application-pki/issue/default", sampleBody: `{"common_name":"svc.example.test","ttl":"1h"}`, operationID: "vaultCompatMountedPKIIssuePut", summary: "Issue PKI material through a tenant-authored mount", successCode: "200", permission: authz.SecretsWrite, tokenRequired: true, mutation: true, requestSchema: "VaultPKIIssueRequest", responseSchema: "VaultPKIIssueResponse", sensitiveResponse: true, handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultMountedPKIIssue) }},
 	{method: http.MethodPost, pattern: "/v1/{mount}/keys/{name}", contractPath: "/v1/{mount}/keys/{name}", samplePath: "/v1/transit/keys/app", sampleBody: `{"type":"aes256-gcm96"}`, operationID: "vaultCompatTransitCreateKey", summary: "Create a Vault-compatible transit key", successCode: "204", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitCreateKey) }},
 	{method: http.MethodPut, pattern: "/v1/{mount}/keys/{name}", contractPath: "/v1/{mount}/keys/{name}", samplePath: "/v1/transit/keys/app", sampleBody: `{"type":"aes256-gcm96"}`, operationID: "vaultCompatTransitCreateKeyPut", summary: "Create a Vault-compatible transit key", successCode: "204", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitCreateKey) }},
 	{method: http.MethodPost, pattern: "/v1/{mount}/keys/{name}/rotate", contractPath: "/v1/{mount}/keys/{name}/rotate", samplePath: "/v1/transit/keys/app/rotate", sampleBody: `{}`, operationID: "vaultCompatTransitRotateKey", summary: "Rotate a Vault-compatible transit key", successCode: "204", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitRotateKey) }},
+	{method: http.MethodPost, pattern: "/v1/{mount}/encrypt/{name}", contractPath: "/v1/{mount}/encrypt/{name}", samplePath: "/v1/transit/encrypt/app", sampleBody: `{"plaintext":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitEncrypt", summary: "Encrypt with a Vault-compatible transit key", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitEncrypt) }},
+	{method: http.MethodPut, pattern: "/v1/{mount}/encrypt/{name}", contractPath: "/v1/{mount}/encrypt/{name}", samplePath: "/v1/transit/encrypt/app", sampleBody: `{"plaintext":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitEncryptPut", summary: "Encrypt with a Vault-compatible transit key", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitEncrypt) }},
+	{method: http.MethodPost, pattern: "/v1/{mount}/decrypt/{name}", contractPath: "/v1/{mount}/decrypt/{name}", samplePath: "/v1/transit/decrypt/app", sampleBody: `{"ciphertext":"vault:v1:opaque"}`, operationID: "vaultCompatTransitDecrypt", summary: "Decrypt with a Vault-compatible transit key", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", sensitiveResponse: true, handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitDecrypt) }},
+	{method: http.MethodPut, pattern: "/v1/{mount}/decrypt/{name}", contractPath: "/v1/{mount}/decrypt/{name}", samplePath: "/v1/transit/decrypt/app", sampleBody: `{"ciphertext":"vault:v1:opaque"}`, operationID: "vaultCompatTransitDecryptPut", summary: "Decrypt with a Vault-compatible transit key", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", sensitiveResponse: true, handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitDecrypt) }},
+	{method: http.MethodPost, pattern: "/v1/{mount}/rewrap/{name}", contractPath: "/v1/{mount}/rewrap/{name}", samplePath: "/v1/transit/rewrap/app", sampleBody: `{"ciphertext":"vault:v1:opaque"}`, operationID: "vaultCompatTransitRewrap", summary: "Rewrap a Vault-compatible transit ciphertext", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitRewrap) }},
+	{method: http.MethodPut, pattern: "/v1/{mount}/rewrap/{name}", contractPath: "/v1/{mount}/rewrap/{name}", samplePath: "/v1/transit/rewrap/app", sampleBody: `{"ciphertext":"vault:v1:opaque"}`, operationID: "vaultCompatTransitRewrapPut", summary: "Rewrap a Vault-compatible transit ciphertext", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitRewrap) }},
+	{method: http.MethodPost, pattern: "/v1/{mount}/hmac/{name}", contractPath: "/v1/{mount}/hmac/{name}", samplePath: "/v1/transit/hmac/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitHMAC", summary: "Compute a Vault-compatible transit HMAC", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitHMAC) }},
+	{method: http.MethodPut, pattern: "/v1/{mount}/hmac/{name}", contractPath: "/v1/{mount}/hmac/{name}", samplePath: "/v1/transit/hmac/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitHMACPut", summary: "Compute a Vault-compatible transit HMAC", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitHMAC) }},
+	{method: http.MethodPost, pattern: "/v1/{mount}/sign/{name}", contractPath: "/v1/{mount}/sign/{name}", samplePath: "/v1/transit/sign/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitSign", summary: "Sign with a Vault-compatible transit key", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitSign) }},
+	{method: http.MethodPut, pattern: "/v1/{mount}/sign/{name}", contractPath: "/v1/{mount}/sign/{name}", samplePath: "/v1/transit/sign/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitSignPut", summary: "Sign with a Vault-compatible transit key", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitSign) }},
+	{method: http.MethodPost, pattern: "/v1/{mount}/verify/{name}", contractPath: "/v1/{mount}/verify/{name}", samplePath: "/v1/transit/verify/app", sampleBody: `{"input":"cGF5bG9hZA==","signature":"vault:v1:opaque"}`, operationID: "vaultCompatTransitVerify", summary: "Verify a Vault-compatible transit signature", successCode: "200", permission: authz.KeysRead, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysRead, a.vaultTransitVerify) }},
+	{method: http.MethodPut, pattern: "/v1/{mount}/verify/{name}", contractPath: "/v1/{mount}/verify/{name}", samplePath: "/v1/transit/verify/app", sampleBody: `{"input":"cGF5bG9hZA==","signature":"vault:v1:opaque"}`, operationID: "vaultCompatTransitVerifyPut", summary: "Verify a Vault-compatible transit signature", successCode: "200", permission: authz.KeysRead, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysRead, a.vaultTransitVerify) }},
 }
 
 func allVaultCompatRoutes() []vaultCompatRoute {
@@ -44,21 +58,18 @@ func allVaultCompatRoutes() []vaultCompatRoute {
 }
 
 func (a *API) mountVaultTransitRoutes(mux *http.ServeMux) {
-	for _, method := range []string{http.MethodPost, http.MethodPut} {
-		mux.HandleFunc(method+" /v1/{mount}/encrypt/{name}", a.vaultAuth(authz.KeysWrite, a.vaultTransitEncrypt))
-		mux.HandleFunc(method+" /v1/{mount}/decrypt/{name}", a.vaultAuth(authz.KeysWrite, a.vaultTransitDecrypt))
-		mux.HandleFunc(method+" /v1/{mount}/rewrap/{name}", a.vaultAuth(authz.KeysWrite, a.vaultTransitRewrap))
-		mux.HandleFunc(method+" /v1/{mount}/hmac/{name}", a.vaultAuth(authz.KeysWrite, a.vaultTransitHMAC))
-		mux.HandleFunc(method+" /v1/{mount}/sign/{name}", a.vaultAuth(authz.KeysWrite, a.vaultTransitSign))
-		mux.HandleFunc(method+" /v1/{mount}/verify/{name}", a.vaultAuth(authz.KeysRead, a.vaultTransitVerify))
-	}
 	mux.HandleFunc("LIST /v1/sys/policies/acl", a.vaultAuth(authz.PolicyRead, a.vaultListPolicies))
 }
 
 type vaultMountRequest struct {
-	Type        string            `json:"type"`
-	Description string            `json:"description,omitempty"`
-	Options     map[string]string `json:"options,omitempty"`
+	Type                  string            `json:"type"`
+	Description           string            `json:"description,omitempty"`
+	Options               map[string]string `json:"options,omitempty"`
+	Config                map[string]any    `json:"config,omitempty"`
+	Local                 bool              `json:"local,omitempty"`
+	SealWrap              bool              `json:"seal_wrap,omitempty"`
+	ExternalEntropyAccess bool              `json:"external_entropy_access,omitempty"`
+	PluginName            string            `json:"plugin_name,omitempty"`
 }
 
 func (a *API) vaultListMounts(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +104,11 @@ func (a *API) vaultBuiltinMounts() map[string]any {
 }
 
 func vaultMountResponse(mount vaultCompatMount) map[string]any {
-	return map[string]any{"type": mount.Type, "description": mount.Description, "options": mount.Options}
+	return map[string]any{
+		"type": mount.Type, "description": mount.Description, "options": mount.Options,
+		"config": map[string]any{}, "local": false, "seal_wrap": false,
+		"external_entropy_access": false,
+	}
 }
 
 //trstctl:mutation
@@ -203,6 +218,7 @@ func (a *API) vaultMountedKVRead(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, vaultHTTPStatus(err), err.Error())
 		return
 	}
+	r.SetPathValue("name", strings.Trim(r.PathValue("mount"), "/")+"/"+strings.Trim(r.PathValue("name"), "/"))
 	a.vaultKVRead(w, r)
 }
 
@@ -211,7 +227,16 @@ func (a *API) vaultMountedKVWrite(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, vaultHTTPStatus(err), err.Error())
 		return
 	}
+	r.SetPathValue("name", strings.Trim(r.PathValue("mount"), "/")+"/"+strings.Trim(r.PathValue("name"), "/"))
 	a.vaultKVWrite(w, r)
+}
+
+func (a *API) vaultMountedPKIIssue(w http.ResponseWriter, r *http.Request) {
+	if err := a.resolveVaultMount(r, "pki"); err != nil {
+		writeVaultError(w, vaultHTTPStatus(err), err.Error())
+		return
+	}
+	a.vaultPKIIssue(w, r)
 }
 
 func vaultHTTPStatus(err error) int {
@@ -460,6 +485,9 @@ func (a *API) requireVaultTransit(w http.ResponseWriter, r *http.Request) (strin
 	if name == "" || strings.Contains(name, "/") {
 		writeVaultError(w, http.StatusBadRequest, "transit key name is required")
 		return "", false
+	}
+	if mount := strings.Trim(r.PathValue("mount"), "/"); mount != "transit" {
+		name = mount + "/" + name
 	}
 	return name, true
 }

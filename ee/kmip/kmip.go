@@ -9,12 +9,26 @@ package kmip
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
+)
+
+const (
+	kmipStateCreatedEventType    = "kmip.state.object.created"
+	kmipStateRegisteredEventType = "kmip.state.object.registered"
+	kmipStateRekeyedEventType    = "kmip.state.object.rekeyed"
+	kmipStateRevokedEventType    = "kmip.state.object.revoked"
+	kmipStateDestroyedEventType  = "kmip.state.object.destroyed"
 )
 
 // Authenticator authenticates a KMIP client by its TLS client certificate.
@@ -68,6 +82,8 @@ type Server struct {
 	tenantID string
 	auth     Authenticator
 	audit    auditsink.Auditor
+	log      *events.Log
+	wrapper  seal.KeyWrapper
 	mu       sync.Mutex
 	objects  map[string]*ManagedObject
 	n        int
@@ -79,6 +95,34 @@ func New(tenantID string, auth Authenticator, audit auditsink.Auditor) *Server {
 		audit = auditsink.Nop{}
 	}
 	return &Server{tenantID: tenantID, auth: auth, audit: audit, objects: map[string]*ManagedObject{}}
+}
+
+// NewDurable constructs a KMIP server whose managed-object lifecycle is rebuilt
+// from the tenant's append-only event stream. Key bytes are envelope-sealed by a
+// stable KeyWrapper before entering an event; plaintext is never persisted.
+func NewDurable(ctx context.Context, tenantID string, auth Authenticator, audit auditsink.Auditor, log *events.Log, wrapper seal.KeyWrapper) (*Server, error) {
+	if log == nil {
+		return nil, errors.New("kmip: durable server requires an event log")
+	}
+	if wrapper == nil {
+		return nil, errors.New("kmip: durable server requires a key wrapper")
+	}
+	s := New(tenantID, auth, audit)
+	s.log = log
+	s.wrapper = wrapper
+	if err := s.replay(ctx); err != nil {
+		s.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+type kmipStateEvent struct {
+	ID        string      `json:"id"`
+	Algorithm string      `json:"algorithm,omitempty"`
+	State     ObjectState `json:"state,omitempty"`
+	Version   int         `json:"version,omitempty"`
+	SealedKey []byte      `json:"sealed_key,omitempty"`
 }
 
 func (s *Server) authClient(ctx context.Context, op string, clientCertDER []byte) (string, error) {
@@ -109,7 +153,7 @@ func (s *Server) Create(ctx context.Context, clientCertDER []byte, algorithm str
 	if err != nil {
 		return "", err
 	}
-	return s.register(ctx, algorithm, key, "kmip.object.created"), nil
+	return s.register(ctx, algorithm, key, "kmip.object.created", kmipStateCreatedEventType)
 }
 
 // Register stores a client-supplied key and returns its unique identifier.
@@ -120,17 +164,23 @@ func (s *Server) Register(ctx context.Context, clientCertDER []byte, algorithm s
 	if algorithm != "AES" || len(key) != 32 {
 		return "", fmt.Errorf("kmip: Register supports only AES-256 key material")
 	}
-	return s.register(ctx, algorithm, append([]byte(nil), key...), "kmip.object.registered"), nil
+	return s.register(ctx, algorithm, append([]byte(nil), key...), "kmip.object.registered", kmipStateRegisteredEventType)
 }
 
-func (s *Server) register(ctx context.Context, algorithm string, key []byte, eventType string) string {
+func (s *Server) register(ctx context.Context, algorithm string, key []byte, auditEventType, stateEventType string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.n++
 	id := fmt.Sprintf("kmip-%d", s.n)
-	s.objects[id] = &ManagedObject{ID: id, Algorithm: algorithm, State: StateActive, Version: 1, key: key}
-	_ = auditsink.Emit(ctx, s.audit, nil, eventType, s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"alg":%q}`, id, algorithm)))
-	return id
+	obj := &ManagedObject{ID: id, Algorithm: algorithm, State: StateActive, Version: 1, key: key}
+	if err := s.persistKeyState(ctx, stateEventType, obj, key); err != nil {
+		s.n--
+		secret.Wipe(key)
+		return "", err
+	}
+	s.objects[id] = obj
+	_ = auditsink.Emit(ctx, s.audit, nil, auditEventType, s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"alg":%q}`, id, algorithm)))
+	return id, nil
 }
 
 // Get returns the key material of an active managed object to an authenticated
@@ -194,9 +244,14 @@ func (s *Server) ReKey(ctx context.Context, clientCertDER []byte, id string) (in
 		secret.Wipe(key)
 		return 0, fmt.Errorf("kmip: object %q not active", id)
 	}
+	version := obj.Version + 1
+	if err := s.persistKeyState(ctx, kmipStateRekeyedEventType, &ManagedObject{ID: obj.ID, Algorithm: obj.Algorithm, State: obj.State, Version: version}, key); err != nil {
+		secret.Wipe(key)
+		return 0, err
+	}
 	secret.Wipe(obj.key)
 	obj.key = key
-	obj.Version++
+	obj.Version = version
 	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object.rekeyed", s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"version":%d}`, id, obj.Version)))
 	return obj.Version, nil
 }
@@ -216,6 +271,9 @@ func (s *Server) Destroy(ctx context.Context, clientCertDER []byte, id string) e
 	obj, ok := s.objects[id]
 	if !ok {
 		return fmt.Errorf("kmip: object %q not found", id)
+	}
+	if err := s.persistState(ctx, kmipStateDestroyedEventType, kmipStateEvent{ID: id, State: StateDestroyed, Version: obj.Version}); err != nil {
+		return err
 	}
 	secret.Wipe(obj.key)
 	obj.key = nil
@@ -247,7 +305,103 @@ func (s *Server) transition(ctx context.Context, clientCertDER []byte, op, id st
 	if !ok {
 		return fmt.Errorf("kmip: object %q not found", id)
 	}
+	stateEventType := kmipStateRevokedEventType
+	if err := s.persistState(ctx, stateEventType, kmipStateEvent{ID: id, State: to, Version: obj.Version}); err != nil {
+		return err
+	}
 	obj.State = to
 	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object."+op, s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"state":%q}`, id, to)))
 	return nil
+}
+
+func (s *Server) persistKeyState(ctx context.Context, eventType string, obj *ManagedObject, key []byte) error {
+	if s.log == nil {
+		return nil
+	}
+	sealed, err := seal.Seal(s.wrapper, key, s.stateAAD(obj.ID, obj.Version))
+	if err != nil {
+		return fmt.Errorf("kmip: seal state key: %w", err)
+	}
+	defer secret.Wipe(sealed)
+	return s.persistState(ctx, eventType, kmipStateEvent{
+		ID: obj.ID, Algorithm: obj.Algorithm, State: obj.State, Version: obj.Version,
+		SealedKey: sealed,
+	})
+}
+
+func (s *Server) persistState(ctx context.Context, eventType string, payload kmipStateEvent) error {
+	if s.log == nil {
+		return nil
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := s.log.Append(ctx, events.Event{Type: eventType, TenantID: s.tenantID, Data: data}); err != nil {
+		return fmt.Errorf("kmip: append state event: %w", err)
+	}
+	return nil
+}
+
+func (s *Server) replay(ctx context.Context) error {
+	return s.log.Replay(ctx, 0, func(ev events.Event) error {
+		if ev.TenantID != s.tenantID {
+			return nil
+		}
+		switch ev.Type {
+		case kmipStateCreatedEventType, kmipStateRegisteredEventType, kmipStateRekeyedEventType:
+			var payload kmipStateEvent
+			if err := json.Unmarshal(ev.Data, &payload); err != nil {
+				return fmt.Errorf("kmip: replay key state: %w", err)
+			}
+			if payload.ID == "" || payload.Algorithm != "AES" || payload.Version < 1 || len(payload.SealedKey) == 0 {
+				return errors.New("kmip: replay key state is malformed")
+			}
+			key, err := seal.Open(s.wrapper, payload.SealedKey, s.stateAAD(payload.ID, payload.Version))
+			if err != nil {
+				return fmt.Errorf("kmip: open replayed key state: %w", err)
+			}
+			if len(key) != 32 {
+				secret.Wipe(key)
+				return errors.New("kmip: replayed AES key has invalid length")
+			}
+			if old := s.objects[payload.ID]; old != nil {
+				secret.Wipe(old.key)
+			}
+			s.objects[payload.ID] = &ManagedObject{ID: payload.ID, Algorithm: payload.Algorithm, State: StateActive, Version: payload.Version, key: key}
+			s.observeNumericID(payload.ID)
+		case kmipStateRevokedEventType, kmipStateDestroyedEventType:
+			var payload kmipStateEvent
+			if err := json.Unmarshal(ev.Data, &payload); err != nil {
+				return fmt.Errorf("kmip: replay lifecycle state: %w", err)
+			}
+			obj := s.objects[payload.ID]
+			if obj == nil {
+				return fmt.Errorf("kmip: replay lifecycle references unknown object %q", payload.ID)
+			}
+			if ev.Type == kmipStateDestroyedEventType {
+				secret.Wipe(obj.key)
+				obj.key = nil
+				obj.State = StateDestroyed
+			} else {
+				obj.State = StateRevoked
+			}
+		}
+		return nil
+	})
+}
+
+func (s *Server) stateAAD(id string, version int) []byte {
+	return []byte("trstctl.kmip.state.v1|" + s.tenantID + "|" + id + "|" + strconv.Itoa(version))
+}
+
+func (s *Server) observeNumericID(id string) {
+	raw, ok := strings.CutPrefix(id, "kmip-")
+	if !ok {
+		return
+	}
+	n, err := strconv.Atoi(raw)
+	if err == nil && n > s.n {
+		s.n = n
+	}
 }

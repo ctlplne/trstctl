@@ -1,41 +1,53 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, FileKey2, Loader2, RotateCcw, Server, ShieldCheck } from "lucide-react";
-import { api, type Agent, type EnrollmentToken } from "@/lib/api";
+import { CheckCircle2, FileKey2, Loader2, Network, RotateCcw, Server, ShieldCheck } from "lucide-react";
+import { ApiError, api, type Agent, type EnrollmentToken, type ProtocolProfileStatus } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { markOnboardingComplete, resetOnboarding } from "@/lib/onboardingState";
+import { useTranslation } from "@/i18n/I18nProvider";
 
-type WizardStepID = "issuer" | "certificate" | "agent" | "complete";
+type WizardStepID = "issuer" | "protocols" | "certificate" | "agent" | "complete";
 
-const onboardingSteps: CarouselStep[] = [
-  { id: "issuer", label: "Connect issuer", description: "Confirm the signer-backed internal CA or connect an upstream authority later." },
-  { id: "certificate", label: "Issue certificate", description: "Create the first workload identity and issue it with an operator credential." },
-  { id: "agent", label: "Enroll agent", description: "Mint a one-time enrollment token and wait for the first in-network agent." },
-  { id: "complete", label: "Complete", description: "Latch this first-run guide and jump into day-two certificate operations." },
-];
+function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselStep[] {
+  return [
+    { id: "issuer", label: "Connect issuer", description: "Confirm the signer-backed internal CA or connect an upstream authority later." },
+    { id: "protocols", label: t("wizard.protocols.stepLabel"), description: t("wizard.protocols.stepDescription") },
+    { id: "certificate", label: "Issue certificate", description: "Create the first workload identity and issue it with an operator credential." },
+    { id: "agent", label: "Enroll agent", description: "Mint a one-time enrollment token and wait for the first in-network agent." },
+    { id: "complete", label: "Complete", description: "Latch this first-run guide and jump into day-two certificate operations." },
+  ];
+}
 
 /** Wizard is the first-run flow (F12): a fresh install confirms an issuer,
- * issues its first certificate, enrolls an agent, then latches a browser-local
- * completion flag (see lib/onboardingState) so the dashboard stops prompting
- * setup on later visits. "Reopen setup guide" clears the flag. */
+ * activates the explicit eval enrollment profile when configured, issues its
+ * first certificate, enrolls an agent, then latches a browser-local completion
+ * flag (see lib/onboardingState) so the dashboard stops prompting setup on later
+ * visits. "Reopen setup guide" clears the flag. */
 export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
+  const { t } = useTranslation();
+  const steps = onboardingSteps(t);
   const [stepIndex, setStepIndex] = useState(0);
   const [issuerReady, setIssuerReady] = useState(false);
   const [issuerName, setIssuerName] = useState<string | null>(null);
+  const [protocolSummary, setProtocolSummary] = useState<string | null>(null);
   const [certificateName, setCertificateName] = useState<string | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [completed, setCompleted] = useState(false);
 
-  const currentStep = onboardingSteps[stepIndex]?.id as WizardStepID;
+  const currentStep = steps[stepIndex]?.id as WizardStepID;
   const nextEnabled =
-    (currentStep === "issuer" && issuerReady) || (currentStep === "certificate" && Boolean(certificateName)) || (currentStep === "agent" && Boolean(agent));
+    (currentStep === "issuer" && issuerReady) ||
+    (currentStep === "protocols" && Boolean(protocolSummary)) ||
+    (currentStep === "certificate" && Boolean(certificateName)) ||
+    (currentStep === "agent" && Boolean(agent));
 
   function resetWizard() {
     setStepIndex(0);
     setIssuerReady(false);
     setIssuerName(null);
+    setProtocolSummary(null);
     setCertificateName(null);
     setAgent(null);
     setCompleted(false);
@@ -86,15 +98,15 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
 
   return (
     <section aria-labelledby="wizard-heading" className="mx-auto grid max-w-3xl gap-6">
-      <PageHeader title="Set up trstctl" titleId="wizard-heading" description="Connect an issuer, issue a certificate, enroll an agent, and finish." />
+      <PageHeader title="Set up trstctl" titleId="wizard-heading" description={t("wizard.header.description")} />
 
       <StepShell
-        steps={onboardingSteps}
+        steps={steps}
         currentIndex={stepIndex}
         onPrevious={() => setStepIndex((current) => Math.max(0, current - 1))}
-        onNext={currentStep === "complete" ? undefined : () => setStepIndex((current) => Math.min(onboardingSteps.length - 1, current + 1))}
+        onNext={currentStep === "complete" ? undefined : () => setStepIndex((current) => Math.min(steps.length - 1, current + 1))}
         nextDisabled={!nextEnabled}
-        nextLabel={nextLabel(currentStep)}
+        nextLabel={nextLabel(currentStep, t)}
       >
         {currentStep === "issuer" && (
           <IssuerStep
@@ -106,10 +118,113 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
             }}
           />
         )}
+        {currentStep === "protocols" && <ProtocolProfileStep onReady={setProtocolSummary} />}
         {currentStep === "certificate" && <CertificateStep certificateName={certificateName} onIssued={setCertificateName} />}
         {currentStep === "agent" && <AgentStep pollMs={pollMs} agent={agent} onAgent={setAgent} />}
-        {currentStep === "complete" && <CompleteStep certificateName={certificateName} issuerName={issuerName} agent={agent} onComplete={markComplete} />}
+        {currentStep === "complete" && (
+          <CompleteStep certificateName={certificateName} issuerName={issuerName} protocolSummary={protocolSummary} agent={agent} onComplete={markComplete} />
+        )}
       </StepShell>
+    </section>
+  );
+}
+
+function ProtocolProfileStep({ onReady }: { onReady: (summary: string) => void }) {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<ProtocolProfileStatus | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [activating, setActivating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadStatus() {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await api.protocolProfileStatus();
+      setStatus(next);
+      setUnavailable(false);
+      if (next.active) onReady(t("wizard.protocols.summaryActive"));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        // Production deployments keep protocols config-controlled. A missing
+        // eval control is expected there and must not trap first-run setup.
+        setUnavailable(true);
+        onReady(t("wizard.protocols.summaryOperator"));
+      } else {
+        setError(t("wizard.protocols.statusError", { error: String(err instanceof Error ? err.message : err) }));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadStatus();
+    // This is a one-time server-state read when the carousel mounts this step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function activate() {
+    setActivating(true);
+    setError(null);
+    try {
+      const next = await api.activateProtocolProfile();
+      if (!next.active) throw new Error(t("wizard.protocols.inactiveError"));
+      setStatus(next);
+      onReady(t("wizard.protocols.summaryActive"));
+    } catch (err) {
+      setError(t("wizard.protocols.activationError", { error: String(err instanceof Error ? err.message : err) }));
+    } finally {
+      setActivating(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="step-protocols-heading" className="grid gap-4">
+      <div className="flex items-start gap-3">
+        <Network className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
+        <div>
+          <h3 id="step-protocols-heading" className="text-title font-semibold">
+            {t("wizard.protocols.heading")}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">{t("wizard.protocols.description")}</p>
+        </div>
+      </div>
+
+      {loading && (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          {t("wizard.protocols.loading")}
+        </p>
+      )}
+      {status && (
+        <div className="grid gap-3">
+          <p className="text-sm text-muted-foreground">{t("wizard.protocols.responders", { protocols: status.protocols.join(", ") })}</p>
+          {status.active ? (
+            <p className="flex items-center gap-2 text-sm font-medium text-status-success">
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              {t("wizard.protocols.active")}
+            </p>
+          ) : (
+            <Button type="button" className="justify-self-start" onClick={() => void activate()} disabled={activating}>
+              {activating && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {t("wizard.protocols.activate")}
+            </Button>
+          )}
+        </div>
+      )}
+      {unavailable && <p className="text-sm text-muted-foreground">{t("wizard.protocols.unavailable")}</p>}
+      {error && (
+        <div className="grid justify-items-start gap-2">
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+          <Button type="button" variant="outline" onClick={() => void loadStatus()} disabled={loading}>
+            {t("wizard.protocols.retry")}
+          </Button>
+        </div>
+      )}
     </section>
   );
 }
@@ -382,11 +497,13 @@ function CompleteStep({
   agent,
   certificateName,
   issuerName,
+  protocolSummary,
   onComplete,
 }: {
   agent: Agent | null;
   certificateName: string | null;
   issuerName: string | null;
+  protocolSummary: string | null;
   onComplete: () => void;
 }) {
   return (
@@ -395,8 +512,9 @@ function CompleteStep({
         <CheckCircle2 className="h-5 w-5 text-status-success" aria-hidden="true" />
         Ready for certificate operations
       </h3>
-      <dl className="grid gap-3 sm:grid-cols-3">
+      <dl className="grid gap-3 sm:grid-cols-2">
         <SummaryItem label="Issuer" value={issuerName ?? "Internal CA"} />
+        <SummaryItem label="Protocols" value={protocolSummary ?? "Not configured"} />
         <SummaryItem label="Certificate" value={certificateName ?? "first-service"} />
         <SummaryItem label="Agent" value={agent?.name ?? "not enrolled"} />
       </dl>
@@ -417,8 +535,9 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function nextLabel(step: WizardStepID): string {
-  if (step === "issuer") return "Next: issue certificate";
+function nextLabel(step: WizardStepID, t: ReturnType<typeof useTranslation>["t"]): string {
+  if (step === "issuer") return t("wizard.protocols.next");
+  if (step === "protocols") return "Next: issue certificate";
   if (step === "certificate") return "Next: enroll agent";
   if (step === "agent") return "Next: complete setup";
   return "Next";

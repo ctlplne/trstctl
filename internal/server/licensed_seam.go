@@ -6,6 +6,8 @@ import "trstctl.com/trstctl/internal/editionseam"
 
 type LicensedLeafSigner = editionseam.LicensedLeafSigner
 type LicensedCSRInspector = editionseam.LicensedCSRInspector
+type LicensedCSRParser = editionseam.LicensedCSRParser
+type LicensedSPIFFESVIDFactory = editionseam.LicensedSPIFFESVIDFactory
 type LicensedAPIOptionsDeps = editionseam.LicensedAPIOptionsDeps
 type LicensedAPIOptionsFactory = editionseam.LicensedAPIOptionsFactory
 type LicensedOutboxHandler = editionseam.LicensedOutboxHandler

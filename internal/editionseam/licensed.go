@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/transit"
@@ -18,6 +19,17 @@ import (
 type LicensedLeafSigner func(caCertDER []byte, caSigner crypto.DigestSigner, csrDER []byte, ttl time.Duration, prof crypto.LeafProfile) ([]byte, error)
 
 type LicensedCSRInspector func(csrDER []byte, classical crypto.CSRInfo) (useLicensedSigner bool, err error)
+
+// LicensedCSRParser verifies and describes a subject algorithm the core Go
+// toolchain cannot inspect yet. recognized=false means the request is not owned
+// by this parser; recognized=true with an error is a fail-closed malformed
+// licensed request. The parser is supplied only by the tagged attach seam.
+type LicensedCSRParser func(csrDER []byte) (info crypto.CSRInfo, recognized bool, err error)
+
+// LicensedSPIFFESVIDFactory attaches an additional X509-SVID key/certificate
+// issuer after the server provisions its signer-backed CA. Nil keeps the core
+// Workload API's single-key response.
+type LicensedSPIFFESVIDFactory func(caCertDER []byte, caSigner crypto.DigestSigner) (spiffe.AdditionalX509SVIDIssuer, error)
 
 type LicensedAPIOptionsFactory func(LicensedAPIOptionsDeps) ([]api.Option, error)
 

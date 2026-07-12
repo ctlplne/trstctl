@@ -402,9 +402,9 @@ func dodCrashFirstVersioningSyncAfterReceiverCommit(t *testing.T, srv *Server) {
 		t.Fatal("served dispatcher has no secret-integration worker")
 	}
 	remaining := map[string]bool{
-		"aws-secrets-manager":     true,
-		"gcp-secret-manager":      true,
-		"azure-key-vault":         true,
+		"aws-secrets-manager":      true,
+		"gcp-secret-manager":       true,
+		"azure-key-vault":          true,
 		"terraform-cloud-opentofu": true,
 		"vault-kv-v2":              true,
 	}
@@ -1156,13 +1156,13 @@ func dodAssertSecretSyncReconciledOnce(t *testing.T, endpoint, remoteKey, kind s
 	query := url.Values{"key": []string{remoteKey}}
 	deadline := time.Now().Add(15 * time.Second)
 	var last struct {
-		Versions   int  `json:"versions"`
-		Reconciled bool `json:"reconciled"`
-		NativeWire bool `json:"native_wire"`
-		Sensitive  bool `json:"sensitive"`
-		Category   string `json:"category"`
-		CASConflicts int `json:"cas_conflicts"`
-		CASPreserved bool `json:"cas_preserved"`
+		Versions     int    `json:"versions"`
+		Reconciled   bool   `json:"reconciled"`
+		NativeWire   bool   `json:"native_wire"`
+		Sensitive    bool   `json:"sensitive"`
+		Category     string `json:"category"`
+		CASConflicts int    `json:"cas_conflicts"`
+		CASPreserved bool   `json:"cas_preserved"`
 	}
 	var lastStatus int
 	var lastErr error
@@ -1170,13 +1170,13 @@ func dodAssertSecretSyncReconciledOnce(t *testing.T, endpoint, remoteKey, kind s
 		response, err := http.Get(endpoint + "/dod/sync-state?" + query.Encode())
 		if err == nil {
 			last = struct {
-				Versions   int  `json:"versions"`
-				Reconciled bool `json:"reconciled"`
-				NativeWire bool `json:"native_wire"`
-				Sensitive  bool `json:"sensitive"`
-				Category   string `json:"category"`
-				CASConflicts int `json:"cas_conflicts"`
-				CASPreserved bool `json:"cas_preserved"`
+				Versions     int    `json:"versions"`
+				Reconciled   bool   `json:"reconciled"`
+				NativeWire   bool   `json:"native_wire"`
+				Sensitive    bool   `json:"sensitive"`
+				Category     string `json:"category"`
+				CASConflicts int    `json:"cas_conflicts"`
+				CASPreserved bool   `json:"cas_preserved"`
 			}{}
 			lastStatus = response.StatusCode
 			lastErr = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&last)

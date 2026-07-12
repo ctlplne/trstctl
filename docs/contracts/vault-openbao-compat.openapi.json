@@ -2048,6 +2048,722 @@
         "x-trstctl-permission": "secrets:write"
       }
     },
+    "/v1/{mount}/decrypt/{name}": {
+      "post": {
+        "operationId": "vaultCompatTransitDecrypt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Decrypt with a Vault-compatible transit key",
+        "x-trstctl-permission": "keys:write",
+        "x-trstctl-sensitive-response": true
+      },
+      "put": {
+        "operationId": "vaultCompatTransitDecryptPut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Decrypt with a Vault-compatible transit key",
+        "x-trstctl-permission": "keys:write",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/v1/{mount}/encrypt/{name}": {
+      "post": {
+        "operationId": "vaultCompatTransitEncrypt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Encrypt with a Vault-compatible transit key",
+        "x-trstctl-permission": "keys:write"
+      },
+      "put": {
+        "operationId": "vaultCompatTransitEncryptPut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Encrypt with a Vault-compatible transit key",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/v1/{mount}/hmac/{name}": {
+      "post": {
+        "operationId": "vaultCompatTransitHMAC",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Compute a Vault-compatible transit HMAC",
+        "x-trstctl-permission": "keys:write"
+      },
+      "put": {
+        "operationId": "vaultCompatTransitHMACPut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Compute a Vault-compatible transit HMAC",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/v1/{mount}/issue/{role}": {
+      "post": {
+        "operationId": "vaultCompatMountedPKIIssue",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultPKIIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultPKIIssueResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Issue PKI material through a tenant-authored mount",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      },
+      "put": {
+        "operationId": "vaultCompatMountedPKIIssuePut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultPKIIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultPKIIssueResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Issue PKI material through a tenant-authored mount",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      }
+    },
     "/v1/{mount}/keys/{name}": {
       "post": {
         "operationId": "vaultCompatTransitCreateKey",
@@ -2314,6 +3030,540 @@
         ],
         "summary": "Rotate a Vault-compatible transit key",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/v1/{mount}/rewrap/{name}": {
+      "post": {
+        "operationId": "vaultCompatTransitRewrap",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Rewrap a Vault-compatible transit ciphertext",
+        "x-trstctl-permission": "keys:write"
+      },
+      "put": {
+        "operationId": "vaultCompatTransitRewrapPut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Rewrap a Vault-compatible transit ciphertext",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/v1/{mount}/sign/{name}": {
+      "post": {
+        "operationId": "vaultCompatTransitSign",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Sign with a Vault-compatible transit key",
+        "x-trstctl-permission": "keys:write"
+      },
+      "put": {
+        "operationId": "vaultCompatTransitSignPut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Sign with a Vault-compatible transit key",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/v1/{mount}/verify/{name}": {
+      "post": {
+        "operationId": "vaultCompatTransitVerify",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Verify a Vault-compatible transit signature",
+        "x-trstctl-permission": "keys:read"
+      },
+      "put": {
+        "operationId": "vaultCompatTransitVerifyPut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Verify a Vault-compatible transit signature",
+        "x-trstctl-permission": "keys:read"
       }
     }
   }

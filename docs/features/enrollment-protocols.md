@@ -191,6 +191,14 @@ security depends on the challenge gate (F56) since the protocol itself is weakly
 authenticated. For SCEP/CMP, keep `protocols.ra_key_file` on shared persistent storage
 in HA so all replicas use the same CMS transport identity.
 
+The blank evaluation stack can instead select `protocols.profile=eval` with one
+`eval_tenant_id`. That profile assembles ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE but
+keeps them unreachable until an authenticated first-run action calls
+`POST /api/v1/setup/protocols/activate`. The server appends a tenant-scoped activation
+event before opening its shared HTTP gate or SPIFFE UDS, and event replay restores the
+state after restart. KMIP remains a separately licensed, mTLS-configured listener and
+is never enabled by the eval shortcut.
+
 ## Reference
 
 - **EST:** `GET /.well-known/est/cacerts`, `POST /.well-known/est/simpleenroll`,

@@ -2591,8 +2591,11 @@ KubernetesCSRSupport = TypedDict(
         'architecture_controls': list[str],
         'capability': str,
         'controller_flow': list[str],
+        'controllers': list[dict[str, Any]],
         'evidence_refs': list[str],
         'generated_at': str,
+        'last_sync': str,
+        'objects': list[dict[str, Any]],
         'rbac_rules': list[dict[str, Any]],
         'recommended_next_actions': list[str],
         'residuals': list[str],
@@ -2600,6 +2603,7 @@ KubernetesCSRSupport = TypedDict(
         'served': bool,
         'signer_names': list[str],
         'status_fields': list[str],
+        'summary': dict[str, Any],
     },
     total=False,
 )
@@ -2610,6 +2614,54 @@ KubernetesCSRSupportRule = TypedDict(
         'api_group': str,
         'resource': str,
         'verbs': list[str],
+    },
+    total=False,
+)
+
+KubernetesPostureController = TypedDict(
+    'KubernetesPostureController',
+    {
+        'cluster_id': str,
+        'controller_id': str,
+        'failed': int,
+        'failure_code': str,
+        'last_sync': str,
+        'observed': int,
+        'pending': int,
+        'ready': int,
+        'reconcile_complete': bool,
+        'report_id': str,
+        'stale': bool,
+    },
+    total=False,
+)
+
+KubernetesPostureObject = TypedDict(
+    'KubernetesPostureObject',
+    {
+        'cluster_id': str,
+        'controller_id': str,
+        'name': str,
+        'namespace': str,
+        'public_hash': str,
+        'reason': str,
+        'resource_version': str,
+        'state': str,
+        'uid': str,
+    },
+    total=False,
+)
+
+KubernetesPostureSummary = TypedDict(
+    'KubernetesPostureSummary',
+    {
+        'complete_controllers': int,
+        'controllers': int,
+        'failed': int,
+        'observed': int,
+        'pending': int,
+        'ready': int,
+        'stale_controllers': int,
     },
     total=False,
 )
@@ -2654,15 +2706,19 @@ KubernetesTrustBundleDistribution = TypedDict(
         'architecture_controls': list[str],
         'capability': str,
         'controller_flow': list[str],
+        'controllers': list[dict[str, Any]],
         'distribution_targets': list[str],
         'evidence_refs': list[str],
         'generated_at': str,
+        'last_sync': str,
+        'objects': list[dict[str, Any]],
         'rbac_rules': list[dict[str, Any]],
         'recommended_next_actions': list[str],
         'residuals': list[str],
         'resource': str,
         'served': bool,
         'status_fields': list[str],
+        'summary': dict[str, Any],
     },
     total=False,
 )
@@ -4449,6 +4505,16 @@ ProfileRequest = TypedDict(
     {
         'name': str,
         'spec': dict[str, Any],
+    },
+    total=False,
+)
+
+ProtocolProfileStatus = TypedDict(
+    'ProtocolProfileStatus',
+    {
+        'active': bool,
+        'profile': str,
+        'protocols': list[str],
     },
     total=False,
 )

@@ -91,7 +91,7 @@ func vaultCompatParameters(rt vaultCompatRoute) []Parameter {
 			Schema:      str(),
 		})
 	default:
-		for _, name := range []string{"mount", "path", "name"} {
+		for _, name := range []string{"mount", "path", "name", "role"} {
 			if strings.Contains(rt.contractPath, "{"+name+"}") {
 				out = append(out, Parameter{Name: name, In: "path", Required: true, Schema: str()})
 			}

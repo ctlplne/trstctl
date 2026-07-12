@@ -3394,6 +3394,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup/protocols": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the tenant-bound eval protocol profile status */
+        get: operations["getProtocolProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/protocols/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate the tenant-bound eval protocol profile */
+        post: operations["activateProtocolProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/attested-user-certs": {
         parameters: {
             query?: never;
@@ -5581,9 +5615,13 @@ export interface components {
             architecture_controls: string[];
             capability: string;
             controller_flow: string[];
+            controllers?: components["schemas"]["KubernetesPostureController"][];
             evidence_refs: string[];
             /** Format: date-time */
             generated_at: string;
+            /** Format: date-time */
+            last_sync?: string;
+            objects?: components["schemas"]["KubernetesPostureObject"][];
             rbac_rules: components["schemas"]["KubernetesCSRSupportRule"][];
             recommended_next_actions: string[];
             residuals: string[];
@@ -5591,11 +5629,47 @@ export interface components {
             served: boolean;
             signer_names: string[];
             status_fields: string[];
+            summary?: components["schemas"]["KubernetesPostureSummary"];
         };
         KubernetesCSRSupportRule: {
             api_group: string;
             resource: string;
             verbs: string[];
+        };
+        KubernetesPostureController: {
+            cluster_id: string;
+            controller_id: string;
+            failed: number;
+            failure_code?: string;
+            /** Format: date-time */
+            last_sync: string;
+            observed: number;
+            pending: number;
+            ready: number;
+            reconcile_complete: boolean;
+            report_id: string;
+            stale: boolean;
+        };
+        KubernetesPostureObject: {
+            cluster_id: string;
+            controller_id: string;
+            name: string;
+            namespace?: string;
+            public_hash?: string;
+            reason: string;
+            resource_version: string;
+            /** @enum {string} */
+            state: "ready" | "pending" | "failed";
+            uid: string;
+        };
+        KubernetesPostureSummary: {
+            complete_controllers: number;
+            controllers: number;
+            failed: number;
+            observed: number;
+            pending: number;
+            ready: number;
+            stale_controllers: number;
         };
         KubernetesSecretOperator: {
             architecture_controls: string[];
@@ -5626,16 +5700,21 @@ export interface components {
             architecture_controls: string[];
             capability: string;
             controller_flow: string[];
+            controllers?: components["schemas"]["KubernetesPostureController"][];
             distribution_targets: string[];
             evidence_refs: string[];
             /** Format: date-time */
             generated_at: string;
+            /** Format: date-time */
+            last_sync?: string;
+            objects?: components["schemas"]["KubernetesPostureObject"][];
             rbac_rules: components["schemas"]["KubernetesCSRSupportRule"][];
             recommended_next_actions: string[];
             residuals: string[];
             resource: string;
             served: boolean;
             status_fields: string[];
+            summary?: components["schemas"]["KubernetesPostureSummary"];
         };
         MCPToolCall: {
             authority_id?: string;
@@ -6981,6 +7060,12 @@ export interface components {
         ProfileRequest: {
             name: string;
             spec: Record<string, never>;
+        };
+        ProtocolProfileStatus: {
+            active: boolean;
+            /** @enum {string} */
+            profile: "eval";
+            protocols: string[];
         };
         RCARequest: {
             question: string;
@@ -18185,6 +18270,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretWorkloadInjection"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getProtocolProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtocolProfileStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    activateProtocolProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtocolProfileStatus"];
                 };
             };
             /** @description client error */

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/StatePrimitives";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 type Mode = "key" | "keyless";
 
@@ -43,6 +44,7 @@ const auditReceipts = [
  * (POST /code-signing/keyless) — and renders the returned signature receipt.
  * Only the digest is sent; artifact bytes and private keys never touch the SPA. */
 export function CodeSigning() {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<Mode>("key");
   const [artifactType, setArtifactType] = useState("container");
   const [digest, setDigest] = useState("");
@@ -116,7 +118,7 @@ export function CodeSigning() {
                 id="codesign-digest"
                 value={digest}
                 onChange={(e) => setDigest(e.target.value)}
-                placeholder="sha256:<64 hexadecimal characters>"
+                placeholder={t("codesign.digest.placeholder")}
                 className="rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
               />
             </label>
@@ -191,25 +193,25 @@ export function CodeSigning() {
               ) : null}
               {signature.fulcio_san ? (
                 <div>
-                  <dt className="font-medium text-muted-foreground">Verified Fulcio SAN</dt>
+                  <dt className="font-medium text-muted-foreground">{t("codesign.receipt.fulcioSAN")}</dt>
                   <dd className="break-all font-mono text-xs">{signature.fulcio_san}</dd>
                 </div>
               ) : null}
               {signature.transparency_destination ? (
                 <div>
-                  <dt className="font-medium text-muted-foreground">Transparency destination</dt>
+                  <dt className="font-medium text-muted-foreground">{t("codesign.receipt.transparencyDestination")}</dt>
                   <dd className="font-mono text-xs">{signature.transparency_destination}</dd>
                 </div>
               ) : null}
               <div className="sm:col-span-2">
-                <dt className="font-medium text-muted-foreground">Signature (base64)</dt>
+                <dt className="font-medium text-muted-foreground">{t("codesign.receipt.signatureBase64")}</dt>
                 <dd className="break-all font-mono text-xs">{signature.signature}</dd>
                 <a
                   href={`data:application/octet-stream;base64,${signature.signature}`}
                   download="artifact.sig"
                   className="mt-2 inline-flex text-xs font-medium text-primary underline"
                 >
-                  Download signature
+                  {t("codesign.receipt.downloadSignature")}
                 </a>
               </div>
               <div className="sm:col-span-2">

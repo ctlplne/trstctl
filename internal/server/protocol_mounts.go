@@ -104,6 +104,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		issue:              s.IssueLeafWithProfile,
 		issueLicensed:      s.IssueLicensedLeafWithProfile,
 		inspectLicensedCSR: s.licensedCSRInspector,
+		parseLicensedCSR:   s.licensedCSRParser,
 		orch:               s.orch,
 		idem:               s.idem,
 		store:              s.store,
@@ -147,11 +148,13 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 	if cfg.EST.Enabled {
 		sp.estTenant = firstNonEmpty(cfg.EST.TenantID, tenantFallback)
 		estSrv := est.New(est.Config{
-			Enroller:   enrollerAdapter{tenantID: sp.estTenant, issuer: issuer},
-			Auth:       servedEnrollAuth{store: s.store, tenantID: sp.estTenant},
-			CAChainDER: [][]byte{s.caCertDER},
-			Pool:       pool,
-			Log:        s.log,
+			Enroller:     enrollerAdapter{tenantID: sp.estTenant, issuer: issuer},
+			Auth:         servedEnrollAuth{store: s.store, tenantID: sp.estTenant},
+			CAChainDER:   [][]byte{s.caCertDER},
+			Pool:         pool,
+			Log:          s.log,
+			CSRVerifier:  issuer.verifyCSR,
+			CSRInspector: issuer.inspectCSRInfo,
 		})
 		dispatcher, err := est.NewDispatcher([]est.ProfileRoute{{Server: estSrv}})
 		if err != nil {
@@ -840,7 +843,18 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 	if socket == "" {
 		socket = defaultSPIFFESocket
 	}
-	return &spiffeProtocol{server: spiffe.NewWorkloadAPIServer(wl, []string{"unix"}), socket: socket}, nil
+	var workloadOpts []spiffe.WorkloadAPIOption
+	if s.licensedSPIFFESVIDFactory != nil {
+		additional, err := s.licensedSPIFFESVIDFactory(s.caCertDER, s.caSigner)
+		if err != nil {
+			return nil, fmt.Errorf("server: build licensed SPIFFE X509-SVID issuer: %w", err)
+		}
+		if additional == nil {
+			return nil, errors.New("server: licensed SPIFFE X509-SVID factory returned nil (fail closed)")
+		}
+		workloadOpts = append(workloadOpts, spiffe.WithAdditionalX509SVIDIssuer(additional))
+	}
+	return &spiffeProtocol{server: spiffe.NewWorkloadAPIServer(wl, []string{"unix"}, workloadOpts...), socket: socket}, nil
 }
 
 // spiffeJWTSigner returns a signer-backed DigestSigner for the SPIFFE JWT-SVID

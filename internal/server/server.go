@@ -166,6 +166,8 @@ type Deps struct {
 	LicensedProjectionOptions []projections.Option
 	LicensedLeafSigner        LicensedLeafSigner
 	LicensedCSRInspector      LicensedCSRInspector
+	LicensedCSRParser         LicensedCSRParser
+	LicensedSPIFFESVIDFactory LicensedSPIFFESVIDFactory
 	SignTimeout               time.Duration // per-issuance signer deadline (slow → fail closed)
 	CACommonName              string
 	CACertFile                string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
@@ -573,9 +575,11 @@ type Server struct {
 	// CDP/AIA/policy pointers and key/EKU/validity constraints stamped on every leaf
 	// the served path mints. The zero value preserves the legacy leaf shape (plus an
 	// always-present Subject Key Identifier).
-	leafProfile          crypto.LeafProfile
-	licensedLeafSigner   LicensedLeafSigner
-	licensedCSRInspector LicensedCSRInspector
+	leafProfile               crypto.LeafProfile
+	licensedLeafSigner        LicensedLeafSigner
+	licensedCSRInspector      LicensedCSRInspector
+	licensedCSRParser         LicensedCSRParser
+	licensedSPIFFESVIDFactory LicensedSPIFFESVIDFactory
 
 	// plugins is the served WASM-plugin surface (ARCH-007/SUPPLY-004): operator-
 	// supplied connector plugins loaded from a directory, each only after its
@@ -747,6 +751,8 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		leafProfile:               d.LeafProfile,
 		licensedLeafSigner:        d.LicensedLeafSigner,
 		licensedCSRInspector:      d.LicensedCSRInspector,
+		licensedCSRParser:         d.LicensedCSRParser,
+		licensedSPIFFESVIDFactory: d.LicensedSPIFFESVIDFactory,
 		licensedBackgroundWorkers: d.LicensedBackgroundWorkers,
 		registry:                  observ.NewRegistry(),
 		egress:                    d.EgressGuard,
@@ -1238,7 +1244,8 @@ func (s *Server) kemCustody() KEMCustody {
 func (s *Server) protocolLeafIssuer(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) ProtocolLeafIssuer {
 	return func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte) ([]byte, error) {
 		issuer := &protocolIssuer{
-			issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile, inspectLicensedCSR: s.licensedCSRInspector,
+			issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile,
+			inspectLicensedCSR: s.licensedCSRInspector, parseLicensedCSR: s.licensedCSRParser,
 			orch: orch, idem: idem, store: d.Store, log: d.Log, caID: IssuingCAID(),
 			defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile,
 			ensureCRL: ensureCRL, publishCRL: publishCRL,

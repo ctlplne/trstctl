@@ -11,6 +11,8 @@ const { apiMock } = vi.hoisted(() => ({
     createEnrollmentToken: vi.fn(),
     agents: vi.fn(),
     issueCertificate: vi.fn(),
+    protocolProfileStatus: vi.fn(),
+    activateProtocolProfile: vi.fn(),
   },
 }));
 
@@ -35,6 +37,16 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     apiMock.createEnrollmentToken.mockResolvedValue({ token: "BOOT-TOKEN-DESIGN-001" });
     apiMock.agents.mockResolvedValue([{ id: "agent-1", tenant_id: "t1", name: "edge-01", status: "online" }]);
     apiMock.issueCertificate.mockResolvedValue({ id: "id-1", tenant_id: "t1", name: "payments", kind: "x509_certificate", status: "issued" });
+    apiMock.protocolProfileStatus.mockResolvedValue({
+      profile: "eval",
+      active: false,
+      protocols: ["acme", "est", "scep", "cmp", "ssh", "tsa", "spiffe"],
+    });
+    apiMock.activateProtocolProfile.mockResolvedValue({
+      profile: "eval",
+      active: true,
+      protocols: ["acme", "est", "scep", "cmp", "ssh", "tsa", "spiffe"],
+    });
   });
 
   it("keeps the wizard order aligned with docs and names the issuance credential boundary", async () => {
@@ -44,6 +56,11 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     expect(screen.getByRole("heading", { name: "Connect an issuer" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Use internal CA" }));
     await waitFor(() => expect(apiMock.issuers).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "Next: enable protocols" }));
+
+    expect(await screen.findByRole("heading", { name: "Enable enrollment protocols" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Activate eval protocol profile" }));
+    await waitFor(() => expect(apiMock.activateProtocolProfile).toHaveBeenCalledTimes(1));
     await user.click(screen.getByRole("button", { name: "Next: issue certificate" }));
 
     expect(await screen.findByRole("heading", { name: "Issue your first certificate" })).toBeInTheDocument();

@@ -6956,6 +6956,12 @@
             },
             "type": "array"
           },
+          "controllers": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesPostureController"
+            },
+            "type": "array"
+          },
           "evidence_refs": {
             "items": {
               "type": "string"
@@ -6965,6 +6971,16 @@
           "generated_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "last_sync": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesPostureObject"
+            },
+            "type": "array"
           },
           "rbac_rules": {
             "items": {
@@ -7001,6 +7017,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/KubernetesPostureSummary"
           }
         },
         "required": [
@@ -7040,6 +7059,138 @@
           "api_group",
           "resource",
           "verbs"
+        ],
+        "type": "object"
+      },
+      "KubernetesPostureController": {
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "controller_id": {
+            "type": "string"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "failure_code": {
+            "type": "string"
+          },
+          "last_sync": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "integer"
+          },
+          "reconcile_complete": {
+            "type": "boolean"
+          },
+          "report_id": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "controller_id",
+          "cluster_id",
+          "report_id",
+          "reconcile_complete",
+          "last_sync",
+          "stale",
+          "observed",
+          "ready",
+          "pending",
+          "failed"
+        ],
+        "type": "object"
+      },
+      "KubernetesPostureObject": {
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "controller_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "public_hash": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "resource_version": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "ready",
+              "pending",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "uid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "controller_id",
+          "cluster_id",
+          "name",
+          "uid",
+          "resource_version",
+          "state",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "KubernetesPostureSummary": {
+        "properties": {
+          "complete_controllers": {
+            "type": "integer"
+          },
+          "controllers": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "observed": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "integer"
+          },
+          "stale_controllers": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "controllers",
+          "complete_controllers",
+          "stale_controllers",
+          "observed",
+          "ready",
+          "pending",
+          "failed"
         ],
         "type": "object"
       },
@@ -7177,6 +7328,12 @@
             },
             "type": "array"
           },
+          "controllers": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesPostureController"
+            },
+            "type": "array"
+          },
           "distribution_targets": {
             "items": {
               "type": "string"
@@ -7192,6 +7349,16 @@
           "generated_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "last_sync": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesPostureObject"
+            },
+            "type": "array"
           },
           "rbac_rules": {
             "items": {
@@ -7222,6 +7389,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/KubernetesPostureSummary"
           }
         },
         "required": [
@@ -12246,6 +12416,31 @@
         "required": [
           "name",
           "spec"
+        ],
+        "type": "object"
+      },
+      "ProtocolProfileStatus": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "profile": {
+            "enum": [
+              "eval"
+            ],
+            "type": "string"
+          },
+          "protocols": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "profile",
+          "active",
+          "protocols"
         ],
         "type": "object"
       },
@@ -31064,6 +31259,111 @@
         ],
         "summary": "Report no-code workload secret-injection coverage",
         "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/setup/protocols": {
+      "get": {
+        "operationId": "getProtocolProfile",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolProfileStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get the tenant-bound eval protocol profile status",
+        "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/setup/protocols/activate": {
+      "post": {
+        "operationId": "activateProtocolProfile",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolProfileStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Activate the tenant-bound eval protocol profile",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/ssh/attested-user-certs": {

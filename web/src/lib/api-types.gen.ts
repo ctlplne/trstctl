@@ -1811,8 +1811,11 @@ export interface KubernetesCSRSupport {
   architecture_controls: string[];
   capability: string;
   controller_flow: string[];
+  controllers?: KubernetesPostureController[];
   evidence_refs: string[];
   generated_at: string;
+  last_sync?: string;
+  objects?: KubernetesPostureObject[];
   rbac_rules: KubernetesCSRSupportRule[];
   recommended_next_actions: string[];
   residuals: string[];
@@ -1820,12 +1823,49 @@ export interface KubernetesCSRSupport {
   served: boolean;
   signer_names: string[];
   status_fields: string[];
+  summary?: KubernetesPostureSummary;
 }
 
 export interface KubernetesCSRSupportRule {
   api_group: string;
   resource: string;
   verbs: string[];
+}
+
+export interface KubernetesPostureController {
+  cluster_id: string;
+  controller_id: string;
+  failed: number;
+  failure_code?: string;
+  last_sync: string;
+  observed: number;
+  pending: number;
+  ready: number;
+  reconcile_complete: boolean;
+  report_id: string;
+  stale: boolean;
+}
+
+export interface KubernetesPostureObject {
+  cluster_id: string;
+  controller_id: string;
+  name: string;
+  namespace?: string;
+  public_hash?: string;
+  reason: string;
+  resource_version: string;
+  state: "ready" | "pending" | "failed";
+  uid: string;
+}
+
+export interface KubernetesPostureSummary {
+  complete_controllers: number;
+  controllers: number;
+  failed: number;
+  observed: number;
+  pending: number;
+  ready: number;
+  stale_controllers: number;
 }
 
 export interface KubernetesSecretOperator {
@@ -1858,15 +1898,19 @@ export interface KubernetesTrustBundleDistribution {
   architecture_controls: string[];
   capability: string;
   controller_flow: string[];
+  controllers?: KubernetesPostureController[];
   distribution_targets: string[];
   evidence_refs: string[];
   generated_at: string;
+  last_sync?: string;
+  objects?: KubernetesPostureObject[];
   rbac_rules: KubernetesCSRSupportRule[];
   recommended_next_actions: string[];
   residuals: string[];
   resource: string;
   served: boolean;
   status_fields: string[];
+  summary?: KubernetesPostureSummary;
 }
 
 export interface MCPToolCall {
@@ -3153,6 +3197,12 @@ export interface ProfileList {
 export interface ProfileRequest {
   name: string;
   spec: Record<string, unknown>;
+}
+
+export interface ProtocolProfileStatus {
+  active: boolean;
+  profile: "eval";
+  protocols: string[];
 }
 
 export interface RCARequest {

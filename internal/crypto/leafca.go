@@ -455,6 +455,20 @@ func SignAgentClientCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, 
 // unconstrained for legacy callers, but once one SAN allow-list is present, every
 // requested SAN type must have its own matching allow-list.
 func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof LeafProfile) error {
+	return EnforceLeafProfileInfo(CSRInfo{
+		DNSNames:       append([]string(nil), csr.DNSNames...),
+		IPAddresses:    ipStrings(csr.IPAddresses),
+		EmailAddresses: append([]string(nil), csr.EmailAddresses...),
+		URIs:           uriStrings(csr.URIs),
+		CommonName:     csr.Subject.CommonName,
+	}, ttl, prof)
+}
+
+// EnforceLeafProfileInfo applies the served leaf-profile constraints to a
+// backend-agnostic CSR view. Opaque subject algorithms use this after their
+// edition verifier authenticates the PKCS#10 signature; classical requests use
+// the same implementation through enforceLeafProfile above.
+func EnforceLeafProfileInfo(info CSRInfo, ttl time.Duration, prof LeafProfile) error {
 	if prof.MaxValidity > 0 && ttl > prof.MaxValidity {
 		return &leafProfileError{fmt.Sprintf("validity %s exceeds the profile ceiling %s", ttl, prof.MaxValidity)}
 	}
@@ -463,7 +477,7 @@ func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof Le
 	if err != nil {
 		return &leafProfileError{fmt.Sprintf("invalid permitted IP CIDR policy: %v", err)}
 	}
-	for _, name := range csr.DNSNames {
+	for _, name := range info.DNSNames {
 		if len(prof.PermittedDNSSuffixes) == 0 {
 			if sanPolicy {
 				return &leafProfileError{fmt.Sprintf("DNS SAN %q is not permitted by this profile", name)}
@@ -474,7 +488,11 @@ func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof Le
 			return &leafProfileError{fmt.Sprintf("DNS SAN %q is outside the permitted DNS suffixes %v", name, prof.PermittedDNSSuffixes)}
 		}
 	}
-	for _, ip := range csr.IPAddresses {
+	for _, rawIP := range info.IPAddresses {
+		ip := net.ParseIP(rawIP)
+		if ip == nil {
+			return &leafProfileError{fmt.Sprintf("IP SAN %q is malformed", rawIP)}
+		}
 		if len(prof.PermittedIPCIDRs) == 0 {
 			if sanPolicy {
 				return &leafProfileError{fmt.Sprintf("IP SAN %q is not permitted by this profile", ip.String())}
@@ -485,7 +503,7 @@ func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof Le
 			return &leafProfileError{fmt.Sprintf("IP SAN %q is outside the permitted CIDRs %v", ip.String(), prof.PermittedIPCIDRs)}
 		}
 	}
-	for _, email := range csr.EmailAddresses {
+	for _, email := range info.EmailAddresses {
 		if len(prof.PermittedEmailDomains) == 0 {
 			if sanPolicy {
 				return &leafProfileError{fmt.Sprintf("email SAN %q is not permitted by this profile", email)}
@@ -496,8 +514,7 @@ func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof Le
 			return &leafProfileError{fmt.Sprintf("email SAN %q is outside the permitted email domains %v", email, prof.PermittedEmailDomains)}
 		}
 	}
-	for _, uri := range csr.URIs {
-		raw := uri.String()
+	for _, raw := range info.URIs {
 		if len(prof.PermittedURIPrefixes) == 0 {
 			if sanPolicy {
 				return &leafProfileError{fmt.Sprintf("URI SAN %q is not permitted by this profile", raw)}

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Out-of-process dynamic-secret and secret-sync DoD substrate.
 
-HTTP integrations are vendor-wire-faithful emulators. Database entries launch the
-official PostgreSQL/MySQL/MongoDB/Redis containers and expose only a control/readback
-endpoint; trstctl talks to the actual database port, never to a fixture adapter.
+HTTP integrations are vendor-wire-faithful emulators, including HCP Terraform's
+workspace Variables JSON:API and Vault/OpenBao KV v2 read/CAS/write semantics.
+Database entries launch the official PostgreSQL/MySQL/MongoDB/Redis containers and
+expose only a control/readback endpoint; trstctl talks to the actual database port,
+never to a fixture adapter.
 """
 
 from __future__ import annotations
@@ -699,6 +701,10 @@ class Handler(BaseHTTPRequestHandler):
             self._vercel_sync(parsed.path, body)
         elif entry == "secret_sync.kubernetes_secrets":
             self._kubernetes_sync(method, parsed.path, body)
+        elif entry == "secrets_residuals.terraform_opentofu_native_sync":
+            self._terraform_sync(method, parsed, body)
+        elif entry == "secrets_residuals.vault_kv_outbound_sync":
+            self._vault_sync(method, parsed.path, body)
         else:
             self.send_body(404)
 
@@ -812,6 +818,153 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("Authorization") != expected:
             self.send_body(401); return
         payload = json.loads(body); self.state.values[payload["key"]] = base64.b64decode(payload["encoded_value"]); self.state.synced = True; self.send_body(200)
+
+    def _terraform_sync(self, method: str, parsed, body: bytes) -> None:
+        operation = self.headers.get("Idempotency-Key", "")
+        collection = "/api/v2/workspaces/ws-dod-opentofu/vars"
+        valid_headers = (
+            self.headers.get("Authorization") == "Bearer dod-terraform-token" and
+            self.headers.get("Accept") == "application/vnd.api+json" and
+            self.headers.get("Content-Type") == "application/vnd.api+json" and
+            bool(operation)
+        )
+        try:
+            payload = json.loads(body)
+            data = payload["data"]
+            attributes = data["attributes"]
+            key = attributes["key"]
+            value = attributes["value"]
+            description = attributes["description"]
+            expected_description = (
+                "DOD managed variable; operation-sha256=" +
+                hashlib.sha256(operation.encode()).hexdigest()
+            )
+            native_shape = (
+                set(payload) == {"data"} and data.get("type") == "vars" and
+                isinstance(key, str) and bool(key) and isinstance(value, str) and
+                attributes.get("category") == "env" and attributes.get("hcl") is False and
+                attributes.get("sensitive") is True and description == expected_description and
+                operation not in description and "provider" not in attributes and
+                "encoded_value" not in attributes
+            )
+        except (AttributeError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            native_shape = False
+            key = value = description = ""
+            data = {}
+        valid_path = (
+            (method == "POST" and parsed.path == collection and not data.get("id")) or
+            (method == "PATCH" and parsed.path.startswith(collection + "/") and
+             data.get("id") == unquote(parsed.path.removeprefix(collection + "/")))
+        )
+        if not valid_headers or not native_shape or not valid_path:
+            with self.state.lock:
+                self.state.protocol_errors += 1
+            self.send_body(400)
+            return
+        with self.state.lock:
+            existing = self.state.terraform_variables.get(key)
+            if method == "POST" and existing is not None:
+                self.send_body(422)
+                return
+            if method == "PATCH" and (existing is None or existing["id"] != data["id"]):
+                self.send_body(404)
+                return
+            variable_id = data.get("id") or "var-dod-1"
+            self.state.terraform_variables[key] = {
+                "id": variable_id,
+                "key": key,
+                "description": description,
+                "category": "env",
+                "hcl": False,
+                "sensitive": True,
+                "operation": operation,
+            }
+            self.state.values[key] = value.encode()
+            self.state.sync_operations[operation] = (key, value.encode())
+            self.state.sync_versions[key] = self.state.sync_versions.get(key, 0) + 1
+            self.state.native_wire = True
+            self.state.sensitive = True
+            self.state.category = "env"
+            self.state.synced = True
+        response = {
+            "data": {
+                "id": variable_id,
+                "type": "vars",
+                "attributes": {
+                    "key": key,
+                    "description": description,
+                    "category": "env",
+                    "hcl": False,
+                    "sensitive": True,
+                },
+            },
+        }
+        self.send_body(201 if method == "POST" else 200,
+                       json.dumps(response).encode(), "application/vnd.api+json")
+
+    def _vault_sync(self, method: str, path: str, body: bytes) -> None:
+        operation = self.headers.get("Idempotency-Key", "")
+        prefix = "/v1/team-secrets/data/apps/"
+        valid_headers = (
+            method == "POST" and path.startswith(prefix) and
+            self.headers.get("X-Vault-Token") == "dod-vault-token" and
+            self.headers.get("X-Vault-Namespace") == "platform/team-a" and
+            self.headers.get("Content-Type") == "application/json" and bool(operation)
+        )
+        try:
+            payload = json.loads(body)
+            options = payload["options"]
+            data = payload["data"]
+            cas = options["cas"]
+            key = unquote(path.removeprefix(prefix))
+            native_shape = (
+                set(payload) == {"options", "data"} and set(options) == {"cas"} and
+                isinstance(cas, int) and cas >= 0 and isinstance(data, dict) and bool(key) and
+                isinstance(data.get("value"), str) and
+                all(isinstance(name, str) and isinstance(value, str) for name, value in data.items()) and
+                "provider" not in data and "encoded_value" not in data
+            )
+        except (AttributeError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            native_shape = False
+            cas = -1
+            key = ""
+            data = {}
+        if not valid_headers or not native_shape:
+            with self.state.lock:
+                self.state.protocol_errors += 1
+            self.send_body(400)
+            return
+        with self.state.lock:
+            record = self.state.vault_records.get(key)
+            if record is None or cas != record["version"]:
+                self.state.protocol_errors += 1
+                self.send_body(400, b'{"errors":["check-and-set parameter did not match current version"]}')
+                return
+            if key not in self.state.vault_race_injected:
+                # Race the first CAS after its read. A correct pusher must re-read
+                # version 2, preserve the independently changed sibling field,
+                # and retry with cas=2.
+                record["version"] += 1
+                record["data"] = {"owner": b"concurrent-writer", "value": b"concurrent-value"}
+                self.state.vault_race_injected.add(key)
+                self.state.cas_conflicts += 1
+                self.send_body(400, b'{"errors":["check-and-set parameter did not match current version"]}')
+                return
+            preserved = data.get("owner") == "concurrent-writer"
+            if not preserved:
+                self.state.protocol_errors += 1
+                self.send_body(409)
+                return
+            record["version"] += 1
+            record["data"] = {name: value.encode() for name, value in data.items()}
+            self.state.values[key] = record["data"]["value"]
+            self.state.sync_operations[operation] = (key, self.state.values[key])
+            self.state.sync_versions[key] = self.state.sync_versions.get(key, 0) + 1
+            self.state.cas_preserved = True
+            self.state.native_wire = True
+            self.state.synced = True
+            version = record["version"]
+        self.send_body(200, json.dumps({"data": {"version": version}}).encode())
 
     def _aws_sync(self, parsed, body: bytes) -> None:
         if not self._verify_sigv4(

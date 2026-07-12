@@ -50,12 +50,31 @@ func NewFactory() server.KMIPFactory {
 		if logger == nil {
 			logger = slog.Default()
 		}
+		if d.EventLog == nil {
+			return nil, errors.New("KMIP requires the source-of-truth event log")
+		}
+		if d.KeyWrapper == nil {
+			return nil, errors.New("KMIP requires a stable envelope key wrapper")
+		}
+		replayCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		service, err := NewDurable(
+			replayCtx,
+			firstNonEmpty(cfg.TenantID, d.ProtocolTenant),
+			VerifiedClientCertAuthenticator{},
+			audit.NewAuditor(d.EventLog),
+			d.EventLog,
+			d.KeyWrapper,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("restore KMIP managed-object state: %w", err)
+		}
 		return &Runtime{
 			addr:         addr,
 			certFile:     cfg.CertFile,
 			keyFile:      cfg.KeyFile,
 			clientCAFile: cfg.ClientCAFile,
-			service:      New(firstNonEmpty(cfg.TenantID, d.ProtocolTenant), VerifiedClientCertAuthenticator{}, audit.NewAuditor(d.EventLog)),
+			service:      service,
 			pool:         pool,
 			log:          logger,
 		}, nil

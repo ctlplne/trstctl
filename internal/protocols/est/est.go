@@ -81,6 +81,8 @@ type Server struct {
 	profile                      string   // the certificate profile this endpoint binds (S8.1)
 	pool                         *bulkhead.Pool
 	log                          *events.Log
+	verifyCSR                    func([]byte) error
+	inspectCSR                   func([]byte) (crypto.CSRInfo, error)
 	mux                          *http.ServeMux
 }
 
@@ -99,6 +101,11 @@ type Config struct {
 	ProfileName                  string
 	Pool                         *bulkhead.Pool // AN-7; nil runs inline
 	Log                          *events.Log    // AN-2; nil disables audit emit
+	// CSRVerifier/CSRInspector are feature-neutral production seams for subject
+	// algorithms not yet understood by the Go toolchain. Nil uses the strict
+	// internal/crypto classical parser.
+	CSRVerifier  func([]byte) error
+	CSRInspector func([]byte) (crypto.CSRInfo, error)
 }
 
 // New builds the EST server.
@@ -108,6 +115,13 @@ func New(cfg Config) *Server {
 		channelBindingRequired: cfg.ChannelBindingRequired, channelBindingCertificateDER: cfg.ChannelBindingCertificateDER, mtlsClientCAsDER: cfg.MTLSClientCAsDER,
 		principalLimit: cfg.MaxEnrollmentsPerPrincipal, principalWindow: cfg.PrincipalRateLimitWindow,
 		auth: cfg.Auth, caChain: cfg.CAChainDER, profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
+		verifyCSR: cfg.CSRVerifier, inspectCSR: cfg.CSRInspector,
+	}
+	if s.verifyCSR == nil {
+		s.verifyCSR = crypto.VerifyCertificateRequest
+	}
+	if s.inspectCSR == nil {
+		s.inspectCSR = crypto.InspectCSR
 	}
 	if cfg.MaxEnrollmentsPerPrincipal > 0 {
 		s.principalLimiter = newWindowCounter(time.Now)
@@ -215,6 +229,10 @@ func (s *Server) csrattrs(w http.ResponseWriter, _ *http.Request) {
 // its self-signature. It fails closed on oversize, bad base64, or an unparseable
 // CSR — the fuzz target.
 func parseEnrollBody(r io.Reader) ([]byte, error) {
+	return parseEnrollBodyWithVerifier(r, crypto.VerifyCertificateRequest)
+}
+
+func parseEnrollBodyWithVerifier(r io.Reader, verify func([]byte) error) ([]byte, error) {
 	raw, err := bodylimit.ReadAll(r, maxEnrollBody)
 	if err != nil {
 		return nil, err
@@ -223,7 +241,7 @@ func parseEnrollBody(r io.Reader) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("est: body is not valid base64 PKCS#10")
 	}
-	if err := crypto.VerifyCertificateRequest(der); err != nil {
+	if verify == nil || verify(der) != nil {
 		return nil, errors.New("est: invalid CSR")
 	}
 	return der, nil
@@ -247,7 +265,7 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 		if !s.authorize(w, r, opType) {
 			return
 		}
-		csrDER, err := parseEnrollBody(r.Body)
+		csrDER, err := parseEnrollBodyWithVerifier(r.Body, s.verifyCSR)
 		if err != nil {
 			if errors.Is(err, bodylimit.ErrTooLarge) {
 				s.audit(r.Context(), opType, "deny", "request body too large")
@@ -326,7 +344,7 @@ func (s *Server) allowPrincipalEnrollment(r *http.Request, csrDER []byte) (bool,
 	if s.principalLimit <= 0 || s.principalLimiter == nil {
 		return true, nil
 	}
-	info, err := crypto.InspectCSR(csrDER)
+	info, err := s.inspectCSR(csrDER)
 	if err != nil {
 		return false, err
 	}
@@ -344,7 +362,7 @@ func (s *Server) serverKeygenHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, opType) {
 		return
 	}
-	csrDER, err := parseEnrollBody(r.Body)
+	csrDER, err := parseEnrollBodyWithVerifier(r.Body, s.verifyCSR)
 	if err != nil {
 		if errors.Is(err, bodylimit.ErrTooLarge) {
 			s.audit(r.Context(), opType, "deny", "request body too large")

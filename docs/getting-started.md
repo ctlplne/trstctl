@@ -86,9 +86,10 @@ still run side by side.
 
 Visit <https://localhost:8443> (accept the self-signed evaluation certificate) and
 sign in. On a fresh install you land on a
-**Get started** prompt that launches the setup wizard. The wizard has four
-screens: use the internal CA, issue the first certificate with an issuer
-credential, enroll an agent, and complete setup.
+**Get started** prompt that launches the setup wizard. The wizard has five
+screens: use the internal CA, activate the tenant-bound evaluation enrollment
+profile, issue the first certificate with an issuer credential, enroll an agent,
+and complete setup.
 
 ## 3. Run the wizard (about 10 minutes)
 
@@ -98,6 +99,17 @@ In **Use the internal CA**, continue with the signer-backed X.509 CA that the
 server provisioned at boot. This first certificate flow does not create an
 external issuer. External X.509 issuers require a certificate chain and are added
 after setup from the issuers/API surface.
+
+### Enable enrollment protocols
+
+The blank Compose stack assembles the explicit `eval` profile for its evaluation
+tenant. In **Enable enrollment protocols**, review the seven shipped responders and
+click **Activate eval protocol profile**. The UI calls the authenticated mutation at
+`POST /api/v1/setup/protocols/activate`; the server records the activation in the event
+log before opening ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE. This state survives a
+restart and cannot activate another tenant's profile. A production deployment that
+uses individual protocol toggles reports that the eval profile is unavailable and lets
+the wizard continue without changing operator configuration.
 
 ### Issue your first cert
 
@@ -168,9 +180,9 @@ for how to get the `trstctl-agent` binary on Linux, macOS, and Windows.
 
 ### Complete setup
 
-In **Complete setup**, confirm the internal CA, issued certificate, and enrolled
-agent summary. The wizard latches closed in this browser and sends you to the
-certificate operations view.
+In **Complete setup**, confirm the internal CA, protocol profile, issued certificate,
+and enrolled agent summary. The wizard latches closed in this browser and sends you to
+the certificate operations view.
 
 ## Get your first API token
 
@@ -205,6 +217,12 @@ token. With the API token you minted above (see the [CLI reference](cli.md)):
 export TRSTCTL_SERVER=https://localhost:8443
 export TRSTCTL_BOOTSTRAP_TOKEN=trst_...
 export TRSTCTL_TOKEN="$TRSTCTL_BOOTSTRAP_TOKEN"
+
+# The blank Compose stack selects PROFILE=eval. Activate the assembled responders
+# for this authenticated tenant before using their public protocol endpoints.
+curl -fksS -X POST "$TRSTCTL_SERVER/api/v1/setup/protocols/activate" \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Idempotency-Key: first-run-eval-protocols"
 
 # Create an owner and an identity; the id of each is in its JSON.
 owner=$(echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f - | jq -r .id)

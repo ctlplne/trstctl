@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/protocols/spiffe/workloadpb"
 )
 
@@ -51,14 +52,43 @@ type WorkloadAPIServer struct {
 	// permissions on the socket; richer peer-credential attestation (uid/gid/path)
 	// is layered on top (S11.2). Empty means every registration entry with no
 	// selectors is unreachable and entries are matched by these defaults.
-	selectors []string
+	selectors                []string
+	additionalX509SVIDIssuer AdditionalX509SVIDIssuer
+}
+
+// AdditionalX509SVID is one extra key/certificate pair in the standard
+// repeated X509SVID response. It is the feature-neutral extension point used by
+// a licensed hybrid issuer; core neither names nor implements that algorithm.
+type AdditionalX509SVID struct {
+	CertificateDER  []byte
+	PrivateKeyPKCS8 []byte
+	Hint            string
+}
+
+// AdditionalX509SVIDIssuer mints a second key/certificate pair for the same
+// authorized SPIFFE ID. Implementations receive the classical SVID expiry so
+// both halves of the hybrid identity rotate together.
+type AdditionalX509SVIDIssuer interface {
+	IssueAdditionalX509SVID(context.Context, string, time.Time) (AdditionalX509SVID, error)
+}
+
+type WorkloadAPIOption func(*WorkloadAPIServer)
+
+func WithAdditionalX509SVIDIssuer(issuer AdditionalX509SVIDIssuer) WorkloadAPIOption {
+	return func(s *WorkloadAPIServer) { s.additionalX509SVIDIssuer = issuer }
 }
 
 // NewWorkloadAPIServer wraps a spiffe.Server as the gRPC Workload API service.
 // callerSelectors are the selectors attributed to a local UDS caller (so the
 // registration entries whose selectors are a subset are issued).
-func NewWorkloadAPIServer(wl *Server, callerSelectors []string) *WorkloadAPIServer {
-	return &WorkloadAPIServer{wl: wl, selectors: append([]string(nil), callerSelectors...)}
+func NewWorkloadAPIServer(wl *Server, callerSelectors []string, opts ...WorkloadAPIOption) *WorkloadAPIServer {
+	s := &WorkloadAPIServer{wl: wl, selectors: append([]string(nil), callerSelectors...)}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+	return s
 }
 
 // requireSecurityHeader enforces the mandatory workload.spiffe.io:true metadata on
@@ -93,6 +123,7 @@ func (s *WorkloadAPIServer) FetchX509SVID(_ *workloadpb.X509SVIDRequest, stream 
 	if err != nil {
 		return err
 	}
+	defer destroyX509SVIDResponse(resp)
 	return stream.Send(resp)
 }
 
@@ -120,23 +151,61 @@ func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloa
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "spiffe: marshal workload key: %v", err)
 	}
+	defer secret.Wipe(keyPKCS8)
 
 	resp := &workloadpb.X509SVIDResponse{}
+	complete := false
+	defer func() {
+		if !complete {
+			destroyX509SVIDResponse(resp)
+		}
+	}()
 	for _, svid := range svids {
 		// SPIFFE Workload API X509SVID: x509_svid is the leaf+intermediates DER
 		// concatenated, x509_svid_key is the PKCS#8 DER private key, bundle is the
 		// trust-domain CA DER concatenated.
-		resp.Svids = append(resp.Svids, &workloadpb.X509SVID{
+		classical := &workloadpb.X509SVID{
 			SpiffeId:    svid.SPIFFEID,
 			X509Svid:    concatDER(svid.CertChain),
-			X509SvidKey: keyPKCS8,
+			X509SvidKey: append([]byte(nil), keyPKCS8...),
 			Bundle:      concatDER(svid.Bundle),
-		})
+		}
+		if s.additionalX509SVIDIssuer != nil {
+			classical.Hint = "trstctl-hybrid-classical"
+		}
+		resp.Svids = append(resp.Svids, classical)
+		if s.additionalX509SVIDIssuer != nil {
+			additional, err := s.additionalX509SVIDIssuer.IssueAdditionalX509SVID(ctx, svid.SPIFFEID, svid.ExpiresAt)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "spiffe: issue additional X509-SVID: %v", err)
+			}
+			if len(additional.CertificateDER) == 0 || len(additional.PrivateKeyPKCS8) == 0 || additional.Hint == "" || additional.Hint == classical.Hint {
+				secret.Wipe(additional.PrivateKeyPKCS8)
+				return nil, status.Error(codes.Internal, "spiffe: additional X509-SVID issuer returned an incomplete pair")
+			}
+			resp.Svids = append(resp.Svids, &workloadpb.X509SVID{
+				SpiffeId: svid.SPIFFEID, X509Svid: append([]byte(nil), additional.CertificateDER...),
+				X509SvidKey: additional.PrivateKeyPKCS8, Bundle: concatDER(svid.Bundle), Hint: additional.Hint,
+			})
+		}
 	}
 	if len(resp.Svids) == 0 {
 		return nil, status.Error(codes.PermissionDenied, "spiffe: no identity issued for caller selectors")
 	}
+	complete = true
 	return resp, nil
+}
+
+func destroyX509SVIDResponse(resp *workloadpb.X509SVIDResponse) {
+	if resp == nil {
+		return
+	}
+	for _, svid := range resp.Svids {
+		if svid != nil {
+			secret.Wipe(svid.X509SvidKey)
+			svid.X509SvidKey = nil
+		}
+	}
 }
 
 // FetchX509Bundles streams the trust-domain X.509 bundle (for clients that only

@@ -21,6 +21,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent"
 	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
+	"trstctl.com/trstctl/internal/agent/k8s"
 	"trstctl.com/trstctl/internal/agent/transport"
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -37,6 +38,33 @@ func TestBootstrapTokenFileLoadsTrimmedToken(t *testing.T) {
 	}
 	if !bytes.Equal(got, []byte("trst_bootstrap_secret")) {
 		t.Fatalf("token = %q, want trimmed token", got)
+	}
+}
+
+func TestKubernetesControllerPostureWireConversionIsMetadataOnly(t *testing.T) {
+	report := k8s.ControllerPostureReport{
+		ReportID:  "33333333-3333-3333-3333-333333333333",
+		ClusterID: "sha256:" + strings.Repeat("a", 64), ReconcileIntervalSeconds: 30,
+		CertificateSigning: k8s.PostureSection{Complete: true, Resources: []k8s.PostureResource{{
+			Name: "web-csr", UID: "csr-uid", ResourceVersion: "17", State: "ready", Reason: "signed", PublicHash: strings.Repeat("b", 64),
+		}}},
+		TrustBundles: k8s.PostureSection{Complete: false, FailureCode: "reconcile_failed", Resources: []k8s.PostureResource{{
+			Name: "corp-roots", UID: "bundle-uid", ResourceVersion: "9", State: "failed", Reason: "controller_error",
+		}}},
+	}
+	wire := transportKubernetesPostureReport(report)
+	if wire.ReportID != report.ReportID || wire.CertificateSigning.Resources[0].ResourceVersion != "17" || wire.TrustBundles.FailureCode != "reconcile_failed" {
+		t.Fatalf("wire report = %+v", wire)
+	}
+	raw, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := strings.ToLower(string(raw))
+	for _, forbidden := range []string{"private_key", "ca_bundle_pem", "csr_der", "certificate_pem", "bearer", "token"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("metadata-only Kubernetes report contains %q: %s", forbidden, raw)
+		}
 	}
 }
 

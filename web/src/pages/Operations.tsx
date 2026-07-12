@@ -51,15 +51,17 @@ type OperationRow =
       approval: ApprovalQueueRow;
     };
 
-const statusOptions = [
-  { value: "", label: "All statuses" },
-  { value: "running", label: "Running" },
-  { value: "succeeded", label: "Succeeded" },
-  { value: "failed", label: "Failed" },
-  { value: "delivered", label: "Delivered" },
-  { value: "queued", label: "Queued" },
-  { value: "awaiting_approval", label: "Awaiting approval" },
-];
+function statusOptions(queuedLabel: string) {
+  return [
+    { value: "", label: "All statuses" },
+    { value: "running", label: "Running" },
+    { value: "succeeded", label: "Succeeded" },
+    { value: "failed", label: "Failed" },
+    { value: "delivered", label: "Delivered" },
+    { value: "queued", label: queuedLabel },
+    { value: "awaiting_approval", label: "Awaiting approval" },
+  ];
+}
 
 const typeOptions: Array<{ value: "" | OperationType; label: string }> = [
   { value: "", label: "All types" },
@@ -69,6 +71,7 @@ const typeOptions: Array<{ value: "" | OperationType; label: string }> = [
 ];
 
 export function Operations() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<OperationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Notice | null>(null);
@@ -176,7 +179,7 @@ export function Operations() {
             onChange={(event) => setStatusFilter(event.target.value)}
             className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
           >
-            {statusOptions.map((option) => (
+            {statusOptions(t("operations.status.queued")).map((option) => (
               <option key={option.value || "all"} value={option.value}>
                 {option.label}
               </option>

@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 )
 
@@ -33,6 +34,9 @@ type KMIPFactoryDeps struct {
 	Bulkhead       *bulkhead.Set
 	Log            *slog.Logger
 	EventLog       *events.Log
+	// KeyWrapper envelope-seals KMIP object material before immutable state
+	// events are appended. The licensed factory fails closed when it is absent.
+	KeyWrapper seal.KeyWrapper
 }
 
 func (s *Server) configureKMIPSurface(d Deps) error {
@@ -46,6 +50,7 @@ func (s *Server) configureKMIPSurface(d Deps) error {
 		Bulkhead:       s.bulk,
 		Log:            s.logger,
 		EventLog:       d.Log,
+		KeyWrapper:     d.KEK,
 	})
 	if err != nil {
 		return fmt.Errorf("server: configure KMIP: %w", err)
