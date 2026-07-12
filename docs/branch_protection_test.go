@@ -61,6 +61,7 @@ var branchProtectionExemptCIJobs = map[string]string{
 	"branch protection / live policy drift": "scheduled/manual-only drift verifier; it audits the live GitHub branch-protection settings outside the PR path",
 	"captured soak / leak gate":             "scheduled/manual-only endurance verifier; it publishes captured soak trend evidence outside the PR path and cannot be required on pull_request",
 	"spine burst / replay-outbox gate":      "scheduled/manual-only event-spine capacity verifier; it boots embedded datastores, publishes replay/outbox trend evidence, and cannot be required on pull_request",
+	"perf live / served hot-path load gate": "scheduled/manual-only served-load verifier; too load-sensitive for shared per-PR runners. Promoted to required by the per-PR 'scheduled gates / nightly freshness' check",
 }
 
 // TestBranchProtectionMatchesCIJobs is the TEST-006 reality-test for the codified
@@ -199,6 +200,54 @@ func TestChaosGateExecutesFaultMatrix(t *testing.T) {
 	} {
 		if !strings.Contains(matrix, want) {
 			t.Fatalf("chaos fault matrix no longer names %q (RESIL-003)", want)
+		}
+	}
+}
+
+// TestScheduledAndReleaseGatePromotionsAreRequired is the OPS-CI-101..107
+// acceptance: the vdec release gate rides the required build/test/lint job
+// exactly like the xrec/PCAS family (OPS-CI-103/104), reproducible-check gates
+// every PR as its own required job (OPS-CI-102), perf-live runs on the nightly
+// schedule (OPS-CI-101), and the scheduled-only verifiers (captured soak, spine
+// burst, live branch-protection drift, perf live) are promoted to REQUIRED via
+// the per-PR "scheduled gates / nightly freshness" check, which fails closed
+// when the latest scheduled run is missing, stale, red, or silently skipped a
+// promoted job (OPS-CI-105/106/107).
+func TestScheduledAndReleaseGatePromotionsAreRequired(t *testing.T) {
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"run: make vdec-release-gate",
+		"name: reproducible build (byte-identical rebuild)",
+		"run: make reproducible-check",
+		"name: perf live / served hot-path load gate",
+		"run: make perf-live",
+		"name: scheduled gates / nightly freshness",
+		"run: scripts/ci/verify-scheduled-gates.sh",
+		"bash scripts/ci/verify-scheduled-gates_selftest.sh",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Fatalf("ci.yml must contain %q (OPS-CI-101..107 gate promotion)", want)
+		}
+	}
+	policy := read(t, "../.github/branch-protection.json")
+	for _, want := range []string{
+		`"reproducible build (byte-identical rebuild)"`,
+		`"scheduled gates / nightly freshness"`,
+	} {
+		if !strings.Contains(policy, want) {
+			t.Fatalf("branch-protection.json must require %s (OPS-CI-101..107)", want)
+		}
+	}
+	freshness := read(t, "../scripts/ci/verify-scheduled-gates.sh")
+	for _, want := range []string{
+		"captured soak / leak gate",
+		"spine burst / replay-outbox gate",
+		"branch protection / live policy drift",
+		"perf live / served hot-path load gate",
+		"TRSTCTL_SCHEDULED_GATES_MAX_AGE_HOURS",
+	} {
+		if !strings.Contains(freshness, want) {
+			t.Fatalf("verify-scheduled-gates.sh must enforce %q (OPS-CI-105/106/107)", want)
 		}
 	}
 }

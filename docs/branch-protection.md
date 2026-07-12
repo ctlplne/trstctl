@@ -71,6 +71,8 @@ required set.
 | `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint, with PKIOperation request/response transcripts archived |
 | `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe fetches and validates X.509-SVID and JWT-SVID paths from the served Workload API Unix socket; spiffe-helper writes the served X.509-SVID, key, and trust bundle |
 | `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose eval stack boots real PostgreSQL, JetStream, isolated signer, served issuance/revocation, and PKI profile linting |
+| `reproducible build (byte-identical rebuild)` | `ci.yml` | Shipped binaries and image layers rebuild byte/layer-identical on every PR (OPS-CI-102) |
+| `scheduled gates / nightly freshness` | `ci.yml` | Fails closed unless the latest scheduled run is fresh (≤26h), green, and actually executed every promoted nightly gate — captured soak, spine burst, live branch-protection drift, and perf live (OPS-CI-101/105/106/107). This is how scheduled-only verifiers are REQUIRED in effect: a stale, red, or silently-skipped nightly blocks merge |
 | `windows cross-build` | `ci.yml` | Whole module cross-compiles for Windows |
 | `fips-capable build (GOFIPS140)` | `ci.yml` | All binaries build with the FIPS-capable Go toolchain setting (`GOFIPS140`) and run the FIPS crypto self-test path |
 | `windows / test + MSI` | `ci.yml` | Windows agent surface (real cert store) + MSI |

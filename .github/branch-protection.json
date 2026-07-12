@@ -24,6 +24,8 @@
       "scep client conformance (sscep transcript)",
       "spiffe workload api conformance (go-spiffe + helper)",
       "compose e2e + PKI conformance (EXC-GATE-01)",
+      "reproducible build (byte-identical rebuild)",
+      "scheduled gates / nightly freshness",
       "windows cross-build",
       "fips-capable build (GOFIPS140)",
       "windows / test + MSI",

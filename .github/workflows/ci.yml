@@ -113,6 +113,13 @@ jobs:
       - name: PCAS release gate
         run: make pcas-release-gate
 
+      # VDEC INT-WIRE/11: the vdec family gates every PR exactly like the
+      # xrec/PCAS family above — caller+wire conformance over real PostgreSQL,
+      # embedded NATS, and a cross-process signer, plus vectors, fuzz seeds,
+      # traceability, and edition/zero-removal (OPS-CI-103, OPS-CI-104).
+      - name: VDEC release gate
+        run: make vdec-release-gate
+
       - name: Editions gate
         run: make editions-gate
 
@@ -154,6 +161,7 @@ jobs:
           bash scripts/ci/check-base-pinned_selftest.sh
           bash scripts/ci/verify-branch-protection_selftest.sh
           bash scripts/ci/verify-required-checks_selftest.sh
+          bash scripts/ci/verify-scheduled-gates_selftest.sh
           bash scripts/ci/profile-zlint_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
 
@@ -285,6 +293,79 @@ jobs:
           name: branch-protection-live-drift-receipt
           path: ${{ runner.temp }}/branch-protection-drift-receipt.json
           if-no-files-found: error
+
+  # OPS-CI-102: the shipped binaries and image layers must rebuild
+  # byte/layer-identical on every PR, not only when someone remembers to run it.
+  reproducible:
+    name: reproducible build (byte-identical rebuild)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Reproducible rebuild check
+        run: make reproducible-check
+
+  # OPS-CI-101: the served hot-path live load gate (realistic + peak phases).
+  # Too load-sensitive for shared per-PR runners, so it runs on the nightly
+  # schedule and is promoted to REQUIRED by the scheduled-gates freshness check.
+  perf-live:
+    name: perf live / served hot-path load gate
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Live load gate (realistic + peak phases)
+        env:
+          PERF_LIVE_OUT: ${{ runner.temp }}/perf-live.json
+        run: make perf-live
+
+      - name: Upload live perf SLO artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perf-live-slo
+          path: ${{ runner.temp }}/perf-live.json
+          if-no-files-found: error
+
+  # OPS-CI-105/106/107 (+ perf-live above): scheduled-only verifiers cannot be
+  # per-PR status checks, so this REQUIRED job fails closed unless the latest
+  # scheduled CI run is fresh, green, and actually executed every promoted
+  # nightly gate (captured soak, spine burst, live branch-protection drift,
+  # perf live). A stale, red, missing, or silently-skipped nightly blocks merge.
+  scheduled-freshness:
+    name: scheduled gates / nightly freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Verify the promoted nightly gates are fresh and green
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/verify-scheduled-gates.sh
 
   # Continuous-fuzzing regression net (FUZZ-003). The mandated "fuzz every parser
   # that touches untrusted input" (CLAUDE.md §6) is only a safety net if it RUNS:
