@@ -115,11 +115,16 @@ func Lint(raw []byte, opts Options) ([]Finding, error) {
 		add(Error, "e_leaf_is_ca", "an end-entity certificate must not assert CA=true")
 	}
 
-	// Key usage: must be present; a CA needs keyCertSign.
+	// Key usage: must be present; a CA needs keyCertSign, and a leaf must NOT
+	// assert keyCertSign (a mis-issued leaf that can sign certificates is a path
+	// to unauthorized issuance — the M11 mutation direction).
 	if !info.KeyUsageSet {
 		add(Error, "e_key_usage_absent", "keyUsage extension is absent or empty")
 	} else if info.IsCA && !info.KeyUsageCertSign {
 		add(Error, "e_ca_without_cert_sign", "a CA certificate must assert keyCertSign")
+	}
+	if opts.Leaf && info.KeyUsageCertSign {
+		add(Error, "e_leaf_asserts_cert_sign", "an end-entity certificate must not assert keyCertSign (it could sign other certificates)")
 	}
 
 	// SAN: a leaf MUST carry a subjectAltName (§4.2.1.6).

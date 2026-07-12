@@ -80,6 +80,7 @@ SERVER_LIFECYCLE_FUNCS := Build|IssueLeaf|Drain|Shutdown
 # merged -coverpkg profile, so it counts coverage delivered by cross-package
 # integration tests. Enforced by `make test` and the CI coverage gate (SF.1).
 CRITICAL_COVERAGE_MIN ?= 70
+EE_COVERAGE_MIN ?= 40
 
 .PHONY: help
 help: ## Show this help
@@ -333,6 +334,16 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate xrec-caller-gate vdec-caller-gate
 
 .PHONY: editions-gate
+.PHONY: ee-test
+ee-test: ## Run the ee/ unit tests with a coverage floor (TEST-EE-CI-001)
+	@echo ">> ee/ unit tests (race + coverage floor $(EE_COVERAGE_MIN)%)"
+	@set -euo pipefail; \
+	$(GO) test -race -count=1 -covermode=atomic -coverpkg=./ee/... -coverprofile=$(COVERPROFILE).ee ./ee/...; \
+	total=$$($(GO) tool cover -func=$(COVERPROFILE).ee | awk '/^total:/ {print $$3}' | tr -d '%'); \
+	echo ">> ee/ coverage: $$total% (minimum $(EE_COVERAGE_MIN)%)"; \
+	awk -v t="$$total" -v m=$(EE_COVERAGE_MIN) 'BEGIN { if (t+0 < m+0) exit 1 }' || \
+		{ echo "FAIL: ee/ coverage $$total% is below the required $(EE_COVERAGE_MIN)%"; exit 1; }
+
 editions-gate: ## Prove the open-core one-way valve and core-only build
 	@echo ">> editions import guard self-test"
 	@SELFTEST=1 ./scripts/check_editions_imports.sh

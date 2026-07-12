@@ -808,7 +808,7 @@ func startPostgres(t *testing.T) (string, func()) {
 		Logger(io.Discard).
 		StartTimeout(60 * time.Second))
 	if err := inst.Start(); err != nil {
-		t.Skipf("embedded PostgreSQL unavailable: %v", err)
+		t.Fatalf("embedded PostgreSQL unavailable, but this is a real-infra WIRE GATE that must FAIL (not skip) when its substrate is absent (TEST-NOSKIP-001): %v", err)
 	}
 	return fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port), func() {
 		_ = inst.Stop()

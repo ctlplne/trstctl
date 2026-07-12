@@ -11,7 +11,9 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
 # Packages whose tests are release GATES and must run over real infrastructure.
-GATE_DIRS="ee/succession/conformance ee/succession/signerwiring"
+# Every release-GATE and real-infra WIRE-GATE package: a t.Skip in any of these
+# is a gate that silently degrades when its substrate is absent (TEST-NOSKIP-001).
+GATE_DIRS="ee/succession/conformance ee/succession/signerwiring ee/agentid/intwire ee/decommission/intwire ee/reconcile/intwire"
 
 hits=$(grep -rn --include='*_test.go' -e 't\.Skip' $GATE_DIRS 2>/dev/null)
 if [ -n "$hits" ]; then

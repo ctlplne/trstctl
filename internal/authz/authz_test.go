@@ -109,6 +109,41 @@ func TestPrincipalCanTenantBoundary(t *testing.T) {
 	}
 }
 
+// TestPrincipalCanDeniesOnTenantMismatchIndependentOfGrants is the M1 mutation
+// guard (TEST-AUTHZ-XTENANT-001). It isolates the Principal.Can tenant check:
+// an adversarial principal whose OWN tenant differs from the target must be
+// denied even when it holds a grant scoped to the target tenant. Because
+// Scope.Covers ALSO checks tenant, only a grant that references the target
+// tenant can reach — and expose — the Principal.Can guard; removing that guard
+// (the M1 mutant) makes exactly these rows pass, so the suite must fail.
+func TestPrincipalCanDeniesOnTenantMismatchIndependentOfGrants(t *testing.T) {
+	admin := authz.BuiltinRoles()["admin"]
+	for _, tc := range []struct {
+		name         string
+		principal    string
+		grantTenant  string
+		targetTenant string
+		wantAllowed  bool
+	}{
+		{"principal-tenant-matches-target", "t1", "t1", "t1", true},
+		{"principal-tenant-differs-but-holds-target-grant", "t1", "t2", "t2", false},
+		{"principal-and-grant-in-t1-target-t2", "t1", "t1", "t2", false},
+		{"principal-t2-grant-and-target-t1", "t2", "t1", "t1", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := authz.Principal{
+				TenantID: tc.principal,
+				Grants:   []authz.Grant{{Role: admin, Scope: authz.Scope{TenantID: tc.grantTenant}}},
+			}
+			got := p.Can(authz.OwnersRead, authz.Scope{TenantID: tc.targetTenant})
+			if got != tc.wantAllowed {
+				t.Fatalf("Can(tenant=%s, grant=%s, target=%s) = %v, want %v — the principal's OWN tenant must gate access, not merely the grant it carries",
+					tc.principal, tc.grantTenant, tc.targetTenant, got, tc.wantAllowed)
+			}
+		})
+	}
+}
+
 func TestCustomRole(t *testing.T) {
 	deployer := authz.Role{Name: "deployer", Permissions: []authz.Permission{authz.IdentitiesRead, authz.IdentitiesWrite}}
 	reg := authz.NewRegistry(deployer)

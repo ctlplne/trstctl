@@ -94,6 +94,11 @@ func TestProfileLintFailsOnBrokenProfile(t *testing.T) {
 	if !codes["e_leaf_without_san"] {
 		t.Error("linter did not flag a missing SAN on a leaf (e_leaf_without_san)")
 	}
+	// TEST-CA-KEYUSAGE-001: the CA cert carries keyCertSign, so linting it as a
+	// leaf must also flag e_leaf_asserts_cert_sign (the M11 mutation guard).
+	if !codes["e_leaf_asserts_cert_sign"] {
+		t.Error("linter did not flag keyCertSign on a leaf (e_leaf_asserts_cert_sign)")
+	}
 }
 
 // TestProfileLintFlagsOverlongValidity confirms the validity-cap check is RED when a

@@ -58,6 +58,20 @@ func TestIssueFromCSRProducesChainedCert(t *testing.T) {
 	if _, err := leaf.Verify(x509.VerifyOptions{Roots: pool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}}); err != nil {
 		t.Errorf("issued leaf does not chain to the CA: %v", err)
 	}
+
+	// M11 mutation guard (TEST-CA-KEYUSAGE-001): the leaf must assert EXACTLY
+	// digitalSignature and MUST NOT carry keyCertSign — a leaf that could sign
+	// certificates is a path to unauthorized issuance. Pinning the exact bits
+	// (not just "chains OK") makes the M11 mutant that widens leaf KeyUsage fail.
+	if leaf.KeyUsage != x509.KeyUsageDigitalSignature {
+		t.Errorf("leaf KeyUsage = %b, want exactly KeyUsageDigitalSignature (%b)", leaf.KeyUsage, x509.KeyUsageDigitalSignature)
+	}
+	if leaf.KeyUsage&x509.KeyUsageCertSign != 0 {
+		t.Error("issued leaf asserts keyCertSign — an end-entity certificate must never be able to sign certificates")
+	}
+	if leaf.IsCA {
+		t.Error("issued leaf asserts CA=true")
+	}
 }
 
 func TestIssueFromCSRRejectsGarbage(t *testing.T) {

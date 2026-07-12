@@ -24,6 +24,7 @@
       "scep client conformance (sscep transcript)",
       "spiffe workload api conformance (go-spiffe + helper)",
       "compose e2e + PKI conformance (EXC-GATE-01)",
+      "ee / unit tests + vdec gates",
       "restore rehearsal / full DR loop",
       "reproducible build (byte-identical rebuild)",
       "scheduled gates / nightly freshness",

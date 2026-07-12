@@ -298,6 +298,31 @@ jobs:
           path: ${{ runner.temp }}/branch-protection-drift-receipt.json
           if-no-files-found: error
 
+  # TEST-EE-CI-001: exercise the ee/ commercial code on every PR — its unit
+  # tests with a coverage floor, plus the vdec wire/release gates over real
+  # infrastructure, held to the same required-check discipline as the xrec/PCAS
+  # family so EE code cannot rot untested behind the license fence.
+  ee:
+    name: ee / unit tests + vdec gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: ee/ unit tests (coverage floor)
+        run: make ee-test
+
+      - name: VDEC wire + release gates
+        run: make vdec-release-gate
+
   # OPS-RESTORE-001: the full DR loop must work every PR — backup from a
   # populated instance, restore through the shipped binary's flags into a
   # fresh instance, boot it, read old data, issue NEW credentials, and prove a

@@ -27,15 +27,33 @@ MODULE="${MODULE:-trstctl.com/trstctl}"
 CRITICAL_COVERAGE_MIN="${CRITICAL_COVERAGE_MIN:-70}"
 
 # The security-critical packages named in the SF.1 card: the crypto boundary,
-# issuance, the outbox, RLS storage, signing, and revocation.
+# issuance, the outbox, RLS storage, signing, and revocation — plus the
+# TEST-COVFLOOR-001 additions (license validation, authz decisions, the event
+# spine, and the untrusted protocol parsers). High-tier packages hold the
+# original 70% floor; the tier-2 additions hold a conservative floor that still
+# bites on a regression while accommodating their larger surface.
 default_pkgs="\
 ${MODULE}/internal/crypto
 ${MODULE}/internal/store
 ${MODULE}/internal/signing
 ${MODULE}/internal/orchestrator
 ${MODULE}/internal/ca
-${MODULE}/internal/ca/revocation"
+${MODULE}/internal/ca/revocation
+${MODULE}/internal/authz
+${MODULE}/internal/license"
 CRITICAL_PKGS="${CRITICAL_PKGS:-$default_pkgs}"
+
+# Tier-2 security-critical packages (TEST-COVFLOOR-001): the event spine, secret
+# material handling, and the untrusted-input protocol parsers. They carry a
+# floor too — just a lower one than the crypto/issuance core.
+default_pkgs_tier2="\
+${MODULE}/internal/events
+${MODULE}/internal/crypto/secret
+${MODULE}/internal/protocols/acme
+${MODULE}/internal/protocols/est
+${MODULE}/internal/protocols/scep"
+CRITICAL_PKGS_TIER2="${CRITICAL_PKGS_TIER2:-$default_pkgs_tier2}"
+CRITICAL_COVERAGE_MIN_TIER2="${CRITICAL_COVERAGE_MIN_TIER2:-55}"
 
 # eval_profile <profile> <min> <pkg...>
 # Computes per-package statement coverage from a merged -coverpkg profile and
@@ -116,9 +134,17 @@ main() {
 		echo "coverage-critical: profile '$profile' not found — run 'make test' first (it writes the merged profile)." >&2
 		exit 2
 	fi
-	echo ">> critical-package coverage gate (minimum ${CRITICAL_COVERAGE_MIN}% per package)"
+	echo ">> critical-package coverage gate (core minimum ${CRITICAL_COVERAGE_MIN}% per package)"
 	# shellcheck disable=SC2086
 	eval_profile "$profile" "$CRITICAL_COVERAGE_MIN" $CRITICAL_PKGS
+	local core=$?
+	echo ">> critical-package coverage gate (tier-2 minimum ${CRITICAL_COVERAGE_MIN_TIER2}% per package)"
+	# shellcheck disable=SC2086
+	eval_profile "$profile" "$CRITICAL_COVERAGE_MIN_TIER2" $CRITICAL_PKGS_TIER2
+	local tier2=$?
+	if [[ "$core" -ne 0 || "$tier2" -ne 0 ]]; then
+		return 1
+	fi
 }
 
 # Only run main when executed directly, so the self-test can source the
