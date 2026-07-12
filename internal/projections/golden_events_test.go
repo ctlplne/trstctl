@@ -36,7 +36,7 @@ func TestGoldenEventBytesReplayIntoReadModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("frozen golden events missing (%v); regenerate with TRSTCTL_UPDATE_GOLDEN=1 only as a reviewed schema decision", err)
 	}
-	defer raw.Close()
+	defer func() { _ = raw.Close() }()
 
 	s := newStore(t)
 	ctx := context.Background()
@@ -111,7 +111,7 @@ func writeGoldenEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	for _, e := range fixture {
 		line, err := json.Marshal(e)
 		if err != nil {

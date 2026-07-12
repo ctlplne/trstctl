@@ -122,7 +122,7 @@ func vaultServedRequest(t *testing.T, h *servedHarness, token, method, path stri
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read %s %s response: %v", method, path, err)

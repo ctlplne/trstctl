@@ -143,7 +143,7 @@ func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T)
 		"F65": "conditional", // all eight providers are assembled when tenant endpoints and credentials are configured
 		"F66": "partial",     // transit is served; KMIP residuals/config remain
 		"F67": "conditional", // secrets.enable_api
-		"F68": "partial",     // eight native pushers are served; explicit secrets_residuals remain
+		"F68": "conditional", // ten native pushers are served when operator endpoints and credentials are configured
 		"F69": "conditional", // ACME plus provider configuration
 		"F70": "conditional",
 		"F71": "conditional",
@@ -370,14 +370,42 @@ func TestReadmeRoadmapMatchesServedStateReality(t *testing.T) {
 			t.Errorf("README Roadmap must replace stale broad binary-wiring wording %q with exact residuals from limitations.md", stale)
 		}
 	}
-	for _, want := range []string{
+	var manifest struct {
+		Entries []struct {
+			CardID      string `json:"card_id"`
+			Enforcement string `json:"enforcement"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "../tools/dodcensus/manifest.json")), &manifest); err != nil {
+		t.Fatalf("parse wiring-census manifest: %v", err)
+	}
+	requiredCards := map[string]bool{}
+	for _, entry := range manifest.Entries {
+		if entry.Enforcement == "required" {
+			requiredCards[entry.CardID] = true
+		}
+	}
+	for _, cardID := range []string{"COMPLETE-SECRETS-102", "COMPLETE-SECRETS-103", "COMPLETE-SECRETS-104"} {
+		if !requiredCards[cardID] {
+			t.Fatalf("README cannot retire %s from the roadmap until its exact wiring-census row is required", cardID)
+		}
+	}
+	if _, err := os.Stat(filepath.FromSlash("../web/src/__tests__/pagination-virtualization.test.tsx")); err != nil {
+		t.Fatalf("README cannot retire console scale work without its multi-page virtualization acceptance: %v", err)
+	}
+	for _, staleResidual := range []string{
 		"cursor pagination and list virtualization",
 		"terraform cloud/opentofu and arbitrary webhook secret-sync targets",
-		"vault kv outbound sync",
+		"vault kv outbound sync beyond discovery-only core",
 		"kmip appliance profiles/wrapping",
 	} {
+		if strings.Contains(roadmapText, staleResidual) {
+			t.Errorf("README Roadmap resurrects completed residual %q", staleResidual)
+		}
+	}
+	for _, want := range []string{"executable capability census", "now served paths"} {
 		if !strings.Contains(roadmapText, want) {
-			t.Errorf("README Roadmap must name residual %q instead of broad served-domain wiring", want)
+			t.Errorf("README Roadmap must protect completed capability work with %q", want)
 		}
 	}
 }

@@ -10254,11 +10254,11 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 79,
-      "served_state": "partial",
-      "backend_status": "partial: buildRunDeps production-assembles all eight tenant-bound outbound pushers and serves sealed-outbox delivery; deeper native Terraform/OpenTofu and Vault KV outbound integrations plus other secrets_residuals remain",
-      "current_frontend_mapping": "partial: Secrets UI serves configured native sync delivery, catalog/status, cloud discovery, Kubernetes/workload injection, and unvaulted posture; deeper provider-specific Terraform/OpenTofu and Vault KV workflows remain residual",
-      "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt. Roadmap residual: deeper Terraform/OpenTofu provider-specific APIs and arbitrary webhook-specific managed configuration beyond the served generic JSON/webhook target.",
-      "acceptance_test": "The secret_sync DoD census drives all eight configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback.",
+      "served_state": "conditional",
+      "backend_status": "served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers, including native Terraform Cloud/OpenTofu Variables API and Vault KV v2 targets, through sealed-outbox delivery",
+      "current_frontend_mapping": "operate: Secrets UI serves configured sync delivery, catalog/status, cloud discovery, Kubernetes/workload injection, unvaulted posture, and provider-specific Terraform/OpenTofu and Vault KV v2 targets",
+      "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt. Arbitrary webhook-specific managed forms may add convenience beyond the served generic JSON target without changing the backend boundary.",
+      "acceptance_test": "The secret_sync and secrets_residuals DoD census rows drive all ten configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
@@ -10280,7 +10280,7 @@
         "web/src/pages/Secrets.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071. WIRE-SYNC-000/101-108 add validated tenant target configuration, production buildRunDeps construction, immutable ciphertext-only intent, sealed outbox delivery, and a universal external proof for all eight native targets. CAP-SEC-04 exposes GET /api/v1/secrets/cloud-secret-managers and trstctl-cli secrets cloud-secret-managers, combining cloud_secret discovery coverage for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox sync coverage for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault. CAP-SECR-03 exposes GET /api/v1/secrets/syncs/targets, native pushers for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes, plus a Secrets UI catalog that shows configured target status. CAP-SECR-04 exposes GET /api/v1/secrets/kubernetes-operator and a TrstctlSecretSync operator path that resolves served trstctl secrets into Kubernetes Secret.data and patches Deployment/StatefulSet/DaemonSet pod-template annotations for reload. CAP-SECR-05 exposes GET /api/v1/secrets/workload-injection and trstctl-cli secrets workload-injection; TrstctlSecretInjection consumes a Kubernetes Secret and patches Deployment/StatefulSet/DaemonSet pod templates with the shipped trstctl-agent --secret-inject sidecar, memory volume, app mounts, optional env valueFrom references, and metadata-only status. CAP-SECR-07 exposes GET /api/v1/secrets/unvaulted and trstctl-cli secrets unvaulted; the route combines repository and third-party leaked-secret scan sources, redacted leaked_secret finding counts, AWS/GCP/Azure/Vault cloud_secret discovery visibility, and configured AWS/GCP/Azure vault-augmentation sync targets. Sync remains target-configured and fail-closed: Vault KV is discovery-only in core, while Terraform Cloud/OpenTofu and arbitrary webhooks still use the generic JSON/webhook shape until deeper provider-specific APIs are configured.",
+      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071. WIRE-SYNC-000/101-108 add validated tenant target configuration, production buildRunDeps construction, immutable ciphertext-only intent, sealed outbox delivery, and universal external proof for the original eight native targets. COMPLETE-SECRETS-103/104 add provider-specific Terraform Cloud/OpenTofu Variables API and Vault KV v2 pushers to the same production assembly and proof boundary. CAP-SEC-04 exposes GET /api/v1/secrets/cloud-secret-managers and trstctl-cli secrets cloud-secret-managers, combining cloud_secret discovery coverage for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox sync coverage. CAP-SECR-03 exposes GET /api/v1/secrets/syncs/targets and the Secrets UI catalog. CAP-SECR-04/05 serve Kubernetes SecretSync and workload-injection controllers. CAP-SECR-07 combines repository and third-party leaked-secret scan sources, redacted leaked_secret findings, cloud discovery visibility, and configured vault-augmentation targets. Sync remains target-configured and fail-closed; arbitrary webhooks intentionally use the generic JSON target.",
       "api_surface": [
         "getCloudSecretManagerIntegration",
         "listSecretSyncTargets",
@@ -10306,10 +10306,10 @@
             "buildRunDeps constructs TenantSecretSyncTargets from tenant-bound operator configuration; GET /api/v1/secrets/syncs/targets marks those concrete targets configured.",
             "POST /api/v1/secrets/syncs reads a tenant secret, appends an immutable ciphertext-only intent, atomically projects a sealed outbox row, and lets only the outbox dispatcher perform the external write.",
             "Kubernetes operator, workload-injection, and unvaulted-secret posture remain served independently of outbound native pusher delivery.",
-            "served_state=partial",
-            "backend_status=partial: buildRunDeps production-assembles all eight tenant-bound outbound pushers and serves sealed-outbox delivery; deeper native Terraform/OpenTofu and Vault KV outbound integrations plus other secrets_residuals remain",
+            "served_state=conditional",
+            "backend_status=served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers, including native Terraform Cloud/OpenTofu Variables API and Vault KV v2 targets, through sealed-outbox delivery",
             "TrstctlSecretSync and TrstctlSecretInjection controller posture is served independently of outbound pusher construction; unvaulted posture returns redacted leaked_secret evidence.",
-            "The secret_sync DoD proof requires exact vendor authentication and independent external readback for AWS, GCP, Azure, GitHub sealed boxes, GitLab, Vercel, generic CI JSON, and Kubernetes targets."
+            "The secret_sync and secrets_residuals DoD proofs require exact vendor authentication and independent external readback for AWS, GCP, Azure, GitHub sealed boxes, GitLab, Vercel, generic CI JSON, Kubernetes, Terraform Cloud/OpenTofu, and Vault KV v2 targets."
           ],
           "commands": [
             "make test"
@@ -10440,7 +10440,7 @@
         }
       },
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Native eight-target sync is served when configured; remaining GA residuals are the explicit secrets_residuals rows for deeper Vault, KMIP, and provider-specific Terraform/OpenTofu breadth.",
+      "ga_scope_reason": "Conditional residual: external target credentials and endpoints are operator supplied, so all ten census-protected native sync targets remain outside the unconditional GA denominator even though each is served when configured.",
       "dod_capabilities": [
         "secret_sync",
         "secrets_residuals"

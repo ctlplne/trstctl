@@ -13,6 +13,8 @@ const { apiMock } = vi.hoisted(() => ({
     issueCertificate: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
+    connectorCatalog: vi.fn(),
+    externalCAs: vi.fn(),
   },
 }));
 
@@ -47,6 +49,8 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
       active: true,
       protocols: ["acme", "est", "scep", "cmp", "ssh", "tsa", "spiffe"],
     });
+    apiMock.connectorCatalog.mockResolvedValue({ items: [] });
+    apiMock.externalCAs.mockResolvedValue([]);
   });
 
   it("keeps the wizard order aligned with docs and names the issuance credential boundary", async () => {
@@ -68,6 +72,9 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     await user.type(screen.getByLabelText("Service name"), "payments");
     await user.click(screen.getByRole("button", { name: "Issue certificate" }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
+    await user.click(screen.getByRole("button", { name: "Next: prove integrations" }));
+    expect(await screen.findByRole("heading", { name: "Verify configured integrations" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Skip integration proof for now" }));
     await user.click(screen.getByRole("button", { name: "Next: enroll agent" }));
 
     expect(await screen.findByRole("heading", { name: "Enroll an agent" })).toBeInTheDocument();

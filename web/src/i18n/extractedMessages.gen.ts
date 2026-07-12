@@ -200,7 +200,7 @@ export const extractedMessages = [
     key: "source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50",
     defaultMessage: "A fresh trstctl server provisions a signer-backed internal X.509 CA at boot. Confirm it before the first certificate is issued.",
     sources: [
-      "src/pages/Wizard.tsx:257",
+      "src/pages/Wizard.tsx:274",
     ],
   },
   {
@@ -271,14 +271,14 @@ export const extractedMessages = [
     defaultMessage: "Acknowledge wildcard blast radius",
     sources: [
       "src/pages/Identities.tsx:1285",
-      "src/pages/Wizard.tsx:343",
+      "src/pages/Wizard.tsx:360",
     ],
   },
   {
     key: "source.action.64cff1319d",
     defaultMessage: "Action",
     sources: [
-      "src/components/DataGrid.tsx:332",
+      "src/components/DataGrid.tsx:374",
       "src/pages/Graph.tsx:344",
       "src/pages/Privacy.tsx:412",
     ],
@@ -427,7 +427,7 @@ export const extractedMessages = [
     defaultMessage: "Agent identity",
     sources: [
       "src/pages/Agents.tsx:291",
-      "src/pages/Wizard.tsx:442",
+      "src/pages/Wizard.tsx:751",
     ],
   },
   {
@@ -512,14 +512,14 @@ export const extractedMessages = [
     key: "source.all.environments.f19ac5a6af",
     defaultMessage: "All environments",
     sources: [
-      "src/pages/Certificates.tsx:1274",
+      "src/pages/Certificates.tsx:1275",
     ],
   },
   {
     key: "source.all.issuers.ab00116bbe",
     defaultMessage: "All issuers",
     sources: [
-      "src/pages/Certificates.tsx:1226",
+      "src/pages/Certificates.tsx:1227",
     ],
   },
   {
@@ -535,7 +535,7 @@ export const extractedMessages = [
     key: "source.all.profiles.18f6aff3fe",
     defaultMessage: "All profiles",
     sources: [
-      "src/pages/Certificates.tsx:1242",
+      "src/pages/Certificates.tsx:1243",
     ],
   },
   {
@@ -549,7 +549,7 @@ export const extractedMessages = [
     key: "source.all.teams.bf65fc89ca",
     defaultMessage: "All teams",
     sources: [
-      "src/pages/Certificates.tsx:1258",
+      "src/pages/Certificates.tsx:1259",
     ],
   },
   {
@@ -730,7 +730,7 @@ export const extractedMessages = [
     key: "source.array.9d11074609",
     defaultMessage: "): Array",
     sources: [
-      "src/pages/Certificates.tsx:1516",
+      "src/pages/Certificates.tsx:1517",
     ],
   },
   {
@@ -1024,6 +1024,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/CAHierarchy.tsx:1932",
       "src/pages/CAHierarchy.tsx:2046",
+      "src/pages/Wizard.tsx:593",
     ],
   },
   {
@@ -1108,7 +1109,7 @@ export const extractedMessages = [
     defaultMessage: "Bootstrap token",
     sources: [
       "src/pages/Agents.tsx:329",
-      "src/pages/Wizard.tsx:461",
+      "src/pages/Wizard.tsx:770",
     ],
   },
   {
@@ -1341,7 +1342,7 @@ export const extractedMessages = [
       "src/pages/CAHierarchy.tsx:1948",
       "src/pages/CAHierarchy.tsx:2062",
       "src/pages/CAHierarchy.tsx:2291",
-      "src/pages/Certificates.tsx:1381",
+      "src/pages/Certificates.tsx:1382",
       "src/pages/Connectors.tsx:583",
       "src/pages/Connectors.tsx:638",
       "src/pages/Identities.tsx:676",
@@ -1443,7 +1444,7 @@ export const extractedMessages = [
     key: "source.certificate.details.fccff74faf",
     defaultMessage: "Certificate details",
     sources: [
-      "src/pages/Certificates.tsx:1423",
+      "src/pages/Certificates.tsx:1424",
     ],
   },
   {
@@ -1479,7 +1480,7 @@ export const extractedMessages = [
     key: "source.certificateprofile.c.13d397eeee",
     defaultMessage: "certificateProfile(c) ||",
     sources: [
-      "src/pages/Certificates.tsx:1532",
+      "src/pages/Certificates.tsx:1533",
     ],
   },
   {
@@ -1496,7 +1497,7 @@ export const extractedMessages = [
     key: "source.certificateteamlabel.c.ownerbyid.c80e3166f7",
     defaultMessage: "certificateTeamLabel(c, ownerByID) ||",
     sources: [
-      "src/pages/Certificates.tsx:1537",
+      "src/pages/Certificates.tsx:1538",
     ],
   },
   {
@@ -1538,7 +1539,7 @@ export const extractedMessages = [
     key: "source.check.for.agent.1649b814df",
     defaultMessage: "Check for agent",
     sources: [
-      "src/pages/Wizard.tsx:479",
+      "src/pages/Wizard.tsx:788",
     ],
   },
   {
@@ -1630,7 +1631,7 @@ export const extractedMessages = [
       "src/pages/CAHierarchy.tsx:1916",
       "src/pages/CAHierarchy.tsx:2020",
       "src/pages/CAHierarchy.tsx:2109",
-      "src/pages/Certificates.tsx:1415",
+      "src/pages/Certificates.tsx:1416",
       "src/pages/Connectors.tsx:698",
       "src/pages/Incidents.tsx:1382",
       "src/pages/Notifications.tsx:478",
@@ -1693,29 +1694,29 @@ export const extractedMessages = [
     key: "source.column.datagridcolumn.ee69fa6c44",
     defaultMessage: "(column: DataGridColumn",
     sources: [
-      "src/components/DataGrid.tsx:397",
+      "src/components/DataGrid.tsx:449",
     ],
   },
   {
     key: "source.columnbyid.get.columnid.filter.column.colu.401794f02d",
     defaultMessage: "columnById.get(columnId)) .filter((column): column is DataGridColumn",
     sources: [
-      "src/components/DataGrid.tsx:95",
+      "src/components/DataGrid.tsx:116",
     ],
   },
   {
     key: "source.columns.53aade77cd",
     defaultMessage: "Columns",
     sources: [
-      "src/components/DataGrid.tsx:210",
+      "src/components/DataGrid.tsx:245",
     ],
   },
   {
     key: "source.columns.array.628cb6e821",
     defaultMessage: "(columns: Array",
     sources: [
-      "src/components/DataGrid.tsx:374",
-      "src/components/DataGrid.tsx:381",
+      "src/components/DataGrid.tsx:426",
+      "src/components/DataGrid.tsx:433",
     ],
   },
   {
@@ -1743,14 +1744,14 @@ export const extractedMessages = [
     key: "source.complete.143b270a32",
     defaultMessage: "Complete",
     sources: [
-      "src/pages/Wizard.tsx:19",
+      "src/pages/Wizard.tsx:24",
     ],
   },
   {
     key: "source.complete.setup.fe3da4e70b",
     defaultMessage: "Complete setup",
     sources: [
-      "src/pages/Wizard.tsx:522",
+      "src/pages/Wizard.tsx:834",
     ],
   },
   {
@@ -1799,7 +1800,7 @@ export const extractedMessages = [
     key: "source.confirm.bulk.revoke.d613327838",
     defaultMessage: "Confirm bulk revoke",
     sources: [
-      "src/pages/Certificates.tsx:1378",
+      "src/pages/Certificates.tsx:1379",
       "src/pages/Identities.tsx:739",
     ],
   },
@@ -1822,7 +1823,7 @@ export const extractedMessages = [
     defaultMessage: "Connect an issuer",
     sources: [
       "src/pages/Certificates.tsx:1108",
-      "src/pages/Wizard.tsx:254",
+      "src/pages/Wizard.tsx:271",
     ],
   },
   {
@@ -1878,6 +1879,7 @@ export const extractedMessages = [
       "src/pages/Connectors.tsx:395",
       "src/pages/Connectors.tsx:434",
       "src/pages/Identities.tsx:956",
+      "src/pages/Wizard.tsx:516",
     ],
   },
   {
@@ -2006,7 +2008,7 @@ export const extractedMessages = [
     key: "source.could.not.load.certificate.details.7999752b96",
     defaultMessage: "Could not load certificate details",
     sources: [
-      "src/pages/Certificates.tsx:1429",
+      "src/pages/Certificates.tsx:1430",
     ],
   },
   {
@@ -2571,7 +2573,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Certificates.tsx:1049",
       "src/pages/Certificates.tsx:1077",
-      "src/pages/Certificates.tsx:1483",
+      "src/pages/Certificates.tsx:1484",
     ],
   },
   {
@@ -2960,7 +2962,7 @@ export const extractedMessages = [
     key: "source.enroll.agent.8592144d44",
     defaultMessage: "Enroll agent",
     sources: [
-      "src/pages/Wizard.tsx:18",
+      "src/pages/Wizard.tsx:23",
     ],
   },
   {
@@ -2968,7 +2970,7 @@ export const extractedMessages = [
     defaultMessage: "Enroll an agent",
     sources: [
       "src/pages/Discovery.tsx:930",
-      "src/pages/Wizard.tsx:432",
+      "src/pages/Wizard.tsx:741",
     ],
   },
   {
@@ -3038,7 +3040,7 @@ export const extractedMessages = [
     key: "source.environment.filter.3495eee74d",
     defaultMessage: "Environment filter",
     sources: [
-      "src/pages/Certificates.tsx:1266",
+      "src/pages/Certificates.tsx:1267",
     ],
   },
   {
@@ -3343,7 +3345,7 @@ export const extractedMessages = [
     key: "source.fingerprint.ba7af0b704",
     defaultMessage: "Fingerprint",
     sources: [
-      "src/pages/Certificates.tsx:1453",
+      "src/pages/Certificates.tsx:1454",
       "src/pages/Connectors.tsx:438",
       "src/pages/Identities.tsx:958",
     ],
@@ -4075,7 +4077,7 @@ export const extractedMessages = [
     key: "source.issue.your.first.certificate.8fbb374ce0",
     defaultMessage: "Issue your first certificate",
     sources: [
-      "src/pages/Wizard.tsx:312",
+      "src/pages/Wizard.tsx:329",
     ],
   },
   {
@@ -4111,7 +4113,7 @@ export const extractedMessages = [
     defaultMessage: "Issuer",
     sources: [
       "src/components/GraphView.tsx:32",
-      "src/pages/Certificates.tsx:1437",
+      "src/pages/Certificates.tsx:1438",
       "src/pages/Identities.tsx:1151",
       "src/pages/Incidents.tsx:1411",
     ],
@@ -4134,7 +4136,7 @@ export const extractedMessages = [
     key: "source.issuer.filter.32db997051",
     defaultMessage: "Issuer filter",
     sources: [
-      "src/pages/Certificates.tsx:1218",
+      "src/pages/Certificates.tsx:1219",
     ],
   },
   {
@@ -4206,7 +4208,7 @@ export const extractedMessages = [
     key: "source.key.algorithm.36da451ea3",
     defaultMessage: "Key algorithm",
     sources: [
-      "src/pages/Certificates.tsx:1445",
+      "src/pages/Certificates.tsx:1446",
     ],
   },
   {
@@ -4342,7 +4344,7 @@ export const extractedMessages = [
     key: "source.latch.this.first.run.guide.and.jump.into.d.708bd1e5a1",
     defaultMessage: "Latch this first-run guide and jump into day-two certificate operations.",
     sources: [
-      "src/pages/Wizard.tsx:19",
+      "src/pages/Wizard.tsx:24",
     ],
   },
   {
@@ -4476,7 +4478,7 @@ export const extractedMessages = [
     key: "source.loading.certificate.details.a52129b338",
     defaultMessage: "Loading certificate details...",
     sources: [
-      "src/pages/Certificates.tsx:1427",
+      "src/pages/Certificates.tsx:1428",
     ],
   },
   {
@@ -4866,7 +4868,7 @@ export const extractedMessages = [
     key: "source.mint.a.one.time.enrollment.token.and.wait.41e91b176b",
     defaultMessage: "Mint a one-time enrollment token and wait for the first in-network agent.",
     sources: [
-      "src/pages/Wizard.tsx:18",
+      "src/pages/Wizard.tsx:23",
     ],
   },
   {
@@ -5503,7 +5505,7 @@ export const extractedMessages = [
     key: "source.no.more.certificate.pages.e8cec79bea",
     defaultMessage: "No more certificate pages.",
     sources: [
-      "src/pages/Certificates.tsx:1334",
+      "src/pages/Certificates.tsx:1335",
     ],
   },
   {
@@ -5602,7 +5604,7 @@ export const extractedMessages = [
     defaultMessage: "node-a",
     sources: [
       "src/pages/Agents.tsx:295",
-      "src/pages/Wizard.tsx:446",
+      "src/pages/Wizard.tsx:755",
     ],
   },
   {
@@ -6002,7 +6004,7 @@ export const extractedMessages = [
     key: "source.owner.4b1b8aa360",
     defaultMessage: "Owner",
     sources: [
-      "src/pages/Certificates.tsx:1487",
+      "src/pages/Certificates.tsx:1488",
       "src/pages/Identities.tsx:1143",
       "src/pages/Risk.tsx:903",
     ],
@@ -6071,7 +6073,7 @@ export const extractedMessages = [
     key: "source.page.size.bd69e66e00",
     defaultMessage: "Page size",
     sources: [
-      "src/pages/Certificates.tsx:1300",
+      "src/pages/Certificates.tsx:1301",
     ],
   },
   {
@@ -6123,7 +6125,7 @@ export const extractedMessages = [
     defaultMessage: "payments-api",
     sources: [
       "src/pages/RequestCredential.tsx:296",
-      "src/pages/Wizard.tsx:331",
+      "src/pages/Wizard.tsx:348",
     ],
   },
   {
@@ -6425,7 +6427,7 @@ export const extractedMessages = [
     key: "source.profile.filter.d447429270",
     defaultMessage: "Profile filter",
     sources: [
-      "src/pages/Certificates.tsx:1234",
+      "src/pages/Certificates.tsx:1235",
     ],
   },
   {
@@ -6711,7 +6713,7 @@ export const extractedMessages = [
     key: "source.ready.for.certificate.operations.e99f6e538f",
     defaultMessage: "Ready for certificate operations",
     sources: [
-      "src/pages/Wizard.tsx:512",
+      "src/pages/Wizard.tsx:823",
     ],
   },
   {
@@ -6895,7 +6897,7 @@ export const extractedMessages = [
     key: "source.renewal.history.771f739290",
     defaultMessage: "Renewal history",
     sources: [
-      "src/pages/Certificates.tsx:1499",
+      "src/pages/Certificates.tsx:1500",
     ],
   },
   {
@@ -6916,7 +6918,7 @@ export const extractedMessages = [
     key: "source.reopen.setup.guide.0f10355fd2",
     defaultMessage: "Reopen setup guide",
     sources: [
-      "src/pages/Wizard.tsx:90",
+      "src/pages/Wizard.tsx:99",
     ],
   },
   {
@@ -7250,8 +7252,8 @@ export const extractedMessages = [
     key: "source.revocation.reason.b11670420f",
     defaultMessage: "Revocation reason",
     sources: [
-      "src/pages/Certificates.tsx:1361",
-      "src/pages/Certificates.tsx:1473",
+      "src/pages/Certificates.tsx:1362",
+      "src/pages/Certificates.tsx:1474",
       "src/pages/Identities.tsx:722",
     ],
   },
@@ -7292,7 +7294,7 @@ export const extractedMessages = [
     key: "source.revoked.at.144e77bcf0",
     defaultMessage: "Revoked at",
     sources: [
-      "src/pages/Certificates.tsx:1469",
+      "src/pages/Certificates.tsx:1470",
     ],
   },
   {
@@ -7585,7 +7587,7 @@ export const extractedMessages = [
     key: "source.sans.7a15c9b7f6",
     defaultMessage: "SANs",
     sources: [
-      "src/pages/Certificates.tsx:1441",
+      "src/pages/Certificates.tsx:1442",
     ],
   },
   {
@@ -7599,22 +7601,22 @@ export const extractedMessages = [
     key: "source.save.the.one.time.token.with.0600.permissi.b35e2c6935",
     defaultMessage: "Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane. Agent enrollment tokens cannot issue certificates.",
     sources: [
-      "src/pages/Wizard.tsx:435",
+      "src/pages/Wizard.tsx:744",
     ],
   },
   {
     key: "source.save.view.2115387503",
     defaultMessage: "Save view",
     sources: [
-      "src/components/DataGrid.tsx:264",
+      "src/components/DataGrid.tsx:299",
     ],
   },
   {
     key: "source.saved.view.name.9aa4b3b580",
     defaultMessage: "Saved view name",
     sources: [
-      "src/components/DataGrid.tsx:255",
-      "src/components/DataGrid.tsx:257",
+      "src/components/DataGrid.tsx:290",
+      "src/components/DataGrid.tsx:292",
     ],
   },
   {
@@ -7854,7 +7856,7 @@ export const extractedMessages = [
     key: "source.select.all.visible.rows.b83e9323d3",
     defaultMessage: "Select all visible rows",
     sources: [
-      "src/components/DataGrid.tsx:306",
+      "src/components/DataGrid.tsx:348",
     ],
   },
   {
@@ -7959,7 +7961,7 @@ export const extractedMessages = [
     key: "source.serial.8ea0949377",
     defaultMessage: "Serial",
     sources: [
-      "src/pages/Certificates.tsx:1449",
+      "src/pages/Certificates.tsx:1450",
       "src/pages/SSHTrust.tsx:354",
     ],
   },
@@ -7967,7 +7969,7 @@ export const extractedMessages = [
     key: "source.server.expiry.filter.129321a4ff",
     defaultMessage: "Server expiry filter",
     sources: [
-      "src/pages/Certificates.tsx:1283",
+      "src/pages/Certificates.tsx:1284",
     ],
   },
   {
@@ -7996,7 +7998,7 @@ export const extractedMessages = [
     defaultMessage: "Service name",
     sources: [
       "src/pages/Identities.tsx:1263",
-      "src/pages/Wizard.tsx:321",
+      "src/pages/Wizard.tsx:338",
     ],
   },
   {
@@ -8054,15 +8056,15 @@ export const extractedMessages = [
     sources: [
       "src/lib/journeyMatrix.ts:54",
       "src/pages/Dashboard.tsx:109",
-      "src/pages/Wizard.tsx:101",
-      "src/pages/Wizard.tsx:66",
+      "src/pages/Wizard.tsx:110",
+      "src/pages/Wizard.tsx:75",
     ],
   },
   {
     key: "source.setup.complete.aadaf35950",
     defaultMessage: "Setup complete",
     sources: [
-      "src/pages/Wizard.tsx:74",
+      "src/pages/Wizard.tsx:83",
     ],
   },
   {
@@ -8232,7 +8234,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Certificates.tsx:1040",
       "src/pages/Certificates.tsx:1073",
-      "src/pages/Certificates.tsx:1479",
+      "src/pages/Certificates.tsx:1480",
       "src/pages/Discovery.tsx:808",
       "src/pages/Discovery.tsx:878",
     ],
@@ -8400,7 +8402,7 @@ export const extractedMessages = [
     defaultMessage: "Status",
     sources: [
       "src/pages/Agents.tsx:539",
-      "src/pages/Certificates.tsx:1463",
+      "src/pages/Certificates.tsx:1464",
       "src/pages/Connectors.tsx:433",
       "src/pages/Identities.tsx:1127",
       "src/pages/Identities.tsx:955",
@@ -8441,7 +8443,7 @@ export const extractedMessages = [
       "src/pages/Assistant.tsx:387",
       "src/pages/Assistant.tsx:441",
       "src/pages/Assistant.tsx:499",
-      "src/pages/Certificates.tsx:1433",
+      "src/pages/Certificates.tsx:1434",
       "src/pages/Notifications.tsx:421",
       "src/pages/Notifications.tsx:422",
       "src/pages/Platform.tsx:1188",
@@ -8600,7 +8602,7 @@ export const extractedMessages = [
     key: "source.team.filter.f485fa9dcf",
     defaultMessage: "Team filter",
     sources: [
-      "src/pages/Certificates.tsx:1250",
+      "src/pages/Certificates.tsx:1251",
     ],
   },
   {
@@ -8848,7 +8850,7 @@ export const extractedMessages = [
     key: "source.track.and.renew.certificates.f0f36882b6",
     defaultMessage: "Track and renew certificates",
     sources: [
-      "src/pages/Wizard.tsx:86",
+      "src/pages/Wizard.tsx:95",
     ],
   },
   {
@@ -8933,7 +8935,7 @@ export const extractedMessages = [
     key: "source.trstctl.will.track.this.credential.and.ale.258f3fc1df",
     defaultMessage: "trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.",
     sources: [
-      "src/pages/Wizard.tsx:521",
+      "src/pages/Wizard.tsx:833",
     ],
   },
   {
@@ -9075,7 +9077,7 @@ export const extractedMessages = [
     key: "source.validity.9c3050e867",
     defaultMessage: "Validity",
     sources: [
-      "src/pages/Certificates.tsx:1457",
+      "src/pages/Certificates.tsx:1458",
     ],
   },
   {
@@ -9169,14 +9171,14 @@ export const extractedMessages = [
     key: "source.view.name.572ffd1862",
     defaultMessage: "View name",
     sources: [
-      "src/components/DataGrid.tsx:260",
+      "src/components/DataGrid.tsx:295",
     ],
   },
   {
     key: "source.visible.columns.1da58ee7c6",
     defaultMessage: "Visible columns",
     sources: [
-      "src/components/DataGrid.tsx:216",
+      "src/components/DataGrid.tsx:251",
     ],
   },
   {

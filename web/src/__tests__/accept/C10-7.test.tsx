@@ -13,6 +13,8 @@ const { apiMock } = vi.hoisted(() => ({
     issueCertificate: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
+    connectorCatalog: vi.fn(),
+    externalCAs: vi.fn(),
   },
 }));
 
@@ -65,6 +67,8 @@ describe("C10-7 carousel onboarding wizard", () => {
       active: true,
       protocols: ["acme", "est", "scep", "cmp", "ssh", "tsa", "spiffe"],
     });
+    apiMock.connectorCatalog.mockResolvedValue({ items: [] });
+    apiMock.externalCAs.mockResolvedValue([]);
   });
 
   it("advances through served issuer, certificate, and agent actions, then latches closed and reopens", async () => {
@@ -88,6 +92,9 @@ describe("C10-7 carousel onboarding wizard", () => {
     await user.type(await screen.findByLabelText("Service name"), "payments");
     await user.click(screen.getByRole("button", { name: "Issue certificate" }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
+    await user.click(screen.getByRole("button", { name: "Next: prove integrations" }));
+    expect(await screen.findByRole("heading", { name: "Verify configured integrations" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Skip integration proof for now" }));
     await user.click(screen.getByRole("button", { name: "Next: enroll agent" }));
 
     await user.type(await screen.findByLabelText("Agent identity"), "edge-01");

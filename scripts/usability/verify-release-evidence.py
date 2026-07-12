@@ -79,8 +79,8 @@ def check_first_run(receipt: dict, max_age_days: int) -> None:
             fail(f"first-run measurement does not meet the SLO: {measurement}")
 
     command = " ".join(receipt.get("command") or [])
-    if "wizard.test.tsx" not in command:
-        fail("first-run receipt must be generated from the wizard.test.tsx journey")
+    if "first-run.test.tsx" not in command:
+        fail("first-run receipt must be generated from the first-run.test.tsx served-capability journey")
     test_anchor = receipt.get("test_anchor")
     if not test_anchor or not resolve(test_anchor).exists():
         fail(f"first-run receipt test_anchor does not exist: {test_anchor}")

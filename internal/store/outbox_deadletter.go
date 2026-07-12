@@ -17,31 +17,39 @@ type OutboxDeadLetter struct {
 }
 
 // OutboxDeadLetterDepth counts dead-lettered outbox rows per
-// tenant/destination. Like the dispatch worker it is a deliberate SYSTEM
-// operation over the RLS-bypassing pool (see SystemPool): the depth gauge and
-// its alert are operator-facing fleet health, not tenant data access, and the
-// result carries only counts plus the tenant id needed to label them.
+// tenant/destination. The caller is a system metric, but the data read remains
+// explicitly tenant-scoped: enumerate the tenant registry, then run one
+// tenant-predicated aggregation per tenant. This keeps AN-1 true even for fleet
+// health and prevents a future join from accidentally blending tenant rows.
 func (s *Store) OutboxDeadLetterDepth(ctx context.Context) ([]OutboxDeadLetter, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT tenant_id::text, destination, count(*)
-		   FROM outbox
-		  WHERE status = 'failed'
-		  GROUP BY tenant_id, destination
-		  ORDER BY tenant_id, destination`)
+	tenants, err := s.ListTenants(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("store: outbox dead-letter depth: %w", err)
+		return nil, fmt.Errorf("store: list tenants for outbox dead-letter depth: %w", err)
 	}
-	defer rows.Close()
 	var out []OutboxDeadLetter
-	for rows.Next() {
-		var d OutboxDeadLetter
-		if err := rows.Scan(&d.TenantID, &d.Destination, &d.Depth); err != nil {
-			return nil, fmt.Errorf("store: outbox dead-letter depth scan: %w", err)
+	for _, tenant := range tenants {
+		rows, queryErr := s.pool.Query(ctx,
+			`SELECT tenant_id::text, destination, count(*)
+			   FROM outbox
+			  WHERE tenant_id = $1 AND status = 'failed'
+			  GROUP BY tenant_id, destination
+			  ORDER BY destination`, tenant.TenantID)
+		if queryErr != nil {
+			return nil, fmt.Errorf("store: outbox dead-letter depth for tenant %s: %w", tenant.TenantID, queryErr)
 		}
-		out = append(out, d)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store: outbox dead-letter depth rows: %w", err)
+		for rows.Next() {
+			var d OutboxDeadLetter
+			if scanErr := rows.Scan(&d.TenantID, &d.Destination, &d.Depth); scanErr != nil {
+				rows.Close()
+				return nil, fmt.Errorf("store: outbox dead-letter depth scan for tenant %s: %w", tenant.TenantID, scanErr)
+			}
+			out = append(out, d)
+		}
+		rowsErr := rows.Err()
+		rows.Close()
+		if rowsErr != nil {
+			return nil, fmt.Errorf("store: outbox dead-letter depth rows for tenant %s: %w", tenant.TenantID, rowsErr)
+		}
 	}
 	return out, nil
 }

@@ -1,20 +1,25 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, FileKey2, Loader2, Network, RotateCcw, Server, ShieldCheck } from "lucide-react";
-import { ApiError, api, type Agent, type EnrollmentToken, type ProtocolProfileStatus } from "@/lib/api";
+import { Cable, CheckCircle2, FileKey2, KeyRound, Loader2, Network, RotateCcw, Server, ShieldCheck } from "lucide-react";
+import { ApiError, api, type Agent, type EnrollmentToken, type Identity, type ProtocolProfileStatus } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { markOnboardingComplete, resetOnboarding } from "@/lib/onboardingState";
 import { useTranslation } from "@/i18n/I18nProvider";
 
-type WizardStepID = "issuer" | "protocols" | "certificate" | "agent" | "complete";
+type WizardStepID = "issuer" | "protocols" | "certificate" | "integrations" | "agent" | "complete";
 
 function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselStep[] {
   return [
     { id: "issuer", label: "Connect issuer", description: "Confirm the signer-backed internal CA or connect an upstream authority later." },
     { id: "protocols", label: t("wizard.protocols.stepLabel"), description: t("wizard.protocols.stepDescription") },
     { id: "certificate", label: "Issue certificate", description: "Create the first workload identity and issue it with an operator credential." },
+    {
+      id: "integrations",
+      label: t("wizard.integrations.stepLabel"),
+      description: t("wizard.integrations.stepDescription"),
+    },
     { id: "agent", label: "Enroll agent", description: "Mint a one-time enrollment token and wait for the first in-network agent." },
     { id: "complete", label: "Complete", description: "Latch this first-run guide and jump into day-two certificate operations." },
   ];
@@ -22,7 +27,8 @@ function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselSte
 
 /** Wizard is the first-run flow (F12): a fresh install confirms an issuer,
  * activates the explicit eval enrollment profile when configured, issues its
- * first certificate, enrolls an agent, then latches a browser-local completion
+ * first certificate, proves configured integrations through their served routes,
+ * enrolls an agent, then latches a browser-local completion
  * flag (see lib/onboardingState) so the dashboard stops prompting setup on later
  * visits. "Reopen setup guide" clears the flag. */
 export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
@@ -32,7 +38,8 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   const [issuerReady, setIssuerReady] = useState(false);
   const [issuerName, setIssuerName] = useState<string | null>(null);
   const [protocolSummary, setProtocolSummary] = useState<string | null>(null);
-  const [certificateName, setCertificateName] = useState<string | null>(null);
+  const [certificate, setCertificate] = useState<Identity | null>(null);
+  const [integrationSummary, setIntegrationSummary] = useState<string | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [completed, setCompleted] = useState(false);
 
@@ -40,7 +47,8 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   const nextEnabled =
     (currentStep === "issuer" && issuerReady) ||
     (currentStep === "protocols" && Boolean(protocolSummary)) ||
-    (currentStep === "certificate" && Boolean(certificateName)) ||
+    (currentStep === "certificate" && Boolean(certificate)) ||
+    (currentStep === "integrations" && Boolean(integrationSummary)) ||
     (currentStep === "agent" && Boolean(agent));
 
   function resetWizard() {
@@ -48,7 +56,8 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
     setIssuerReady(false);
     setIssuerName(null);
     setProtocolSummary(null);
-    setCertificateName(null);
+    setCertificate(null);
+    setIntegrationSummary(null);
     setAgent(null);
     setCompleted(false);
     resetOnboarding();
@@ -75,7 +84,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
                 Setup complete
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {certificateName ?? "Your first certificate"} is tracked. trstctl will alert before expiry; renewal is a manual, one-click action today.
+                {certificate?.name ?? "Your first certificate"} is tracked. trstctl will alert before expiry; renewal is a manual, one-click action today.
               </p>
             </div>
           </div>
@@ -119,10 +128,18 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
           />
         )}
         {currentStep === "protocols" && <ProtocolProfileStep onReady={setProtocolSummary} />}
-        {currentStep === "certificate" && <CertificateStep certificateName={certificateName} onIssued={setCertificateName} />}
+        {currentStep === "certificate" && <CertificateStep certificate={certificate} onIssued={setCertificate} />}
+        {currentStep === "integrations" && certificate && <IntegrationProofStep identity={certificate} onReady={setIntegrationSummary} />}
         {currentStep === "agent" && <AgentStep pollMs={pollMs} agent={agent} onAgent={setAgent} />}
         {currentStep === "complete" && (
-          <CompleteStep certificateName={certificateName} issuerName={issuerName} protocolSummary={protocolSummary} agent={agent} onComplete={markComplete} />
+          <CompleteStep
+            certificateName={certificate?.name ?? null}
+            issuerName={issuerName}
+            protocolSummary={protocolSummary}
+            integrationSummary={integrationSummary}
+            agent={agent}
+            onComplete={markComplete}
+          />
         )}
       </StepShell>
     </section>
@@ -279,7 +296,7 @@ function IssuerStep({ issuerName, onReady, ready }: { issuerName: string | null;
   );
 }
 
-function CertificateStep({ certificateName, onIssued }: { certificateName: string | null; onIssued: (name: string) => void }) {
+function CertificateStep({ certificate, onIssued }: { certificate: Identity | null; onIssued: (identity: Identity) => void }) {
   const [name, setName] = useState("");
   const [wildcardAck, setWildcardAck] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -292,11 +309,11 @@ function CertificateStep({ certificateName, onIssued }: { certificateName: strin
     setError(null);
     setBusy(true);
     try {
-      await api.issueCertificate({
+      const issued = await api.issueCertificate({
         name: serviceName,
         ...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {}),
       });
-      onIssued(serviceName);
+      onIssued(issued);
     } catch (err) {
       setError(`Could not issue the certificate: ${String(err instanceof Error ? err.message : err)}`);
     } finally {
@@ -346,10 +363,10 @@ function CertificateStep({ certificateName, onIssued }: { certificateName: strin
           </span>
         </label>
       )}
-      {certificateName ? (
+      {certificate ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {certificateName} was issued.
+          {certificate.name} was issued.
         </p>
       ) : (
         <Button type="submit" className="justify-self-start" disabled={busy || (isWildcard && !wildcardAck)}>
@@ -363,6 +380,298 @@ function CertificateStep({ certificateName, onIssued }: { certificateName: strin
         </p>
       )}
     </form>
+  );
+}
+
+function IntegrationProofStep({ identity, onReady }: { identity: Identity; onReady: (summary: string) => void }) {
+  const { t } = useTranslation();
+  const [connectorKinds, setConnectorKinds] = useState<Array<{ kind: string; name: string }>>([]);
+  const [externalCAs, setExternalCAs] = useState<Array<{ id: string; name: string }>>([]);
+  const [connectorKind, setConnectorKind] = useState("nginx");
+  const [targetName, setTargetName] = useState("first-nginx");
+  const [targetConfig, setTargetConfig] = useState('{"base_url":"https://nginx.example"}');
+  const [externalCAID, setExternalCAID] = useState("");
+  const [csrPEM, setCSRPEM] = useState("");
+  const [dnsNames, setDNSNames] = useState("");
+  const [leaseProvider, setLeaseProvider] = useState("postgres");
+  const [leaseRole, setLeaseRole] = useState("readonly");
+  const [connectorStatus, setConnectorStatus] = useState<string | null>(null);
+  const [externalCAStatus, setExternalCAStatus] = useState<string | null>(null);
+  const [leaseStatus, setLeaseStatus] = useState<string | null>(null);
+  const [loadingCatalogs, setLoadingCatalogs] = useState(true);
+  const [busy, setBusy] = useState<"connector" | "external-ca" | "lease" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([api.connectorCatalog(), api.externalCAs()])
+      .then(([catalog, cas]) => {
+        if (!active) return;
+        const kinds = catalog.items.map(({ kind, name }) => ({ kind, name }));
+        setConnectorKinds(kinds);
+        if (kinds.length > 0 && !kinds.some((item) => item.kind === connectorKind)) {
+          setConnectorKind(kinds[0].kind);
+          setTargetName(`first-${kinds[0].kind}`);
+        }
+        const availableCAs = cas.map(({ id, name }) => ({ id, name }));
+        setExternalCAs(availableCAs);
+        setExternalCAID(availableCAs[0]?.id ?? "");
+      })
+      .catch((err) => {
+        if (active) setError(`Could not load integration catalogs: ${String(err instanceof Error ? err.message : err)}`);
+      })
+      .finally(() => {
+        if (active) setLoadingCatalogs(false);
+      });
+    return () => {
+      active = false;
+    };
+    // Catalog discovery is one served read when this optional carousel step mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (connectorStatus && externalCAStatus && leaseStatus) {
+      onReady("Connector deployment, upstream-CA issuance, and dynamic-secret lease proven");
+    }
+  }, [connectorStatus, externalCAStatus, leaseStatus, onReady]);
+
+  async function deployConnector(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy("connector");
+    setError(null);
+    try {
+      const parsed = JSON.parse(targetConfig) as unknown;
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("target config must be a JSON object");
+      const target = await api.createConnectorTarget({ name: targetName.trim(), connector: connectorKind, config: parsed as Record<string, unknown> });
+      await api.deployConnectorTarget(target.id, { identity_id: identity.id, reason: "first-run connector verification" });
+      setConnectorStatus(`${connectorKind} target ${target.name} accepted the deployment`);
+    } catch (err) {
+      setError(`Connector deployment failed: ${String(err instanceof Error ? err.message : err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function issueExternalCA(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy("external-ca");
+    setError(null);
+    try {
+      const issued = await api.issueExternalCA(externalCAID, {
+        csr_pem: csrPEM,
+        dns_names: dnsNames
+          .split(",")
+          .map((name) => name.trim())
+          .filter(Boolean),
+        ttl_seconds: 900,
+      });
+      setExternalCAStatus(`${issued.issuer} issued serial ${issued.serial}`);
+    } catch (err) {
+      setError(`External-CA issuance failed: ${String(err instanceof Error ? err.message : err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function issueLease(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy("lease");
+    setError(null);
+    try {
+      const lease = await api.issueDynamicLease({ provider: leaseProvider.trim(), role: leaseRole.trim(), ttl_seconds: 900 });
+      // Deliberately retain only metadata. The one-time credential returned by
+      // the API is neither rendered nor copied into component state.
+      setLeaseStatus(`${lease.provider}/${lease.role} lease ${lease.id} is ${lease.state}`);
+    } catch (err) {
+      setError(`Dynamic-secret lease failed: ${String(err instanceof Error ? err.message : err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section aria-labelledby="step-integrations-heading" className="grid gap-5">
+      <div className="flex items-start gap-3">
+        <Cable className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
+        <div>
+          <h3 id="step-integrations-heading" className="text-title font-semibold">
+            {t("wizard.integrations.heading")}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">{t("wizard.integrations.description")}</p>
+        </div>
+      </div>
+
+      {loadingCatalogs && (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {t("wizard.integrations.loading")}
+        </p>
+      )}
+
+      <form onSubmit={deployConnector} className="grid gap-3 rounded-control border border-border p-4" aria-labelledby="connector-proof-heading">
+        <h4 id="connector-proof-heading" className="font-semibold">
+          {t("wizard.integrations.connector.heading")}
+        </h4>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label htmlFor="wizard-connector-kind" className="grid gap-1 text-sm font-medium">
+            Connector
+            <select
+              id="wizard-connector-kind"
+              value={connectorKind}
+              onChange={(event) => {
+                setConnectorKind(event.target.value);
+                setTargetName(`first-${event.target.value}`);
+              }}
+              className="rounded-control border border-border bg-background px-3 py-2"
+            >
+              {connectorKinds.length === 0 && <option value={connectorKind}>{connectorKind}</option>}
+              {connectorKinds.map((item) => (
+                <option key={item.kind} value={item.kind}>
+                  {item.name} ({item.kind})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label htmlFor="wizard-connector-target" className="grid gap-1 text-sm font-medium">
+            {t("wizard.integrations.connector.targetName")}
+            <input
+              id="wizard-connector-target"
+              value={targetName}
+              onChange={(event) => setTargetName(event.target.value)}
+              className="rounded-control border border-border bg-background px-3 py-2"
+            />
+          </label>
+        </div>
+        <label htmlFor="wizard-connector-config" className="grid gap-1 text-sm font-medium">
+          {t("wizard.integrations.connector.config")}
+          <textarea
+            id="wizard-connector-config"
+            value={targetConfig}
+            onChange={(event) => setTargetConfig(event.target.value)}
+            rows={3}
+            spellCheck={false}
+            className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
+          />
+        </label>
+        {connectorStatus ? (
+          <ProofStatus text={connectorStatus} />
+        ) : (
+          <Button type="submit" className="justify-self-start" disabled={busy !== null || !targetName.trim()}>
+            {busy === "connector" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Deploy through connector
+          </Button>
+        )}
+      </form>
+
+      <form onSubmit={issueExternalCA} className="grid gap-3 rounded-control border border-border p-4" aria-labelledby="external-ca-proof-heading">
+        <h4 id="external-ca-proof-heading" className="font-semibold">
+          {t("wizard.integrations.externalCA.heading")}
+        </h4>
+        <label htmlFor="wizard-external-ca" className="grid gap-1 text-sm font-medium">
+          {t("wizard.integrations.externalCA.label")}
+          <select
+            id="wizard-external-ca"
+            value={externalCAID}
+            onChange={(event) => setExternalCAID(event.target.value)}
+            className="rounded-control border border-border bg-background px-3 py-2"
+          >
+            {externalCAs.length === 0 && <option value="">{t("wizard.integrations.externalCA.none")}</option>}
+            {externalCAs.map((ca) => (
+              <option key={ca.id} value={ca.id}>
+                {ca.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="wizard-external-ca-csr" className="grid gap-1 text-sm font-medium">
+          {t("wizard.integrations.externalCA.csr")}
+          <textarea
+            id="wizard-external-ca-csr"
+            value={csrPEM}
+            onChange={(event) => setCSRPEM(event.target.value)}
+            rows={4}
+            spellCheck={false}
+            placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+            className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
+          />
+        </label>
+        <label htmlFor="wizard-external-ca-dns" className="grid gap-1 text-sm font-medium">
+          {t("wizard.integrations.externalCA.dns")}
+          <input
+            id="wizard-external-ca-dns"
+            value={dnsNames}
+            onChange={(event) => setDNSNames(event.target.value)}
+            placeholder={t("wizard.integrations.externalCA.dnsPlaceholder")}
+            className="rounded-control border border-border bg-background px-3 py-2"
+          />
+        </label>
+        {externalCAStatus ? (
+          <ProofStatus text={externalCAStatus} />
+        ) : (
+          <Button type="submit" className="justify-self-start" disabled={busy !== null || !externalCAID || !csrPEM.trim()}>
+            {busy === "external-ca" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Issue through external CA
+          </Button>
+        )}
+      </form>
+
+      <form onSubmit={issueLease} className="grid gap-3 rounded-control border border-border p-4" aria-labelledby="lease-proof-heading">
+        <div className="flex items-start gap-2">
+          <KeyRound className="mt-0.5 h-4 w-4 text-brand-accent" aria-hidden="true" />
+          <h4 id="lease-proof-heading" className="font-semibold">
+            {t("wizard.integrations.lease.heading")}
+          </h4>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label htmlFor="wizard-lease-provider" className="grid gap-1 text-sm font-medium">
+            {t("wizard.integrations.lease.provider")}
+            <input
+              id="wizard-lease-provider"
+              value={leaseProvider}
+              onChange={(event) => setLeaseProvider(event.target.value)}
+              className="rounded-control border border-border bg-background px-3 py-2"
+            />
+          </label>
+          <label htmlFor="wizard-lease-role" className="grid gap-1 text-sm font-medium">
+            {t("wizard.integrations.lease.role")}
+            <input
+              id="wizard-lease-role"
+              value={leaseRole}
+              onChange={(event) => setLeaseRole(event.target.value)}
+              className="rounded-control border border-border bg-background px-3 py-2"
+            />
+          </label>
+        </div>
+        {leaseStatus ? (
+          <ProofStatus text={leaseStatus} />
+        ) : (
+          <Button type="submit" className="justify-self-start" disabled={busy !== null || !leaseProvider.trim() || !leaseRole.trim()}>
+            {busy === "lease" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Issue dynamic lease
+          </Button>
+        )}
+      </form>
+
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        className="justify-self-start"
+        onClick={() => onReady("Integration proof skipped; configure systems and reopen setup")}
+      >
+        {t("wizard.integrations.skip")}
+      </Button>
+    </section>
+  );
+}
+
+function ProofStatus({ text }: { text: string }) {
+  return (
+    <p className="flex items-center gap-2 text-sm font-medium text-status-success">
+      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+      {text}
+    </p>
   );
 }
 
@@ -496,12 +805,14 @@ function shellArg(value: string): string {
 function CompleteStep({
   agent,
   certificateName,
+  integrationSummary,
   issuerName,
   protocolSummary,
   onComplete,
 }: {
   agent: Agent | null;
   certificateName: string | null;
+  integrationSummary: string | null;
   issuerName: string | null;
   protocolSummary: string | null;
   onComplete: () => void;
@@ -516,6 +827,7 @@ function CompleteStep({
         <SummaryItem label="Issuer" value={issuerName ?? "Internal CA"} />
         <SummaryItem label="Protocols" value={protocolSummary ?? "Not configured"} />
         <SummaryItem label="Certificate" value={certificateName ?? "first-service"} />
+        <SummaryItem label="Integrations" value={integrationSummary ?? "Not exercised"} />
         <SummaryItem label="Agent" value={agent?.name ?? "not enrolled"} />
       </dl>
       <p className="text-sm text-muted-foreground">trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.</p>
@@ -538,7 +850,8 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 function nextLabel(step: WizardStepID, t: ReturnType<typeof useTranslation>["t"]): string {
   if (step === "issuer") return t("wizard.protocols.next");
   if (step === "protocols") return "Next: issue certificate";
-  if (step === "certificate") return "Next: enroll agent";
+  if (step === "certificate") return "Next: prove integrations";
+  if (step === "integrations") return "Next: enroll agent";
   if (step === "agent") return "Next: complete setup";
   return "Next";
 }

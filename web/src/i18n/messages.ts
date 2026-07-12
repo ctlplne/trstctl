@@ -190,7 +190,7 @@ export const messages = {
     description: "Explains the durable server-side effect of enabling the eval protocol profile.",
   },
   "wizard.protocols.loading": {
-    defaultMessage: "Reading served protocol status...",
+    defaultMessage: "Reading protocol status...",
     description: "Status shown while the first-run wizard reads protocol profile state.",
   },
   "wizard.protocols.responders": {
@@ -239,8 +239,81 @@ export const messages = {
     description: "First-run wizard button from issuer confirmation to protocol activation.",
   },
   "wizard.header.description": {
-    defaultMessage: "Connect an issuer, enable standard enrollment protocols, issue a certificate, enroll an agent, and finish.",
+    defaultMessage: "Connect an issuer, enable enrollment protocols, issue a certificate, verify configured integrations, enroll an agent, and finish.",
     description: "Description at the top of the first-run wizard.",
+  },
+  "wizard.integrations.stepLabel": {
+    defaultMessage: "Prove integrations",
+    description: "First-run carousel label for optional configured integration verification.",
+  },
+  "wizard.integrations.stepDescription": {
+    defaultMessage: "Exercise connector, upstream-CA, and dynamic-secret operations against systems you configured.",
+    description: "First-run carousel description for optional integration verification.",
+  },
+  "wizard.integrations.heading": {
+    defaultMessage: "Verify configured integrations",
+    description: "Heading for the optional first-run integration verification step.",
+  },
+  "wizard.integrations.description": {
+    defaultMessage:
+      "These checks use the same product routes as day-two automation. They require systems configured by an operator; you can skip this optional proof on a core-only install.",
+    description: "Explains the requirements and optional nature of first-run integration verification.",
+  },
+  "wizard.integrations.loading": {
+    defaultMessage: "Loading integration catalogs...",
+    description: "Status while the wizard reads connector and upstream-CA catalogs.",
+  },
+  "wizard.integrations.connector.heading": {
+    defaultMessage: "Deploy the issued identity through a connector",
+    description: "Heading for the first-run connector deployment proof.",
+  },
+  "wizard.integrations.connector.targetName": {
+    defaultMessage: "Target name",
+    description: "Label for the connector target name in the first-run wizard.",
+  },
+  "wizard.integrations.connector.config": {
+    defaultMessage: "Connector target config",
+    description: "Label for JSON connector configuration in the first-run wizard.",
+  },
+  "wizard.integrations.externalCA.heading": {
+    defaultMessage: "Issue with a configured upstream CA",
+    description: "Heading for first-run upstream-CA issuance verification.",
+  },
+  "wizard.integrations.externalCA.label": {
+    defaultMessage: "External CA",
+    description: "Label for the upstream-CA selector in the first-run wizard.",
+  },
+  "wizard.integrations.externalCA.none": {
+    defaultMessage: "No configured upstream CA",
+    description: "Option shown when no upstream CA is configured.",
+  },
+  "wizard.integrations.externalCA.csr": {
+    defaultMessage: "External CA CSR",
+    description: "Label for the PEM CSR submitted to an upstream CA.",
+  },
+  "wizard.integrations.externalCA.dns": {
+    defaultMessage: "External CA DNS names",
+    description: "Label for comma-separated DNS names requested from an upstream CA.",
+  },
+  "wizard.integrations.externalCA.dnsPlaceholder": {
+    defaultMessage: "payments.example.com, api.example.com",
+    description: "Example upstream-CA DNS names.",
+  },
+  "wizard.integrations.lease.heading": {
+    defaultMessage: "Issue a short-lived dynamic secret",
+    description: "Heading for first-run dynamic-secret lease verification.",
+  },
+  "wizard.integrations.lease.provider": {
+    defaultMessage: "Lease provider",
+    description: "Label for a configured dynamic-secret provider.",
+  },
+  "wizard.integrations.lease.role": {
+    defaultMessage: "Lease role",
+    description: "Label for a provider-specific dynamic-secret role.",
+  },
+  "wizard.integrations.skip": {
+    defaultMessage: "Skip integration proof for now",
+    description: "Button that lets a core-only install defer configured integration verification.",
   },
   "codesign.digest.placeholder": {
     defaultMessage: "sha256:<64 hexadecimal characters>",
@@ -6739,7 +6812,7 @@ const esESCatalog = {
   "wizard.protocols.heading": "Habilitar protocolos de inscripción",
   "wizard.protocols.description":
     "El perfil de evaluación prepara ACME, EST, SCEP, CMP, SSH, TSA y SPIFFE para este inquilino. Al activarlo, el servidor registra estado duradero antes de abrir cualquier respondedor; no es un interruptor solo del navegador.",
-  "wizard.protocols.loading": "Leyendo el estado de los protocolos servidos...",
+  "wizard.protocols.loading": "Leyendo el estado de los protocolos...",
   "wizard.protocols.responders": "Respondedores publicados: {protocols}.",
   "wizard.protocols.active": "El perfil de protocolos de evaluación está activo para este inquilino.",
   "wizard.protocols.activate": "Activar el perfil de protocolos de evaluación",
@@ -6752,7 +6825,27 @@ const esESCatalog = {
   "wizard.protocols.summaryActive": "Perfil de evaluación activo",
   "wizard.protocols.summaryOperator": "Perfil configurado por el operador",
   "wizard.protocols.next": "Siguiente: habilitar protocolos",
-  "wizard.header.description": "Conecte un emisor, habilite los protocolos de inscripción estándar, emita un certificado, inscriba un agente y termine.",
+  "wizard.header.description":
+    "Conecte un emisor, habilite los protocolos de inscripción, emita un certificado, verifique las integraciones configuradas, inscriba un agente y termine.",
+  "wizard.integrations.stepLabel": "Probar integraciones",
+  "wizard.integrations.stepDescription": "Ejecute operaciones de conectores, CA ascendentes y secretos dinámicos contra los sistemas configurados.",
+  "wizard.integrations.heading": "Verificar integraciones configuradas",
+  "wizard.integrations.description":
+    "Estas comprobaciones usan las mismas rutas del producto que la automatización diaria. Requieren sistemas configurados por un operador; puede omitir esta prueba opcional en una instalación solo con el núcleo.",
+  "wizard.integrations.loading": "Cargando catálogos de integraciones...",
+  "wizard.integrations.connector.heading": "Desplegar la identidad emitida mediante un conector",
+  "wizard.integrations.connector.targetName": "Nombre del destino",
+  "wizard.integrations.connector.config": "Configuración del destino del conector",
+  "wizard.integrations.externalCA.heading": "Emitir con una CA ascendente configurada",
+  "wizard.integrations.externalCA.label": "CA externa",
+  "wizard.integrations.externalCA.none": "No hay una CA ascendente configurada",
+  "wizard.integrations.externalCA.csr": "CSR de la CA externa",
+  "wizard.integrations.externalCA.dns": "Nombres DNS de la CA externa",
+  "wizard.integrations.externalCA.dnsPlaceholder": "pagos.example.com, api.example.com",
+  "wizard.integrations.lease.heading": "Emitir un secreto dinámico de corta duración",
+  "wizard.integrations.lease.provider": "Proveedor del arrendamiento",
+  "wizard.integrations.lease.role": "Rol del arrendamiento",
+  "wizard.integrations.skip": "Omitir por ahora la prueba de integraciones",
   "codesign.digest.placeholder": "sha256:<64 caracteres hexadecimales>",
   "codesign.receipt.fulcioSAN": "SAN de Fulcio verificado",
   "codesign.receipt.transparencyDestination": "Destino de transparencia",

@@ -1207,6 +1207,7 @@ export function Certificates() {
                   limit,
                 }}
                 onViewRestore={restoreCertificateGridView}
+                virtualization={{ rowHeight: 52, viewportHeight: 520, overscan: 6, threshold: 80 }}
                 toolbar={({ columnChooser, savedViews }) => (
                   <DataGridToolbar
                     searchLabel="Search loaded rows"

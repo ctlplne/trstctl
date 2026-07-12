@@ -1050,11 +1050,11 @@ func TestTRACE033PKISecretsRemainConditionalUntilEnabled(t *testing.T) {
 	}
 }
 
-// TestTRACE034SecretSyncPlatformIntegrationsRemainPartial locks the
+// TestTRACE034SecretSyncPlatformIntegrationsAreConditionallyServed locks the
 // remediation for TRACE-034. The served secret-sync/platform-integration workflow
 // belongs in the GA denominator once API, CLI, Kubernetes operator, workload
 // injection, and unvaulted-secret posture paths are all served and tested.
-func TestTRACE034SecretSyncPlatformIntegrationsRemainPartial(t *testing.T) {
+func TestTRACE034SecretSyncPlatformIntegrationsAreConditionallyServed(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -1064,7 +1064,7 @@ func TestTRACE034SecretSyncPlatformIntegrationsRemainPartial(t *testing.T) {
 	if !ok {
 		t.Fatal("F68 Secret sync / platform integrations row is missing")
 	}
-	requireResidualServedState(t, "TRACE-034", f68, "partial")
+	requireResidualServedState(t, "TRACE-034", f68, "conditional")
 
 	servedEvidence := strings.ToLower(strings.Join([]string{
 		f68.BackendStatus,
@@ -1083,6 +1083,8 @@ func TestTRACE034SecretSyncPlatformIntegrationsRemainPartial(t *testing.T) {
 		"gcp secret manager",
 		"azure key vault",
 		"hashicorp vault kv",
+		"terraform cloud/opentofu",
+		"vault kv v2",
 		"kubernetes",
 		"trstctlsecretsync",
 		"trstctlsecretinjection",

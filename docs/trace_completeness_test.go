@@ -638,11 +638,11 @@ func TestUsabilityOutcomeNFRsDisclosedAsUnmeasured(t *testing.T) {
 	if len(firstRun.Measurements) == 0 {
 		t.Fatal("first-run receipt must include at least one measurement")
 	}
-	if !containsAll(strings.ToLower(strings.Join(firstRun.Command, " ")), []string{"npm", "wizard.test.tsx"}) {
-		t.Fatalf("first-run receipt command must run the wizard journey test, got %q", strings.Join(firstRun.Command, " "))
+	if !containsAll(strings.ToLower(strings.Join(firstRun.Command, " ")), []string{"npm", "first-run.test.tsx"}) {
+		t.Fatalf("first-run receipt command must run the served-capability journey test, got %q", strings.Join(firstRun.Command, " "))
 	}
-	if firstRun.TestAnchor != "web/src/__tests__/wizard.test.tsx" {
-		t.Fatalf("first-run receipt test anchor = %q, want web/src/__tests__/wizard.test.tsx", firstRun.TestAnchor)
+	if firstRun.TestAnchor != "web/src/__tests__/first-run.test.tsx" {
+		t.Fatalf("first-run receipt test anchor = %q, want web/src/__tests__/first-run.test.tsx", firstRun.TestAnchor)
 	}
 
 	var operatorStudy struct {

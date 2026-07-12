@@ -203,8 +203,11 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
   `GET /api/v1/editions`. It also administers tenants, members, roles, OIDC
   mapping, and API tokens; **Connectors** (`/connectors`) is the
   deployment-connector registry.
-- **Wizard** (`/wizard`) is the onboarding carousel: connect an issuer, issue the first
-  certificate, enroll an agent, then complete. It is re-openable and reduced-motion safe.
+- **Wizard** (`/wizard`) is the onboarding carousel: connect an issuer, enable the
+  evaluation enrollment profile, issue the first certificate, optionally prove a
+  configured connector/upstream-CA/dynamic-secret backend through its served route,
+  enroll an agent, then complete. It is re-openable and reduced-motion safe; lease
+  credential material is never retained in component state.
 
 ## Cross-cutting console capabilities
 

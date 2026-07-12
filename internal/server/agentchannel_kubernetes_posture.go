@@ -72,10 +72,10 @@ func (a *agentService) ReportKubernetesPosture(ctx context.Context, req *transpo
 		})
 	})
 	if err != nil {
-		switch {
-		case err == orchestrator.ErrIdempotencyConflict:
+		switch err {
+		case orchestrator.ErrIdempotencyConflict:
 			return nil, status.Error(codes.AlreadyExists, "Kubernetes posture report id was already used for different metadata")
-		case err == orchestrator.ErrInProgress:
+		case orchestrator.ErrInProgress:
 			return nil, status.Error(codes.Aborted, "Kubernetes posture report is already being recorded")
 		default:
 			return nil, status.Errorf(codes.Internal, "record Kubernetes posture report: %v", err)

@@ -21,7 +21,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   fail(`unknown argument: ${arg}`);
 }
 
-const command = ["npm", "--prefix", "web", "run", "test", "--", "wizard.test.tsx"];
+const command = ["npm", "--prefix", "web", "run", "test", "--", "first-run.test.tsx"];
 const started = performance.now();
 const result = spawnSync(command[0], command.slice(1), {
   cwd: root,
@@ -41,11 +41,11 @@ const receipt = {
   schema_version: 1,
   id: "USABILITY-SLO-001",
   generated_at: process.env.TRSTCTL_USABILITY_RECEIPT_GENERATED_AT || new Date().toISOString(),
-  journey: "first-run wizard to first certificate",
+  journey: "first-run wizard to issue, deploy, integrate, and enroll",
   measurement_method:
-    "Automated Vitest/jsdom user-event walk of the first-run wizard: confirm the signer-backed internal CA, issue the first certificate through the served API client contract, mint an enrollment token, detect the first agent, and complete setup.",
+    "Automated Vitest/jsdom user-event walk of the first-run wizard: confirm the signer-backed internal CA, issue the first certificate, deploy it through a served connector, issue through a served upstream CA, open a served dynamic-secret lease, mint an enrollment token, and detect the first agent.",
   command,
-  test_anchor: "web/src/__tests__/wizard.test.tsx",
+  test_anchor: "web/src/__tests__/first-run.test.tsx",
   served_contract_anchors: [
     "web/src/pages/Wizard.tsx",
     "web/src/lib/api.ts",
@@ -61,7 +61,7 @@ const receipt = {
   },
   measurements: [
     {
-      name: "wizard_contract_walk",
+      name: "served_capability_wizard_contract_walk",
       duration_ms: durationMS,
       met: durationMS <= targetMS,
       samples: 1

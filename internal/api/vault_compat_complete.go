@@ -509,7 +509,7 @@ func (a *API) vaultTransitCreateKey(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		kind := transit.KindAEAD
+		var kind transit.Kind
 		switch strings.ToLower(strings.TrimSpace(req.Type)) {
 		case "", "aes256-gcm96":
 			kind = transit.KindAEAD

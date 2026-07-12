@@ -103,6 +103,7 @@ receipt cannot certify it.
 | F39 | Code/CI secret scanning bridge | docs/features/secrets.md |
 | F63 | Native secret store | docs/features/secrets.md |
 | F65 | Dynamic secrets | docs/features/secrets.md |
+| F68 | Secret sync / platform integrations | docs/features/secrets.md |
 | F67 | PKI as a secrets engine | docs/features/secrets.md |
 | F58 | Platform auth-method framework | docs/features/secrets.md |
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
@@ -123,7 +124,6 @@ receipt cannot certify it.
 | F57 | PQC migration orchestration | docs/features/lifecycle-and-pqc.md |
 | F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
-| F68 | Secret sync / platform integrations | docs/features/secrets.md |
 
 ### Library-only
 
@@ -519,9 +519,12 @@ integration work.
   while discovery stores only redacted rule/file/line/provider metadata. Native
   provider API polling, provider signature verification, artifact retention
   automation, and provider-native annotations remain architecture shortfalls.
-- **React console scale work:** the console itself is served (see "The React web
-  console" below). What remains not yet served of the original F12 epic is cursor
-  pagination and list virtualization for very large tables.
+- **React console scale work:** cursor-aware inventory pages consume `next_cursor`
+  and accumulate additional pages on explicit operator action. Every DataGrid-backed
+  large table switches to a bounded, overscanned DOM window after 100 loaded rows;
+  the certificate inventory has a focused multi-page acceptance test that proves the
+  second cursor is sent and that scrolling replaces, rather than appends, rendered
+  row nodes.
 
 ## The React web console: served by the binary
 
@@ -553,16 +556,16 @@ the running binary serves**:
   SIEM/SOAR/chat/ITSM response dispatch, and sealed audit bundle), and the existing
   **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only** surfaces
   remain labeled until they receive their own served UI, including the bounded
-  break-glass reconciliation workflow and very-large-list cursor/virtualized browsing.
+  break-glass reconciliation workflow.
   This is a UI boundary, not a claim that the corresponding served API is
   library-only.
 - **Console UX hardening.** A **destructive-transition confirmation**
   (revoke/retire require an explicit, credential-named confirm dialog) and
   **429/`Retry-After` handling** (the API client surfaces a concrete "retry in Ns"
-  hint) are served and tested. Still outstanding in the SPA:
-  **cursor-based pagination** (the client reads only `.items` and ignores
-  `next_cursor`) and **list virtualization** for large tables; both remain not yet
-  served.
+  hint) are served and tested. Cursor-based pagination and bounded list
+  virtualization are also served: the client carries `next_cursor` into the next
+  request, accumulates those rows, and the shared DataGrid renders only the visible
+  window plus overscan for large result sets.
 
 ## Interactive OIDC, SAML, and LDAP / Active Directory browser login & sessions: served by the binary
 
@@ -735,14 +738,17 @@ writing a new token file and restarting the control plane so the new hash is loa
   (so state is reconstructable from history); secret values are held in wipeable,
   zeroed memory (never as a string), never logged, and never returned beyond their
   design. The surface is proven end-to-end by acceptance tests.
-- **Secret sync external stores (F68) — partial.**
+- **Secret sync external stores (F68) — served when configured.**
   The running binary mounts `POST /api/v1/secrets/syncs` and `trstctl-cli secrets syncs
   run`. A request reads one stored secret, writes a sealed tenant-scoped outbox row
   before any external write, records immutable sync intent, and returns metadata
   only. `buildRunDeps` constructs tenant-bound targets for
   AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab
   CI/CD variables, Vercel project environment variables, generic CI JSON endpoints, and
-  Kubernetes Secrets from operator configuration. Only the outbox dispatcher resolves
+  Kubernetes Secrets from operator configuration. It also constructs first-class
+  Terraform Cloud/OpenTofu Variables API and Vault KV v2 targets: Terraform writes are
+  workspace-scoped with category/sensitive metadata, while Vault writes use the KV v2
+  data/metadata paths and preserve version/CAS semantics. Only the outbox dispatcher resolves
   the target credential and writes externally. The DoD proof enforces exact target
   authentication, decrypts GitHub's X25519 sealed box in a separate receiver process,
   and independently reads every destination value back. `GET
@@ -768,10 +774,9 @@ writing a new token file and restarting the control plane so the new hash is loa
   /api/v1/secrets/unvaulted` and `trstctl-cli secrets unvaulted` show the served
   CAP-SECR-07 posture by combining configured repository/third-party scan sources,
   redacted `leaked_secret` findings, AWS/GCP/Azure/Vault discovery visibility, and
-  configured AWS/GCP/Azure vault-augmentation sync targets. Terraform Cloud/OpenTofu and
-  arbitrary webhook targets still use the generic JSON/webhook pusher shape until
-  those providers receive deeper first-class APIs; Vault KV is discovery-only in core
-  until a provider-specific outbound Vault sync target is configured. If a target is not configured, the
+  configured AWS/GCP/Azure/Vault vault-augmentation sync targets. Arbitrary webhooks
+  intentionally remain the generic JSON target; Terraform/OpenTofu and Vault no longer
+  depend on that generic shape. If a target is not configured, the
   route returns `503` and does not attempt an external call.
 - **Transit/KMIP (F66) — served, with a bounded KMIP lifecycle profile.**
   The running binary now mounts `/api/v1/transit/*` and the `trstctl-cli transit`
@@ -1530,8 +1535,9 @@ and not yet measured** in CI, so neither is silently over-claimed.
   now has **automated wizard timing** evidence: the
   `scripts/usability/first-run-receipt.json` receipt is generated by
   `scripts/usability/measure-first-run.mjs`, which walks the first-run wizard
-  contract (internal CA confirmation, first certificate issuance, enrollment-token
-  minting, agent detection, and setup completion) and keeps that assisted path
+  contract (internal CA confirmation, first certificate issuance, served connector
+  deployment, upstream-CA issuance, dynamic-secret lease issuance, enrollment-token
+  minting, and agent detection) and keeps that assisted path
   inside a 15 minute time-to-first-certificate budget. The scope is intentionally
   narrow: it measures the browser journey and served API-client contract in CI, not
   human reading time, package download time, real network latency, or the physical

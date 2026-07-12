@@ -13,6 +13,8 @@ const { apiMock } = vi.hoisted(() => ({
     issueCertificate: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
+    connectorCatalog: vi.fn(),
+    externalCAs: vi.fn(),
   },
 }));
 
@@ -46,6 +48,8 @@ describe("first-run wizard", () => {
       active: true,
       protocols: ["acme", "est", "scep", "cmp", "ssh", "tsa", "spiffe"],
     });
+    apiMock.connectorCatalog.mockReset().mockResolvedValue({ items: [] });
+    apiMock.externalCAs.mockReset().mockResolvedValue([]);
   });
 
   it("walks internal-CA → issue-first-cert → install-agent and completes setup", async () => {
@@ -77,9 +81,14 @@ describe("first-run wizard", () => {
     await user.type(screen.getByLabelText(/service name/i), "payments");
     await user.click(screen.getByRole("button", { name: /issue certificate/i }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
+    await user.click(screen.getByRole("button", { name: /next: prove integrations/i }));
+
+    // Step 4 — configured integration proof is optional on a core-only install.
+    expect(await screen.findByRole("heading", { name: /verify configured integrations/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /skip integration proof/i }));
     await user.click(screen.getByRole("button", { name: /next: enroll agent/i }));
 
-    // Step 4 — install an agent: a one-time token is minted and shown in the
+    // Step 5 — install an agent: a one-time token is minted and shown in the
     // install command, then the wizard detects the agent's registration.
     await user.type(await screen.findByLabelText(/agent identity/i), "edge-01");
     await user.click(screen.getByRole("button", { name: /mint enrollment token/i }));
@@ -105,7 +114,10 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
     await user.type(await screen.findByLabelText(/service name/i), "payments");
     await user.click(screen.getByRole("button", { name: /issue certificate/i }));
-    await user.click(await screen.findByRole("button", { name: /next: enroll agent/i }));
+    await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
+    await screen.findByRole("heading", { name: /verify configured integrations/i });
+    await user.click(screen.getByRole("button", { name: /skip integration proof/i }));
+    await user.click(screen.getByRole("button", { name: /next: enroll agent/i }));
     await user.click(await screen.findByRole("button", { name: /check (for agent|now)/i }));
     await waitFor(() => expect(screen.getByText(/edge-01/)).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: /next: complete setup/i }));

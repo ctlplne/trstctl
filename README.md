@@ -361,10 +361,10 @@ scripts/    # developer & release scripts
 The honest axis isn't "phase 1 vs. phase 2" — most of the platform is already built
 and tested. What remains:
 
-- **Close the remaining named residuals** — React console cursor pagination and list
-  virtualization, Terraform Cloud/OpenTofu and arbitrary webhook secret-sync targets,
-  Vault KV outbound sync beyond discovery-only core, and KMIP appliance profiles/wrapping (tracked in
-  [Current limitations](docs/limitations.md)).
+- **Keep the executable capability census green** as integrations and user journeys
+  evolve; cursor pagination/virtualized grids, Terraform/OpenTofu and Vault KV sync,
+  and KMIP profile negotiation are now served paths rather than roadmap placeholders
+  (see [Current limitations](docs/limitations.md) for the remaining bounded edges).
 - **Plugin marketplace maturity** for third-party CAs and connectors, on the existing
   WASM capability host.
 

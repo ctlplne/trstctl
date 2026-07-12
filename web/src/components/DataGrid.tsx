@@ -26,6 +26,24 @@ export type DataGridSort = {
   direction: SortDirection;
 };
 
+export type DataGridVirtualization = {
+  /** Estimated rendered row height in CSS pixels. Keep this stable per grid. */
+  rowHeight: number;
+  /** Scroll viewport height in CSS pixels. */
+  viewportHeight: number;
+  /** Rows rendered before and after the visible window for smooth keyboard/scroll movement. */
+  overscan?: number;
+  /** Small result sets stay as a normal table. Defaults to 100 rows. */
+  threshold?: number;
+};
+
+const defaultVirtualization: DataGridVirtualization = {
+  rowHeight: 56,
+  viewportHeight: 560,
+  overscan: 8,
+  threshold: 100,
+};
+
 export type DataGridToolbarControls = {
   columnChooser?: ReactNode;
   savedViews?: ReactNode;
@@ -51,6 +69,8 @@ export type DataGridProps<Row> = {
     getRowLabel?: (row: Row) => string;
   };
   pagination?: ReactNode;
+  /** Enabled with safe defaults for every large DataGrid; pass false only for a deliberately non-scrollable print/export view. */
+  virtualization?: DataGridVirtualization | false;
   showColumnChooser?: boolean;
   viewStorageKey?: string;
   viewMetadata?: Record<string, GridViewPrimitive | undefined>;
@@ -74,6 +94,7 @@ export function DataGrid<Row>({
   bulkSlot,
   selection,
   pagination,
+  virtualization,
   showColumnChooser = false,
   viewStorageKey,
   viewMetadata,
@@ -96,6 +117,20 @@ export function DataGrid<Row>({
         .filter((column): column is DataGridColumn<Row> => Boolean(column && visibleColumnIds.has(column.id))),
     [columnById, columnOrder, visibleColumnIds],
   );
+  const virtualConfig = virtualization === false ? undefined : (virtualization ?? defaultVirtualization);
+  const [virtualScrollTop, setVirtualScrollTop] = useState(0);
+  const virtualized = Boolean(virtualConfig && rows.length >= (virtualConfig.threshold ?? 100));
+  const rowHeight = Math.max(1, virtualConfig?.rowHeight ?? 1);
+  const viewportHeight = Math.max(rowHeight, virtualConfig?.viewportHeight ?? rowHeight);
+  const overscan = Math.max(0, virtualConfig?.overscan ?? 5);
+  const visibleRowCount = Math.ceil(viewportHeight / rowHeight);
+  const unclampedStart = Math.max(0, Math.floor(virtualScrollTop / rowHeight) - overscan);
+  const virtualStart = virtualized ? Math.min(unclampedStart, Math.max(0, rows.length - visibleRowCount)) : 0;
+  const virtualEnd = virtualized ? Math.min(rows.length, virtualStart + visibleRowCount + overscan * 2) : rows.length;
+  const renderedRows = virtualized ? rows.slice(virtualStart, virtualEnd) : rows;
+  const topSpacerHeight = virtualized ? virtualStart * rowHeight : 0;
+  const bottomSpacerHeight = virtualized ? Math.max(0, (rows.length - virtualEnd) * rowHeight) : 0;
+  const renderedColumnCount = visibleColumns.length + (selection ? 1 : 0) + (onRowOpen ? 1 : 0);
   const allVisibleRowIds = useMemo(() => rows.map(getRowId), [getRowId, rows]);
   const selectedVisibleCount = selection ? allVisibleRowIds.filter((id) => selection.selectedIds.has(id)).length : 0;
   const allVisibleSelected = selection ? allVisibleRowIds.length > 0 && selectedVisibleCount === allVisibleRowIds.length : false;
@@ -294,10 +329,17 @@ export function DataGrid<Row>({
           {stateMessage}
         </GridState>
       ) : (
-        <div className="overflow-x-auto rounded-panel border border-border bg-card shadow-elevation1">
-          <table className="w-full min-w-[40rem] text-start text-body">
+        <div
+          className="overflow-auto rounded-panel border border-border bg-card shadow-elevation1"
+          data-testid="data-grid-scroll-viewport"
+          data-virtualized={virtualized ? "true" : "false"}
+          data-total-rows={rows.length}
+          style={virtualized ? { maxHeight: viewportHeight } : undefined}
+          onScroll={virtualized ? (event) => setVirtualScrollTop(event.currentTarget.scrollTop) : undefined}
+        >
+          <table className="w-full min-w-[40rem] text-start text-body" aria-rowcount={rows.length + 1}>
             <caption className="sr-only">{ariaLabel}</caption>
-            <thead>
+            <thead className={virtualized ? "sticky top-0 z-10 bg-card" : undefined}>
               <tr className="border-b border-border text-muted-foreground">
                 {selection && (
                   <th scope="col" className="px-3 py-2 font-medium">
@@ -336,8 +378,13 @@ export function DataGrid<Row>({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={getRowId(row)} className="border-b border-border align-top last:border-0">
+              {topSpacerHeight > 0 && (
+                <tr aria-hidden="true" data-virtual-spacer="top">
+                  <td colSpan={renderedColumnCount} style={{ height: topSpacerHeight, padding: 0 }} />
+                </tr>
+              )}
+              {renderedRows.map((row, renderedIndex) => (
+                <tr key={getRowId(row)} aria-rowindex={virtualStart + renderedIndex + 2} className="border-b border-border align-top last:border-0">
                   {selection && (
                     <td className="px-3 py-2">
                       <input
@@ -362,6 +409,11 @@ export function DataGrid<Row>({
                   )}
                 </tr>
               ))}
+              {bottomSpacerHeight > 0 && (
+                <tr aria-hidden="true" data-virtual-spacer="bottom">
+                  <td colSpan={renderedColumnCount} style={{ height: bottomSpacerHeight, padding: 0 }} />
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -65,7 +65,7 @@ func fetchServedSerial(t *testing.T, addr string) string {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	state := conn.ConnectionState()
 	if len(state.PeerCertificates) == 0 {
 		t.Fatal("no served certificate")

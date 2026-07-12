@@ -86,10 +86,10 @@ still run side by side.
 
 Visit <https://localhost:8443> (accept the self-signed evaluation certificate) and
 sign in. On a fresh install you land on a
-**Get started** prompt that launches the setup wizard. The wizard has five
+**Get started** prompt that launches the setup wizard. The wizard has six
 screens: use the internal CA, activate the tenant-bound evaluation enrollment
-profile, issue the first certificate with an issuer credential, enroll an agent,
-and complete setup.
+profile, issue the first certificate with an issuer credential, prove configured
+integrations through their served routes, enroll an agent, and complete setup.
 
 ## 3. Run the wizard (about 10 minutes)
 
@@ -132,6 +132,25 @@ track it and alert before expiry. Renewal is a manual, one-click action today.
     a second, so the certificate appears within roughly a second of clicking
     **Issue**. The wall-clock for the whole walkthrough is dominated by installing
     the agent, not by trstctl.
+
+### Prove served integrations
+
+The optional **Prove served integrations** screen demonstrates that integration
+packages are reachable from the shipped control plane, not merely present in the
+source tree. Against systems already configured by an operator, it:
+
+1. reads the served connector catalog, creates a connector target, and deploys the
+   identity issued in the previous screen through
+   `POST /api/v1/connectors/targets/{id}/deploy`;
+2. reads configured upstream authorities and submits an operator-supplied CSR to
+   `POST /api/v1/external-cas/{id}/issue`; and
+3. opens a 15-minute dynamic-secret lease through
+   `POST /api/v1/secrets/leases`.
+
+The wizard retains only lease metadata; it never renders or stores the returned
+one-time credential in browser state. A core-only install with no upstream systems
+can choose **Skip integration proof for now** and reopen the guide after those
+systems are configured. Skipping does not claim that an integration was proven.
 
 ### Install an agent
 
@@ -181,8 +200,8 @@ for how to get the `trstctl-agent` binary on Linux, macOS, and Windows.
 ### Complete setup
 
 In **Complete setup**, confirm the internal CA, protocol profile, issued certificate,
-and enrolled agent summary. The wizard latches closed in this browser and sends you to
-the certificate operations view.
+integration-proof status, and enrolled agent summary. The wizard latches closed in this
+browser and sends you to the certificate operations view.
 
 ## Get your first API token
 

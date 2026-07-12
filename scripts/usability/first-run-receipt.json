@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "id": "USABILITY-SLO-001",
-  "generated_at": "2026-06-30T05:11:58.924Z",
-  "journey": "first-run wizard to first certificate",
-  "measurement_method": "Automated Vitest/jsdom user-event walk of the first-run wizard: confirm the signer-backed internal CA, issue the first certificate through the served API client contract, mint an enrollment token, detect the first agent, and complete setup.",
+  "generated_at": "2026-07-12T21:44:54.523Z",
+  "journey": "first-run wizard to issue, deploy, integrate, and enroll",
+  "measurement_method": "Automated Vitest/jsdom user-event walk of the first-run wizard: confirm the signer-backed internal CA, issue the first certificate, deploy it through a served connector, issue through a served upstream CA, open a served dynamic-secret lease, mint an enrollment token, and detect the first agent.",
   "command": [
     "npm",
     "--prefix",
@@ -11,9 +11,9 @@
     "run",
     "test",
     "--",
-    "wizard.test.tsx"
+    "first-run.test.tsx"
   ],
-  "test_anchor": "web/src/__tests__/wizard.test.tsx",
+  "test_anchor": "web/src/__tests__/first-run.test.tsx",
   "served_contract_anchors": [
     "web/src/pages/Wizard.tsx",
     "web/src/lib/api.ts",
@@ -28,8 +28,8 @@
   },
   "measurements": [
     {
-      "name": "wizard_contract_walk",
-      "duration_ms": 2000.49,
+      "name": "served_capability_wizard_contract_walk",
+      "duration_ms": 1835.11,
       "met": true,
       "samples": 1
     }
@@ -37,17 +37,18 @@
   "summary": {
     "ok": true,
     "met": true,
-    "duration_ms": 2000.49,
+    "duration_ms": 1835.11,
     "target_ms": 900000
   },
   "stdout_tail": [
     "> trstctl-web@0.1.0 test",
-    "> vitest run wizard.test.tsx",
+    "> vitest run first-run.test.tsx",
     " RUN  v2.1.9 /Users/shankar/Desktop/ctlplne-trstctl/trstctl",
-    " ✓ web/src/__tests__/wizard.test.tsx (3 tests) 366ms",
+    " ✓ web/src/__tests__/first-run.test.tsx (1 test) 490ms",
+    "   ✓ first-run served capability journey > issues, deploys, exercises an upstream CA and lease backend, then enrolls 489ms",
     " Test Files  1 passed (1)",
-    "      Tests  3 passed (3)",
-    "   Start at  01:11:57",
-    "   Duration  1.36s (transform 90ms, setup 83ms, collect 231ms, tests 366ms, environment 361ms, prepare 58ms)"
+    "      Tests  1 passed (1)",
+    "   Start at  17:44:53",
+    "   Duration  1.27s (transform 176ms, setup 46ms, collect 309ms, tests 490ms, environment 182ms, prepare 38ms)"
   ]
 }
