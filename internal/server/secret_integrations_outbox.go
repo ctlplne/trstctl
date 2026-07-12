@@ -39,6 +39,10 @@ type secretIntegrationOutboxDispatcher struct {
 	// version-creating receiver commits but before the delivered event/outbox ACK.
 	// Production leaves it nil.
 	afterSecretSyncDelivery func(context.Context, secretSyncOutboxPayload) error
+	// Test-only diagnostic seam. Runtime proof reduces the live provider error to
+	// a closed non-secret class in memory; production leaves it nil and durable
+	// outbox errors remain the closed AN-8-safe values below.
+	afterDynamicSecretDelivery func(error)
 }
 
 func queueSecretSyncEvent(ctx context.Context, st *store.Store, log *events.Log, kek seal.KeyWrapper, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error {
@@ -99,7 +103,11 @@ func queueSecretSyncEvent(ctx context.Context, st *store.Store, log *events.Log,
 func (d *secretIntegrationOutboxDispatcher) Deliver(ctx context.Context, m orchestrator.Message) (handled bool, err error) {
 	switch {
 	case m.Destination == dynamicSecretIssueDestination:
-		return true, d.issueDynamicSecret(ctx, m)
+		err := d.issueDynamicSecret(ctx, m)
+		if d.afterDynamicSecretDelivery != nil {
+			d.afterDynamicSecretDelivery(err)
+		}
+		return true, err
 	case m.Destination == dynamicSecretRevokeDestination:
 		return true, d.revokeDynamicSecret(ctx, m)
 	case strings.HasPrefix(m.Destination, secretSyncDestinationPrefix):

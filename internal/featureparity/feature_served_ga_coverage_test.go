@@ -1143,10 +1143,15 @@ func TestTRACE034SecretSyncPlatformIntegrationsAreConditionallyServed(t *testing
 		}
 	}
 
-	residual := strings.ToLower(strings.Join([]string{f68.TargetMapping, f68.AcceptanceTest}, "\n"))
-	for _, want := range []string{"roadmap residual", "terraform/opentofu", "webhook"} {
+	residual := strings.ToLower(f68.TargetMapping)
+	for _, want := range []string{"roadmap residual", "arbitrary webhook"} {
 		if !strings.Contains(residual, want) {
-			t.Errorf("TRACE-034: F68 must explicitly park deeper target-specific integrations as a roadmap residual; missing %q in %q", want, residual)
+			t.Errorf("TRACE-034: F68 must explicitly park arbitrary webhook-specific managed forms as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+	for _, servedTarget := range []string{"terraform/opentofu", "vault kv"} {
+		if strings.Contains(residual, servedTarget) {
+			t.Errorf("TRACE-034: F68 must not park served target %q as a roadmap residual: %q", servedTarget, residual)
 		}
 	}
 }

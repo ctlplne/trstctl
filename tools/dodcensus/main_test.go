@@ -1117,8 +1117,8 @@ func TestManifestIsVersionedGranularAndCoversEveryDoDCard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load committed manifest: %v", err)
 	}
-	if len(manifest.Entries) != 83 {
-		t.Fatalf("manifest entries = %d, want 83", len(manifest.Entries))
+	if len(manifest.Entries) != 81 {
+		t.Fatalf("manifest entries = %d, want one exact row for each of the 81 DoD-gated backlog cards", len(manifest.Entries))
 	}
 	seen := map[string]bool{}
 	for _, entry := range manifest.Entries {

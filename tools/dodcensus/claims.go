@@ -172,12 +172,13 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		if entry.Inventory == nil || !*entry.Inventory {
 			continue
 		}
-		current := counts[entry.Capability]
+		capability := advertisedInventoryCapability(entry)
+		current := counts[capability]
 		current.inventory++
 		if claimableCensusEntry(report.Entries[entry.ID]) {
 			current.served++
 		}
-		counts[entry.Capability] = current
+		counts[capability] = current
 	}
 	capabilities := make([]string, 0, len(wantInventory))
 	for capability := range wantInventory {
@@ -199,6 +200,19 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		if strings.Contains(readme, stale) {
 			failures.add("README keeps stale integration count %q; code and DoD manifest have 8", stale)
 		}
+	}
+}
+
+// advertisedInventoryCapability keeps public inventory counts tied to the one
+// exact DoD row that proves each backend. The two sync backends completed by W2
+// stay in the secrets_residuals family for card/family reporting, while still
+// contributing to the advertised ten-target secret-sync inventory.
+func advertisedInventoryCapability(entry Entry) string {
+	switch entry.ID {
+	case "secrets_residuals.terraform_opentofu_native_sync", "secrets_residuals.vault_kv_outbound_sync":
+		return "secret_sync"
+	default:
+		return entry.Capability
 	}
 }
 

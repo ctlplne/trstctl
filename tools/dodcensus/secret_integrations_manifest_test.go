@@ -18,7 +18,7 @@ func TestSecretIntegrationManifestMatchesProductionAssemblyAndRuntimeBinding(t *
 		t.Fatal(err)
 	}
 	profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
-	wantByCapability := map[string]int{"dynamic_secret": 9, "secret_sync": 11}
+	wantByCapability := map[string]int{"dynamic_secret": 9, "secret_sync": 9}
 	seen := map[string]int{}
 	for _, entry := range manifest.Entries {
 		if _, ok := wantByCapability[entry.Capability]; !ok {
@@ -74,8 +74,8 @@ func TestSecretResidualManifestPinsNativeSyncAssemblyAndRuntime(t *testing.T) {
 			t.Errorf("%s card/capability/enforcement=%q/%q/%q, want %q/secrets_residuals/required",
 				entry.ID, entry.CardID, entry.Capability, entry.Enforcement, expected.card)
 		}
-		if entry.Inventory == nil || *entry.Inventory {
-			t.Errorf("%s inventory=%v, want explicit false residual", entry.ID, entry.Inventory)
+		if entry.Inventory == nil || !*entry.Inventory {
+			t.Errorf("%s inventory=%v, want explicit true because this residual is also an advertised native sync target", entry.ID, entry.Inventory)
 		}
 		if entry.Assembly.File != "internal/server/run.go" || entry.Assembly.Function != "buildRunDeps" ||
 			entry.Assembly.Binding != "returned-field" || entry.Assembly.Field != "TenantSecretSyncTargets" ||

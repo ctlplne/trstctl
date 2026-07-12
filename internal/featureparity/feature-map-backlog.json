@@ -10257,7 +10257,7 @@
       "served_state": "conditional",
       "backend_status": "served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers, including native Terraform Cloud/OpenTofu Variables API and Vault KV v2 targets, through sealed-outbox delivery",
       "current_frontend_mapping": "operate: Secrets UI serves configured sync delivery, catalog/status, cloud discovery, Kubernetes/workload injection, unvaulted posture, and provider-specific Terraform/OpenTofu and Vault KV v2 targets",
-      "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt. Arbitrary webhook-specific managed forms may add convenience beyond the served generic JSON target without changing the backend boundary.",
+      "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt. Roadmap residual: arbitrary webhook-specific managed forms may add convenience beyond the served generic JSON target without changing the backend boundary.",
       "acceptance_test": "The secret_sync and secrets_residuals DoD census rows drive all ten configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback.",
       "source_docs": [
         "docs/features/secrets.md"

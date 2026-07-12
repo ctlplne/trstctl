@@ -722,7 +722,7 @@ func Start(t *testing.T, id string, handler http.Handler, request *http.Request)
 	capture := &responseCapture{header: make(http.Header), status: http.StatusOK}
 	handler.ServeHTTP(capture, request)
 	if err := responseIsServed(capture.status, capture.body.Bytes()); err != nil {
-		t.Fatalf("DOD-CENSUS: %s assembled route is not served: %v", id, err)
+		t.Fatalf("DOD-CENSUS: %s assembled route is not served: %v body=%q", id, err, boundedResponseDiagnostic(capture.body.Bytes()))
 	}
 	return &Session{t: t, expect: *expected, statusCode: capture.status, body: append([]byte(nil), capture.body.Bytes()...)}
 }

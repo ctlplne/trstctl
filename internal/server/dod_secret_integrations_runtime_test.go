@@ -277,18 +277,19 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 		t.Fatalf("Build production deps: %v", err)
 	}
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	dynamicDeliveryErrorClass := dodCaptureDynamicDeliveryErrorClass(t, srv)
 	dodStartSecretIntegrationDispatcher(t, srv)
 	token := dodSecretIntegrationToken(t, st)
 
-	dodProveDynamicSecret(t, "dynamic_secret.registry", dynamicRegistry, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.registry", "registry", "postgresql"})
-	dodProveDynamicSecret(t, "dynamic_secret.postgresql", dynamicPostgres, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.postgresql", "postgresql", "postgresql"})
-	dodProveDynamicSecret(t, "dynamic_secret.mysql", dynamicMySQL, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.mysql", "mysql", "mysql"})
-	dodProveDynamicSecret(t, "dynamic_secret.mongodb", dynamicMongo, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.mongodb", "mongodb", "mongodb"})
-	dodProveDynamicSecret(t, "dynamic_secret.aws_iam", dynamicAWS, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.aws_iam", "aws-iam", "aws-iam"})
-	dodProveDynamicSecret(t, "dynamic_secret.gcp_iam", dynamicGCP, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.gcp_iam", "gcp-iam", "gcp-iam"})
-	dodProveDynamicSecret(t, "dynamic_secret.azure_entra", dynamicAzure, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.azure_entra", "azure-entra", "azure-entra"})
-	dodProveDynamicSecret(t, "dynamic_secret.kubernetes", dynamicKubernetes, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.kubernetes", "kubernetes", "kubernetes"})
-	dodProveDynamicSecret(t, "dynamic_secret.redis", dynamicRedis, srv, st, token, dodSecretIntegrationTarget{"dynamic_secret.redis", "redis", "redis"})
+	dodProveDynamicSecret(t, "dynamic_secret.registry", dynamicRegistry, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.registry", "registry", "postgresql"})
+	dodProveDynamicSecret(t, "dynamic_secret.postgresql", dynamicPostgres, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.postgresql", "postgresql", "postgresql"})
+	dodProveDynamicSecret(t, "dynamic_secret.mysql", dynamicMySQL, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.mysql", "mysql", "mysql"})
+	dodProveDynamicSecret(t, "dynamic_secret.mongodb", dynamicMongo, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.mongodb", "mongodb", "mongodb"})
+	dodProveDynamicSecret(t, "dynamic_secret.aws_iam", dynamicAWS, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.aws_iam", "aws-iam", "aws-iam"})
+	dodProveDynamicSecret(t, "dynamic_secret.gcp_iam", dynamicGCP, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.gcp_iam", "gcp-iam", "gcp-iam"})
+	dodProveDynamicSecret(t, "dynamic_secret.azure_entra", dynamicAzure, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.azure_entra", "azure-entra", "azure-entra"})
+	dodProveDynamicSecret(t, "dynamic_secret.kubernetes", dynamicKubernetes, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.kubernetes", "kubernetes", "kubernetes"})
+	dodProveDynamicSecret(t, "dynamic_secret.redis", dynamicRedis, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.redis", "redis", "redis"})
 }
 
 func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.ExternalSubstrate, target dodSecretIntegrationTarget) {
@@ -398,9 +399,10 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 		t.Fatalf("Build production deps: %v", err)
 	}
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	dynamicDeliveryErrorClass := dodCaptureDynamicDeliveryErrorClass(t, srv)
 	dodStartSecretIntegrationDispatcher(t, srv)
 	token := dodSecretIntegrationToken(t, st)
-	dodProveDynamicSecret(t, entryID, external, srv, st, token, target)
+	dodProveDynamicSecret(t, entryID, external, srv, st, token, dynamicDeliveryErrorClass, target)
 }
 
 // dodCrashFirstVersioningSyncAfterReceiverCommit forces the exact ambiguous
@@ -840,12 +842,11 @@ func dodSecretIntegrationToken(t *testing.T, st *store.Store) string {
 	return token
 }
 
-func dodProveDynamicSecret(t *testing.T, entryID string, external *proof.ExternalSubstrate, srv *Server, st *store.Store, token string, target dodSecretIntegrationTarget) {
+func dodProveDynamicSecret(t *testing.T, entryID string, external *proof.ExternalSubstrate, srv *Server, st *store.Store, token string, deliveryErrorClass func() string, target dodSecretIntegrationTarget) {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{"provider": target.id, "role": "reader", "ttl_seconds": 300})
 	idempotencyKey := "dod-" + strings.ReplaceAll(target.entryID, ".", "-") + "-issue"
-	firstRequest := dodSecretAPIRequest(t, http.MethodPost, "/api/v1/secrets/leases", token, idempotencyKey, body)
-	firstSession := proof.Start(t, entryID, srv.Handler(), firstRequest)
+	firstSession := dodStartDynamicLeaseProofSession(t, entryID, srv, st, token, idempotencyKey, body, deliveryErrorClass)
 	firstBody := firstSession.ResponseBody()
 	if firstSession.StatusCode() != http.StatusCreated {
 		t.Fatalf("%s issue status=%d body=%s", target.entryID, firstSession.StatusCode(), firstBody)
@@ -860,8 +861,7 @@ func dodProveDynamicSecret(t *testing.T, entryID string, external *proof.Externa
 	}
 	dodUseDynamicCredential(t, external, target, firstRecord.BackendRef, first.Credential)
 	dodRenewDynamicLease(t, srv, token, first.ID, "dod-renew-"+first.ID)
-	rotateRequest := dodSecretAPIRequest(t, http.MethodPost, "/api/v1/secrets/leases", token, "dod-"+strings.ReplaceAll(target.entryID, ".", "-")+"-rotate", body)
-	rotateStatus, rotateBody := dodServeSecretRequest(t, srv, rotateRequest)
+	rotateStatus, rotateBody := dodWaitDynamicLeaseResponse(t, target.entryID, srv, st, token, "dod-"+strings.ReplaceAll(target.entryID, ".", "-")+"-rotate", body, deliveryErrorClass)
 	if rotateStatus != http.StatusCreated {
 		t.Fatalf("%s rotate issue status=%d body=%s", target.entryID, rotateStatus, rotateBody)
 	}
@@ -890,6 +890,103 @@ func dodProveDynamicSecret(t *testing.T, entryID string, external *proof.Externa
 	}))
 	secret.Wipe(first.Credential)
 	secret.Wipe(rotated.Credential)
+}
+
+func dodStartDynamicLeaseProofSession(t *testing.T, entryID string, srv *Server, st *store.Store, token, idempotencyKey string, body []byte, deliveryErrorClass func() string) *proof.Session {
+	t.Helper()
+	status, responseBody := dodWaitDynamicLeaseResponse(t, entryID, srv, st, token, idempotencyKey, body, deliveryErrorClass)
+	if status != http.StatusCreated {
+		t.Fatalf("%s issue status=%d body=%s", entryID, status, responseBody)
+	}
+	// Bind the final successful idempotent replay to the gate-owned route,
+	// nonce, shipped profile, and external substrate receipt. The earlier calls
+	// exercise the documented 504/retry contract; only a real 201 may create the
+	// proof session.
+	served := dodSecretAPIRequest(t, http.MethodPost, "/api/v1/secrets/leases", token, idempotencyKey, body)
+	return proof.Start(t, entryID, srv.Handler(), served)
+}
+
+func dodWaitDynamicLeaseResponse(t *testing.T, entryID string, srv *Server, st *store.Store, token, idempotencyKey string, body []byte, deliveryErrorClass func() string) (int, []byte) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		request := dodSecretAPIRequest(t, http.MethodPost, "/api/v1/secrets/leases", token, idempotencyKey, body)
+		status, responseBody := dodServeSecretRequest(t, srv, request)
+		switch status {
+		case http.StatusCreated:
+			return status, responseBody
+		case http.StatusGatewayTimeout:
+			if time.Now().After(deadline) {
+				lease, leaseErr := st.GetDynamicSecretLeaseByIdempotencyKey(context.Background(), dodSecretIntegrationTenant, idempotencyKey)
+				outboxStatus, outboxAttempts, outboxErrorClass := "unavailable", -1, "unavailable"
+				if leaseErr == nil {
+					if outbox, outboxErr := srv.outbox.Get(context.Background(), dodSecretIntegrationTenant, lease.IssueOutboxID); outboxErr == nil {
+						outboxStatus, outboxAttempts = outbox.Status, outbox.Attempts
+						outboxErrorClass = dodSecretIntegrationErrorClass(outbox.LastError)
+					}
+				}
+				t.Fatalf("%s remained pending after idempotent retries: body=%s lease_state=%s lease_err=%v prepared=%t outbox_status=%s outbox_attempts=%d outbox_error_class=%s live_error_class=%s",
+					entryID, responseBody, lease.State, leaseErr, len(lease.SealedPreparation) > 0, outboxStatus, outboxAttempts, outboxErrorClass, deliveryErrorClass())
+			}
+			time.Sleep(100 * time.Millisecond)
+		default:
+			return status, responseBody
+		}
+	}
+}
+
+func dodSecretIntegrationErrorClass(raw string) string {
+	value := strings.ToLower(raw)
+	for _, candidate := range []struct {
+		contains string
+		class    string
+	}{
+		{"dynsecret postgres: connect failed", "database-connect"},
+		{"dynsecret postgres: lookup role", "postgres-role-lookup"},
+		{"dynsecret postgres: create role failed", "postgres-role-create"},
+		{"dynsecret postgres: clean interrupted role", "postgres-reconcile"},
+		{"failed to connect", "database-connect"},
+		{"connection refused", "connection-refused"},
+		{"no such host", "dns-failure"},
+		{"i/o timeout", "network-timeout"},
+		{"context deadline exceeded", "deadline"},
+		{"password authentication failed", "authentication"},
+		{"permission denied", "authorization"},
+		{"no route to host", "network-route"},
+	} {
+		if strings.Contains(value, candidate.contains) {
+			return candidate.class
+		}
+	}
+	if raw == "" {
+		return "none"
+	}
+	// Do not print upstream error text: vendor responses may echo credentials.
+	return "other-" + crypto.SHA256Hex([]byte(raw))[:12]
+}
+
+func dodCaptureDynamicDeliveryErrorClass(t *testing.T, srv *Server) func() string {
+	t.Helper()
+	dispatch, ok := srv.obHandler.(*issuanceDispatcher)
+	if !ok || dispatch.secretIntegrations == nil {
+		t.Fatal("served dispatcher has no secret-integration worker")
+	}
+	var mu sync.Mutex
+	last := "none"
+	dispatch.secretIntegrations.afterDynamicSecretDelivery = func(err error) {
+		if err == nil {
+			return
+		}
+		classified := dodSecretIntegrationErrorClass(err.Error())
+		mu.Lock()
+		last = classified
+		mu.Unlock()
+	}
+	return func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return last
+	}
 }
 
 func dodWaitDynamicLeaseState(t *testing.T, st *store.Store, leaseID string, want store.DynamicSecretLeaseState) {

@@ -37,6 +37,7 @@ TAG_PROTOCOL_VERSION = 0x420069
 TAG_PROTOCOL_MAJOR = 0x42006A
 TAG_PROTOCOL_MINOR = 0x42006B
 TAG_RESPONSE_MESSAGE = 0x42007B
+TAG_RESPONSE_PAYLOAD = 0x42007C
 TAG_RESULT_STATUS = 0x42007F
 TAG_UNIQUE_IDENTIFIER = 0x420094
 TAG_WRAPPING_METHOD = 0x42009E
@@ -152,13 +153,39 @@ def integers(root: Node, tag: int) -> list[int]:
     return [int.from_bytes(value, "big", signed=True) for value in values(root, tag, INTEGER)]
 
 
-def batch_status(root: Node, operation: int) -> int:
+def response_batch_item(root: Node, operation: int) -> Node:
     for item in (child for child in root.children if child.tag == TAG_BATCH_ITEM):
-        operations = enums(item, TAG_OPERATION)
-        statuses = enums(item, TAG_RESULT_STATUS)
-        if operations == [operation] and len(statuses) == 1:
-            return statuses[0]
+        # Batch metadata is direct-child scoped. Query's ResponsePayload also
+        # contains Operation values describing the server's supported catalog;
+        # recursively collecting them makes a valid Query batch look ambiguous.
+        operations = [
+            int.from_bytes(child.value, "big")
+            for child in item.children
+            if child.tag == TAG_OPERATION and child.kind == ENUMERATION
+        ]
+        if operations == [operation]:
+            return item
     raise ValueError(f"response has no batch item for operation {operation:#x}")
+
+
+def batch_status(root: Node, operation: int) -> int:
+    item = response_batch_item(root, operation)
+    statuses = [
+        int.from_bytes(child.value, "big")
+        for child in item.children
+        if child.tag == TAG_RESULT_STATUS and child.kind == ENUMERATION
+    ]
+    if len(statuses) != 1:
+        raise ValueError(f"response has no unique status for operation {operation:#x}")
+    return statuses[0]
+
+
+def batch_payload(root: Node, operation: int) -> Node:
+    item = response_batch_item(root, operation)
+    payloads = [child for child in item.children if child.tag == TAG_RESPONSE_PAYLOAD and child.kind == STRUCTURE]
+    if len(payloads) != 1:
+        raise ValueError(f"response has no unique payload for operation {operation:#x}")
+    return payloads[0]
 
 
 def verify_kmip(payload: dict[str, object]) -> bytes:
@@ -185,7 +212,7 @@ def verify_kmip(payload: dict[str, object]) -> bytes:
     if batch_status(discover, OP_DISCOVER) != STATUS_SUCCESS:
         raise ValueError("DiscoverVersions did not succeed")
     versions = []
-    for node in walk(discover):
+    for node in walk(batch_payload(discover, OP_DISCOVER)):
         if node.tag == TAG_PROTOCOL_VERSION and node.kind == STRUCTURE:
             major = integers(node, TAG_PROTOCOL_MAJOR)
             minor = integers(node, TAG_PROTOCOL_MINOR)
