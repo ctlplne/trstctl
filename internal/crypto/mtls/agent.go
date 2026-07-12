@@ -240,7 +240,7 @@ func (c *CA) SignClientCSR(csrDER []byte, ttl time.Duration) ([]byte, error) {
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               csr.Subject,
-		NotBefore:             now.Add(-time.Minute),
+		NotBefore:             boundary.IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
@@ -309,7 +309,7 @@ func (c *CA) SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Du
 		SerialNumber:          serial,
 		Subject:               csr.Subject,
 		URIs:                  []*url.URL{spiffeURI},
-		NotBefore:             now.Add(-time.Minute),
+		NotBefore:             boundary.IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},

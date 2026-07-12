@@ -337,11 +337,16 @@ func (s *Store) TruncateReadModel(ctx context.Context) error {
 // tenant. The session's trstctl.tenant_id GUC is set per event by the caller via
 // SetTenantGUCTx so any tenant-scoped logic still sees the right tenant.
 func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// DR rebuilds legitimately exceed the bounded statement deadline
+	// (OPS-TIMEOUTS-001): widen it for THIS transaction only.
+	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = 0"); err != nil {
+		return fmt.Errorf("store: widen rebuild statement deadline: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `TRUNCATE `+strings.Join(ReadModelTables, ", ")+` CASCADE`); err != nil {
 		return err
 	}
@@ -361,9 +366,13 @@ func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) er
 // and apply carries tenant_id explicitly on every write, so AN-1 holds with RLS
 // bypassed for this trusted system operation.
 func (s *Store) RestoreReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return err
+	}
+	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = 0"); err != nil {
+		_ = tx.Rollback(ctx)
+		return fmt.Errorf("store: widen restore statement deadline: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := apply(tx); err != nil {

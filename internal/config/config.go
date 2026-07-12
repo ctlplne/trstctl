@@ -993,6 +993,28 @@ type Postgres struct {
 	DSN     string `json:"dsn"`      // required when external
 	DataDir string `json:"data_dir"` // used when bundled (the embedded data lives here)
 	Port    int    `json:"port"`     // loopback port for the bundled datastore (default 5432)
+	// StatementTimeout bounds every statement server-side; DR rebuild/restore
+	// transactions widen it explicitly (OPS-TIMEOUTS-001). Default "60s".
+	StatementTimeout string `json:"statement_timeout,omitempty"`
+	// AcquireTimeout bounds how long a transaction may wait for a pooled
+	// connection before failing closed with a structured 503. Default "10s".
+	AcquireTimeout string `json:"acquire_timeout,omitempty"`
+}
+
+// StatementTimeoutDuration parses the statement deadline ("" = default 60s).
+func (p Postgres) StatementTimeoutDuration() (time.Duration, error) {
+	if p.StatementTimeout == "" {
+		return 60 * time.Second, nil
+	}
+	return time.ParseDuration(p.StatementTimeout)
+}
+
+// AcquireTimeoutDuration parses the pool-acquire deadline ("" = default 10s).
+func (p Postgres) AcquireTimeoutDuration() (time.Duration, error) {
+	if p.AcquireTimeout == "" {
+		return 10 * time.Second, nil
+	}
+	return time.ParseDuration(p.AcquireTimeout)
 }
 
 // NATS selects the embedded file-backed JetStream or an external cluster, and
@@ -1061,6 +1083,18 @@ type Log struct {
 type Lifecycle struct {
 	RenewBefore string `json:"renew_before"`
 	AlertBefore string `json:"alert_before"`
+	// NotBeforeSkew backdates every issued certificate's NotBefore so fresh
+	// certs are immediately valid at verifiers with modest clock skew
+	// (OPS-CLOCKSKEW-001). Default "5m" per common CA practice; bounds 30s..1h.
+	NotBeforeSkew string `json:"not_before_skew,omitempty"`
+}
+
+// NotBeforeSkewDuration parses the issuance backdate window ("" = default 5m).
+func (l Lifecycle) NotBeforeSkewDuration() (time.Duration, error) {
+	if l.NotBeforeSkew == "" {
+		return 5 * time.Minute, nil
+	}
+	return time.ParseDuration(l.NotBeforeSkew)
 }
 
 // RenewBeforeDuration parses the renewal threshold.
@@ -1540,8 +1574,12 @@ func (m AIModel) ModeValue() string {
 // than rotating it; the keys are sealed with the same KEK as credentials
 // (Secrets.KEKFile).
 type Signer struct {
-	Mode           string `json:"mode"`             // "child" (default) or "external"
-	Socket         string `json:"socket"`           // UDS path; in external mode use this OR the mTLS fields
+	Mode   string `json:"mode"`   // "child" (default) or "external"
+	Socket string `json:"socket"` // UDS path; in external mode use this OR the mTLS fields
+	// CallTimeout bounds every signer RPC that lacks a tighter caller
+	// deadline, so a hung signer fails closed instead of stalling issuance
+	// (OPS-TIMEOUTS-001). Default "10s"; bounds 1s..2m.
+	CallTimeout    string `json:"call_timeout,omitempty"`
 	KeyStoreDir    string `json:"key_store_dir"`    // sealed key persistence directory
 	AuthSecretFile string `json:"auth_secret_file"` // signer-side verifier secret path; do not expose to the control plane in production
 	// AuthTokenCommand is an independent approval-token authority. The control
@@ -1737,7 +1775,7 @@ func Default() *Config {
 		// HA (SPINE-004).
 		NATS:       NATS{Mode: NATSEmbedded, StoreDir: "data/nats", SyncInterval: DefaultEmbeddedSyncInterval.String()},
 		Log:        Log{Level: "info", Format: "json"},
-		Lifecycle:  Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
+		Lifecycle:  Lifecycle{RenewBefore: "720h", AlertBefore: "336h", NotBeforeSkew: "5m"}, // 30d renew, 14d alert, 5m issuance backdate
 		Connectors: Connectors{HTTPTimeout: "15s"},
 		AirGap:     AirGap{Enabled: false, AllowPrivate: true},
 		// Telemetry is OFF by default (privacy-first; decided position). The
@@ -1877,6 +1915,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	applyServerAndSpineEnv(getenv, c)
 	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
 	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
+	setString(getenv, "TRSTCTL_LIFECYCLE_NOT_BEFORE_SKEW", &c.Lifecycle.NotBeforeSkew)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ENABLED", &c.Connectors.Enabled)
 	setString(getenv, "TRSTCTL_CONNECTORS_HTTP_TIMEOUT", &c.Connectors.HTTPTimeout)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ALLOW_PRIVATE_CIDRS", &c.Connectors.AllowPrivateCIDRs)
@@ -1941,6 +1980,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_AI_MODEL_ALLOW_EGRESS", &c.AI.Model.AllowEgress)
 	setString(getenv, "TRSTCTL_SIGNER_MODE", &c.Signer.Mode)
 	setString(getenv, "TRSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
+	setString(getenv, "TRSTCTL_SIGNER_CALL_TIMEOUT", &c.Signer.CallTimeout)
 	setString(getenv, "TRSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
 	setString(getenv, "TRSTCTL_SIGNER_AUTH_SECRET_FILE", &c.Signer.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND", &c.Signer.AuthTokenCommand)
@@ -2011,6 +2051,8 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
 	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
 	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
+	setString(getenv, "TRSTCTL_POSTGRES_STATEMENT_TIMEOUT", &c.Postgres.StatementTimeout)
+	setString(getenv, "TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT", &c.Postgres.AcquireTimeout)
 	setString(getenv, "TRSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
 	setInt(getenv, "TRSTCTL_POSTGRES_PORT", &c.Postgres.Port)
 	setString(getenv, "TRSTCTL_NATS_MODE", &c.NATS.Mode)
@@ -2568,6 +2610,28 @@ func validateLoggingAndLifecycle(c *Config) []error {
 		errs = append(errs, fmt.Errorf("lifecycle.alert_before %q is invalid: %w", c.Lifecycle.AlertBefore, err))
 	} else if d <= 0 {
 		errs = append(errs, errors.New("lifecycle.alert_before must be positive"))
+	}
+	if d, err := c.Postgres.StatementTimeoutDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("postgres.statement_timeout %q is invalid: %w", c.Postgres.StatementTimeout, err))
+	} else if d < time.Second || d > 10*time.Minute {
+		errs = append(errs, errors.New("postgres.statement_timeout must be within [1s, 10m]"))
+	}
+	if d, err := c.Postgres.AcquireTimeoutDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("postgres.acquire_timeout %q is invalid: %w", c.Postgres.AcquireTimeout, err))
+	} else if d < 100*time.Millisecond || d > time.Minute {
+		errs = append(errs, errors.New("postgres.acquire_timeout must be within [100ms, 1m]"))
+	}
+	if c.Signer.CallTimeout != "" {
+		if d, err := time.ParseDuration(c.Signer.CallTimeout); err != nil {
+			errs = append(errs, fmt.Errorf("signer.call_timeout %q is invalid: %w", c.Signer.CallTimeout, err))
+		} else if d < time.Second || d > 2*time.Minute {
+			errs = append(errs, errors.New("signer.call_timeout must be within [1s, 2m]"))
+		}
+	}
+	if d, err := c.Lifecycle.NotBeforeSkewDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("lifecycle.not_before_skew %q is invalid: %w", c.Lifecycle.NotBeforeSkew, err))
+	} else if d < 30*time.Second || d > time.Hour {
+		errs = append(errs, errors.New("lifecycle.not_before_skew must be within [30s, 1h]"))
 	}
 	errs = append(errs, validateNotifications(c.Notifications)...)
 	return errs

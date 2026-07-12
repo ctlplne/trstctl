@@ -575,7 +575,7 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 	tmpl := &x509.Certificate{
 		SerialNumber:                serial,
 		Subject:                     pkix.Name{CommonName: profile.CommonName},
-		NotBefore:                   now.Add(-time.Minute),
+		NotBefore:                   IssuanceNotBefore(now),
 		NotAfter:                    now.Add(profile.TTL),
 		KeyUsage:                    x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid:       true,

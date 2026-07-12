@@ -29,6 +29,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 // ClientCertTTL is the validity period of an agent client certificate. Agents
@@ -56,7 +58,7 @@ func NewCA(commonName string) (*CA, error) {
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               pkix.Name{CommonName: commonName},
-		NotBefore:             now.Add(-time.Minute),
+		NotBefore:             boundarycrypto.IssuanceNotBefore(now),
 		NotAfter:              now.Add(10 * 365 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
@@ -110,7 +112,7 @@ func (c *CA) issue(cn string, dnsNames []string, ttl time.Duration, eku x509.Ext
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               pkix.Name{CommonName: cn},
-		NotBefore:             now.Add(-time.Minute),
+		NotBefore:             boundarycrypto.IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{eku},

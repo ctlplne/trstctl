@@ -381,7 +381,7 @@ func signCACert(commonName string, permitted []string, maxPathLen int, ekus []st
 	tmpl := &x509.Certificate{
 		SerialNumber:                serial,
 		Subject:                     pkix.Name{CommonName: commonName},
-		NotBefore:                   now.Add(-time.Minute),
+		NotBefore:                   boundarycrypto.IssuanceNotBefore(now),
 		NotAfter:                    now.Add(ttl),
 		KeyUsage:                    x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid:       true,

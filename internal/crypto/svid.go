@@ -46,7 +46,7 @@ func SignSVID(caCertDER []byte, caSigner DigestSigner, leafPubDER []byte, spiffe
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
 		URIs:                  []*url.URL{id},
-		NotBefore:             now.Add(-time.Minute),
+		NotBefore:             IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},

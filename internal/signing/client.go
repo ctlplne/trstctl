@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
+	"sync/atomic"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -26,11 +27,54 @@ type Client struct {
 	svc  signerpb.SignerServiceClient
 }
 
+// signerCallTimeoutNanos bounds every signer RPC that arrives without a
+// tighter caller deadline, so a hung or partitioned signer yields a bounded
+// structured failure instead of a stuck issuance (OPS-TIMEOUTS-001). The
+// server assembly may override it once from validated configuration.
+var signerCallTimeoutNanos atomic.Int64
+
+const (
+	defaultSignerCallTimeout = 10 * time.Second
+	minSignerCallTimeout     = 50 * time.Millisecond
+	maxSignerCallTimeout     = 2 * time.Minute
+)
+
+// SignerCallTimeout returns the active per-call signer deadline.
+func SignerCallTimeout() time.Duration {
+	if v := signerCallTimeoutNanos.Load(); v != 0 {
+		return time.Duration(v)
+	}
+	return defaultSignerCallTimeout
+}
+
+// SetSignerCallTimeout configures the per-call signer deadline from validated
+// operator configuration; out-of-bounds values fail closed to the previous.
+func SetSignerCallTimeout(d time.Duration) error {
+	if d < minSignerCallTimeout || d > maxSignerCallTimeout {
+		return fmt.Errorf("signing: per-call timeout %v outside [%v, %v]", d, minSignerCallTimeout, maxSignerCallTimeout)
+	}
+	signerCallTimeoutNanos.Store(int64(d))
+	return nil
+}
+
+// perCallDeadline is a unary interceptor that guarantees every signer RPC has
+// a deadline no looser than SignerCallTimeout.
+func perCallDeadline(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	limit := SignerCallTimeout()
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > limit {
+		bounded, cancel := context.WithTimeout(ctx, limit)
+		defer cancel()
+		ctx = bounded
+	}
+	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
 // Dial connects to the signing service listening at socketPath.
 func Dial(socketPath string) (*Client, error) {
 	conn, err := grpc.NewClient(
 		"unix://"+socketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(perCallDeadline),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("dial signer: %w", err)
@@ -51,7 +95,7 @@ func DialMTLS(addr string, tlsCfg mtls.SignerPeerConfig, serverName string) (*Cl
 	if err != nil {
 		return nil, fmt.Errorf("signer mTLS credentials: %w", err)
 	}
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithChainUnaryInterceptor(perCallDeadline))
 	if err != nil {
 		return nil, fmt.Errorf("dial signer over mTLS: %w", err)
 	}

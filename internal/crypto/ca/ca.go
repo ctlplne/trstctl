@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"math/big"
 	"time"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 // Authority is a self-signed X.509 certificate authority. Its signing key is held
@@ -59,7 +61,7 @@ func NewAuthority(commonName string) (*Authority, error) {
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               pkix.Name{CommonName: commonName},
-		NotBefore:             now.Add(-time.Minute),
+		NotBefore:             boundarycrypto.IssuanceNotBefore(now),
 		NotAfter:              now.Add(10 * 365 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
@@ -115,7 +117,7 @@ func (a *Authority) IssueFromCSR(csrDER []byte, ttl time.Duration) (Issued, erro
 		IPAddresses:           csr.IPAddresses,
 		EmailAddresses:        csr.EmailAddresses,
 		URIs:                  csr.URIs,
-		NotBefore:             now.Add(-time.Minute),
+		NotBefore:             boundarycrypto.IssuanceNotBefore(now),
 		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},

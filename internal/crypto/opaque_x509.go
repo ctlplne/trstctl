@@ -225,7 +225,7 @@ func SignOpaqueLeafFromVerifiedRequestWithProfile(caCertDER []byte, caSigner Dig
 		Subject:      pkix.Name{CommonName: req.Info.CommonName},
 		DNSNames:     append([]string(nil), req.Info.DNSNames...), IPAddresses: ips,
 		EmailAddresses: append([]string(nil), req.Info.EmailAddresses...), URIs: uniqueURIs,
-		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(ttl),
+		NotBefore: IssuanceNotBefore(now), NotAfter: now.Add(ttl),
 		KeyUsage: leafKeyUsageForProfile(prof), ExtKeyUsage: knownEKUs, UnknownExtKeyUsage: customEKUs,
 		BasicConstraintsValid: true, SubjectKeyId: ski[:],
 		CRLDistributionPoints: append([]string(nil), prof.CRLDistributionPoints...),

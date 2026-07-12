@@ -179,7 +179,15 @@ func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := store.Open(ctx, dsn)
+	stmtTimeout, err := cfg.Postgres.StatementTimeoutDuration()
+	if err != nil {
+		return nil, nil, fmt.Errorf("postgres statement timeout: %w", err)
+	}
+	acquireTimeout, err := cfg.Postgres.AcquireTimeoutDuration()
+	if err != nil {
+		return nil, nil, fmt.Errorf("postgres acquire timeout: %w", err)
+	}
+	st, err := store.Open(ctx, dsn, store.WithStatementTimeout(stmtTimeout), store.WithAcquireTimeout(acquireTimeout))
 	if err != nil {
 		if stopPG != nil {
 			_ = stopPG()
@@ -303,6 +311,9 @@ func buildSignTokenProvider(cfg *config.Config) (signing.SignTokenProvider, erro
 }
 
 func connectExternalSigner(ctx context.Context, cfg config.Signer) (SignerProvider, func(), error) {
+	if err := applySignerCallTimeout(cfg); err != nil {
+		return nil, nil, err
+	}
 	var c *signing.Client
 	var err error
 	if cfg.MTLSEnabled() {
@@ -322,7 +333,26 @@ func connectExternalSigner(ctx context.Context, cfg config.Signer) (SignerProvid
 	return signing.StaticProvider{C: c}, func() { _ = c.Close() }, nil
 }
 
+// applySignerCallTimeout binds the validated per-call signer deadline before
+// any signer RPC can hang an issuance (OPS-TIMEOUTS-001).
+func applySignerCallTimeout(cfg config.Signer) error {
+	if cfg.CallTimeout == "" {
+		return nil
+	}
+	d, err := time.ParseDuration(cfg.CallTimeout)
+	if err != nil {
+		return fmt.Errorf("signer call timeout: %w", err)
+	}
+	if err := signing.SetSignerCallTimeout(d); err != nil {
+		return fmt.Errorf("signer call timeout: %w", err)
+	}
+	return nil
+}
+
 func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, func(), error) {
+	if err := applySignerCallTimeout(cfg.Signer); err != nil {
+		return nil, nil, err
+	}
 	signerBin, err := siblingBinary("trstctl-signer")
 	if err != nil {
 		return nil, nil, err
@@ -723,6 +753,13 @@ func runRetentionAndLifecycleWindows(cfg *config.Config) (retention time.Duratio
 	}
 	if alertBefore, err = cfg.Lifecycle.AlertBeforeDuration(); err != nil {
 		return 0, false, 0, privacyPolicy, 0, 0, fmt.Errorf("lifecycle alert before: %w", err)
+	}
+	notBeforeSkew, err := cfg.Lifecycle.NotBeforeSkewDuration()
+	if err != nil {
+		return 0, false, 0, privacyPolicy, 0, 0, fmt.Errorf("lifecycle not-before skew: %w", err)
+	}
+	if err := crypto.SetIssuanceBackdateSkew(notBeforeSkew); err != nil {
+		return 0, false, 0, privacyPolicy, 0, 0, fmt.Errorf("lifecycle not-before skew: %w", err)
 	}
 	return retention, privacyEnabled, privacyInterval, privacyPolicy, renewBefore, alertBefore, nil
 }

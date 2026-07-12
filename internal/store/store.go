@@ -11,6 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jackc/pgx/v5/pgconn"
+	"strconv"
+	"time"
 	"trstctl.com/trstctl/internal/tenancy"
 )
 
@@ -38,6 +41,8 @@ const appRole = "trstctl_app"
 // projections) use the pool directly.
 type Store struct {
 	pool *pgxpool.Pool
+	// acquireTimeout bounds how long begin() waits for a pooled connection.
+	acquireTimeout time.Duration
 	// extraMigrations are additional migration sources registered through the
 	// feature-neutral WithExtraMigrations seam, applied after the core migrations.
 	// The core-only build registers none.
@@ -50,13 +55,64 @@ type Store struct {
 // while a key is claimed; too small a pool would starve the waiters.
 const maxConns = 16
 
+// Bounded-latency defaults (OPS-TIMEOUTS-001): a saturated pool or a runaway
+// query fails closed with a structured error instead of hanging a request.
+const (
+	defaultStatementTimeout = 60 * time.Second
+	defaultAcquireTimeout   = 10 * time.Second
+)
+
+// ErrDatastoreBusy marks a bounded pool-acquire that timed out: the datastore
+// is saturated (or unreachable) and the caller should surface a structured
+// 503 rather than queue forever (OPS-TIMEOUTS-001).
+var ErrDatastoreBusy = errors.New("store: datastore busy: connection pool acquire timed out")
+
+// OpenOption customizes Open.
+type OpenOption func(*openOptions)
+
+type openOptions struct {
+	statementTimeout time.Duration
+	acquireTimeout   time.Duration
+}
+
+// WithStatementTimeout bounds every statement server-side (0 keeps the default).
+func WithStatementTimeout(d time.Duration) OpenOption {
+	return func(o *openOptions) {
+		if d > 0 {
+			o.statementTimeout = d
+		}
+	}
+}
+
+// WithAcquireTimeout bounds how long a transaction may wait for a pooled
+// connection before failing closed with ErrDatastoreBusy (0 keeps the default).
+func WithAcquireTimeout(d time.Duration) OpenOption {
+	return func(o *openOptions) {
+		if d > 0 {
+			o.acquireTimeout = d
+		}
+	}
+}
+
 // Open connects to PostgreSQL at dsn.
-func Open(ctx context.Context, dsn string) (*Store, error) {
+func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
+	options := openOptions{statementTimeout: defaultStatementTimeout, acquireTimeout: defaultAcquireTimeout}
+	for _, opt := range opts {
+		opt(&options)
+	}
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("store: parse dsn: %w", err)
 	}
 	cfg.MaxConns = maxConns
+	if cfg.ConnConfig.RuntimeParams == nil {
+		cfg.ConnConfig.RuntimeParams = map[string]string{}
+	}
+	// Server-enforced statement deadline: a runaway query is cancelled by
+	// PostgreSQL itself (SQLSTATE 57014), bounding request latency even when a
+	// caller forgot a context deadline. Long system operations (read-model
+	// rebuild/restore) explicitly widen it inside their own transactions.
+	cfg.ConnConfig.RuntimeParams["statement_timeout"] = strconv.FormatInt(options.statementTimeout.Milliseconds(), 10)
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("store: connect: %w", err)
@@ -65,7 +121,38 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("store: ping: %w", err)
 	}
-	return &Store{pool: pool}, nil
+	return &Store{pool: pool, acquireTimeout: options.acquireTimeout}, nil
+}
+
+// begin starts a transaction with a bounded pool-acquire window: when the pool
+// is saturated the caller gets ErrDatastoreBusy within acquireTimeout instead
+// of hanging (OPS-TIMEOUTS-001). The bound covers only BEGIN; statement
+// execution stays governed by the caller context + statement_timeout.
+func (s *Store) begin(ctx context.Context) (pgx.Tx, error) {
+	if s.acquireTimeout <= 0 {
+		return s.pool.Begin(ctx)
+	}
+	boundedCtx, cancel := context.WithTimeoutCause(ctx, s.acquireTimeout, ErrDatastoreBusy)
+	defer cancel()
+	tx, err := s.pool.Begin(boundedCtx)
+	if err != nil {
+		if cause := context.Cause(boundedCtx); errors.Is(cause, ErrDatastoreBusy) && ctx.Err() == nil {
+			return nil, fmt.Errorf("%w (acquire window %v)", ErrDatastoreBusy, s.acquireTimeout)
+		}
+		return nil, err
+	}
+	return tx, nil
+}
+
+// IsBusy reports whether err is a bounded-latency datastore failure a handler
+// should surface as a structured 503: a pool-acquire timeout or a statement
+// cancelled by the server-side statement_timeout (SQLSTATE 57014).
+func IsBusy(err error) bool {
+	if errors.Is(err, ErrDatastoreBusy) {
+		return true
+	}
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "57014"
 }
 
 // Close releases the connection pool.
@@ -92,7 +179,7 @@ func (s *Store) Pool() *pgxpool.Pool { return s.SystemPool() }
 // role and sets the trstctl.tenant_id session variable, so row-level security
 // confines every query in fn to that tenant.
 func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return err
 	}

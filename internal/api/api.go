@@ -1699,6 +1699,11 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case a.writeEphemeralError(w, err):
 	case a.writePAMError(w, err):
 	case a.writeSSHWorkflowError(w, err):
+	case store.IsBusy(err):
+		// Bounded-latency datastore failure (pool saturation or server-side
+		// statement deadline): a structured 503 tells the caller to retry
+		// rather than hanging or mislabeling it a 500 (OPS-TIMEOUTS-001).
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "datastore is busy; the request was bounded by its acquire/statement deadline — retry"))
 	case store.IsNotFound(err):
 		a.writeProblem(w, problem.New(http.StatusNotFound, "resource not found"))
 	case errors.Is(err, orchestrator.ErrInvalidTransition):

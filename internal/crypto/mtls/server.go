@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 // ServerCert is a control-plane server's TLS material — its certificate and key,
@@ -22,6 +24,11 @@ import (
 // the crypto boundary, who use only ServeHTTPS and TrustPEM.
 type ServerCert struct {
 	cert tls.Certificate
+	// reload is set for operator file-mode material: it hot-swaps a rotated
+	// certificate/key pair via tls.Config.GetCertificate without a restart
+	// (OPS-TLS-RELOAD-001). TrustPEM keeps the boot-time chain: file-mode
+	// operators distribute trust out of band, so rotation does not mutate it.
+	reload *reloadingServerCert
 	// TrustPEM is the certificate a client adds to its root pool to verify this
 	// server (for an internal cert, the self-signed certificate itself; for a
 	// file cert, the provided chain).
@@ -59,7 +66,7 @@ func SelfSignedServerCert(hosts []string, ttl time.Duration) (*ServerCert, error
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               pkix.Name{CommonName: cn},
-		NotBefore:             now.Add(-time.Minute),
+		NotBefore:             boundarycrypto.IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
@@ -87,15 +94,15 @@ func SelfSignedServerCert(hosts []string, ttl time.Duration) (*ServerCert, error
 // private key (PEM). It fails clearly when the files are missing or malformed,
 // so a misconfiguration cannot silently fall back to plaintext.
 func ServerCertFromFiles(certFile, keyFile string) (*ServerCert, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	reload, err := newReloadingServerCert(certFile, keyFile)
 	if err != nil {
-		return nil, fmt.Errorf("mtls: load server certificate: %w", err)
+		return nil, err
 	}
 	chainPEM, err := os.ReadFile(certFile)
 	if err != nil {
 		return nil, fmt.Errorf("mtls: read server certificate: %w", err)
 	}
-	return &ServerCert{cert: cert, TrustPEM: chainPEM}, nil
+	return &ServerCert{cert: *reload.current.Load(), reload: reload, TrustPEM: chainPEM}, nil
 }
 
 // MutualTLSServerListenerFromFiles wraps ln in a TLS 1.3 mutual-auth listener
@@ -103,15 +110,18 @@ func ServerCertFromFiles(certFile, keyFile string) (*ServerCert, error) {
 // crypto/tls and crypto/x509 handling inside the AN-3 boundary while raw TCP
 // protocols such as KMIP consume an ordinary net.Listener.
 func MutualTLSServerListenerFromFiles(ln net.Listener, certFile, keyFile, clientCAFile string) (net.Listener, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	reload, err := newReloadingServerCert(certFile, keyFile)
 	if err != nil {
-		return nil, fmt.Errorf("mtls: load server certificate: %w", err)
+		return nil, err
 	}
 	clientCAs, err := loadCAPool(clientCAFile)
 	if err != nil {
 		return nil, err
 	}
-	return tls.NewListener(ln, serverTLSConfig(cert, clientCAs)), nil
+	cfg := serverTLSConfig(*reload.current.Load(), clientCAs)
+	cfg.Certificates = nil
+	cfg.GetCertificate = reload.GetCertificate
+	return tls.NewListener(ln, cfg), nil
 }
 
 // PeerCertificateDER returns the verified peer leaf certificate from a mutual-TLS
@@ -152,9 +162,15 @@ func CurvePreferences() []tls.CurveID {
 // not here. It blocks like (*http.Server).ServeTLS and returns its error.
 func (s *ServerCert) ServeHTTPS(srv *http.Server, ln net.Listener) error {
 	srv.TLSConfig = &tls.Config{
-		Certificates:     []tls.Certificate{s.cert},
 		MinVersion:       tls.VersionTLS13,
 		CurvePreferences: CurvePreferences(),
+	}
+	if s.reload != nil {
+		// File mode: serve through the reload hook so a rotated pair is
+		// picked up without a restart (OPS-TLS-RELOAD-001).
+		srv.TLSConfig.GetCertificate = s.reload.GetCertificate
+	} else {
+		srv.TLSConfig.Certificates = []tls.Certificate{s.cert}
 	}
 	return srv.ServeTLS(ln, "", "")
 }
