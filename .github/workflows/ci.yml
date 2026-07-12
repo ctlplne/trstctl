@@ -195,7 +195,9 @@ jobs:
     name: captured soak / leak gate
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Nightly runs the REAL multi-hour sustained-load soak (OPS-SOAK-REAL-001);
+    # workflow_dispatch keeps the short profile for on-demand smoke.
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -210,9 +212,11 @@ jobs:
       - name: Capture real sustained-load series
         env:
           SOAK_CAPTURE_PROFILE: nightly-captured-soak
-          SOAK_CAPTURE_SAMPLES: "24"
+          # 480 x 15s = 2h of real sustained load on the nightly schedule
+          # (OPS-SOAK-REAL-001); dispatch keeps the 6-minute smoke shape.
+          SOAK_CAPTURE_SAMPLES: ${{ github.event_name == 'schedule' && '480' || '24' }}
           SOAK_CAPTURE_STEP_SECONDS: "15"
-          SOAK_CAPTURE_LOAD_SAMPLES: "8"
+          SOAK_CAPTURE_LOAD_SAMPLES: ${{ github.event_name == 'schedule' && '160' || '8' }}
         run: scripts/perf/capture-soak-series.sh --out "${RUNNER_TEMP}/soak-series.json"
 
       - name: Analyze captured soak trend
@@ -293,6 +297,28 @@ jobs:
           name: branch-protection-live-drift-receipt
           path: ${{ runner.temp }}/branch-protection-drift-receipt.json
           if-no-files-found: error
+
+  # OPS-RESTORE-001: the full DR loop must work every PR — backup from a
+  # populated instance, restore through the shipped binary's flags into a
+  # fresh instance, boot it, read old data, issue NEW credentials, and prove a
+  # corrupted backup fails the restore closed.
+  restore-rehearsal:
+    name: restore rehearsal / full DR loop
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Full backup -> fresh restore -> boot -> issue (+ corrupted control)
+        run: bash scripts/ci/restore-rehearsal.sh
 
   # OPS-CI-102: the shipped binaries and image layers must rebuild
   # byte/layer-identical on every PR, not only when someone remembers to run it.
