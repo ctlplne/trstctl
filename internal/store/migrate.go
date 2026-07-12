@@ -31,6 +31,34 @@ var migrationFS embed.FS
 // pg_locks (locktype = 'advisory', objid = the low 32 bits of this key).
 const MigrateAdvisoryLockKey int64 = 0x63746C6D6772 // "ctlmgr"
 
+// migrationLockTimeout bounds how long any migration statement may WAIT for a
+// table lock (OPS-MIG-LOCK-001). An ACCESS-EXCLUSIVE DDL that cannot get its
+// lock fails fast with SQLSTATE 55P03 instead of queueing behind live traffic
+// and stalling the whole estate (every later statement queues behind a waiting
+// ACCESS EXCLUSIVE). The operator retries in a quieter window; docs/migrations.md
+// documents the policy. Statement execution itself is unbounded here because
+// legitimate migrations (CREATE INDEX CONCURRENTLY on a large table) run long —
+// the bounded wait is on LOCKS, not work.
+const migrationLockTimeout = "5s"
+
+// configureMigrationSession pins the migration connection's safety posture:
+// bounded lock waits, unbounded statement runtime (the pool default
+// statement_timeout would kill long CONCURRENTLY builds), and a defensive
+// idle-in-transaction bound so an abandoned migration session cannot hold
+// locks forever.
+func configureMigrationSession(ctx context.Context, conn *pgxpool.Conn) error {
+	for _, stmt := range []string{
+		"SET lock_timeout = '" + migrationLockTimeout + "'",
+		"SET statement_timeout = 0",
+		"SET idle_in_transaction_session_timeout = '60s'",
+	} {
+		if _, err := conn.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("store: configure migration session (%s): %w", stmt, err)
+		}
+	}
+	return nil
+}
+
 // Migrate applies any pending migrations in order, tracked in the
 // schema_migrations ledger (a system, non-tenant table). It runs as the
 // connecting (privileged) role, and serializes the whole run on a session-level
@@ -60,6 +88,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 		// Release on a fresh context so the lock is dropped even if ctx is done.
 		_, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", MigrateAdvisoryLockKey)
 	}()
+	if err := configureMigrationSession(ctx, conn); err != nil {
+		return err
+	}
 
 	if _, err := conn.Exec(ctx,
 		"CREATE TABLE IF NOT EXISTS schema_migrations (version bigint PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())"); err != nil {

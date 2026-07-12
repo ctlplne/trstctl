@@ -187,3 +187,15 @@ tenant-scoped with row-level security and joins the backup set
 
 See [Configuration → Datastores](configuration.md#datastores) for the Postgres
 connection settings these commands use.
+
+## Bounded lock waits (OPS-MIG-LOCK-001)
+
+The migration runner pins its session to `lock_timeout = 5s`,
+`statement_timeout = 0`, and `idle_in_transaction_session_timeout = 60s`.
+A lock-heavy DDL that cannot acquire its table lock fails fast with SQLSTATE
+`55P03` instead of queueing behind live traffic (where every later statement
+would queue behind the waiting ACCESS EXCLUSIVE). Statement runtime stays
+unbounded on purpose: legitimate migrations (`CREATE INDEX CONCURRENTLY` on a
+large table) run long — the bound is on lock WAITS, not on work. On a `55P03`
+failure, retry the migration in a quieter window; the advisory migration lock
+and the per-file idempotency rules above make the retry safe.

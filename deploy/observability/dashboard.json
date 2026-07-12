@@ -430,6 +430,27 @@
           "legendFormat": "stale agents"
         }
       ]
+    },
+    {
+      "id": 16,
+      "title": "Outbox dead-letter depth (by tenant/destination)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 64
+      },
+      "targets": [
+        {
+          "expr": "sum(trstctl_outbox_deadletter_depth) by (tenant_id, destination)",
+          "legendFormat": "{{tenant_id}}/{{destination}}"
+        }
+      ]
     }
   ]
 }

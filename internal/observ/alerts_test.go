@@ -51,6 +51,7 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 	reg.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.").Set(1001)
 	reg.Gauge("trstctl_outbox_reconciliation_lag_events", "Number of events after the last boot reconciliation checkpoint.").Set(1001)
 	reg.CounterVec("trstctl_outbox_delivery_timeouts_total", "Outbox deliveries that exceeded their per-message execution timeout.", []string{"tenant_id", "destination"}).WithLabelValues("tenant-a", "webhook").Inc()
+	reg.GaugeVec("trstctl_outbox_deadletter_depth", "Dead-lettered (permanently failed) outbox rows awaiting operator sweep or replay.", []string{"tenant_id", "destination"}).WithLabelValues("tenant-a", "webhook").Set(1)
 	reg.CounterVec("trstctl_read_model_snapshots_written_total", "Read-model snapshots written by the periodic snapshot worker.", nil).WithLabelValues().Inc()
 	reg.Gauge("trstctl_read_model_snapshot_last_success_timestamp_seconds", "Unix timestamp of the last successful read-model snapshot.").Set(123)
 	reg.CounterVec("trstctl_read_model_snapshot_failures_total", "Read-model snapshot attempts that failed.", nil).WithLabelValues().Inc()
@@ -244,6 +245,7 @@ func opsCriticalMetrics() []string {
 		"trstctl_projection_lag_events",
 		"trstctl_outbox_reconciliation_lag_events",
 		"trstctl_outbox_delivery_timeouts_total",
+		"trstctl_outbox_deadletter_depth",
 		"trstctl_read_model_snapshot_last_success_timestamp_seconds",
 		"trstctl_read_model_snapshot_failures_total",
 		"trstctl_crl_last_regenerated_timestamp_seconds",

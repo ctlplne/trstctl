@@ -657,6 +657,10 @@ type Server struct {
 	tailWorker          *projections.TailWorker
 	mProjLag            *observ.Gauge
 	mOutboxReconcileLag *observ.Gauge
+	mOutboxDeadLetter   *observ.GaugeVec
+	// outboxDeadLetterSeen tracks label tuples previously reported non-zero so a
+	// drained bucket is zeroed on the next sample instead of going stale.
+	outboxDeadLetterSeen map[string][2]string
 	// Event-log durability gauges (RESIL-004): desired vs observed JetStream
 	// replicas for the source-of-truth stream, so an under-replicated external log is
 	// visible in /readyz and /metrics.
@@ -1401,6 +1405,8 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mProjLag = s.registry.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
 	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
 	s.mOutboxReconcileLag = s.registry.Gauge("trstctl_outbox_reconciliation_lag_events", "Number of events after the last boot reconciliation checkpoint.")
+	s.mOutboxDeadLetter = s.registry.GaugeVec("trstctl_outbox_deadletter_depth", "Dead-lettered (permanently failed) outbox rows awaiting operator sweep or replay.", []string{"tenant_id", "destination"})
+	s.outboxDeadLetterSeen = map[string][2]string{}
 	s.mEventLogReplicasDesired = s.registry.Gauge("trstctl_event_log_replicas_desired", "Configured JetStream replica count required for the source-of-truth event stream.")
 	s.mEventLogReplicasActual = s.registry.Gauge("trstctl_event_log_replicas_actual", "Observed JetStream replica count on the source-of-truth event stream.")
 	s.mAgentsTotal = s.registry.Gauge("trstctl_agents_total", "Total agents currently known to the control plane.")
@@ -2207,7 +2213,36 @@ func (s *Server) probeEventLog(ctx context.Context) error {
 	if sampleErr := s.sampleOutboxReconciliationLag(ctx); sampleErr != nil && err == nil {
 		err = sampleErr
 	}
+	if sampleErr := s.sampleOutboxDeadLetterDepth(ctx); sampleErr != nil && err == nil {
+		err = sampleErr
+	}
 	return err
+}
+
+// sampleOutboxDeadLetterDepth refreshes the per-tenant/destination dead-letter
+// gauge (OPS-DLQ-001). Buckets that drained since the last sample are zeroed so
+// the alert clears when an operator sweeps or replays the rows.
+func (s *Server) sampleOutboxDeadLetterDepth(ctx context.Context) error {
+	if s.store == nil || s.mOutboxDeadLetter == nil {
+		return nil
+	}
+	depths, err := s.store.OutboxDeadLetterDepth(ctx)
+	if err != nil {
+		return err
+	}
+	current := map[string][2]string{}
+	for _, d := range depths {
+		key := d.TenantID + "\x1f" + d.Destination
+		current[key] = [2]string{d.TenantID, d.Destination}
+		s.mOutboxDeadLetter.WithLabelValues(d.TenantID, d.Destination).Set(float64(d.Depth))
+	}
+	for key, labels := range s.outboxDeadLetterSeen {
+		if _, ok := current[key]; !ok {
+			s.mOutboxDeadLetter.WithLabelValues(labels[0], labels[1]).Set(0)
+		}
+	}
+	s.outboxDeadLetterSeen = current
+	return nil
 }
 
 func (s *Server) sampleEventLogReplicas(ctx context.Context) error {
