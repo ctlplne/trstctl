@@ -119,6 +119,11 @@ func TestManagedKeyClosureRejectsRehashedMutableBuildInputs(t *testing.T) {
 		{"runtime changes shipped platform", "internal/server/dod_managed_key_runtime_test.go", `"linux/amd64"`, `"linux/arm64"`},
 		{"runtime image inspection drops platform", "internal/server/dod_managed_key_runtime_test.go", `"--format={{.Id}} {{.Os}}/{{.Architecture}}"`, `"--format={{.Id}}"`},
 		{"base pull drops platform", "internal/server/dod_managed_key_runtime_test.go", `"docker", "pull", "--platform", dodManagedKeyRuntimePlatform, taggedImage`, `"docker", "pull", taggedImage`},
+		{"runtime restores embedded postgres sibling", "internal/server/dod_managed_key_runtime_test.go", `postgresDSN: dodManagedKeyPostgresDSN(t)`, `postgresDSN: serverTestPostgresDSN(t)`},
+		{"postgres image becomes mutable", "internal/server/dod_managed_key_runtime_test.go", `postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229`, `postgres:16-alpine`},
+		{"postgres publishes on every interface", "internal/server/dod_managed_key_runtime_test.go", `fmt.Sprintf("127.0.0.1:%d:5432", port)`, `fmt.Sprintf("0.0.0.0:%d:5432", port)`},
+		{"postgres runs as root", "internal/server/dod_managed_key_runtime_test.go", `postgresUser := strconv.Itoa(uid) + ":" + strconv.Itoa(gid)`, `postgresUser := "0:0"`},
+		{"postgres shares host PID namespace", "internal/server/dod_managed_key_runtime_test.go", `"--network", "bridge", "--pids-limit", "256", "--memory", "512m"`, `"--network", "bridge", "--pid", "host", "--pids-limit", "256", "--memory", "512m"`},
 		{"inner emulator run drops platform", "tools/dodcensus/substrates/managed_keys.py", `"docker", "run", "--rm", "--platform", "linux/amd64", "--name"`, `"docker", "run", "--rm", "--name"`},
 		{"receipt omits runtime image id", "tools/dodcensus/substrates/managed_keys.py", `"runtime_identity": image`, `"runtime_identity": "mutable"`},
 		{"signer drops nonroot uid", "internal/server/dod_managed_key_runtime_test.go", `"--user", strconv.Itoa(uid) + ":" + strconv.Itoa(gid)`, `"--user", "0:0"`},
@@ -299,7 +304,7 @@ func TestManagedKeyRuntimeUsesContentAddressedImageAtBothRunSites(t *testing.T) 
 		}
 	}
 	if count := strings.Count(source, `"--platform", dodManagedKeyRuntimePlatform`); count != 4 {
-		t.Errorf("managed-key runtime pins exact pull/build/run platform %d times, want four", count)
+		t.Errorf("managed-key runtime pins exact shipped pull/build/run platform %d times, want four", count)
 	}
 	for _, forbidden := range []string{
 		`t.Setenv("TRSTCTL_HSM_PROOF_IMAGE", "trstctl-managed-key-runtime:dod")`,

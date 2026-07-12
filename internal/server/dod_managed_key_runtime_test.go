@@ -40,6 +40,10 @@ import (
 const (
 	dodManagedKeyProbe                         = "independent managed-key device signature proof"
 	dodManagedKeyRestartProbe                  = "post-restart TPM custody signature proof"
+	dodManagedKeyPostgresImage                 = "postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"
+	dodManagedKeyPostgresUser                  = "trstctl_dod"
+	dodManagedKeyPostgresDatabase              = "trstctl_dod"
+	dodManagedKeyPostgresPassword              = "trstctl-dod-isolated-postgres-password"
 	dodManagedKeySignTokenHelperEnv            = "TRSTCTL_DOD_MANAGED_KEY_SIGN_TOKEN_HELPER"
 	dodManagedKeySignTokenSecretFileEnv        = "TRSTCTL_DOD_MANAGED_KEY_SIGN_TOKEN_SECRET_FILE"
 	dodRuntimeDockerHostEnv                    = "TRSTCTL_RUNTIME_DOCKER_HOST"
@@ -266,7 +270,318 @@ func dodBuildManagedKeyArtifacts(t *testing.T) dodManagedKeyArtifacts {
 	t.Setenv("TRSTCTL_HSM_PROOF_IMAGE", runtimeImage)
 	return dodManagedKeyArtifacts{
 		licenseFile: licenseFile, licensePublicKey: append([]byte(nil), publicKey...),
-		postgresDSN: serverTestPostgresDSN(t), root: root, repo: repo, network: network, runtimeImage: runtimeImage,
+		postgresDSN: dodManagedKeyPostgresDSN(t), root: root, repo: repo, network: network, runtimeImage: runtimeImage,
+	}
+}
+
+type dodManagedKeyPostgresInspect struct {
+	Image  string
+	Config struct {
+		Image, User string
+		Env         []string
+	}
+	HostConfig struct {
+		ReadonlyRootfs bool
+		Privileged     bool
+		CapDrop        []string
+		CapAdd         []string
+		SecurityOpt    []string
+		NetworkMode    string
+		PidMode        string
+		PidsLimit      int64
+		Memory         int64
+		Tmpfs          map[string]string
+		PortBindings   map[string][]struct {
+			HostIP, HostPort string
+		}
+	}
+	Mounts []struct {
+		Type, Source, Destination string
+		RW                        bool
+	}
+	State struct{ Running bool }
+}
+
+// dodManagedKeyPostgresDSN keeps the proof database outside the runtime
+// runner's PID namespace. The former embedded helper launched a non-dumpable
+// same-UID postgres sibling beside the shipped process; the global socket-owner
+// census correctly refused to guess whether that unreadable sibling shared a
+// socket. This digest-pinned container is published only on host loopback and
+// reached through the one already-validated cross-host routing seam.
+func dodManagedKeyPostgresDSN(t *testing.T) string {
+	t.Helper()
+	port := dodFreePort(t)
+	containerName := "trstctl-dod-hsm-postgres-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	passwordFile := filepath.Join(t.TempDir(), "postgres-password")
+	if err := os.WriteFile(passwordFile, []byte(dodManagedKeyPostgresPassword), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	uid, gid := os.Getuid(), os.Getgid()
+	if uid <= 0 || gid < 0 {
+		t.Fatalf("managed-key PostgreSQL requires a non-root runtime owner, got %d:%d", uid, gid)
+	}
+	postgresUser := strconv.Itoa(uid) + ":" + strconv.Itoa(gid)
+	passwdFile, groupFile := dodManagedKeyPostgresNSS(t, filepath.Dir(passwordFile), uid, gid)
+	passwordMountSource := proof.DockerHostMountSource(t, passwordFile)
+	passwdMountSource := proof.DockerHostMountSource(t, passwdFile)
+	groupMountSource := proof.DockerHostMountSource(t, groupFile)
+	dodRunCommand(t, "pull exact managed-key PostgreSQL image", "docker", "pull", dodManagedKeyPostgresImage)
+	imageID := dodManagedKeyPostgresImageID(t)
+	args := []string{
+		"run", "-d", "--name", containerName, "--pull", "never",
+		"--user", postgresUser,
+		"--read-only", "--security-opt", "no-new-privileges", "--cap-drop", "ALL",
+		"--network", "bridge", "--pids-limit", "256", "--memory", "512m",
+		"--tmpfs", fmt.Sprintf("/var/lib/postgresql/data:rw,nosuid,nodev,noexec,size=256m,uid=%d,gid=%d,mode=0700", uid, gid),
+		"--tmpfs", fmt.Sprintf("/var/run/postgresql:rw,nosuid,nodev,noexec,size=1m,uid=%d,gid=%d,mode=0750", uid, gid),
+		"--tmpfs", fmt.Sprintf("/tmp:rw,nosuid,nodev,noexec,size=16m,uid=%d,gid=%d,mode=1777", uid, gid),
+		"--mount", "type=bind,src=" + passwordMountSource + ",dst=/run/secrets/postgres-password,readonly",
+		"--mount", "type=bind,src=" + passwdMountSource + ",dst=/etc/passwd,readonly",
+		"--mount", "type=bind,src=" + groupMountSource + ",dst=/etc/group,readonly",
+		"-p", fmt.Sprintf("127.0.0.1:%d:5432", port),
+		"-e", "POSTGRES_USER=" + dodManagedKeyPostgresUser,
+		"-e", "POSTGRES_DB=" + dodManagedKeyPostgresDatabase,
+		"-e", "POSTGRES_PASSWORD_FILE=/run/secrets/postgres-password",
+		"-e", "PGDATA=/var/lib/postgresql/data/pgdata",
+		dodManagedKeyPostgresImage,
+	}
+	dodRunCommand(t, "start isolated managed-key PostgreSQL", "docker", args...)
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", containerName).Run() })
+	dodInspectManagedKeyPostgres(t, containerName, imageID, postgresUser,
+		map[string]string{
+			"/run/secrets/postgres-password": passwordMountSource,
+			"/etc/passwd":                    passwdMountSource,
+			"/etc/group":                     groupMountSource,
+		},
+		uid, gid, port)
+
+	host, err := dodRuntimeDockerHost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsnURL := &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(dodManagedKeyPostgresUser, dodManagedKeyPostgresPassword),
+		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+		Path:   "/" + dodManagedKeyPostgresDatabase,
+	}
+	query := dsnURL.Query()
+	query.Set("sslmode", "disable")
+	dsnURL.RawQuery = query.Encode()
+	dsn := dsnURL.String()
+	deadline := time.Now().Add(30 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		connection, connectErr := pgx.Connect(ctx, dsn)
+		if connectErr == nil {
+			pingErr := connection.Ping(ctx)
+			_ = connection.Close(ctx)
+			cancel()
+			if pingErr == nil {
+				return dsn
+			}
+			lastErr = pingErr
+		} else {
+			cancel()
+			lastErr = connectErr
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("isolated managed-key PostgreSQL did not become ready: %v state=%s logs=%s", lastErr,
+		dodManagedKeyCompactDiagnostic(dodCommandOutput("docker", "inspect", "--format={{json .State}}", containerName)),
+		dodManagedKeyCompactDiagnostic(dodCommandOutput("docker", "logs", "--tail=80", containerName)))
+	return ""
+}
+
+func dodManagedKeyPostgresImageID(t *testing.T) string {
+	t.Helper()
+	command := exec.Command("docker", "image", "inspect", "--format={{.Id}} {{.Os}}/{{.Architecture}}", dodManagedKeyPostgresImage)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect pinned managed-key PostgreSQL image: %v output=%s", err, output)
+	}
+	fields := strings.Fields(string(output))
+	if len(fields) != 2 || (fields[1] != "linux/amd64" && fields[1] != "linux/arm64") {
+		t.Fatalf("pinned managed-key PostgreSQL image inspect = %q, want bounded Linux architecture", strings.TrimSpace(string(output)))
+	}
+	id, err := dodParseContentImageID(fields[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func dodInspectManagedKeyPostgres(t *testing.T, containerName, imageID, postgresUser string, mountSources map[string]string, uid, gid, port int) {
+	t.Helper()
+	command := exec.Command("docker", "inspect", containerName)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect isolated managed-key PostgreSQL: %v output=%s", err, output)
+	}
+	var rows []dodManagedKeyPostgresInspect
+	if err := json.Unmarshal(output, &rows); err != nil || len(rows) != 1 {
+		t.Fatalf("decode isolated managed-key PostgreSQL inspect: rows=%d err=%v", len(rows), err)
+	}
+	row := rows[0]
+	if row.Image != imageID || row.Config.Image != dodManagedKeyPostgresImage || row.Config.User != postgresUser || !row.State.Running {
+		t.Fatalf("isolated PostgreSQL image/user/state changed: image=%q config_image=%q user=%q running=%v", row.Image, row.Config.Image, row.Config.User, row.State.Running)
+	}
+	if !row.HostConfig.ReadonlyRootfs || row.HostConfig.Privileged || len(row.HostConfig.CapAdd) != 0 ||
+		strings.Join(row.HostConfig.CapDrop, ",") != "ALL" || row.HostConfig.PidMode != "" ||
+		strings.Join(row.HostConfig.SecurityOpt, ",") != "no-new-privileges" || row.HostConfig.NetworkMode != "bridge" ||
+		row.HostConfig.PidsLimit != 256 || row.HostConfig.Memory != 512*1024*1024 {
+		t.Fatalf("isolated PostgreSQL confinement changed: %+v", row.HostConfig)
+	}
+	wantTmpfs := map[string]struct {
+		size int64
+		mode string
+	}{
+		"/var/lib/postgresql/data": {size: 256 * 1024 * 1024, mode: "0700"},
+		"/var/run/postgresql":      {size: 1024 * 1024, mode: "0750"},
+		"/tmp":                     {size: 16 * 1024 * 1024, mode: "1777"},
+	}
+	if len(row.HostConfig.Tmpfs) != len(wantTmpfs) {
+		t.Fatalf("isolated PostgreSQL tmpfs set changed: %v", row.HostConfig.Tmpfs)
+	}
+	for path, expected := range wantTmpfs {
+		options := map[string]bool{}
+		for _, option := range strings.Split(row.HostConfig.Tmpfs[path], ",") {
+			options[option] = true
+		}
+		for _, option := range []string{"rw", "nosuid", "nodev", "noexec", "uid=" + strconv.Itoa(uid), "gid=" + strconv.Itoa(gid), "mode=" + expected.mode} {
+			if !options[option] {
+				t.Fatalf("isolated PostgreSQL tmpfs %s omits %q: %q", path, option, row.HostConfig.Tmpfs[path])
+			}
+		}
+		size := int64(-1)
+		for option := range options {
+			if raw, ok := strings.CutPrefix(option, "size="); ok {
+				size, err = dodTmpfsSizeBytes(raw)
+				if err != nil {
+					t.Fatalf("isolated PostgreSQL tmpfs %s has invalid size %q: %v", path, raw, err)
+				}
+			}
+		}
+		if size != expected.size {
+			t.Fatalf("isolated PostgreSQL tmpfs %s size=%d, want %d: %q", path, size, expected.size, row.HostConfig.Tmpfs[path])
+		}
+		if len(options) != 8 {
+			t.Fatalf("isolated PostgreSQL tmpfs %s has unreviewed options: %q", path, row.HostConfig.Tmpfs[path])
+		}
+	}
+	bindings := row.HostConfig.PortBindings["5432/tcp"]
+	if len(bindings) != 1 || bindings[0].HostIP != "127.0.0.1" || bindings[0].HostPort != strconv.Itoa(port) {
+		t.Fatalf("isolated PostgreSQL is not bound only to exact host loopback: %+v", bindings)
+	}
+	if len(row.Mounts) != len(mountSources) {
+		t.Fatalf("isolated PostgreSQL mount set changed: %+v", row.Mounts)
+	}
+	for _, mount := range row.Mounts {
+		if mount.Type != "bind" || mount.RW || mountSources[mount.Destination] != mount.Source {
+			t.Fatalf("isolated PostgreSQL private mount changed: %+v", row.Mounts)
+		}
+	}
+	for _, required := range []string{
+		"POSTGRES_USER=" + dodManagedKeyPostgresUser,
+		"POSTGRES_DB=" + dodManagedKeyPostgresDatabase,
+		"POSTGRES_PASSWORD_FILE=/run/secrets/postgres-password",
+		"PGDATA=/var/lib/postgresql/data/pgdata",
+	} {
+		if !dodContainsExact(row.Config.Env, required) {
+			t.Fatalf("isolated PostgreSQL environment omits %q", required)
+		}
+	}
+	for _, value := range row.Config.Env {
+		if strings.HasPrefix(value, "POSTGRES_PASSWORD=") {
+			t.Fatal("isolated PostgreSQL retained its password in container environment metadata")
+		}
+	}
+}
+
+func dodManagedKeyPostgresNSS(t *testing.T, dir string, uid, gid int) (string, string) {
+	t.Helper()
+	if uid <= 0 || gid < 0 || !filepath.IsAbs(dir) || strings.ContainsAny(dir, ":\r\n\x00") {
+		t.Fatalf("invalid managed-key PostgreSQL NSS identity/path %d:%d %q", uid, gid, dir)
+	}
+	passwd := "root:x:0:0:root:/root:/usr/sbin/nologin\n" +
+		fmt.Sprintf("dodpostgres:x:%d:%d:DoD managed-key PostgreSQL:/var/lib/postgresql:/usr/sbin/nologin\n", uid, gid)
+	group := "root:x:0:\n"
+	if gid != 0 {
+		group += fmt.Sprintf("dodpostgres:x:%d:\n", gid)
+	}
+	write := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			t.Fatalf("create managed-key PostgreSQL %s: %v", name, err)
+		}
+		if _, err := file.WriteString(content); err != nil {
+			_ = file.Close()
+			t.Fatalf("write managed-key PostgreSQL %s: %v", name, err)
+		}
+		if err := file.Sync(); err != nil {
+			_ = file.Close()
+			t.Fatalf("sync managed-key PostgreSQL %s: %v", name, err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatalf("close managed-key PostgreSQL %s: %v", name, err)
+		}
+		return path
+	}
+	return write("postgres-passwd", passwd), write("postgres-group", group)
+}
+
+func dodContainsExact(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func dodTmpfsSizeBytes(raw string) (int64, error) {
+	if raw == "" {
+		return 0, fmt.Errorf("empty tmpfs size")
+	}
+	multiplier := int64(1)
+	suffix := raw[len(raw)-1]
+	if suffix < '0' || suffix > '9' {
+		switch suffix {
+		case 'k', 'K':
+			multiplier = 1024
+		case 'm', 'M':
+			multiplier = 1024 * 1024
+		case 'g', 'G':
+			multiplier = 1024 * 1024 * 1024
+		default:
+			return 0, fmt.Errorf("unsupported tmpfs size suffix %q", suffix)
+		}
+		raw = raw[:len(raw)-1]
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 || value > (1<<63-1)/multiplier {
+		return 0, fmt.Errorf("invalid tmpfs size")
+	}
+	return value * multiplier, nil
+}
+
+func TestDODManagedKeyTmpfsSizeParserIsClosed(t *testing.T) {
+	for raw, want := range map[string]int64{
+		"1048576": 1024 * 1024,
+		"1024k":   1024 * 1024,
+		"16m":     16 * 1024 * 1024,
+		"1G":      1024 * 1024 * 1024,
+	} {
+		if got, err := dodTmpfsSizeBytes(raw); err != nil || got != want {
+			t.Errorf("tmpfs size %q = %d err=%v, want %d", raw, got, err, want)
+		}
+	}
+	for _, raw := range []string{"", "0", "-1", "1t", "not-a-size", "9223372036854775807g"} {
+		if got, err := dodTmpfsSizeBytes(raw); err == nil {
+			t.Errorf("unsafe tmpfs size %q accepted as %d", raw, got)
+		}
 	}
 }
 

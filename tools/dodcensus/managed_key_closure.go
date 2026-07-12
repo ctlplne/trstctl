@@ -124,6 +124,20 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 		`"docker", "build", "--platform", dodManagedKeyRuntimePlatform, "-f", "tools/dodcensus/Dockerfile.managed-key-runtime"`,
 		`"SIGNER_IMAGE="+signerImage`,
 		`runtimeImage := dodBuiltImageID(t, "trstctl-managed-key-runtime:dod", dodManagedKeyRuntimePlatform)`,
+		`dodManagedKeyPostgresImage                 = "postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"`,
+		`postgresDSN: dodManagedKeyPostgresDSN(t)`,
+		`"docker", "pull", dodManagedKeyPostgresImage`,
+		`fields[1] != "linux/amd64" && fields[1] != "linux/arm64"`,
+		`postgresUser := strconv.Itoa(uid) + ":" + strconv.Itoa(gid)`,
+		`"--user", postgresUser`,
+		`"--read-only", "--security-opt", "no-new-privileges", "--cap-drop", "ALL"`,
+		`"--network", "bridge", "--pids-limit", "256", "--memory", "512m"`,
+		`"-p", fmt.Sprintf("127.0.0.1:%d:5432", port)`,
+		`passwordMountSource := proof.DockerHostMountSource(t, passwordFile)`,
+		`row.Image != imageID || row.Config.Image != dodManagedKeyPostgresImage || row.Config.User != postgresUser || !row.State.Running`,
+		`row.HostConfig.Privileged || len(row.HostConfig.CapAdd) != 0`,
+		`row.HostConfig.PidMode != ""`,
+		`host, err := dodRuntimeDockerHost()`,
 		`"--format={{.Id}} {{.Os}}/{{.Architecture}}"`,
 		`len(fields) != 2 || fields[1] != platform`,
 		`t.Setenv("TRSTCTL_HSM_PROOF_IMAGE", runtimeImage)`,
@@ -161,7 +175,13 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 		}
 	}
 	if count := strings.Count(runtimeSource, `"--platform", dodManagedKeyRuntimePlatform`); count != 4 {
-		return fmt.Errorf("managed-key runtime pins linux/amd64 at %d pull/build/run sites, want four", count)
+		return fmt.Errorf("managed-key runtime pins linux/amd64 at %d shipped pull/build/run sites, want four", count)
+	}
+	if count := strings.Count(runtimeSource, `"--format={{.Id}} {{.Os}}/{{.Architecture}}"`); count != 2 {
+		return fmt.Errorf("managed-key runtime has %d architecture-bound image inspections, want PostgreSQL plus signer", count)
+	}
+	if count := strings.Count(runtimeSource, `os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)`); count != 2 {
+		return fmt.Errorf("managed-key runtime has %d exclusive private NSS writers, want PostgreSQL plus signer", count)
 	}
 	for _, forbidden := range []string{
 		`"BUILD_IMAGE=golang:`, `"BASE_IMAGE=debian:`,
@@ -170,6 +190,10 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 		`"docker", "image", "inspect", "--format={{.Id}}", image`,
 		`"docker", "build", "-f", "deploy/docker/Dockerfile.signer-hsm"`,
 		`"docker", "build", "-f", "tools/dodcensus/Dockerfile.managed-key-runtime"`,
+		`postgresDSN: serverTestPostgresDSN(t)`,
+		`"postgres:16-alpine"`,
+		`fmt.Sprintf("0.0.0.0:%d:5432", port)`,
+		`"--network", "host"`,
 		`"--privileged"`,
 		`"seccomp=unconfined"`,
 		`"--user", "0:0"`,

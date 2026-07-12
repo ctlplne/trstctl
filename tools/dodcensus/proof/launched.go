@@ -44,6 +44,8 @@ const (
 	runtimeZeroCapabilityString = "0000000000000000"
 )
 
+var errNoStableProcessSockets = errors.New("launched process has no stable socket to audit")
+
 type shippedBuild struct {
 	binDir     string
 	binary     string
@@ -1261,7 +1263,7 @@ func (p *ShippedProcess) Start(directory string, environment []string) {
 		_ = command.Process.Kill()
 		p.t.Fatalf("DOD-CENSUS: launched process executable mismatch: %v", err)
 	}
-	if err := requireAllProcessSocketsExclusive(command.Process.Pid, p.build, p.expect); err != nil {
+	if err := waitForExclusiveProcessSockets(command.Process.Pid, p.build, p.expect, p.done); err != nil {
 		_ = command.Process.Kill()
 		p.t.Fatalf("DOD-CENSUS: launched process inherited a foreign-owned socket: %v", err)
 	}
@@ -1352,6 +1354,25 @@ func waitForLiveProcess(pid int, built shippedBuild, expected expectation, done 
 		lastErr = err
 		if !processRunning(done) || time.Now().After(deadline) {
 			return processExecutableWitness{}, lastErr
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func waitForExclusiveProcessSockets(pid int, built shippedBuild, expected expectation, done <-chan struct{}) error {
+	return waitForSocketOwnershipAudit(done, time.Now().Add(5*time.Second), func() error {
+		return requireAllProcessSocketsExclusive(pid, built, expected)
+	})
+}
+
+func waitForSocketOwnershipAudit(done <-chan struct{}, deadline time.Time, audit func() error) error {
+	for {
+		err := audit()
+		if err == nil {
+			return nil
+		}
+		if err != errNoStableProcessSockets || !processRunning(done) || time.Now().After(deadline) {
+			return err
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -1466,6 +1487,9 @@ func (p *ShippedProcess) Do(request *http.Request) *launchedResponse {
 	if err != nil || liveWitness != expectedWitness {
 		p.t.Fatalf("DOD-CENSUS: live executable is not the unchanged gate-built control plane: %v", err)
 	}
+	if err := requireAllProcessSocketsExclusive(command.Process.Pid, p.build, p.expect); err != nil {
+		p.t.Fatalf("DOD-CENSUS: pre-request launched socket ownership: %v", err)
+	}
 	inode, err := processLoopbackListener(command.Process.Pid, port)
 	if err != nil {
 		p.t.Fatalf("DOD-CENSUS: launched listener ownership: %v", err)
@@ -1525,9 +1549,10 @@ func (p *ShippedProcess) Do(request *http.Request) *launchedResponse {
 	afterInode, err := processLoopbackListener(command.Process.Pid, port)
 	afterWitness, witnessErr := inspectLiveProcess(command.Process.Pid, p.build, p.expect)
 	exclusiveErr := requireExclusiveSocketOwner(command.Process.Pid, afterInode, p.build, p.expect)
-	if err != nil || afterInode != inode || witnessErr != nil || afterWitness != expectedWitness || exclusiveErr != nil || !processRunning(done) {
+	allExclusiveErr := requireAllProcessSocketsExclusive(command.Process.Pid, p.build, p.expect)
+	if err != nil || afterInode != inode || witnessErr != nil || afterWitness != expectedWitness || exclusiveErr != nil || allExclusiveErr != nil || !processRunning(done) {
 		_ = response.Body.Close()
-		p.t.Fatalf("DOD-CENSUS: shipped process/executable/listener changed during response: listener=%v executable=%v exclusive=%v", err, witnessErr, exclusiveErr)
+		p.t.Fatalf("DOD-CENSUS: shipped process/executable/listener changed during response: listener=%v executable=%v exclusive=%v all_sockets=%v", err, witnessErr, exclusiveErr, allExclusiveErr)
 	}
 	if err := p.revalidateBuiltArtifacts(); err != nil {
 		_ = response.Body.Close()
@@ -2413,6 +2438,9 @@ func requireAllProcessSocketsExclusive(pid int, built shippedBuild, expected exp
 		}
 		inodes[strings.TrimSuffix(strings.TrimPrefix(target, "socket:["), "]")] = true
 	}
+	if len(inodes) == 0 {
+		return errNoStableProcessSockets
+	}
 	for inode := range inodes {
 		if err := requireExclusiveSocketOwner(pid, inode, built, expected, true); err != nil {
 			return err
@@ -2548,9 +2576,11 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 		return fmt.Errorf("parent socket descriptor was not causally sampled with close-on-exec")
 	}
 	status, err := readReviewedCompanionStatus(candidatePID)
-	if err != nil || status.parentPID != parentPID || status.state == "Z" || status.state == "X" ||
-		status.noNewPrivs != "1" || status.seccomp != "2" {
-		return fmt.Errorf("unreadable process is not a hardened live direct companion: %w", err)
+	if err != nil {
+		return fmt.Errorf("read unreadable companion hardening status: %w", err)
+	}
+	if err := validateUnreadableCompanionStatus(parentPID, status); err != nil {
+		return err
 	}
 	parentStart, err := processStartTime(parentPID)
 	if err != nil {
@@ -2607,6 +2637,15 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 		}
 	} else if !os.IsPermission(liveErr) {
 		return fmt.Errorf("inspect companion process executable: %w", liveErr)
+	}
+	return nil
+}
+
+func validateUnreadableCompanionStatus(parentPID int, status reviewedCompanionStatus) error {
+	if status.parentPID != parentPID || status.state == "Z" || status.state == "X" ||
+		status.noNewPrivs != "1" || status.seccomp != "2" {
+		return fmt.Errorf("unreadable process is not a hardened live direct companion: name=%q state=%q parent=%d no_new_privs=%q seccomp=%q",
+			status.name, status.state, status.parentPID, status.noNewPrivs, status.seccomp)
 	}
 	return nil
 }

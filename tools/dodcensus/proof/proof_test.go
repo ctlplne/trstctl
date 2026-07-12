@@ -80,6 +80,58 @@ func TestValidateObservedSocketOwnersAllowsOnlyParentOrClosedRace(t *testing.T) 
 	}
 }
 
+func TestSocketOwnershipReadinessRetriesOnlyEmptyStableSample(t *testing.T) {
+	done := make(chan struct{})
+	attempts := 0
+	err := waitForSocketOwnershipAudit(done, time.Now().Add(time.Second), func() error {
+		attempts++
+		if attempts < 3 {
+			return errNoStableProcessSockets
+		}
+		return nil
+	})
+	if err != nil || attempts != 3 {
+		t.Fatalf("delayed stable socket audit = attempts=%d err=%v, want third-attempt success", attempts, err)
+	}
+
+	permissionErr := os.ErrPermission
+	attempts = 0
+	err = waitForSocketOwnershipAudit(done, time.Now().Add(time.Second), func() error {
+		attempts++
+		return permissionErr
+	})
+	if !errors.Is(err, permissionErr) || attempts != 1 {
+		t.Fatalf("unreadable sibling audit = attempts=%d err=%v, want immediate permission failure", attempts, err)
+	}
+
+	close(done)
+	attempts = 0
+	err = waitForSocketOwnershipAudit(done, time.Now().Add(time.Second), func() error {
+		attempts++
+		return errNoStableProcessSockets
+	})
+	if !errors.Is(err, errNoStableProcessSockets) || attempts != 1 {
+		t.Fatalf("stopped process audit = attempts=%d err=%v, want immediate empty-sample failure", attempts, err)
+	}
+}
+
+func TestLaunchedRequestAuditsAllSocketsBeforeAndAfterResponse(t *testing.T) {
+	raw, err := os.ReadFile("launched.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(raw)
+	for _, anchor := range []string{
+		`DOD-CENSUS: pre-request launched socket ownership`,
+		`allExclusiveErr := requireAllProcessSocketsExclusive(command.Process.Pid, p.build, p.expect)`,
+		`all_sockets=%v`,
+	} {
+		if !strings.Contains(source, anchor) {
+			t.Errorf("launched request socket proof omits %q", anchor)
+		}
+	}
+}
+
 func TestReviewedBinfmtInterpreterIsClosedToExactImmutableRosetta(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	target := executableIdentity{Device: 1, Inode: 10, Links: 1, UID: 501, Size: 4096, Mode: 0o700, Digest: digest}
@@ -389,6 +441,12 @@ func TestReviewedCompanionStatusRequiresDirectHardenedSignerShape(t *testing.T) 
 				t.Fatal("incomplete/invalid companion status accepted")
 			}
 		})
+	}
+	invalid := status
+	invalid.parentPID++
+	err = validateUnreadableCompanionStatus(42, invalid)
+	if err == nil || strings.Contains(err.Error(), "%!w") {
+		t.Fatalf("invalid unreadable companion diagnostic = %v", err)
 	}
 }
 
