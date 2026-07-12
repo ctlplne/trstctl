@@ -71,6 +71,7 @@ required set.
 | `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint, with PKIOperation request/response transcripts archived |
 | `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe fetches and validates X.509-SVID and JWT-SVID paths from the served Workload API Unix socket; spiffe-helper writes the served X.509-SVID, key, and trust bundle |
 | `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose eval stack boots real PostgreSQL, JetStream, isolated signer, served issuance/revocation, and PKI profile linting |
+| `vault compat (real openbao client)` | `ci.yml` | Runs the Vault-compat shim acceptance against a pinned real OpenBao CLI, non-skipped (TEST-VAULT-001) |
 | `ee / unit tests + vdec gates` | `ci.yml` | Runs `make ee-test` (ee/ unit tests + coverage floor) and the VDEC wire/release gates so commercial code is exercised every PR (TEST-EE-CI-001) |
 | `restore rehearsal / full DR loop` | `ci.yml` | Full backup from a populated instance restores through the shipped binary into a fresh instance that boots, reads old data, and issues new credentials; a corrupted backup fails closed (OPS-RESTORE-001) |
 | `reproducible build (byte-identical rebuild)` | `ci.yml` | Shipped binaries and image layers rebuild byte/layer-identical on every PR (OPS-CI-102) |

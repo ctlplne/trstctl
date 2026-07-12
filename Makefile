@@ -334,6 +334,12 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate xrec-caller-gate vdec-caller-gate
 
 .PHONY: editions-gate
+.PHONY: vault-compat-gate
+vault-compat-gate: ## Run the Vault/OpenBao shim acceptance against a real CLI (TEST-VAULT-001)
+	@echo ">> vault-compat-gate (real vault/openbao CLI, non-skipped)"
+	@if [ -z "$${TRSTCTL_VAULT_BIN:-}" ] && ! command -v vault >/dev/null 2>&1; then 		echo "FAIL: TEST-VAULT-001 requires a real vault/openbao CLI; set TRSTCTL_VAULT_BIN or install 'vault'" >&2; 		exit 1; 	fi
+	@$(GO) test ./internal/server -run 'VaultCLICompatibility' -count=1
+
 .PHONY: ee-test
 ee-test: ## Run the ee/ unit tests with a coverage floor (TEST-EE-CI-001)
 	@echo ">> ee/ unit tests (race + coverage floor $(EE_COVERAGE_MIN)%)"

@@ -298,6 +298,39 @@ jobs:
           path: ${{ runner.temp }}/branch-protection-drift-receipt.json
           if-no-files-found: error
 
+  # TEST-VAULT-001: prove the Vault-compat shim against a REAL vault/openbao CLI
+  # (a pinned OpenBao binary), non-skipped, as a required check — the acceptance
+  # must fail rather than skip when the client is absent.
+  vault-compat:
+    name: vault compat (real openbao client)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENBAO_VERSION: "2.0.0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Install pinned OpenBao CLI
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"; case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac
+          url="https://github.com/openbao/openbao/releases/download/v${OPENBAO_VERSION}/bao_${OPENBAO_VERSION}_Linux_${arch}.tar.gz"
+          curl -sSL -o /tmp/bao.tgz "$url"
+          tar -C /usr/local/bin -xzf /tmp/bao.tgz bao
+          sudo ln -sf /usr/local/bin/bao /usr/local/bin/vault
+          vault version
+
+      - name: Vault-compat acceptance (non-skipped)
+        run: make vault-compat-gate
+
   # TEST-EE-CI-001: exercise the ee/ commercial code on every PR — its unit
   # tests with a coverage floor, plus the vdec wire/release gates over real
   # infrastructure, held to the same required-check discipline as the xrec/PCAS
