@@ -28,11 +28,11 @@ type Quorum = bgquorum.Quorum
 // EmergencyRequest is a request to issue a certificate under break-glass.
 type EmergencyRequest struct {
 	CeremonyID string
-	ID        string
-	Subject   string
-	CSRDer    []byte
-	Reason    string
-	Approvals []string // operator ids authorizing this issuance (m-of-n)
+	ID         string
+	Subject    string
+	CSRDer     []byte
+	Reason     string
+	Approvals  []string // operator ids authorizing this issuance (m-of-n)
 }
 
 // IssuePurpose binds one tenant-scoped ceremony to the exact online emergency
@@ -40,12 +40,12 @@ type EmergencyRequest struct {
 // immutable ca.ceremony.approved events when the operation is consumed.
 func IssuePurpose(tenantID string, req EmergencyRequest, ttl time.Duration) string {
 	payload, err := json.Marshal(struct {
-		TenantID string `json:"tenant_id"`
-		RequestID string `json:"request_id"`
-		Subject string `json:"subject"`
-		CSRHash string `json:"csr_sha256"`
-		Reason string `json:"reason"`
-		TTLSeconds int64 `json:"ttl_seconds"`
+		TenantID   string `json:"tenant_id"`
+		RequestID  string `json:"request_id"`
+		Subject    string `json:"subject"`
+		CSRHash    string `json:"csr_sha256"`
+		Reason     string `json:"reason"`
+		TTLSeconds int64  `json:"ttl_seconds"`
 	}{tenantID, req.ID, req.Subject, crypto.SHA256Hex(req.CSRDer), req.Reason, int64(ttl / time.Second)})
 	if err != nil {
 		panic(fmt.Sprintf("breakglass: canonical issue purpose: %v", err))
@@ -58,11 +58,11 @@ func IssuePurpose(tenantID string, req EmergencyRequest, ttl time.Duration) stri
 // different rotation has advanced the active CA.
 func RotationPurpose(tenantID, signerHandle string, currentCertDER []byte, reason string, ttl time.Duration) string {
 	payload, err := json.Marshal(struct {
-		TenantID string `json:"tenant_id"`
-		SignerHandle string `json:"signer_handle"`
+		TenantID      string `json:"tenant_id"`
+		SignerHandle  string `json:"signer_handle"`
 		CurrentCAHash string `json:"current_ca_sha256"`
-		Reason string `json:"reason"`
-		TTLSeconds int64 `json:"ttl_seconds"`
+		Reason        string `json:"reason"`
+		TTLSeconds    int64  `json:"ttl_seconds"`
 	}{tenantID, signerHandle, crypto.SHA256Hex(currentCertDER), reason, int64(ttl / time.Second)})
 	if err != nil {
 		panic(fmt.Sprintf("breakglass: canonical rotation purpose: %v", err))
@@ -74,9 +74,9 @@ func RotationPurpose(tenantID, signerHandle string, currentCertDER []byte, reaso
 // target public certificate.
 func CrossSignPurpose(tenantID, signerHandle string, targetCertDER []byte) string {
 	payload, err := json.Marshal(struct {
-		TenantID string `json:"tenant_id"`
+		TenantID     string `json:"tenant_id"`
 		SignerHandle string `json:"signer_handle"`
-		TargetHash string `json:"target_ca_sha256"`
+		TargetHash   string `json:"target_ca_sha256"`
 	}{tenantID, signerHandle, crypto.SHA256Hex(targetCertDER)})
 	if err != nil {
 		panic(fmt.Sprintf("breakglass: canonical cross-sign purpose: %v", err))

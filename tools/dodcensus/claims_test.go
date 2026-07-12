@@ -124,7 +124,7 @@ func validProductClaimsFixture() (Manifest, Report, featureClaimsLedger, string,
 		{capability: "dynamic_secret", label: "Dynamic-secret backends", count: 8},
 		{capability: "external_ca", label: "CA integrations", count: 14},
 		{capability: "hsm_kms", label: "HSM/KMS backends", count: 6},
-		{capability: "secret_sync", label: "Secret-sync targets", count: 8},
+		{capability: "secret_sync", label: "Secret-sync targets", count: 10},
 	}
 	manifest := Manifest{}
 	report := Report{Entries: map[string]entryResult{}}

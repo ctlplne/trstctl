@@ -122,6 +122,7 @@ func TestDODSecretSyncProductionAssembly(t *testing.T) {
 		"secret_sync.registry", "secret_sync.aws_secrets_manager", "secret_sync.gcp_secret_manager",
 		"secret_sync.azure_key_vault", "secret_sync.github_actions", "secret_sync.gitlab_ci",
 		"secret_sync.vercel", "secret_sync.generic_ci_json", "secret_sync.kubernetes_secrets",
+		"secret_sync.terraform_cloud_opentofu", "secret_sync.vault_kv_v2",
 		"secrets_residuals.terraform_opentofu_native_sync", "secrets_residuals.vault_kv_outbound_sync",
 	)
 	if only == "" {
@@ -171,6 +172,16 @@ func TestDODSecretSyncProductionAssembly(t *testing.T) {
 	if only == "secret_sync.kubernetes_secrets" {
 		external := proof.StartCommand(t, "secret_sync.kubernetes_secrets")
 		dodRunFocusedSecretSync(t, "secret_sync.kubernetes_secrets", external, dodSecretIntegrationTarget{"secret_sync.kubernetes_secrets", "kubernetes-secrets", "kubernetes"})
+		return
+	}
+	if only == "secret_sync.terraform_cloud_opentofu" {
+		external := proof.StartCommand(t, "secret_sync.terraform_cloud_opentofu")
+		dodRunFocusedSecretSync(t, only, external, dodSecretIntegrationTarget{only, "terraform-cloud-opentofu", "terraform"})
+		return
+	}
+	if only == "secret_sync.vault_kv_v2" {
+		external := proof.StartCommand(t, "secret_sync.vault_kv_v2")
+		dodRunFocusedSecretSync(t, only, external, dodSecretIntegrationTarget{only, "vault-kv-v2", "vault"})
 		return
 	}
 	if only == "secrets_residuals.terraform_opentofu_native_sync" {
@@ -432,6 +443,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	syncKubernetes := proof.StartCommand(t, "secret_sync.kubernetes_secrets")
 	syncTerraform := proof.StartCommand(t, "secrets_residuals.terraform_opentofu_native_sync")
 	syncVault := proof.StartCommand(t, "secrets_residuals.vault_kv_outbound_sync")
+	syncTerraformCatalog := proof.StartCommand(t, "secret_sync.terraform_cloud_opentofu")
+	syncVaultCatalog := proof.StartCommand(t, "secret_sync.vault_kv_v2")
 
 	syncRegistryEndpoint := dodParentSubstrateLoopbackBridge(t, syncRegistry.Endpoint())
 	syncAWSEndpoint := dodParentSubstrateLoopbackBridge(t, syncAWS.Endpoint())
@@ -444,6 +457,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	syncKubernetesEndpoint := dodParentSubstrateLoopbackBridge(t, syncKubernetes.Endpoint())
 	syncTerraformEndpoint := dodParentSubstrateLoopbackBridge(t, syncTerraform.Endpoint())
 	syncVaultEndpoint := dodParentSubstrateLoopbackBridge(t, syncVault.Endpoint())
+	syncTerraformCatalogEndpoint := dodParentSubstrateLoopbackBridge(t, syncTerraformCatalog.Endpoint())
+	syncVaultCatalogEndpoint := dodParentSubstrateLoopbackBridge(t, syncVaultCatalog.Endpoint())
 
 	secretDir := t.TempDir()
 	fileRef := func(name string, value []byte) string { return dodSecretIntegrationFile(t, secretDir, name, value) }
@@ -467,6 +482,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 		{TenantID: dodSecretIntegrationTenant, ID: "kubernetes-secrets", Type: "kubernetes-secrets", Endpoint: syncKubernetesEndpoint, Namespace: "apps", TokenRef: fileRef("kubernetes-sync-token", []byte("dod-k8s-sync-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 		{TenantID: dodSecretIntegrationTenant, ID: "terraform-cloud-opentofu", Type: "terraform-cloud-opentofu", Endpoint: syncTerraformEndpoint, WorkspaceID: "ws-dod-opentofu", VariableCategory: "env", Description: "DOD managed variable", TokenRef: fileRef("terraform-sync-token", []byte("dod-terraform-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 		{TenantID: dodSecretIntegrationTenant, ID: "vault-kv-v2", Type: "vault-kv-v2", Endpoint: syncVaultEndpoint, Mount: "team-secrets", PathPrefix: "apps", Field: "value", VaultNamespace: "platform/team-a", TokenRef: fileRef("vault-sync-token", []byte("dod-vault-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
+		{TenantID: dodSecretIntegrationTenant, ID: "terraform-cloud-opentofu-catalog", Type: "terraform-cloud-opentofu", Endpoint: syncTerraformCatalogEndpoint, WorkspaceID: "ws-dod-opentofu-catalog", VariableCategory: "env", Description: "DOD catalog-served variable", TokenRef: fileRef("terraform-catalog-sync-token", []byte("dod-terraform-catalog-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
+		{TenantID: dodSecretIntegrationTenant, ID: "vault-kv-v2-catalog", Type: "vault-kv-v2", Endpoint: syncVaultCatalogEndpoint, Mount: "team-secrets", PathPrefix: "catalog", Field: "value", VaultNamespace: "platform/team-a", TokenRef: fileRef("vault-catalog-sync-token", []byte("dod-vault-catalog-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("secret integration production config: %v", err)
@@ -518,6 +535,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	dodProveSecretSync(t, "secret_sync.kubernetes_secrets", syncKubernetes, srv, token, dodSecretIntegrationTarget{"secret_sync.kubernetes_secrets", "kubernetes-secrets", "kubernetes"}, sourceValue)
 	dodProveSecretSync(t, "secrets_residuals.terraform_opentofu_native_sync", syncTerraform, srv, token, dodSecretIntegrationTarget{"secrets_residuals.terraform_opentofu_native_sync", "terraform-cloud-opentofu", "terraform"}, sourceValue)
 	dodProveSecretSync(t, "secrets_residuals.vault_kv_outbound_sync", syncVault, srv, token, dodSecretIntegrationTarget{"secrets_residuals.vault_kv_outbound_sync", "vault-kv-v2", "vault"}, sourceValue)
+	dodProveSecretSync(t, "secret_sync.terraform_cloud_opentofu", syncTerraformCatalog, srv, token, dodSecretIntegrationTarget{"secret_sync.terraform_cloud_opentofu", "terraform-cloud-opentofu-catalog", "terraform"}, sourceValue)
+	dodProveSecretSync(t, "secret_sync.vault_kv_v2", syncVaultCatalog, srv, token, dodSecretIntegrationTarget{"secret_sync.vault_kv_v2", "vault-kv-v2-catalog", "vault"}, sourceValue)
 }
 
 func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.ExternalSubstrate, target dodSecretIntegrationTarget) {
@@ -564,6 +583,14 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 	case "secret_sync.kubernetes_secrets":
 		base.Type, base.Namespace = "kubernetes-secrets", "apps"
 		base.TokenRef = fileRef("kubernetes-sync-token", []byte("dod-k8s-sync-token"))
+	case "secret_sync.terraform_cloud_opentofu":
+		base.Type, base.WorkspaceID, base.VariableCategory = "terraform-cloud-opentofu", "ws-dod-opentofu", "env"
+		base.Description = "DOD catalog-served variable"
+		base.TokenRef = fileRef("terraform-catalog-sync-token", []byte("dod-terraform-catalog-token"))
+	case "secret_sync.vault_kv_v2":
+		base.Type, base.Mount, base.PathPrefix, base.Field = "vault-kv-v2", "team-secrets", "catalog", "value"
+		base.VaultNamespace = "platform/team-a"
+		base.TokenRef = fileRef("vault-catalog-sync-token", []byte("dod-vault-catalog-token"))
 	case "secrets_residuals.terraform_opentofu_native_sync":
 		base.Type, base.WorkspaceID, base.VariableCategory = "terraform-cloud-opentofu", "ws-dod-opentofu", "env"
 		base.Description = "DOD managed variable"

@@ -156,7 +156,7 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		"connector":      24,
 		"external_ca":    14,
 		"dynamic_secret": 8,
-		"secret_sync":    8,
+		"secret_sync":    10,
 		"hsm_kms":        6,
 	}
 	labels := map[string]string{

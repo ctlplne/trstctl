@@ -18,7 +18,7 @@ func TestSecretIntegrationManifestMatchesProductionAssemblyAndRuntimeBinding(t *
 		t.Fatal(err)
 	}
 	profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
-	wantByCapability := map[string]int{"dynamic_secret": 9, "secret_sync": 9}
+	wantByCapability := map[string]int{"dynamic_secret": 9, "secret_sync": 11}
 	seen := map[string]int{}
 	for _, entry := range manifest.Entries {
 		if _, ok := wantByCapability[entry.Capability]; !ok {
@@ -37,7 +37,7 @@ func TestSecretIntegrationManifestMatchesProductionAssemblyAndRuntimeBinding(t *
 	}
 	for capability, want := range wantByCapability {
 		if seen[capability] != want {
-			t.Errorf("%s manifest entries=%d, want registry + 8 providers", capability, seen[capability])
+			t.Errorf("%s manifest entries=%d, want %d (registry + full provider catalog)", capability, seen[capability], want)
 		}
 	}
 }

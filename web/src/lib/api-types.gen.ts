@@ -371,6 +371,46 @@ export interface BreakglassBundle {
   subject: string;
 }
 
+export interface BreakglassCeremony {
+  approvals: number;
+  created_at: string;
+  id: string;
+  opener?: string;
+  purpose: string;
+  status: string;
+  tenant_id: string;
+  threshold: number;
+}
+
+export interface BreakglassCrossSign {
+  ceremony_id: string;
+  certificate_pem: string;
+  issuer_signer_handle: string;
+  target_sha256: string;
+}
+
+export interface BreakglassCrossSignRequest {
+  ceremony_id?: string;
+  certificate_pem: string;
+}
+
+export interface BreakglassIssueExecutionRequest {
+  ceremony_id: string;
+  csr_der: string;
+  reason: string;
+  request_id: string;
+  subject: string;
+  ttl_seconds?: number;
+}
+
+export interface BreakglassIssueIntentRequest {
+  csr_der: string;
+  reason: string;
+  request_id: string;
+  subject: string;
+  ttl_seconds?: number;
+}
+
 export interface BreakglassIssueRequest {
   approvals: string[];
   csr_der: string;
@@ -392,6 +432,28 @@ export interface BreakglassReconcileRequest {
 
 export interface BreakglassReconcileResponse {
   reconciled: number;
+}
+
+export interface BreakglassRotation {
+  active_certificate_pem: string;
+  active_signer_handle: string;
+  ceremony_id: string;
+  new_signed_by_previous_pem: string;
+  previous_certificate_pem: string;
+  previous_signed_by_new_pem: string;
+  previous_signer_handle: string;
+  request_digest: string;
+}
+
+export interface BreakglassRotationIntent {
+  reason: string;
+  ttl_seconds: number;
+}
+
+export interface BreakglassRotationRequest {
+  ceremony_id: string;
+  reason: string;
+  ttl_seconds: number;
 }
 
 export interface BrokerAgentIdentity {
@@ -492,11 +554,15 @@ export interface CAAuthorityRotationRequest {
 export interface CACeremonyStartRequest {
   authority_id?: string;
   certificate_pem?: string;
+  cross_certificate_pem?: string;
   csr_pem?: string;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
   parent_id?: string;
+  reason?: string;
+  reverse_cross_certificate_pem?: string;
   signer_handle?: string;
   spec: CASpec;
+  target_certificate_pem?: string;
   threshold: number;
 }
 
@@ -514,6 +580,19 @@ export interface CACreateOfflineIntermediateCSRRequest {
 export interface CACreateRootRequest {
   ceremony_id: string;
   spec: CASpec;
+}
+
+export interface CACrossSign {
+  ceremony_id: string;
+  certificate_pem: string;
+  imported: boolean;
+  issuer_authority_id: string;
+  target_sha256: string;
+}
+
+export interface CACrossSignRequest {
+  ceremony_id: string;
+  certificate_pem: string;
 }
 
 export interface CADiscoveryInventory {
@@ -604,6 +683,28 @@ export interface CAKeyCeremony {
   status: string;
   tenant_id: string;
   threshold: number;
+}
+
+export interface CAOfflineCrossSignImportRequest {
+  ceremony_id: string;
+  cross_certificate_pem: string;
+  target_certificate_pem: string;
+}
+
+export interface CAOfflineRootRekey {
+  ceremony_id: string;
+  new_signed_by_previous_pem: string;
+  previous_signed_by_new_pem: string;
+  rotation: CAAuthorityRotation;
+}
+
+export interface CAOfflineRootRekeyRequest {
+  ceremony_id: string;
+  new_signed_by_previous_pem: string;
+  previous_signed_by_new_pem: string;
+  reason: string;
+  spec: CASpec;
+  successor_certificate_pem: string;
 }
 
 export interface CASpec {

@@ -241,8 +241,8 @@ func TestReadmeCapabilityInventoryCountsMatchCode(t *testing.T) {
 	if got := len(providerConstructor.FindAllString(dynamicSource, -1)); got != 8 {
 		t.Fatalf("dynamic-secret implementation inventory=%d, want 8", got)
 	}
-	if got := len(secretsync.ProviderCatalog()); got != 8 {
-		t.Fatalf("secret-sync provider catalog inventory=%d, want 8", got)
+	if got := len(secretsync.ProviderCatalog()); got != 10 {
+		t.Fatalf("secret-sync provider catalog inventory=%d, want 10", got)
 	}
 
 	kmsEntries, err := os.ReadDir(filepath.FromSlash("../internal/kms"))

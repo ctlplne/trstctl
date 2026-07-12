@@ -371,21 +371,9 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	retention, err := cfg.Audit.RetentionDuration()
-	if err != nil {
-		return Deps{}, fmt.Errorf("audit retention: %w", err)
-	}
-	privacyRetentionEnabled, privacyRetentionInterval, privacyRetentionPolicy, err := privacyRetentionFromConfig(cfg.Privacy.Retention)
+	retention, privacyRetentionEnabled, privacyRetentionInterval, privacyRetentionPolicy, renewBefore, alertBefore, err := runRetentionAndLifecycleWindows(cfg)
 	if err != nil {
 		return Deps{}, err
-	}
-	renewBefore, err := cfg.Lifecycle.RenewBeforeDuration()
-	if err != nil {
-		return Deps{}, fmt.Errorf("lifecycle renew before: %w", err)
-	}
-	alertBefore, err := cfg.Lifecycle.AlertBeforeDuration()
-	if err != nil {
-		return Deps{}, fmt.Errorf("lifecycle alert before: %w", err)
 	}
 	pluginCfg, err := buildPluginConfig(cfg.Plugins)
 	if err != nil {
@@ -718,6 +706,25 @@ func zeroBytes(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
+}
+
+// runRetentionAndLifecycleWindows is a named startup stage: it derives the
+// audit-retention, privacy-retention, and lifecycle renew/alert windows from
+// static configuration before any credential-owning constructor runs.
+func runRetentionAndLifecycleWindows(cfg *config.Config) (retention time.Duration, privacyEnabled bool, privacyInterval time.Duration, privacyPolicy privacy.RetentionPolicy, renewBefore, alertBefore time.Duration, err error) {
+	if retention, err = cfg.Audit.RetentionDuration(); err != nil {
+		return 0, false, 0, privacyPolicy, 0, 0, fmt.Errorf("audit retention: %w", err)
+	}
+	if privacyEnabled, privacyInterval, privacyPolicy, err = privacyRetentionFromConfig(cfg.Privacy.Retention); err != nil {
+		return 0, false, 0, privacyPolicy, 0, 0, err
+	}
+	if renewBefore, err = cfg.Lifecycle.RenewBeforeDuration(); err != nil {
+		return 0, false, 0, privacyPolicy, 0, 0, fmt.Errorf("lifecycle renew before: %w", err)
+	}
+	if alertBefore, err = cfg.Lifecycle.AlertBeforeDuration(); err != nil {
+		return 0, false, 0, privacyPolicy, 0, 0, fmt.Errorf("lifecycle alert before: %w", err)
+	}
+	return retention, privacyEnabled, privacyInterval, privacyPolicy, renewBefore, alertBefore, nil
 }
 
 func privacyRetentionFromConfig(cfg config.PrivacyRetention) (bool, time.Duration, privacy.RetentionPolicy, error) {
