@@ -106,6 +106,8 @@ var commandTable = []Command{
 	{Name: []string{"external-cas", "issue"}, Method: "POST", Path: "/api/v1/external-cas/{id}/issue", Body: bodyFile, Summary: "Issue a certificate through an upstream CA integration"},
 	{Name: []string{"kubernetes", "csr"}, Method: "GET", Path: "/api/v1/kubernetes/certificate-signing-requests", Summary: "Show native Kubernetes CertificateSigningRequest support"},
 	{Name: []string{"kubernetes", "trust-bundles"}, Method: "GET", Path: "/api/v1/kubernetes/trust-bundles", Summary: "Show Kubernetes trust-bundle distribution support"},
+	{Name: []string{"setup", "protocols", "status"}, Method: "GET", Path: "/api/v1/setup/protocols", Summary: "Show the tenant-bound eval protocol profile status"},
+	{Name: []string{"setup", "protocols", "activate"}, Method: "POST", Path: "/api/v1/setup/protocols/activate", Body: bodyNone, Summary: "Activate the tenant-bound eval protocol profile"},
 
 	{Name: []string{"identities", "create"}, Method: "POST", Path: "/api/v1/identities", Body: bodyFile, Summary: "Create an identity"},
 	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor"}, Summary: "List identities"},

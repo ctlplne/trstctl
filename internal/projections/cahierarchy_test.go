@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -312,13 +313,32 @@ func TestCAAuthorityRekeyedEventProjectsReadModel(t *testing.T) {
 		t.Fatalf("insert predecessor: %v", err)
 	}
 	notAfter := time.Now().UTC().Add(365 * 24 * time.Hour)
+	rekeyCeremonyID := "00000000-0000-4000-8000-000000000053"
+	for i, ev := range []struct {
+		typ  string
+		data any
+	}{
+		{projections.EventCACeremonyStarted, projections.CACeremonyStarted{CeremonyID: rekeyCeremonyID, Purpose: "rekey:" + predecessor.ID, Threshold: 1, Opener: "operator"}},
+		{projections.EventCACeremonyApproved, projections.CACeremonyApproved{CeremonyID: rekeyCeremonyID, Custodian: "custodian"}},
+	} {
+		raw, err := json.Marshal(ev.data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := projections.New(s).Apply(ctx, events.Event{
+			ID: fmt.Sprintf("00000000-0000-4000-8000-0000000000e%d", i+1), Sequence: uint64(i + 1),
+			Type: ev.typ, TenantID: tenantA, Time: notAfter.Add(-2 * time.Hour), Data: raw,
+		}); err != nil {
+			t.Fatalf("seed ceremony event %s: %v", ev.typ, err)
+		}
+	}
 	payload, err := json.Marshal(projections.CAAuthorityRekeyed{
 		ID: "00000000-0000-4000-8000-000000000052", PredecessorCAID: predecessor.ID,
 		CommonName: "re-key predecessor", Kind: "intermediate",
 		CertificatePEM: "-----BEGIN CERTIFICATE-----\nSUCCESSOR\n-----END CERTIFICATE-----\n",
 		SignerHandle:   "signer-rekeyed", Serial: "successor-1", NotAfter: notAfter,
 		MaxPathLen: 0, PermittedDNSNames: []string{"example.test"}, EKUs: []string{"serverAuth"},
-		CeremonyID: "00000000-0000-4000-8000-000000000053",
+		CeremonyID: rekeyCeremonyID,
 	})
 	if err != nil {
 		t.Fatal(err)

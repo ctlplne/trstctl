@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -444,10 +445,20 @@ func TestProviderWorkerRetryReplacesLostAuthorityOnStableIdentity(t *testing.T) 
 	})
 }
 
+// dynsecretShortTempRoot returns a short world-standard temp root so the
+// PostgreSQL unix socket path stays under the 108-byte sun_path limit on every
+// platform (macOS resolves /tmp to /private/tmp; Linux CI uses /tmp directly).
+func dynsecretShortTempRoot() string {
+	if runtime.GOOS == "darwin" {
+		return "/private/tmp"
+	}
+	return "/tmp"
+}
+
 func startDynsecretPostgres(t *testing.T) (string, func()) {
 	t.Helper()
 	port := freeDynsecretPort(t)
-	dir, err := os.MkdirTemp("/private/tmp", "trstctl-dynsecret-pg-*")
+	dir, err := os.MkdirTemp(dynsecretShortTempRoot(), "trstctl-dynsecret-pg-*")
 	if err != nil {
 		t.Fatal(err)
 	}
