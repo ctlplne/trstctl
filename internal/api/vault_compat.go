@@ -394,7 +394,10 @@ func (a *API) vaultKVWrite(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, "secret path is required")
 		return
 	}
-	idempotencyKey := vaultIdempotencyKey(r, body)
+	idempotencyKey, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultKVWriteRequest
 		if err := decodeJSON(r, &req); err != nil {
@@ -556,7 +559,10 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusServiceUnavailable, "dynamic PKI secret issuance unavailable")
 		return
 	}
-	idempotencyKey := vaultIdempotencyKey(r, body)
+	idempotencyKey, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultPKIIssueRequest
 		if err := decodeJSON(r, &req); err != nil {
@@ -631,19 +637,25 @@ func (a *API) captureVaultBody(w http.ResponseWriter, r *http.Request) ([]byte, 
 	return body, true
 }
 
-func vaultIdempotencyKey(r *http.Request, body []byte) string {
+func vaultIdempotencyKey(r *http.Request) (string, error) {
 	if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
-		return key
+		return key, nil
 	}
-	material := make([]byte, 0, len(r.Method)+len(r.URL.Path)+1+len(body))
-	material = append(material, r.Method...)
-	material = append(material, ' ')
-	material = append(material, r.URL.Path...)
-	material = append(material, '\n')
-	material = append(material, body...)
-	digest := crypto.SHA256Hex(material)
-	secret.Wipe(material)
-	return "vault:" + digest
+	nonce, err := crypto.RandomBytes(32)
+	if err != nil {
+		return "", errors.New("vault: generate request idempotency key")
+	}
+	defer secret.Wipe(nonce)
+	return "vault:" + crypto.SHA256Hex(nonce), nil
+}
+
+func vaultMutationKey(w http.ResponseWriter, r *http.Request) (string, bool) {
+	key, err := vaultIdempotencyKey(r)
+	if err != nil {
+		writeVaultError(w, http.StatusInternalServerError, "generate request idempotency key")
+		return "", false
+	}
+	return key, true
 }
 
 func rawJSONObject(raw []byte) bool {

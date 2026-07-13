@@ -221,15 +221,14 @@ func TestVaultCompatBodyTTLIdempotencyAndKVReadHelpers(t *testing.T) {
 
 	idemReq := httptest.NewRequest(http.MethodPost, "/v1/secret/data/app", nil)
 	idemReq.Header.Set("Idempotency-Key", " explicit-key ")
-	if got := vaultIdempotencyKey(idemReq, []byte(`{"a":1}`)); got != "explicit-key" {
+	if got, err := vaultIdempotencyKey(idemReq); err != nil || got != "explicit-key" {
 		t.Fatalf("explicit vault idempotency key = %q", got)
 	}
 	idemReq.Header.Del("Idempotency-Key")
-	first := vaultIdempotencyKey(idemReq, []byte(`{"a":1}`))
-	second := vaultIdempotencyKey(idemReq, []byte(`{"a":1}`))
-	third := vaultIdempotencyKey(idemReq, []byte(`{"a":2}`))
-	if first == "" || !strings.HasPrefix(first, "vault:") || first != second || first == third {
-		t.Fatalf("derived vault idempotency keys not stable/distinct: %q %q %q", first, second, third)
+	first, firstErr := vaultIdempotencyKey(idemReq)
+	second, secondErr := vaultIdempotencyKey(idemReq)
+	if firstErr != nil || secondErr != nil || first == "" || !strings.HasPrefix(first, "vault:") || first == second {
+		t.Fatalf("generated vault idempotency keys not unique: %q %q errors=%v/%v", first, second, firstErr, secondErr)
 	}
 
 	for raw, want := range map[string]bool{

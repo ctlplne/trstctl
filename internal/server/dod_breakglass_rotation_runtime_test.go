@@ -45,7 +45,8 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats"), SyncAlways: true})
+	natsDir := filepath.Join(dir, "nats")
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: natsDir, SyncAlways: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,6 +55,7 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(dir, "audit-signing-key.pem")
+	cfg.Secrets.KEKFile = filepath.Join(dir, "secrets-kek.bin")
 	cfg.Signer.KeyStoreDir = filepath.Join(dir, "signer-keys")
 	cfg.CA.CertFile = filepath.Join(dir, "issuing-ca.crt")
 	if err := cfg.Validate(); err != nil {
@@ -104,6 +106,8 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	if err := bootstrap.Shutdown(ctx); err != nil {
 		t.Fatal(err)
 	}
+	st = dodReopenBreakglassStore(t, ctx)
+	log = dodReopenBreakglassLog(t, ctx, natsDir)
 	caPath := filepath.Join(dir, "breakglass-ca.der")
 	publicPath := filepath.Join(dir, "breakglass-public.der")
 	if err := os.WriteFile(caPath, initialCADER, 0o600); err != nil {
@@ -171,12 +175,16 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	status, crossTenant := dodBreakglassRequest(t, srv, otherTenant, http.MethodPost, "/api/v1/breakglass/issue-ceremonies", "dod-bg-other-tenant", map[string]any{
 		"request_id": "cross-tenant", "subject": "cross-tenant.test", "csr_der": csr, "reason": "must fail", "ttl_seconds": 60,
 	}, http.StatusInternalServerError)
-	if status != http.StatusInternalServerError || !bytes.Contains(crossTenant, []byte("configured online break-glass tenant")) {
+	if status != http.StatusInternalServerError || !bytes.Contains(crossTenant, []byte(`"code":"problem.internal.error"`)) ||
+		bytes.Contains(crossTenant, []byte(dodBreakglassTenant)) || bytes.Contains(crossTenant, []byte(dodBreakglassOther)) ||
+		bytes.Contains(crossTenant, []byte("configured online break-glass tenant")) {
 		t.Fatalf("tenant isolation response status=%d body=%s", status, crossTenant)
 	}
 	if err := srv.Shutdown(ctx); err != nil {
 		t.Fatal(err)
 	}
+	st = dodReopenBreakglassStore(t, ctx)
+	log = dodReopenBreakglassLog(t, ctx, natsDir)
 	srv = dodBreakglassBuildServer(t, ctx, cfg, st, log, signer, runSecrets) // exact assembly restart replays active handle/certificate.
 	defer func() { _ = srv.Shutdown(context.Background()) }()
 
@@ -340,6 +348,29 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 		ClientIdentity: []byte("OpenSSL independent break-glass chain verifier"), Transcript: transcript,
 		IndependentVerifier: verifierReadback, ExecutionReceipt: executionReceipt,
 	}))
+}
+
+func dodReopenBreakglassStore(t *testing.T, ctx context.Context) *store.Store {
+	t.Helper()
+	st, err := store.Open(ctx, serverTestPostgresDSN(t))
+	if err != nil {
+		t.Fatalf("reopen break-glass store: %v", err)
+	}
+	t.Cleanup(st.Close)
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatalf("migrate reopened break-glass store: %v", err)
+	}
+	return st
+}
+
+func dodReopenBreakglassLog(t *testing.T, ctx context.Context, dir string) *events.Log {
+	t.Helper()
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: dir, SyncAlways: true})
+	if err != nil {
+		t.Fatalf("reopen break-glass event log: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	return log
 }
 
 func dodBreakglassBuildServer(t *testing.T, ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets) *Server {

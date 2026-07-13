@@ -19,6 +19,7 @@ import os
 import re
 import secrets
 import signal
+import socket
 import socketserver
 import subprocess
 import tempfile
@@ -35,6 +36,12 @@ IMAGES = {
     "redis": "redis:8.2-bookworm@sha256:14678cf7a021c8fef198403f2cf5f6d30492218156f41f03cdb79a4caafb8bd4",
 }
 
+# The pinned linux/amd64 runner may execute through architecture emulation on
+# an arm64 developer host. Keep receiver compilation bounded, but give the Go
+# linker enough time to finish from a cold cache. The parent broker applies a
+# slightly larger independent READY deadline.
+GITHUB_RECEIVER_BUILD_TIMEOUT_SECONDS = 40
+
 
 class LoopbackHTTPServer(ThreadingHTTPServer):
     """Bind without HTTPServer's reverse-DNS lookup on loopback."""
@@ -43,6 +50,68 @@ class LoopbackHTTPServer(ThreadingHTTPServer):
         socketserver.TCPServer.server_bind(self)
         self.server_name = str(self.server_address[0])
         self.server_port = int(self.server_address[1])
+
+
+class DatabaseBridgeHandler(socketserver.BaseRequestHandler):
+    """Copy opaque database protocol bytes to the real pinned container."""
+
+    def handle(self) -> None:
+        server = self.server
+        upstream_addresses = getattr(server, "upstream_addresses")
+        state = getattr(server, "state")
+        with state.lock:
+            state.bridge_accepts += 1
+        upstream_socket = None
+        for route, upstream_address in upstream_addresses:
+            try:
+                upstream_socket = socket.create_connection(upstream_address, timeout=5)
+                with state.lock:
+                    state.bridge_upstream_route = route
+                break
+            except OSError as exc:
+                with state.lock:
+                    state.bridge_last_errno = int(exc.errno or -1)
+        if upstream_socket is None:
+            return
+        with upstream_socket as upstream:
+            with state.lock:
+                state.bridge_upstream_connects += 1
+            upstream.settimeout(None)
+
+            def pump(source: socket.socket, destination: socket.socket) -> None:
+                try:
+                    while True:
+                        chunk = source.recv(64 * 1024)
+                        if not chunk:
+                            break
+                        destination.sendall(chunk)
+                except (ConnectionError, OSError):
+                    pass
+                finally:
+                    try:
+                        destination.shutdown(socket.SHUT_WR)
+                    except OSError:
+                        pass
+
+            request_to_upstream = threading.Thread(
+                target=pump, args=(self.request, upstream), daemon=True,
+            )
+            request_to_upstream.start()
+            pump(upstream, self.request)
+            request_to_upstream.join(timeout=2)
+
+
+class LoopbackDatabaseBridge(socketserver.ThreadingTCPServer):
+    allow_reuse_address = False
+    daemon_threads = True
+
+    def __init__(self, upstream_port: int, state) -> None:
+        self.upstream_addresses = (
+            ("loopback", ("127.0.0.1", upstream_port)),
+            ("docker-host", ("host.docker.internal", upstream_port)),
+        )
+        self.state = state
+        super().__init__(("127.0.0.1", 0), DatabaseBridgeHandler)
 
 
 # This receiver is compiled into a temporary, independent process by the
@@ -125,6 +194,12 @@ class State:
         self.container = f"trstctl-dod-secret-{os.getpid()}-{secrets.token_hex(4)}"
         self.container_port = {"postgresql": 5432, "mysql": 3306, "mongodb": 27017, "redis": 6379}.get(self.kind, 0)
         self.host_port = 0
+        self.database_bridge = None
+        self.database_bridge_thread = None
+        self.bridge_accepts = 0
+        self.bridge_upstream_connects = 0
+        self.bridge_last_errno = 0
+        self.bridge_upstream_route = "none"
         self.start_error = ""
         self.ready = threading.Event()
         self.stop = threading.Event()
@@ -192,6 +267,7 @@ class State:
                     mapped = run(["docker", "port", self.container, f"{self.container_port}/tcp"], timeout=5).stdout.strip().splitlines()[0]
                     self.host_port = int(mapped.rsplit(":", 1)[1])
                     if self._database_healthy():
+                        self._start_database_bridge()
                         self.ready.set()
                         return
                 except Exception:
@@ -201,6 +277,15 @@ class State:
         except Exception as exc:
             self.start_error = str(exc)
             self.ready.set()
+
+    def _start_database_bridge(self) -> None:
+        upstream_port = self.host_port
+        bridge = LoopbackDatabaseBridge(upstream_port, self)
+        thread = threading.Thread(target=bridge.serve_forever, daemon=True)
+        thread.start()
+        self.database_bridge = bridge
+        self.database_bridge_thread = thread
+        self.host_port = int(bridge.server_address[1])
 
     def _database_healthy(self) -> bool:
         if self.kind == "postgresql":
@@ -228,6 +313,15 @@ class State:
         if self.kind == "redis":
             return {"kind": self.kind, "addr": host, "password": "dod-admin"}
         return {"kind": "http"}
+
+    def bridge_status(self) -> dict:
+        with self.lock:
+            return {
+                "accepts": self.bridge_accepts,
+                "upstream_connects": self.bridge_upstream_connects,
+                "last_errno": self.bridge_last_errno,
+                "upstream_route": self.bridge_upstream_route,
+            }
 
     def database_readback(self, principal: str, phase: str) -> bool:
         principal = re.sub(r"[^a-zA-Z0-9_.-]", "", principal)
@@ -312,7 +406,10 @@ class State:
         binary = os.path.join(directory.name, "receiver")
         with open(source, "w", encoding="utf-8") as handle:
             handle.write(GITHUB_SEALED_BOX_RECEIVER)
-        run(["go", "build", "-trimpath", "-o", binary, source], timeout=9)
+        run(
+            ["go", "build", "-trimpath", "-o", binary, source],
+            timeout=GITHUB_RECEIVER_BUILD_TIMEOUT_SECONDS,
+        )
         process = subprocess.Popen(
             [binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, bufsize=1,
@@ -342,6 +439,11 @@ class State:
 
     def cleanup(self) -> None:
         self.stop.set()
+        if self.database_bridge is not None:
+            self.database_bridge.shutdown()
+            self.database_bridge.server_close()
+        if self.database_bridge_thread is not None:
+            self.database_bridge_thread.join(timeout=2)
         if self.github_box_process is not None:
             if self.github_box_process.stdin is not None:
                 self.github_box_process.stdin.close()
@@ -384,6 +486,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_body(200, json.dumps(self.state.config()).encode())
             except Exception as exc:
                 self.send_body(503, json.dumps({"error": str(exc)}).encode())
+            return
+        if parsed.path == "/dod/bridge-status":
+            self.send_body(200, json.dumps(self.state.bridge_status()).encode())
             return
         if parsed.path == "/dod/auth":
             self._auth(parsed)

@@ -123,7 +123,10 @@ func (a *API) vaultEnableMount(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key := vaultIdempotencyKey(r, body)
+	key, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultMountRequest
 		if err := decodeJSON(r, &req); err != nil {
@@ -170,7 +173,10 @@ func (a *API) vaultDisableMount(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key := vaultIdempotencyKey(r, nil)
+	key, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
 		if path == "secret" || path == "pki" || path == "transit" {
 			return 0, nil, errStatus(http.StatusBadRequest, "built-in mounts cannot be disabled")
@@ -301,7 +307,10 @@ func (a *API) vaultPutPolicy(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key := vaultIdempotencyKey(r, body)
+	key, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultPolicyRequest
 		if err := decodeJSON(r, &req); err != nil {
@@ -328,7 +337,10 @@ func (a *API) vaultDeletePolicy(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key := vaultIdempotencyKey(r, nil)
+	key, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
 		state, err := a.vaultCompat.snapshot(ctx, tenantID)
 		if err != nil {
@@ -503,7 +515,10 @@ func (a *API) vaultTransitCreateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer secret.Wipe(body)
-	key := vaultIdempotencyKey(r, body)
+	key, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultTransitKeyRequest
 		if err := decodeJSON(r, &req); err != nil {
@@ -538,7 +553,10 @@ func (a *API) vaultTransitRotateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer secret.Wipe(body)
-	key := vaultIdempotencyKey(r, body)
+	key, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
 		if _, err := a.transit.Rotate(ctx, tenantID, name); err != nil {
 			return 0, nil, mapTransitError(err)
@@ -557,7 +575,10 @@ func (a *API) vaultTransitMutation(w http.ResponseWriter, r *http.Request, fn fu
 		return
 	}
 	defer secret.Wipe(body)
-	key := vaultIdempotencyKey(r, body)
+	key, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
 	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultTransitInputRequest
 		if err := decodeJSON(r, &req); err != nil {

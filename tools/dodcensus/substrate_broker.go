@@ -27,7 +27,11 @@ import (
 
 var dockerObjectNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
-const maxBrokerDynamicFileBytes = 1 << 20
+const (
+	maxBrokerDynamicFileBytes   = 1 << 20
+	brokerCommandReadyTimeout   = 45 * time.Second
+	brokerCommandReceiptTimeout = 15 * time.Second
+)
 
 var brokerSecretFileInputs = map[string]bool{
 	"TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE":    true,
@@ -248,7 +252,7 @@ func (b *substrateBroker) launch(ctx context.Context, expected runtimeExpectatio
 			return nil, brokerReady{}, fmt.Errorf("decode parent-owned substrate READY: %w: %s", result.err, stderr.String())
 		}
 		ready = result.value
-	case <-time.After(15 * time.Second):
+	case <-time.After(brokerCommandReadyTimeout):
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 		return nil, brokerReady{}, fmt.Errorf("parent-owned substrate READY timed out: %s", stderr.String())
@@ -541,7 +545,7 @@ func stopBrokerSubstrate(session *brokerSubstrate) ([]byte, error) {
 			return nil, fmt.Errorf("decode parent-owned substrate receipt: %w: %s", result.err, session.stderr.String())
 		}
 		receipt = result.value
-	case <-time.After(15 * time.Second):
+	case <-time.After(brokerCommandReceiptTimeout):
 		_ = session.cmd.Process.Kill()
 		_ = session.cmd.Wait()
 		return nil, fmt.Errorf("parent-owned substrate receipt timed out")

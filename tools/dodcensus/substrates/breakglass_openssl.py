@@ -63,7 +63,7 @@ def decode_pem(payload: dict[str, object], name: str) -> tuple[bytes, bytes]:
     raw = base64.b64decode(encoded, validate=True)
     if b"BEGIN CERTIFICATE" not in raw or b"PRIVATE KEY" in raw:
         raise ValueError(f"{name} is not public certificate PEM")
-    return raw, base64.b64decode(ssl.PEM_cert_to_DER_cert(raw.decode()), validate=True)
+    return raw, ssl.PEM_cert_to_DER_cert(raw.decode())
 
 
 def der_to_pem(der: bytes) -> bytes:
@@ -157,8 +157,12 @@ def verify_transcript(state: State, payload: dict[str, object]) -> bytes:
     unauthorized_detail = str(unauthorized.get("detail", "")).lower()
     if "not an authorized break-glass operator" not in unauthorized_detail:
         raise ValueError("authenticated actor outside the configured roster gained quorum authority")
-    if "configured online break-glass tenant" not in str(cross_tenant.get("detail", "")).lower():
-        raise ValueError("cross-tenant request did not fail the configured tenant boundary")
+    cross_tenant_wire = json.dumps(cross_tenant, sort_keys=True).lower()
+    if (cross_tenant.get("code") != "problem.internal.error" or cross_tenant.get("status") != 500 or
+            "internal error" not in str(cross_tenant.get("detail", "")).lower()):
+        raise ValueError("cross-tenant request did not fail closed with the stable redacted problem")
+    if "configured online break-glass tenant" in cross_tenant_wire or "d0d00000" in cross_tenant_wire:
+        raise ValueError("cross-tenant failure leaked configured tenant identity")
 
     initial_issue, initial_issue_raw = decode_json_response(payload, "initial_issue")
     rotation, rotation_raw = decode_json_response(payload, "rotation")

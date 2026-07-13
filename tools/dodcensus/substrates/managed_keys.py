@@ -17,6 +17,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import socket
 import socketserver
 import subprocess
 import tempfile
@@ -49,6 +50,57 @@ class LoopbackHTTPServer(ThreadingHTTPServer):
         socketserver.TCPServer.server_bind(self)
         self.server_name = str(self.server_address[0])
         self.server_port = int(self.server_address[1])
+
+
+class PublishedPortBridgeHandler(socketserver.BaseRequestHandler):
+    """Forward opaque emulator HTTP bytes to the pinned inner container."""
+
+    def handle(self) -> None:
+        upstream = None
+        for address in self.server.upstream_addresses:  # type: ignore[attr-defined]
+            try:
+                upstream = socket.create_connection(address, timeout=5)
+                break
+            except OSError:
+                continue
+        if upstream is None:
+            return
+        with upstream:
+            upstream.settimeout(None)
+
+            def pump(source: socket.socket, destination: socket.socket) -> None:
+                try:
+                    while True:
+                        chunk = source.recv(64 * 1024)
+                        if not chunk:
+                            break
+                        destination.sendall(chunk)
+                except (ConnectionError, OSError):
+                    pass
+                finally:
+                    try:
+                        destination.shutdown(socket.SHUT_WR)
+                    except OSError:
+                        pass
+
+            request_to_upstream = threading.Thread(
+                target=pump, args=(self.request, upstream), daemon=True,
+            )
+            request_to_upstream.start()
+            pump(upstream, self.request)
+            request_to_upstream.join(timeout=2)
+
+
+class LoopbackPublishedPortBridge(socketserver.ThreadingTCPServer):
+    allow_reuse_address = False
+    daemon_threads = True
+
+    def __init__(self, upstream_port: int) -> None:
+        self.upstream_addresses = (
+            ("127.0.0.1", upstream_port),
+            ("host.docker.internal", upstream_port),
+        )
+        super().__init__(("127.0.0.1", 0), PublishedPortBridgeHandler)
 
 
 def required_env(name: str) -> str:
@@ -761,10 +813,13 @@ def container_main() -> int:
     host_endpoint = os.environ.get(DOCKER_HOST_ENDPOINT_ENV, "127.0.0.1")
     if host_endpoint not in {"127.0.0.1", "host.docker.internal"}:
         raise SystemExit(f"{DOCKER_HOST_ENDPOINT_ENV} has an untrusted host name")
+    bridge = LoopbackPublishedPortBridge(int(host_port))
+    bridge_thread = threading.Thread(target=bridge.serve_forever, daemon=True)
+    bridge_thread.start()
     json_line({
         "schema_version": 1, "challenge": challenge, "entry_id": entry_id,
         "identity": identity, "contract_digest": contract, "pid": os.getpid(),
-        "ready": True, "endpoint": f"http://{host_endpoint}:{host_port}",
+        "ready": True, "endpoint": f"http://127.0.0.1:{bridge.server_address[1]}",
         "runtime_identity": image,
     })
     while not stopped.wait(0.1) and child.poll() is None:
@@ -774,6 +829,9 @@ def container_main() -> int:
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
     )
     remaining_stdout, stderr = child.communicate(timeout=10)
+    bridge.shutdown()
+    bridge.server_close()
+    bridge_thread.join(timeout=5)
     final_receipts = []
     for line in remaining_stdout.splitlines():
         try:
