@@ -13,8 +13,10 @@
 # and the control: a deliberately CORRUPTED backup must make the restore fail
 # closed (non-zero) rather than boot a silently-wrong control plane.
 #
-# Self-contained: bundled PostgreSQL + embedded NATS, TLS disabled on loopback
-# (rehearsal only). Requires: go toolchain, curl, jq, python3.
+# Self-contained: digest-pinned external PostgreSQL + NATS containers, TLS
+# disabled on loopback (rehearsal only). Full DR intentionally rejects bundled
+# datastores because their process lifecycle is owned by the control plane.
+# Requires: go toolchain, Docker, curl, jq, python3.
 set -euo pipefail
 
 say() { printf '>> restore-rehearsal: %s\n' "$*"; }
@@ -23,9 +25,11 @@ fail() { printf '::error::restore-rehearsal: %s\n' "$*" >&2; exit 1; }
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROOT="$(mktemp -d "${TMPDIR:-/tmp}/trstctl-restore-rehearsal.XXXXXX")"
 SERVER_PID=""
+INFRA_IDS=""
 cleanup() {
 	[ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
 	[ -n "$SERVER_PID" ] && wait "$SERVER_PID" 2>/dev/null || true
+	for id in $INFRA_IDS; do docker rm -f "$id" >/dev/null 2>&1 || true; done
 	rm -rf "$ROOT"
 }
 trap cleanup EXIT
@@ -42,14 +46,61 @@ else
 fi
 BIN="$BIN_DIR/trstctl"
 
-write_config() { # $1 = instance dir, $2 = server port, $3 = pg port
-	local dir="$1" port="$2" pgport="$3"
+command -v docker >/dev/null 2>&1 || fail "Docker is required for fresh external PostgreSQL/NATS datastores"
+POSTGRES_IMAGE="postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"
+NATS_IMAGE="nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927"
+POSTGRES_PASSWORD="trstctl-dr-rehearsal-password"
+
+wait_postgres() { # $1 = container id
+	local id="$1"
+	for _ in $(seq 1 60); do
+		if docker exec "$id" pg_isready -U postgres -d postgres >/dev/null 2>&1; then return 0; fi
+		sleep 1
+	done
+	docker logs "$id" >&2 || true
+	fail "external PostgreSQL did not become ready"
+}
+
+wait_tcp() { # $1 = loopback port, $2 = label
+	local port="$1" label="$2"
+	for _ in $(seq 1 60); do
+		if python3 - "$port" <<'PY'
+import socket, sys
+try:
+    with socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=0.5):
+        pass
+except OSError:
+    raise SystemExit(1)
+PY
+		then return 0; fi
+		sleep 1
+	done
+	fail "$label did not become ready on 127.0.0.1:$port"
+}
+
+start_infra() { # $1 = PostgreSQL loopback port, $2 = NATS loopback port
+	local pgport="$1" natsport="$2" pgid natsid
+	pgid="$(docker run -d --rm \
+		-e "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
+		-p "127.0.0.1:$pgport:5432" "$POSTGRES_IMAGE")" \
+		|| fail "start external PostgreSQL container"
+	INFRA_IDS="$INFRA_IDS $pgid"
+	natsid="$(docker run -d --rm \
+		-p "127.0.0.1:$natsport:4222" "$NATS_IMAGE" -js -sd /data)" \
+		|| fail "start external NATS container"
+	INFRA_IDS="$INFRA_IDS $natsid"
+	wait_postgres "$pgid"
+	wait_tcp "$natsport" "external NATS"
+}
+
+write_config() { # $1 = instance dir, $2 = server port, $3 = pg port, $4 = NATS port
+	local dir="$1" port="$2" pgport="$3" natsport="$4"
 	mkdir -p "$dir"
 	cat > "$dir/config.json" <<EOF
 {
   "server": {"addr": "127.0.0.1:$port", "tls": {"mode": "disabled", "allow_plaintext_dev": true}},
-  "postgres": {"mode": "bundled", "data_dir": "$dir/postgres", "port": $pgport},
-  "nats": {"mode": "embedded", "store_dir": "$dir/nats", "replicas": 1, "allow_single_replica": true},
+  "postgres": {"mode": "external", "dsn": "postgres://postgres:$POSTGRES_PASSWORD@127.0.0.1:$pgport/postgres?sslmode=disable"},
+  "nats": {"mode": "external", "url": "nats://127.0.0.1:$natsport", "replicas": 1, "allow_single_replica": true},
   "migrate": {"auto": true},
   "rate_limit": {"enabled": false},
   "telemetry": {"enabled": false},
@@ -97,8 +148,9 @@ post() { # $1 = base, $2 = token, $3 = idem key, $4 = path, $5 = body
 }
 
 # ---------------------------------------------------------------- instance A
-A_PORT="$(free_port)"; A_PG="$(free_port)"
-A_CFG="$(write_config "$ROOT/a" "$A_PORT" "$A_PG")"
+A_PORT="$(free_port)"; A_PG="$(free_port)"; A_NATS="$(free_port)"
+start_infra "$A_PG" "$A_NATS"
+A_CFG="$(write_config "$ROOT/a" "$A_PORT" "$A_PG" "$A_NATS")"
 A_URL="http://127.0.0.1:$A_PORT"
 TENANT="00000000-0000-4000-8000-0000000d0d01"
 
@@ -142,9 +194,13 @@ run_bin "$A_CFG" --full-backup-dir "$BACKUP" --backup-encryption-key-file "$KEYF
 [ -d "$BACKUP" ] || fail "backup directory was not created"
 
 # ---------------------------------------------------------------- restore -> B
-B_PORT="$(free_port)"; B_PG="$(free_port)"
-B_CFG="$(write_config "$ROOT/b" "$B_PORT" "$B_PG")"
+B_PORT="$(free_port)"; B_PG="$(free_port)"; B_NATS="$(free_port)"
+start_infra "$B_PG" "$B_NATS"
+B_CFG="$(write_config "$ROOT/b" "$B_PORT" "$B_PG" "$B_NATS")"
 B_URL="http://127.0.0.1:$B_PORT"
+say "restore independently-held deployment KEK into instance B"
+[ -s "$ROOT/a/secrets-kek.bin" ] || fail "instance A deployment KEK is missing"
+install -m 0600 "$ROOT/a/secrets-kek.bin" "$ROOT/b/secrets-kek.bin"
 say "full restore into fresh instance B"
 run_bin "$B_CFG" --full-restore-dir "$BACKUP" --backup-encryption-key-file "$KEYFILE" \
 	|| fail "--full-restore-dir failed on a GOOD backup"
@@ -188,8 +244,10 @@ with open(path, "r+b") as f:
     f.seek(32)
     f.write(chunk)
 EOF
-C_PORT="$(free_port)"; C_PG="$(free_port)"
-C_CFG="$(write_config "$ROOT/c" "$C_PORT" "$C_PG")"
+C_PORT="$(free_port)"; C_PG="$(free_port)"; C_NATS="$(free_port)"
+start_infra "$C_PG" "$C_NATS"
+C_CFG="$(write_config "$ROOT/c" "$C_PORT" "$C_PG" "$C_NATS")"
+install -m 0600 "$ROOT/a/secrets-kek.bin" "$ROOT/c/secrets-kek.bin"
 if run_bin "$C_CFG" --full-restore-dir "$CORRUPT" --backup-encryption-key-file "$KEYFILE" >"$ROOT/c.log" 2>&1; then
 	tail -20 "$ROOT/c.log" >&2 || true
 	fail "corrupted backup was ACCEPTED by --full-restore-dir"

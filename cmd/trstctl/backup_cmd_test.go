@@ -54,3 +54,31 @@ func TestDRScriptsInvokeFullBackupRestoreFlags(t *testing.T) {
 		}
 	}
 }
+
+// TestRestoreRehearsalUsesFreshExternalDatastores locks the operational truth
+// behind OPS-RESTORE-001. Full backup deliberately rejects bundled stores, so
+// the required CI drill must create independent external PostgreSQL and NATS
+// instances for source, restore target, and corrupted-control target.
+func TestRestoreRehearsalUsesFreshExternalDatastores(t *testing.T) {
+	path := filepath.Join("..", "..", "scripts", "ci", "restore-rehearsal.sh")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, want := range []string{
+		`POSTGRES_IMAGE="postgres:16-alpine@sha256:`,
+		`NATS_IMAGE="nats:2.10-alpine@sha256:`,
+		`"postgres": {"mode": "external", "dsn":`,
+		`"nats": {"mode": "external", "url":`,
+		`start_infra "$A_PG" "$A_NATS"`,
+		`start_infra "$B_PG" "$B_NATS"`,
+		`start_infra "$C_PG" "$C_NATS"`,
+		`install -m 0600 "$ROOT/a/secrets-kek.bin" "$ROOT/b/secrets-kek.bin"`,
+		`install -m 0600 "$ROOT/a/secrets-kek.bin" "$ROOT/c/secrets-kek.bin"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("restore rehearsal no longer requires %q", want)
+		}
+	}
+}
