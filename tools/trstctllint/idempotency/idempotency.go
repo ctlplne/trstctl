@@ -238,10 +238,10 @@ func isApprovedIdempotencyHelper(pass *analysis.Pass, call *ast.CallExpr) bool {
 		return false
 	}
 	switch fn.Name() {
-	case "vaultIdempotencyKey", "scimIdempotencyKey":
+	case "vaultIdempotencyKey", "vaultMutationKey", "scimIdempotencyKey":
 		// Vault and SCIM compatibility routes intentionally preserve the header
-		// when present and derive a documented deterministic fallback for legacy
-		// clients that cannot set arbitrary headers.
+		// through one reviewed helper. Vault mutations fail closed when the
+		// header is absent; SCIM retains its documented compatibility derivation.
 		return true
 	default:
 		return false

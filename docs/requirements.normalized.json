@@ -877,12 +877,12 @@
       "requirement_text": "trstctl shall provide Secret sync / platform integrations.",
       "owner": "Secrets",
       "priority": "P2",
-      "acceptance_criteria": "The secret_sync DoD census drives all eight configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial: buildRunDeps production-assembles all eight tenant-bound outbound pushers and serves sealed-outbox delivery; deeper native Terraform/OpenTofu and Vault KV outbound integrations plus other secrets_residuals remain",
+      "acceptance_criteria": "The secret_sync and secrets_residuals DoD census rows drive all ten configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers, including native Terraform Cloud/OpenTofu Variables API and Vault KV v2 targets, through sealed-outbox delivery",
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Native eight-target sync is served when configured; remaining GA residuals are the explicit secrets_residuals rows for deeper Vault, KMIP, and provider-specific Terraform/OpenTofu breadth.",
+      "ga_scope_reason": "Conditional residual: external target credentials and endpoints are operator supplied, so all ten census-protected native sync targets remain outside the unconditional GA denominator even though each is served when configured.",
       "source_docs": [
         "docs/features/secrets.md"
       ]

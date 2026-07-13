@@ -21,7 +21,11 @@ func TestProcessLoopbackListenerRequiresDirectPIDOwnership(t *testing.T) {
 	if err != nil || inode == "" {
 		t.Fatalf("direct process listener was not witnessed: inode=%q err=%v", inode, err)
 	}
-	if inode, err := processLoopbackListener(os.Getpid()+1, port); err == nil || inode != "" {
+	foreignPID := 1
+	if os.Getpid() == foreignPID {
+		t.Fatal("proof test process unexpectedly owns container PID 1")
+	}
+	if inode, err := processLoopbackListener(foreignPID, port); err == nil || inode != "" {
 		t.Fatalf("foreign PID inherited listener witness: inode=%q err=%v", inode, err)
 	}
 }

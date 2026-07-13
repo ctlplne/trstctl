@@ -52,9 +52,12 @@ def compact(value: object) -> bytes:
 
 
 def run(args: list[str], timeout: float = 180, check: bool = True) -> subprocess.CompletedProcess:
+    openssl_conf = os.environ.get("OPENSSL_CONF", "")
+    if openssl_conf != "/dev/null":
+        raise RuntimeError("kind substrate OpenSSL configuration is not the pinned empty profile")
     command_env = {
         key: value for key, value in os.environ.items()
-        if key in {"PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "XDG_RUNTIME_DIR"}
+        if key in {"PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "XDG_RUNTIME_DIR", "OPENSSL_CONF"}
     }
     command_env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
     command_env.setdefault("HOME", "/tmp")
@@ -174,6 +177,20 @@ def wait_crd(api: KubernetesAPI, name: str) -> None:
     raise RuntimeError(f"CRD {name} did not become Established")
 
 
+def wait_collection(api: KubernetesAPI, path: str) -> None:
+    deadline = time.time() + 60
+    last_status = 0
+    last_body = b""
+    while time.time() < deadline:
+        last_status, last_body = api.request("GET", path)
+        if last_status == 200:
+            return
+        if last_status not in (404, 429, 503):
+            break
+        time.sleep(0.25)
+    raise RuntimeError(f"Kubernetes collection {path} did not become ready: status={last_status} body={last_body[:800]!r}")
+
+
 def create_namespace(api: KubernetesAPI, name: str) -> None:
     api.create("/api/v1/namespaces", {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": name}})
 
@@ -192,6 +209,14 @@ def prepare_fixtures(api: KubernetesAPI, root: Path) -> tuple[str, str, str]:
 
     create_namespace(api, NAMESPACE)
     create_namespace(api, TARGET_NAMESPACE)
+    for path in (
+        "/apis/trstctl.com/v1alpha1/clusterissuers",
+        f"/apis/trstctl.com/v1alpha1/namespaces/{NAMESPACE}/issuers",
+        f"/apis/trstctl.com/v1alpha1/namespaces/{NAMESPACE}/certificates",
+        "/apis/trstctl.com/v1alpha1/trustbundles",
+        f"/apis/cert-manager.io/v1/namespaces/{NAMESPACE}/certificaterequests",
+    ):
+        wait_collection(api, path)
     api.create(f"/api/v1/namespaces/{NAMESPACE}/serviceaccounts", {
         "apiVersion": "v1", "kind": "ServiceAccount", "metadata": {"name": "trstctl-dod-controller", "namespace": NAMESPACE},
     })
@@ -216,7 +241,7 @@ def prepare_fixtures(api: KubernetesAPI, root: Path) -> tuple[str, str, str]:
     })
     token_response = api.json("POST", f"/api/v1/namespaces/{NAMESPACE}/serviceaccounts/trstctl-dod-controller/token", {
         "apiVersion": "authentication.k8s.io/v1", "kind": "TokenRequest",
-        "spec": {"audiences": ["https://kubernetes.default.svc"], "expirationSeconds": 1800},
+        "spec": {"audiences": ["https://kubernetes.default.svc.cluster.local"], "expirationSeconds": 1800},
     }, (200, 201))
     token = token_response.get("status", {}).get("token", "")
     if not token:
@@ -228,11 +253,13 @@ def prepare_fixtures(api: KubernetesAPI, root: Path) -> tuple[str, str, str]:
     })
 
     csr_key = root / "csr-key.pem"
+    csr_pem = root / "request.pem"
     csr_der = root / "request.der"
-    run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=dod-kind-workload", "-keyout", str(csr_key), "-outform", "DER", "-out", str(csr_der)], timeout=30)
-    csr_raw = csr_der.read_bytes()
+    run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=dod-kind-workload", "-keyout", str(csr_key), "-out", str(csr_pem)], timeout=30)
+    run(["openssl", "req", "-in", str(csr_pem), "-outform", "DER", "-out", str(csr_der)], timeout=30)
+    csr_raw = csr_pem.read_bytes()
     csr_key.unlink(missing_ok=True)
-    csr_hash = hashlib.sha256(csr_raw).hexdigest()
+    csr_hash = hashlib.sha256(csr_der.read_bytes()).hexdigest()
     api.create("/apis/certificates.k8s.io/v1/certificatesigningrequests", {
         "apiVersion": "certificates.k8s.io/v1", "kind": "CertificateSigningRequest",
         "metadata": {

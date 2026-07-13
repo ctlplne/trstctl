@@ -20,6 +20,12 @@
 !clients/sdk/java/src/
 !clients/sdk/java/src/**
 
+# Keep shipped-binary DoD tests trackable when a developer-local exclude uses
+# the broad package-name pattern `trstctl` (which also matches cmd/trstctl/).
+!cmd/trstctl/
+!cmd/trstctl/dod_pqc_runtime_test.go
+!cmd/trstctl/dod_kmip_runtime_test.go
+
 # The built web console under internal/webui/dist IS committed (EXC-WIRE-04 /
 # SURFACE-001): it is the artifact the Go binary embeds via //go:embed, so a plain
 # `go build ./cmd/trstctl` (no `make web` step) serves the REAL React console, not a

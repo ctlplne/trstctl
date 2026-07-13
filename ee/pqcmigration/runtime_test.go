@@ -78,6 +78,33 @@ func TestPQCRuntimeProgressRebuildAndRestartConvergeWithoutQueuedResidual(t *tes
 	}
 }
 
+func TestPQCProgressStartedMergesIntentWhenPreparedArrivesFirst(t *testing.T) {
+	intent := testTLSIntent()
+	prepared := TLSFindingPrepared{
+		RunID: intent.RunID, AssetID: intent.AssetID, FindingKind: intent.FindingKind,
+		TargetID: intent.TargetID, TargetRevision: intent.TargetRevision, Connector: intent.Connector,
+		Previous: connector.TLSPosture{
+			MinimumVersion: "TLSv1.0", CipherSuites: []string{"TLS_RSA_WITH_AES_128_CBC_SHA"},
+			KeyExchangeGroups: []string{"secp256r1"},
+		},
+	}
+	started := projections.LicensedCryptoMigrationStarted{
+		RunID: intent.RunID, AssetIDs: []string{intent.AssetID}, TargetAlgorithm: TargetMLDSA65,
+		EffectiveAlgorithm: EffectiveHybridTLS, Protocol: ProtocolACME, Queued: 1,
+		TLSPostures: []projections.LicensedCryptoMigrationTLSPosture{intent},
+	}
+	when := time.Date(2026, 7, 12, 13, 0, 0, 0, time.UTC)
+	runtime := testProgressRuntime()
+	applyProgressLog(t, runtime.Progress, []events.Event{
+		{Type: EventTLSFindingPrepared, TenantID: sealedTestTenant, Time: when, Data: mustJSON(t, prepared)},
+		{Type: projections.EventLicensedCryptoMigrationStarted, TenantID: sealedTestTenant, Time: when.Add(time.Second), Data: mustJSON(t, started)},
+	})
+	items := runtime.Progress.Snapshot(sealedTestTenant, intent.RunID)
+	if len(items) != 1 || !connector.EqualTLSPosture(items[0].Desired, intent.Desired) || items[0].Previous == nil {
+		t.Fatalf("out-of-order progress did not merge durable intent: %+v", items)
+	}
+}
+
 func testProgressRuntime() *Runtime {
 	runtime := NewRuntime(nil)
 	runtime.Progress.projectCompletedHook = func(context.Context, eventspec.Event, TLSFindingCompleted) error { return nil }

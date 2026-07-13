@@ -14,8 +14,39 @@ RUN printf '%s\n' \
       > /etc/apt/sources.list \
  && rm -f /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates docker.io git openssl python3 \
+ && apt-get install -y --no-install-recommends ca-certificates docker.io git openssl python3 curl build-essential perl \
  && rm -rf /var/lib/apt/lists/*
+
+# The real-cluster posture proof runs the reviewed kind release, not an ambient
+# host binary. GitHub publishes this digest on the immutable v0.31.0 release.
+ARG KIND_VERSION=v0.31.0
+ARG KIND_LINUX_AMD64_SHA256=eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
+RUN curl --fail --silent --show-error --location \
+      "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \
+      --output /usr/local/bin/kind \
+ && echo "${KIND_LINUX_AMD64_SHA256}  /usr/local/bin/kind" | sha256sum --check --strict \
+ && chmod 0555 /usr/local/bin/kind
+
+# Debian bookworm's stock client predates standardized ML-DSA. Build the current
+# OpenSSL 3.5 LTS security release from its official, digest-pinned source so the
+# PQC proof is driven by a genuinely independent stock client.
+ARG OPENSSL_VERSION=3.5.7
+ARG OPENSSL_SOURCE_SHA256=a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8
+RUN curl --fail --silent --show-error --location \
+      "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
+      --output /tmp/openssl.tar.gz \
+ && echo "${OPENSSL_SOURCE_SHA256}  /tmp/openssl.tar.gz" | sha256sum --check --strict \
+ && mkdir /tmp/openssl-src \
+ && tar --extract --gzip --file /tmp/openssl.tar.gz --directory /tmp/openssl-src --strip-components=1 \
+ && cd /tmp/openssl-src \
+ && ./Configure linux-x86_64 no-shared no-tests --prefix=/opt/openssl-${OPENSSL_VERSION} \
+ && make -j2 \
+ && make install_sw \
+ && ln -s "/opt/openssl-${OPENSSL_VERSION}/bin/openssl" /usr/local/bin/openssl \
+ && /usr/local/bin/openssl version \
+ && /usr/local/bin/openssl list -signature-algorithms | grep -F ML-DSA-65 \
+ && rm -rf /tmp/openssl-src /tmp/openssl.tar.gz
+ENV OPENSSL_CONF=/dev/null
 
 # Cache only modules whose checksums are committed in the runner identity. The
 # runtime UID may read this cache but cannot replace already-verified source and

@@ -8,11 +8,15 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
 )
+
+var vaultServedMutationSequence atomic.Uint64
 
 // TestVaultCompatMountACLTransitPKIProductionAssembly proves COMPLETE-SECRETS-101
 // against Build's shipped handler, real PostgreSQL, the real event log, and the
@@ -115,6 +119,10 @@ func vaultServedRequest(t *testing.T, h *servedHarness, token, method, path stri
 		t.Fatalf("build Vault request: %v", err)
 	}
 	req.Header.Set("X-Vault-Token", token)
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		req.Header.Set("Idempotency-Key", "vault-served-"+strconv.FormatUint(vaultServedMutationSequence.Add(1), 10))
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

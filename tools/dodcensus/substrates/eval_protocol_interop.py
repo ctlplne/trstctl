@@ -49,6 +49,9 @@ def decode(value: object, name: str) -> bytes:
 
 
 def run(args: list[str], timeout: float = 15) -> bytes:
+    openssl_conf = os.environ.get("OPENSSL_CONF", "")
+    if openssl_conf != "/dev/null":
+        raise ValueError("independent protocol OpenSSL configuration is not the pinned empty profile")
     result = subprocess.run(
         args,
         stdin=subprocess.DEVNULL,
@@ -56,7 +59,7 @@ def run(args: list[str], timeout: float = 15) -> bytes:
         stderr=subprocess.STDOUT,
         timeout=timeout,
         check=False,
-        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "OPENSSL_CONF": openssl_conf},
     )
     if result.returncode != 0:
         raise ValueError(f"independent command failed ({' '.join(args[:3])}): {result.stdout[:800]!r}")

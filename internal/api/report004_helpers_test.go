@@ -227,8 +227,9 @@ func TestVaultCompatBodyTTLIdempotencyAndKVReadHelpers(t *testing.T) {
 	idemReq.Header.Del("Idempotency-Key")
 	first, firstErr := vaultIdempotencyKey(idemReq)
 	second, secondErr := vaultIdempotencyKey(idemReq)
-	if firstErr != nil || secondErr != nil || first == "" || !strings.HasPrefix(first, "vault:") || first == second {
-		t.Fatalf("generated vault idempotency keys not unique: %q %q errors=%v/%v", first, second, firstErr, secondErr)
+	if firstErr == nil || secondErr == nil || first != "" || second != "" ||
+		!strings.Contains(firstErr.Error(), "Idempotency-Key") || !strings.Contains(secondErr.Error(), "Idempotency-Key") {
+		t.Fatalf("missing Vault idempotency header did not fail closed: %q %q errors=%v/%v", first, second, firstErr, secondErr)
 	}
 
 	for raw, want := range map[string]bool{

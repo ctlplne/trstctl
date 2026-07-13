@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"trstctl.com/trstctl/internal/audit"
@@ -23,6 +25,8 @@ const (
 	vaultCompleteTenantA = "11111111-1111-4111-8111-111111111111"
 	vaultCompleteTenantB = "22222222-2222-4222-8222-222222222222"
 )
+
+var vaultTestRequestSequence atomic.Uint64
 
 // TestVaultCompatMountACLTransitServedAndReplayed is a non-skipping HTTP-wire
 // proof against API.New's shipped mux. It covers mutable mount/ACL authoring,
@@ -119,6 +123,7 @@ func vaultRequest(t *testing.T, handler http.Handler, tenantID, role, method, ta
 	req.Header.Set("X-Tenant-ID", tenantID)
 	req.Header.Set("X-Subject", role+"-subject")
 	req.Header.Set("X-Roles", role)
+	req.Header.Set("Idempotency-Key", "vault-test-"+strconv.FormatUint(vaultTestRequestSequence.Add(1), 10))
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	if res.Code != wantStatus {

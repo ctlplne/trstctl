@@ -107,23 +107,40 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 // the served transition algorithm. Tenant_id is both in the RLS context and in
 // the predicate (AN-1).
 func (s *Store) ApplyCryptoAssetMigratedTx(ctx context.Context, tx pgx.Tx, a CryptoAsset, observedAt time.Time) error {
-	return s.replaceCryptoAssetTx(ctx, tx, a, observedAt)
+	return s.replaceCryptoAssetTx(ctx, tx, a, observedAt, false)
 }
 
 // ApplyCryptoAssetRolledBackTx restores the previous public crypto fact for a CBOM
 // row after a migration rollback. Like migration completion, this is a projection of
 // an immutable event rather than an imperative read-model mutation.
 func (s *Store) ApplyCryptoAssetRolledBackTx(ctx context.Context, tx pgx.Tx, a CryptoAsset, observedAt time.Time) error {
-	return s.replaceCryptoAssetTx(ctx, tx, a, observedAt)
+	return s.replaceCryptoAssetTx(ctx, tx, a, observedAt, true)
 }
 
-func (s *Store) replaceCryptoAssetTx(ctx context.Context, tx pgx.Tx, a CryptoAsset, observedAt time.Time) error {
-	_ = observedAt
+func (s *Store) replaceCryptoAssetTx(ctx context.Context, tx pgx.Tx, a CryptoAsset, observedAt time.Time, restoreMissing bool) error {
 	reasons := a.Reasons
 	if reasons == nil {
 		reasons = []string{}
 	}
 	signature := a.Signature()
+	// A scan can observe both a weak fact and the already-approved fact that a
+	// migration will converge on (for example TLSv1 plus TLSv1.3 in one listener
+	// directive). The unique tenant/signature index correctly prevents duplicate
+	// read-model facts. On forward migration, retain the already-observed desired
+	// fact and remove the now-obsolete weak selected row. Rollback can recreate
+	// that selected row from the immutable event payload.
+	merged, err := tx.Exec(ctx,
+		`DELETE FROM crypto_assets selected
+		  WHERE selected.tenant_id = $1 AND selected.id = $3
+		    AND EXISTS (SELECT 1 FROM crypto_assets desired
+		                 WHERE desired.tenant_id = $1 AND desired.signature = $2 AND desired.id <> $3)`,
+		a.TenantID, signature, a.ID)
+	if err != nil {
+		return err
+	}
+	if merged.RowsAffected() != 0 {
+		return nil
+	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE crypto_assets
 		    SET signature = $3, kind = $4, location = $5, algorithm = $6, key_bits = $7,
@@ -136,6 +153,9 @@ func (s *Store) replaceCryptoAssetTx(ctx context.Context, tx pgx.Tx, a CryptoAss
 		return err
 	}
 	if tag.RowsAffected() == 0 {
+		if restoreMissing {
+			return s.ApplyCryptoAssetObservedTx(ctx, tx, a, observedAt)
+		}
 		return pgx.ErrNoRows
 	}
 	return nil

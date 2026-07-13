@@ -37,6 +37,9 @@ def emit(value: dict) -> None:
 
 
 def run(args: list[str]) -> bytes:
+    openssl_conf = os.environ.get("OPENSSL_CONF", "")
+    if openssl_conf != "/dev/null":
+        raise ValueError("independent OpenSSL client configuration is not the pinned empty profile")
     result = subprocess.run(
         args,
         stdin=subprocess.DEVNULL,
@@ -44,7 +47,10 @@ def run(args: list[str]) -> bytes:
         stderr=subprocess.STDOUT,
         timeout=20,
         check=False,
-        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        env={
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "OPENSSL_CONF": openssl_conf,
+        },
     )
     if result.returncode != 0:
         raise ValueError(f"independent command failed ({' '.join(args[:4])}): {result.stdout[:1000]!r}")

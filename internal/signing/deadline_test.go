@@ -5,6 +5,7 @@ package signing
 import (
 	"context"
 	"net"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -41,7 +42,15 @@ func TestSignerCallDeadlineBoundsSlowDependency(t *testing.T) {
 		}
 	})
 
-	socket := filepath.Join(t.TempDir(), "hung-signer.sock")
+	// Darwin caps AF_UNIX paths at 104 bytes. testing.T.TempDir includes the
+	// full test name and can exceed that cap before gRPC is exercised, so use a
+	// short private directory under /tmp and retain automatic cleanup.
+	socketDir, err := os.MkdirTemp("/tmp", "trstctl-signing-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socket := filepath.Join(socketDir, "hung.sock")
 	ln, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)

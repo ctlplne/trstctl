@@ -13,6 +13,8 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"trstctl.com/trstctl/internal/authz"
@@ -23,6 +25,8 @@ import (
 )
 
 const dodVaultCompatTenant = "d0d00000-0000-4000-8000-000000000501"
+
+var dodVaultRequestSequence atomic.Uint64
 
 // TestDODVaultCompatProductionAssembly passes untouched buildRunDeps output to
 // Build, drives the resulting shipped handler, and sends raw Vault response
@@ -205,6 +209,7 @@ func dodVaultRequest(t *testing.T, srv *Server, token, method, path string, body
 	}
 	request.Header.Set("X-Vault-Token", token)
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "dod-vault-"+strconv.FormatUint(dodVaultRequestSequence.Add(1), 10))
 	response := &dodHTTPRecorder{header: make(http.Header), status: http.StatusOK}
 	srv.Handler().ServeHTTP(response, request)
 	if response.status != want {

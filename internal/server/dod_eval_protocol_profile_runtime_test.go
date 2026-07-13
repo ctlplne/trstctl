@@ -17,6 +17,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -77,7 +78,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	cfg.Protocols.EvalTenantID = dodEvalProtocolTenant
 	cfg.Protocols.RAKeyFile = filepath.Join(dir, "protocol-ra.key")
 	cfg.Protocols.TSACertFile = filepath.Join(dir, "tsa.crt")
-	cfg.Protocols.SPIFFE.SocketPath = filepath.Join(dir, "spiffe-workload.sock")
+	cfg.Protocols.SPIFFE.SocketPath = dodEvalLocalSocketPath(t)
 	cfg.Protocols.SCEPIntuneChallenge = scepConfig
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("validate eval-profile production config: %v", err)
@@ -166,6 +167,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	firstSCEPCA := dodEvalGetBody(t, first.Client(), first.BaseURL()+"/scep?operation=GetCACert", http.StatusOK)
 	firstESTCA := dodEvalGetBody(t, first.Client(), first.BaseURL()+"/.well-known/est/cacerts", http.StatusOK)
 	firstDirectory := dodEvalGetBody(t, first.Client(), first.BaseURL()+"/directory", http.StatusOK)
+	firstDirectoryCanonical := dodEvalCanonicalACMEDirectory(t, firstDirectory)
 	first.Close(t)
 	firstClosed = true
 
@@ -197,10 +199,11 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 
 	restartReadbacks := map[string]string{}
 	restartDirectory := dodEvalGetBody(t, second.Client(), second.BaseURL()+"/directory", http.StatusOK)
-	if !bytes.Equal(firstDirectory, restartDirectory) {
+	restartDirectoryCanonical := dodEvalCanonicalACMEDirectory(t, restartDirectory)
+	if !bytes.Equal(firstDirectoryCanonical, restartDirectoryCanonical) {
 		t.Fatal("ACME directory changed across activation replay")
 	}
-	restartReadbacks["acme"] = crypto.SHA256Hex(restartDirectory)
+	restartReadbacks["acme"] = crypto.SHA256Hex(restartDirectoryCanonical)
 	restartESTCA := dodEvalGetBody(t, second.Client(), second.BaseURL()+"/.well-known/est/cacerts", http.StatusOK)
 	if !bytes.Equal(firstESTCA, restartESTCA) {
 		t.Fatal("EST CA readback changed across restart")
@@ -259,6 +262,22 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 		IndependentVerifier: readback,
 		ExecutionReceipt:    executionReceipt,
 	}))
+}
+
+// dodEvalLocalSocketPath keeps the Workload API UDS on the shipped runtime's
+// local filesystem. The rest of the proof state intentionally lives on the
+// parent-owned receipt mount, but Docker Desktop bind mounts are not a valid
+// host-local Unix-socket substrate and can reject listen/chmod operations. This
+// mirrors the production default (/tmp/trstctl-spiffe-workload.sock) while using
+// a unique directory so concurrent proof processes cannot collide.
+func dodEvalLocalSocketPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "trstctl-dod-spiffe-")
+	if err != nil {
+		t.Fatalf("create runtime-local SPIFFE socket directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "workload.sock")
 }
 
 type dodEvalRuntime struct {
@@ -957,6 +976,42 @@ func dodEvalWaitForSocket(t *testing.T, socket string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("SPIFFE Workload API socket %q did not become reachable", socket)
+}
+
+func dodEvalCanonicalACMEDirectory(t *testing.T, body []byte) []byte {
+	t.Helper()
+	var value any
+	if err := json.Unmarshal(body, &value); err != nil {
+		t.Fatalf("decode ACME directory for restart comparison: %v", err)
+	}
+	var canonicalize func(any) any
+	canonicalize = func(current any) any {
+		switch typed := current.(type) {
+		case map[string]any:
+			for key, child := range typed {
+				typed[key] = canonicalize(child)
+			}
+			return typed
+		case []any:
+			for index, child := range typed {
+				typed[index] = canonicalize(child)
+			}
+			return typed
+		case string:
+			parsed, err := url.Parse(typed)
+			if err == nil && parsed.IsAbs() && parsed.Host != "" {
+				parsed.Scheme = ""
+				parsed.Host = ""
+				return parsed.String()
+			}
+		}
+		return current
+	}
+	canonical, err := json.Marshal(canonicalize(value))
+	if err != nil {
+		t.Fatalf("encode canonical ACME directory: %v", err)
+	}
+	return canonical
 }
 
 func dodEvalTenantEventCounts(t *testing.T, log *events.Log, tenantID string) map[string]int {

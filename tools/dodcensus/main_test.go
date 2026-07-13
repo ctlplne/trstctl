@@ -1396,6 +1396,12 @@ RUN printf '%s\n' 'snapshot.debian.org/archive/debian/20260701T000000Z' 'snapsho
  && rm -f /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
  && apt-get install -y ca-certificates docker.io git openssl python3
+ARG KIND_VERSION=v0.31.0
+ARG KIND_LINUX_AMD64_SHA256=eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
+ARG OPENSSL_VERSION=3.5.7
+ARG OPENSSL_SOURCE_SHA256=a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8
+RUN /usr/local/bin/openssl list -signature-algorithms
+ENV OPENSSL_CONF=/dev/null
 COPY go.mod go.sum /runtime-modules/
 RUN cd /runtime-modules && GOFLAGS=-mod=readonly go mod download all \
  && chown -R 0:0 /go \

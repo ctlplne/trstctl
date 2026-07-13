@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
-	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
@@ -641,18 +640,13 @@ func vaultIdempotencyKey(r *http.Request) (string, error) {
 	if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
 		return key, nil
 	}
-	nonce, err := crypto.RandomBytes(32)
-	if err != nil {
-		return "", errors.New("vault: generate request idempotency key")
-	}
-	defer secret.Wipe(nonce)
-	return "vault:" + crypto.SHA256Hex(nonce), nil
+	return "", errors.New("vault: Idempotency-Key is required for mutations")
 }
 
 func vaultMutationKey(w http.ResponseWriter, r *http.Request) (string, bool) {
 	key, err := vaultIdempotencyKey(r)
 	if err != nil {
-		writeVaultError(w, http.StatusInternalServerError, "generate request idempotency key")
+		writeVaultError(w, http.StatusBadRequest, "Idempotency-Key is required")
 		return "", false
 	}
 	return key, true

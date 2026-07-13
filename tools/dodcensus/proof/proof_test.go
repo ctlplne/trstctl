@@ -450,6 +450,22 @@ func TestReviewedCompanionStatusRequiresDirectHardenedSignerShape(t *testing.T) 
 	}
 }
 
+func TestProcessStatusZombieClassificationIsExact(t *testing.T) {
+	if !processStatusIsZombie([]byte("Name:\tpostgres\nState:\tZ (zombie)\nPPid:\t1\n")) {
+		t.Fatal("Linux zombie process status was not recognized")
+	}
+	for _, raw := range [][]byte{
+		[]byte("Name:\tpostgres\nState:\tS (sleeping)\n"),
+		[]byte("Name:\tpostgres\nState:\tR (running)\n"),
+		[]byte("Name:\tpostgres\n"),
+		[]byte("State:\tinvalid\n"),
+	} {
+		if processStatusIsZombie(raw) {
+			t.Fatalf("live/malformed process status classified as zombie: %q", raw)
+		}
+	}
+}
+
 func TestUnreadableCompanionRequiresPreExecListenerCloseOnExec(t *testing.T) {
 	if err := requireLinuxDescriptorCloseOnExecFlags([]byte("pos:\t0\nflags:\t02000002\n")); err != nil {
 		t.Fatalf("Linux O_CLOEXEC listener flags rejected: %v", err)

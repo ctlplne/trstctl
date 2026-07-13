@@ -63,6 +63,7 @@ func (a *API) routes() []route {
 	return []route{
 		{handler: a.goodHeader, mutation: true},
 		{handler: a.goodVaultCompat, mutation: true},
+		{handler: a.goodVaultMutationHelper, mutation: true},
 		{handler: a.goodSCIMCompat, mutation: true},
 		{handler: a.badFixedString, mutation: true},
 		{handler: a.badUUIDGenerated, mutation: true},
@@ -78,6 +79,12 @@ func (a *API) goodHeader(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) goodVaultCompat(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := vaultIdempotencyKey(r, nil)
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) goodVaultMutationHelper(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey, ok := vaultMutationKey(w, r)
+	if !ok { return }
 	a.mutate(w, r, idempotencyKey, nil)
 }
 
@@ -115,6 +122,11 @@ func vaultIdempotencyKey(r *http.Request, body []byte) string {
 		return key
 	}
 	return "vault:documented-compatibility-derivation"
+}
+
+func vaultMutationKey(w http.ResponseWriter, r *http.Request) (string, bool) {
+	key := r.Header.Get("Idempotency-Key")
+	return key, key != ""
 }
 
 func scimIdempotencyKey(r *http.Request, body []byte) string {

@@ -161,16 +161,28 @@ cover: test ## Alias for `make test`; writes cover.out and prints per-function c
 	@$(GO) tool cover -func=$(COVERPROFILE).nogen | tail -1
 
 DOD_CENSUS_OUT ?= wiring-census.json
+DOD_CARD ?=
+DOD_CAPABILITY ?=
+DOD_SELECTION :=
+ifneq ($(strip $(DOD_CARD)),)
+DOD_SELECTION += --card $(DOD_CARD)
+endif
+ifneq ($(strip $(DOD_CAPABILITY)),)
+DOD_SELECTION += --capability $(DOD_CAPABILITY)
+endif
 
 .PHONY: dod-gate
 dod-gate: ## Prove every required capability is compiled, production-assembled, and non-sentinel served
 	@echo ">> definition-of-done wiring census (manifest-pinned shipped profiles)"
+	@if [ -n "$(strip $(DOD_CARD))" ] && [ -n "$(strip $(DOD_CAPABILITY))" ]; then \
+		echo "dod-gate: choose only one of DOD_CARD or DOD_CAPABILITY" >&2; exit 2; \
+	fi
 	@set -eu; cache="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}"; \
 		if [ ! -e "$$cache" ]; then (umask 077; mkdir -p "$$cache"); fi
 	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) test ./tools/dodcensus/... -count=1
 	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) test ./internal/server -run '^TestDODGateProductionAssemblyCanary$$' -count=1
 	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) run ./tools/dodcensus \
-		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)"
+		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)" $(DOD_SELECTION)
 
 # Per-target fuzz budget for the smoke run (FUZZ-003). Short enough for a per-PR
 # CI gate; the nightly job overrides it (e.g. FUZZ_SMOKE_TIME=120s) for depth.

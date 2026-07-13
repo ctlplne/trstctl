@@ -135,6 +135,9 @@ func isPQCAllowedCorePath(filename string) bool {
 	rel := shortPath(filename)
 	for _, prefix := range []string{
 		"tools/trstctllint/",
+		// DoD census code verifies proprietary algorithms in externally built
+		// shipped artifacts but is not linked into a product binary.
+		"tools/dodcensus/",
 		"docs/",
 	} {
 		if strings.HasPrefix(rel, prefix) {

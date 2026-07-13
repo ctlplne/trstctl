@@ -203,7 +203,15 @@ func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projection
 	defer p.mu.Unlock()
 	for _, intent := range started.TLSPostures {
 		key := progressKey{tenantID: ev.TenantID, runID: intent.RunID, assetID: intent.AssetID}
-		if _, exists := p.items[key]; exists {
+		if item, exists := p.items[key]; exists {
+			// The live event tail and an outbox worker can race during startup.
+			// Prepared may therefore arrive at this in-memory projection before the
+			// corresponding started event. Merge the durable operator intent into
+			// that row instead of leaving its desired posture empty.
+			item.RunID, item.AssetID, item.FindingKind = intent.RunID, intent.AssetID, intent.FindingKind
+			item.TargetID, item.TargetRevision, item.Connector = intent.TargetID, intent.TargetRevision, intent.Connector
+			item.Desired = clonePosture(intent.Desired)
+			p.items[key] = item
 			continue
 		}
 		p.items[key] = FindingProgress{

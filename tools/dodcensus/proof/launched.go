@@ -2508,6 +2508,13 @@ func requireExclusiveSocketOwner(pid int, inode string, built shippedBuild, expe
 			if os.IsNotExist(readErr) {
 				continue
 			}
+			// A zombie has exited and its descriptor table has already been
+			// destroyed; only the waitable PID record remains. Container PID 1
+			// may retain such records between sequential full-census groups. It
+			// cannot own or inherit the live socket inode being audited.
+			if raw, statusErr := os.ReadFile(filepath.Join(candidateRoot, "status")); statusErr == nil && processStatusIsZombie(raw) {
+				continue
+			}
 			companionErr := fmt.Errorf("not an unreadable shipped companion")
 			if os.IsPermission(readErr) {
 				companionErr = validateUnreadableShippedCompanion(pid, candidate, built, expected, sealed)
@@ -2534,6 +2541,17 @@ func requireExclusiveSocketOwner(pid int, inode string, built shippedBuild, expe
 		return fmt.Errorf("socket inode %s: %w", inode, err)
 	}
 	return nil
+}
+
+func processStatusIsZombie(raw []byte) bool {
+	for _, line := range strings.Split(string(raw), "\n") {
+		if !strings.HasPrefix(line, "State:") {
+			continue
+		}
+		fields := strings.Fields(line)
+		return len(fields) >= 2 && fields[1] == "Z"
+	}
+	return false
 }
 
 func validateObservedSocketOwners(parentPID int, owners map[int]bool) error {

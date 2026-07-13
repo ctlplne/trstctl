@@ -19,6 +19,10 @@ import (
 func TestOutboxDeadLetterDepthTracksInducedPermanentFailure(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
+	// The metric intentionally enumerates the tenant registry before issuing
+	// tenant-predicated counts. Register the tenant exactly as production does;
+	// an RLS session variable alone must never manufacture fleet membership.
+	mustRegisterTenant(t, s, tenantA)
 	ob := orchestrator.NewOutbox(s,
 		orchestrator.WithMaxAttempts(1),
 		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),

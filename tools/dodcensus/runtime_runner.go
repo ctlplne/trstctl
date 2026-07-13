@@ -108,6 +108,12 @@ func inspectRuntimeRunnerProof(repo string, profile BuildProfile) checkEvidence 
 	}
 	for _, fragment := range []string{
 		"ca-certificates docker.io git openssl python3",
+		"KIND_VERSION=v0.31.0",
+		"KIND_LINUX_AMD64_SHA256=eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa",
+		"OPENSSL_VERSION=3.5.7",
+		"OPENSSL_SOURCE_SHA256=a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8",
+		"/usr/local/bin/openssl list -signature-algorithms",
+		"OPENSSL_CONF=/dev/null",
 		"COPY go.mod go.sum /runtime-modules/",
 		"GOFLAGS=-mod=readonly go mod download all",
 		"chown -R 0:0 /go",
@@ -153,7 +159,8 @@ type linuxRuntimeExecutor struct {
 	images map[string]string
 }
 
-const runtimeRunnerPreflightScript = `import os
+const runtimeRunnerPreflightScript = `import hashlib
+import os
 import pathlib
 import socket
 import stat
@@ -234,6 +241,32 @@ version = subprocess.run(
 ).stdout.strip()
 if version != "go version go1.26.4 linux/amd64":
     raise RuntimeError("runtime runner toolchain identity is %r" % version)
+
+kind_path = pathlib.Path("/usr/local/bin/kind")
+kind_digest = hashlib.sha256(kind_path.read_bytes()).hexdigest()
+if kind_digest != "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa":
+    raise RuntimeError("runtime runner kind v0.31.0 digest is %r" % kind_digest)
+kind_version = subprocess.run(
+    [str(kind_path), "version"], check=True, stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE, text=True,
+).stdout.strip()
+if "kind v0.31.0" not in kind_version:
+    raise RuntimeError("runtime runner kind identity is %r" % kind_version)
+
+openssl_version = subprocess.run(
+    ["/usr/local/bin/openssl", "version"], check=True, stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE, text=True,
+).stdout.strip()
+if not openssl_version.startswith("OpenSSL 3.5.7 "):
+    raise RuntimeError("runtime runner OpenSSL identity is %r" % openssl_version)
+if os.environ.get("OPENSSL_CONF") != "/dev/null":
+    raise RuntimeError("runtime runner OpenSSL uses ambient configuration")
+openssl_signatures = subprocess.run(
+    ["/usr/local/bin/openssl", "list", "-signature-algorithms"], check=True,
+    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+).stdout
+if b"ML-DSA-65" not in openssl_signatures:
+    raise RuntimeError("runtime runner OpenSSL omits ML-DSA-65")
 
 module_root = pathlib.Path("/go/pkg/mod")
 for parent in (pathlib.Path("/go"), pathlib.Path("/go/pkg"), module_root):
