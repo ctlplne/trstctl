@@ -1,16 +1,16 @@
 # trstctl
 
-**trstctl** is self-hosted non-human identity management / Machine IAM for every
+**trstctl** is a **Machine Identity Security Control Plane** for every
 credential that is *not* a human: X.509 certificates, SSH host and user
 certificates, secrets, API keys, tokens, and SPIFFE workload identities. It
 discovers, issues, deploys, rotates, revokes, and retires those credentials
 across hybrid infrastructure.
 
-trstctl is **MPL-2.0 open core**: the Community core is open-source software
-under the repository `LICENSE`. Enterprise, Provider, PQC, and other
-license-gated features live under proprietary `ee/`, Managed is first-party
-operated packaging, and the billable units are control-plane deployment and
-managed tenant band — never issued certificates or ephemeral identities.
+trstctl is **MPL-2.0 open core**: the Free/Community core is open-source software
+under the repository `LICENSE`. Enterprise features live under proprietary `ee/`.
+Provider/MSP inherits Enterprise and adds managed-service and resale rights. The
+billing units are control-plane deployment for Enterprise and a negotiable
+managed-customer band for Provider/MSP — never credentials or rotations.
 Served-vs-library maturity is tracked separately from those edition gates. trstctl is pre-1.0 and under active hardening: see
 **[Current limitations](limitations.md)** for an honest account of what the running
 binary serves today versus what is built as library code but not yet served.
@@ -63,7 +63,7 @@ Reference docs:
   register for implemented narrative, pricing, editions, and managed-offering
   decisions.
 - **[Pricing and billing posture](pricing.md)** and **[Editions](editions.md)** —
-  the public Community/Enterprise/Provider/Managed matrix, billable units, and
+  the public Free/Enterprise/Provider-MSP matrix, billable units, and
   certificate-counter telemetry classification.
 - **[CLI](cli.md)** — drive trstctl from scripts and CI with `trstctl-cli`.
 - **[Terraform provider](terraform-provider.md)** — manage profiles, short-lived
@@ -90,7 +90,7 @@ environments.
 
 ## License and data
 
-trstctl is **MPL-2.0 open core**. The Community core is licensed under
+trstctl is **MPL-2.0 open core**. The Free/Community core is licensed under
 [MPL-2.0](../LICENSE). Commercial Enterprise, Provider, PQC, and other
 license-gated features are proprietary material under [ee/LICENSE](../ee/LICENSE)
 and are activated by an offline Ed25519-signed license; multi-tenancy, the event

@@ -521,6 +521,66 @@ BreakglassBundle = TypedDict(
     total=False,
 )
 
+BreakglassCeremony = TypedDict(
+    'BreakglassCeremony',
+    {
+        'approvals': int,
+        'created_at': str,
+        'id': str,
+        'opener': str,
+        'purpose': str,
+        'status': str,
+        'tenant_id': str,
+        'threshold': int,
+    },
+    total=False,
+)
+
+BreakglassCrossSign = TypedDict(
+    'BreakglassCrossSign',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+        'issuer_signer_handle': str,
+        'target_sha256': str,
+    },
+    total=False,
+)
+
+BreakglassCrossSignRequest = TypedDict(
+    'BreakglassCrossSignRequest',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+    },
+    total=False,
+)
+
+BreakglassIssueExecutionRequest = TypedDict(
+    'BreakglassIssueExecutionRequest',
+    {
+        'ceremony_id': str,
+        'csr_der': str,
+        'reason': str,
+        'request_id': str,
+        'subject': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
+BreakglassIssueIntentRequest = TypedDict(
+    'BreakglassIssueIntentRequest',
+    {
+        'csr_der': str,
+        'reason': str,
+        'request_id': str,
+        'subject': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
 BreakglassIssueRequest = TypedDict(
     'BreakglassIssueRequest',
     {
@@ -556,6 +616,40 @@ BreakglassReconcileResponse = TypedDict(
     'BreakglassReconcileResponse',
     {
         'reconciled': int,
+    },
+    total=False,
+)
+
+BreakglassRotation = TypedDict(
+    'BreakglassRotation',
+    {
+        'active_certificate_pem': str,
+        'active_signer_handle': str,
+        'ceremony_id': str,
+        'new_signed_by_previous_pem': str,
+        'previous_certificate_pem': str,
+        'previous_signed_by_new_pem': str,
+        'previous_signer_handle': str,
+        'request_digest': str,
+    },
+    total=False,
+)
+
+BreakglassRotationIntent = TypedDict(
+    'BreakglassRotationIntent',
+    {
+        'reason': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
+BreakglassRotationRequest = TypedDict(
+    'BreakglassRotationRequest',
+    {
+        'ceremony_id': str,
+        'reason': str,
+        'ttl_seconds': int,
     },
     total=False,
 )
@@ -704,11 +798,15 @@ CACeremonyStartRequest = TypedDict(
     {
         'authority_id': str,
         'certificate_pem': str,
+        'cross_certificate_pem': str,
         'csr_pem': str,
         'operation': str,
         'parent_id': str,
+        'reason': str,
+        'reverse_cross_certificate_pem': str,
         'signer_handle': str,
         'spec': dict[str, Any],
+        'target_certificate_pem': str,
         'threshold': int,
     },
     total=False,
@@ -738,6 +836,27 @@ CACreateRootRequest = TypedDict(
     {
         'ceremony_id': str,
         'spec': dict[str, Any],
+    },
+    total=False,
+)
+
+CACrossSign = TypedDict(
+    'CACrossSign',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+        'imported': bool,
+        'issuer_authority_id': str,
+        'target_sha256': str,
+    },
+    total=False,
+)
+
+CACrossSignRequest = TypedDict(
+    'CACrossSignRequest',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
     },
     total=False,
 )
@@ -876,6 +995,40 @@ CAKeyCeremony = TypedDict(
         'status': str,
         'tenant_id': str,
         'threshold': int,
+    },
+    total=False,
+)
+
+CAOfflineCrossSignImportRequest = TypedDict(
+    'CAOfflineCrossSignImportRequest',
+    {
+        'ceremony_id': str,
+        'cross_certificate_pem': str,
+        'target_certificate_pem': str,
+    },
+    total=False,
+)
+
+CAOfflineRootRekey = TypedDict(
+    'CAOfflineRootRekey',
+    {
+        'ceremony_id': str,
+        'new_signed_by_previous_pem': str,
+        'previous_signed_by_new_pem': str,
+        'rotation': dict[str, Any],
+    },
+    total=False,
+)
+
+CAOfflineRootRekeyRequest = TypedDict(
+    'CAOfflineRootRekeyRequest',
+    {
+        'ceremony_id': str,
+        'new_signed_by_previous_pem': str,
+        'previous_signed_by_new_pem': str,
+        'reason': str,
+        'spec': dict[str, Any],
+        'successor_certificate_pem': str,
     },
     total=False,
 )
@@ -1957,8 +2110,10 @@ EditionsInfo = TypedDict(
         'features': list[dict[str, Any]],
         'fips': dict[str, Any],
         'license_id': str,
+        'managed_customer_band': int,
         'packaging': dict[str, Any],
         'read_only_at': str,
+        'rights': list[str],
         'state': str,
         'tenant_band': int,
         'tier': str,
@@ -2916,6 +3071,7 @@ ManagedOfferingStatus = TypedDict(
         'idempotency_required': bool,
         'license_state': str,
         'managed_boundary': str,
+        'managed_customer_band': int,
         'mutation_path': str,
         'provider_plane_mode': str,
         'served': bool,

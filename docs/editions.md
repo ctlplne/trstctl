@@ -1,46 +1,41 @@
 # Editions
 
-trstctl is MPL-2.0 open-core, self-hosted non-human identity management /
-Machine IAM software. The product line keeps core credential issuance, enrollment,
+trstctl is an MPL-2.0 open-core **Machine Identity Security Control Plane**. The
+product line keeps core credential issuance, enrollment,
 rotation primitives, protocol interoperability, audit/export, PostgreSQL RLS
-tenant isolation, and the offline license verifier in Community. Enterprise,
-Provider, PQC, and Managed add scale, assurance, governance, support, proprietary
-post-quantum migration features, and operating responsibility.
+tenant isolation, and the offline license verifier in Free. Enterprise adds the
+commercial `ee/` feature set. Provider / MSP includes every Enterprise feature and
+adds provider-plane operations plus managed-service and resale rights.
 
 ## Pricing Posture
 
-The public billable unit is the control-plane deployment for self-hosted
-Community and Enterprise. Provider and Managed packaging use the
-`managed_tenant_band` because those offerings operate isolated tenant groups for
-customers or business units. Issued certificates, stored certificates, and
-ephemeral identities are never the primary billable unit; their counters remain
-operational telemetry for capacity planning, abuse detection, and renewal
-posture.
+Free has no license bill. Enterprise uses `control_plane_deployment`. Provider /
+MSP uses a negotiated `managed_customer_band` as its wholesale anchor. The MSP
+controls its downstream hosting and support prices. Certificates, SVIDs, secrets,
+API keys, tokens, rotations, nodes, and deployment count are not automatic
+Provider wholesale billing units.
 
 ## Buyer Matrix
 
-| Packaging line | Community | Enterprise | Provider | Managed |
-|---|---|---|---|---|
-| P-01 Category entry | Self-hosted NHI / Machine IAM control plane | Self-hosted NHI / Machine IAM with assurance and support | MSP or platform provider NHI / Machine IAM plane | First-party operated NHI / Machine IAM service |
-| P-02 Deployment owner | Customer operated | Customer operated | Provider operated for hosted tenants | trstctl operated |
-| P-03 Core protocols | ACME, EST, SCEP, CMP, SPIFFE, SSH CA, TSA | Same core protocols | Same core protocols across provider tenants | Same core protocols through the managed control plane |
-| P-04 Tenant isolation | PostgreSQL RLS and event spine in core | Same core isolation | Provider tenant isolation plus silo controls | First-party operation with tenant isolation and residency terms |
-| P-05 Audit/export | Included | Included plus governance workflows | Included for provider and hosted tenants | Included, with operating handoff terms |
-| P-06 Governance | Core policy and audit surfaces | Advanced approvals, remediation, BYOK, governance | Provider governance delegation | Managed operations plus agreed governance handoff |
-| P-07 Scale and support | Self-support | HA support and commercial support packages | Provider support terms for hosted tenants | Managed support terms |
-| P-08 Assurance | Core crypto boundary and signer isolation | FIPS-capable artifact posture and external-custody options | Provider assurance posture for tenant operation | Managed assurance evidence and residual ownership |
-| P-08a PQC and future patented features | Not included in MPL core | Proprietary `ee/` capability when licensed | Proprietary `ee/` capability when licensed | Proprietary operated capability when contracted |
-| P-09 Provider operations | Not included | Not included unless explicitly licensed as an extra | Provider plane, metering, white label, siloed isolation | Operated through the Provider control-plane path |
-| P-15 Managed offering | Not included | Not included | MSP or self-hosted provider-plane operation | First-party operated packaging column |
+| Packaging line | Free | Enterprise | Provider / MSP |
+|---|---|---|---|
+| P-01 Buyer | Organization operating trstctl for itself | Organization needing the commercial feature set | MSP operating or reselling trstctl-backed services to customers |
+| P-02 Primary billing unit | None | Per control-plane deployment | Negotiated managed-customer band |
+| P-03 Core protocols | ACME, EST, SCEP, CMP, SPIFFE, SSH CA, TSA | Included | Included |
+| P-04 Tenant isolation | PostgreSQL RLS and event spine | Included | Included; shared multi-tenant control plane is the normal shape |
+| P-05 Enterprise features | Not included | FIPS artifact posture, remediation, PQC, HA support, BYOK, governance, PCAS, agent delegation, reconciliation, and VDEC | All Enterprise features |
+| P-06 Provider operations | Not included | Not included | Provider plane, metering, white label, and siloed isolation |
+| P-07 Product motion and commercial `ee/` rights | Self-hosted core under MPL-2.0 | Self-hosted commercial feature set | Self-host, managed service, and resale of the commercial feature set |
+| P-08 Deployment flexibility | Customer operated | Customer operated | Shared control plane or dedicated customer deployments |
+| P-09 Pricing discretion | No license fee | Deployment contract | Wholesale band and terms are negotiable; MSP sets downstream pricing |
 
-The same binary lineage serves all four columns. Community, Enterprise, and
-Provider are edition/license boundaries. Managed is an operating model backed by
-the Provider control-plane path; it does not move core multi-tenancy, audit,
-crypto, or licensing code out of core.
+The same binary lineage serves all three tiers. The offline signed tier drives
+both feature inheritance and use rights. Core multi-tenancy, audit/export, crypto,
+and the license verifier remain in core.
 
 ## Core Protocols
 
-These protocol surfaces are Community capabilities. They are not Enterprise-only
+These protocol surfaces are Free/Community capabilities. They are not Enterprise-only
 features in `internal/license`.
 
 | Capability | Edition | Notes |
@@ -56,7 +51,8 @@ features in `internal/license`.
 ## License-Gated Features
 
 This table mirrors `internal/license` exactly. A feature absent from this table is
-Community by default unless a signed license explicitly grants it as an extra.
+Free/Community by default unless a signed license explicitly grants it as an extra.
+Provider inherits every Enterprise row below, then adds the Provider rows.
 
 | Feature ID | Edition | Product line |
 |---|---|---|

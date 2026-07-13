@@ -171,6 +171,19 @@ func TestAttachEEReconcileRequiresEnterpriseLicense(t *testing.T) {
 	}
 }
 
+func TestAttachEEProviderLicenseMountsEnterpriseAndProviderSurfaces(t *testing.T) {
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, commercialLicense(t, license.TierProvider), deps); err != nil {
+		t.Fatalf("provider attachEE: %v", err)
+	}
+	if !deps.EnableRemediation || deps.LicensedCSRParser == nil || deps.GovernanceFactory == nil {
+		t.Fatal("Provider license did not mount inherited Enterprise remediation, PQC, and governance surfaces")
+	}
+	if deps.ProviderHandler == nil {
+		t.Fatal("Provider license did not mount the Provider control-plane surface")
+	}
+}
+
 func hasBackgroundWorker(deps *server.Deps, name string) bool {
 	for _, worker := range deps.LicensedBackgroundWorkers {
 		if worker != nil && worker.Name() == name {
@@ -181,6 +194,10 @@ func hasBackgroundWorker(deps *server.Deps, name string) bool {
 }
 
 func enterpriseLicense(t *testing.T) *license.Manager {
+	return commercialLicense(t, license.TierEnterprise)
+}
+
+func commercialLicense(t *testing.T, tier license.Tier) *license.Manager {
 	t.Helper()
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()
 	if err != nil {
@@ -188,7 +205,7 @@ func enterpriseLicense(t *testing.T) *license.Manager {
 	}
 	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
 	raw, err := license.Sign(license.Claims{
-		V: 1, ID: "lic_test_remediation", Customer: "Acme Robotics", Tier: license.TierEnterprise,
+		V: 1, ID: "lic_test_" + string(tier), Customer: "Acme Robotics", Tier: tier,
 		IssuedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour),
 	}, priv)
 	if err != nil {

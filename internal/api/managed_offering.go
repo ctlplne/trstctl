@@ -18,6 +18,7 @@ type managedOfferingStatus struct {
 	LicenseState        license.State `json:"license_state"`
 	ProviderPlaneMode   license.Mode  `json:"provider_plane_mode"`
 	TenantBand          int           `json:"tenant_band,omitempty"`
+	ManagedCustomerBand int           `json:"managed_customer_band,omitempty"`
 	BillingUnit         string        `json:"billing_unit"`
 	ManagedBoundary     string        `json:"managed_boundary"`
 	IdempotencyRequired bool          `json:"idempotency_required"`
@@ -34,8 +35,9 @@ func (a *API) getManagedOfferingStatus(w http.ResponseWriter, _ *http.Request) {
 		LicenseState:        mgr.State(),
 		ProviderPlaneMode:   mgr.Mode(license.FeatureProviderPlane),
 		TenantBand:          mgr.TenantBand(),
-		BillingUnit:         usage.BillingUnitManagedTenantBand,
-		ManagedBoundary:     "Managed is first-party operated; Provider is MSP or self-hosted provider-plane operation.",
+		ManagedCustomerBand: mgr.ManagedCustomerBand(),
+		BillingUnit:         usage.BillingUnitManagedCustomerBand,
+		ManagedBoundary:     "Provider/MSP normally uses one shared control plane with multiple customer tenants; dedicated customer deployments are also supported.",
 		IdempotencyRequired: true,
 		EventType:           "tenant.registered",
 		MutationPath:        "/api/v1/managed-offering/tenants",

@@ -22,7 +22,7 @@ func TestProductDecisionRegisterCapturesReport007ImplementedDecisions(t *testing
 		"RED-006",
 		"2026-07-03",
 		"NARRATIVE-001",
-		"self-hosted non-human identity management / Machine IAM control plane",
+		"Machine Identity Security Control Plane",
 		"NARRATIVE-002",
 		"no per-certificate and no ephemeral-identity billing is product policy",
 		"NARRATIVE-003",
@@ -33,12 +33,12 @@ func TestProductDecisionRegisterCapturesReport007ImplementedDecisions(t *testing
 		"PACKAGING-001",
 		"billable unit",
 		"PACKAGING-002",
-		"Community, Enterprise, Provider, and Managed",
+		"exactly Free, Enterprise, and Provider / MSP",
 		"PACKAGING-003",
 		"certificate counters are operational telemetry",
 		"PACKAGING-004",
-		"Managed is a first-party operated packaging column",
-		"Provider remains the MSP and self-hosted provider-plane packaging path",
+		"managed-service and resale rights",
+		"shared multi-tenant control plane",
 	}
 	for _, want := range required {
 		if !strings.Contains(page, want) {

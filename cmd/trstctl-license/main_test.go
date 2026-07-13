@@ -40,7 +40,7 @@ func TestLicenseHelperSignsVerifiesAndInspectsOfflineLicense(t *testing.T) {
 		"--customer", "Example Corp",
 		"--tier", string(license.TierProvider),
 		"--features", string(license.FeatureGovernance) + ", " + string(license.FeatureProviderPlane),
-		"--tenant-band", "25",
+		"--managed-customer-band", "25",
 		"--issued-at", "2026-07-01T00:00:00Z",
 		"--expires-at", "2027-07-01T00:00:00Z",
 	}
@@ -52,7 +52,7 @@ func TestLicenseHelperSignsVerifiesAndInspectsOfflineLicense(t *testing.T) {
 	if err := run([]string{"verify", "--license", licPath, "--public-key", pubPath}, &verifyOut, &bytes.Buffer{}); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
-	for _, want := range []string{"ok:", "lic-report-004", "Example Corp", string(license.TierProvider), "2027-07-01T00:00:00Z"} {
+	for _, want := range []string{"ok:", "lic-report-004", "Example Corp", string(license.TierProvider), "2027-07-01T00:00:00Z", "managed_customer_band=25", "managed_service", "resale"} {
 		if !strings.Contains(verifyOut.String(), want) {
 			t.Fatalf("verify output missing %q: %s", want, verifyOut.String())
 		}
@@ -74,6 +74,35 @@ func TestLicenseHelperSignsVerifiesAndInspectsOfflineLicense(t *testing.T) {
 	}
 	if got := parseFeatures(" governance, ,provider_plane "); len(got) != 2 || got[0] != license.FeatureGovernance || got[1] != license.FeatureProviderPlane {
 		t.Fatalf("parseFeatures = %#v, want governance and provider_plane", got)
+	}
+}
+
+func TestLicenseHelperBandFlagsAndTierValidation(t *testing.T) {
+	dir := t.TempDir()
+	privPath := filepath.Join(dir, "vendor-ed25519.key")
+	pubPath := filepath.Join(dir, "vendor-ed25519.pub")
+	if err := run([]string{"gen-key", "--private-key", privPath, "--public-key", pubPath}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	base := []string{
+		"sign", "--private-key", privPath, "--id", "lic-band", "--customer", "MSP",
+		"--issued-at", "2026-07-01T00:00:00Z", "--expires-at", "2027-07-01T00:00:00Z",
+	}
+	for name, extra := range map[string][]string{
+		"enterprise customer band": {"--tier", "enterprise", "--managed-customer-band", "10"},
+		"negative customer band":   {"--tier", "provider", "--managed-customer-band", "-1"},
+		"both band flags":          {"--tier", "provider", "--managed-customer-band", "10", "--tenant-band", "10"},
+		"unknown tier":             {"--tier", "platinum"},
+	} {
+		args := append(append([]string(nil), base...), extra...)
+		if err := run(args, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
+			t.Errorf("%s: sign succeeded, want error", name)
+		}
+	}
+
+	legacy := append(append([]string(nil), base...), "--tier", "provider", "--tenant-band", "10")
+	if err := run(legacy, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("deprecated --tenant-band must remain compatible: %v", err)
 	}
 }
 

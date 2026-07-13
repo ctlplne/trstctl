@@ -80,7 +80,8 @@ func runSign(args []string, stdout, stderr io.Writer) error {
 	customer := fs.String("customer", "", "customer name")
 	tier := fs.String("tier", "", "enterprise or provider")
 	features := fs.String("features", "", "comma-separated explicit feature extras")
-	tenantBand := fs.Int("tenant-band", 0, "provider tenant band; zero means unlimited")
+	managedCustomerBand := fs.Int("managed-customer-band", 0, "Provider/MSP contracted managed-customer band; zero means negotiated or unlimited")
+	tenantBand := fs.Int("tenant-band", 0, "deprecated alias for --managed-customer-band")
 	issuedAt := fs.String("issued-at", time.Now().UTC().Format(time.RFC3339), "RFC3339 issue time")
 	expiresAt := fs.String("expires-at", "", "RFC3339 expiry time")
 	if err := fs.Parse(args); err != nil {
@@ -88,6 +89,25 @@ func runSign(args []string, stdout, stderr io.Writer) error {
 	}
 	if *privPath == "" || *id == "" || *customer == "" || *tier == "" || *expiresAt == "" {
 		return errors.New("sign requires --private-key, --id, --customer, --tier, and --expires-at")
+	}
+	provided := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) { provided[f.Name] = true })
+	if provided["managed-customer-band"] && provided["tenant-band"] {
+		return errors.New("sign accepts only one of --managed-customer-band and deprecated --tenant-band")
+	}
+	band := *managedCustomerBand
+	if provided["tenant-band"] {
+		band = *tenantBand
+	}
+	licenseTier := license.Tier(*tier)
+	if licenseTier != license.TierEnterprise && licenseTier != license.TierProvider {
+		return fmt.Errorf("sign: tier must be enterprise or provider, got %q", *tier)
+	}
+	if band < 0 {
+		return errors.New("sign: managed customer band cannot be negative")
+	}
+	if licenseTier != license.TierProvider && band != 0 {
+		return errors.New("sign: --managed-customer-band is only valid for provider licenses")
 	}
 	issued, err := time.Parse(time.RFC3339, *issuedAt)
 	if err != nil {
@@ -102,8 +122,8 @@ func runSign(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("read private key: %w", err)
 	}
 	claims := license.Claims{
-		V: 1, ID: *id, Customer: *customer, Tier: license.Tier(*tier),
-		Features: parseFeatures(*features), TenantBand: *tenantBand,
+		V: 1, ID: *id, Customer: *customer, Tier: licenseTier,
+		Features: parseFeatures(*features), TenantBand: band,
 		IssuedAt: issued, ExpiresAt: expires,
 	}
 	raw, err := license.Sign(claims, priv)
@@ -141,7 +161,7 @@ func runVerify(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stdout, "ok: %s %s %s expires %s\n", claims.ID, claims.Customer, claims.Tier, claims.ExpiresAt.Format(time.RFC3339))
+	_, _ = fmt.Fprintf(stdout, "ok: %s %s %s expires %s managed_customer_band=%d rights=%s\n", claims.ID, claims.Customer, claims.Tier, claims.ExpiresAt.Format(time.RFC3339), claims.TenantBand, joinRights(license.TierRights(claims.Tier)))
 	return nil
 }
 
@@ -163,13 +183,29 @@ func runInspect(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	pretty, err := json.MarshalIndent(claims, "", "  ")
+	pretty, err := json.MarshalIndent(struct {
+		license.Claims
+		ManagedCustomerBand int             `json:"managed_customer_band,omitempty"`
+		Rights              []license.Right `json:"rights"`
+	}{
+		Claims:              claims,
+		ManagedCustomerBand: claims.TenantBand,
+		Rights:              license.TierRights(claims.Tier),
+	}, "", "  ")
 	if err != nil {
 		return err
 	}
 	_, _ = stdout.Write(pretty)
 	_, _ = io.WriteString(stdout, "\n")
 	return nil
+}
+
+func joinRights(rights []license.Right) string {
+	parts := make([]string, 0, len(rights))
+	for _, right := range rights {
+		parts = append(parts, string(right))
+	}
+	return strings.Join(parts, ",")
 }
 
 func parseFeatures(raw string) []license.Feature {

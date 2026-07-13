@@ -794,6 +794,8 @@ export interface EditionsInfo {
   expires_at?: string;
   read_only_at?: string;
   tenant_band?: number;
+  managed_customer_band?: number;
+  rights?: Array<"self_host" | "managed_service" | "resale">;
   features: EditionFeature[];
   fips: FIPSStatus;
   packaging: EditionPackaging;

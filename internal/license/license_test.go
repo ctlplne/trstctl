@@ -217,11 +217,17 @@ func TestInfoRendersLicenseTruth(t *testing.T) {
 	if info.TenantBand != 100 {
 		t.Fatalf("tenant band = %d want 100", info.TenantBand)
 	}
-	assertFeatureRow(t, info, FeatureFIPS, TierEnterprise, false, ModeOff)
-	assertFeatureRow(t, info, FeaturePQC, TierEnterprise, false, ModeOff)
-	assertFeatureRow(t, info, FeatureHASupport, TierEnterprise, false, ModeOff)
-	assertFeatureRow(t, info, FeatureBYOK, TierEnterprise, false, ModeOff)
-	assertFeatureRow(t, info, FeatureGovernance, TierEnterprise, false, ModeOff)
+	if info.ManagedCustomerBand != 100 {
+		t.Fatalf("managed customer band = %d want 100", info.ManagedCustomerBand)
+	}
+	if !hasRight(info.Rights, RightManagedService) || !hasRight(info.Rights, RightResale) {
+		t.Fatalf("provider rights = %v, want managed-service and resale rights", info.Rights)
+	}
+	assertFeatureRow(t, info, FeatureFIPS, TierEnterprise, true, ModeEnabled)
+	assertFeatureRow(t, info, FeaturePQC, TierEnterprise, true, ModeEnabled)
+	assertFeatureRow(t, info, FeatureHASupport, TierEnterprise, true, ModeEnabled)
+	assertFeatureRow(t, info, FeatureBYOK, TierEnterprise, true, ModeEnabled)
+	assertFeatureRow(t, info, FeatureGovernance, TierEnterprise, true, ModeEnabled)
 	assertFeatureRow(t, info, FeatureProviderPlane, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, info, FeatureMetering, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, info, FeatureWhiteLabel, TierProvider, true, ModeEnabled)
@@ -265,10 +271,10 @@ func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	assertFeatureRow(t, provider, FeatureMetering, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, provider, FeatureWhiteLabel, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, provider, FeatureSiloedIsolation, TierProvider, true, ModeEnabled)
-	assertFeatureRow(t, provider, FeatureRemediation, TierEnterprise, false, ModeOff)
+	assertFeatureRow(t, provider, FeatureRemediation, TierEnterprise, true, ModeEnabled)
 }
 
-func TestVerifiableDecommissionFeatureIsEnterpriseOnly(t *testing.T) {
+func TestVerifiableDecommissionFeatureStartsAtEnterprise(t *testing.T) {
 	if FeatureVerifiableDecommission != Feature("vdec") {
 		t.Fatalf("FeatureVerifiableDecommission = %q, want vdec", FeatureVerifiableDecommission)
 	}
@@ -292,7 +298,83 @@ func TestVerifiableDecommissionFeatureIsEnterpriseOnly(t *testing.T) {
 	enterprise := managerAt(t, testClaims(TierEnterprise, expires), priv, pub, expires.Add(-time.Hour)).Info()
 	assertFeatureRow(t, enterprise, FeatureVerifiableDecommission, TierEnterprise, true, ModeEnabled)
 	provider := managerAt(t, testClaims(TierProvider, expires), priv, pub, expires.Add(-time.Hour)).Info()
-	assertFeatureRow(t, provider, FeatureVerifiableDecommission, TierEnterprise, false, ModeOff)
+	assertFeatureRow(t, provider, FeatureVerifiableDecommission, TierEnterprise, true, ModeEnabled)
+}
+
+func TestTierRightsAndProviderInheritance(t *testing.T) {
+	priv, pub := testKeypair(t)
+	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+	now := expires.Add(-time.Hour)
+
+	community := Community()
+	if hasRight(community.Rights(), RightManagedService) || hasRight(community.Rights(), RightResale) {
+		t.Fatalf("community rights = %v, must not grant provider use rights", community.Rights())
+	}
+
+	enterprise := managerAt(t, testClaims(TierEnterprise, expires), priv, pub, now)
+	if !hasRight(enterprise.Rights(), RightSelfHost) || hasRight(enterprise.Rights(), RightManagedService) || hasRight(enterprise.Rights(), RightResale) {
+		t.Fatalf("enterprise rights = %v, want self-host only", enterprise.Rights())
+	}
+	if enterprise.Has(FeatureProviderPlane) {
+		t.Fatal("enterprise must not inherit Provider-only features")
+	}
+
+	provider := managerAt(t, testClaims(TierProvider, expires), priv, pub, now)
+	for _, feature := range append(TierFeatures(TierEnterprise), TierFeatures(TierProvider)...) {
+		if !provider.Has(feature) {
+			t.Errorf("provider must inherit licensed feature %q", feature)
+		}
+	}
+	for _, right := range []Right{RightSelfHost, RightManagedService, RightResale} {
+		if !hasRight(provider.Rights(), right) {
+			t.Errorf("provider rights = %v, missing %q", provider.Rights(), right)
+		}
+	}
+}
+
+func TestManagedCustomerBandValidation(t *testing.T) {
+	priv, pub := testKeypair(t)
+	now := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
+
+	for name, claims := range map[string]Claims{
+		"negative band": {
+			V: 1, Tier: TierProvider, TenantBand: -1,
+			IssuedAt: now, ExpiresAt: now.Add(time.Hour),
+		},
+	} {
+		raw, err := Sign(claims, priv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Verify(raw, [][]byte{pub}); err == nil {
+			t.Errorf("%s: must be rejected", name)
+		}
+	}
+
+	// V1 signers accepted --tenant-band on Enterprise. Keep those already-signed
+	// files loadable, but do not expose the legacy value as a Provider customer band.
+	legacyEnterprise := testClaims(TierEnterprise, now.Add(time.Hour))
+	legacyEnterprise.TenantBand = 10
+	legacyManager := managerAt(t, legacyEnterprise, priv, pub, now)
+	if legacyManager.TenantBand() != 10 || legacyManager.ManagedCustomerBand() != 0 {
+		t.Fatalf("legacy Enterprise band compatibility = tenant %d customer %d", legacyManager.TenantBand(), legacyManager.ManagedCustomerBand())
+	}
+
+	claims := testClaims(TierProvider, now.Add(time.Hour))
+	claims.TenantBand = 50
+	manager := managerAt(t, claims, priv, pub, now)
+	if got := manager.ManagedCustomerBand(); got != 50 {
+		t.Fatalf("ManagedCustomerBand() = %d, want 50", got)
+	}
+}
+
+func hasRight(rights []Right, want Right) bool {
+	for _, right := range rights {
+		if right == want {
+			return true
+		}
+	}
+	return false
 }
 
 func assertFeatureRow(t *testing.T, info Info, name Feature, tier Tier, licensed bool, mode Mode) {

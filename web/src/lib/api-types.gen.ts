@@ -1474,8 +1474,10 @@ export interface EditionsInfo {
   features: EditionFeature[];
   fips: FIPSStatus;
   license_id?: string;
+  managed_customer_band?: number;
   packaging: EditionPackaging;
   read_only_at?: string;
+  rights?: ("self_host" | "managed_service" | "resale")[];
   state: "community" | "active" | "grace" | "read_only";
   tenant_band?: number;
   tier: "community" | "enterprise" | "provider";
@@ -2141,6 +2143,7 @@ export interface ManagedOfferingStatus {
   idempotency_required: boolean;
   license_state: "community" | "active" | "grace" | "read_only";
   managed_boundary: string;
+  managed_customer_band?: number;
   mutation_path: string;
   provider_plane_mode: "enabled" | "read_only" | "off";
   served: boolean;

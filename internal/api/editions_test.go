@@ -43,6 +43,7 @@ type editionsTestResponse struct {
 		NoEphemeralIdentityBilling        bool   `json:"no_ephemeral_identity_billing"`
 		CertificateCountersClassification string `json:"certificate_counters_classification"`
 		ManagedBoundary                   string `json:"managed_boundary"`
+		PricingPosture                    string `json:"pricing_posture"`
 		Editions                          []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
@@ -79,10 +80,10 @@ func TestEditionsEndpointServesRED006PackagingDecisions(t *testing.T) {
 	var got editionsTestResponse
 	getCanonicalEditions(t, api.New(nil, nil, nil), &got)
 
-	if got.Packaging.CategoryLabel != "self-hosted non-human identity management / Machine IAM control plane" {
+	if got.Packaging.CategoryLabel != "Machine Identity Security Control Plane" {
 		t.Fatalf("category label = %q", got.Packaging.CategoryLabel)
 	}
-	if got.Packaging.BillableUnit != "control_plane_deployment" || got.Packaging.ProviderBillingUnit != "managed_tenant_band" {
+	if got.Packaging.BillableUnit != "control_plane_deployment" || got.Packaging.ProviderBillingUnit != "managed_customer_band" {
 		t.Fatalf("unexpected billable units: %+v", got.Packaging)
 	}
 	if !got.Packaging.NoPerCertificateBilling || !got.Packaging.NoEphemeralIdentityBilling {
@@ -91,11 +92,18 @@ func TestEditionsEndpointServesRED006PackagingDecisions(t *testing.T) {
 	if got.Packaging.CertificateCountersClassification != "operational_telemetry" {
 		t.Fatalf("certificate counter classification = %q", got.Packaging.CertificateCountersClassification)
 	}
-	if !strings.Contains(strings.ToLower(got.Packaging.ManagedBoundary), "first-party operated") ||
-		!strings.Contains(strings.ToLower(got.Packaging.ManagedBoundary), "provider") {
-		t.Fatalf("managed boundary does not publish Managed and Provider split: %q", got.Packaging.ManagedBoundary)
+	if !strings.Contains(strings.ToLower(got.Packaging.ManagedBoundary), "shared control plane") ||
+		!strings.Contains(strings.ToLower(got.Packaging.ManagedBoundary), "dedicated") {
+		t.Fatalf("provider deployment flexibility is not published: %q", got.Packaging.ManagedBoundary)
 	}
-	for _, want := range []string{"community", "enterprise", "provider", "managed"} {
+	if !strings.Contains(strings.ToLower(got.Packaging.PricingPosture), "negotiable") ||
+		!strings.Contains(strings.ToLower(got.Packaging.PricingPosture), "downstream") {
+		t.Fatalf("MSP pricing discretion is not published: %q", got.Packaging.PricingPosture)
+	}
+	if len(got.Packaging.Editions) != 3 {
+		t.Fatalf("license packaging must have exactly Free, Enterprise, and Provider/MSP, got %+v", got.Packaging.Editions)
+	}
+	for _, want := range []string{"community", "enterprise", "provider"} {
 		if !hasEditionID(got.Packaging.Editions, want) {
 			t.Fatalf("packaging editions missing %q: %+v", want, got.Packaging.Editions)
 		}

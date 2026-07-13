@@ -82,10 +82,11 @@ func TestCategoryLeadershipLedgerRecordsRED006ImplementedDecisions(t *testing.T)
 		"PACKAGING-004",
 		"RED-006",
 		"Implemented packaging proof",
-		"self-hosted non-human identity management / Machine IAM control plane",
+		"Machine Identity Security Control Plane",
 		"no per-certificate and no ephemeral-identity billing",
-		"Managed is first-party operated",
-		"Provider is MSP or self-hosted provider-plane operation",
+		"managed_customer_band",
+		"managed-service and resale rights",
+		"dedicated-deployment flexibility",
 	}
 	for _, want := range required {
 		if !strings.Contains(page, want) {

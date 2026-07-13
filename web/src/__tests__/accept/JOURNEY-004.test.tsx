@@ -85,9 +85,9 @@ const { apiMock, clearApiCalls } = vi.hoisted(() => {
         features: [],
         fips: { module_active: false, required: false, self_test_passed: true },
         packaging: {
-          category_label: "self-hosted non-human identity management / Machine IAM control plane",
+          category_label: "Machine Identity Security Control Plane",
           billable_unit: "control_plane_deployment",
-          provider_billing_unit: "managed_tenant_band",
+          provider_billing_unit: "managed_customer_band",
           no_per_certificate_billing: true,
           no_ephemeral_identity_billing: true,
           editions: [],

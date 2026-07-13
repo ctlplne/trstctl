@@ -88,25 +88,25 @@ describe("WIRE-12 Platform served admin surface", () => {
       customer: "Acme Robotics",
       license_id: "lic_test_editions",
       expires_at: "2026-12-31T00:00:00Z",
+      rights: ["self_host"],
       features: [{ name: "fips", tier: "enterprise", licensed: true, mode: "enabled" }],
       fips: { module_active: false, required: false, self_test_passed: true },
       packaging: {
-        category_label: "self-hosted non-human identity management / Machine IAM control plane",
+        category_label: "Machine Identity Security Control Plane",
         billable_unit: "control_plane_deployment",
-        provider_billing_unit: "managed_tenant_band",
+        provider_billing_unit: "managed_customer_band",
         no_per_certificate_billing: true,
         no_ephemeral_identity_billing: true,
         certificate_counters_classification: "operational_telemetry",
-        managed_boundary: "Managed is first-party operated; Provider is MSP or self-hosted provider-plane operation.",
+        managed_boundary: "Provider/MSP normally runs one shared control plane; dedicated customer deployments are supported.",
         editions: [
-          { id: "community", name: "Community self-host" },
+          { id: "community", name: "Free" },
           { id: "enterprise", name: "Enterprise self-host" },
-          { id: "provider", name: "Provider" },
-          { id: "managed", name: "Managed" },
+          { id: "provider", name: "Provider / MSP" },
         ],
         meters: [
           { name: "certificates_issued", classification: "operational_telemetry", primary_billable: false },
-          { name: "managed_tenant_band", classification: "primary_billable_unit", primary_billable: true },
+          { name: "managed_customer_band", classification: "primary_billable_unit", primary_billable: true },
         ],
       },
     });
@@ -157,6 +157,8 @@ describe("WIRE-12 Platform served admin surface", () => {
       license_state: "active",
       provider_plane_mode: "enabled",
       tenant_band: 100,
+      managed_customer_band: 100,
+      billing_unit: "managed_customer_band",
       idempotency_required: true,
       event_type: "tenant.registered",
       mutation_path: "/api/v1/managed-offering/tenants",
@@ -300,11 +302,12 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("heading", { name: "Editions" })).toBeInTheDocument();
     expect(screen.getByText("ENTERPRISE")).toBeInTheDocument();
     expect(screen.getByText("Acme Robotics")).toBeInTheDocument();
+    expect(screen.getByText("self host")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Packaging" })).toBeInTheDocument();
-    expect(screen.getByText("self-hosted non-human identity management / Machine IAM control plane")).toBeInTheDocument();
+    expect(screen.getByText("Machine Identity Security Control Plane")).toBeInTheDocument();
     expect(screen.getByText("control_plane_deployment")).toBeInTheDocument();
     expect(screen.getByText(/No per-certificate or ephemeral-identity billing/i)).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /Community self-host Enterprise self-host Provider Managed/i })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Free Enterprise self-host Provider \/ MSP/i })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
     expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();
     expect(screen.getByText(/self-test passed/i)).toBeInTheDocument();
@@ -315,6 +318,7 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
     expect(screen.getByText("managed_provider")).toBeInTheDocument();
     expect(screen.getByText("provider plane enabled")).toBeInTheDocument();
+    expect(screen.getAllByText("managed_customer_band").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-01 active")).toBeInTheDocument();
     expect(screen.getByText("perf-live")).toBeInTheDocument();

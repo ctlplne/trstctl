@@ -13,14 +13,19 @@ import (
 )
 
 const (
-	MeterCertificatesIssued      = "certificates_issued"
-	MeterCertificatesStored      = "certificates_stored"
-	MeterSecretsStored           = "secrets_stored"
-	MeterAgents                  = "agents"
-	MeterTenants                 = "tenants"
-	MeterManagedTenantBand       = "managed_tenant_band"
-	BillingUnitControlPlane      = "control_plane_deployment"
-	BillingUnitManagedTenantBand = "managed_tenant_band"
+	MeterCertificatesIssued        = "certificates_issued"
+	MeterCertificatesStored        = "certificates_stored"
+	MeterSecretsStored             = "secrets_stored"
+	MeterAgents                    = "agents"
+	MeterTenants                   = "tenants"
+	MeterManagedCustomerBand       = "managed_customer_band"
+	BillingUnitControlPlane        = "control_plane_deployment"
+	BillingUnitManagedCustomerBand = "managed_customer_band"
+	// Deprecated compatibility aliases. Provider pricing is based on contracted
+	// managed customers, even when an MSP chooses dedicated deployments instead
+	// of representing every customer as one tenant in a shared control plane.
+	MeterManagedTenantBand       = MeterManagedCustomerBand
+	BillingUnitManagedTenantBand = BillingUnitManagedCustomerBand
 	MeterOperationalTelemetry    = "operational_telemetry"
 	MeterCapacitySignal          = "capacity_signal"
 	MeterPrimaryBillableUnit     = "primary_billable_unit"
@@ -64,7 +69,7 @@ func MeterDefinitions() []MeterDefinition {
 			Name:            MeterManagedTenantBand,
 			Classification:  MeterPrimaryBillableUnit,
 			PrimaryBillable: true,
-			Notes:           "Provider and Managed packaging unit; implemented as tenant-band licensing",
+			Notes:           "Provider/MSP wholesale unit: contracted managed-customer band; negotiated terms may override a standard band",
 		},
 		{
 			Name:            MeterTenants,

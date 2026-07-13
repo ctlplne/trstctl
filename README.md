@@ -9,7 +9,7 @@ the keys to your infrastructure,
   kept in your infrastructure
 ```
 
-<p align="center">Self-hosted non-human identity management / Machine IAM control plane for every credential that <em>isn't</em> a human —<br>
+<p align="center"><strong>Machine Identity Security Control Plane</strong> for every credential that <em>isn't</em> a human —<br>
 discover, issue, deploy, rotate, revoke, and retire X.509 certificates, SSH certs, secrets,<br>
 API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identity billing; you host it all.</p>
 
@@ -54,10 +54,10 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 > but not yet wired into the served binary.** Each feature page states its own status,
 > and **[Current limitations](docs/limitations.md) is the single authority** on what
 > runs end to end versus what is library code. trstctl is **MPL-2.0 open core**:
-> the Community core is open-source, Enterprise/Provider/PQC capabilities live
-> under proprietary `ee/` and require an offline signed license, and Managed is
-> first-party operated packaging. The billable units are control-plane deployment
-> and managed tenant band — never issued certificates or ephemeral identities
+> the Free core is open-source, Enterprise capabilities live under proprietary
+> `ee/`, and Provider/MSP licenses inherit Enterprise plus managed-service and resale
+> rights. Enterprise bills per control-plane deployment; Provider/MSP wholesale
+> pricing uses a negotiable managed-customer band. Credentials and rotations are never billed
 > ([details](#license)).
 
 ---
@@ -391,9 +391,12 @@ way.
 
 ## License
 
-**MPL-2.0 open core.** The Community core is licensed under the
+**MPL-2.0 open core.** The Free/Community core is licensed under the
 [Mozilla Public License 2.0](LICENSE). Commercial Enterprise, Provider, PQC, and
 other license-gated features are proprietary material under `ee/`, governed by
 [ee/LICENSE](ee/LICENSE), and activated by an offline Ed25519-signed license.
+Provider licenses include every Enterprise feature plus managed-service and resale
+rights. The Provider wholesale price is negotiated around a managed-customer band;
+the MSP controls its own downstream hosting, support, and customer pricing.
 Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and
 the offline license verifier stay in MPL core.

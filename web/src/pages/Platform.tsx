@@ -47,22 +47,21 @@ function browserTransport(): { label: string; detail: string; warning?: string }
 }
 
 const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
-  category_label: "self-hosted non-human identity management / Machine IAM control plane",
+  category_label: "Machine Identity Security Control Plane",
   positioning: "One control plane for machine credentials, secrets, SSH certificates, X.509, API tokens, and SPIFFE workload identities.",
   billable_unit: "control_plane_deployment",
-  provider_billing_unit: "managed_tenant_band",
+  provider_billing_unit: "managed_customer_band",
   no_per_certificate_billing: true,
   no_ephemeral_identity_billing: true,
   certificate_counters_classification: "operational_telemetry",
-  managed_boundary: "Managed is first-party operated; Provider is MSP or self-hosted provider-plane operation.",
+  managed_boundary: "Provider/MSP normally runs one shared control plane with multiple customer tenants, with dedicated customer deployments available when its security posture requires them.",
   pricing_posture:
-    "Community self-host is MPL-2.0 open core; Enterprise, Provider, PQC, and Managed package by deployment or managed-tenant band, never by issued certificate.",
+    "Free is the self-hosted MPL core. Enterprise bills per control-plane deployment. Provider/MSP wholesale pricing uses negotiable managed-customer bands and includes managed-service and resale rights for the commercial feature set; each MSP controls its own downstream hosting, support, and customer pricing. Credentials and rotations are never billing units.",
   evidence_rail: ["live eval receipts", "served NHI route coverage", "OWASP NHI mapping", "current limitations"],
   editions: [
-    { id: "community", name: "Community self-host", column: "Community", buyer_fit: "", license_boundary: "", billing: "", included: [] },
+    { id: "community", name: "Free", column: "Free", buyer_fit: "", license_boundary: "", billing: "", included: [] },
     { id: "enterprise", name: "Enterprise self-host", column: "Enterprise", buyer_fit: "", license_boundary: "", billing: "", included: [] },
-    { id: "provider", name: "Provider", column: "Provider", buyer_fit: "", license_boundary: "", billing: "", included: [] },
-    { id: "managed", name: "Managed", column: "Managed", buyer_fit: "", license_boundary: "", billing: "", included: [] },
+    { id: "provider", name: "Provider / MSP", column: "Provider / MSP", buyer_fit: "", license_boundary: "", billing: "", included: [] },
   ],
   meters: [],
 };
@@ -593,6 +592,16 @@ export function Platform() {
                   <dd>{formatOptionalDate(editions?.expires_at, formatPolicy)}</dd>
                 </div>
                 <div>
+                  <dt className="font-medium text-muted-foreground">Use rights</dt>
+                  <dd>{(editions?.rights ?? ["self_host"]).map((right) => right.replaceAll("_", " ")).join(", ")}</dd>
+                </div>
+                {editions?.tier === "provider" ? (
+                  <div>
+                    <dt className="font-medium text-muted-foreground">Managed customer band</dt>
+                    <dd>{editions.managed_customer_band ? formatNumberPolicy(editions.managed_customer_band, formatPolicy) : "Negotiated / unlimited"}</dd>
+                  </div>
+                ) : null}
+                <div>
                   <dt className="font-medium text-muted-foreground">FIPS posture</dt>
                   <dd className="grid gap-1">
                     <span>
@@ -1084,6 +1093,20 @@ export function Platform() {
                   <dt className="font-medium text-muted-foreground">License tier</dt>
                   <dd>{managedOffering?.tier ?? editions?.tier ?? "community"}</dd>
                 </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">Billing unit</dt>
+                  <dd>{managedOffering?.billing_unit ?? packaging.provider_billing_unit}</dd>
+                </div>
+                {(managedOffering?.tier ?? editions?.tier) === "provider" ? (
+                  <div>
+                    <dt className="font-medium text-muted-foreground">Managed customer band</dt>
+                    <dd>
+                      {managedOffering?.managed_customer_band
+                        ? formatNumberPolicy(managedOffering.managed_customer_band, formatPolicy)
+                        : "Negotiated / unlimited"}
+                    </dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt className="font-medium text-muted-foreground">Event source</dt>
                   <dd>{managedOffering?.event_type ?? "tenant.registered"}</dd>

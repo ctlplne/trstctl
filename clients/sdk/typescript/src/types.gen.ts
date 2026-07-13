@@ -487,6 +487,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/breakglass/cross-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cross-sign a CA certificate with the active break-glass signer */
+        post: operations["crossSignBreakglass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/breakglass/cross-sign-ceremonies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a target-certificate-bound break-glass cross-sign ceremony */
+        post: operations["startBreakglassCrossSignCeremony"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/breakglass/issue": {
         parameters: {
             query?: never;
@@ -496,8 +530,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Issue and audit an online m-of-n break-glass certificate */
+        /** Issue and audit a ceremony-approved online break-glass certificate */
         post: operations["issueBreakglass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/breakglass/issue-ceremonies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start an exact-request-bound online break-glass ceremony */
+        post: operations["startBreakglassIssueCeremony"];
         delete?: never;
         options?: never;
         head?: never;
@@ -515,6 +566,40 @@ export interface paths {
         put?: never;
         /** Verify break-glass bundles and reconcile them into audit */
         post: operations["reconcileBreakglass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/breakglass/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate and bidirectionally cross-sign the signer-backed break-glass CA */
+        post: operations["rotateBreakglass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/breakglass/rotation-ceremonies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start an exact-request-bound break-glass CA rotation ceremony */
+        post: operations["startBreakglassRotationCeremony"];
         delete?: never;
         options?: never;
         head?: never;
@@ -623,6 +708,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/{id}/cross-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cross-sign a CA certificate with a signer-backed authority after ceremony quorum */
+        post: operations["crossSignCAAuthority"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/{id}/intermediates/csr": {
         parameters: {
             query?: never;
@@ -657,6 +759,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/{id}/offline-cross-signs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify and import a public cross-certificate produced by an offline root */
+        post: operations["importOfflineRootCrossSign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/{id}/offline-intermediates": {
         parameters: {
             query?: never;
@@ -685,6 +804,23 @@ export interface paths {
         put?: never;
         /** Create a signer-backed intermediate CSR for an offline root */
         post: operations["createOfflineIntermediateCSR"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/{id}/offline-rekey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import and activate an offline-root successor with bidirectional cross-signatures */
+        post: operations["rekeyOfflineRoot"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4128,6 +4264,49 @@ export interface components {
             signature: string;
             subject: string;
         };
+        BreakglassCeremony: {
+            approvals: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            opener?: string;
+            purpose: string;
+            status: string;
+            /** Format: uuid */
+            tenant_id: string;
+            threshold: number;
+        };
+        BreakglassCrossSign: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
+            issuer_signer_handle: string;
+            target_sha256: string;
+        };
+        BreakglassCrossSignRequest: {
+            /** Format: uuid */
+            ceremony_id?: string;
+            certificate_pem: string;
+        };
+        BreakglassIssueExecutionRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            /** Format: byte */
+            csr_der: string;
+            reason: string;
+            request_id: string;
+            subject: string;
+            ttl_seconds?: number;
+        };
+        BreakglassIssueIntentRequest: {
+            /** Format: byte */
+            csr_der: string;
+            reason: string;
+            request_id: string;
+            subject: string;
+            ttl_seconds?: number;
+        };
         BreakglassIssueRequest: {
             approvals: string[];
             /** Format: byte */
@@ -4147,6 +4326,27 @@ export interface components {
         };
         BreakglassReconcileResponse: {
             reconciled: number;
+        };
+        BreakglassRotation: {
+            active_certificate_pem: string;
+            active_signer_handle: string;
+            /** Format: uuid */
+            ceremony_id: string;
+            new_signed_by_previous_pem: string;
+            previous_certificate_pem: string;
+            previous_signed_by_new_pem: string;
+            previous_signer_handle: string;
+            request_digest: string;
+        };
+        BreakglassRotationIntent: {
+            reason: string;
+            ttl_seconds: number;
+        };
+        BreakglassRotationRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            reason: string;
+            ttl_seconds: number;
         };
         BrokerAgentIdentity: {
             agent_id: string;
@@ -4254,13 +4454,17 @@ export interface components {
             /** Format: uuid */
             authority_id?: string;
             certificate_pem?: string;
+            cross_certificate_pem?: string;
             csr_pem?: string;
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
             /** Format: uuid */
             parent_id?: string;
+            reason?: string;
+            reverse_cross_certificate_pem?: string;
             signer_handle?: string;
             spec: components["schemas"]["CASpec"];
+            target_certificate_pem?: string;
             threshold: number;
         };
         CACreateIntermediateRequest: {
@@ -4279,6 +4483,20 @@ export interface components {
             /** Format: uuid */
             ceremony_id: string;
             spec: components["schemas"]["CASpec"];
+        };
+        CACrossSign: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
+            imported: boolean;
+            /** Format: uuid */
+            issuer_authority_id: string;
+            target_sha256: string;
+        };
+        CACrossSignRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
         };
         CADiscoveryInventory: {
             items: components["schemas"]["CADiscoveryItem"][];
@@ -4372,6 +4590,28 @@ export interface components {
             /** Format: uuid */
             tenant_id: string;
             threshold: number;
+        };
+        CAOfflineCrossSignImportRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            cross_certificate_pem: string;
+            target_certificate_pem: string;
+        };
+        CAOfflineRootRekey: {
+            /** Format: uuid */
+            ceremony_id: string;
+            new_signed_by_previous_pem: string;
+            previous_signed_by_new_pem: string;
+            rotation: components["schemas"]["CAAuthorityRotation"];
+        };
+        CAOfflineRootRekeyRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            new_signed_by_previous_pem: string;
+            previous_signed_by_new_pem: string;
+            reason: string;
+            spec: components["schemas"]["CASpec"];
+            successor_certificate_pem: string;
         };
         CASpec: {
             common_name: string;
@@ -5171,9 +5411,11 @@ export interface components {
             features: components["schemas"]["EditionFeature"][];
             fips: components["schemas"]["FIPSStatus"];
             license_id?: string;
+            managed_customer_band?: number;
             packaging: components["schemas"]["EditionPackaging"];
             /** Format: date-time */
             read_only_at?: string;
+            rights?: ("self_host" | "managed_service" | "resale")[];
             /** @enum {string} */
             state: "community" | "active" | "grace" | "read_only";
             tenant_band?: number;
@@ -5841,6 +6083,7 @@ export interface components {
             /** @enum {string} */
             license_state: "community" | "active" | "grace" | "read_only";
             managed_boundary: string;
+            managed_customer_band?: number;
             mutation_path: string;
             /** @enum {string} */
             provider_plane_mode: "enabled" | "read_only" | "off";
@@ -9600,6 +9843,96 @@ export interface operations {
             };
         };
     };
+    crossSignBreakglass: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakglassCrossSignRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassCrossSign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startBreakglassCrossSignCeremony: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakglassCrossSignRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassCeremony"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     issueBreakglass: {
         parameters: {
             query?: never;
@@ -9612,7 +9945,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BreakglassIssueRequest"];
+                "application/json": components["schemas"]["BreakglassIssueExecutionRequest"];
             };
         };
         responses: {
@@ -9623,6 +9956,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BreakglassIssueResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startBreakglassIssueCeremony: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakglassIssueIntentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassCeremony"];
                 };
             };
             /** @description client error */
@@ -9668,6 +10046,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BreakglassReconcileResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateBreakglass: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakglassRotationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassRotation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startBreakglassRotationCeremony: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakglassRotationIntent"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassCeremony"];
                 };
             };
             /** @description client error */
@@ -9953,6 +10421,53 @@ export interface operations {
             };
         };
     };
+    crossSignCAAuthority: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CACrossSignRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CACrossSign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     issueIntermediateCAFromCSR: {
         parameters: {
             query?: never;
@@ -10047,6 +10562,53 @@ export interface operations {
             };
         };
     };
+    importOfflineRootCrossSign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAOfflineCrossSignImportRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CACrossSign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     importOfflineIntermediateCA: {
         parameters: {
             query?: never;
@@ -10119,6 +10681,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAIntermediateCSR"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rekeyOfflineRoot: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAOfflineRootRekeyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAOfflineRootRekey"];
                 };
             };
             /** @description client error */

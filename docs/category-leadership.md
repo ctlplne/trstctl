@@ -32,18 +32,18 @@ each row.
 
 | Source | Implemented decision | Served proof |
 |--------|----------------------|--------------|
-| NARRATIVE-001 | trstctl's front-door category label is "self-hosted non-human identity management / Machine IAM control plane". | README first viewport, docs index first viewport, `docs/editions.md`, and the web Platform first viewport use the label. |
+| NARRATIVE-001 | trstctl's front-door category label is "Machine Identity Security Control Plane". | README first viewport, docs index first viewport, `docs/editions.md`, and the web Platform first viewport use the label. |
 | NARRATIVE-002 | trstctl has no per-certificate and no ephemeral-identity billing. Certificate and identity counts are operational telemetry or capacity signals. | `GET /api/v1/editions` returns `packaging.no_per_certificate_billing`, `packaging.no_ephemeral_identity_billing`, and meter classifications from `internal/usage`. |
 | NARRATIVE-003 | The public proof rail is evidence-bound: live eval receipts, served NHI route coverage, OWASP NHI mapping, and current limitations. | README, docs index, and editions/pricing docs point to served proof and limitation pages instead of analyst-placement claims. |
 | NARRATIVE-004 | Unified scope is split into served-now, conditional, partial, and roadmap evidence instead of broad category copy. | Feature pages and limitations continue to carry served-state evidence; this ledger only counts rows with served proof. |
-| PACKAGING-001 | Public pricing posture names the billable unit and never-billed counters. | `docs/pricing.md`, `docs/editions.md`, and `GET /api/v1/editions` publish `control_plane_deployment`, `managed_tenant_band`, and the never-billed certificate posture. |
-| PACKAGING-002 | The buyer matrix has Community, Enterprise, Provider, and Managed columns. | `docs/editions.md` and the web Platform packaging matrix render all four columns from the served editions payload. |
-| PACKAGING-003 | Provider billing uses the managed tenant band. Certificate counters are operational telemetry. | `internal/usage.MeterDefinitions` classifies `certificates_issued` and `certificates_stored` as telemetry and marks `managed_tenant_band` as the primary Provider/Managed unit. |
-| PACKAGING-004 | Managed is first-party operated. Provider is MSP or self-hosted provider-plane operation. | `docs/features/platform-and-api.md`, `docs/editions.md`, `docs/pricing.md`, and the managed-offering API/UI document the split. |
+| PACKAGING-001 | Public pricing posture names the Enterprise and Provider/MSP billing units and never-billed counters. | `docs/pricing.md`, `docs/editions.md`, and `GET /api/v1/editions` publish `control_plane_deployment`, `managed_customer_band`, and the never-billed credential posture. |
+| PACKAGING-002 | The buyer matrix has exactly Free, Enterprise, and Provider / MSP columns. Provider inherits Enterprise features. | `docs/editions.md`, the license manager, and the web Platform packaging matrix expose the three tiers. |
+| PACKAGING-003 | Provider wholesale pricing uses a negotiable managed-customer band; MSP downstream pricing remains discretionary. | `internal/usage.MeterDefinitions` names `managed_customer_band`, while editions and pricing surfaces publish the negotiation boundary. |
+| PACKAGING-004 | Provider includes managed-service and resale rights with shared-control-plane and dedicated-deployment flexibility. | The license status, `docs/features/platform-and-api.md`, `docs/editions.md`, `docs/pricing.md`, and managed-offering API expose the boundary. |
 
 ## Operator read
 
 The practical interpretation is simple. trstctl now presents itself as a
-self-hosted NHI / Machine IAM control plane before the architecture discussion
+Machine Identity Security Control Plane before the architecture discussion
 starts. A buyer can inspect the served capability rows, pricing posture,
 edition matrix, and managed boundary without relying on sales language.

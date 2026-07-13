@@ -198,7 +198,7 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
   distinct reviewer. The panel stores metadata and evidence references only, never
   credential values.
 - **Platform** (`/platform`) starts with the Packaging first viewport: the NHI /
-  Machine IAM category label, `control_plane_deployment`, `managed_tenant_band`,
+  Machine Identity Security Control Plane category label, `control_plane_deployment`, `managed_customer_band`,
   and the no per-certificate / no ephemeral-identity billing posture from
   `GET /api/v1/editions`. It also administers tenants, members, roles, OIDC
   mapping, and API tokens; **Connectors** (`/connectors`) is the

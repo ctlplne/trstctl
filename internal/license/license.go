@@ -75,9 +75,64 @@ var tierFeatures = map[Tier][]Feature{
 
 var tierOrder = []Tier{TierEnterprise, TierProvider}
 
+// tierParents defines edition inheritance. Provider is the MSP/resale tier, so
+// one Provider license unlocks every Enterprise feature plus Provider-only
+// control-plane features. Keep inheritance here beside the feature-to-tier table
+// so attachEE remains the single activation seam (AN-9).
+var tierParents = map[Tier][]Tier{
+	TierProvider: {TierEnterprise},
+}
+
+// Right is a commercial use permission derived from the signed tier. It is not
+// a separately editable claim: changing the use rights requires issuing a new
+// signed license with a different tier.
+type Right string
+
+const (
+	RightSelfHost       Right = "self_host"
+	RightManagedService Right = "managed_service"
+	RightResale         Right = "resale"
+)
+
+// tierRights is the single tier-to-use-rights table. The MPL core remains usable
+// under its repository license; these rows describe the supported product motion
+// and the commercial ee/ rights carried by a signed tier. Provider adds the right
+// to operate the commercial feature set for customers and resell that service.
+var tierRights = map[Tier][]Right{
+	TierCommunity:  {RightSelfHost},
+	TierEnterprise: {RightSelfHost},
+	TierProvider:   {RightSelfHost, RightManagedService, RightResale},
+}
+
 // TierFeatures returns a copy of the feature set for a tier.
 func TierFeatures(t Tier) []Feature {
 	return append([]Feature(nil), tierFeatures[t]...)
+}
+
+// EffectiveTierFeatures returns direct and inherited features for a tier.
+func EffectiveTierFeatures(t Tier) []Feature {
+	var out []Feature
+	seen := make(map[Feature]struct{})
+	var addTier func(Tier)
+	addTier = func(current Tier) {
+		for _, parent := range tierParents[current] {
+			addTier(parent)
+		}
+		for _, feature := range tierFeatures[current] {
+			if _, ok := seen[feature]; ok {
+				continue
+			}
+			seen[feature] = struct{}{}
+			out = append(out, feature)
+		}
+	}
+	addTier(t)
+	return out
+}
+
+// TierRights returns a copy of the commercial use rights for a tier.
+func TierRights(t Tier) []Right {
+	return append([]Right(nil), tierRights[t]...)
 }
 
 // AllFeatures returns every table feature in stable tier declaration order.
@@ -208,6 +263,9 @@ func validateClaims(claims Claims) error {
 	if claims.IssuedAt.IsZero() || claims.ExpiresAt.IsZero() || !claims.ExpiresAt.After(claims.IssuedAt) {
 		return fmt.Errorf("license: invalid validity window")
 	}
+	if claims.TenantBand < 0 {
+		return fmt.Errorf("license: managed customer band cannot be negative")
+	}
 	return nil
 }
 
@@ -272,7 +330,7 @@ func (m *Manager) granted(f Feature) bool {
 	if m == nil || m.claims == nil {
 		return false
 	}
-	for _, granted := range tierFeatures[m.claims.Tier] {
+	for _, granted := range EffectiveTierFeatures(m.claims.Tier) {
 		if granted == f {
 			return true
 		}
@@ -283,6 +341,11 @@ func (m *Manager) granted(f Feature) bool {
 		}
 	}
 	return false
+}
+
+// Rights returns commercial use rights derived from the signed tier.
+func (m *Manager) Rights() []Right {
+	return TierRights(m.Tier())
 }
 
 // Mode returns f's effective posture.
@@ -311,6 +374,17 @@ func (m *Manager) TenantBand() int {
 	return m.claims.TenantBand
 }
 
+// ManagedCustomerBand returns the contracted number of managed customers. A
+// Provider normally serves those customers as tenants in one shared control
+// plane, but the commercial band does not change when dedicated deployments are
+// used. Zero means the band is unlimited or governed by negotiated terms.
+func (m *Manager) ManagedCustomerBand() int {
+	if m.Tier() != TierProvider {
+		return 0
+	}
+	return m.TenantBand()
+}
+
 // FeatureInfo is one Editions view row.
 type FeatureInfo struct {
 	Name     Feature `json:"name"`
@@ -321,19 +395,21 @@ type FeatureInfo struct {
 
 // Info is the operator-visible Editions payload.
 type Info struct {
-	Tier       Tier          `json:"tier"`
-	State      State         `json:"state"`
-	Customer   string        `json:"customer,omitempty"`
-	LicenseID  string        `json:"license_id,omitempty"`
-	ExpiresAt  *time.Time    `json:"expires_at,omitempty"`
-	ReadOnlyAt *time.Time    `json:"read_only_at,omitempty"`
-	TenantBand int           `json:"tenant_band,omitempty"`
-	Features   []FeatureInfo `json:"features"`
+	Tier                Tier          `json:"tier"`
+	State               State         `json:"state"`
+	Customer            string        `json:"customer,omitempty"`
+	LicenseID           string        `json:"license_id,omitempty"`
+	ExpiresAt           *time.Time    `json:"expires_at,omitempty"`
+	ReadOnlyAt          *time.Time    `json:"read_only_at,omitempty"`
+	TenantBand          int           `json:"tenant_band,omitempty"`
+	ManagedCustomerBand int           `json:"managed_customer_band,omitempty"`
+	Rights              []Right       `json:"rights"`
+	Features            []FeatureInfo `json:"features"`
 }
 
 // Info renders the current license truth.
 func (m *Manager) Info() Info {
-	info := Info{Tier: m.Tier(), State: m.State(), Features: []FeatureInfo{}}
+	info := Info{Tier: m.Tier(), State: m.State(), Rights: m.Rights(), Features: []FeatureInfo{}}
 	if m != nil && m.claims != nil {
 		info.Customer = m.claims.Customer
 		info.LicenseID = m.claims.ID
@@ -342,6 +418,7 @@ func (m *Manager) Info() Info {
 		info.ExpiresAt = &exp
 		info.ReadOnlyAt = &ro
 		info.TenantBand = m.claims.TenantBand
+		info.ManagedCustomerBand = m.ManagedCustomerBand()
 	}
 	for _, f := range AllFeatures() {
 		info.Features = append(info.Features, FeatureInfo{

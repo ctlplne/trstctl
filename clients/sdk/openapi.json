@@ -5642,12 +5642,26 @@
           "license_id": {
             "type": "string"
           },
+          "managed_customer_band": {
+            "type": "integer"
+          },
           "packaging": {
             "$ref": "#/components/schemas/EditionPackaging"
           },
           "read_only_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "rights": {
+            "items": {
+              "enum": [
+                "self_host",
+                "managed_service",
+                "resale"
+              ],
+              "type": "string"
+            },
+            "type": "array"
           },
           "state": {
             "enum": [
@@ -8203,6 +8217,9 @@
           },
           "managed_boundary": {
             "type": "string"
+          },
+          "managed_customer_band": {
+            "type": "integer"
           },
           "mutation_path": {
             "type": "string"
