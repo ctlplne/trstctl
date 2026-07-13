@@ -184,6 +184,13 @@ dod-gate: ## Prove every required capability is compiled, production-assembled, 
 	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) run ./tools/dodcensus \
 		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)" $(DOD_SELECTION)
 
+.PHONY: journey-census journey-census-check
+journey-census: ## Regenerate journey served badges and console data from wiring-census.json
+	@python3 scripts/docs/render-journey-served.py
+
+journey-census-check: ## Fail when journey served claims drift from a fresh wiring census
+	@python3 scripts/docs/render-journey-served.py --check
+
 # Per-target fuzz budget for the smoke run (FUZZ-003). Short enough for a per-PR
 # CI gate; the nightly job overrides it (e.g. FUZZ_SMOKE_TIME=120s) for depth.
 FUZZ_SMOKE_TIME ?= 10s

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { api } from "@/lib/api";
 import { hasJourneyMark, readJourneyMarks, toggleJourneyMark } from "@/lib/journeyProgress";
+import { journeyCensus } from "@/lib/journeyCensus.gen";
 import { journeyById, journeyDocUrl, journeys, type Journey, type JourneyDetector, type JourneyStep } from "@/lib/journeys";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { cn } from "@/lib/utils";
@@ -107,6 +108,7 @@ export function Journeys() {
         {journeys.map((journey) => {
           const progress = journeyProgress(journey, detected, marks);
           const selected = journey.id === active.id;
+          const served = journeyCensus.journeys[journey.id];
           return (
             <button
               key={journey.id}
@@ -120,6 +122,15 @@ export function Journeys() {
             >
               <span className="font-display text-title font-bold">{t(journey.titleKey)}</span>
               <span className="text-body text-muted-foreground">{t(journey.descriptionKey)}</span>
+              <StatusBadge
+                value={served.status}
+                tone="success"
+                label={formatMessage("journeys.census.verified", {
+                  passed: journeyCensus.summary.served,
+                  total: journeyCensus.summary.total,
+                })}
+                data-journey-census={journey.id}
+              />
               <span className="text-caption font-medium tabular-nums text-brand-accent">
                 {formatMessage("journeys.progress", { done: progress.done, total: progress.total })}
               </span>

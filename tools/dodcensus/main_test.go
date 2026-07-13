@@ -917,8 +917,8 @@ func TestDODGoInvocationAllowsOnlyClosedListAndReceiptTestShapes(t *testing.T) {
 	}{
 		{name: "go", args: []string{"list", "-deps", "./cmd/trstctl"}},
 		{name: "go", args: []string{"list", "-tags=pkcs11cgo", "-deps", "./cmd/trstctl-signer"}},
-		{name: "go", args: []string{"test", "-tags=trstctl_dodproof", "-json", "-count=1", "-run", "^TestDODConnectorNginxServed$", "./internal/server"}},
-		{name: "go", args: []string{"test", "-tags=pkcs11cgo,trstctl_dodproof", "-json", "-count=1", "-run", "^TestDODManagedKeyProductionAssembly$", "./internal/server"}},
+		{name: "go", args: []string{"test", "-tags=trstctl_dodproof", "-json", "-count=1", "-timeout=30m", "-run", "^TestDODConnectorNginxServed$", "./internal/server"}},
+		{name: "go", args: []string{"test", "-tags=pkcs11cgo,trstctl_dodproof", "-json", "-count=1", "-timeout=30m", "-run", "^TestDODManagedKeyProductionAssembly$", "./internal/server"}},
 	}
 	for _, test := range accepted {
 		if err := validateDODGoInvocation(test.name, test.args); err != nil {
@@ -937,7 +937,8 @@ func TestDODGoInvocationAllowsOnlyClosedListAndReceiptTestShapes(t *testing.T) {
 		{name: "go", args: []string{"list", "-tags=pkcs11cgo,trstctl_dodproof", "-deps", "./cmd/trstctl-signer"}},
 		{name: "go", args: []string{"test", "-json", "-count=1", "-run", "TestDOD", "./internal/server"}},
 		{name: "go", args: []string{"test", "-tags=pkcs11cgo", "-json", "-count=1", "-run", "TestDOD", "./internal/server"}},
-		{name: "go", args: []string{"test", "-json", "-count=1", "-run", "TestDOD", "./internal/server", "-exec=/tmp/attacker"}},
+		{name: "go", args: []string{"test", "-tags=trstctl_dodproof", "-json", "-count=1", "-timeout=29m", "-run", "TestDOD", "./internal/server"}},
+		{name: "go", args: []string{"test", "-tags=trstctl_dodproof", "-json", "-count=1", "-timeout=30m", "-run", "TestDOD", "./internal/server", "-exec=/tmp/attacker"}},
 		{name: "go", args: []string{"test", "-json", "-count=1", "-run", "TestDOD", "../outside"}},
 	}
 	for _, test := range rejected {
@@ -975,6 +976,9 @@ func TestRuntimeExecutionAlwaysAddsReservedProofTag(t *testing.T) {
 			if len(runner.calls) != 1 || len(runner.calls[0].Args) < 2 || runner.calls[0].Args[1] != tc.wantTag {
 				t.Fatalf("runtime argv = %+v, want reserved proof tag %q", runner.calls, tc.wantTag)
 			}
+			if got := strings.Join(runner.calls[0].Args, " "); !strings.Contains(got, " -timeout=30m ") {
+				t.Fatalf("runtime argv = %q, want exact 30-minute receipt-test timeout", got)
+			}
 			if runner.calls[0].Profile.HostRuntime || !runner.calls[0].Profile.RuntimeExecution {
 				t.Fatal("dedicated proof test was not configured for shipped-profile execution")
 			}
@@ -993,14 +997,14 @@ func TestOSRunnerRequiresPinnedRuntimeEvenOnNativeLinuxProfile(t *testing.T) {
 		t.Fatalf("native-matching runtime profile bypassed pinned preparation: %v", err)
 	}
 	result := runner.Run(context.Background(), t.TempDir(), profile,
-		"go", "test", "-tags=trstctl_dodproof", "-json", "-count=1", "-run", "^TestDODExample$", "./internal/server")
+		"go", "test", "-tags=trstctl_dodproof", "-json", "-count=1", "-timeout=30m", "-run", "^TestDODExample$", "./internal/server")
 	if result.Err == nil || !strings.Contains(result.Err.Error(), "pinned Linux runner") {
 		t.Fatalf("native-matching runtime proof fell back to host Go: %+v", result)
 	}
 
 	profile.GOOS = "definitely-not-" + runtime.GOOS
 	result = runner.Run(context.Background(), t.TempDir(), profile,
-		"go", "test", "-tags=trstctl_dodproof", "-json", "-count=1", "-run", "^TestDODExample$", "./internal/server")
+		"go", "test", "-tags=trstctl_dodproof", "-json", "-count=1", "-timeout=30m", "-run", "^TestDODExample$", "./internal/server")
 	if result.Err == nil || !strings.Contains(result.Err.Error(), "pinned Linux runner") {
 		t.Fatalf("cross-host runtime profile bypassed pinned runner: %+v", result)
 	}

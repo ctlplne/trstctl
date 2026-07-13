@@ -363,13 +363,14 @@ func validateDODGoInvocation(name string, args []string) error {
 		if !proofTagged {
 			return fmt.Errorf("DoD census receipt test requires reserved build tag %q", dodProofBuildTag)
 		}
-		if len(args)-index != 5 || args[index] != "-json" || args[index+1] != "-count=1" || args[index+2] != "-run" || args[index+3] == "" || !validPackage(args[index+4]) {
+		if len(args)-index != 6 || args[index] != "-json" || args[index+1] != "-count=1" || args[index+2] != dodReceiptTestTimeoutArg || args[index+3] != "-run" || args[index+4] == "" || !validPackage(args[index+5]) {
 			return fmt.Errorf("DoD census go test argv is outside the closed receipt-test shape")
 		}
-		// There are five values after index: -json, -count=1, -run, regex,
-		// and package. Rejecting any extra value is what excludes -exec and
-		// -toolexec even if a caller later tries to append one.
-		if index+5 != len(args) {
+		// There are six values after index: -json, -count=1, the exact
+		// receipt-test timeout, -run, regex, and package. Rejecting any extra
+		// value is what excludes -exec and -toolexec even if a caller later
+		// tries to append one.
+		if index+6 != len(args) {
 			return fmt.Errorf("DoD census go test argv contains trailing values")
 		}
 	default:

@@ -1,5 +1,14 @@
 # Issue and trust SSH access at scale
 
+<!-- trstctl:journey-census:start -->
+!!! success "Served path — wiring census 81/81"
+
+    The shipped-binary census reports **81/81 required capabilities served**.
+    This journey uses no separately DoD-gated capability row; it stays on core served surfaces.
+    Core surfaces guarded by route and journey tests: `ssh_ca`, `ssh_krl`, `ssh_trust_rollout`, `ssh_attested_issuance`, `ssh_retirement`.
+    This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+<!-- trstctl:journey-census:end -->
+
 ## Goal
 
 You will replace the pile of standing SSH keys in everyone's `authorized_keys` with
@@ -54,8 +63,9 @@ operator-confirmed agent path.
    ```
 
    -> you get a list of standing-access keys to retire as certificates take over. The
-   SSH discovery control surface (source/schedule/run/findings) is served; the host-key
-   scan executes from the agent/library connector — see
+   SSH discovery control surface (source/schedule/run/findings) and its host-key scan
+   execute through the served discovery outbox worker; on-host SSH/private-key
+   inventory arrives through the agent's mTLS inventory report path. See
    [Discovery & inventory](../features/discovery-and-inventory.md).
 
 3. Make your hosts trust the CA's public key. The CA's key goes into a host's

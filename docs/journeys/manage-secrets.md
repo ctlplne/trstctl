@@ -1,5 +1,14 @@
 # Manage application secrets
 
+<!-- trstctl:journey-census:start -->
+!!! success "Served path — wiring census 81/81"
+
+    The shipped-binary census reports **81/81 required capabilities served**.
+    DoD-gated rows used by this journey (all `required`, all `served`): `dynamic_secret.registry`, `secret_sync.registry`, `secrets_residuals.kmip_wrapping_profile_negotiation`, `secrets_residuals.terraform_opentofu_native_sync`, `secrets_residuals.vault_kv_outbound_sync`, `secrets_residuals.vault_shim_acl_transit`.
+    Core surfaces guarded by route and journey tests: `encrypted_secret_store`, `one_time_sharing`, `secret_scanning`.
+    This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+<!-- trstctl:journey-census:end -->
+
 ## Goal
 
 You will give your applications a safer way to hold the sensitive values they need —
@@ -8,8 +17,8 @@ out short-lived ones that expire on their own, and sharing one-off secrets throu
 links that self-destruct after a single view. The outcome is fewer long-lived secrets
 copied into config files and CI, each one encrypted at rest and recorded in a
 tamper-evident log. This is for a developer or platform engineer who wants their
-services to stop hard-coding secrets. It is also honest about which pieces the running
-binary serves today and which are library code you drive in Go.
+services to stop hard-coding secrets. Every command below stays on a route or listener
+the running binary serves today.
 
 > **In the console:** the `/secrets` workspace presents the same store as a folder
 > tree with a reference resolver, an environment diff, version history, bulk import, and
@@ -25,9 +34,9 @@ binary serves today and which are library code you drive in Go.
   set the master key-encryption key file (`TRSTCTL_SECRETS_KEK_FILE`, mode 0600) — the
   surface fails closed without it. See [Secrets](../features/secrets.md).
 
-## What is served vs library-only
+## Served scope and deliberate boundaries
 
-Be precise here (see [Current limitations](../limitations.md) and
+The shipped path is precise (see [Current limitations](../limitations.md) and
 [Secrets](../features/secrets.md)):
 
 - **Served** on the running binary under `/api/v1/secrets/*`: the secret store
@@ -41,8 +50,9 @@ Be precise here (see [Current limitations](../limitations.md) and
   at `/api/v1/transit/*` and `trstctl-cli transit`. A Vault/OpenBao-compatible
   common subset is served at `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, and
   `/v1/pki/issue/*` for stock `vault` CLI migration. KMIP is served as an opt-in
-  mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy.
-- **Still outside this journey:** broader KMIP appliance profiles, wrapping, and
+  mTLS listener for AES-256 SymmetricKey Create/Register/Get/Locate/Revoke/Destroy,
+  KMIP 1.4 Query/DiscoverVersions negotiation, and AES-GCM wrapped Get/Register.
+- **Deliberately outside this journey:** appliance-specific KMIP templates and
   secret-store / API-key *discovery* of actual values. Discovery records references
   only and stays covered by the discovery journey.
 
@@ -452,11 +462,12 @@ Be precise here (see [Current limitations](../limitations.md) and
    staged-diff scanner needs no server, scans only staged Git blobs or the head side
    of an explicit CI diff, and also drops the raw secret value.
 
-13. Know the edges before you rely on them. Transit encryption-as-a-service is now
-    served through `/api/v1/transit/*` and `trstctl-cli transit`, and KMIP is served
+13. Know the edges before you rely on them. Transit encryption-as-a-service is
+    served through `/api/v1/transit/*` and `trstctl-cli transit`. KMIP is served
     through a separate `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey
-    Create/Get/Locate/Revoke/Destroy. Broader appliance profiles and wrapping are
-    still future work.
+    Create/Register/Get/Locate/Revoke/Destroy, KMIP 1.4 Query/DiscoverVersions, and
+    AES-GCM wrapped Get/Register. Appliance-specific templates and tenant self-service
+    listener provisioning remain outside this journey.
     Finding secrets already scattered across your estate (secret-store and API-key
     discovery) records references only, never values — see
     [Discovery & inventory](../features/discovery-and-inventory.md) and

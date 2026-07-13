@@ -183,6 +183,9 @@ jobs:
       - name: Run the shipped-binary Definition-of-Done census
         run: make dod-gate
 
+      - name: Verify journey served badges against the fresh census
+        run: make journey-census-check
+
       - name: Upload wiring census
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

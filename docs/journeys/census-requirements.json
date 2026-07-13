@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "source": "wiring-census.json",
+  "journeys": {
+    "automate-fleet-tls": {
+      "census_rows": [
+        "connector.registry",
+        "connector_right_size.dispatch",
+        "protocol_ergonomics.eval_profile"
+      ],
+      "core_surfaces": [
+        "acme_protocol",
+        "lifecycle_endpoint_bindings",
+        "certificate_renewal"
+      ]
+    },
+    "build-on-the-api": {
+      "census_rows": [],
+      "core_surfaces": [
+        "openapi_contract",
+        "cli",
+        "generated_sdks",
+        "cursor_pagination",
+        "credential_graph"
+      ]
+    },
+    "crypto-agility-pqc": {
+      "census_rows": [
+        "pqc_end_to_end.automated_rollout_tls_findings",
+        "pqc_end_to_end.multikey_spiffe_hybrid_svid",
+        "pqc_end_to_end.pure_mldsa_leaf_stock_clients"
+      ],
+      "core_surfaces": [
+        "crypto_inventory",
+        "migration_plans"
+      ]
+    },
+    "enroll-devices": {
+      "census_rows": [
+        "pqc_end_to_end.pure_mldsa_leaf_stock_clients",
+        "protocol_ergonomics.eval_profile"
+      ],
+      "core_surfaces": [
+        "est_protocol",
+        "scep_protocol",
+        "cmp_protocol",
+        "device_bootstrap"
+      ]
+    },
+    "first-certificate": {
+      "census_rows": [],
+      "core_surfaces": [
+        "built_in_ca",
+        "identity_requests",
+        "approvals",
+        "certificate_inventory"
+      ]
+    },
+    "kubernetes-workload-identity": {
+      "census_rows": [
+        "k8s_posture_routes.certificate_signing_requests",
+        "k8s_posture_routes.trust_bundles",
+        "pqc_end_to_end.multikey_spiffe_hybrid_svid"
+      ],
+      "core_surfaces": [
+        "spiffe_workload_api",
+        "kubernetes_operator",
+        "workload_identity_inventory"
+      ]
+    },
+    "manage-secrets": {
+      "census_rows": [
+        "dynamic_secret.registry",
+        "secret_sync.registry",
+        "secrets_residuals.kmip_wrapping_profile_negotiation",
+        "secrets_residuals.terraform_opentofu_native_sync",
+        "secrets_residuals.vault_kv_outbound_sync",
+        "secrets_residuals.vault_shim_acl_transit"
+      ],
+      "core_surfaces": [
+        "encrypted_secret_store",
+        "one_time_sharing",
+        "secret_scanning"
+      ]
+    },
+    "migrate-from-existing-ca": {
+      "census_rows": [
+        "connector.registry",
+        "external_ca.registry"
+      ],
+      "core_surfaces": [
+        "certificate_discovery",
+        "issuance_profiles",
+        "certificate_health"
+      ]
+    },
+    "onboard-a-team": {
+      "census_rows": [],
+      "core_surfaces": [
+        "tenant_rls",
+        "oidc",
+        "rbac",
+        "policy",
+        "audit_export"
+      ]
+    },
+    "respond-to-compromise": {
+      "census_rows": [
+        "breakglass_rotation.cross_sign_rekey",
+        "connector.registry",
+        "notification_channel.dispatch"
+      ],
+      "core_surfaces": [
+        "credential_graph",
+        "incident_execution",
+        "revocation",
+        "evidence_export"
+      ]
+    },
+    "run-in-production": {
+      "census_rows": [
+        "hsm_kms.runtime",
+        "notification_channel.dispatch"
+      ],
+      "core_surfaces": [
+        "transport_tls",
+        "health_metrics",
+        "backup_restore",
+        "federation",
+        "audit_export"
+      ]
+    },
+    "ssh-at-scale": {
+      "census_rows": [],
+      "core_surfaces": [
+        "ssh_ca",
+        "ssh_krl",
+        "ssh_trust_rollout",
+        "ssh_attested_issuance",
+        "ssh_retirement"
+      ]
+    }
+  }
+}

@@ -778,7 +778,7 @@ writing a new token file and restarting the control plane so the new hash is loa
   intentionally remain the generic JSON target; Terraform/OpenTofu and Vault no longer
   depend on that generic shape. If a target is not configured, the
   route returns `503` and does not attempt an external call.
-- **Transit/KMIP (F66) — served, with a bounded KMIP lifecycle profile.**
+- **Transit/KMIP (F66) — served, with a bounded OASIS KMIP 1.4 profile.**
   The running binary now mounts `/api/v1/transit/*` and the `trstctl-cli transit`
   command group for tenant-scoped key create/rotate, encrypt/decrypt, rewrap,
   HMAC, sign, and verify. Transit keys never leave the process as exportable
@@ -789,12 +789,12 @@ writing a new token file and restarting the control plane so the new hash is loa
   `protocols.kmip.cert_file`, `protocols.kmip.key_file`, and
   `protocols.kmip.client_ca_file` are configured. That first served KMIP profile is
   intentionally bounded: it accepts verified client certificates, decodes TTLV with
-  frame-size, field-count, and nesting-depth caps, serves AES-256 `SymmetricKey`
-  Create/Get for stock PyKMIP clients plus Locate/Revoke/Destroy over the wire, records
+  frame-size, field-count, and nesting-depth caps, serves Query and DiscoverVersions,
+  AES-256 `SymmetricKey` Create/Register/Get (including AES-GCM wrapped Get/Register),
+  plus Locate/Revoke/Destroy over the wire for stock clients, records
   `kmip.object.created`, `kmip.object.revoke`, and `kmip.object.destroyed`, and
-  zeroizes in-memory key material on rekey/destroy/shutdown. Remaining KMIP gaps
-  such as wrapping, profile negotiation, appliance-specific templates, and tenant
-  self-service listener management remain future served work.
+  zeroizes in-memory key material on rekey/destroy/shutdown. Appliance-specific
+  templates and tenant self-service listener management remain deliberate gaps.
 ## Authorization policy gates and ABAC overlays: served by the binary
 
 The RBAC guard, ABAC deny overlay, OPA/Rego default-deny policy gate, RA scope split,
@@ -1423,16 +1423,22 @@ targets, weak TLS protocol or cipher findings are mapped to ML-KEM/FIPS 203, DSA
 mapped to SLH-DSA/FIPS 205, and `migration_progress` shows how much of the observed
 estate is already post-quantum-ready.
 
-What is **not yet** end-to-end is pure ML-DSA subject certificates through every stock
-client, a multi-key SPIFFE Workload API response for useful hybrid SVID private-key
-delivery, and automated rollout for every TLS protocol/cipher finding. The served PQC
-migration trigger now covers CBOM certificate-key assets: it queues ACME re-issuance
-through the outbox, mints the deployable `Hybrid-ML-DSA-44-ECDSA-P256` transition leaf,
-projects `migration_progress`, and supports evented rollback. The crypto primitives,
-isolated-signer signing path, served hybrid leaf assembly, ACME/EST/SCEP/CMP hybrid
-issuance, and hybrid TLS key exchange are in place; the remaining work is broader
-protocol/client compatibility and deployment automation. See
-[Lifecycle & PQC](features/lifecycle-and-pqc.md) for the current state of that tooling.
+The proprietary EE attach now serves the three former end-to-end residuals behind
+one license boundary. A stock OpenSSL 3.5 client creates an RFC 9881 ML-DSA-65 CSR,
+enrolls it through EST, and verifies the returned pure ML-DSA-65 subject leaf. The
+stock SPIFFE Workload API returns a two-entry response for one SPIFFE ID: the normal
+classical SVID and an ML-DSA-65 SVID with its matching private key. Finally, CBOM TLS
+protocol/cipher findings can be bound to a posture-capable connector target; the
+migration worker seals the forward intent in the outbox, applies TLS 1.3 plus
+`X25519MLKEM768`, reads receiver evidence, projects per-finding progress, and performs
+exact rollback. The shipped-binary proof drives that TLS finding rollout against
+Envoy rather than constructing the migration runtime in a test.
+
+Those proofs define the compatibility boundary: they do not claim every legacy TLS
+client or every connector understands ML-DSA. A hybrid-to-pure cutover for an existing
+hybrid certificate remains evidence-gated by succession/retirement policy; direct pure
+ML-DSA enrollment is already served. See [Lifecycle & PQC](features/lifecycle-and-pqc.md)
+for operator flow and license placement.
 
 ## Kubernetes deployment
 

@@ -29,10 +29,11 @@ import (
 )
 
 const (
-	maxRuntimeHelpers = 64
-	maxRuntimeDepth   = 8
-	maxReceiptBytes   = 1 << 20
-	dodProofBuildTag  = "trstctl_dodproof"
+	maxRuntimeHelpers        = 64
+	maxRuntimeDepth          = 8
+	maxReceiptBytes          = 1 << 20
+	dodProofBuildTag         = "trstctl_dodproof"
+	dodReceiptTestTimeoutArg = "-timeout=30m"
 )
 
 var verifierConstructor = map[string]string{
@@ -1405,7 +1406,7 @@ func executeRuntimeTest(ctx context.Context, repo, profileName string, profile B
 	tags = append(tags, dodProofBuildTag)
 	args := []string{"test", "-tags=" + strings.Join(tags, ",")}
 	proof := group[0].Runtime
-	args = append(args, "-json", "-count=1", "-run", "^"+regexp.QuoteMeta(proof.Test)+"$", proof.Package)
+	args = append(args, "-json", "-count=1", dodReceiptTestTimeoutArg, "-run", "^"+regexp.QuoteMeta(proof.Test)+"$", proof.Package)
 	execution.result = runner.Run(ctx, repo, runtimeProfile, "go", args...)
 	execution.passed, execution.skipped, execution.failed = parseTestOutcome(execution.result, proof.Test)
 	return execution, nil

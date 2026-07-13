@@ -396,6 +396,10 @@ export const messages = {
     defaultMessage: "{done} of {total} steps done",
     description: "Progress line on a journey card.",
   },
+  "journeys.census.verified": {
+    defaultMessage: "Verified path · shipped wiring {passed}/{total}",
+    description: "Generated shipped-binary census badge on every journey card.",
+  },
   "journeys.open": {
     defaultMessage: "Take me there",
     description: "Primary button on a journey step that deep-links to the right page.",
@@ -6867,6 +6871,7 @@ const esESCatalog = {
     "Los recorridos documentados del operador como listas vivas: cada paso lleva con un clic al lugar correcto y los pasos terminados se marcan solos a partir de datos servidos.",
   "journeys.listLabel": "Recorridos disponibles",
   "journeys.progress": "{done} de {total} pasos completados",
+  "journeys.census.verified": "Ruta verificada · cableado publicado {passed}/{total}",
   "journeys.open": "Llévame allí",
   "journeys.refresh": "Actualizar estado",
   "journeys.doc": "Guía de referencia",

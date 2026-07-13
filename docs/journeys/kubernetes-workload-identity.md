@@ -1,5 +1,14 @@
 # Give your Kubernetes workloads an identity
 
+<!-- trstctl:journey-census:start -->
+!!! success "Served path — wiring census 81/81"
+
+    The shipped-binary census reports **81/81 required capabilities served**.
+    DoD-gated rows used by this journey (all `required`, all `served`): `k8s_posture_routes.certificate_signing_requests`, `k8s_posture_routes.trust_bundles`, `pqc_end_to_end.multikey_spiffe_hybrid_svid`.
+    Core surfaces guarded by route and journey tests: `spiffe_workload_api`, `kubernetes_operator`, `workload_identity_inventory`.
+    This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+<!-- trstctl:journey-census:end -->
+
 ## Goal
 
 When you finish this journey, your Kubernetes services will prove *what they are* and
@@ -183,6 +192,12 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    separate signing service, that expires in minutes, not months. The wire details are in
    [Workload identity](../features/workload-identity.md).
 
+   With the Enterprise/PQC license attached, that same stock Workload API call returns
+   two X.509-SVID entries for the same SPIFFE ID: the classical SVID and a second
+   ML-DSA-65 SVID labeled `trstctl-hybrid-ml-dsa-65`, each with its matching private
+   key and trust bundle. The response is production-attached, and both key buffers are
+   explicitly wiped after the client consumes them.
+
 9. **Confirm there is no static secret to steal.** Because the SVID is short-lived
    and minted only after attestation, there is nothing long-lived in the pod to leak,
    and even a captured credential is useless within minutes. A `NeedsRotation` helper
@@ -213,7 +228,8 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    > `/api/v1/ephemeral/{request_id}/approvals`; and the AI-agent broker is served
    > through `POST /api/v1/broker/agent-identities` when its attestors, policy, trust
    > domain, and signer-backed issuing CA are configured. See
-   > [Current limitations](../limitations.md) for the exact served-vs-library split.
+   > [Current limitations](../limitations.md) for configuration and compatibility
+   > boundaries.
 
 ## Where next
 

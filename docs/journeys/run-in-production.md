@@ -1,5 +1,14 @@
 # Run trstctl in production
 
+<!-- trstctl:journey-census:start -->
+!!! success "Served path — wiring census 81/81"
+
+    The shipped-binary census reports **81/81 required capabilities served**.
+    DoD-gated rows used by this journey (all `required`, all `served`): `hsm_kms.runtime`, `notification_channel.dispatch`.
+    Core surfaces guarded by route and journey tests: `transport_tls`, `health_metrics`, `backup_restore`, `federation`, `audit_export`.
+    This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+<!-- trstctl:journey-census:end -->
+
 ## Goal
 
 When you finish this journey you will have trstctl running the way it is meant to run

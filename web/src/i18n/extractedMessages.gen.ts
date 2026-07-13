@@ -6479,7 +6479,7 @@ export const extractedMessages = [
       "src/lib/useResource.ts:10",
       "src/pages/Certificates.tsx:158",
       "src/pages/Dashboard.tsx:35",
-      "src/pages/Journeys.tsx:16",
+      "src/pages/Journeys.tsx:17",
       "src/pages/Owners.tsx:21",
       "src/pages/Policy.tsx:1662",
       "src/pages/Policy.tsx:1770",

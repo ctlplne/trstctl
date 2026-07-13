@@ -521,7 +521,7 @@ func TestAIAgentBrokerNarrowedToServedReadOnlyMCPVsLibraryBroker(t *testing.T) {
 	}
 }
 
-// ---- TRACE-008: PQC primitives in place; pure-subject and broad rollout gaps remain -
+// ---- TRACE-008: licensed PQC end-to-end residuals are served but bounded -----------
 
 // pqcMigrationServedInMPLCore reports whether the MPL core still exposes the
 // proprietary PQC migration endpoint/CLI. PACKAGING-007 requires this to stay false.
@@ -535,11 +535,11 @@ func pqcMigrationServedInMPLCore(t *testing.T) bool {
 		strings.Contains(cliCommands, `{"pqc", "migrations", "rollback"}`)
 }
 
-// TestPQCMigrationNotTraceCompleteDisclosed pins TRACE-008. PACKAGING-007 moves
-// PQC algorithms and the PQC migration API behind the proprietary ee/ boundary,
-// while pure subject certificates and broad rollout automation are still not
-// end-to-end. The disclosure must keep both facts visible.
-func TestPQCMigrationNotTraceCompleteDisclosed(t *testing.T) {
+// TestPQCMigrationServedResidualsDisclosed pins TRACE-008. PACKAGING-007 keeps
+// PQC algorithms and the migration API behind the proprietary ee/ boundary. The
+// shipped-binary census now proves the three old end-to-end gaps, while the docs
+// must keep the exact client/connector boundary visible.
+func TestPQCMigrationServedResidualsDisclosed(t *testing.T) {
 	low := limLower(t)
 
 	// Reality anchor (licensed side): the migration orchestrator still exists.
@@ -547,23 +547,36 @@ func TestPQCMigrationNotTraceCompleteDisclosed(t *testing.T) {
 		t.Fatalf("ee/pqcmigration no longer exists; revisit this TRACE-008 reality test: %v", err)
 	}
 
-	// The "not yet end-to-end" gaps (pure subject certs + broad rollout automation)
-	// must always be disclosed in limitations.md.
-	if !containsAll(low, []string{"not yet", "pure ml-dsa subject certificates", "automated rollout"}) {
-		t.Error("limitations.md must disclose that pure-subject PQC certificates and broad rollout automation are not yet end-to-end — TRACE-008")
+	if !containsAll(low, []string{
+		"stock openssl 3.5 client",
+		"pure ml-dsa-65 subject leaf",
+		"two-entry response",
+		"tls finding rollout",
+		"envoy",
+		"hybrid-to-pure cutover",
+	}) {
+		t.Error("limitations.md must disclose the served PQC proofs and their exact compatibility boundary — TRACE-008")
 	}
 
 	lcp := strings.ToLower(read(t, "features/lifecycle-and-pqc.md"))
 	if pqcMigrationServedInMPLCore(t) {
 		t.Error("PQC migration surfaced in MPL core API/CLI; PACKAGING-007 requires it to attach only through ee/ — TRACE-008")
 	}
-	for _, want := range []string{"proprietary ee", "not part of the mpl core openapi", "no mpl-core cli command", "served when the enterprise/pqc license attaches"} {
+	for _, want := range []string{
+		"proprietary ee",
+		"not part of the mpl core openapi",
+		"no mpl-core cli command",
+		"served when the enterprise/pqc license attaches",
+		"stock openssl 3.5",
+		"two-entry classical + ml-dsa-65 response",
+		"receiver readback and exact rollback",
+	} {
 		if !strings.Contains(lcp, want) {
 			t.Errorf("features/lifecycle-and-pqc.md must disclose licensed PQC placement (missing %q) — TRACE-008", want)
 		}
 	}
-	if strings.Contains(lcp, "fleet-wide rollout is served") {
-		t.Error("features/lifecycle-and-pqc.md over-claims fleet-wide PQC rollout as served — TRACE-008")
+	if strings.Contains(lcp, "every legacy client") && !strings.Contains(lcp, "not a claim about every legacy client") {
+		t.Error("features/lifecycle-and-pqc.md over-claims universal PQC client compatibility — TRACE-008")
 	}
 }
 

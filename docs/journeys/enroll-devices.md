@@ -1,5 +1,14 @@
 # Enroll devices and IoT fleets
 
+<!-- trstctl:journey-census:start -->
+!!! success "Served path — wiring census 81/81"
+
+    The shipped-binary census reports **81/81 required capabilities served**.
+    DoD-gated rows used by this journey (all `required`, all `served`): `pqc_end_to_end.pure_mldsa_leaf_stock_clients`, `protocol_ergonomics.eval_profile`.
+    Core surfaces guarded by route and journey tests: `est_protocol`, `scep_protocol`, `cmp_protocol`, `device_bootstrap`.
+    This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+<!-- trstctl:journey-census:end -->
+
 ## Goal
 
 When you finish this journey, the routers, switches, printers, phones, and IoT
@@ -93,10 +102,13 @@ against its rules, and hands back a signed certificate.
    challenge. This is covered in
    [Enrollment protocols](../features/enrollment-protocols.md).
 
-   > Honest status: the EST, SCEP, CMP, embedded bootstrap, and embedded renewal
-   > endpoints are served end-to-end and cross-checked by acceptance tests. The MDM
-   > challenge gate's trust-anchor lifecycle is still tracked in
-   > [Current limitations](../limitations.md).
+   > Served boundary: EST, SCEP, CMP, embedded bootstrap, and embedded renewal are
+   > cross-checked end to end. With the Enterprise/PQC license attached, the same EST
+   > route accepts an RFC 9881 ML-DSA-65 CSR produced by stock OpenSSL 3.5 and returns
+   > a pure ML-DSA leaf that stock OpenSSL verifies. The MDM challenge gate is also
+   > served; its live validator trust anchors come from
+   > `protocols.scep.intune_challenge` startup configuration, while policy CRUD and
+   > rotation evidence remain visible through `/api/v1/mdm/scep/*`.
 
 ## Where next
 

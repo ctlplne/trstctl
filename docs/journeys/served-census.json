@@ -1,0 +1,265 @@
+{
+  "journeys": {
+    "automate-fleet-tls": {
+      "census_rows": [
+        {
+          "enforcement": "required",
+          "id": "connector.registry",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "connector_right_size.dispatch",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "protocol_ergonomics.eval_profile",
+          "status": "served"
+        }
+      ],
+      "core_surfaces": [
+        "acme_protocol",
+        "lifecycle_endpoint_bindings",
+        "certificate_renewal"
+      ],
+      "status": "served"
+    },
+    "build-on-the-api": {
+      "census_rows": [],
+      "core_surfaces": [
+        "openapi_contract",
+        "cli",
+        "generated_sdks",
+        "cursor_pagination",
+        "credential_graph"
+      ],
+      "status": "served"
+    },
+    "crypto-agility-pqc": {
+      "census_rows": [
+        {
+          "enforcement": "required",
+          "id": "pqc_end_to_end.automated_rollout_tls_findings",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "pqc_end_to_end.multikey_spiffe_hybrid_svid",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "pqc_end_to_end.pure_mldsa_leaf_stock_clients",
+          "status": "served"
+        }
+      ],
+      "core_surfaces": [
+        "crypto_inventory",
+        "migration_plans"
+      ],
+      "status": "served"
+    },
+    "enroll-devices": {
+      "census_rows": [
+        {
+          "enforcement": "required",
+          "id": "pqc_end_to_end.pure_mldsa_leaf_stock_clients",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "protocol_ergonomics.eval_profile",
+          "status": "served"
+        }
+      ],
+      "core_surfaces": [
+        "est_protocol",
+        "scep_protocol",
+        "cmp_protocol",
+        "device_bootstrap"
+      ],
+      "status": "served"
+    },
+    "first-certificate": {
+      "census_rows": [],
+      "core_surfaces": [
+        "built_in_ca",
+        "identity_requests",
+        "approvals",
+        "certificate_inventory"
+      ],
+      "status": "served"
+    },
+    "kubernetes-workload-identity": {
+      "census_rows": [
+        {
+          "enforcement": "required",
+          "id": "k8s_posture_routes.certificate_signing_requests",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "k8s_posture_routes.trust_bundles",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "pqc_end_to_end.multikey_spiffe_hybrid_svid",
+          "status": "served"
+        }
+      ],
+      "core_surfaces": [
+        "spiffe_workload_api",
+        "kubernetes_operator",
+        "workload_identity_inventory"
+      ],
+      "status": "served"
+    },
+    "manage-secrets": {
+      "census_rows": [
+        {
+          "enforcement": "required",
+          "id": "dynamic_secret.registry",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "secret_sync.registry",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "secrets_residuals.kmip_wrapping_profile_negotiation",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "secrets_residuals.terraform_opentofu_native_sync",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "secrets_residuals.vault_kv_outbound_sync",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "secrets_residuals.vault_shim_acl_transit",
+          "status": "served"
+        }
+      ],
+      "core_surfaces": [
+        "encrypted_secret_store",
+        "one_time_sharing",
+        "secret_scanning"
+      ],
+      "status": "served"
+    },
+    "migrate-from-existing-ca": {
+      "census_rows": [
+        {
+          "enforcement": "required",
+          "id": "connector.registry",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "external_ca.registry",
+          "status": "served"
+        }
+      ],
+      "core_surfaces": [
+        "certificate_discovery",
+        "issuance_profiles",
+        "certificate_health"
+      ],
+      "status": "served"
+    },
+    "onboard-a-team": {
+      "census_rows": [],
+      "core_surfaces": [
+        "tenant_rls",
+        "oidc",
+        "rbac",
+        "policy",
+        "audit_export"
+      ],
+      "status": "served"
+    },
+    "respond-to-compromise": {
+      "census_rows": [
+        {
+          "enforcement": "required",
+          "id": "breakglass_rotation.cross_sign_rekey",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "connector.registry",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "notification_channel.dispatch",
+          "status": "served"
+        }
+      ],
+      "core_surfaces": [
+        "credential_graph",
+        "incident_execution",
+        "revocation",
+        "evidence_export"
+      ],
+      "status": "served"
+    },
+    "run-in-production": {
+      "census_rows": [
+        {
+          "enforcement": "required",
+          "id": "hsm_kms.runtime",
+          "status": "served"
+        },
+        {
+          "enforcement": "required",
+          "id": "notification_channel.dispatch",
+          "status": "served"
+        }
+      ],
+      "core_surfaces": [
+        "transport_tls",
+        "health_metrics",
+        "backup_restore",
+        "federation",
+        "audit_export"
+      ],
+      "status": "served"
+    },
+    "ssh-at-scale": {
+      "census_rows": [],
+      "core_surfaces": [
+        "ssh_ca",
+        "ssh_krl",
+        "ssh_trust_rollout",
+        "ssh_attested_issuance",
+        "ssh_retirement"
+      ],
+      "status": "served"
+    }
+  },
+  "manifest_version": 1,
+  "schema_version": 1,
+  "source": "wiring-census.json",
+  "summary": {
+    "inventory": 62,
+    "inventory_served": 62,
+    "library_only": 0,
+    "pending": 0,
+    "required": 81,
+    "required_failed": 0,
+    "served": 81,
+    "stub": 0,
+    "total": 81,
+    "unknown": 0
+  }
+}

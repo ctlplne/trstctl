@@ -154,13 +154,14 @@ the PQC migration trigger attaches only from proprietary EE.
   certificate.
 - **PQC migration is licensed EE scope.** The MPL core exposes CBOM posture but does
   not expose PQC algorithms, the PQC migration API, or a PQC CLI command.
-- **What's *not* end-to-end on PQC** is pure ML-DSA subject certificates for every stock
-  client, a multi-key SPIFFE Workload API response, and the fully automated fleet-wide
-  rollout; the served TLS path already negotiates ML-KEM hybrid key exchange, the served
-  ACME/EST/SCEP/CMP paths can issue hybrid transition leaves, and the signer can already
-  hold and use ML-DSA and SLH-DSA keys. trstctl is crypto-agile by construction, so the
-  remaining work is protocol-specific client compatibility and broader deployment
-  automation, not a redesign.
+- **The former PQC end-to-end residuals are served behind the Enterprise/PQC attach.**
+  Stock OpenSSL 3.5 enrolls and verifies a pure ML-DSA-65 subject leaf over EST; the
+  stock SPIFFE Workload API receives a two-entry classical + ML-DSA-65 response; and
+  CBOM TLS findings roll out TLS 1.3 plus `X25519MLKEM768` through a posture-capable
+  connector with receiver readback and exact rollback (the shipped proof uses Envoy).
+  This is a tested client/connector boundary, not a claim about every legacy client.
+  Hybrid-to-pure replacement of an already deployed hybrid leaf remains gated by
+  succession and evidence-based retirement; direct pure enrollment is served.
 - **SLH-DSA signatures are large.** They're the conservative choice for long-lived roots,
   not for high-volume leaf issuance — pick the algorithm per profile.
 

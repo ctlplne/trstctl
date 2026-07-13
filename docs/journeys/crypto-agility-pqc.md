@@ -1,5 +1,14 @@
 # Stay crypto-agile and migrate to post-quantum
 
+<!-- trstctl:journey-census:start -->
+!!! success "Served path — wiring census 81/81"
+
+    The shipped-binary census reports **81/81 required capabilities served**.
+    DoD-gated rows used by this journey (all `required`, all `served`): `pqc_end_to_end.automated_rollout_tls_findings`, `pqc_end_to_end.multikey_spiffe_hybrid_svid`, `pqc_end_to_end.pure_mldsa_leaf_stock_clients`.
+    Core surfaces guarded by route and journey tests: `crypto_inventory`, `migration_plans`.
+    This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+<!-- trstctl:journey-census:end -->
+
 ## Goal
 
 When you finish this journey you will understand where your weak and
@@ -24,11 +33,12 @@ post-quantum target.
 - The lifecycle, crypto-agility, and PQC-migration model is in
   [Lifecycle & PQC](../features/lifecycle-and-pqc.md); how the key-encryption key and
   secret material are protected is in [Secrets](../features/secrets.md).
-- An honest expectation: the served migration trigger covers CBOM certificate-key assets
-  first. It queues ACME re-issuance through the outbox and uses a hybrid transition leaf
-  for deployability; broader TLS protocol/cipher and every-client pure ML-DSA rollout
-  still need protocol and deployment-specific work. See
-  [Current limitations](../limitations.md) for served-vs-library detail.
+- The licensed shipped path serves three concrete compatibility anchors: pure
+  ML-DSA-65 leaf enrollment over EST with stock OpenSSL 3.5, a two-entry classical +
+  ML-DSA-65 SPIFFE Workload API response, and automatic CBOM TLS protocol/cipher
+  remediation through a posture-capable connector with exact rollback. See
+  [Current limitations](../limitations.md) for the tested client/connector boundary;
+  it is not a promise that every legacy client understands ML-DSA.
 
 ## Steps
 
@@ -139,6 +149,33 @@ post-quantum target.
    `protocol.issued` and `licensed_crypto.migration.asset_completed`, and updates
    CBOM progress. The MPL core has no `trstctl-cli pqc` command; any PQC operator
    command belongs in the proprietary EE bundle.
+
+   For a CBOM TLS endpoint or host-config finding, bind the finding to the connector
+   target that owns the listener and include the desired TLS posture in the same
+   request. The server rejects an unbound finding instead of pretending it migrated:
+
+   ```json
+   {
+     "asset_ids": ["<tls-finding-asset-id>"],
+     "target_algorithm": "ML-DSA-65",
+     "protocol": "acme",
+     "rollback_on_failure": true,
+     "tls_bindings": [{
+       "asset_id": "<tls-finding-asset-id>",
+       "target_id": "<connector-target-id>",
+       "desired": {
+         "minimum_version": "TLSv1.3",
+         "cipher_suites": ["TLS_AES_256_GCM_SHA384"],
+         "key_exchange_groups": ["X25519MLKEM768", "X25519"]
+       }
+     }]
+   }
+   ```
+
+   A successful response increments `tls_findings_queued`. Read
+   `GET /api/v1/pqc/migrations/<run-id>` until the finding is `applied`; the progress
+   projection is built from the immutable prepared/completed events and the connector
+   receiver evidence, not an optimistic in-memory flag.
 
 6. **Exercise rollback before broad rollout.** Keep rollback boring and rehearsed:
 

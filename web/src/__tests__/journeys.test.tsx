@@ -5,6 +5,7 @@ import { axe } from "vitest-axe";
 import { MemoryRouter } from "react-router-dom";
 import { appRoutePaths } from "@/lib/navigation";
 import { journeyDocUrl, journeys } from "@/lib/journeys";
+import { journeyCensus } from "@/lib/journeyCensus.gen";
 import { messages } from "@/i18n/messages";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -49,11 +50,18 @@ describe("journey definitions stay wired end to end", () => {
   it("keeps every journey id a doc slug and every step key in the catalog", () => {
     const ids = journeys.map((journey) => journey.id);
     expect(new Set(ids).size).toBe(ids.length);
+    expect([...ids].sort()).toEqual(Object.keys(journeyCensus.journeys).sort());
     for (const journey of journeys) {
       expect(journey.id).toMatch(/^[a-z0-9-]+$/);
       expect(journeyDocUrl(journey)).toBe(`https://docs.trstctl.com/journeys/${journey.id}/`);
       expect(messages[journey.titleKey], `missing ${journey.titleKey}`).toBeDefined();
       expect(messages[journey.descriptionKey], `missing ${journey.descriptionKey}`).toBeDefined();
+      const census = journeyCensus.journeys[journey.id];
+      expect(census.status).toBe("served");
+      for (const row of census.census_rows) {
+        expect(row.status, `${journey.id}/${row.id} is not served`).toBe("served");
+        expect(row.enforcement, `${journey.id}/${row.id} is not required`).toBe("required");
+      }
       for (const step of journey.steps) {
         expect(messages[step.titleKey], `missing ${step.titleKey}`).toBeDefined();
         expect(messages[step.bodyKey], `missing ${step.bodyKey}`).toBeDefined();
@@ -111,6 +119,11 @@ describe("journeys hub", () => {
     const { container } = renderJourneys();
 
     expect(await screen.findByRole("heading", { name: "Journeys" })).toBeInTheDocument();
+
+    // The label is generated from wiring-census.json, not hand-authored page
+    // copy. Every card has the same current shipped-binary proof boundary.
+    expect(screen.getAllByText("Verified path · shipped wiring 81/81")).toHaveLength(journeys.length);
+    expect(screen.getByRole("button", { name: /First certificate/ }).querySelector('[data-journey-census="first-certificate"]')).toBeInTheDocument();
 
     // Detector-backed progress: the issuer exists, so first-certificate shows 1 of 4.
     const firstCert = screen.getByRole("button", { name: /First certificate/ });

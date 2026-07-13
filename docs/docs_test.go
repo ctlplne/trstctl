@@ -1960,8 +1960,8 @@ func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
 			}
 		}
 		for _, want := range []string{
-			"transit/kmip (f66) — served, with a bounded kmip lifecycle profile",
-			"stock pykmip clients",
+			"transit/kmip (f66) — served, with a bounded oasis kmip 1.4 profile",
+			"aes-gcm wrapped get/register",
 			"frame-size, field-count, and nesting-depth caps",
 			"locate/revoke/destroy over the wire",
 		} {

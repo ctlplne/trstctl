@@ -1,4 +1,5 @@
 import type { MessageKey } from "@/i18n/messages";
+import type { JourneyCensusId } from "@/lib/journeyCensus.gen";
 
 /** Journeys turn the documented operator walkthroughs (docs/journeys/*.md)
  * into live, click-through checklists: steps with a `to` deep-link straight to
@@ -34,7 +35,8 @@ export interface JourneyStep {
 }
 
 export interface Journey {
-  id: string;
+  /** Also keys the generated shipped-binary census evidence for this path. */
+  id: JourneyCensusId;
   titleKey: MessageKey;
   descriptionKey: MessageKey;
   /** The long-form reference walkthrough this journey mirrors. */

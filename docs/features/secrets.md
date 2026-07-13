@@ -326,11 +326,12 @@ The listener is raw KMIP over TLS 1.3 mutual TLS. The TLS layer verifies the cli
 certificate chain before the KMIP handler sees a frame; the KMIP service stores objects
 under the configured tenant, emits immutable `kmip.object.created`,
 `kmip.object.revoke`, and `kmip.object.destroyed` audit events, and zeroizes in-memory
-key material on destroy, rekey, and server shutdown. The served profile is intentionally
-bounded and stock-client-tested for the core path: clients can `Create` an AES-256
-`SymmetricKey`, `Get` the 32-byte key material back, `Locate` active AES objects,
-`Revoke` an object so later `Get` fails, and `Destroy` it over TTLV. Unsupported
-operations receive a KMIP failure response instead of an unframed TCP close.
+key material on destroy, rekey, and server shutdown. The served OASIS 1.4 profile is
+stock-client-tested: clients can Query profiles, DiscoverVersions, Create or Register
+an AES-256 `SymmetricKey`, Get it directly or AES-GCM-wrapped by another KMIP key,
+register the wrapped value back, Locate active AES objects, Revoke an object so later
+Get fails, and Destroy it over TTLV. Unsupported operations receive a KMIP failure
+response instead of an unframed TCP close.
 
 ### Secret sync (F68)
 
@@ -632,8 +633,9 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
 - **Transit/KMIP serving status:** Transit is served through `/api/v1/transit/*` and the
   `trstctl-cli transit` command group. KMIP is served through the separate
   `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey
-  Create/Get/Locate/Revoke/Destroy. Treat broader appliance profiles, wrapping, and
-  tenant self-service listener management as future served-endpoint work.
+  Create/Register/Get/Locate/Revoke/Destroy, OASIS 1.4 profile/version negotiation,
+  and AES-GCM wrapped Get/Register. Appliance-specific templates and tenant
+  self-service listener management remain deliberate boundaries.
 - **Sync is push + drift-detect**, not a two-way merge — trstctl is the source of truth.
 
 ## Reference

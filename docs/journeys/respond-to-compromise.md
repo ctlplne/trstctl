@@ -1,5 +1,14 @@
 # Respond to a key or certificate compromise
 
+<!-- trstctl:journey-census:start -->
+!!! success "Served path — wiring census 81/81"
+
+    The shipped-binary census reports **81/81 required capabilities served**.
+    DoD-gated rows used by this journey (all `required`, all `served`): `breakglass_rotation.cross_sign_rekey`, `connector.registry`, `notification_channel.dispatch`.
+    Core surfaces guarded by route and journey tests: `credential_graph`, `incident_execution`, `revocation`, `evidence_export`.
+    This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+<!-- trstctl:journey-census:end -->
+
 ## Goal
 
 When you finish this journey you will have **contained a compromised credential**:

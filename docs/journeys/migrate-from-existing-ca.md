@@ -1,5 +1,14 @@
 # Migrate from your existing CA
 
+<!-- trstctl:journey-census:start -->
+!!! success "Served path — wiring census 81/81"
+
+    The shipped-binary census reports **81/81 required capabilities served**.
+    DoD-gated rows used by this journey (all `required`, all `served`): `connector.registry`, `external_ca.registry`.
+    Core surfaces guarded by route and journey tests: `certificate_discovery`, `issuance_profiles`, `certificate_health`.
+    This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+<!-- trstctl:journey-census:end -->
+
 ## Goal
 
 You will move certificate issuance off your current authority and onto trstctl
