@@ -476,13 +476,14 @@ func brokerEnvironment(expected runtimeExpectation, receiptDir string, dynamic m
 	out := make([]string, 0, len(os.Environ())+8)
 	for _, item := range os.Environ() {
 		name, _, _ := strings.Cut(item, "=")
-		if strings.HasPrefix(name, "TRSTCTL_") || name == "TMPDIR" {
+		if strings.HasPrefix(name, "TRSTCTL_") || name == "TMPDIR" || name == "OPENSSL_CONF" {
 			continue
 		}
 		out = append(out, item)
 	}
 	out = append(out,
 		"TMPDIR="+receiptDir,
+		"OPENSSL_CONF=/dev/null",
 		"TRSTCTL_DOD_CHALLENGE="+expected.Nonce,
 		"TRSTCTL_DOD_ENTRY_ID="+expected.ID,
 		"TRSTCTL_DOD_SUBSTRATE_IDENTITY="+expected.SubstrateIdentity,

@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +15,33 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 )
+
+func TestRetryCBOMWriteRetriesTransientFailure(t *testing.T) {
+	attempts := 0
+	err := retryCBOMWrite(context.Background(), func() error {
+		attempts++
+		if attempts < cbomWriteAttempts {
+			return errors.New("transient write failure")
+		}
+		return nil
+	})
+	if err != nil || attempts != cbomWriteAttempts {
+		t.Fatalf("retry result err=%v attempts=%d, want success on attempt %d", err, attempts, cbomWriteAttempts)
+	}
+}
+
+func TestRetryCBOMWriteStopsOnCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	attempts := 0
+	err := retryCBOMWrite(ctx, func() error {
+		attempts++
+		return context.Canceled
+	})
+	if !errors.Is(err, context.Canceled) || attempts != 1 {
+		t.Fatalf("retry result err=%v attempts=%d, want immediate cancellation", err, attempts)
+	}
+}
 
 // TestServedCBOMScanPopulatesMigrationInventory verifies that the
 // assembled control plane drives a real served CBOM scan over a fixture TLS estate

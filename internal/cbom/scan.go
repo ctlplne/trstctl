@@ -56,7 +56,7 @@ type Report struct {
 	Weak              int
 	QuantumVulnerable int
 	OutOfPolicy       int
-	Failed            int // sources that errored
+	Failed            int // source scans or individual finding records that errored
 }
 
 type scanConfig struct {
@@ -149,7 +149,11 @@ func (s *Scanner) Scan(ctx context.Context, sources []Source) Report {
 				f = f.Classified(s.policy)
 				if err := s.sink.Record(ctx, f); err != nil {
 					rep.Failed++
-					return
+					// Findings are independent observations. A transient failure while
+					// persisting one fact must not discard every later fact returned by
+					// the same source; keep the failure visible in the report and attempt
+					// the remaining observations.
+					continue
 				}
 				rep.Findings++
 				if f.Class.Strength == StrengthWeak {

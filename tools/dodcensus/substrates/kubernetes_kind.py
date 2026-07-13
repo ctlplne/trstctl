@@ -38,6 +38,7 @@ CSR_NAME = "dod-kind-csr"
 BUNDLE_NAME = "dod-kind-roots"
 ISSUER_NAME = "dod-kind-issuer"
 MAX_BODY = 4 << 20
+MAX_KIND_BINARY = 32 << 20
 
 
 class LoopbackHTTPServer(ThreadingHTTPServer):
@@ -76,22 +77,62 @@ def run(args: list[str], timeout: float = 180, check: bool = True) -> subprocess
     return result
 
 
-def require_kind() -> str:
-    binary = shutil.which("kind")
-    if not binary:
-        raise RuntimeError("kind v0.31.0 is required on PATH for the real-cluster DoD substrate")
-    version = run([binary, "version"], timeout=10).stdout.strip()
-    if not re.search(r"\bv?0\.31\.0\b", version):
-        raise RuntimeError(f"kind binary version is not pinned {KIND_VERSION}: {version}")
+def host_platform() -> tuple[tuple[str, str], str]:
     machine = platform.machine().lower()
     architecture = "amd64" if machine in {"x86_64", "amd64"} else "arm64" if machine in {"aarch64", "arm64"} else machine
     platform_key = (platform.system(), architecture)
     expected = KIND_BINARY_SHA256.get(platform_key)
     if expected is None:
         raise RuntimeError(f"kind proof does not have an official {KIND_VERSION} digest for {platform_key[0]}/{platform_key[1]}")
+    return platform_key, expected
+
+
+def kind_binary_is_exact(binary: str, expected: str) -> bool:
+    path = Path(binary)
+    return path.is_file() and not path.is_symlink() and hashlib.sha256(path.read_bytes()).hexdigest() == expected
+
+
+def fetch_kind(root: Path, platform_key: tuple[str, str], expected: str) -> str:
+    system, architecture = platform_key
+    suffix = f"{system.lower()}-{architecture}"
+    url = f"https://github.com/kubernetes-sigs/kind/releases/download/{KIND_VERSION}/kind-{suffix}"
+    target = root / f"kind-{KIND_VERSION}-{suffix}"
+    request = urllib.request.Request(url, headers={"User-Agent": "trstctl-dod-census/1"})
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response, target.open("xb") as output:
+            while True:
+                block = response.read(1 << 20)
+                if not block:
+                    break
+                total += len(block)
+                if total > MAX_KIND_BINARY:
+                    raise RuntimeError(f"official kind {KIND_VERSION} binary exceeded {MAX_KIND_BINARY} bytes")
+                digest.update(block)
+                output.write(block)
+            output.flush()
+            os.fsync(output.fileno())
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+    if total == 0 or digest.hexdigest() != expected:
+        target.unlink(missing_ok=True)
+        raise RuntimeError(f"downloaded kind {system}/{architecture} is not the official {KIND_VERSION} digest")
+    target.chmod(0o500)
+    return str(target)
+
+
+def require_kind(root: Path) -> str:
+    platform_key, expected = host_platform()
+    ambient = shutil.which("kind")
+    binary = ambient if ambient and kind_binary_is_exact(ambient, expected) else fetch_kind(root, platform_key, expected)
     digest = hashlib.sha256(Path(binary).read_bytes()).hexdigest()
     if digest != expected:
         raise RuntimeError(f"kind {platform_key[0]}/{platform_key[1]} binary digest {digest} is not the official {KIND_VERSION} digest")
+    version = run([binary, "version"], timeout=10).stdout.strip()
+    if not re.search(r"\bv?0\.31\.0\b", version):
+        raise RuntimeError(f"kind binary version is not pinned {KIND_VERSION}: {version}")
     return binary
 
 
@@ -298,7 +339,7 @@ class State:
         self.contract_digest = contract_digest
         self.root = Path(tempfile.mkdtemp(prefix="trstctl-dod-kind-"))
         self.cluster_name = "trstctl-dod-" + hashlib.sha256((entry_id + str(os.getpid())).encode()).hexdigest()[:10]
-        self.kind = require_kind()
+        self.kind = ""
         self.kubeconfig = self.root / "kubeconfig"
         self.lock = threading.Lock()
         self.config_read = False
@@ -316,6 +357,7 @@ class State:
 
     def start(self) -> None:
         try:
+            self.kind = require_kind(self.root)
             run([self.kind, "create", "cluster", "--name", self.cluster_name, "--image", NODE_IMAGE, "--kubeconfig", str(self.kubeconfig), "--wait", "180s"], timeout=300)
             node = self.cluster_name + "-control-plane"
             image = run(["docker", "inspect", "--format", "{{.Config.Image}}", node], timeout=15).stdout.strip()
@@ -345,7 +387,8 @@ class State:
     def stop(self) -> None:
         if self.setup_thread is not None:
             self.setup_thread.join(timeout=1)
-        run([self.kind, "delete", "cluster", "--name", self.cluster_name], timeout=120, check=False)
+        if self.kind:
+            run([self.kind, "delete", "cluster", "--name", self.cluster_name], timeout=120, check=False)
         shutil.rmtree(self.root, ignore_errors=True)
 
     def config(self) -> bytes:

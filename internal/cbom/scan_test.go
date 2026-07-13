@@ -22,6 +22,20 @@ type fakeSource struct {
 	peak     *atomic.Int32
 }
 
+type failOnceSink struct {
+	failed bool
+	items  []cbom.Finding
+}
+
+func (s *failOnceSink) Record(_ context.Context, finding cbom.Finding) error {
+	if !s.failed {
+		s.failed = true
+		return errors.New("transient persistence failure")
+	}
+	s.items = append(s.items, finding)
+	return nil
+}
+
 func (f *fakeSource) Name() string { return f.name }
 
 func (f *fakeSource) Scan(context.Context) ([]cbom.Finding, error) {
@@ -87,6 +101,25 @@ func TestScannerCountsSourceFailures(t *testing.T) {
 	})
 	if rep.Findings != 1 || rep.Failed != 1 {
 		t.Errorf("report = %+v, want 1 finding / 1 failed", rep)
+	}
+}
+
+func TestScannerContinuesAfterFindingRecordFailure(t *testing.T) {
+	sink := &failOnceSink{}
+	sc := cbom.NewScanner(sink)
+	defer sc.Close()
+
+	rep := sc.Scan(context.Background(), []cbom.Source{
+		&fakeSource{name: "host-config", findings: []cbom.Finding{
+			{Kind: cbom.AssetHostConfig, Protocol: "TLSv1.3"},
+			{Kind: cbom.AssetHostConfig, Cipher: "TLS_RSA_WITH_3DES_EDE_CBC_SHA"},
+		}},
+	})
+	if rep.Findings != 1 || rep.Failed != 1 {
+		t.Fatalf("report = %+v, want later finding recorded and one visible failure", rep)
+	}
+	if len(sink.items) != 1 || sink.items[0].Cipher != "TLS_RSA_WITH_3DES_EDE_CBC_SHA" || !sink.items[0].Class.OutOfPolicy {
+		t.Fatalf("later independent finding was discarded: %+v", sink.items)
 	}
 }
 

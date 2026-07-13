@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/cbom"
@@ -69,6 +70,31 @@ type eventedCBOMSink struct {
 	tenantID string
 }
 
+const (
+	cbomWriteAttempts = 3
+	cbomWriteBackoff  = 20 * time.Millisecond
+)
+
+func retryCBOMWrite(ctx context.Context, operation func() error) error {
+	var err error
+	for attempt := 0; attempt < cbomWriteAttempts; attempt++ {
+		if err = operation(); err == nil {
+			return nil
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || attempt == cbomWriteAttempts-1 {
+			return err
+		}
+		timer := time.NewTimer(cbomWriteBackoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return err
+}
+
 func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 	if s.log == nil || s.store == nil {
 		return errors.New("server: CBOM sink requires store and event log")
@@ -91,10 +117,23 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 	if err != nil {
 		return fmt.Errorf("server: encode CBOM asset event: %w", err)
 	}
-	if _, err := s.log.Append(ctx, events.Event{Type: projections.EventCBOMAssetObserved, TenantID: s.tenantID, Data: data}); err != nil {
+	// Pin one event ID across retries. If JetStream committed the first publish but
+	// its acknowledgement was lost, the retry is duplicate-suppressed and returns
+	// the canonical immutable event instead of adding a second observation.
+	event := events.Event{ID: events.NewID(), Type: projections.EventCBOMAssetObserved, TenantID: s.tenantID, Data: data}
+	var stored events.Event
+	if err := retryCBOMWrite(ctx, func() error {
+		var appendErr error
+		stored, appendErr = s.log.Append(ctx, event)
+		return appendErr
+	}); err != nil {
 		return fmt.Errorf("server: append CBOM asset event: %w", err)
 	}
-	// StoreSink is the local projection used for read-your-write API responses. The
-	// event log remains the truth; rebuild/tail replays the same payload idempotently.
-	return cbom.NewStoreSink(s.store, s.tenantID).Record(ctx, f)
+	// Project the exact canonical event for read-your-write API responses. The tail
+	// worker can apply it concurrently or later; the projection is idempotent by the
+	// tenant-scoped asset signature. Retrying this step never appends another event.
+	if err := retryCBOMWrite(ctx, func() error { return projections.New(s.store).Apply(ctx, stored) }); err != nil {
+		return fmt.Errorf("server: project CBOM asset event: %w", err)
+	}
+	return nil
 }

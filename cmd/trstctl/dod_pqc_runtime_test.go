@@ -270,10 +270,22 @@ func dodRunAutomatedTLSRolloutProof(t *testing.T) {
 	if err := json.Unmarshal(targetBody, &target); err != nil || target.ID == "" {
 		t.Fatalf("decode Envoy target: %v body=%s", err, targetBody)
 	}
-	dodRightSizeAPIRequest(t, runtime.client, runtime.baseURL, runtime.token,
+	scanBody := dodRightSizeAPIRequest(t, runtime.client, runtime.baseURL, runtime.token,
 		http.MethodPost, "/api/v1/cbom/scans", "dod-pqc-scan", map[string]any{
 			"host_configs": []string{hostConfig},
 		}, http.StatusCreated)
+	var scan struct {
+		Report struct {
+			Findings int `json:"findings"`
+			Failed   int `json:"failed"`
+		} `json:"report"`
+	}
+	if err := json.Unmarshal(scanBody, &scan); err != nil {
+		t.Fatalf("decode CBOM scan report: %v body=%s", err, scanBody)
+	}
+	if scan.Report.Findings != 4 || scan.Report.Failed != 0 {
+		t.Fatalf("CBOM scan report=%+v, want all four host findings persisted without partial failure; body=%s; shipped_logs=%s", scan.Report, scanBody, control.Logs())
+	}
 	var inventory struct {
 		Items []struct {
 			ID          string `json:"id"`
@@ -323,7 +335,7 @@ func dodRunAutomatedTLSRolloutProof(t *testing.T) {
 		selected = append(selected, map[string]any{"asset_id": item.ID, "finding_kind": kind})
 	}
 	if len(assetIDs) != 2 {
-		t.Fatalf("applicable TLS finding count=%d, want exact protocol+cipher; inventory=%s", len(assetIDs), inventoryBody)
+		t.Fatalf("applicable TLS finding count=%d, want exact protocol+cipher; inventory=%s; shipped_logs=%s", len(assetIDs), inventoryBody, control.Logs())
 	}
 	startBody := dodRightSizeAPIRequest(t, runtime.client, runtime.baseURL, runtime.token,
 		http.MethodPost, "/api/v1/pqc/migrations", "dod-pqc-rollout", map[string]any{

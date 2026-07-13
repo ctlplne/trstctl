@@ -40,7 +40,7 @@ func TestKubernetesPostureRuntimeSourceBindsBothFocusedAndFullGroupModes(t *test
 		"kubernetes_kind_posture_v1": {
 			Kind: "vendor-emulator", Verifier: "interop", Execution: "command",
 			Command: []string{"tools/dodcensus/substrates/kubernetes_kind.py"}, IdentityFiles: []string{"tools/dodcensus/substrates/kubernetes_kind.py"},
-			Identity:     "trstctl-kubernetes-kind-posture-v1@sha256:2b8f91c69f1e4d61c89b7da930b8626e0c45641b9b3595e033ab4ceed8b2bc9b",
+			Identity:     "trstctl-kubernetes-kind-posture-v1@sha256:2cde0e2ed5397a958f7a356a21b54073b71d83e3e5ebb3bef6081b3ae4da8351",
 			ContractFile: "tools/dodcensus/contracts/kubernetes-kind-posture-v1.json", ContractSHA256: "sha256:c5d80931e5fecd381d082a6672511d65e18c0352c514702f1586e08c58dd0e5f",
 		},
 	}

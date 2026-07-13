@@ -201,6 +201,7 @@ func TestBrokerValidatesEntrustAndRekorInputsBeforeLaunch(t *testing.T) {
 }
 
 func TestBrokerEnvironmentForwardsOnlyReviewedNames(t *testing.T) {
+	t.Setenv("OPENSSL_CONF", "/tmp/ambient-openssl.cnf")
 	expected := runtimeExpectation{ID: "code_signing.default"}
 	environment := strings.Join(brokerEnvironment(expected, t.TempDir(), map[string]string{
 		"TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE": "/approved/key",
@@ -211,6 +212,9 @@ func TestBrokerEnvironmentForwardsOnlyReviewedNames(t *testing.T) {
 	}
 	if strings.Contains(environment, "TRSTCTL_ARBITRARY_FILE") {
 		t.Fatal("unreviewed dynamic input was forwarded")
+	}
+	if strings.Count(environment, "OPENSSL_CONF=") != 1 || !strings.Contains(environment, "OPENSSL_CONF=/dev/null") || strings.Contains(environment, "/tmp/ambient-openssl.cnf") {
+		t.Fatalf("parent substrate did not receive the one pinned empty OpenSSL profile:\n%s", environment)
 	}
 }
 
