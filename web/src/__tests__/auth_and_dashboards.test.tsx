@@ -24,6 +24,7 @@ const { apiMock } = vi.hoisted(() => ({
     connectorDeliveries: vi.fn(),
     secretPage: vi.fn(),
     incidentExecutions: vi.fn(),
+    transitionIdentity: vi.fn(),
   },
 }));
 
@@ -108,6 +109,8 @@ describe("auth + dashboards", () => {
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.secretPage.mockResolvedValue({ items: [] });
     apiMock.incidentExecutions.mockResolvedValue({ items: [] });
+    apiMock.transitionIdentity.mockReset();
+    apiMock.transitionIdentity.mockResolvedValue({ id: "i1", name: "renewed", kind: "x509_certificate", status: "renewing" });
   });
 
   it("redirects an unauthenticated visitor to the login page", async () => {
@@ -410,6 +413,40 @@ describe("auth + dashboards", () => {
     const dash = await screen.findByRole("region", { name: "Dashboard" });
     // Preview stays a rich showcase: the demo trend card still renders there.
     expect(await within(dash).findByText(/Issuance trend/)).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------- S-N1 ----
+  // The expiring worklist must not dead-end: managed rows carry Renew wired to
+  // the identity lifecycle transition; unmanaged rows degrade honestly
+  // (02-findings DA-05, upgraded to Blocker in the 2026-07-13 live pass).
+
+  it("offers Renew on managed certificate rows and starts the identity renewal (S-N1)", async () => {
+    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        { id: "c1", tenant_id: "t1", subject: "CN=payments-api.example.test", issuer: "CN=CA", status: "active", fingerprint: "f1" },
+        { id: "c2", tenant_id: "t1", subject: "CN=orphan.example.test", issuer: "CN=orphan.example.test", status: "active", fingerprint: "f2" },
+        { id: "c3", tenant_id: "t1", subject: "CN=gone.example.test", issuer: "CN=CA", status: "revoked", fingerprint: "f3" },
+      ],
+    });
+    apiMock.identities.mockResolvedValue([
+      { id: "id-1", name: "payments-api.example.test", kind: "x509_certificate", status: "deployed", owner_id: "o1", target_id: "t" },
+    ]);
+    const user = userEvent.setup();
+
+    renderAt("/certificates");
+    await screen.findByText("CN=payments-api.example.test");
+
+    // Managed row: Renew is present and dispatches the lifecycle transition.
+    const renew = await screen.findByRole("button", { name: /Renew payments-api\.example\.test/i });
+    await user.click(renew);
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("id-1", "renewing", expect.stringContaining("certificate inventory")));
+
+    // Unmanaged active row degrades honestly to a replace path, not silence.
+    expect(screen.getByRole("link", { name: /Replace via request/i })).toHaveAttribute("href", "/request");
+
+    // Revoked rows get no lifecycle affordance.
+    expect(screen.queryByRole("button", { name: /Renew gone\.example\.test/i })).not.toBeInTheDocument();
   });
 
   it("lands the certificate inventory on an expiry-filtered worklist from the URL", async () => {

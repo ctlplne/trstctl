@@ -11,6 +11,7 @@ import {
   type ConnectorDelivery,
   type CRLDistribution,
   type CTSubmission,
+  type Identity,
   type Owner,
   type RogueCertificatePosture,
   type RotationRun,
@@ -632,6 +633,8 @@ export function Certificates() {
   const [rotationRuns, setRotationRuns] = useState<RotationRun[]>([]);
   const [deliveries, setDeliveries] = useState<ConnectorDelivery[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
+  const [identities, setIdentities] = useState<Identity[]>([]);
+  const [renewingIds, setRenewingIds] = useState<Set<string>>(() => new Set());
   const [health, setHealth] = useState<CertificateHealthDashboard | null>(null);
   const [crlDistributions, setCRLDistributions] = useState<CRLDistribution[]>([]);
   const [roguePosture, setRoguePosture] = useState<RogueCertificatePosture | null>(null);
@@ -662,7 +665,8 @@ export function Certificates() {
       settleOptional(() => api.rotationRuns({ limit: 100 })),
       settleOptional(() => api.connectorDeliveries({ limit: 50 })),
       settleOptional(() => api.owners()),
-    ]).then(([healthResult, crlResult, rogueResult, riskResult, rotationResult, deliveryResult, ownerResult]) => {
+      settleOptional(() => api.identities()),
+    ]).then(([healthResult, crlResult, rogueResult, riskResult, rotationResult, deliveryResult, ownerResult, identityResult]) => {
       if (cancelled) return;
       if (healthResult) setHealth(healthResult);
       if (crlResult) setCRLDistributions(crlResult.items ?? []);
@@ -671,6 +675,7 @@ export function Certificates() {
       if (rotationResult) setRotationRuns(rotationResult.items ?? []);
       if (deliveryResult) setDeliveries(deliveryResult.items ?? []);
       if (ownerResult) setOwners(ownerResult);
+      if (identityResult) setIdentities(identityResult);
     });
     return () => {
       cancelled = true;
@@ -904,6 +909,40 @@ export function Certificates() {
   }
 
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
+  const identityByCN = useMemo(() => {
+    const map = new Map<string, Identity>();
+    for (const identity of identities) {
+      if (identity.kind !== "x509_certificate") continue;
+      map.set(identity.name.trim().toLowerCase(), identity);
+    }
+    return map;
+  }, [identities]);
+
+  /** startRenew advances the MANAGING IDENTITY to `renewing` (the same
+   * idempotent transition the Identities page uses), so the expiring-certs
+   * worklist can finish Job 1 without a page hop (S-N1 / DA-05). */
+  async function startRenew(certificate: Certificate, identity: Identity) {
+    setRenewingIds((current) => new Set(current).add(certificate.id));
+    try {
+      await api.transitionIdentity(identity.id, "renewing", `renew requested from certificate inventory (${certificate.subject})`);
+      toast({
+        title: "Renewal started",
+        description: `${identity.name} is now renewing; track progress on Identities.`,
+      });
+    } catch (err) {
+      toast({
+        kind: "error",
+        title: "Renewal could not start",
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRenewingIds((current) => {
+        const next = new Set(current);
+        next.delete(certificate.id);
+        return next;
+      });
+    }
+  }
   const issuerOptions = useMemo(
     () =>
       uniqueOptions(
@@ -929,7 +968,11 @@ export function Certificates() {
     [certificates, environmentFilter],
   );
   const teamOptions = useMemo(() => teamFacetOptions(certificates, ownerByID, owners, teamFilter), [certificates, ownerByID, owners, teamFilter]);
-  const columns = useMemo(() => certificateColumns(ownerByID), [ownerByID]);
+  const columns = useMemo(
+    () => certificateColumns(ownerByID, lifecycleColumn({ identityByCN, renewingIds, onRenew: (c, i) => void startRenew(c, i) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startRenew is stable per render semantics used across this page
+    [ownerByID, identityByCN, renewingIds],
+  );
 
   const filtered = useMemo(() => {
     const all = certificates;
@@ -1497,7 +1540,35 @@ export function Certificates() {
               </dd>
             </div>
             <div className="md:col-span-2">
-              <dt className="font-medium text-muted-foreground">Renewal history</dt>
+              <dt className="flex items-center justify-between gap-2 font-medium text-muted-foreground">
+                Renewal history
+                {(() => {
+                  const identity = renewableIdentityFor(detail, identityByCN);
+                  if (identity) {
+                    const busy = renewingIds.has(detail.id);
+                    return (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        aria-label={`Renew ${certificateCN(detail.subject) || detail.subject}`}
+                        onClick={() => void startRenew(detail, identity)}
+                      >
+                        {busy ? "Renewing…" : "Renew now"}
+                      </Button>
+                    );
+                  }
+                  if (detail.status === "active") {
+                    return (
+                      <Link to="/request" className="text-caption font-medium text-brand-accent hover:underline">
+                        Not identity-managed — replace via request →
+                      </Link>
+                    );
+                  }
+                  return null;
+                })()}
+              </dt>
               <dd>
                 <RenewalHistory
                   runs={rotationRuns.filter((r) => r.predecessor_fingerprint === detail.fingerprint || r.successor_fingerprint === detail.fingerprint)}
@@ -1514,8 +1585,69 @@ export function Certificates() {
   );
 }
 
-function certificateColumns(ownerByID: Map<string, Owner>): Array<DataGridColumn<Certificate>> {
-  return [
+/** certificateCN pulls the CN attribute out of an X.509 subject string so a
+ * certificate can be matched to the non-human identity that holds it (the
+ * durable identity record is named by CN in the issuance path). */
+export function certificateCN(subject: string): string {
+  const match = /(?:^|[,/]\s*)CN=([^,/]+)/i.exec(subject);
+  return (match?.[1] ?? "").trim().toLowerCase();
+}
+
+/** renewableIdentityFor returns the managing identity for a certificate when
+ * one exists: an x509 identity whose name matches the certificate CN and that
+ * is not already retired/revoked. */
+function renewableIdentityFor(certificate: Certificate, identityByCN: Map<string, Identity>): Identity | undefined {
+  if (certificate.status !== "active") return undefined;
+  const identity = identityByCN.get(certificateCN(certificate.subject));
+  if (!identity) return undefined;
+  if (identity.status === "retired" || identity.status === "revoked") return undefined;
+  return identity;
+}
+
+type LifecycleColumnContext = {
+  identityByCN: Map<string, Identity>;
+  renewingIds: Set<string>;
+  onRenew: (certificate: Certificate, identity: Identity) => void;
+};
+
+/** lifecycleColumn closes the DA-05 dead-end: managed rows get Renew wired to
+ * the identity lifecycle transition; unmanaged active rows degrade honestly to
+ * the self-service replace path instead of silence. */
+function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certificate> {
+  return {
+    id: "lifecycle",
+    header: "Lifecycle",
+    cell: (c) => {
+      const identity = renewableIdentityFor(c, context.identityByCN);
+      if (identity) {
+        const busy = context.renewingIds.has(c.id);
+        return (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            aria-label={`Renew ${certificateCN(c.subject) || c.subject}`}
+            onClick={() => context.onRenew(c, identity)}
+          >
+            {busy ? "Renewing…" : "Renew"}
+          </Button>
+        );
+      }
+      if (c.status === "active") {
+        return (
+          <Link to="/request" className="text-caption font-medium text-brand-accent hover:underline">
+            Replace via request →
+          </Link>
+        );
+      }
+      return <span className="text-muted-foreground">—</span>;
+    },
+  };
+}
+
+function certificateColumns(ownerByID: Map<string, Owner>, lifecycle?: DataGridColumn<Certificate>): Array<DataGridColumn<Certificate>> {
+  const base: Array<DataGridColumn<Certificate>> = [
     {
       id: "subject",
       header: "Subject",
@@ -1564,6 +1696,7 @@ function certificateColumns(ownerByID: Map<string, Owner>): Array<DataGridColumn
       ),
     },
   ];
+  return lifecycle ? [...base, lifecycle] : base;
 }
 
 function uniqueOptions(values: Array<string | undefined>, selected: FacetFilter): string[] {
