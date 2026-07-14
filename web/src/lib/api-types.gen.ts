@@ -2103,6 +2103,7 @@ export interface MachineAuthMethod {
   allowed_projects?: string[];
   allowed_service_accounts?: string[];
   audience?: string;
+  disabled?: boolean;
   issuer?: string;
   jwks_configured: boolean;
   name: string;
@@ -2122,6 +2123,11 @@ export interface MachineAuthMethodList {
   next_cursor?: string;
 }
 
+export interface MachineAuthMethodOverride {
+  disabled: boolean;
+  name: string;
+}
+
 export interface MachineLoginRequest {
   credential: string;
   method?: string;
@@ -2133,6 +2139,23 @@ export interface MachineLoginResponse {
   principal: string;
   scopes: string[];
   session_id: string;
+}
+
+export interface MachineSession {
+  expires_at: string;
+  id: string;
+  issued_at: string;
+  method: string;
+  principal: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  scopes?: string[];
+  status: "active" | "expired" | "revoked";
+}
+
+export interface MachineSessionList {
+  items: MachineSession[];
+  next_cursor?: string;
 }
 
 export interface ManagedKey {

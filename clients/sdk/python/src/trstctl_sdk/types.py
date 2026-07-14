@@ -3003,6 +3003,7 @@ MachineAuthMethod = TypedDict(
         'allowed_projects': list[str],
         'allowed_service_accounts': list[str],
         'audience': str,
+        'disabled': bool,
         'issuer': str,
         'jwks_configured': bool,
         'name': str,
@@ -3028,6 +3029,15 @@ MachineAuthMethodList = TypedDict(
     total=False,
 )
 
+MachineAuthMethodOverride = TypedDict(
+    'MachineAuthMethodOverride',
+    {
+        'disabled': bool,
+        'name': str,
+    },
+    total=False,
+)
+
 MachineLoginRequest = TypedDict(
     'MachineLoginRequest',
     {
@@ -3045,6 +3055,31 @@ MachineLoginResponse = TypedDict(
         'principal': str,
         'scopes': list[str],
         'session_id': str,
+    },
+    total=False,
+)
+
+MachineSession = TypedDict(
+    'MachineSession',
+    {
+        'expires_at': str,
+        'id': str,
+        'issued_at': str,
+        'method': str,
+        'principal': str,
+        'revoked_at': str,
+        'revoked_by': str,
+        'scopes': list[str],
+        'status': str,
+    },
+    total=False,
+)
+
+MachineSessionList = TypedDict(
+    'MachineSessionList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
     },
     total=False,
 )

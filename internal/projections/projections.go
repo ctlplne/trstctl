@@ -114,6 +114,10 @@ const (
 	EventAPITokenRevoked                          = "api_token.revoked"
 	EventPAMSessionStarted                        = "pam.session.started"
 	EventPAMSessionExpired                        = "pam.session.expired"
+	EventMachineSessionStarted                    = "secrets.session.started"
+	EventMachineSessionRevoked                    = "secrets.session.revoked"
+	EventMachineAuthMethodDisabled                = "secrets.auth_method.disabled"
+	EventMachineAuthMethodEnabled                 = "secrets.auth_method.enabled"
 	EventNHIAccessReviewCampaignStarted           = "nhi.access_review.campaign.started"
 	EventNHIAccessReviewItemDecided               = "nhi.access_review.item.decided"
 	EventAccessChangeRequestCreated               = "access.change_request.created"
@@ -1311,6 +1315,34 @@ type PAMSessionExpired struct {
 	Reason  string    `json:"reason,omitempty"`
 }
 
+// MachineSessionStarted is the payload of secrets.session.started (C-S3,
+// DA-02). It carries session metadata only — never the exchanged credential
+// or any token material (AN-8).
+type MachineSessionStarted struct {
+	ID        string    `json:"id"`
+	Principal string    `json:"principal"`
+	Method    string    `json:"method"`
+	Scopes    []string  `json:"scopes,omitempty"`
+	IssuedAt  time.Time `json:"issued_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// MachineSessionRevoked is the payload of secrets.session.revoked.
+type MachineSessionRevoked struct {
+	ID        string    `json:"id"`
+	RevokedBy string    `json:"revoked_by,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
+	RevokedAt time.Time `json:"revoked_at"`
+}
+
+// MachineAuthMethodOverride is the payload of secrets.auth_method.disabled and
+// secrets.auth_method.enabled: the tenant-level overlay on the config-declared
+// machine-auth method set. The event type carries the direction.
+type MachineAuthMethodOverride struct {
+	Name      string `json:"name"`
+	UpdatedBy string `json:"updated_by,omitempty"`
+}
+
 // Apply applies a single event to the read model in its own tenant-scoped
 // transaction. It is exported so the command side can project an event live,
 // right after appending it, using the same logic a rebuild uses.
@@ -1508,6 +1540,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAPITokenCreated:                     {1: true},
 	EventAPITokenRevoked:                     {1: true},
 	EventPAMSessionStarted:                   {1: true},
+	EventMachineSessionStarted:               {1: true},
+	EventMachineSessionRevoked:               {1: true},
+	EventMachineAuthMethodDisabled:           {1: true},
+	EventMachineAuthMethodEnabled:            {1: true},
 	EventPAMSessionExpired:                   {1: true},
 	EventNHIAccessReviewCampaignStarted:      {1: true},
 	EventNHIAccessReviewItemDecided:          {1: true},
@@ -2652,6 +2688,45 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			endedAt = e.Time
 		}
 		return p.store.ApplyPAMSessionExpiredTx(ctx, tx, e.TenantID, pl.ID, endedAt)
+	case EventMachineSessionStarted:
+		var pl MachineSessionStarted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Principal == "" || pl.Method == "" || pl.ExpiresAt.IsZero() {
+			return fmt.Errorf("projections: %s requires id, principal, method, and expires_at", e.Type)
+		}
+		issuedAt := pl.IssuedAt
+		if issuedAt.IsZero() {
+			issuedAt = e.Time
+		}
+		return p.store.ApplyMachineSessionStartedTx(ctx, tx, store.MachineSession{
+			TenantID: e.TenantID, ID: pl.ID, Principal: pl.Principal, Method: pl.Method,
+			Scopes: pl.Scopes, Status: store.MachineSessionStatusActive,
+			IssuedAt: issuedAt, ExpiresAt: pl.ExpiresAt,
+		})
+	case EventMachineSessionRevoked:
+		var pl MachineSessionRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: %s requires id", e.Type)
+		}
+		revokedAt := pl.RevokedAt
+		if revokedAt.IsZero() {
+			revokedAt = e.Time
+		}
+		return p.store.ApplyMachineSessionRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, revokedAt)
+	case EventMachineAuthMethodDisabled, EventMachineAuthMethodEnabled:
+		var pl MachineAuthMethodOverride
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Name == "" {
+			return fmt.Errorf("projections: %s requires name", e.Type)
+		}
+		return p.store.ApplyMachineAuthMethodOverrideTx(ctx, tx, e.TenantID, pl.Name, e.Type == EventMachineAuthMethodDisabled, pl.UpdatedBy, e.Time)
 	case EventNHIAccessReviewCampaignStarted:
 		var pl NHIAccessReviewCampaignStarted
 		if err := decode(e, &pl); err != nil {

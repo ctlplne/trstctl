@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
@@ -20,7 +21,9 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/pkisecret"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretsdk"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -303,7 +306,7 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 	if method == "" {
 		method = "token"
 	}
-	mgr, err := a.secrets.authManager(tenantID)
+	mgr, err := a.secrets.authManager(r.Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, errMachineLoginNotConfigured) {
 			a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "machine login is not configured"))
@@ -321,6 +324,13 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	if sess.TenantID != tenantID {
 		a.writeProblem(w, problem.New(http.StatusUnauthorized, "machine login failed"))
+		return
+	}
+	// C-S3 (DA-02): the issued session becomes ledger state. When the ledger
+	// subsystem is configured, a session that cannot be recorded is not
+	// issued — evidence-first, matching the PAM precedent (AN-2).
+	if err := a.recordMachineSession(r.Context(), tenantID, sess); err != nil {
+		a.writeError(w, err)
 		return
 	}
 	a.writeJSON(w, http.StatusOK, machineLoginResponse{
@@ -359,6 +369,9 @@ type machineAuthMethodInfo struct {
 	RequiredClaims         map[string]string   `json:"required_claims,omitempty"`
 	JWKSConfigured         bool                `json:"jwks_configured"`
 	AllowUnexpiring        bool                `json:"allow_unexpiring,omitempty"`
+	// Disabled reflects the event-sourced per-tenant overlay (C-S3): a
+	// disabled method is refused by the login exchange until re-enabled.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 func sortedBoolKeys(m map[string]bool) []string {
@@ -475,22 +488,251 @@ func (a *API) listMachineAuthMethods(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	disabled := map[string]bool{}
+	if a.secrets.be.Store != nil {
+		overlay, err := a.secrets.be.Store.DisabledMachineAuthMethods(r.Context(), tenantID)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		disabled = overlay
+	}
 	items := make([]machineAuthMethodInfo, 0, 4)
 	if len(a.secrets.be.AuthSecret) > 0 {
 		// The builtin exchange is projected without constructing a TokenMethod:
 		// its only interesting fields here are name/type, and its Secret must
 		// never travel toward a response writer.
-		items = append(items, machineAuthMethodInfo{Name: "token", Type: "token", Source: "builtin"})
+		items = append(items, machineAuthMethodInfo{Name: "token", Type: "token", Source: "builtin", Disabled: disabled["token"]})
 	}
 	if a.secrets.be.MachineAuthMethods != nil {
 		for _, m := range a.secrets.be.MachineAuthMethods(tenantID) {
 			if m == nil {
 				continue
 			}
-			items = append(items, machineAuthMethodProjection(m, "config"))
+			info := machineAuthMethodProjection(m, "config")
+			info.Disabled = disabled[info.Name]
+			items = append(items, info)
 		}
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
+}
+
+/* ---- machine session ledger + method overlay (C-S3, DA-02) ---------------- */
+
+// machineSessionInfo is the ledger row served to the console. "expired" is a
+// display status computed from expires_at; the projection stores only
+// active/revoked so the ledger needs no expiry worker.
+type machineSessionInfo struct {
+	ID        string     `json:"id"`
+	Principal string     `json:"principal"`
+	Method    string     `json:"method"`
+	Scopes    []string   `json:"scopes,omitempty"`
+	Status    string     `json:"status"`
+	IssuedAt  time.Time  `json:"issued_at"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	RevokedBy string     `json:"revoked_by,omitempty"`
+}
+
+func machineSessionDisplay(m store.MachineSession, now time.Time) machineSessionInfo {
+	status := m.Status
+	if status == store.MachineSessionStatusActive && now.After(m.ExpiresAt) {
+		status = "expired"
+	}
+	return machineSessionInfo{
+		ID: m.ID, Principal: m.Principal, Method: m.Method, Scopes: m.Scopes,
+		Status: status, IssuedAt: m.IssuedAt, ExpiresAt: m.ExpiresAt,
+		RevokedAt: m.RevokedAt, RevokedBy: m.RevokedBy,
+	}
+}
+
+func machineSessionLedgerDisabledProblem() *problem.Problem {
+	return problem.New(http.StatusNotFound, "machine session ledger requires the event log and datastore")
+}
+
+// machineSessionLedgerReady reports whether the event-sourced ledger can be
+// served: it needs both the event log (append) and the store (projection).
+func (a *API) machineSessionLedgerReady() bool {
+	return a.secrets != nil && a.secrets.be.Store != nil && a.log != nil
+}
+
+// recordMachineSession appends secrets.session.started and projects it (AN-2).
+// When the ledger subsystem is not configured (no event log or store), the
+// exchange behaves as before C-S3: the session is a scope receipt only, and
+// GET /secrets/sessions says so honestly instead of serving an empty ledger.
+func (a *API) recordMachineSession(ctx context.Context, tenantID string, sess authmethod.Session) error {
+	if !a.machineSessionLedgerReady() {
+		return nil
+	}
+	payload, err := json.Marshal(projections.MachineSessionStarted{
+		ID: sess.ID, Principal: sess.Principal, Method: sess.Method,
+		Scopes: sess.Scopes, IssuedAt: sess.IssuedAt, ExpiresAt: sess.ExpiresAt,
+	})
+	if err != nil {
+		return err
+	}
+	ev, err := a.log.Append(ctx, events.Event{Type: projections.EventMachineSessionStarted, TenantID: tenantID, Data: payload})
+	if err != nil {
+		return err
+	}
+	return projections.New(a.secrets.be.Store).Apply(ctx, ev)
+}
+
+// listMachineSessions serves GET /api/v1/secrets/sessions (C-S3, DA-02): the
+// issued-session ledger, newest first. Sessions are advisory scope receipts —
+// the response never carries credential material.
+func (a *API) listMachineSessions(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	if !a.machineSessionLedgerReady() {
+		a.writeProblem(w, machineSessionLedgerDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "limit must be an integer"))
+			return
+		}
+		limit = parsed
+	}
+	sessions, err := a.secrets.be.Store.ListMachineSessions(r.Context(), tenantID, limit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	now := time.Now().UTC()
+	items := make([]machineSessionInfo, 0, len(sessions))
+	for _, m := range sessions {
+		items = append(items, machineSessionDisplay(m, now))
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
+}
+
+// revokeMachineSession serves POST /api/v1/secrets/sessions/{id}/revoke
+// (C-S3): an idempotent, event-sourced ledger revocation. Machine sessions
+// are not consumed by later API calls, so this marks evidence state — the
+// enforcement half of revocation is the auth-method overlay (refuse new
+// logins) and API-token revocation.
+//
+//trstctl:mutation
+func (a *API) revokeMachineSession(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	if !a.machineSessionLedgerReady() {
+		a.writeProblem(w, machineSessionLedgerDisabledProblem())
+		return
+	}
+	id := r.PathValue("id")
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if id == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "session id is required")
+		}
+		if _, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id); err != nil {
+			return 0, nil, errStatus(http.StatusNotFound, "machine session not found")
+		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		payload, err := json.Marshal(projections.MachineSessionRevoked{ID: id, RevokedBy: principal.Subject, RevokedAt: time.Now().UTC()})
+		if err != nil {
+			return 0, nil, err
+		}
+		ev, err := a.log.Append(ctx, events.Event{Type: projections.EventMachineSessionRevoked, TenantID: tenantID, Data: payload})
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := projections.New(a.secrets.be.Store).Apply(ctx, ev); err != nil {
+			return 0, nil, err
+		}
+		updated, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, machineSessionDisplay(updated, time.Now().UTC()), nil
+	})
+}
+
+// machineAuthMethodOverrideResponse acknowledges a disable/enable overlay
+// change.
+type machineAuthMethodOverrideResponse struct {
+	Name     string `json:"name"`
+	Disabled bool   `json:"disabled"`
+}
+
+// setMachineAuthMethodOverride is the shared disable/enable implementation:
+// validate the method exists on the served projection, then append the
+// overlay event and project it (AN-2). The login exchange consults the
+// overlay on every login, so a disabled method is refused immediately.
+func (a *API) setMachineAuthMethodOverride(w http.ResponseWriter, r *http.Request, idempotencyKey string, disable bool) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	if !a.machineSessionLedgerReady() {
+		a.writeProblem(w, machineSessionLedgerDisabledProblem())
+		return
+	}
+	name := r.PathValue("name")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if name == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "method name is required")
+		}
+		known := map[string]bool{}
+		if len(a.secrets.be.AuthSecret) > 0 {
+			known["token"] = true
+		}
+		if a.secrets.be.MachineAuthMethods != nil {
+			for _, m := range a.secrets.be.MachineAuthMethods(tenantID) {
+				if m != nil {
+					known[m.Name()] = true
+				}
+			}
+		}
+		if !known[name] {
+			return 0, nil, errStatus(http.StatusNotFound, "no such configured machine-auth method")
+		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		eventType := projections.EventMachineAuthMethodEnabled
+		if disable {
+			eventType = projections.EventMachineAuthMethodDisabled
+		}
+		payload, err := json.Marshal(projections.MachineAuthMethodOverride{Name: name, UpdatedBy: principal.Subject})
+		if err != nil {
+			return 0, nil, err
+		}
+		ev, err := a.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := projections.New(a.secrets.be.Store).Apply(ctx, ev); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, machineAuthMethodOverrideResponse{Name: name, Disabled: disable}, nil
+	})
+}
+
+// disableMachineAuthMethod serves POST /api/v1/secrets/auth-methods/{name}/disable.
+//
+//trstctl:mutation
+func (a *API) disableMachineAuthMethod(w http.ResponseWriter, r *http.Request) {
+	a.setMachineAuthMethodOverride(w, r, r.Header.Get("Idempotency-Key"), true)
+}
+
+// enableMachineAuthMethod serves POST /api/v1/secrets/auth-methods/{name}/enable.
+//
+//trstctl:mutation
+func (a *API) enableMachineAuthMethod(w http.ResponseWriter, r *http.Request) {
+	a.setMachineAuthMethodOverride(w, r, r.Header.Get("Idempotency-Key"), false)
 }
 
 // ---- per-request framework construction (tenant-scoped, AN-1) --------------
@@ -542,7 +784,7 @@ func (s *secretsService) pkiProvider(tenantID string, caCertDER []byte, caSigner
 // authManager builds a per-tenant authmethod.Manager with the configured machine
 // login methods (F58). Each method is tenant-scoped at construction so a session is
 // bound to this tenant (AN-1).
-func (s *secretsService) authManager(tenantID string) (*authmethod.Manager, error) {
+func (s *secretsService) authManager(ctx context.Context, tenantID string) (*authmethod.Manager, error) {
 	ttl := s.be.SessionTTL
 	if ttl <= 0 {
 		ttl = time.Hour
@@ -553,6 +795,24 @@ func (s *secretsService) authManager(tenantID string) (*authmethod.Manager, erro
 	}
 	if s.be.MachineAuthMethods != nil {
 		methods = append(methods, s.be.MachineAuthMethods(tenantID)...)
+	}
+	// C-S3 (DA-02): the event-sourced per-tenant disable overlay is enforced
+	// here, at the exchange itself. Overlay read errors fail closed — refusing
+	// logins beats accepting a credential against a disabled method.
+	if s.be.Store != nil {
+		disabled, err := s.be.Store.DisabledMachineAuthMethods(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		if len(disabled) > 0 {
+			kept := methods[:0]
+			for _, m := range methods {
+				if !disabled[m.Name()] {
+					kept = append(kept, m)
+				}
+			}
+			methods = kept
+		}
 	}
 	if len(methods) == 0 {
 		return nil, errMachineLoginNotConfigured

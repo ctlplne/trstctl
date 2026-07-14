@@ -310,6 +310,10 @@ var commandTable = []Command{
 
 	// Secret store, dynamic leases, secret sharing, and dynamic PKI secret (GAP-006).
 	{Name: []string{"secrets", "auth-methods", "list"}, Method: "GET", Path: "/api/v1/secrets/auth-methods", Summary: "List configured machine-auth login methods (secret-free projection)"},
+	{Name: []string{"secrets", "auth-methods", "disable"}, Method: "POST", Path: "/api/v1/secrets/auth-methods/{name}/disable", Summary: "Disable a machine-auth method for this tenant (refused at login)"},
+	{Name: []string{"secrets", "auth-methods", "enable"}, Method: "POST", Path: "/api/v1/secrets/auth-methods/{name}/enable", Summary: "Re-enable a machine-auth method for this tenant"},
+	{Name: []string{"secrets", "sessions", "list"}, Method: "GET", Path: "/api/v1/secrets/sessions", Query: []string{"limit"}, Summary: "List issued machine-login sessions (event-sourced ledger)"},
+	{Name: []string{"secrets", "sessions", "revoke"}, Method: "POST", Path: "/api/v1/secrets/sessions/{id}/revoke", Summary: "Mark an issued machine session revoked in the ledger"},
 	{Name: []string{"secrets", "login"}, Method: "POST", Path: "/api/v1/secrets/login", Body: bodyFile, Summary: "Exchange a machine credential for a workload session"},
 	{Name: []string{"secrets", "store", "put"}, Method: "POST", Path: "/api/v1/secrets/store", Body: bodyFile, Summary: "Store a secret"},
 	{Name: []string{"secrets", "store", "list"}, Method: "GET", Path: "/api/v1/secrets/store", Query: []string{"limit", "cursor"}, Summary: "List stored secrets"},

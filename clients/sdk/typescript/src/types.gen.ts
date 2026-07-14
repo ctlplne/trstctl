@@ -3067,6 +3067,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/auth-methods/{name}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable a configured machine-auth method for this tenant (refused at login until re-enabled) */
+        post: operations["disableMachineAuthMethod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/auth-methods/{name}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-enable a configured machine-auth method for this tenant */
+        post: operations["enableMachineAuthMethod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/cloud-secret-managers": {
         parameters: {
             query?: never;
@@ -3334,6 +3368,40 @@ export interface paths {
         put?: never;
         /** Queue a third-party artifact secret scan */
         post: operations["ingestThirdPartySecretScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issued machine-login sessions (event-sourced ledger) */
+        get: operations["listMachineSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/sessions/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark an issued machine session revoked in the ledger (idempotent) */
+        post: operations["revokeMachineSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6062,6 +6130,7 @@ export interface components {
             allowed_projects?: string[];
             allowed_service_accounts?: string[];
             audience?: string;
+            disabled?: boolean;
             issuer?: string;
             jwks_configured: boolean;
             name: string;
@@ -6083,6 +6152,10 @@ export interface components {
             items: components["schemas"]["MachineAuthMethod"][];
             next_cursor?: string;
         };
+        MachineAuthMethodOverride: {
+            disabled: boolean;
+            name: string;
+        };
         MachineLoginRequest: {
             credential: string;
             method?: string;
@@ -6094,6 +6167,25 @@ export interface components {
             principal: string;
             scopes: string[];
             session_id: string;
+        };
+        MachineSession: {
+            /** Format: date-time */
+            expires_at: string;
+            id: string;
+            /** Format: date-time */
+            issued_at: string;
+            method: string;
+            principal: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            revoked_by?: string;
+            scopes?: string[];
+            /** @enum {string} */
+            status: "active" | "expired" | "revoked";
+        };
+        MachineSessionList: {
+            items: components["schemas"]["MachineSession"][];
+            next_cursor?: string;
         };
         ManagedKey: {
             algorithm: string;
@@ -17598,6 +17690,94 @@ export interface operations {
             };
         };
     };
+    disableMachineAuthMethod: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description configured method name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineAuthMethodOverride"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    enableMachineAuthMethod: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description configured method name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineAuthMethodOverride"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getCloudSecretManagerIntegration: {
         parameters: {
             query?: never;
@@ -18308,6 +18488,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThirdPartySecretScanReceipt"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMachineSessions: {
+        parameters: {
+            query?: {
+                /** @description maximum ledger rows to return (newest first) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineSessionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeMachineSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description machine session id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineSession"];
                 };
             };
             /** @description client error */
