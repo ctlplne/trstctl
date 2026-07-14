@@ -23,7 +23,7 @@ import { NotificationCenter } from "@/components/notifications";
 import { demoDashboard } from "@/lib/demoData";
 import { isOnboardingComplete } from "@/lib/onboardingState";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { formatShortDate, type FormatPolicy } from "@/i18n/format";
+import { formatDateTime, formatShortDate, type FormatPolicy } from "@/i18n/format";
 
 const highRiskThreshold = 70;
 
@@ -522,6 +522,7 @@ function Kpi({
  * are facts, not delivery attempts. */
 function RecentAuditList({ events }: { events: AuditEvent[] }) {
   const { locale, timeZone, t } = useTranslation();
+  const policy = { locale, timeZone };
   if (events.length === 0) {
     return <p className="py-2 text-caption text-muted-foreground">{t("dashboard.recentActivity.empty")}</p>;
   }
@@ -534,7 +535,7 @@ function RecentAuditList({ events }: { events: AuditEvent[] }) {
             {event.hash && <span className="block truncate text-caption text-muted-foreground">{event.hash.slice(0, 12)}…</span>}
           </span>
           <span className="shrink-0 font-mono text-caption text-muted-foreground">
-            {new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", timeZone }).format(new Date(event.time))}
+            {formatDateTime(event.time, policy, { dateStyle: undefined, timeStyle: "short" })}
           </span>
         </li>
       ))}

@@ -1467,6 +1467,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.certificate.profiles.f58c830645",
+    defaultMessage: "Certificate profiles",
+    sources: [
+      "src/lib/journeyMatrix.ts:50",
+    ],
+  },
+  {
     key: "source.certificate.transparency.findings.55891f79b6",
     defaultMessage: "Certificate Transparency findings",
     sources: [
@@ -2214,6 +2221,13 @@ export const extractedMessages = [
     defaultMessage: "Credential detail",
     sources: [
       "src/pages/Risk.tsx:951",
+    ],
+  },
+  {
+    key: "source.credential.graph.bf60e82af3",
+    defaultMessage: "Credential graph",
+    sources: [
+      "src/lib/journeyMatrix.ts:42",
     ],
   },
   {
@@ -3305,7 +3319,7 @@ export const extractedMessages = [
     defaultMessage: "failed",
     sources: [
       "src/lib/statusVocab.ts:71",
-      "src/pages/Dashboard.tsx:581",
+      "src/pages/Dashboard.tsx:582",
     ],
   },
   {
@@ -3505,7 +3519,6 @@ export const extractedMessages = [
     key: "source.graph.32ab018fd3",
     defaultMessage: "Graph",
     sources: [
-      "src/lib/journeyMatrix.ts:42",
       "src/pages/Assistant.tsx:17",
     ],
   },
@@ -6463,13 +6476,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.profiles.535e52e4a2",
-    defaultMessage: "Profiles",
-    sources: [
-      "src/lib/journeyMatrix.ts:50",
-    ],
-  },
-  {
     key: "source.promise.1eec97a07f",
     defaultMessage: "Promise",
     sources: [
@@ -7074,17 +7080,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.request.a.credential.d4eafb1d4a",
-    defaultMessage: "Request a credential",
-    sources: [
-      "src/lib/journeyMatrix.ts:51",
-    ],
-  },
-  {
     key: "source.request.boundary.4ba2298c84",
     defaultMessage: "Request boundary",
     sources: [
       "src/pages/RequestCredential.tsx:363",
+    ],
+  },
+  {
+    key: "source.request.credential.014a4a64ca",
+    defaultMessage: "Request credential",
+    sources: [
+      "src/lib/journeyMatrix.ts:51",
     ],
   },
   {
@@ -8474,7 +8480,7 @@ export const extractedMessages = [
     key: "source.succeeded.5dceaeceb6",
     defaultMessage: "succeeded",
     sources: [
-      "src/pages/Dashboard.tsx:580",
+      "src/pages/Dashboard.tsx:581",
     ],
   },
   {
@@ -9275,8 +9281,14 @@ export const extractedMessages = [
     key: "source.workload.identity.ebfedeba5e",
     defaultMessage: "Workload identity",
     sources: [
-      "src/lib/journeyMatrix.ts:53",
       "src/pages/Identities.tsx:89",
+    ],
+  },
+  {
+    key: "source.workloads.84bd9e2acc",
+    defaultMessage: "Workloads",
+    sources: [
+      "src/lib/journeyMatrix.ts:53",
     ],
   },
   {
