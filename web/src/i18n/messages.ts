@@ -4110,6 +4110,18 @@ export const messages = {
     defaultMessage: "Connector delivery evidence",
     description: "Heading for served connector registry and delivery receipt evidence.",
   },
+  "platform.editions.useRights": {
+    defaultMessage: "Use rights",
+    description: "Label for the license use-rights row on the editions panel.",
+  },
+  "platform.editions.managedCustomerBand": {
+    defaultMessage: "Managed customer band",
+    description: "Label for the Provider managed-customer band row on the editions and managed-offering panels.",
+  },
+  "platform.editions.billingUnit": {
+    defaultMessage: "Billing unit",
+    description: "Label for the billing-unit row on the managed-offering panel.",
+  },
   "platform.scale.heading": {
     defaultMessage: "Scale orchestration",
     description: "Heading for the high-volume orchestration posture panel.",
@@ -7861,6 +7873,9 @@ const esESCatalog = {
   "incidents.response.jiraPlaceholder": "https://jira.example",
   "incidents.response.servicenowPlaceholder": "https://example.service-now.com",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
+  "platform.editions.useRights": "Derechos de uso",
+  "platform.editions.managedCustomerBand": "Banda de clientes gestionados",
+  "platform.editions.billingUnit": "Unidad de facturación",
   "platform.scale.heading": "Orquestación de escala",
   "platform.scale.served": "CAP-SCALE-01 activo",
   "platform.scale.unavailable": "escala no disponible",

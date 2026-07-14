@@ -592,12 +592,12 @@ export function Platform() {
                   <dd>{formatOptionalDate(editions?.expires_at, formatPolicy)}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Use rights</dt>
+                  <dt className="font-medium text-muted-foreground">{t("platform.editions.useRights")}</dt>
                   <dd>{(editions?.rights ?? ["self_host"]).map((right) => right.replaceAll("_", " ")).join(", ")}</dd>
                 </div>
                 {editions?.tier === "provider" ? (
                   <div>
-                    <dt className="font-medium text-muted-foreground">Managed customer band</dt>
+                    <dt className="font-medium text-muted-foreground">{t("platform.editions.managedCustomerBand")}</dt>
                     <dd>{editions.managed_customer_band ? formatNumberPolicy(editions.managed_customer_band, formatPolicy) : "Negotiated / unlimited"}</dd>
                   </div>
                 ) : null}
@@ -1094,12 +1094,12 @@ export function Platform() {
                   <dd>{managedOffering?.tier ?? editions?.tier ?? "community"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Billing unit</dt>
+                  <dt className="font-medium text-muted-foreground">{t("platform.editions.billingUnit")}</dt>
                   <dd>{managedOffering?.billing_unit ?? packaging.provider_billing_unit}</dd>
                 </div>
                 {(managedOffering?.tier ?? editions?.tier) === "provider" ? (
                   <div>
-                    <dt className="font-medium text-muted-foreground">Managed customer band</dt>
+                    <dt className="font-medium text-muted-foreground">{t("platform.editions.managedCustomerBand")}</dt>
                     <dd>
                       {managedOffering?.managed_customer_band
                         ? formatNumberPolicy(managedOffering.managed_customer_band, formatPolicy)
