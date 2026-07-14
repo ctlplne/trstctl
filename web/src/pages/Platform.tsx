@@ -833,25 +833,25 @@ export function AdminEditions() {
                   <div>
                     <dt className="font-medium text-muted-foreground">{t("parity.runModes_6fced8")}</dt>
                     <dd className="grid gap-1">
-                      {distribution.run_modes.map((mode) => (
+                      {(distribution.run_modes ?? []).map((mode) => (
                         <span key={mode.id}>
                           <span className="font-medium">{mode.label}</span>
                           <span className="text-muted-foreground"> — {mode.intended_use}</span>
                         </span>
                       ))}
-                      {distribution.run_modes.length === 0 && <span className="text-muted-foreground">-</span>}
+                      {(distribution.run_modes ?? []).length === 0 && <span className="text-muted-foreground">-</span>}
                     </dd>
                   </div>
                   <div>
                     <dt className="font-medium text-muted-foreground">{t("parity.supportedHostArchives_38c6c0")}</dt>
                     <dd className="grid gap-1">
-                      {distribution.supported_host_archives.map((archive) => (
+                      {(distribution.supported_host_archives ?? []).map((archive) => (
                         <span key={`${archive.os_arch}-${archive.postgres_version}`} className="font-mono text-xs">
                           {archive.os_arch} · PostgreSQL {archive.postgres_version}
                           {archive.evaluation_only ? " · evaluation only" : ""}
                         </span>
                       ))}
-                      {distribution.supported_host_archives.length === 0 && <span className="text-muted-foreground">-</span>}
+                      {(distribution.supported_host_archives ?? []).length === 0 && <span className="text-muted-foreground">-</span>}
                     </dd>
                   </div>
                   <div>
@@ -1258,7 +1258,7 @@ export function AdminAccess() {
               <form onSubmit={(event) => void onboardMember(event)} className="ui-panel grid gap-3 p-comfortable">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-status-success" aria-hidden="true" />
-                  <h3 className="text-body font-semibold">Onboard member</h3>
+                  <h2 className="text-body font-semibold">Onboard member</h2>
                 </div>
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium text-muted-foreground">Subject</span>
@@ -1284,7 +1284,7 @@ export function AdminAccess() {
               <form onSubmit={(event) => void mintToken(event)} className="ui-panel grid gap-3 p-comfortable">
                 <div className="flex items-center gap-2">
                   <KeyRound className="h-4 w-4 text-status-warning" aria-hidden="true" />
-                  <h3 className="text-body font-semibold">Mint API token</h3>
+                  <h2 className="text-body font-semibold">Mint API token</h2>
                 </div>
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium text-muted-foreground">Subject</span>
@@ -1302,7 +1302,7 @@ export function AdminAccess() {
               <form onSubmit={(event) => void offboardMember(event)} className="ui-panel grid gap-3 p-comfortable">
                 <div className="flex items-center gap-2">
                   <UserMinus className="h-4 w-4 text-destructive" aria-hidden="true" />
-                  <h3 className="text-body font-semibold">Offboard member</h3>
+                  <h2 className="text-body font-semibold">Offboard member</h2>
                 </div>
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium text-muted-foreground">Subject</span>
@@ -1337,7 +1337,7 @@ export function AdminAccess() {
               <div className="ui-panel mb-4 grid gap-3 p-comfortable">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-body font-semibold">{t("parity.privilegedAccessSessions_368da5")}</h3>
+                    <h2 className="text-body font-semibold">{t("parity.privilegedAccessSessions_368da5")}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">{t("parity.justInTimeOperatorSessionsBrokered_df233f")}</p>
                   </div>
                   <Button type="button" size="sm" onClick={() => setPAMFormOpen(true)}>
@@ -1385,7 +1385,7 @@ export function AdminAccess() {
                 </table>
               </div>
               <div className="ui-panel p-comfortable text-sm">
-                <h3 className="font-semibold">OIDC mapping status</h3>
+                <h2 className="font-semibold">OIDC mapping status</h2>
                 <dl className="mt-3 grid gap-2">
                   <div>
                     <dt className="font-medium text-muted-foreground">Enabled</dt>
@@ -1784,7 +1784,8 @@ function humanizeToken(value: string): string {
   return value ? value.replace(/[_-]+/g, " ") : "-";
 }
 
-function airGapSummary(airGap: PlatformDistributionStatus["air_gap"]): string {
+function airGapSummary(airGap: PlatformDistributionStatus["air_gap"] | undefined): string {
+  if (!airGap) return "No air-gap protections reported.";
   const protections = [
     airGap.no_phone_home_default ? "no phone-home by default" : null,
     airGap.public_telemetry_fail_closed ? "public telemetry fails closed" : null,
