@@ -6,6 +6,8 @@ import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { moduleLabelKey, moduleScopeTerm } from "@/lib/navigation";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 type Notice = { kind: "permission" | "error"; message: string };
 
@@ -28,9 +30,21 @@ const defaultFilters: FilterState = {
 };
 
 export function Audit() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const initialFilters = filtersFromSearchParams(searchParams);
   const [filters, setFilters] = useState<FilterState>(initialFilters);
+  // S-B4: the module scope is a lens over the one shared stream; surfaced as a
+  // clearable chip so it never becomes an invisible, sticky filter.
+  const [moduleScope, setModuleScope] = useState<string>(() => searchParams.get("module") ?? "");
+  const moduleScopeLabelKey = moduleScope ? moduleLabelKey(moduleScope) : undefined;
+
+  function clearModuleScope() {
+    setModuleScope("");
+    const cleared = { ...filters, q: "" };
+    setFilters(cleared);
+    void loadEvents(toAuditQuery(cleared));
+  }
   const [applied, setApplied] = useState<AuditQuery>(toAuditQuery(initialFilters));
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,6 +157,23 @@ export function Audit() {
           </Button>
         }
       />
+
+      {moduleScope && moduleScopeLabelKey && (
+        <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="audit-module-scope">
+          <span className="inline-flex items-center gap-2 rounded-control border border-brand-accent/40 bg-brand-accent/10 px-2.5 py-1 font-medium text-brand-accent">
+            {t("audit.moduleScope.label", { module: t(moduleScopeLabelKey) })}
+            <button
+              type="button"
+              onClick={clearModuleScope}
+              className="rounded-control px-1 text-brand-accent/80 hover:text-brand-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
+              aria-label={t("audit.moduleScope.clear")}
+            >
+              ✕
+            </button>
+          </span>
+          <span className="text-muted-foreground">{t("audit.moduleScope.note")}</span>
+        </div>
+      )}
 
       {exportError && <ErrorState title="Evidence export unavailable">{exportError}</ErrorState>}
       {bundle && <EvidenceBundle bundle={bundle} />}
@@ -333,12 +364,17 @@ function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
 }
 
 function filtersFromSearchParams(searchParams: URLSearchParams): FilterState {
+  // S-B4: ?module=<id> scopes the shared audit stream to one module by seeding
+  // the free-text query with the module's scope term (unless an explicit q is
+  // already present, which wins).
+  const moduleParam = searchParams.get("module") ?? "";
+  const moduleTerm = moduleParam ? moduleScopeTerm(moduleParam) : undefined;
   return {
     type: searchParams.get("type") ?? "",
     since: searchParams.get("since") ?? "",
     until: searchParams.get("until") ?? "",
     asOf: searchParams.get("as_of") ?? "",
-    q: searchParams.get("q") ?? "",
+    q: searchParams.get("q") ?? moduleTerm ?? "",
     limit: searchParams.get("limit") ?? "50",
   };
 }

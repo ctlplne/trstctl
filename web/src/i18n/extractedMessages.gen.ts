@@ -45,14 +45,14 @@ export const extractedMessages = [
     key: "source.2026.06.17t00.00.00z.f4debbb70c",
     defaultMessage: "2026-06-17T00:00:00Z",
     sources: [
-      "src/pages/Audit.tsx:203",
+      "src/pages/Audit.tsx:234",
     ],
   },
   {
     key: "source.2026.06.18t00.00.00z.b4c7e74181",
     defaultMessage: "2026-06-18T00:00:00Z",
     sources: [
-      "src/pages/Audit.tsx:210",
+      "src/pages/Audit.tsx:241",
     ],
   },
   {
@@ -331,7 +331,7 @@ export const extractedMessages = [
     key: "source.actor.449995c4fe",
     defaultMessage: "Actor",
     sources: [
-      "src/pages/Audit.tsx:395",
+      "src/pages/Audit.tsx:431",
     ],
   },
   {
@@ -661,7 +661,7 @@ export const extractedMessages = [
     key: "source.apply.filters.d80ab19b7e",
     defaultMessage: "Apply filters",
     sources: [
-      "src/pages/Audit.tsx:239",
+      "src/pages/Audit.tsx:270",
     ],
   },
   {
@@ -843,7 +843,7 @@ export const extractedMessages = [
     defaultMessage: "Audit",
     sources: [
       "src/lib/journeyMatrix.ts:38",
-      "src/pages/Audit.tsx:138",
+      "src/pages/Audit.tsx:152",
       "src/pages/Graph.tsx:592",
     ],
   },
@@ -1219,7 +1219,7 @@ export const extractedMessages = [
     key: "source.bundle.bytes.842399751d",
     defaultMessage: "Bundle bytes",
     sources: [
-      "src/pages/Audit.tsx:315",
+      "src/pages/Audit.tsx:346",
     ],
   },
   {
@@ -1684,7 +1684,7 @@ export const extractedMessages = [
     key: "source.cmd.k.abdd8e293f",
     defaultMessage: "Cmd K",
     sources: [
-      "src/components/AppShell.tsx:569",
+      "src/components/AppShell.tsx:609",
     ],
   },
   {
@@ -2371,7 +2371,7 @@ export const extractedMessages = [
     key: "source.current.filters.4e3b0ba1cb",
     defaultMessage: "Current filters",
     sources: [
-      "src/pages/Audit.tsx:320",
+      "src/pages/Audit.tsx:351",
     ],
   },
   {
@@ -2421,7 +2421,7 @@ export const extractedMessages = [
     key: "source.data.cec3a9b89b",
     defaultMessage: "Data",
     sources: [
-      "src/pages/Audit.tsx:397",
+      "src/pages/Audit.tsx:433",
     ],
   },
   {
@@ -2749,7 +2749,7 @@ export const extractedMessages = [
     key: "source.download.signed.bundle.c6373a92cb",
     defaultMessage: "Download signed bundle",
     sources: [
-      "src/pages/Audit.tsx:328",
+      "src/pages/Audit.tsx:359",
       "src/pages/Policy.tsx:1454",
     ],
   },
@@ -3099,7 +3099,7 @@ export const extractedMessages = [
     key: "source.event.detail.097e77abc2",
     defaultMessage: "Event detail",
     sources: [
-      "src/pages/Audit.tsx:374",
+      "src/pages/Audit.tsx:410",
     ],
   },
   {
@@ -3130,7 +3130,7 @@ export const extractedMessages = [
     key: "source.evidence.export.unavailable.9cb4129ff9",
     defaultMessage: "Evidence export unavailable",
     sources: [
-      "src/pages/Audit.tsx:147",
+      "src/pages/Audit.tsx:178",
     ],
   },
   {
@@ -3283,7 +3283,7 @@ export const extractedMessages = [
     key: "source.export.evidence.caab91492e",
     defaultMessage: "Export evidence",
     sources: [
-      "src/pages/Audit.tsx:141",
+      "src/pages/Audit.tsx:155",
     ],
   },
   {
@@ -3428,7 +3428,7 @@ export const extractedMessages = [
     key: "source.format.2f343666aa",
     defaultMessage: "Format",
     sources: [
-      "src/pages/Audit.tsx:311",
+      "src/pages/Audit.tsx:342",
     ],
   },
   {
@@ -3603,14 +3603,14 @@ export const extractedMessages = [
     key: "source.hash.a91069147f",
     defaultMessage: "Hash",
     sources: [
-      "src/pages/Audit.tsx:383",
+      "src/pages/Audit.tsx:419",
     ],
   },
   {
     key: "source.hash.chain.status.f5491b14e9",
     defaultMessage: "Hash-chain status",
     sources: [
-      "src/pages/Audit.tsx:356",
+      "src/pages/Audit.tsx:392",
     ],
   },
   {
@@ -3815,7 +3815,7 @@ export const extractedMessages = [
     key: "source.identity.issued.08c478fa05",
     defaultMessage: "identity.issued",
     sources: [
-      "src/pages/Audit.tsx:196",
+      "src/pages/Audit.tsx:227",
     ],
   },
   {
@@ -6262,7 +6262,7 @@ export const extractedMessages = [
     key: "source.policy.decisions.988b13232e",
     defaultMessage: "Policy decisions",
     sources: [
-      "src/pages/Audit.tsx:233",
+      "src/pages/Audit.tsx:264",
     ],
   },
   {
@@ -6436,7 +6436,7 @@ export const extractedMessages = [
     key: "source.profile.evaluations.fc73272085",
     defaultMessage: "Profile evaluations",
     sources: [
-      "src/pages/Audit.tsx:236",
+      "src/pages/Audit.tsx:267",
     ],
   },
   {
@@ -7119,7 +7119,7 @@ export const extractedMessages = [
     key: "source.reset.daee7606b3",
     defaultMessage: "Reset",
     sources: [
-      "src/pages/Audit.tsx:249",
+      "src/pages/Audit.tsx:280",
     ],
   },
   {
@@ -7654,7 +7654,7 @@ export const extractedMessages = [
     key: "source.scope.b073f6c68e",
     defaultMessage: "Scope",
     sources: [
-      "src/pages/Audit.tsx:319",
+      "src/pages/Audit.tsx:350",
       "src/pages/Incidents.tsx:1413",
     ],
   },
@@ -7866,7 +7866,7 @@ export const extractedMessages = [
     key: "source.select.an.audit.event.to.inspect.its.immut.b522affee1",
     defaultMessage: "Select an audit event to inspect its immutable sequence, hash, actor, and data payload.",
     sources: [
-      "src/pages/Audit.tsx:367",
+      "src/pages/Audit.tsx:403",
     ],
   },
   {
@@ -7957,7 +7957,7 @@ export const extractedMessages = [
     key: "source.sequence.0740f4bade",
     defaultMessage: "Sequence",
     sources: [
-      "src/pages/Audit.tsx:379",
+      "src/pages/Audit.tsx:415",
     ],
   },
   {
@@ -8158,7 +8158,7 @@ export const extractedMessages = [
     key: "source.signed.evidence.bundle.ready.9ce177ede7",
     defaultMessage: "Signed evidence bundle ready",
     sources: [
-      "src/pages/Audit.tsx:306",
+      "src/pages/Audit.tsx:337",
     ],
   },
   {
@@ -8626,7 +8626,7 @@ export const extractedMessages = [
     key: "source.tenant.e23969d284",
     defaultMessage: "Tenant",
     sources: [
-      "src/pages/Audit.tsx:391",
+      "src/pages/Audit.tsx:427",
     ],
   },
   {
@@ -8958,7 +8958,7 @@ export const extractedMessages = [
     key: "source.type.baaddf70fb",
     defaultMessage: "Type",
     sources: [
-      "src/pages/Audit.tsx:387",
+      "src/pages/Audit.tsx:423",
       "src/pages/Graph.tsx:383",
     ],
   },
@@ -9316,7 +9316,7 @@ export const extractedMessages = [
     key: "source.your.session.cannot.read.tenant.audit.evid.6c0890fb54",
     defaultMessage: "Your session cannot read tenant audit evidence.",
     sources: [
-      "src/pages/Audit.tsx:463",
+      "src/pages/Audit.tsx:499",
     ],
   },
   {

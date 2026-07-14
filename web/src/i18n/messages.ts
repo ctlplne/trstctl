@@ -60,6 +60,18 @@ export const messages = {
     defaultMessage: "View →",
     description: "Module KPI value for a navigational (non-numeric) tile that links to a sub-surface.",
   },
+  "audit.moduleScope.label": {
+    defaultMessage: "Scoped to {module}",
+    description: "Chip label on the audit page when the shared stream is filtered to one module (S-B4).",
+  },
+  "audit.moduleScope.clear": {
+    defaultMessage: "Clear module scope",
+    description: "Accessible label for the button that removes the audit module scope.",
+  },
+  "audit.moduleScope.note": {
+    defaultMessage: "One audit stream, filtered to this module. Clear to see all events.",
+    description: "Explanatory note beside the audit module-scope chip.",
+  },
   "moduleKpi.certificates.renewSoon": {
     defaultMessage: "renew soon",
     description: "Module KPI sub-label under the certificates expiring-30d metric.",
@@ -1020,6 +1032,18 @@ export const messages = {
   "nav.section.module": {
     defaultMessage: "Module",
     description: "Primary nav section label above the S-B2 product module switcher.",
+  },
+  "nav.module.auditLens": {
+    defaultMessage: "Audit (this module)",
+    description: "Module-band link to the audit stream scoped to the active module (S-B4).",
+  },
+  "nav.module.upsell": {
+    defaultMessage: "This module requires a commercial edition — view Editions & license",
+    description: "Tooltip on a locked module's upsell row in the switcher (S-B5).",
+  },
+  "nav.module.upsellBadge": {
+    defaultMessage: "Upgrade",
+    description: "Short badge on a locked module's upsell row.",
   },
   "nav.section.needsActionWorklists": {
     defaultMessage: "Needs action worklists",
@@ -6899,6 +6923,9 @@ const esESCatalog = {
   "certificates.tabs.inventory": "Inventario",
   "certificates.lifecycle.replaceViaRequest": "Reemplazar mediante solicitud →",
   "moduleKpi.view": "Ver →",
+  "audit.moduleScope.label": "Filtrado a {module}",
+  "audit.moduleScope.clear": "Quitar filtro de módulo",
+  "audit.moduleScope.note": "Un solo flujo de auditoría, filtrado a este módulo. Quítalo para ver todos los eventos.",
   "moduleKpi.certificates.renewSoon": "renovar pronto",
   "moduleKpi.certificates.expiring30d": "Caduca ≤30d",
   "moduleKpi.certificates.expiring7d": "Caduca ≤7d",
@@ -7183,6 +7210,9 @@ const esESCatalog = {
   "locale.arXB": "Pseudolocalización RTL",
   "nav.section.needsAction": "Acción requerida",
   "nav.section.module": "Módulo",
+  "nav.module.auditLens": "Auditoría (este módulo)",
+  "nav.module.upsell": "Este módulo requiere una edición comercial — ver Ediciones y licencia",
+  "nav.module.upsellBadge": "Mejorar",
   "nav.section.needsActionWorklists": "Listas de trabajo que requieren acción",
   "nav.task.expiringSoon.label": "Vencen pronto",
   "nav.task.expiringSoon.description": "lista de certificados a 30 días",

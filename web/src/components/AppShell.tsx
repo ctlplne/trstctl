@@ -43,6 +43,7 @@ import { hasAnyPermission } from "@/lib/access";
 import {
   contextualRouteItems,
   globalBandRoutes,
+  lockedModuleIds,
   moduleForRoute,
   navGroups,
   navModules,
@@ -161,6 +162,16 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
     () => navModules.filter((module) => module.routes.some((route) => hasAnyPermission(user, permissionAnyForPath(route)))),
     [user],
   );
+
+  // S-B5: modules whose required commercial feature is unlicensed render as a
+  // single graceful upsell row instead of being selectable. trstctl's modules
+  // are all MPL-core (moduleRequiredFeature is empty), so this is empty today;
+  // the seam avoids scattered locked panels if a commercial module is ever
+  // added. No editions fetch is made here while the map is empty.
+  const lockedModuleSet = useMemo(() => {
+    const noneLicensed: ReadonlySet<string> = new Set();
+    return new Set(lockedModuleIds(noneLicensed));
+  }, []);
 
   const routeModule = moduleForRoute(location.pathname);
   const [activeModule, setActiveModule] = useState<ModuleId | null>(() => {
@@ -294,13 +305,29 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
             </ul>
           </li>
         )}
-        {permittedModules.length > 0 && (
+        {permittedModules.length !== 0 && (
           <li>
             <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.module")}</p>
             <div role="tablist" aria-label={t("nav.section.module")} className="mb-2 flex flex-wrap gap-1 px-1">
               {permittedModules.map((module) => {
                 const Icon = iconMap[module.icon];
                 const selected = module.id === activeModule;
+                if (lockedModuleSet.has(module.id)) {
+                  // S-B5: one graceful upsell row, linking to Platform → Editions.
+                  return (
+                    <NavLink
+                      key={module.id}
+                      to="/platform?tab=editions"
+                      onClick={onNavigate}
+                      className="inline-flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-semibold text-sidebar-foreground/50 transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
+                      title={t("nav.module.upsell")}
+                    >
+                      <LockKeyhole aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{t(module.labelKey)}</span>
+                      <span className="rounded bg-sidebar-foreground/10 px-1 text-[0.65rem] uppercase tracking-wide">{t("nav.module.upsellBadge")}</span>
+                    </NavLink>
+                  );
+                }
                 return (
                   <button
                     key={module.id}
@@ -319,8 +346,8 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 );
               })}
             </div>
-            {moduleBandItems.length > 0 && (
-              <ul aria-label={activeModuleDef ? t(activeModuleDef.labelKey) : undefined} className="space-y-1">
+            {moduleBandItems.length !== 0 && activeModuleDef && (
+              <ul aria-label={t(activeModuleDef.labelKey)} className="space-y-1">
                 {moduleBandItems.map((item) => {
                   const { to, labelKey, icon, end } = item;
                   const Icon = iconMap[icon];
@@ -334,6 +361,19 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                     </li>
                   );
                 })}
+                {hasAnyPermission(user, permissionAnyForPath("/audit")) &&
+                  (() => {
+                    const AuditLensIcon = iconMap.audit;
+                    return (
+                      <li key="module-audit-scope">
+                        {/* S-B4: a scoped lens into the ONE shared audit stream. */}
+                        <NavLink to={`/audit?module=${activeModuleDef.id}`} onClick={onNavigate} className={navItemClass(false)}>
+                          <AuditLensIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{t("nav.module.auditLens")}</span>
+                        </NavLink>
+                      </li>
+                    );
+                  })()}
               </ul>
             )}
           </li>

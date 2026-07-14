@@ -150,6 +150,49 @@ export function moduleForRoute(to: string): ModuleId | undefined {
   return navModules.find((module) => module.routes.includes(path))?.id;
 }
 
+/** S-B4: dual-scope filters for the global planes. A module id maps to a free-
+ * text term that scopes the (single, shared) audit stream and risk list to that
+ * module's events/credentials — Infisical's dual-scope audit, adapted. There is
+ * still ONE audit surface and one hash chain; these are lenses, not silos (the
+ * DigiCert per-manager-audit anti-pattern, 03 §2). FE-only: the term is applied
+ * as the existing `q` free-text filter. */
+const moduleScopeTerms: Record<ModuleId, string> = {
+  certificates: "cert",
+  secrets: "secret",
+  ssh: "ssh",
+  signing: "sign",
+  fleet: "agent",
+};
+
+export function moduleScopeTerm(moduleId: string): string | undefined {
+  return (moduleScopeTerms as Record<string, string>)[moduleId];
+}
+
+export function moduleLabelKey(moduleId: string): MessageKey | undefined {
+  return navModules.find((module) => module.id === moduleId)?.labelKey;
+}
+
+/** S-B5 (DA-26 point-of-use upsell): the commercial feature each module needs
+ * to be fully usable, if any. trstctl's five modules are all MPL-core, so this
+ * map is EMPTY today — no module ever renders as a whole locked upsell row.
+ * Edition gating in trstctl is per-sub-feature, quarantined to Platform →
+ * Editions (S-A3). The seam exists so a future fully-commercial module (e.g. a
+ * Provider-only module) surfaces exactly one graceful upsell row rather than
+ * scattered locked panels (the Infisical OSS-billing lesson, 03 §1). */
+export const moduleRequiredFeature: Partial<Record<ModuleId, string>> = {};
+
+/** lockedModuleIds returns the modules that should render as an upsell row: a
+ * module is locked iff it declares a required commercial feature that is not in
+ * the licensed-feature set. With the empty map above this is always empty. */
+export function lockedModuleIds(licensedFeatures: ReadonlySet<string>): ModuleId[] {
+  return navModules
+    .filter((module) => {
+      const required = moduleRequiredFeature[module.id];
+      return Boolean(required) && !licensedFeatures.has(required as string);
+    })
+    .map((module) => module.id);
+}
+
 export const appRoutePaths = [
   "/login",
   "/",
