@@ -23,6 +23,9 @@ const { apiMock } = vi.hoisted(() => ({
     resumeFleetReissuance: vi.fn(),
     rollbackFleetReissuance: vi.fn(),
     exportFleetReissuanceEvidence: vi.fn(),
+    identities: vi.fn(),
+    connectorCatalog: vi.fn(),
+    nhiInventory: vi.fn(),
   },
 }));
 
@@ -48,6 +51,9 @@ vi.mock("@/lib/api", async (orig) => {
       resumeFleetReissuance: apiMock.resumeFleetReissuance,
       rollbackFleetReissuance: apiMock.rollbackFleetReissuance,
       exportFleetReissuanceEvidence: apiMock.exportFleetReissuanceEvidence,
+      identities: apiMock.identities,
+      connectorCatalog: apiMock.connectorCatalog,
+      nhiInventory: apiMock.nhiInventory,
     },
   };
 });
@@ -288,6 +294,26 @@ describe("incident response served execution surface", () => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
     apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [execution] });
     apiMock.executeIncident.mockReset().mockResolvedValue(execution);
+    // DA-10 rosters (C-P1): pickers are fed from the same inventory the rest
+    // of the console loads; defaults keep pre-picker tests behaviorally identical.
+    apiMock.identities
+      .mockReset()
+      .mockResolvedValue([
+        { id: "11111111-1111-1111-1111-111111111111", name: "payments-api", kind: "x509_certificate", status: "issued" },
+        { id: "55555555-5555-5555-5555-555555555555", name: "billing-bot", kind: "workload_identity", status: "issued" },
+      ]);
+    apiMock.connectorCatalog.mockReset().mockResolvedValue({
+      items: [
+        { name: "nginx", kind: "webserver", delivery_mode: "push", rollback: "restore previous bundle" },
+        { name: "aws-iam", kind: "cloud", delivery_mode: "api", rollback: "restore previous policy" },
+      ],
+    });
+    apiMock.nhiInventory.mockReset().mockResolvedValue({
+      generated_at: "2026-06-20T12:00:00Z",
+      items: [{ id: "nhi-payments-bot", display_name: "payments bot", kind: "secret", created_at: "2026-06-01T00:00:00Z", metadata: {} }],
+      summary: {},
+      coverage: [],
+    });
     apiMock.remediationPlaybooks
       .mockReset()
       .mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-20T12:00:00Z", items: playbooks });
@@ -560,5 +586,86 @@ describe("incident response served execution surface", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Break-glass help" })).not.toBeInTheDocument();
     expect(opener).toHaveFocus();
+  });
+});
+
+// ------------------------------------------------------------------ C-P1 ----
+// DA-10: incident intake stops taking raw UUIDs on faith. Identity fields are
+// datalist pickers fed from the served identity roster (DESIGN rule 13), the
+// delivery-method fields offer the served connector vocabulary, and the
+// inventory field offers the NHI inventory — while free typing keeps working
+// so operators and fixtures can still paste ids directly.
+
+describe("incident intake pickers (C-P1 / DA-10)", () => {
+  function datalistFor(input: HTMLElement): HTMLDataListElement {
+    const listId = input.getAttribute("list");
+    expect(listId, "input should reference a datalist").toBeTruthy();
+    const list = document.getElementById(listId as string);
+    expect(list, `datalist #${listId} should exist`).toBeInstanceOf(HTMLDataListElement);
+    return list as HTMLDataListElement;
+  }
+
+  function optionValues(list: HTMLDataListElement): string[] {
+    return Array.from(list.querySelectorAll("option")).map((option) => option.value);
+  }
+
+  function optionLabels(list: HTMLDataListElement): string[] {
+    return Array.from(list.querySelectorAll("option")).map((option) => option.getAttribute("label") ?? "");
+  }
+
+  it("feeds the affected-identity field from the served identity roster", async () => {
+    renderIncidents();
+    const input = await screen.findByLabelText("Affected identity");
+    await waitFor(() => expect(optionValues(datalistFor(input))).toContain("11111111-1111-1111-1111-111111111111"));
+    const list = datalistFor(input);
+    expect(optionValues(list)).toContain("55555555-5555-5555-5555-555555555555");
+    // Options carry the name (as the label attribute, so the wrapping <label>'s
+    // accessible name stays clean) — the operator picks by name, not by UUID.
+    expect(optionLabels(list).join(" ")).toMatch(/payments-api/);
+    expect(optionLabels(list).join(" ")).toMatch(/billing-bot/);
+  });
+
+  it("feeds the playbook target-identity field from the same roster", async () => {
+    renderIncidents();
+    const input = await screen.findByLabelText("Target identity");
+    await waitFor(() => expect(optionValues(datalistFor(input))).toContain("11111111-1111-1111-1111-111111111111"));
+  });
+
+  it("offers the served connector vocabulary on every delivery-method field", async () => {
+    renderIncidents();
+    // Execute + fleet forms both label their connector field "Delivery method".
+    const deliveryFields = await screen.findAllByLabelText("Delivery method");
+    expect(deliveryFields).toHaveLength(2);
+    const playbook = await screen.findByLabelText("Playbook delivery method");
+    for (const input of [...deliveryFields, playbook]) {
+      await waitFor(() => expect(optionValues(datalistFor(input))).toEqual(expect.arrayContaining(["nginx", "aws-iam"])));
+    }
+  });
+
+  it("offers the NHI inventory on the inventory field", async () => {
+    renderIncidents();
+    const input = await screen.findByLabelText("Inventory ID");
+    await waitFor(() => expect(optionValues(datalistFor(input))).toContain("nhi-payments-bot"));
+    expect(optionLabels(datalistFor(input)).join(" ")).toMatch(/payments bot/);
+  });
+
+  it("keeps free-typed identity ids working end-to-end", async () => {
+    const user = userEvent.setup();
+    renderIncidents();
+    await user.type(await screen.findByLabelText("Affected identity"), "deaddead-dead-dead-dead-deaddeaddead");
+    await user.click(screen.getByRole("button", { name: "Execute incident" }));
+    await waitFor(() =>
+      expect(apiMock.executeIncident).toHaveBeenCalledWith(expect.objectContaining({ identity_id: "deaddead-dead-dead-dead-deaddeaddead" })),
+    );
+  });
+
+  it("degrades to plain inputs when the rosters are unavailable", async () => {
+    apiMock.identities.mockRejectedValue(new ApiError(500, "boom"));
+    apiMock.connectorCatalog.mockRejectedValue(new ApiError(500, "boom"));
+    apiMock.nhiInventory.mockRejectedValue(new ApiError(500, "boom"));
+    renderIncidents();
+    const input = await screen.findByLabelText("Affected identity");
+    // Roster failure must not break intake: the field still accepts input.
+    await waitFor(() => expect(optionValues(datalistFor(input))).toEqual([]));
   });
 });

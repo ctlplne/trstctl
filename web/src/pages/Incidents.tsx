@@ -4,14 +4,17 @@ import { Activity, Bell, CheckCircle, Download, Pause, Play, RotateCcw, Send } f
 import {
   api,
   ApiError,
+  type ConnectorCatalogItem,
   type FleetReissuanceEvidence,
   type FleetReissuanceRequest,
   type FleetReissuanceRun,
   type GraphImpact,
   type GraphNode,
+  type Identity,
   type IncidentExecution,
   type IncidentExecutionRequest,
   type ITSMTicket,
+  type NHIInventoryItem,
   type OwnerRemediationQueue,
   type OwnerRemediationRun,
   type ResponseIntegrationDispatch,
@@ -22,6 +25,7 @@ import {
   type ServiceNowTicketRequest,
 } from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { IdentityPicker } from "@/components/IdentityPicker";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -110,6 +114,18 @@ const defaultPlaybookRun: RemediationPlaybookRunRequest = {
   rollback_ref: "",
 };
 
+/** readRoster loads picker suggestion data on a best-effort basis (C-P1 /
+ * DA-10): intake must keep working when a roster read fails or the api
+ * function is absent in a partial test double, so failures resolve to null
+ * instead of surfacing. Suggestion data is never load-bearing. */
+async function readRoster<T>(load: () => Promise<T>): Promise<T | null> {
+  try {
+    return (await load()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const breakGlassChecklist = [
   "emergency declaration names incident ID, commander, reason, and expiry",
   "quorum approval records two operators outside the affected owner team",
@@ -165,6 +181,27 @@ export function Incidents() {
   const [evidenceRunsError, setEvidenceRunsError] = useState<string | null>(null);
   const [evidenceRunDetail, setEvidenceRunDetail] = useState<RemediationPlaybookRun | null>(null);
   const [ownerQueueEvidence, setOwnerQueueEvidence] = useState<OwnerRemediationQueue | null>(null);
+  // C-P1 (DA-10): picker rosters — the identities, connector vocabulary, and
+  // NHI inventory the rest of the console already loads elsewhere.
+  const [identityRoster, setIdentityRoster] = useState<Identity[]>([]);
+  const [connectorRoster, setConnectorRoster] = useState<ConnectorCatalogItem[]>([]);
+  const [inventoryRoster, setInventoryRoster] = useState<NHIInventoryItem[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void readRoster(() => api.identities()).then((items) => {
+      if (active && items) setIdentityRoster(items);
+    });
+    void readRoster(() => api.connectorCatalog()).then((catalog) => {
+      if (active && catalog?.items) setConnectorRoster(catalog.items);
+    });
+    void readRoster(() => api.nhiInventory()).then((inventory) => {
+      if (active && inventory?.items) setInventoryRoster(inventory.items);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -520,13 +557,14 @@ export function Incidents() {
           </p>
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={executeIncident}>
-          <label className="grid gap-1 text-sm font-medium">
+          <label className="grid gap-1 text-sm font-medium" htmlFor="incident-affected-identity">
             Affected identity
-            <input
-              className="ui-input font-mono"
+            <IdentityPicker
+              id="incident-affected-identity"
               value={form.identity_id}
-              onChange={(event) => setForm({ ...form, identity_id: event.target.value })}
-              placeholder="00000000-0000-0000-0000-000000000000"
+              onChange={(identityId) => setForm({ ...form, identity_id: identityId })}
+              identities={identityRoster}
+              placeholder={t("incidents.picker.identityHint")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
@@ -544,7 +582,12 @@ export function Incidents() {
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Delivery method
-            <input className="ui-input" value={form.connector ?? ""} onChange={(event) => setForm({ ...form, connector: event.target.value })} />
+            <input
+              className="ui-input"
+              value={form.connector ?? ""}
+              onChange={(event) => setForm({ ...form, connector: event.target.value })}
+              list="incident-delivery-method-options"
+            />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Deployment target
@@ -573,6 +616,15 @@ export function Incidents() {
             </Button>
           </div>
         </form>
+        {/* Shared delivery-method vocabulary (C-P1): one served connector
+            catalog feeds every delivery-method field on this page. */}
+        <datalist id="incident-delivery-method-options">
+          {connectorRoster.map((item) => (
+            <option key={item.name} value={item.name}>
+              {`${item.kind} · ${item.delivery_mode}`}
+            </option>
+          ))}
+        </datalist>
         {previewError && <ErrorState title="Blast-radius preview unavailable">{previewError}</ErrorState>}
         {executeError && <ErrorState title="Incident execution failed">{executeError}</ErrorState>}
         {latestExecution && (
@@ -615,13 +667,14 @@ export function Incidents() {
           ))}
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={runRightSizePlaybook}>
-          <label className="grid gap-1 text-sm font-medium">
+          <label className="grid gap-1 text-sm font-medium" htmlFor="playbook-target-identity">
             {t("incidents.playbooks.targetIdentity")}
-            <input
-              className="ui-input font-mono"
+            <IdentityPicker
+              id="playbook-target-identity"
               value={playbookForm.target_identity_id ?? ""}
-              onChange={(event) => setPlaybookForm({ ...playbookForm, target_identity_id: event.target.value })}
-              placeholder="00000000-0000-0000-0000-000000000000"
+              onChange={(identityId) => setPlaybookForm({ ...playbookForm, target_identity_id: identityId })}
+              identities={identityRoster}
+              placeholder={t("incidents.picker.identityHint")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
@@ -631,7 +684,15 @@ export function Incidents() {
               value={playbookForm.inventory_id ?? ""}
               onChange={(event) => setPlaybookForm({ ...playbookForm, inventory_id: event.target.value })}
               placeholder={t("incidents.playbooks.inventoryPlaceholder")}
+              list="incident-inventory-options"
             />
+            {/* label attribute, not text children — this datalist lives inside
+                the field's <label> (see IdentityPicker). */}
+            <datalist id="incident-inventory-options">
+              {inventoryRoster.map((item) => (
+                <option key={item.id} value={item.id} label={`${item.display_name} (${item.kind})`} />
+              ))}
+            </datalist>
           </label>
           <label className="grid gap-1 text-sm font-medium">
             {t("incidents.playbooks.connector")}
@@ -640,6 +701,7 @@ export function Incidents() {
               value={playbookForm.connector ?? ""}
               onChange={(event) => setPlaybookForm({ ...playbookForm, connector: event.target.value })}
               placeholder={t("incidents.playbooks.connectorPlaceholder")}
+              list="incident-delivery-method-options"
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
@@ -1178,7 +1240,12 @@ export function Incidents() {
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Delivery method
-            <input className="ui-input" value={fleetForm.connector ?? ""} onChange={(event) => setFleetForm({ ...fleetForm, connector: event.target.value })} />
+            <input
+              className="ui-input"
+              value={fleetForm.connector ?? ""}
+              onChange={(event) => setFleetForm({ ...fleetForm, connector: event.target.value })}
+              list="incident-delivery-method-options"
+            />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Deployment target
