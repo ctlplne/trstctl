@@ -164,6 +164,111 @@ export const messages = {
     defaultMessage: "Queue signed certificates for Certificate Transparency log submission.",
     description: "Description next to the Submit to CT button.",
   },
+  "secrets.grant.heading": {
+    defaultMessage: "Grant workload access",
+    description: "Secrets Access tab: heading for the C-S1 grant console (Job 2's grant step, DA-02 interim).",
+  },
+  "secrets.grant.description": {
+    defaultMessage: "Job 2, end to end: create the secret on the Store tab, grant a scoped credential here, then verify with a machine login below.",
+    description: "Secrets Access tab: grant console description framing create → grant → verify.",
+  },
+  "secrets.grant.subject": {
+    defaultMessage: "Workload / subject",
+    description: "Grant console: subject field label (identity picker).",
+  },
+  "secrets.grant.scopes": {
+    defaultMessage: "Scopes (comma-separated)",
+    description: "Grant console: scopes field label.",
+  },
+  "secrets.grant.ephemeral": {
+    defaultMessage: "Time-bound (ephemeral)",
+    description: "Grant console: checkbox switching from a standing API token to a TTL-bound ephemeral key.",
+  },
+  "secrets.grant.ttl": {
+    defaultMessage: "TTL seconds",
+    description: "Grant console: TTL field label for ephemeral keys.",
+  },
+  "secrets.grant.submit": {
+    defaultMessage: "Grant access",
+    description: "Grant console: submit button.",
+  },
+  "secrets.grant.failedTitle": {
+    defaultMessage: "Grant failed",
+    description: "Grant console: error state title.",
+  },
+  "secrets.grant.revealTitle": {
+    defaultMessage: "Reveal-once credential",
+    description: "Grant console: title above the minted token, shown exactly once.",
+  },
+  "secrets.grant.revealNote": {
+    defaultMessage: "Copy it now — it is never shown again.",
+    description: "Grant console: reveal-once warning under the minted token.",
+  },
+  "secrets.grant.dismiss": {
+    defaultMessage: "Dismiss",
+    description: "Grant console: dismiss the revealed token.",
+  },
+  "secrets.grant.ledgerCaption": {
+    defaultMessage: "Granted access tokens",
+    description: "Grant console: screen-reader caption for the token ledger table.",
+  },
+  "secrets.grant.ledgerSubject": {
+    defaultMessage: "Subject",
+    description: "Grant console ledger column: subject.",
+  },
+  "secrets.grant.ledgerScopes": {
+    defaultMessage: "Scopes",
+    description: "Grant console ledger column: scopes.",
+  },
+  "secrets.grant.ledgerStatus": {
+    defaultMessage: "Status",
+    description: "Grant console ledger column: status.",
+  },
+  "secrets.grant.ledgerExpires": {
+    defaultMessage: "Expires",
+    description: "Grant console ledger column: expiry.",
+  },
+  "secrets.grant.ledgerActions": {
+    defaultMessage: "Actions",
+    description: "Grant console ledger column: actions.",
+  },
+  "secrets.grant.statusActive": {
+    defaultMessage: "active",
+    description: "Grant console ledger: active token status.",
+  },
+  "secrets.grant.statusRevoked": {
+    defaultMessage: "revoked",
+    description: "Grant console ledger: revoked token status.",
+  },
+  "secrets.grant.revoke": {
+    defaultMessage: "Revoke",
+    description: "Grant console ledger: revoke action button.",
+  },
+  "secrets.grant.ledgerEmpty": {
+    defaultMessage: "No granted tokens yet.",
+    description: "Grant console ledger: empty state row.",
+  },
+  "secrets.access.adminPendingTitle": {
+    defaultMessage: "Method & session administration isn't in the console yet",
+    description: "Secrets Access tab: honest remaining DA-02 scope after C-S1 (waits for C-S2..C-S4 backend).",
+  },
+  "secrets.access.adminPendingBody": {
+    defaultMessage:
+      "Configured token methods, audience rules, and the issued-session ledger land with the auth-method console. Until then, methods are declared in server config and the CLI covers the grant flow:",
+    description: "Secrets Access tab: body of the remaining-scope note with the CLI interim.",
+  },
+  "secrets.access.cliGrant": {
+    defaultMessage: "trstctl-cli access tokens create --subject <workload-id> --scopes secrets:read",
+    description: "Secrets Access tab: CLI interim command for the grant step (not translated per locale).",
+  },
+  "secrets.access.cliVerify": {
+    defaultMessage: "trstctl-cli secrets login --method token",
+    description: "Secrets Access tab: CLI interim command for the verify step (not translated per locale).",
+  },
+  "secrets.access.cliJourney": {
+    defaultMessage: "Open the manage-secrets journey →",
+    description: "Secrets Access tab: link to the guided journey covering Job 2.",
+  },
   "secrets.tabs.store": {
     defaultMessage: "Store",
     description: "Secrets page tab: browse, import, and manage the native secret store.",
@@ -6960,6 +7065,32 @@ const esESCatalog = {
   "certificates.tabs.renewal": "Preparación de renovación",
   "certificates.ct.launch": "Enviar a CT",
   "certificates.ct.launchDescription": "Ponga en cola certificados firmados para su envío a los registros de Certificate Transparency.",
+  "secrets.grant.heading": "Conceder acceso a workload",
+  "secrets.grant.description": "Job 2, de principio a fin: cree el secreto en la pestaña Almacén, conceda aquí una credencial con alcances y verifique abajo con un inicio de sesión de máquina.",
+  "secrets.grant.subject": "Workload / sujeto",
+  "secrets.grant.scopes": "Alcances (separados por comas)",
+  "secrets.grant.ephemeral": "Con límite de tiempo (efímero)",
+  "secrets.grant.ttl": "Segundos de TTL",
+  "secrets.grant.submit": "Conceder acceso",
+  "secrets.grant.failedTitle": "La concesión falló",
+  "secrets.grant.revealTitle": "Credencial de un solo vistazo",
+  "secrets.grant.revealNote": "Cópiela ahora — no volverá a mostrarse.",
+  "secrets.grant.dismiss": "Descartar",
+  "secrets.grant.ledgerCaption": "Tokens de acceso concedidos",
+  "secrets.grant.ledgerSubject": "Sujeto",
+  "secrets.grant.ledgerScopes": "Alcances",
+  "secrets.grant.ledgerStatus": "Estado",
+  "secrets.grant.ledgerExpires": "Caduca",
+  "secrets.grant.ledgerActions": "Acciones",
+  "secrets.grant.statusActive": "activo",
+  "secrets.grant.statusRevoked": "revocado",
+  "secrets.grant.revoke": "Revocar",
+  "secrets.grant.ledgerEmpty": "Aún no hay tokens concedidos.",
+  "secrets.access.adminPendingTitle": "La administración de métodos y sesiones aún no está en la consola",
+  "secrets.access.adminPendingBody": "Los métodos de token configurados, las reglas de audiencia y el libro de sesiones emitidas llegan con la consola de métodos de autenticación. Hasta entonces, los métodos se declaran en la configuración del servidor y la CLI cubre el flujo de concesión:",
+  "secrets.access.cliGrant": "trstctl-cli access tokens create --subject <workload-id> --scopes secrets:read",
+  "secrets.access.cliVerify": "trstctl-cli secrets login --method token",
+  "secrets.access.cliJourney": "Abrir el journey manage-secrets →",
   "secrets.tabs.store": "Almacén",
   "secrets.tabs.access": "Acceso",
   "secrets.tabs.sharing": "Compartir",

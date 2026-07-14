@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams , Link } from "react-router-dom";
 import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -7,7 +7,9 @@ import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { IdentityPicker } from "@/components/IdentityPicker";
 import { ModuleKpiStrip } from "@/components/ModuleKpiStrip";
+import { useCan } from "@/components/rbac";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -17,10 +19,12 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import {
   ApiError,
   api,
+  type APIToken,
   type CloudSecretManagerIntegration,
   type DynamicLease,
   type EphemeralAPIKey,
   type EphemeralCredential,
+  type Identity,
   type KubernetesSecretOperator,
   type MachineLoginResponse,
   type PKISecret,
@@ -123,6 +127,20 @@ export function Secrets() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [session, setSession] = useState<MachineLoginResponse | null>(null);
+  // C-S1 (DA-02 interim): grant console state — Job 2's grant step over the
+  // existing idempotent /access and /ephemeral endpoints.
+  const canGrant = useCan("access:write");
+  const canReadTokens = useCan("access:read");
+  const [grantIdentities, setGrantIdentities] = useState<Identity[]>([]);
+  const [grantSubject, setGrantSubject] = useState("");
+  const [grantScopes, setGrantScopes] = useState("secrets:read");
+  const [grantEphemeral, setGrantEphemeral] = useState(false);
+  const [grantTTL, setGrantTTL] = useState("3600");
+  const [grantBusy, setGrantBusy] = useState(false);
+  const [grantError, setGrantError] = useState<string | null>(null);
+  const [grantResult, setGrantResult] = useState<{ token: string; subject: string; expiresAt?: string } | null>(null);
+  const [tokenRows, setTokenRows] = useState<APIToken[] | null>(null);
+  const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
 
   const [shareValueInput, setShareValueInput] = useState("");
   const [shareTTL, setShareTTL] = useState("300");
@@ -590,6 +608,80 @@ export function Secrets() {
       setLoginError(apiProblemMessage(err, "Machine login failed"));
     } finally {
       setLoginBusy(false);
+    }
+  }
+
+  /* ------------------------------------------------------------- C-S1 ---- */
+
+  /** Best-effort roster/ledger reads: grant suggestions and the token table
+   * are never load-bearing for the rest of the Secrets page. */
+  async function readGrantRoster<T>(load: () => Promise<T>): Promise<T | null> {
+    try {
+      return (await load()) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function refreshTokenLedger() {
+    const page = await readGrantRoster(() => api.apiTokens({ includeRevoked: true, limit: 50 }));
+    setTokenRows(page?.items ?? null);
+  }
+
+  useEffect(() => {
+    let active = true;
+    void readGrantRoster(() => api.identities()).then((items) => {
+      if (active && items) setGrantIdentities(items);
+    });
+    if (canReadTokens) {
+      void readGrantRoster(() => api.apiTokens({ includeRevoked: true, limit: 50 })).then((page) => {
+        if (active) setTokenRows(page?.items ?? null);
+      });
+    }
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function submitGrant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setGrantError(null);
+    setGrantResult(null);
+    setGrantBusy(true);
+    try {
+      const subject = grantSubject.trim();
+      const scopes = grantScopes
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean);
+      if (grantEphemeral) {
+        const ttl = Number(grantTTL.trim());
+        const key = await api.issueEphemeralAPIKey({ subject, scopes, ttl_seconds: Number.isFinite(ttl) && ttl > 0 ? Math.floor(ttl) : 3600 });
+        setGrantResult({ token: key.token, subject: key.subject, expiresAt: key.expires_at });
+      } else {
+        const created = await api.createAPIToken({ subject, scopes });
+        setGrantResult({ token: created.token, subject: created.subject, expiresAt: created.expires_at });
+      }
+      setGrantSubject("");
+      await refreshTokenLedger();
+    } catch (err) {
+      setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
+    } finally {
+      setGrantBusy(false);
+    }
+  }
+
+  async function revokeGrantedToken(id: string) {
+    setRevokingTokenId(id);
+    setGrantError(null);
+    try {
+      await api.revokeAPIToken(id);
+      await refreshTokenLedger();
+    } catch (err) {
+      setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
+    } finally {
+      setRevokingTokenId(null);
     }
   }
 
@@ -1533,6 +1625,124 @@ export function Secrets() {
 
       {tab === "access" && (
         <div className="grid gap-6">
+          {/* C-S1 (DA-02 interim): Job 2's grant step, in-console, over the
+              existing idempotent /access/api-tokens and /ephemeral/api-keys
+              mutations. Create (Store tab) → grant (here) → verify (login
+              below). */}
+          {canGrant && (
+            <section aria-labelledby="grant-access-heading" className="grid gap-4 border-y border-border py-4">
+              <div>
+                <h2 id="grant-access-heading" className="text-title font-semibold">
+                  {t("secrets.grant.heading")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.grant.description")}</p>
+              </div>
+              <form aria-labelledby="grant-access-heading" onSubmit={(event) => void submitGrant(event)} className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm" htmlFor="grant-subject">
+                  <span className="font-medium">{t("secrets.grant.subject")}</span>
+                  <IdentityPicker
+                    id="grant-subject"
+                    value={grantSubject}
+                    onChange={setGrantSubject}
+                    identities={grantIdentities}
+                    placeholder={t("incidents.picker.identityHint")}
+                    className="rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{t("secrets.grant.scopes")}</span>
+                  <input
+                    className="rounded-md border border-input bg-background px-3 py-2 font-mono"
+                    value={grantScopes}
+                    onChange={(event) => setGrantScopes(event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" checked={grantEphemeral} onChange={(event) => setGrantEphemeral(event.target.checked)} />
+                  {t("secrets.grant.ephemeral")}
+                </label>
+                {grantEphemeral && (
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{t("secrets.grant.ttl")}</span>
+                    <input
+                      className="rounded-md border border-input bg-background px-3 py-2"
+                      type="number"
+                      min={1}
+                      value={grantTTL}
+                      onChange={(event) => setGrantTTL(event.target.value)}
+                    />
+                  </label>
+                )}
+                <div className="md:col-span-2">
+                  <Button type="submit" disabled={grantBusy || !grantSubject.trim() || !grantScopes.trim()}>
+                    {grantBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                    {t("secrets.grant.submit")}
+                  </Button>
+                </div>
+              </form>
+              {grantError && <ErrorState title={t("secrets.grant.failedTitle")}>{grantError}</ErrorState>}
+              {grantResult && (
+                <div role="status" className="rounded-panel border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium">{t("secrets.grant.revealTitle")}</p>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setGrantResult(null)}>
+                      {t("secrets.grant.dismiss")}
+                    </Button>
+                  </div>
+                  <code className="mt-2 block break-all rounded bg-background px-2 py-1 text-xs">{grantResult.token}</code>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("secrets.grant.revealNote")}</p>
+                </div>
+              )}
+              {canReadTokens && tokenRows && (
+                <div className="overflow-x-auto rounded-panel border border-border">
+                  <table className="ui-table min-w-[44rem]">
+                    <caption className="sr-only">{t("secrets.grant.ledgerCaption")}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t("secrets.grant.ledgerSubject")}</th>
+                        <th scope="col">{t("secrets.grant.ledgerScopes")}</th>
+                        <th scope="col">{t("secrets.grant.ledgerStatus")}</th>
+                        <th scope="col">{t("secrets.grant.ledgerExpires")}</th>
+                        <th scope="col">{t("secrets.grant.ledgerActions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tokenRows.map((token) => (
+                        <tr key={token.id} className="align-top">
+                          <td className="font-medium">{token.subject}</td>
+                          <td className="font-mono text-xs">{token.scopes.join(", ")}</td>
+                          <td>{token.revoked_at ? t("secrets.grant.statusRevoked") : t("secrets.grant.statusActive")}</td>
+                          <td>{token.expires_at ? formatDate(token.expires_at) : "—"}</td>
+                          <td>
+                            {!token.revoked_at && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={revokingTokenId === token.id}
+                                onClick={() => void revokeGrantedToken(token.id)}
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                {t("secrets.grant.revoke")}
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {tokenRows.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="text-muted-foreground">
+                            {t("secrets.grant.ledgerEmpty")}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
           <section aria-labelledby="machine-login-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="machine-login-heading" className="text-title font-semibold">
@@ -1569,9 +1779,17 @@ export function Secrets() {
             </form>
             {loginError && <ErrorState title="Machine login failed">{loginError}</ErrorState>}
             {session && <MachineSession session={session} />}
-            <UnavailableState title="Auth-method administration isn't in the console yet">
-              Configured token methods, audience rules, issued-session ledger, and revoked methods are not available in the console yet. This page exposes only
-              the login exchange.
+            {/* C-S1 shrank the DA-02 dead-end to the half that genuinely waits
+                for the C-S2..C-S4 backend: method/audience/session admin. The
+                grant step itself now lives above, and the CLI interim 02 asked
+                for is spelled out verbatim. */}
+            <UnavailableState title={t("secrets.access.adminPendingTitle")}>
+              {t("secrets.access.adminPendingBody")}
+              <code className="mt-2 block break-all rounded bg-background px-2 py-1 text-xs">{t("secrets.access.cliGrant")}</code>
+              <code className="mt-1 block break-all rounded bg-background px-2 py-1 text-xs">{t("secrets.access.cliVerify")}</code>
+              <Link to="/journeys" className="mt-2 inline-block text-sm font-medium text-brand-accent hover:underline">
+                {t("secrets.access.cliJourney")}
+              </Link>
             </UnavailableState>
           </section>
         </div>

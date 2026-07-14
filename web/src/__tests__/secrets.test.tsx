@@ -36,6 +36,10 @@ const { apiMock } = vi.hoisted(() => ({
     unvaultedSecrets: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
+    identities: vi.fn(),
+    apiTokens: vi.fn(),
+    createAPIToken: vi.fn(),
+    revokeAPIToken: vi.fn(),
   },
 }));
 
@@ -51,6 +55,144 @@ function renderSecrets() {
     </MemoryRouter>,
   );
 }
+
+function primeSecretsMocks() {
+  localStorage.clear();
+  sessionStorage.clear();
+  vi.restoreAllMocks();
+  for (const mock of Object.values(apiMock)) mock.mockReset();
+  apiMock.secretPage.mockResolvedValue({
+    items: [
+      {
+        name: "app/db/password",
+        version: 3,
+        created_at: "2026-06-18T10:00:00Z",
+        updated_at: "2026-06-19T10:00:00Z",
+      },
+    ],
+  });
+  apiMock.createSecret.mockResolvedValue({ name: "app/cache/token", version: 1 });
+  apiMock.getSecret.mockResolvedValue({ name: "app/db/password", value: "SUPER-SECRET", version: 3 });
+  apiMock.rotateSecret.mockResolvedValue({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
+  apiMock.deleteSecret.mockResolvedValue(undefined);
+  apiMock.approveSecretChange.mockResolvedValue({
+    resource: "secret:app/db/password",
+    action: "rotate",
+    approver: "bob",
+    approvals: 2,
+  });
+  apiMock.issuePKISecret.mockResolvedValue({
+    serial: "pki-01",
+    certificate: "-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----",
+    private_key: "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----",
+  });
+  // C-S1 grant-console rosters and ledger defaults.
+  apiMock.identities.mockResolvedValue([
+    { id: "wl-1111", name: "payments-bot", kind: "workload_identity", status: "issued" },
+    { id: "id-2222", name: "billing-svc", kind: "x509_certificate", status: "issued" },
+  ]);
+  apiMock.apiTokens.mockResolvedValue({
+    items: [
+      { id: "tok-1", tenant_id: "t1", subject: "wl-1111", scopes: ["secrets:read"], created_at: "2026-07-01T00:00:00Z" },
+      { id: "tok-2", tenant_id: "t1", subject: "old-bot", scopes: ["secrets:read"], created_at: "2026-06-01T00:00:00Z", revoked_at: "2026-06-20T00:00:00Z" },
+    ],
+  });
+  apiMock.createAPIToken.mockResolvedValue({
+    id: "tok-3",
+    tenant_id: "t1",
+    subject: "wl-1111",
+    scopes: ["secrets:read"],
+    token: "trst_REVEAL_ONCE_abc",
+    created_at: "2026-07-14T00:00:00Z",
+  });
+  apiMock.revokeAPIToken.mockResolvedValue(undefined);
+  apiMock.machineLogin.mockResolvedValue({
+    session_id: "sess-1",
+    principal: "svc-api",
+    method: "token",
+    scopes: ["secrets:read", "secrets:write"],
+    expires_at: "2026-06-19T13:00:00Z",
+  });
+  apiMock.createShare.mockResolvedValue({ token: "SHARE-TOKEN-1", expires_at: "2026-06-19T13:30:00Z" });
+  apiMock.redeemShare.mockResolvedValue({ value: "redeemed-secret" });
+  apiMock.issueEphemeralAPIKey.mockResolvedValue({
+    id: "33333333-3333-3333-3333-333333333333",
+    tenant_id: "44444444-4444-4444-4444-444444444444",
+    subject: "ci/deploy-preview",
+    scopes: ["repo:payments:read", "deploy:staging:write"],
+    created_at: "2026-06-19T13:00:00Z",
+    expires_at: "2026-06-19T13:15:00Z",
+    token: "epk_live_reveal_once_123",
+  });
+  apiMock.issueDynamicLease.mockResolvedValue({
+    id: "lease-postgres-1",
+    provider: "postgresql",
+    role: "readonly-reporting",
+    state: "active",
+    issued_at: "2026-06-19T13:00:00Z",
+    expires_at: "2026-06-19T13:20:00Z",
+    credential: "postgres://lease-secret",
+  });
+  apiMock.renewDynamicLease.mockResolvedValue({
+    id: "lease-postgres-1",
+    provider: "postgresql",
+    role: "readonly-reporting",
+    state: "active",
+    issued_at: "2026-06-19T13:00:00Z",
+    expires_at: "2026-06-19T13:25:00Z",
+  });
+  apiMock.revokeDynamicLease.mockResolvedValue({
+    id: "lease-postgres-1",
+    provider: "postgresql",
+    role: "readonly-reporting",
+    state: "revoked",
+    issued_at: "2026-06-19T13:00:00Z",
+    expires_at: "2026-06-19T13:25:00Z",
+  });
+  apiMock.encryptTransit.mockResolvedValue({ ciphertext: "trst:v1:ciphertext", version: 4 });
+  apiMock.decryptTransit.mockResolvedValue({ plaintext: "aGVsbG8gdHJhbnNpdA==" });
+  apiMock.hmacTransit.mockResolvedValue({ hmac: "hmac-base64" });
+  apiMock.rewrapTransit.mockResolvedValue({ ciphertext: "trst:v4:rewrapped", version: 4 });
+  apiMock.signTransit.mockResolvedValue({ signature: "signature-base64", public_der: "public-der-base64" });
+  apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
+  apiMock.thirdPartySecretScanning.mockResolvedValue(thirdPartyScanPostureFixture());
+  apiMock.ingestThirdPartySecretScan.mockResolvedValue({
+    capability: "CAP-SCAN-04",
+    provider: "slack",
+    source: "acme/slack",
+    source_id: "secret-third-party:slack:acme-slack",
+    run_id: "66666666-6666-6666-6666-666666666666",
+    queued: true,
+    status: "queued",
+    outbox_destination: "discovery.run",
+    scanner: "gitleaks v8.27.2",
+    discovery_run_path: "/api/v1/discovery/runs/66666666-6666-6666-6666-666666666666",
+  });
+  apiMock.cloudSecretManagers.mockResolvedValue(cloudSecretManagerFixture());
+  apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
+  apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
+  apiMock.secretWorkloadInjection.mockResolvedValue(secretWorkloadInjectionFixture());
+  apiMock.unvaultedSecrets.mockResolvedValue(unvaultedSecretPostureFixture());
+  apiMock.scanSecrets.mockResolvedValue({
+    run_id: "55555555-5555-5555-5555-555555555555",
+    scanner: "gitleaks",
+    engine_version: "8.18.2",
+    mode: "workspace",
+    custom_rules: false,
+    capabilities: ["pattern-rules", "entropy-rules", "default-rules-100-plus", "workspace"],
+    rules_active: 121,
+    findings_count: 1,
+    findings: [{ rule_id: "generic-api-key", file: "config/ci.yml", line: 42, credential_ref: "sha256:6e5a...91bb" }],
+  });
+  apiMock.syncSecret.mockResolvedValue({
+    name: "app/db/password",
+    target: "kubernetes/prod",
+    remote_key: "Secret/payments-db/password",
+    enqueued: true,
+    delivered: false,
+  });
+}
+
 
 function repoScanPostureFixture() {
   return {
@@ -404,122 +546,7 @@ function unvaultedSecretPostureFixture() {
 }
 
 describe("secrets surface", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-    vi.restoreAllMocks();
-    for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.secretPage.mockResolvedValue({
-      items: [
-        {
-          name: "app/db/password",
-          version: 3,
-          created_at: "2026-06-18T10:00:00Z",
-          updated_at: "2026-06-19T10:00:00Z",
-        },
-      ],
-    });
-    apiMock.createSecret.mockResolvedValue({ name: "app/cache/token", version: 1 });
-    apiMock.getSecret.mockResolvedValue({ name: "app/db/password", value: "SUPER-SECRET", version: 3 });
-    apiMock.rotateSecret.mockResolvedValue({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
-    apiMock.deleteSecret.mockResolvedValue(undefined);
-    apiMock.approveSecretChange.mockResolvedValue({
-      resource: "secret:app/db/password",
-      action: "rotate",
-      approver: "bob",
-      approvals: 2,
-    });
-    apiMock.issuePKISecret.mockResolvedValue({
-      serial: "pki-01",
-      certificate: "-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----",
-      private_key: "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----",
-    });
-    apiMock.machineLogin.mockResolvedValue({
-      session_id: "sess-1",
-      principal: "svc-api",
-      method: "token",
-      scopes: ["secrets:read", "secrets:write"],
-      expires_at: "2026-06-19T13:00:00Z",
-    });
-    apiMock.createShare.mockResolvedValue({ token: "SHARE-TOKEN-1", expires_at: "2026-06-19T13:30:00Z" });
-    apiMock.redeemShare.mockResolvedValue({ value: "redeemed-secret" });
-    apiMock.issueEphemeralAPIKey.mockResolvedValue({
-      id: "33333333-3333-3333-3333-333333333333",
-      tenant_id: "44444444-4444-4444-4444-444444444444",
-      subject: "ci/deploy-preview",
-      scopes: ["repo:payments:read", "deploy:staging:write"],
-      created_at: "2026-06-19T13:00:00Z",
-      expires_at: "2026-06-19T13:15:00Z",
-      token: "epk_live_reveal_once_123",
-    });
-    apiMock.issueDynamicLease.mockResolvedValue({
-      id: "lease-postgres-1",
-      provider: "postgresql",
-      role: "readonly-reporting",
-      state: "active",
-      issued_at: "2026-06-19T13:00:00Z",
-      expires_at: "2026-06-19T13:20:00Z",
-      credential: "postgres://lease-secret",
-    });
-    apiMock.renewDynamicLease.mockResolvedValue({
-      id: "lease-postgres-1",
-      provider: "postgresql",
-      role: "readonly-reporting",
-      state: "active",
-      issued_at: "2026-06-19T13:00:00Z",
-      expires_at: "2026-06-19T13:25:00Z",
-    });
-    apiMock.revokeDynamicLease.mockResolvedValue({
-      id: "lease-postgres-1",
-      provider: "postgresql",
-      role: "readonly-reporting",
-      state: "revoked",
-      issued_at: "2026-06-19T13:00:00Z",
-      expires_at: "2026-06-19T13:25:00Z",
-    });
-    apiMock.encryptTransit.mockResolvedValue({ ciphertext: "trst:v1:ciphertext", version: 4 });
-    apiMock.decryptTransit.mockResolvedValue({ plaintext: "aGVsbG8gdHJhbnNpdA==" });
-    apiMock.hmacTransit.mockResolvedValue({ hmac: "hmac-base64" });
-    apiMock.rewrapTransit.mockResolvedValue({ ciphertext: "trst:v4:rewrapped", version: 4 });
-    apiMock.signTransit.mockResolvedValue({ signature: "signature-base64", public_der: "public-der-base64" });
-    apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
-    apiMock.thirdPartySecretScanning.mockResolvedValue(thirdPartyScanPostureFixture());
-    apiMock.ingestThirdPartySecretScan.mockResolvedValue({
-      capability: "CAP-SCAN-04",
-      provider: "slack",
-      source: "acme/slack",
-      source_id: "secret-third-party:slack:acme-slack",
-      run_id: "66666666-6666-6666-6666-666666666666",
-      queued: true,
-      status: "queued",
-      outbox_destination: "discovery.run",
-      scanner: "gitleaks v8.27.2",
-      discovery_run_path: "/api/v1/discovery/runs/66666666-6666-6666-6666-666666666666",
-    });
-    apiMock.cloudSecretManagers.mockResolvedValue(cloudSecretManagerFixture());
-    apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
-    apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
-    apiMock.secretWorkloadInjection.mockResolvedValue(secretWorkloadInjectionFixture());
-    apiMock.unvaultedSecrets.mockResolvedValue(unvaultedSecretPostureFixture());
-    apiMock.scanSecrets.mockResolvedValue({
-      run_id: "55555555-5555-5555-5555-555555555555",
-      scanner: "gitleaks",
-      engine_version: "8.18.2",
-      mode: "workspace",
-      custom_rules: false,
-      capabilities: ["pattern-rules", "entropy-rules", "default-rules-100-plus", "workspace"],
-      rules_active: 121,
-      findings_count: 1,
-      findings: [{ rule_id: "generic-api-key", file: "config/ci.yml", line: 42, credential_ref: "sha256:6e5a...91bb" }],
-    });
-    apiMock.syncSecret.mockResolvedValue({
-      name: "app/db/password",
-      target: "kubernetes/prod",
-      remote_key: "Secret/payments-db/password",
-      enqueued: true,
-      delivered: false,
-    });
-  });
+  beforeEach(() => primeSecretsMocks());
 
   it("lists metadata, creates, reveals, rotates, and deletes native secrets without storage writes", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
@@ -542,8 +569,8 @@ describe("secrets surface", () => {
 
     // Machine-login disclosures live on the Access workspace tab.
     await user.click(screen.getByRole("tab", { name: "Access" }));
-    expect(screen.getByText("Auth-method administration isn't in the console yet")).toBeInTheDocument();
-    expect(screen.getByText(/revoked methods are not available in the console yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Method & session administration isn't in the console yet/)).toBeInTheDocument();
+    expect(screen.getByText(/land with the auth-method console/i)).toBeInTheDocument();
 
     // Sync and platform-integration posture live on the Sync workspace tab.
     await user.click(screen.getByRole("tab", { name: "Sync" }));
@@ -927,5 +954,101 @@ describe("secrets surface", () => {
 
     expect(await screen.findByText("No secrets stored yet")).toBeInTheDocument();
     expect(screen.getByText(/Only the name and version return/)).toBeInTheDocument();
+  });
+});
+
+// ------------------------------------------------------------------ C-S1 ----
+// DA-02 interim: Job 2 — create, grant, verify — completes in-console with
+// zero backend changes. The grant console mints scoped credentials over the
+// existing idempotent /access and /ephemeral endpoints, lists and revokes
+// them, and the old "isn't in the console yet" dead-end shrinks to the
+// method/session half that genuinely waits for C-S2..C-S4.
+
+describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
+  beforeEach(() => primeSecretsMocks());
+
+  async function openAccessTab() {
+    const user = userEvent.setup();
+    renderSecrets();
+    await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Access" }));
+    return user;
+  }
+
+  it("mints a scoped standing token for a picked workload and reveals it once", async () => {
+    const user = await openAccessTab();
+    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
+
+    const subject = grant.getByLabelText("Workload / subject");
+    await user.type(subject, "wl-1111");
+    // Scopes default to secrets:read — the least-privilege Job 2 grant.
+    expect(grant.getByLabelText(/Scopes/)).toHaveValue("secrets:read");
+    await user.click(grant.getByRole("button", { name: "Grant access" }));
+
+    await waitFor(() => expect(apiMock.createAPIToken).toHaveBeenCalledWith({ subject: "wl-1111", scopes: ["secrets:read"] }));
+    expect(await screen.findByText("trst_REVEAL_ONCE_abc")).toBeInTheDocument();
+    expect(screen.getByText(/never shown again/i)).toBeInTheDocument();
+    // Ledger refreshes after the mint.
+    expect(apiMock.apiTokens.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("offers the identity roster on the subject picker", async () => {
+    await openAccessTab();
+    const subject = await screen.findByLabelText("Workload / subject");
+    const listId = subject.getAttribute("list");
+    expect(listId).toBeTruthy();
+    await waitFor(() => {
+      const options = Array.from(document.getElementById(listId as string)?.querySelectorAll("option") ?? []);
+      expect(options.map((option) => option.getAttribute("value"))).toContain("wl-1111");
+    });
+  });
+
+  it("mints a TTL-bound ephemeral key when time-bound is selected", async () => {
+    const user = await openAccessTab();
+    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
+
+    await user.type(grant.getByLabelText("Workload / subject"), "wl-1111");
+    await user.click(grant.getByLabelText(/Time-bound/));
+    await user.clear(grant.getByLabelText("TTL seconds"));
+    await user.type(grant.getByLabelText("TTL seconds"), "900");
+    await user.click(grant.getByRole("button", { name: "Grant access" }));
+
+    await waitFor(() =>
+      expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith({ subject: "wl-1111", scopes: ["secrets:read"], ttl_seconds: 900 }),
+    );
+    expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
+    expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+  });
+
+  it("lists granted tokens and revokes one", async () => {
+    const user = await openAccessTab();
+    // Ledger renders both rows, revoked one labeled as such.
+    expect(await screen.findByText("wl-1111")).toBeInTheDocument();
+    expect(screen.getByText("old-bot")).toBeInTheDocument();
+
+    const row = screen.getByText("wl-1111").closest("tr") as HTMLTableRowElement;
+    await user.click(within(row).getByRole("button", { name: "Revoke" }));
+    await waitFor(() => expect(apiMock.revokeAPIToken).toHaveBeenCalledWith("tok-1"));
+  });
+
+  it("replaces the grant dead-end with the honest remaining scope + CLI interim", async () => {
+    await openAccessTab();
+    // The DA-02 blocker text is gone…
+    expect(screen.queryByText("Auth-method administration isn't in the console yet")).not.toBeInTheDocument();
+    // …replaced by the narrower truth (methods/sessions wait for C-S2..C-S4)…
+    expect(await screen.findByText(/Method & session administration isn't in the console yet/)).toBeInTheDocument();
+    // …plus the exact CLI interim 02 asked for, and the journey link.
+    expect(screen.getByText(/trstctl-cli access tokens create/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /manage-secrets journey/i })).toHaveAttribute("href", "/journeys");
+  });
+
+  it("keeps the login verify step working beside the grant flow", async () => {
+    const user = await openAccessTab();
+    const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));
+    await user.type(loginForm.getByLabelText("Method"), "{selectall}token");
+    await user.type(loginForm.getByLabelText("Credential"), "cred-1");
+    await user.click(loginForm.getByRole("button", { name: /test login/i }));
+    await waitFor(() => expect(apiMock.machineLogin).toHaveBeenCalled());
+    expect(await screen.findByText("sess-1")).toBeInTheDocument();
   });
 });
