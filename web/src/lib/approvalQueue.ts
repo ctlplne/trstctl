@@ -1,4 +1,5 @@
 import { identityState, type Identity, type Me } from "@/lib/api";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export type ApprovalActionKind = "issue" | "rotate" | "revoke";
 
@@ -14,12 +15,18 @@ export type ApprovalQueueRow = {
 export function approvalActionsForState(state: string): Array<{ label: string; action: ApprovalActionKind }> {
   switch (state) {
     case "requested":
-      return [{ label: "Approve issue", action: "issue" }];
+      return [{ get label() {
+      return translateNow("source.approve.issue.a4353290b7");
+    }, action: "issue" }];
     case "renewing":
-      return [{ label: "Approve rotate", action: "rotate" }];
+      return [{ get label() {
+      return translateNow("source.approve.rotate.cdbd42f3c6");
+    }, action: "rotate" }];
     case "issued":
     case "deployed":
-      return [{ label: "Approve revoke", action: "revoke" }];
+      return [{ get label() {
+      return translateNow("source.approve.revoke.80c949285d");
+    }, action: "revoke" }];
     default:
       return [];
   }

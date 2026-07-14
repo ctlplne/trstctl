@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { CheckCircle2, Info, TriangleAlert, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { translateNow } from "@/i18n/I18nProvider";
 
 type ToastKind = "error" | "info" | "success" | "warning";
 
@@ -79,7 +80,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 size="icon"
                 className="h-7 w-7 shrink-0"
                 onClick={() => remove(record.id)}
-                aria-label="Dismiss notification"
+                aria-label={translateNow("source.dismiss.notification.b7bb3f3424")}
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>

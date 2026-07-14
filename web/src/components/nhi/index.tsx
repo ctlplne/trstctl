@@ -1,7 +1,7 @@
 import { SectionCard, DashboardGrid, AttentionList, AttentionRow } from "@/components/dashboard";
 import { StatTile } from "@/components/charts";
 import { RiskScore, useRisk } from "@/components/risk";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { Identity, CredentialRisk, NHIInventory as NHIInventoryResponse, Owner } from "@/lib/api";
 
 function humanize(value: string): string {
@@ -66,9 +66,9 @@ export function OrphanGovernance({ owners = [] }: { owners?: Owner[] }) {
         <StatTile label="Orphaned" value={orphans.length} tone={orphans.length ? "high" : undefined} />
         <StatTile label="Ownership coverage" value={`${coverage}%`} />
       </DashboardGrid>
-      <SectionCard title="Orphaned credentials" description="machine identities whose human custodian is gone or inactive">
+      <SectionCard title={translateNow("source.orphaned.credentials.0e9e535cd8")} description="machine identities whose human custodian is gone or inactive">
         {orphans.length === 0 ? (
-          <p className="text-caption text-muted-foreground">Every credential has an active owner.</p>
+          <p className="text-caption text-muted-foreground">{translateNow("source.every.credential.has.an.active.owner.aebb83b953")}</p>
         ) : (
           <AttentionList ariaLabel="Orphaned credentials">
             {orphans.map((risk) => (

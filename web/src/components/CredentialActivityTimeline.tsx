@@ -1,4 +1,5 @@
 import type { ConnectorDelivery, RotationRun } from "@/lib/api";
+import { translateNow } from "@/i18n/I18nProvider";
 
 function shortFingerprint(value?: string): string {
   if (!value) return "-";
@@ -15,21 +16,21 @@ export function CredentialActivityTimeline({
   rotationRun?: RotationRun;
 }) {
   const rows = [
-    { label: "Lifecycle accepted", value: "state is projected from the event log" },
+    { label: translateNow("source.lifecycle.accepted.436d4137b8"), value: "state is projected from the event log" },
     {
-      label: "Connector delivery",
+      label: translateNow("source.connector.delivery.670c8c3d02"),
       value: deliveryReceipt
         ? `${deliveryReceipt.status} ${deliveryReceipt.connector}/${deliveryReceipt.target} after ${deliveryReceipt.attempts} attempt${deliveryReceipt.attempts === 1 ? "" : "s"}`
         : "no connector delivery receipt yet",
     },
     {
-      label: "Rotation run",
+      label: translateNow("source.rotation.run.a813bc1537"),
       value: rotationRun
         ? `${rotationRun.status} via ${rotationRun.trigger}; successor ${shortFingerprint(rotationRun.successor_fingerprint)}`
         : "no lifecycle rotation run yet",
     },
     {
-      label: "Rollback evidence",
+      label: translateNow("source.rollback.evidence.bf960c995c"),
       value: rotationRun?.rollback_ref || deliveryReceipt?.rollback_ref || "no rollback reference recorded yet",
     },
   ];
@@ -37,12 +38,9 @@ export function CredentialActivityTimeline({
   return (
     <section aria-labelledby="credential-activity-timeline-heading" className="mt-5 border-t border-border pt-4">
       <h3 id="credential-activity-timeline-heading" className="font-semibold">
-        Credential activity timeline
-      </h3>
+        {translateNow("source.credential.activity.timeline.e03f707dcc")}</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        {credentialLabel ? `${credentialLabel} has` : "This credential has"} lifecycle state plus projected connector and rotation evidence when an outbox
-        worker has produced it.
-      </p>
+        {credentialLabel ? `${credentialLabel} has` : "This credential has"} {" "}{translateNow("source.lifecycle.state.plus.projected.connector.a.efb351b308")}</p>
       <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
         {rows.map((row) => (
           <li key={row.label} className="rounded-md border border-border p-2">

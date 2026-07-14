@@ -8,6 +8,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,18 +28,42 @@ const excludedPathParts = [
   // values are intentionally not customer copy, so they stay out of the
   // extraction ratchet the same way test fixtures do.
   `${path.sep}pages${path.sep}Styleguide.tsx`,
+  // C-I1 exemption re-audit (DA-14): demoData is the preview-mode showcase —
+  // real tenants never see it (ia_ratchets guards its imports), and its
+  // fabricated fixtures are intentionally not translated copy. journeyMatrix
+  // is the persona-smoke test matrix: its heading strings must byte-match the
+  // live H1s (which are themselves keyed), so keying the matrix would only
+  // duplicate the catalog and defeat its cross-check purpose.
+  `${path.sep}lib${path.sep}demoData.ts`,
+  `${path.sep}lib${path.sep}journeyMatrix.ts`,
 ];
 
-const candidatePatterns = [
-  { kind: "jsx-text", re: />((?:[^<>{}]|\n)+)</g, pick: 1 },
-  { kind: "attribute", re: /\b(?:aria-label|aria-description|placeholder|title|alt)=["']([^"']+)["']/g, pick: 1 },
-  {
-    kind: "copy-property",
-    re: /\b(?:label|title|description|heading|summary|message|detail|emptyTitle|emptyDescription|tooltip|copy)\s*:\s*"([^"\n]+)"/g,
-    pick: 1,
-  },
-  { kind: "state-copy", re: /return\s*\{\s*(?:label|title|description|message|detail)\s*:\s*"([^"\n]+)"/g, pick: 1 },
-];
+// C-I1 re-audit (DA-14): candidates come from the TypeScript AST instead of
+// regexes. JSX text nodes, whitelisted JSX string attributes, and whitelisted
+// object-property string literals are the entire user-facing surface; comments,
+// type positions, and generics can no longer masquerade as UI copy.
+const attrNames = new Set(["aria-label", "aria-description", "placeholder", "title", "alt"]);
+const propNames = new Set(["label", "title", "description", "heading", "summary", "message", "detail", "emptyTitle", "emptyDescription", "tooltip", "copy"]);
+
+function astCandidates(file, source) {
+  const scriptKind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, scriptKind);
+  const out = [];
+  const visit = (node) => {
+    if (ts.isJsxText(node)) {
+      out.push({ value: node.text, index: node.getStart(sf) });
+    } else if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
+      const name = node.name.getText(sf);
+      if (attrNames.has(name)) out.push({ value: node.initializer.text, index: node.initializer.getStart(sf) });
+    } else if (ts.isPropertyAssignment(node) && ts.isStringLiteral(node.initializer)) {
+      const name = ts.isIdentifier(node.name) || ts.isStringLiteral(node.name) ? node.name.text : "";
+      if (propNames.has(name)) out.push({ value: node.initializer.text, index: node.initializer.getStart(sf) });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return out;
+}
 
 function walk(dir) {
   const out = [];
@@ -94,19 +119,17 @@ function extract() {
   for (const file of walk(SRC)) {
     const source = readFileSync(file, "utf8");
     const rel = path.relative(WEB, file);
-    for (const pattern of candidatePatterns) {
-      for (const match of source.matchAll(pattern.re)) {
-        const value = normalize(match[pattern.pick]);
-        if (!isUserFacing(value)) continue;
-        const sourceRef = `${rel}:${lineFor(source, match.index ?? 0)}`;
-        const current = byValue.get(value) ?? {
-          key: keyFor(value),
-          defaultMessage: value,
-          sources: new Set(),
-        };
-        current.sources.add(sourceRef);
-        byValue.set(value, current);
-      }
+    for (const candidate of astCandidates(file, source)) {
+      const value = normalize(candidate.value);
+      if (!isUserFacing(value)) continue;
+      const sourceRef = `${rel}:${lineFor(source, candidate.index)}`;
+      const current = byValue.get(value) ?? {
+        key: keyFor(value),
+        defaultMessage: value,
+        sources: new Set(),
+      };
+      current.sources.add(sourceRef);
+      byValue.set(value, current);
     }
   }
   return [...byValue.values()].map((entry) => ({ ...entry, sources: [...entry.sources].sort() })).sort((left, right) => left.key.localeCompare(right.key));

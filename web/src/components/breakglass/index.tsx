@@ -3,7 +3,7 @@ import { api, type BreakglassIssueRequest, type BreakglassIssueResponse, type Br
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/StatePrimitives";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 /** BreakGlassReconcile takes the bundles a quorum issued OFFLINE during an outage
  * (when the control plane could not be reached) and reconciles them back into the
@@ -71,7 +71,7 @@ export function BreakGlassReconcile() {
 
   return (
     <SectionCard
-      title="Break-glass reconciliation"
+      title={translateNow("source.break.glass.reconciliation.7351236672")}
       description="Reconcile offline-issued, quorum-approved break-glass certificate bundles back into the control plane once connectivity returns."
     >
       <form onSubmit={issue} className="mb-5 grid gap-3 border-b border-border pb-5">
@@ -104,8 +104,7 @@ export function BreakGlassReconcile() {
       ) : null}
       <form onSubmit={reconcile} className="grid gap-3">
         <label className="grid gap-1 text-sm font-medium" htmlFor="breakglass-bundles">
-          Offline-issued bundles (JSON)
-          <textarea
+          {translateNow("source.offline.issued.bundles.json.58401e65e9")}<textarea
             id="breakglass-bundles"
             value={bundles}
             onChange={(event) => setBundles(event.target.value)}
@@ -120,11 +119,10 @@ export function BreakGlassReconcile() {
           </Button>
         </div>
       </form>
-      {error ? <ErrorState title="Reconcile failed">{error}</ErrorState> : null}
+      {error ? <ErrorState title={translateNow("source.reconcile.failed.45e781836d")}>{error}</ErrorState> : null}
       {result ? (
         <p role="status" className="mt-3 rounded-panel border border-border p-comfortable text-sm">
-          Reconciled {result.reconciled} break-glass bundle{result.reconciled === 1 ? "" : "s"} into the event log.
-        </p>
+          {translateNow("source.reconciled.2d5676cba2")}{" "}{result.reconciled} {" "}{translateNow("source.break.glass.bundle.37f85fd7cf")}{result.reconciled === 1 ? "" : "s"} {" "}{translateNow("source.into.the.event.log.5f4b11117b")}</p>
       ) : null}
     </SectionCard>
   );

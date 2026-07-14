@@ -3,6 +3,7 @@ import { runBulk, type BulkResult } from "@/lib/bulk";
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export interface BulkTarget {
   id: string;
@@ -42,12 +43,12 @@ export function BulkActionRunner({ targets, actionLabel, action }: { targets: Bu
       }
     >
       {results ? (
-        <table className="w-full text-sm" aria-label="Bulk action results">
+        <table className="w-full text-sm" aria-label={translateNow("source.bulk.action.results.61bfc95a90")}>
           <thead>
             <tr className="border-b border-border text-left text-caption text-muted-foreground">
-              <th className="py-2 font-medium">Row</th>
-              <th className="py-2 font-medium">Result</th>
-              <th className="py-2 font-medium">Detail</th>
+              <th className="py-2 font-medium">{translateNow("source.row.95110d74c4")}</th>
+              <th className="py-2 font-medium">{translateNow("source.result.6e7d50e84f")}</th>
+              <th className="py-2 font-medium">{translateNow("source.detail.fb5f27d545")}</th>
             </tr>
           </thead>
           <tbody>
@@ -63,7 +64,7 @@ export function BulkActionRunner({ targets, actionLabel, action }: { targets: Bu
           </tbody>
         </table>
       ) : (
-        <p className="text-caption text-muted-foreground">Select rows and run a bulk action to see per-row results.</p>
+        <p className="text-caption text-muted-foreground">{translateNow("source.select.rows.and.run.a.bulk.action.to.see.p.56a22c6444")}</p>
       )}
     </SectionCard>
   );

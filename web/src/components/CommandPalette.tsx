@@ -8,7 +8,7 @@ import { api, type Me } from "@/lib/api";
 import { appRoutePaths, contextualRouteItems, navGroups, permissionAnyForPath, primaryNavItems } from "@/lib/navigation";
 import { useGlobalSearch, type GlobalSearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
 interface RouteCommand {
@@ -127,8 +127,8 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
     () => [
       {
         id: "action:issue-credential",
-        label: "Issue credential",
-        description: "Open the self-service request workflow",
+        label: translateNow("source.issue.credential.ab0616c48f"),
+        description: translateNow("source.open.the.self.service.request.workflow.a5dd4f8af7"),
         permissionAny: ["certs:request"],
         run: () => {
           navigate("/request");
@@ -137,8 +137,8 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
       },
       {
         id: "action:connect-issuer",
-        label: "Connect issuer",
-        description: "Open CA hierarchy and issuer catalog",
+        label: translateNow("source.connect.issuer.abc8382bc1"),
+        description: translateNow("source.open.ca.hierarchy.and.issuer.catalog.a303297c19"),
         permissionAny: ["issuers:write"],
         run: () => {
           navigate("/ca-hierarchy");
@@ -147,8 +147,8 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
       },
       {
         id: "action:run-discovery-scan",
-        label: "Run discovery scan",
-        description: "Queue a run for the first configured discovery source",
+        label: translateNow("source.run.discovery.scan.da1bb2978b"),
+        description: translateNow("source.queue.a.run.for.the.first.configured.disco.77e4b8a43d"),
         permissionAny: ["discovery:write"],
         run: async () => {
           try {
@@ -243,7 +243,7 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
       <div className="max-h-[24rem] overflow-y-auto p-2">
         {search.loading && <p className="px-3 py-2 text-sm text-muted-foreground">{t("command.searchingInventory")}</p>}
         {filteredActions.length > 0 && (
-          <PaletteSection title="Actions">
+          <PaletteSection title={translateNow("source.actions.ff8059dc67")}>
             {filteredActions.map((command) => (
               <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => void activate(command)} />
             ))}

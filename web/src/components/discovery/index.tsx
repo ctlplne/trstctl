@@ -1,6 +1,7 @@
 import { SectionCard, DashboardGrid } from "@/components/dashboard";
 import { StatTile } from "@/components/charts";
 import type { DiscoveryFinding, DiscoverySource } from "@/lib/api";
+import { translateNow } from "@/i18n/I18nProvider";
 
 function kindCounts(findings: DiscoveryFinding[]): Array<[string, number]> {
   const map = new Map<string, number>();
@@ -12,7 +13,7 @@ export function DiscoveryHero({ findings }: { findings: DiscoveryFinding[] }) {
   const kinds = kindCounts(findings);
   const highRisk = findings.filter((finding) => (finding.risk_score ?? 0) >= 70).length;
   return (
-    <SectionCard title="Shadow inventory" description="unmanaged credentials discovered across your environments">
+    <SectionCard title={translateNow("source.shadow.inventory.fd12d94cc1")} description="unmanaged credentials discovered across your environments">
       <DashboardGrid>
         <StatTile label="Shadow findings" value={findings.length} />
         <StatTile label="High risk" value={highRisk} tone={highRisk ? "high" : undefined} />
@@ -26,7 +27,7 @@ export function CTDriftPanel({ findings, sources }: { findings: DiscoveryFinding
   const monitoredSourceIds = new Set(sources.filter((source) => source.kind === "ct_log" || source.kind === "drift").map((source) => source.id));
   const monitored = findings.filter((finding) => monitoredSourceIds.has(finding.source_id)).length;
   return (
-    <SectionCard title="CT-log & drift monitoring" description="certificate-transparency and configuration-drift findings">
+    <SectionCard title={translateNow("source.ct.log.drift.monitoring.82c2bb4d3f")} description="certificate-transparency and configuration-drift findings">
       <DashboardGrid>
         <StatTile label="CT-log & drift findings" value={monitored} tone={monitored ? "warning" : undefined} />
       </DashboardGrid>

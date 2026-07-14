@@ -1,3 +1,4 @@
+import { translateNow } from "@/i18n/I18nProvider";
 export type StatusTone = "operate" | "observe" | "disclose" | "success" | "warning" | "critical" | "high" | "medium" | "low" | "neutral" | "info";
 
 export type StatusVocabulary = "agent" | "certificate" | "delivery" | "expiry" | "honesty" | "lifecycle" | "risk";
@@ -9,44 +10,96 @@ export type StatusDescriptor = {
 };
 
 export const lifecycleStatus: Record<string, StatusDescriptor> = {
-  requested: { label: "requested", tone: "observe", order: 1 },
-  approved: { label: "approved", tone: "operate", order: 2 },
-  issued: { label: "issued", tone: "success", order: 3 },
-  deployed: { label: "deployed", tone: "success", order: 4 },
-  renewing: { label: "renewing", tone: "warning", order: 5 },
-  revoked: { label: "revoked", tone: "critical", order: 6 },
-  retired: { label: "retired", tone: "neutral", order: 7 },
+  requested: { get label() {
+      return translateNow("source.requested.c6a91ee7f9");
+    }, tone: "observe", order: 1 },
+  approved: { get label() {
+      return translateNow("source.approved.2687f86ed6");
+    }, tone: "operate", order: 2 },
+  issued: { get label() {
+      return translateNow("source.issued.c91a3cc769");
+    }, tone: "success", order: 3 },
+  deployed: { get label() {
+      return translateNow("source.deployed.c1fa83ed9f");
+    }, tone: "success", order: 4 },
+  renewing: { get label() {
+      return translateNow("source.renewing.7c0bdbad43");
+    }, tone: "warning", order: 5 },
+  revoked: { get label() {
+      return translateNow("source.revoked.4bb47f186d");
+    }, tone: "critical", order: 6 },
+  retired: { get label() {
+      return translateNow("source.retired.5b720147b6");
+    }, tone: "neutral", order: 7 },
 };
 
 export const certificateStatus: Record<string, StatusDescriptor> = {
-  active: { label: "active", tone: "success", order: 1 },
-  superseded: { label: "superseded", tone: "neutral", order: 2 },
-  revoked: { label: "revoked", tone: "critical", order: 3 },
+  active: { get label() {
+      return translateNow("source.active.9687961165");
+    }, tone: "success", order: 1 },
+  superseded: { get label() {
+      return translateNow("source.superseded.444bd9c51d");
+    }, tone: "neutral", order: 2 },
+  revoked: { get label() {
+      return translateNow("source.revoked.4bb47f186d");
+    }, tone: "critical", order: 3 },
 };
 
 export const riskBands: Record<string, StatusDescriptor> = {
-  critical: { label: "Critical", tone: "critical", order: 1 },
-  high: { label: "High", tone: "high", order: 2 },
-  medium: { label: "Medium", tone: "medium", order: 3 },
-  low: { label: "Low", tone: "low", order: 4 },
-  none: { label: "None", tone: "neutral", order: 5 },
+  critical: { get label() {
+      return translateNow("source.critical.427dd2969b");
+    }, tone: "critical", order: 1 },
+  high: { get label() {
+      return translateNow("source.high.c4ebc6d4a5");
+    }, tone: "high", order: 2 },
+  medium: { get label() {
+      return translateNow("source.medium.8e588cd187");
+    }, tone: "medium", order: 3 },
+  low: { get label() {
+      return translateNow("source.low.f793de205e");
+    }, tone: "low", order: 4 },
+  none: { get label() {
+      return translateNow("source.none.dc937b5989");
+    }, tone: "neutral", order: 5 },
 };
 
 export const expiryBands: Record<string, StatusDescriptor> = {
-  expired: { label: "Expired", tone: "critical", order: 1 },
-  critical: { label: "<7d critical", tone: "critical", order: 2 },
-  watch: { label: "7-30d watch", tone: "warning", order: 3 },
-  planned: { label: "30-90d planned", tone: "info", order: 4 },
-  healthy: { label: ">90d healthy", tone: "success", order: 5 },
-  unknown: { label: "No expiry", tone: "neutral", order: 6 },
+  expired: { get label() {
+      return translateNow("source.expired.424a2551d3");
+    }, tone: "critical", order: 1 },
+  critical: { get label() {
+      return translateNow("source.7d.critical.b43c284b63");
+    }, tone: "critical", order: 2 },
+  watch: { get label() {
+      return translateNow("source.7.30d.watch.7ecf4fbde2");
+    }, tone: "warning", order: 3 },
+  planned: { get label() {
+      return translateNow("source.30.90d.planned.be92bb89d8");
+    }, tone: "info", order: 4 },
+  healthy: { get label() {
+      return translateNow("source.90d.healthy.af665501c4");
+    }, tone: "success", order: 5 },
+  unknown: { get label() {
+      return translateNow("source.no.expiry.fe06351db8");
+    }, tone: "neutral", order: 6 },
 };
 
 export const honestyModes: Record<string, StatusDescriptor> = {
-  operate: { label: "Operate", tone: "operate", order: 1 },
-  observe: { label: "Observe", tone: "observe", order: 2 },
-  disclose: { label: "Disclose", tone: "disclose", order: 3 },
-  real: { label: "Operate", tone: "operate", order: 1 },
-  disclosure: { label: "Disclose", tone: "disclose", order: 3 },
+  operate: { get label() {
+      return translateNow("source.operate.58c3939c4c");
+    }, tone: "operate", order: 1 },
+  observe: { get label() {
+      return translateNow("source.observe.744ea732e2");
+    }, tone: "observe", order: 2 },
+  disclose: { get label() {
+      return translateNow("source.disclose.5e663b5c89");
+    }, tone: "disclose", order: 3 },
+  real: { get label() {
+      return translateNow("source.operate.58c3939c4c");
+    }, tone: "operate", order: 1 },
+  disclosure: { get label() {
+      return translateNow("source.disclose.5e663b5c89");
+    }, tone: "disclose", order: 3 },
 };
 
 export const featureMaturityLabels: Record<string, string> = {
@@ -58,17 +111,33 @@ export const featureMaturityLabels: Record<string, string> = {
 };
 
 export const agentStatus: Record<string, StatusDescriptor> = {
-  online: { label: "online", tone: "success", order: 1 },
-  degraded: { label: "degraded", tone: "warning", order: 2 },
-  offline: { label: "offline", tone: "neutral", order: 3 },
-  offboarded: { label: "offboarded", tone: "neutral", order: 4 },
+  online: { get label() {
+      return translateNow("source.online.f6fc84c9f2");
+    }, tone: "success", order: 1 },
+  degraded: { get label() {
+      return translateNow("source.degraded.3c8cab8b47");
+    }, tone: "warning", order: 2 },
+  offline: { get label() {
+      return translateNow("source.offline.8e2c7ac508");
+    }, tone: "neutral", order: 3 },
+  offboarded: { get label() {
+      return translateNow("source.offboarded.1e493e6cf3");
+    }, tone: "neutral", order: 4 },
 };
 
 export const deliveryStatus: Record<string, StatusDescriptor> = {
-  pending: { label: "pending", tone: "observe", order: 1 },
-  processing: { label: "processing", tone: "operate", order: 2 },
-  delivered: { label: "delivered", tone: "success", order: 3 },
-  failed: { label: "failed", tone: "critical", order: 4 },
+  pending: { get label() {
+      return translateNow("source.pending.62a2fed3d6");
+    }, tone: "observe", order: 1 },
+  processing: { get label() {
+      return translateNow("source.processing.0a63dd9aa0");
+    }, tone: "operate", order: 2 },
+  delivered: { get label() {
+      return translateNow("source.delivered.373e0712c8");
+    }, tone: "success", order: 3 },
+  failed: { get label() {
+      return translateNow("source.failed.5d28a90f44");
+    }, tone: "critical", order: 4 },
 };
 
 export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDescriptor>> = {

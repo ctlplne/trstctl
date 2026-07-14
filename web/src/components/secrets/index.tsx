@@ -2,6 +2,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { SectionCard, AttentionList, AttentionRow } from "@/components/dashboard";
 import { api, type SecretMeta } from "@/lib/api";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export interface SecretFolder {
   path: string;
@@ -28,11 +29,11 @@ function leafName(name: string): string {
 export function SecretTree({ secrets, onSelect, selectedName }: { secrets: SecretMeta[]; onSelect?: (name: string) => void; selectedName?: string }) {
   const folders = groupSecretsByFolder(secrets);
   return (
-    <SectionCard title="Browse by folder" description="secrets grouped by path, like environments and folders">
+    <SectionCard title={translateNow("source.browse.by.folder.2bd11442a2")} description="secrets grouped by path, like environments and folders">
       {folders.length === 0 ? (
-        <p className="text-caption text-muted-foreground">No secrets yet.</p>
+        <p className="text-caption text-muted-foreground">{translateNow("source.no.secrets.yet.b9b321718c")}</p>
       ) : (
-        <nav aria-label="Secret folders" className="grid gap-3">
+        <nav aria-label={translateNow("source.secret.folders.78f2cd9fca")} className="grid gap-3">
           {folders.map((folder) => (
             <div key={folder.path}>
               <p className="font-mono text-caption font-medium text-muted-foreground">{folder.path === "/" ? "(root)" : folder.path}</p>
@@ -77,14 +78,14 @@ export function ReferenceResolver() {
     }
   }
   return (
-    <SectionCard title="Secret references" description="resolve ${...} references — a base secret propagates to everything that points at it">
+    <SectionCard title={translateNow("source.secret.references.4afbc504fa")} description="resolve ${...} references — a base secret propagates to everything that points at it">
       <div className="flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-body">
-          <span className="font-medium">Secret name</span>
+          <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="prod/db/url"
+            placeholder={translateNow("source.prod.db.url.708742f8f1")}
             className="rounded-control border border-border bg-background px-3 py-2"
           />
         </label>
@@ -94,10 +95,9 @@ export function ReferenceResolver() {
           disabled={busy || !name.trim()}
           className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
         >
-          Resolve references
-        </button>
+          {translateNow("source.resolve.references.df9921d3ac")}</button>
       </div>
-      {resolved !== null ? <p className="mt-2 break-all font-mono text-caption">resolved: {resolved}</p> : null}
+      {resolved !== null ? <p className="mt-2 break-all font-mono text-caption">{translateNow("source.resolved.8db3c92ddc")}{" "}{resolved}</p> : null}
       {error ? (
         <p role="alert" className="mt-2 text-caption text-risk-critical">
           {error}
@@ -142,10 +142,10 @@ export function EnvDiffPanel({ secrets }: { secrets: SecretMeta[] }) {
   const diff = diffSecrets(left, right);
   const same = diff.added.length + diff.removed.length + diff.changed.length === 0;
   return (
-    <SectionCard title="Environment diff" description="spot missing or changed secrets across two folders at a glance">
+    <SectionCard title={translateNow("source.environment.diff.ed4e460569")} description="spot missing or changed secrets across two folders at a glance">
       <div className="mb-3 flex flex-wrap gap-2">
         <select
-          aria-label="Left environment"
+          aria-label={translateNow("source.left.environment.a42bb38048")}
           value={leftPath}
           onChange={(event) => setLeftPath(event.target.value)}
           className="min-h-9 rounded-control border border-border bg-background px-2 text-body"
@@ -160,7 +160,7 @@ export function EnvDiffPanel({ secrets }: { secrets: SecretMeta[] }) {
           →
         </span>
         <select
-          aria-label="Right environment"
+          aria-label={translateNow("source.right.environment.17dc94151f")}
           value={rightPath}
           onChange={(event) => setRightPath(event.target.value)}
           className="min-h-9 rounded-control border border-border bg-background px-2 text-body"
@@ -188,7 +188,7 @@ export function EnvDiffPanel({ secrets }: { secrets: SecretMeta[] }) {
             ~ {name}
           </p>
         ))}
-        {same ? <p className="text-muted-foreground">These environments are identical.</p> : null}
+        {same ? <p className="text-muted-foreground">{translateNow("source.these.environments.are.identical.3a4421cc16")}</p> : null}
       </div>
     </SectionCard>
   );
@@ -222,14 +222,13 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
   }
 
   return (
-    <SectionCard title="Version history" description="every version is retained; reveal a version or recover to a point in time">
+    <SectionCard title={translateNow("source.version.history.a6df11e706")} description="every version is retained; reveal a version or recover to a point in time">
       <AttentionList ariaLabel="Secret versions">
         {versions.map((version) => (
           <AttentionRow key={version}>
-            <span className="flex-1 tabular-nums">version {version}</span>
+            <span className="flex-1 tabular-nums">{translateNow("source.version.5ca4f3850c")}{" "}{version}</span>
             <button type="button" onClick={() => void reveal(version)} className="rounded-control border border-border px-2 py-1 text-caption">
-              Reveal
-            </button>
+              {translateNow("source.reveal.36b830bdb4")}</button>
           </AttentionRow>
         ))}
       </AttentionList>
@@ -240,11 +239,11 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
       ) : null}
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-body">
-          <span className="font-medium">Recover to (timestamp)</span>
+          <span className="font-medium">{translateNow("source.recover.to.timestamp.c9cb99538c")}</span>
           <input
             value={at}
             onChange={(event) => setAt(event.target.value)}
-            placeholder="2026-01-01T00:00:00Z"
+            placeholder={translateNow("source.2026.01.01t00.00.00z.06fea089d5")}
             className="rounded-control border border-border bg-background px-3 py-2"
           />
         </label>
@@ -254,8 +253,7 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
           disabled={!at.trim()}
           className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
         >
-          Recover
-        </button>
+          {translateNow("source.recover.0c5327fd45")}</button>
       </div>
       {note ? <p className="mt-2 text-caption text-status-success">{note}</p> : null}
       {error ? (
@@ -299,14 +297,14 @@ export function SecretImport({ onImported }: { onImported?: (names: string[]) =>
   }
 
   return (
-    <SectionCard title="Import secrets" description="bulk-import key=value pairs into a folder">
+    <SectionCard title={translateNow("source.import.secrets.a657cdf701")} description="bulk-import key=value pairs into a folder">
       <div className="grid gap-2">
         <label className="grid gap-1 text-body">
-          <span className="font-medium">Folder prefix</span>
+          <span className="font-medium">{translateNow("source.folder.prefix.2d63670e07")}</span>
           <input
             value={prefix}
             onChange={(event) => setPrefix(event.target.value)}
-            placeholder="prod/imported"
+            placeholder={translateNow("source.prod.imported.b9342ac821")}
             className="rounded-control border border-border bg-background px-3 py-2"
           />
         </label>
@@ -333,7 +331,7 @@ export function SecretImport({ onImported }: { onImported?: (names: string[]) =>
       </div>
       {imported ? (
         <p className="mt-2 text-caption text-status-success">
-          Imported {imported.length} secrets: {imported.join(", ")}
+          {translateNow("source.imported.321f179c80")}{" "}{imported.length} {" "}{translateNow("source.secrets.cdefff020a")}{" "}{imported.join(", ")}
         </p>
       ) : null}
       {error ? (

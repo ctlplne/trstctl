@@ -2,6 +2,7 @@ import { SectionCard, DashboardGrid, AttentionList, AttentionRow } from "@/compo
 import { StatTile } from "@/components/charts";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { CredentialRisk, Certificate } from "@/lib/api";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export type AlertSeverity = "critical" | "high" | "warning";
 
@@ -59,14 +60,14 @@ export function NotificationCenter({ risks = [], certs = [] }: { risks?: Credent
     warning: alerts.filter((a) => a.severity === "warning").length,
   };
   return (
-    <SectionCard title="Alert center" description="Severity-ranked alerts projected from served risk and certificate-expiry events.">
+    <SectionCard title={translateNow("source.alert.center.9bbd88c00f")} description="Severity-ranked alerts projected from served risk and certificate-expiry events.">
       <DashboardGrid>
         <StatTile label="Critical" value={counts.critical} tone={counts.critical ? "critical" : undefined} />
         <StatTile label="High" value={counts.high} tone={counts.high ? "high" : undefined} />
         <StatTile label="Warning" value={counts.warning} tone={counts.warning ? "warning" : undefined} />
       </DashboardGrid>
       {alerts.length === 0 ? (
-        <p className="mt-3 text-caption text-muted-foreground">No active alerts.</p>
+        <p className="mt-3 text-caption text-muted-foreground">{translateNow("source.no.active.alerts.c5dab5aede")}</p>
       ) : (
         <AttentionList ariaLabel="Active alerts">
           {alerts.map((alert) => (

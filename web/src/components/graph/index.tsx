@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SectionCard, AttentionList, AttentionRow } from "@/components/dashboard";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { api, type GraphNode, type GraphImpact } from "@/lib/api";
 
 /** BlastRadiusExplorer is the quick "what breaks if this is compromised?"
@@ -34,15 +34,15 @@ export function BlastRadiusExplorer({ nodes, selectedId, onAnalyze }: { nodes: G
   }
 
   return (
-    <SectionCard title="Blast radius explorer" description="pick a credential and see everything that breaks if it is compromised">
+    <SectionCard title={translateNow("source.blast.radius.explorer.447e6bd3bc")} description="pick a credential and see everything that breaks if it is compromised">
       <label className="grid gap-1 text-body">
-        <span className="font-medium">Credential</span>
+        <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
         <select
           value={selected}
           onChange={(event) => void explore(event.target.value)}
           className="min-h-9 rounded-control border border-border bg-background px-2 text-body"
         >
-          <option value="">Select a node…</option>
+          <option value="">{translateNow("source.select.a.node.f85197a6e6")}</option>
           {nodes.map((node) => (
             <option key={node.id} value={node.id}>
               {node.name} ({node.kind})
@@ -53,7 +53,7 @@ export function BlastRadiusExplorer({ nodes, selectedId, onAnalyze }: { nodes: G
       {delegated && <p className="mt-2 text-caption text-muted-foreground">{t("graph.explorer.delegatedHint")}</p>}
       {impact ? (
         <div className="mt-3">
-          <p className="text-caption text-muted-foreground">{impact.affected.length} affected credentials</p>
+          <p className="text-caption text-muted-foreground">{impact.affected.length} {" "}{translateNow("source.affected.credentials.db1bc1b0d4")}</p>
           <AttentionList ariaLabel="Affected credentials">
             {impact.affected.map((node) => (
               <AttentionRow key={node.id}>

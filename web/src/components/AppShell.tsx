@@ -57,7 +57,7 @@ import {
 import { persistActiveModule, persistCollapsedGroups, readActiveModule, readCollapsedGroups } from "@/lib/navPreferences";
 import { cn } from "@/lib/utils";
 import type { Me } from "@/lib/api";
-import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
+import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { localeLabelKeys, productionLocales, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
 
 // Pseudo-locales (en-XA/ar-XB) are i18n test fixtures; only offer them in dev
@@ -606,7 +606,7 @@ export function AppShell() {
           >
             <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-start">{t("shell.searchOrJump")}</span>
-            <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px]">Cmd K</kbd>
+            <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px]">{translateNow("source.cmd.k.abdd8e293f")}</kbd>
           </Button>
           {user && (
             <div aria-label={t("shell.tenantContext")} className="hidden min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs lg:flex">

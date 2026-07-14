@@ -9,6 +9,7 @@
 // or removes a field, the generated types change and any code in the SPA that reads a
 // now-missing field fails `tsc` — the drift cannot ship silently. Regenerate with
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
+import { translateNow } from "@/i18n/I18nProvider";
 import type {
   SecretRotationScheduleRun,
   MDMSCEPPolicyRequest,
@@ -909,7 +910,9 @@ async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeSt
       endpoint: spec.endpoint,
       enabled: false,
       served: false,
-      detail: "Responder probe failed before an HTTP status was returned.",
+      get detail() {
+      return translateNow("source.responder.probe.failed.before.an.http.stat.e6657440c5");
+    },
     };
   }
 }

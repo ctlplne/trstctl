@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export interface ShortcutsHelpProps {
   open: boolean;
@@ -9,10 +10,10 @@ export interface ShortcutsHelpProps {
 }
 
 const shortcuts = [
-  { keys: "Cmd/Ctrl K", label: "Open command palette" },
-  { keys: "?", label: "Show keyboard shortcuts" },
-  { keys: "Esc", label: "Close open overlay" },
-  { keys: "Tab", label: "Move within overlay" },
+  { keys: "Cmd/Ctrl K", label: translateNow("source.open.command.palette.c022b19a38") },
+  { keys: "?", label: translateNow("source.show.keyboard.shortcuts.3d0ced5dc6") },
+  { keys: "Esc", label: translateNow("source.close.open.overlay.7f51d8d159") },
+  { keys: "Tab", label: translateNow("source.move.within.overlay.659fa0eb0e") },
 ];
 
 function focusableElements(panel: HTMLElement): HTMLElement[] {
@@ -73,12 +74,10 @@ export function ShortcutsHelp({ open, onClose, returnFocusRef }: ShortcutsHelpPr
       >
         <div className="flex items-center justify-between gap-3 border-b border-border p-comfortable">
           <h2 id={titleId} className="text-heading font-semibold">
-            Keyboard shortcuts
-          </h2>
+            {translateNow("source.keyboard.shortcuts.e9bef0b0f3")}</h2>
           <Button ref={closeRef} type="button" size="sm" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" aria-hidden="true" />
-            Close
-          </Button>
+            {translateNow("source.close.7d9eb7acb1")}</Button>
         </div>
         <div className="p-comfortable">
           <dl className="space-y-3">

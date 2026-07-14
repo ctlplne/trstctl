@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export type DetailDrawerProps = {
   open: boolean;
@@ -46,8 +47,7 @@ export function DetailDrawer({ open, title, description, children, actions, onCl
           </div>
           <Button ref={closeRef} type="button" size="sm" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" aria-hidden="true" />
-            Close
-          </Button>
+            {translateNow("source.close.7d9eb7acb1")}</Button>
         </div>
         {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
       </header>

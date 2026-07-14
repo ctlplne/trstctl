@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { readGridPreferences, sanitizeViewMetadata, writeGridPreferences, type GridViewPrimitive, type SavedGridView } from "@/lib/gridViews";
 import { cn } from "@/lib/utils";
 
@@ -243,12 +243,11 @@ export function DataGrid<Row>({
     <div className="relative">
       <Button type="button" variant="outline" size="sm" aria-expanded={chooserOpen} onClick={() => setChooserOpen((open) => !open)}>
         <Columns3 className="h-4 w-4" aria-hidden="true" />
-        Columns
-      </Button>
+        {translateNow("source.columns.53aade77cd")}</Button>
       {chooserOpen && (
         <div className="absolute end-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
           <fieldset>
-            <legend className="px-2 pb-1 text-caption font-medium text-muted-foreground">Visible columns</legend>
+            <legend className="px-2 pb-1 text-caption font-medium text-muted-foreground">{translateNow("source.visible.columns.1da58ee7c6")}</legend>
             {columns.map((column) => (
               <div key={column.id} className="flex items-center gap-2 rounded-control px-2 py-1.5">
                 <label className="flex flex-1 items-center gap-2">
@@ -287,18 +286,17 @@ export function DataGrid<Row>({
   const savedViewControls = viewStorageKey ? (
     <div className="flex flex-wrap items-end gap-2">
       <label className="grid gap-1 text-sm font-medium">
-        <span className="sr-only">Saved view name</span>
+        <span className="sr-only">{translateNow("source.saved.view.name.9aa4b3b580")}</span>
         <input
-          aria-label="Saved view name"
+          aria-label={translateNow("source.saved.view.name.9aa4b3b580")}
           value={viewName}
           onChange={(event) => setViewName(event.target.value)}
-          placeholder="View name"
+          placeholder={translateNow("source.view.name.572ffd1862")}
           className="min-h-9 w-36 rounded-control border border-input bg-background px-3 py-2 text-sm"
         />
       </label>
       <Button type="button" variant="outline" size="sm" disabled={!viewName.trim()} onClick={saveCurrentView}>
-        Save view
-      </Button>
+        {translateNow("source.save.view.2115387503")}</Button>
       {savedViews.map((view) => (
         <Button key={view.id} type="button" variant="ghost" size="sm" onClick={() => restoreView(view)}>
           {`Restore view ${view.name}`}
@@ -345,7 +343,7 @@ export function DataGrid<Row>({
                   <th scope="col" className="px-3 py-2 font-medium">
                     <input
                       type="checkbox"
-                      aria-label="Select all visible rows"
+                      aria-label={translateNow("source.select.all.visible.rows.b83e9323d3")}
                       checked={allVisibleSelected}
                       ref={(input) => {
                         if (input) input.indeterminate = partiallySelected;
@@ -372,8 +370,7 @@ export function DataGrid<Row>({
                 ))}
                 {onRowOpen && (
                   <th scope="col" className="px-3 py-2 font-medium">
-                    Action
-                  </th>
+                    {translateNow("source.action.64cff1319d")}</th>
                 )}
               </tr>
             </thead>

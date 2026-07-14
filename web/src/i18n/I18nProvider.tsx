@@ -65,8 +65,39 @@ export function formatMessage(key: MessageKey, values?: MessageValues, locale: L
   return interpolateMessage(message, values);
 }
 
+/* activeLocale mirrors the provider's current locale for module-scope copy.
+ * The DA-14 sweep keys strings in plain helpers and config factories where the
+ * useTranslation hook cannot reach; translateNow reads this mirror instead.
+ * Locale changes re-render the whole tree under the provider, so helpers
+ * re-run and pick up the new locale on the same pass. Outside a provider
+ * (unit tests, isolated renders) it stays on the default locale. */
+const activeLocaleRef: { current: Locale } = { current: defaultLocale };
+
+/** translateNow resolves a message key against the provider's current locale
+ * without requiring hook scope (C-I1, DA-14 sweep). */
+export function translateNow(key: MessageKey, values?: MessageValues): string {
+  return formatMessage(key, values, activeLocaleRef.current);
+}
+
 export function IntlProvider({ children, initialLocale, initialTimeZone, serverLocale, serverTimeZone }: IntlProviderProps) {
   const [locale, updateLocale] = useState<Locale>(() => initialLocalePreference(initialLocale));
+  // Mirror for translateNow (set during render so module-scope copy resolved
+  // in this same pass already sees the new locale — the mutation is idempotent
+  // per pass). The unmount cleanup resets the mirror so renders outside any
+  // provider (unit tests, isolated mounts) fall back to the default locale
+  // instead of inheriting a stale one.
+  // The mirror write is idempotent per pass and must happen during render:
+  // module-scope copy (translateNow) resolved later in this same pass needs
+  // the new locale, and an effect-only write would leave the first painted
+  // pass stale.
+  // eslint-disable-next-line react-hooks/immutability
+  activeLocaleRef.current = locale;
+  useEffect(() => {
+    activeLocaleRef.current = locale;
+    return () => {
+      activeLocaleRef.current = defaultLocale;
+    };
+  }, [locale]);
   const [timeZone, updateTimeZone] = useState(() => initialTimeZonePreference(initialTimeZone));
   const dir = directionForLocale(locale);
 

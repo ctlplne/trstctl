@@ -1,6 +1,7 @@
 import { DashboardGrid, SectionCard } from "@/components/dashboard";
 import { StatTile } from "@/components/charts";
 import type { Identity } from "@/lib/api";
+import { translateNow } from "@/i18n/I18nProvider";
 
 const STAGE_ORDER = ["requested", "pending", "pending_approval", "approved", "issued", "deployed", "active", "renewing", "expiring", "revoked", "retired"];
 
@@ -27,7 +28,7 @@ export function IssuancePipeline({ identities }: { identities: Identity[] }) {
   const stages = pipelineStages(identities);
   if (stages.length === 0) return null;
   return (
-    <SectionCard title="Issuance pipeline" description="non-human identities by lifecycle stage" className="mb-4">
+    <SectionCard title={translateNow("source.issuance.pipeline.83471535a2")} description="non-human identities by lifecycle stage" className="mb-4">
       <DashboardGrid>
         {stages.map(({ stage, count }) => (
           <StatTile key={stage} label={stageLabel(stage)} value={count} />

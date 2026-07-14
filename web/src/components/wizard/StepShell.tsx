@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export type CarouselStep = {
   id: string;
@@ -48,19 +49,19 @@ export function StepShell({
   }, [currentIndex, nextDisabled, onNext, onPrevious]);
 
   return (
-    <section aria-label="Onboarding carousel" className="ui-panel overflow-hidden">
+    <section aria-label={translateNow("source.onboarding.carousel.282df6ade1")} className="ui-panel overflow-hidden">
       <div className="border-b border-border p-comfortable">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-caption font-medium uppercase text-muted-foreground">
-              Step {currentIndex + 1} of {steps.length}
+              {translateNow("source.step.8e6a6cca7a")}{" "}{currentIndex + 1} {" "}{translateNow("source.of.28391d3bc6")}{" "}{steps.length}
             </p>
             <h2 className="mt-1 text-title font-semibold">{currentStep?.label}</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{currentStep?.description}</p>
           </div>
           <p className="font-mono text-caption text-muted-foreground">{progress}%</p>
         </div>
-        <ol className="mt-5 grid gap-2 sm:grid-cols-4" aria-label="Onboarding progress">
+        <ol className="mt-5 grid gap-2 sm:grid-cols-4" aria-label={translateNow("source.onboarding.progress.ad8a0dac00")}>
           {steps.map((step, index) => {
             const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
             return (
@@ -89,8 +90,7 @@ export function StepShell({
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-comfortable">
         <Button type="button" variant="outline" onClick={onPrevious} disabled={currentIndex === 0 || !onPrevious}>
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Previous
-        </Button>
+          {translateNow("source.previous.a57b08a480")}</Button>
         {onNext ? (
           <Button type="button" onClick={onNext} disabled={nextDisabled}>
             {nextLabel ?? "Next"}

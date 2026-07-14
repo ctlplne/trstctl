@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { GraphNode, GraphResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -26,12 +26,12 @@ export type GraphViewProps = {
 };
 
 const nodeKindTokens: Record<string, { label: string; fill: string; stroke: string }> = {
-  workload: { label: "Workload", fill: "hsl(var(--operate) / 0.14)", stroke: "hsl(var(--operate))" },
-  credential: { label: "Credential", fill: "hsl(var(--risk-high) / 0.14)", stroke: "hsl(var(--risk-high))" },
-  resource: { label: "Resource", fill: "hsl(var(--observe) / 0.14)", stroke: "hsl(var(--observe))" },
-  issuer: { label: "Issuer", fill: "hsl(var(--status-info) / 0.14)", stroke: "hsl(var(--status-info))" },
-  "crypto-asset": { label: "Crypto asset", fill: "hsl(var(--disclose) / 0.14)", stroke: "hsl(var(--disclose))" },
-  attestation: { label: "Attestation", fill: "hsl(var(--status-success) / 0.14)", stroke: "hsl(var(--status-success))" },
+  workload: { label: translateNow("source.workload.ba3c74c1a1"), fill: "hsl(var(--operate) / 0.14)", stroke: "hsl(var(--operate))" },
+  credential: { label: translateNow("source.credential.b1c42b3ce1"), fill: "hsl(var(--risk-high) / 0.14)", stroke: "hsl(var(--risk-high))" },
+  resource: { label: translateNow("source.resource.eb7a842ff9"), fill: "hsl(var(--observe) / 0.14)", stroke: "hsl(var(--observe))" },
+  issuer: { label: translateNow("source.issuer.39e02c46a0"), fill: "hsl(var(--status-info) / 0.14)", stroke: "hsl(var(--status-info))" },
+  "crypto-asset": { label: translateNow("source.crypto.asset.230cdababb"), fill: "hsl(var(--disclose) / 0.14)", stroke: "hsl(var(--disclose))" },
+  attestation: { label: translateNow("source.attestation.e52a82c98b"), fill: "hsl(var(--status-success) / 0.14)", stroke: "hsl(var(--status-success))" },
 };
 
 const edgeLabels: Record<string, string> = {
@@ -92,7 +92,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
   }, []);
 
   if (nodes.length === 0) {
-    return <div className={cn("rounded-panel border border-border p-4 text-sm text-muted-foreground", className)}>No graph nodes to draw.</div>;
+    return <div className={cn("rounded-panel border border-border p-4 text-sm text-muted-foreground", className)}>{translateNow("source.no.graph.nodes.to.draw.92bde898ba")}</div>;
   }
 
   const impactActive = Boolean(impactIds && impactIds.size > 0);
@@ -157,12 +157,10 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
     <section className={cn("grid gap-3", className)} aria-labelledby="graph-visual-heading">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="graph-visual-heading" className="text-sm font-semibold">
-          Node-link graph
-        </h2>
+          {translateNow("source.node.link.graph.161edc4754")}</h2>
         <div className="flex items-center gap-2">
           <p className="text-sm text-muted-foreground">
-            {nodes.length} nodes, {visibleEdges.length} edges shown
-          </p>
+            {nodes.length} {" "}{translateNow("source.nodes.ceafc3fdcc")}{" "}{visibleEdges.length} {" "}{translateNow("source.edges.shown.ae11d98ea9")}</p>
           <span className="text-caption tabular-nums text-muted-foreground">{Math.round(view.scale * 100)}%</span>
           <Button type="button" size="icon" variant="outline" className="h-7 w-7" aria-label={t("graph.view.zoomIn")} onClick={() => zoomBy(1.25)}>
             <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
@@ -259,7 +257,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
         </svg>
       </div>
       <div data-testid="graph-text-fallback" className="rounded-panel border border-border p-3 text-sm">
-        <h3 className="font-semibold">Graph text fallback</h3>
+        <h3 className="font-semibold">{translateNow("source.graph.text.fallback.f71216b763")}</h3>
         <ul className="mt-2 grid gap-1 md:grid-cols-2">
           {nodes.map((node) => (
             <li key={node.id}>

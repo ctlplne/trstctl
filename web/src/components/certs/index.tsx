@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { expiryBandForDate, type StatusTone } from "@/lib/statusVocab";
 import type { Certificate, ConnectorDelivery, RotationRun } from "@/lib/api";
 import type { RiskItem } from "@/components/risk";
+import { translateNow } from "@/i18n/I18nProvider";
 
 const DAY = 86_400_000;
 
@@ -32,11 +33,11 @@ function expiryBuckets(certificates: Certificate[]): BucketDatum[] {
     else beyond += 1;
   }
   return [
-    { label: "Expired", value: expired, tone: "critical" },
+    { label: translateNow("source.expired.424a2551d3"), value: expired, tone: "critical" },
     { label: "<=7d", value: within7, tone: "critical" },
-    { label: "8-30d", value: within30, tone: "warning" },
-    { label: "31-90d", value: within90, tone: "info" },
-    { label: "90d+", value: beyond, tone: "low" },
+    { label: translateNow("source.8.30d.3a1c0beb22"), value: within30, tone: "warning" },
+    { label: translateNow("source.31.90d.149111f115"), value: within90, tone: "info" },
+    { label: translateNow("source.90d.460c87f2aa"), value: beyond, tone: "low" },
   ];
 }
 
@@ -90,12 +91,12 @@ export function CertificatesDashboard({ certificates, risks }: { certificates: C
   return (
     <div className="grid gap-4">
       <CertKpis certificates={certificates} risks={risks} />
-      <SectionCard title="Expiring certificates" description="by time to expiry">
+      <SectionCard title={translateNow("source.expiring.certificates.73810831a4")} description="by time to expiry">
         <BucketBar ariaLabel="Certificates by time to expiry" data={buckets} />
       </SectionCard>
-      <SectionCard title="Needs attention" description="expiring within 30 days, soonest first">
+      <SectionCard title={translateNow("source.needs.attention.c1ebc78178")} description="expiring within 30 days, soonest first">
         {attention.length === 0 ? (
-          <p className="text-caption text-muted-foreground">Nothing expiring in the next 30 days.</p>
+          <p className="text-caption text-muted-foreground">{translateNow("source.nothing.expiring.in.the.next.30.days.b4f1023cf6")}</p>
         ) : (
           <AttentionList ariaLabel="Certificates needing attention">
             {attention.map(({ certificate, days }) => (
@@ -131,25 +132,25 @@ export function ReadinessPanel({
   const pct = active.length ? Math.round((auto / active.length) * 100) : 0;
   const manualAtRisk = active.filter((certificate) => !fingerprints.has(certificate.fingerprint) && daysUntil(certificate.not_after) <= 47).length;
   return (
-    <SectionCard title="47-day renewal readiness" description="short-lived certificates require automation" actions={actions}>
+    <SectionCard title={translateNow("source.47.day.renewal.readiness.971543ca36")} description="short-lived certificates require automation" actions={actions}>
       <div className="flex items-baseline gap-2">
         <span className="text-[2.25rem] font-semibold leading-none tabular-nums">{pct}%</span>
-        <span className="text-body text-muted-foreground">of certificates auto-renew</span>
+        <span className="text-body text-muted-foreground">{translateNow("source.of.certificates.auto.renew.02d35aa265")}</span>
       </div>
-      <p className="mt-1 text-caption text-risk-high">{manualAtRisk} manual certs expiring within 47 days</p>
+      <p className="mt-1 text-caption text-risk-high">{manualAtRisk} {" "}{translateNow("source.manual.certs.expiring.within.47.days.e57062b5bf")}</p>
       <Meter
         className="mt-3"
         ariaLabel="Auto-renew vs manual"
         segments={[
-          { value: auto, tone: "success", label: "auto" },
-          { value: manual, tone: "warning", label: "manual" },
+          { value: auto, tone: "success", label: translateNow("source.auto.929260ad9b") },
+          { value: manual, tone: "warning", label: translateNow("source.manual.36bde66f28") },
         ]}
       />
       <div className="mt-2 flex justify-between text-caption text-muted-foreground">
-        <span>398d today</span>
-        <span>200d · 2026</span>
-        <span>100d · 2027</span>
-        <span>47d · 2029</span>
+        <span>{translateNow("source.398d.today.066f1024a9")}</span>
+        <span>{translateNow("source.200d.2026.a78e5092ff")}</span>
+        <span>{translateNow("source.100d.2027.a5960d51fb")}</span>
+        <span>{translateNow("source.47d.2029.2add4e085d")}</span>
       </div>
     </SectionCard>
   );
@@ -162,8 +163,8 @@ export function ReadinessSimulator({ certificates, autoRenewing }: { certificate
   const renewalsPerYear = Math.ceil(365 / cap);
   const manualLoad = manual * renewalsPerYear;
   return (
-    <SectionCard title="47-day readiness simulator" description="model your fleet against shorter validity caps">
-      <div role="group" aria-label="Validity cap" className="flex gap-2">
+    <SectionCard title={translateNow("source.47.day.readiness.simulator.6c79ae6d09")} description="model your fleet against shorter validity caps">
+      <div role="group" aria-label={translateNow("source.validity.cap.1e61e889d2")} className="flex gap-2">
         {[200, 100, 47].map((value) => (
           <button
             key={value}
@@ -175,8 +176,7 @@ export function ReadinessSimulator({ certificates, autoRenewing }: { certificate
               cap === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background",
             )}
           >
-            {value}-day
-          </button>
+            {value}{translateNow("source.day.b396878953")}</button>
         ))}
       </div>
       <DashboardGrid className="mt-3">
@@ -203,9 +203,9 @@ function runTone(status: RotationRun["status"]): StatusTone {
 export function DeploymentReceipts({ deliveries }: { deliveries: ConnectorDelivery[] }) {
   const recent = deliveries.slice(0, 8);
   return (
-    <SectionCard title="Recent deployments" description="last-mile connector delivery receipts">
+    <SectionCard title={translateNow("source.recent.deployments.df97a4e11f")} description="last-mile connector delivery receipts">
       {recent.length === 0 ? (
-        <p className="text-caption text-muted-foreground">No deployment receipts yet.</p>
+        <p className="text-caption text-muted-foreground">{translateNow("source.no.deployment.receipts.yet.439880ad78")}</p>
       ) : (
         <AttentionList ariaLabel="Connector delivery receipts">
           {recent.map((receipt) => (
@@ -214,7 +214,7 @@ export function DeploymentReceipts({ deliveries }: { deliveries: ConnectorDelive
                 {receipt.connector} <span className="text-muted-foreground">→ {receipt.target || receipt.destination}</span>
               </span>
               <StatusBadge value={receipt.status} label={receipt.status} tone={deliveryTone(receipt.status)} />
-              {receipt.rollback_ref ? <span className="w-44 truncate text-caption text-muted-foreground">rollback: {receipt.rollback_ref}</span> : null}
+              {receipt.rollback_ref ? <span className="w-44 truncate text-caption text-muted-foreground">{translateNow("source.rollback.c48b9dea6f")}{" "}{receipt.rollback_ref}</span> : null}
             </AttentionRow>
           ))}
         </AttentionList>
@@ -225,7 +225,7 @@ export function DeploymentReceipts({ deliveries }: { deliveries: ConnectorDelive
 
 export function RenewalHistory({ runs }: { runs: RotationRun[] }) {
   if (runs.length === 0) {
-    return <p className="text-caption text-muted-foreground">No renewal history for this certificate yet.</p>;
+    return <p className="text-caption text-muted-foreground">{translateNow("source.no.renewal.history.for.this.certificate.ye.d731b9489d")}</p>;
   }
   return (
     <AttentionList ariaLabel="Renewal history">
