@@ -521,9 +521,9 @@ function Kpi({
  * hash, and event time — no fabricated ok/retry chips, because audit events
  * are facts, not delivery attempts. */
 function RecentAuditList({ events }: { events: AuditEvent[] }) {
-  const { locale, timeZone } = useTranslation();
+  const { locale, timeZone, t } = useTranslation();
   if (events.length === 0) {
-    return <p className="py-2 text-caption text-muted-foreground">No audit events yet.</p>;
+    return <p className="py-2 text-caption text-muted-foreground">{t("dashboard.recentActivity.empty")}</p>;
   }
   return (
     <ul className="-mt-1 divide-y divide-border">

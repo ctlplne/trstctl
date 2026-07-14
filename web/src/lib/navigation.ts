@@ -164,21 +164,21 @@ export const taskNavItems: TaskNavItem[] = [
   },
 ];
 
+/* S-A1 (DA-03/DA-04/DA-17): the rail is re-grouped into four question-shaped
+ * bands and every product surface that used to hide in `contextualRouteItems`
+ * is promoted into the rail. Groups answer, in order: what exists (Inventory),
+ * how it gets issued (Issue & automate), what's wrong and who's handling it
+ * (Detect & respond), and who governs it (Govern & administer). No route URL
+ * changes — this is nav chrome only. Item labels are unchanged here; the
+ * one-name-per-surface renames are S-A2. `/wizard` intentionally leaves the
+ * rail (it is an onboarding flow, reached from the Dashboard empty-state CTA
+ * and Journeys, not a permanent destination). */
 export const navGroups: NavGroup[] = [
   {
-    labelKey: "nav.group.issuanceCas",
+    labelKey: "nav.group.inventory",
     items: [
-      { to: "/wizard", labelKey: "nav.item.setUp", icon: "rocket", mode: "real", featureIds: ["F3", "F4"] },
-      { to: "/request", labelKey: "nav.item.requestCredential", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
-      { to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
       { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
-      {
-        to: "/protocols",
-        labelKey: "nav.item.protocols",
-        icon: "protocol",
-        mode: "real",
-        featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"],
-      },
+      { to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
       {
         to: "/secrets",
         labelKey: "nav.item.secrets",
@@ -186,55 +186,62 @@ export const navGroups: NavGroup[] = [
         mode: "real",
         featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
       },
-    ],
-  },
-  {
-    labelKey: "nav.group.inventoryDiscovery",
-    items: [
-      { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
-      { to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] },
       { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
+      { to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] },
       { to: "/owners", labelKey: "nav.item.owners", icon: "owner", mode: "real", featureIds: ["F59"] },
     ],
   },
   {
-    labelKey: "nav.group.incidentsJit",
+    labelKey: "nav.group.issueAutomate",
     items: [
+      { to: "/request", labelKey: "nav.item.requestCredential", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
+      { to: "/profiles", labelKey: "nav.item.profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
+      { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
+      {
+        to: "/protocols",
+        labelKey: "nav.item.protocols",
+        icon: "protocol",
+        mode: "real",
+        featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"],
+      },
+      { to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] },
+      { to: "/codesign", labelKey: "nav.item.codeSigning", icon: "signature", mode: "real", featureIds: ["F50"] },
+    ],
+  },
+  {
+    labelKey: "nav.group.detectRespond",
+    items: [
+      { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
+      { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
+      { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
+      { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
       { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
       { to: "/approvals", labelKey: "nav.item.approvals", icon: "approval", mode: "real", featureIds: ["F33"] },
+      { to: "/operations", labelKey: "nav.item.operations", icon: "activity", mode: "real", featureIds: ["F7"] },
+      { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7"] },
     ],
   },
   {
-    labelKey: "nav.group.riskInsight",
+    labelKey: "nav.group.governAdminister",
     items: [
-      { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
-      { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
-      { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
-      { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F76", "F77", "F78"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.platform",
-    items: [
-      { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
       { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
+      { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
+      { to: "/privacy", labelKey: "nav.item.privacy", icon: "policy", mode: "real", featureIds: ["F79"] },
       { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
+      { to: "/integrate", labelKey: "nav.item.integrate", icon: "protocol", mode: "real", featureIds: ["F5", "F46"] },
+      { to: "/integrate/api", labelKey: "nav.item.apiExplorer", icon: "protocol", mode: "real", featureIds: ["F10", "F46"] },
       { to: "/platform", labelKey: "nav.item.platform", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40", "F41"] },
+      { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F76", "F77", "F78"] },
     ],
   },
 ];
 
-export const contextualRouteItems: ContextualRouteItem[] = [
-  { to: "/profiles", labelKey: "nav.item.profiles", groupKey: "nav.group.issuanceCas", featureIds: ["F53"] },
-  { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", groupKey: "nav.group.issuanceCas", featureIds: ["F26", "F48"] },
-  { to: "/ssh", labelKey: "nav.item.sshTrust", groupKey: "nav.group.issuanceCas", featureIds: ["F44", "F45"] },
-  { to: "/codesign", labelKey: "nav.item.codeSigning", groupKey: "nav.group.issuanceCas", featureIds: ["F50"] },
-  { to: "/operations", labelKey: "nav.item.operations", groupKey: "nav.group.incidentsJit", featureIds: ["F7"] },
-  { to: "/notifications", labelKey: "nav.item.notifications", groupKey: "nav.group.incidentsJit", featureIds: ["F7"] },
-  { to: "/privacy", labelKey: "nav.item.privacy", groupKey: "nav.group.platform", featureIds: ["F79"] },
-  { to: "/integrate", labelKey: "nav.item.integrate", groupKey: "nav.group.platform", featureIds: ["F5", "F46"] },
-  { to: "/integrate/api", labelKey: "nav.item.apiExplorer", groupKey: "nav.group.platform", featureIds: ["F10", "F46"] },
-];
+/* S-A1: every product surface now lives in the rail, so there are no
+ * contextual-only routes. The export stays (as an empty list) so downstream
+ * consumers — AppShell.routeLabel, CommandPalette, i18n/route-parity tests —
+ * keep their stable shape; the module switcher (S-B2) reads `navModules`
+ * rather than this list. */
+export const contextualRouteItems: ContextualRouteItem[] = [];
 
 export interface RealGuiSurface {
   featureId: string;

@@ -11,15 +11,15 @@ describe("UX-03 task-based navigation", () => {
     const groupedItems = navGroups.flatMap((group) => group.items.map((item) => ({ ...item, group: group.labelKey })));
     const allSidebarItems = [...taskNavItems, ...groupedItems];
 
-    // Budget tracks the served task IA: three urgency shortcuts plus five
-    // grouped command-center bands. Secondary destinations stay contextual.
-    expect(allSidebarItems.length).toBeLessThanOrEqual(24);
+    // S-A1: the rail now shows every product surface (no contextual-only
+    // routes), grouped into four question-shaped bands. Budget tracks the
+    // served IA: three urgency shortcuts plus the grouped destinations.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(32);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
-      "Issue & renew",
-      "Discover & inventory",
-      "Approve & respond",
-      "Monitor posture",
-      "Administer",
+      "Inventory",
+      "Issue & automate",
+      "Detect & respond",
+      "Govern & administer",
     ]);
 
     const registered = new Set<string>(appRoutePaths);
@@ -34,9 +34,8 @@ describe("UX-03 task-based navigation", () => {
       expect(labels, `${route} should only have one grouped nav row`).toHaveLength(1);
     }
 
-    const sidebarRoutes = new Set(groupedItems.map((item) => basePath(item.to)));
-    for (const item of contextualRouteItems) {
-      expect(sidebarRoutes.has(basePath(item.to)), `${item.to} should stay contextual, not a permanent sidebar row`).toBe(false);
-    }
+    // S-A1 promoted every former contextual route into the rail, so the
+    // contextual list is now empty by design.
+    expect(contextualRouteItems).toEqual([]);
   });
 });

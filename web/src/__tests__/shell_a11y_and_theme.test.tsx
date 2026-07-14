@@ -526,11 +526,12 @@ describe("app shell accessibility and theme", () => {
     await screen.findByText("u@example.test");
     const nav = screen.getByRole("navigation", { name: /Primary/i });
 
-    for (const group of ["Issue & renew", "Discover & inventory", "Approve & respond", "Monitor posture", "Administer"]) {
+    for (const group of ["Inventory", "Issue & automate", "Detect & respond", "Govern & administer"]) {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
 
-    for (const link of ["Set up", "Request credential", "Protocols", "Secrets", "Discovery", "Incidents", "Deployment connectors", "Platform"]) {
+    // S-A1: formerly-hidden product surfaces are now visible rail rows.
+    for (const link of ["Request credential", "Protocols", "Secrets", "Discovery", "Incidents", "Deployment connectors", "Platform", "CA hierarchy", "SSH trust", "Code signing"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
     expect(within(nav).queryByRole("link", { name: /Coverage roadmap|RBAC/i })).not.toBeInTheDocument();
@@ -542,12 +543,12 @@ describe("app shell accessibility and theme", () => {
     await screen.findByText("u@example.test");
 
     const nav = screen.getByRole("navigation", { name: /Primary/i });
-    const group = within(nav).getByRole("button", { name: "Issue & renew" });
+    const group = within(nav).getByRole("button", { name: "Inventory" });
     expect(group).toHaveAttribute("aria-expanded", "true");
 
     await user.click(group);
     expect(group).toHaveAttribute("aria-expanded", "false");
-    expect(localStorage.getItem("trstctl-nav-collapsed")).toContain("nav.group.issuanceCas");
+    expect(localStorage.getItem("trstctl-nav-collapsed")).toContain("nav.group.inventory");
 
     await user.click(group);
     expect(group).toHaveAttribute("aria-expanded", "true");
@@ -555,12 +556,12 @@ describe("app shell accessibility and theme", () => {
   });
 
   it("reopens a stored-collapsed nav group when deep-linking to one of its routes", async () => {
-    localStorage.setItem("trstctl-nav-collapsed", JSON.stringify(["nav.group.issuanceCas"]));
+    localStorage.setItem("trstctl-nav-collapsed", JSON.stringify(["nav.group.inventory"]));
     renderShell(["/certificates"]);
     await screen.findByText("u@example.test");
 
     const nav = screen.getByRole("navigation", { name: /Primary/i });
-    await waitFor(() => expect(within(nav).getByRole("button", { name: "Issue & renew" })).toHaveAttribute("aria-expanded", "true"));
+    await waitFor(() => expect(within(nav).getByRole("button", { name: "Inventory" })).toHaveAttribute("aria-expanded", "true"));
     expect(localStorage.getItem("trstctl-nav-collapsed")).toBe("[]");
   });
 

@@ -49,7 +49,7 @@ function basePath(to: string): string {
 function routeCommands(t: (key: MessageKey, values?: Record<string, string | number>) => string, user: Me | null | undefined): RouteCommand[] {
   const labels = new Map<string, { labelKey: MessageKey; groupKey: MessageKey }>();
   for (const item of primaryNavItems) {
-    labels.set(basePath(item.to), { labelKey: item.labelKey, groupKey: "nav.group.riskInsight" });
+    labels.set(basePath(item.to), { labelKey: item.labelKey, groupKey: "nav.group.overview" });
   }
   for (const group of navGroups) {
     for (const item of group.items) {

@@ -52,6 +52,26 @@ export const messages = {
     defaultMessage: "Inventory",
     description: "Certificates page tab: the primary certificate table.",
   },
+  "certificates.lifecycle.replaceViaRequest": {
+    defaultMessage: "Replace via request →",
+    description: "Certificate row action for an unmanaged certificate: link to the self-service request flow.",
+  },
+  "certificates.lifecycle.notManaged": {
+    defaultMessage: "Not identity-managed — replace via request →",
+    description: "Certificate detail affordance when no managing identity exists; links to the request flow.",
+  },
+  "certificates.lifecycle.renewStarted": {
+    defaultMessage: "Renewal started",
+    description: "Toast title shown when an identity renewal has been kicked off from the certificate inventory.",
+  },
+  "certificates.lifecycle.renewFailed": {
+    defaultMessage: "Renewal could not start",
+    description: "Toast title shown when kicking off an identity renewal from the certificate inventory failed.",
+  },
+  "dashboard.recentActivity.empty": {
+    defaultMessage: "No audit events yet.",
+    description: "Dashboard recent-activity empty state when the served audit stream has no events.",
+  },
   "certificates.tabs.health": {
     defaultMessage: "Estate health",
     description: "Certificates page tab: health, rogue findings, and KPI panels.",
@@ -1300,6 +1320,22 @@ export const messages = {
   "nav.group.overview": {
     defaultMessage: "Overview",
     description: "Primary navigation group.",
+  },
+  "nav.group.inventory": {
+    defaultMessage: "Inventory",
+    description: "Primary navigation group: what non-human identities exist.",
+  },
+  "nav.group.issueAutomate": {
+    defaultMessage: "Issue & automate",
+    description: "Primary navigation group: how credentials get issued and enrolled.",
+  },
+  "nav.group.detectRespond": {
+    defaultMessage: "Detect & respond",
+    description: "Primary navigation group: what is wrong and who is handling it.",
+  },
+  "nav.group.governAdminister": {
+    defaultMessage: "Govern & administer",
+    description: "Primary navigation group: policy, evidence, and administration.",
   },
   "nav.group.inventoryDiscovery": {
     defaultMessage: "Discover & inventory",
@@ -6797,6 +6833,11 @@ const esESCatalog = {
   "graph.view.resetView": "Restablecer vista",
   "graph.explorer.delegatedHint": "Los resultados se pintan en el mapa inferior y se detallan en el panel de análisis.",
   "certificates.tabs.inventory": "Inventario",
+  "certificates.lifecycle.replaceViaRequest": "Reemplazar mediante solicitud →",
+  "certificates.lifecycle.notManaged": "No gestionado por identidad — reemplazar mediante solicitud →",
+  "certificates.lifecycle.renewStarted": "Renovación iniciada",
+  "certificates.lifecycle.renewFailed": "No se pudo iniciar la renovación",
+  "dashboard.recentActivity.empty": "Aún no hay eventos de auditoría.",
   "certificates.tabs.health": "Salud del entorno",
   "certificates.tabs.crlct": "CRL y CT",
   "certificates.tabs.renewal": "Preparación de renovación",
@@ -7155,6 +7196,10 @@ const esESCatalog = {
   "certificates.rogue.typeIssuerMissing": "Falta emisor",
   "certificates.rogue.riskScore": "{score} riesgo",
   "nav.group.overview": "Resumen",
+  "nav.group.inventory": "Inventario",
+  "nav.group.issueAutomate": "Emitir y automatizar",
+  "nav.group.detectRespond": "Detectar y responder",
+  "nav.group.governAdminister": "Gobernar y administrar",
   "nav.group.inventoryDiscovery": "Descubrir e inventariar",
   "nav.group.issuanceCas": "Emitir y renovar",
   "nav.group.protocols": "Protocolos",

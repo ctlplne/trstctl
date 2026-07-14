@@ -926,13 +926,13 @@ export function Certificates() {
     try {
       await api.transitionIdentity(identity.id, "renewing", `renew requested from certificate inventory (${certificate.subject})`);
       toast({
-        title: "Renewal started",
+        title: t("certificates.lifecycle.renewStarted"),
         description: `${identity.name} is now renewing; track progress on Identities.`,
       });
     } catch (err) {
       toast({
         kind: "error",
-        title: "Renewal could not start",
+        title: t("certificates.lifecycle.renewFailed"),
         description: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -969,9 +969,18 @@ export function Certificates() {
   );
   const teamOptions = useMemo(() => teamFacetOptions(certificates, ownerByID, owners, teamFilter), [certificates, ownerByID, owners, teamFilter]);
   const columns = useMemo(
-    () => certificateColumns(ownerByID, lifecycleColumn({ identityByCN, renewingIds, onRenew: (c, i) => void startRenew(c, i) })),
+    () =>
+      certificateColumns(
+        ownerByID,
+        lifecycleColumn({
+          identityByCN,
+          renewingIds,
+          onRenew: (c, i) => void startRenew(c, i),
+          replaceLabel: t("certificates.lifecycle.replaceViaRequest"),
+        }),
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- startRenew is stable per render semantics used across this page
-    [ownerByID, identityByCN, renewingIds],
+    [ownerByID, identityByCN, renewingIds, t],
   );
 
   const filtered = useMemo(() => {
@@ -1562,7 +1571,7 @@ export function Certificates() {
                   if (detail.status === "active") {
                     return (
                       <Link to="/request" className="text-caption font-medium text-brand-accent hover:underline">
-                        Not identity-managed — replace via request →
+                        {t("certificates.lifecycle.notManaged")}
                       </Link>
                     );
                   }
@@ -1608,6 +1617,7 @@ type LifecycleColumnContext = {
   identityByCN: Map<string, Identity>;
   renewingIds: Set<string>;
   onRenew: (certificate: Certificate, identity: Identity) => void;
+  replaceLabel: string;
 };
 
 /** lifecycleColumn closes the DA-05 dead-end: managed rows get Renew wired to
@@ -1637,7 +1647,7 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
       if (c.status === "active") {
         return (
           <Link to="/request" className="text-caption font-medium text-brand-accent hover:underline">
-            Replace via request →
+            {context.replaceLabel}
           </Link>
         );
       }

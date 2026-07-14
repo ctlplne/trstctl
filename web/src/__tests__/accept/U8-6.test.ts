@@ -5,7 +5,9 @@ const basePath = (to: string) => to.split("?")[0] || "/";
 
 describe("U8-6 navigation & IA refresh", () => {
   it("renders task-based groups where every command resolves to one registered route and is RBAC-gated", () => {
-    expect(navGroups.length).toBeGreaterThanOrEqual(5); // task-oriented groups
+    // S-A1: four question-shaped bands (Inventory / Issue & automate /
+    // Detect & respond / Govern & administer).
+    expect(navGroups.length).toBe(4);
 
     const registered = new Set<string>(appRoutePaths);
     const sidebarItems = navGroups.flatMap((group) => group.items);
@@ -24,14 +26,15 @@ describe("U8-6 navigation & IA refresh", () => {
     expect(new Set(sidebarRoutes).size).toBe(sidebarRoutes.length);
 
     expect(sidebarRoutes).toContain("/approvals");
-    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(24);
+    // Every product surface is now in the rail (no contextual-only routes), so
+    // the budget grew from the old task-nav ceiling to the full IA.
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(32);
 
-    // secondary command-center surfaces remain registered, labeled, and reachable
-    // from page-local actions instead of taking permanent rail rows.
-    const contextualRoutes = contextualRouteItems.map((item) => basePath(item.to));
-    expect(contextualRoutes).toEqual(expect.arrayContaining(["/privacy", "/integrate", "/operations", "/notifications"]));
-    for (const route of contextualRoutes) {
-      expect(sidebarRoutes).not.toContain(route);
+    // S-A1 promoted the formerly-hidden surfaces into the rail; they are no
+    // longer contextual-only.
+    expect(contextualRouteItems).toEqual([]);
+    for (const route of ["/privacy", "/integrate", "/operations", "/notifications", "/ca-hierarchy", "/ssh", "/codesign", "/profiles"]) {
+      expect(sidebarRoutes).toContain(route);
     }
   });
 });
