@@ -175,6 +175,8 @@ describe("i18n boundary", () => {
   it("provides deterministic locale negotiation and formatting helpers", () => {
     expect(negotiateLocale(["fr-CA", "en-GB"])).toBe(defaultLocale);
     expect(negotiateLocale(["es-MX"])).toBe("es-ES");
+    expect(negotiateLocale(["de-AT"])).toBe("de-DE");
+    expect(negotiateLocale(["de"])).toBe("de-DE");
     expect(negotiateLocale(["ar-SA"])).toBe("ar-XB");
     expect(directionForLocale("he-IL")).toBe("rtl");
     expect(formatMessage("command.routeDescription", { group: "Platform" })).toBe("Route · Platform");
@@ -184,13 +186,17 @@ describe("i18n boundary", () => {
     expect(formatPlural(1, { one: "node", other: "nodes" })).toBe("node");
   });
 
-  it("ships a real non-English production catalog rather than pseudo-only locale coverage", () => {
+  it("ships real non-English production catalogs rather than pseudo-only locale coverage", () => {
     const realNonEnglishLocales = productionLocales.filter((locale) => locale !== defaultLocale);
     expect(realNonEnglishLocales).toContain("es-ES");
+    expect(realNonEnglishLocales).toContain("de-DE");
+    // Each production catalog is a real human translation of the anchor key,
+    // not the English default and not a pseudo-localized transform (C-L1).
+    const expectedNeedsAction: Record<string, string> = { "es-ES": "Acción requerida", "de-DE": "Aktion erforderlich" };
     for (const locale of realNonEnglishLocales) {
       const translatedKeys = (Object.keys(messages) as MessageKey[]).filter((key) => catalogs[locale][key] !== catalogs[defaultLocale][key]);
       expect(translatedKeys.length).toBeGreaterThan(50);
-      expect(catalogs[locale]["nav.section.needsAction"]).toBe("Acción requerida");
+      expect(catalogs[locale]["nav.section.needsAction"]).toBe(expectedNeedsAction[locale]);
       expect(catalogs[locale]["nav.section.needsAction"]).not.toBe(pseudoLocalize(messages["nav.section.needsAction"].defaultMessage));
     }
   });

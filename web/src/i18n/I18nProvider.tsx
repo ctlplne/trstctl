@@ -43,6 +43,7 @@ export function negotiateLocale(candidates: readonly string[] = []): Locale {
     const language = candidate.split("-")[0]?.toLowerCase();
     if (language === "en") return "en-US";
     if (language === "es") return "es-ES";
+    if (language === "de") return "de-DE";
     if (["ar", "fa", "he", "ur"].includes(language)) return "ar-XB";
   }
   return defaultLocale;
