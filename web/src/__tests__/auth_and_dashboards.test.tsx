@@ -22,6 +22,8 @@ const { apiMock } = vi.hoisted(() => ({
     risk: vi.fn(),
     rotationRuns: vi.fn(),
     connectorDeliveries: vi.fn(),
+    secretPage: vi.fn(),
+    incidentExecutions: vi.fn(),
   },
 }));
 
@@ -104,6 +106,8 @@ describe("auth + dashboards", () => {
     apiMock.risk.mockResolvedValue([]);
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
+    apiMock.secretPage.mockResolvedValue({ items: [] });
+    apiMock.incidentExecutions.mockResolvedValue({ items: [] });
   });
 
   it("redirects an unauthenticated visitor to the login page", async () => {
@@ -177,7 +181,9 @@ describe("auth + dashboards", () => {
     expect(within(dash).getByRole("link", { name: /Issue credential/i })).toHaveAttribute("href", "/request");
     expect(within(dash).getByText(/Identities \(NHI\)/)).toBeInTheDocument();
     expect(within(dash).getByText(/High-risk/)).toBeInTheDocument();
-    expect(within(dash).getByText(/Issuance trend/)).toBeInTheDocument();
+    // Real mode shows the served daily issuance chart, never the demo monthly trend (S-N0 / DA-01).
+    expect(within(dash).getByText(/Issuance rate/)).toBeInTheDocument();
+    expect(within(dash).queryByText(/Issuance trend/)).not.toBeInTheDocument();
     expect(within(dash).getByText(/Algorithm mix/)).toBeInTheDocument();
     expect(within(dash).getByText(/Rotate first/)).toBeInTheDocument();
     // Rotate-first uses served risk data (highest score first).
@@ -291,6 +297,119 @@ describe("auth + dashboards", () => {
     expect(apiMock.auditEvents).toHaveBeenCalledWith({ limit: 50 });
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------- S-N0 ----
+  // Dashboard integrity: no fabricated demo values in real mode; the four
+  // action KPIs are wired to served data (02-findings DA-01 / DA-12 / DA-28).
+
+  function dayFromNow(days: number): string {
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  function seededTenant() {
+    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.certificates.mockResolvedValue([
+      { id: "c1", tenant_id: "t1", subject: "CN=soon", status: "active", fingerprint: "f1", key_algorithm: "RSA-2048", not_after: dayFromNow(3) },
+      { id: "c2", tenant_id: "t1", subject: "CN=later", status: "active", fingerprint: "f2", key_algorithm: "ECDSA P-256", not_after: dayFromNow(20) },
+      { id: "c3", tenant_id: "t1", subject: "CN=pqc", status: "active", fingerprint: "f3", key_algorithm: "ML-DSA-65", not_after: dayFromNow(120) },
+    ]);
+    apiMock.identities.mockResolvedValue([{ id: "i1", name: "svc", kind: "x509_certificate", status: "issued" }]);
+    apiMock.risk.mockResolvedValue([
+      { credential_id: "c1", subject: "CN=soon", kind: "certificate", score: 92, exposure: 2, owner_active: false },
+      { credential_id: "c2", subject: "CN=later", kind: "certificate", score: 20, exposure: 1, owner_active: true },
+    ]);
+    apiMock.secretPage.mockResolvedValue({ items: [{ name: "demo/a" }, { name: "demo/b" }] });
+    apiMock.incidentExecutions.mockResolvedValue({
+      items: [
+        { id: "x1", status: "executing", phase: "scope" },
+        { id: "x2", status: "completed", phase: "done" },
+      ],
+    });
+    apiMock.auditEvents.mockResolvedValue([{ id: "e1", sequence: 1, tenant_id: "t1", type: "identity.transition", time: dayFromNow(0) }]);
+  }
+
+  function kpiTile(dash: HTMLElement, label: RegExp): HTMLElement {
+    const labelNode = within(dash).getByText(label);
+    const tile = labelNode.closest("a") ?? labelNode.closest("div.group");
+    if (!tile) throw new Error(`no KPI tile container for ${label}`);
+    return tile as HTMLElement;
+  }
+
+  it("wires the four action KPIs to served data in real mode (S-N0)", async () => {
+    seededTenant();
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+
+    // Expiring ≤7d: exactly one fixture cert expires within 7 days.
+    const expiring = kpiTile(dash, /Expiring ≤7d/);
+    await waitFor(() => expect(within(expiring).getByText("1")).toBeInTheDocument());
+    expect(expiring).toHaveAttribute("href", "/certificates?expiry=7d");
+
+    // High-risk: one row ≥ threshold.
+    const highRisk = kpiTile(dash, /High-risk/);
+    await waitFor(() => expect(within(highRisk).getByText("1")).toBeInTheDocument());
+
+    // Open incidents: one non-completed execution, served.
+    const incidents = kpiTile(dash, /Open incidents/);
+    await waitFor(() => expect(within(incidents).getByText("1")).toBeInTheDocument());
+    expect(incidents).toHaveAttribute("href", "/incidents");
+
+    // Future-ready: one PQC-family key algorithm among served certs.
+    const pqc = kpiTile(dash, /Future-ready/);
+    await waitFor(() => expect(within(pqc).getByText("1")).toBeInTheDocument());
+
+    // Secrets KPI comes from the served secret store, not a stub.
+    const secrets = kpiTile(dash, /^Secrets$/);
+    await waitFor(() => expect(within(secrets).getByText("2")).toBeInTheDocument());
+  });
+
+  it("renders no fabricated demo markers in real mode (S-N0)", async () => {
+    seededTenant();
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    await within(dash).findByText(/Algorithm mix/);
+
+    // Demo-dataset fingerprints from lib/demoData must not appear for a live tenant.
+    expect(within(dash).queryByText(/97 this month/)).not.toBeInTheDocument();
+    expect(within(dash).queryByText(/crt_8f21/)).not.toBeInTheDocument();
+    expect(within(dash).queryByText(/1,033/)).not.toBeInTheDocument();
+    expect(within(dash).queryByText(/Issuance trend/)).not.toBeInTheDocument();
+
+    // Recent activity is the served audit stream.
+    expect(await within(dash).findByText("identity.transition")).toBeInTheDocument();
+    expect(apiMock.auditEvents).toHaveBeenCalledWith({ limit: 6 });
+  });
+
+  it("keeps the algorithm-mix donut internally consistent in real mode (S-N0)", async () => {
+    seededTenant();
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    await within(dash).findByText(/Algorithm mix/);
+
+    // Legend entries come from served certs; center count equals their total (3).
+    expect(await within(dash).findByText("RSA-2048")).toBeInTheDocument();
+    expect(within(dash).getByText("ECDSA P-256")).toBeInTheDocument();
+    expect(within(dash).getByText("ML-DSA-65")).toBeInTheDocument();
+    // The demo legend's fabricated totals must be gone.
+    expect(within(dash).queryByText("742")).not.toBeInTheDocument();
+    expect(within(dash).queryByText("368")).not.toBeInTheDocument();
+  });
+
+  it("keeps the demo showcase intact in preview mode (S-N0)", async () => {
+    const { UnauthorizedError } = await import("@/lib/api");
+    apiMock.me.mockRejectedValue(new UnauthorizedError());
+    const user = userEvent.setup();
+
+    renderAt("/");
+    await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
+
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    // Preview stays a rich showcase: the demo trend card still renders there.
+    expect(await within(dash).findByText(/Issuance trend/)).toBeInTheDocument();
   });
 
   it("lands the certificate inventory on an expiry-filtered worklist from the URL", async () => {

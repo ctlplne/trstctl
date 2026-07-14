@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Activity, AlertTriangle, Boxes, KeyRound, RotateCw, Rocket, ScrollText, Search, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
-import { api, type Certificate, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
+import { api, type AuditEvent, type Certificate, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +49,84 @@ function readOnboardingDone(): boolean {
   return isOnboardingComplete();
 }
 
+/* S-N0 (DA-01/DA-12): real mode renders served data only. The readers below
+ * feature-detect their api functions (the api object is mocked per-suite in
+ * tests) and resolve to a null/empty fallback instead of throwing, following
+ * the readNhiInventory precedent above. */
+
+function readSecretsCount(): Promise<number | null> {
+  const client = api as typeof api & { secretPage?: (o?: { limit?: number }) => Promise<{ items?: unknown[] }> };
+  return client.secretPage ? client.secretPage({ limit: 200 }).then((r) => (r.items ?? []).length) : Promise.resolve(null);
+}
+
+function readOpenIncidents(): Promise<number | null> {
+  const client = api as typeof api & {
+    incidentExecutions?: (o?: { limit?: number }) => Promise<{ items?: Array<{ status?: string }> }>;
+  };
+  if (!client.incidentExecutions) return Promise.resolve(null);
+  return client.incidentExecutions({ limit: 100 }).then(
+    (r) => (r.items ?? []).filter((x) => x.status !== "completed" && x.status !== "rolled_back").length,
+  );
+}
+
+function readRecentAudit(): Promise<AuditEvent[]> {
+  const client = api as typeof api & { auditEvents?: (o?: { limit?: number }) => Promise<AuditEvent[]> };
+  return client.auditEvents ? client.auditEvents({ limit: 6 }).catch(() => []) : Promise.resolve([]);
+}
+
+const pqcAlgorithmPattern = /^(ml-kem|ml-dsa|slh-dsa|hybrid)/i;
+
+function isPqcReady(certificate: Certificate): boolean {
+  return pqcAlgorithmPattern.test(certificate.key_algorithm ?? "");
+}
+
+function expiresWithinDays(certificate: Certificate, days: number): boolean {
+  if (!certificate.not_after || certificate.status === "revoked") return false;
+  const expires = new Date(certificate.not_after).getTime();
+  if (!Number.isFinite(expires)) return false;
+  const now = Date.now();
+  return expires >= now && expires <= now + days * dayMs;
+}
+
+/** Served algorithm mix: group live certificates by key algorithm so the donut
+ * legend can never disagree with its own center count (DA-01's worst case). */
+function servedAlgoMix(certificates: Certificate[]): Array<{ algo: string; n: number }> {
+  const counts = new Map<string, number>();
+  for (const certificate of certificates) {
+    const algo = certificate.key_algorithm?.trim() || "unknown";
+    counts.set(algo, (counts.get(algo) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort(([, a], [, b]) => b - a)
+    .map(([algo, n]) => ({ algo, n }));
+}
+
+/** Served expiry bands over the live inventory (excludes revoked; counts every
+ * non-expired certificate exactly once). */
+function servedExpiryBands(certificates: Certificate[]): Array<{ label: string; n: number; tone: "crit" | "warn" | "ok" }> {
+  let b7 = 0;
+  let b30 = 0;
+  let b90 = 0;
+  let bLater = 0;
+  const now = Date.now();
+  for (const certificate of certificates) {
+    if (!certificate.not_after || certificate.status === "revoked") continue;
+    const expires = new Date(certificate.not_after).getTime();
+    if (!Number.isFinite(expires) || expires < now) continue;
+    const days = (expires - now) / dayMs;
+    if (days <= 7) b7 += 1;
+    else if (days <= 30) b30 += 1;
+    else if (days <= 90) b90 += 1;
+    else bLater += 1;
+  }
+  return [
+    { label: "<7d", n: b7, tone: "crit" },
+    { label: "7–30d", n: b30, tone: "warn" },
+    { label: "30–90d", n: b90, tone: "ok" },
+    { label: ">90d", n: bLater, tone: "ok" },
+  ];
+}
+
 /** Dashboard is the single pane of glass over every non-human identity. It renders
  * real served data when present; in dev/preview (no backend) it falls back to demo
  * data so the console reads as a live product rather than an empty shell. */
@@ -60,6 +138,9 @@ export function Dashboard() {
   const identities = useResource(api.identities);
   const nhiInventory = useResource(readNhiInventory);
   const rotationRuns = useResource(() => api.rotationRuns({ limit: 100 }));
+  const secretsCount = useResource(readSecretsCount);
+  const openIncidents = useResource(readOpenIncidents);
+  const recentAudit = useResource(readRecentAudit);
   const [dismissed, setDismissed] = useState(false);
 
   const riskRows = risk.data ?? [];
@@ -82,13 +163,13 @@ export function Dashboard() {
     : {
         certificates: certs.data?.length ?? 0,
         identities: inventoryTotal,
-        secrets: inventoryCount(nhiInventory.data, "secret"),
+        secrets: secretsCount.data ?? inventoryCount(nhiInventory.data, "secret"),
         agentsOnline: inventoryCount(nhiInventory.data, "agent"),
         agentsTotal: inventoryCount(nhiInventory.data, "agent"),
-        expiring7d: 0,
+        expiring7d: servedCertificates.filter((c) => expiresWithinDays(c, 7)).length,
         highRisk,
-        openIncidents: 0,
-        pqcReady: 0,
+        openIncidents: openIncidents.data ?? 0,
+        pqcReady: servedCertificates.filter(isPqcReady).length,
       };
 
   const rotateFirst = useDemo
@@ -144,28 +225,28 @@ export function Dashboard() {
           label="Certificates"
           value={kpis.certificates}
           delta={useDemo ? d.deltas.certificates : undefined}
-          spark={d.issuanceTrend}
+          spark={useDemo ? d.issuanceTrend : undefined}
         />
         <Kpi
           icon={<KeyRound className="h-4 w-4" />}
           label="Identities (NHI)"
           value={kpis.identities}
           delta={useDemo ? d.deltas.identities : undefined}
-          spark={[28, 31, 30, 34, 33, 37, 39, 41, 44, 46, 48, 51]}
+          spark={useDemo ? [28, 31, 30, 34, 33, 37, 39, 41, 44, 46, 48, 51] : undefined}
         />
         <Kpi
           icon={<Boxes className="h-4 w-4" />}
           label="Secrets"
           value={kpis.secrets}
           delta={useDemo ? d.deltas.secrets : undefined}
-          spark={[20, 22, 21, 24, 23, 25, 26, 27, 27, 29, 30, 31]}
+          spark={useDemo ? [20, 22, 21, 24, 23, 25, 26, 27, 27, 29, 30, 31] : undefined}
         />
         <Kpi
           icon={<Activity className="h-4 w-4" />}
           label="Agents online"
           value={kpis.agentsOnline}
           sub={kpis.agentsTotal ? `${kpis.agentsOnline}/${kpis.agentsTotal}` : undefined}
-          spark={[44, 45, 46, 46, 47, 46, 47, 48, 47, 48, 46, 48]}
+          spark={useDemo ? [44, 45, 46, 46, 47, 46, 47, 48, 47, 48, 46, 48] : undefined}
         />
         <Kpi
           icon={<AlertTriangle className="h-4 w-4" />}
@@ -190,7 +271,7 @@ export function Dashboard() {
           value={kpis.pqcReady}
           delta={useDemo ? d.deltas.pqcReady : undefined}
           tone="ok"
-          spark={[10, 13, 16, 18, 21, 24, 26, 28, 30, 31, 33, 34]}
+          spark={useDemo ? [10, 13, 16, 18, 21, 24, 26, 28, 30, 31, 33, 34] : undefined}
         />
       </div>
 
@@ -199,21 +280,27 @@ export function Dashboard() {
       {!useDemo && <NotificationCenter risks={riskRows} certs={certs.data ?? []} />}
       {!useDemo && <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />}
 
-      {/* Trend + algorithm mix */}
+      {/* Trend + algorithm mix. The monthly issuance-trend card is demo-showcase
+          only (S-N0/DA-01): real tenants already get the served daily charts above,
+          and rendering the fabricated series beside them destroyed trust. The
+          algorithm mix renders SERVED segments in real mode so its legend can
+          never disagree with its own center count again. */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-baseline justify-between space-y-0">
-            <CardTitle>
-              Issuance trend <span className="ml-1 text-caption font-normal text-muted-foreground">credentials issued per month</span>
-            </CardTitle>
-            <span className="rounded-control bg-brand-accent/10 px-2 py-0.5 text-caption font-medium text-brand-accent">
-              {d.issuanceTrend[d.issuanceTrend.length - 1] ?? 0} this month
-            </span>
-          </CardHeader>
-          <CardContent>
-            <AreaTrend points={d.issuanceTrend} ariaLabel="Issuance trend over the last 12 months" />
-          </CardContent>
-        </Card>
+        {useDemo && (
+          <Card className="lg:col-span-2">
+            <CardHeader className="flex-row items-baseline justify-between space-y-0">
+              <CardTitle>
+                Issuance trend <span className="ml-1 text-caption font-normal text-muted-foreground">credentials issued per month</span>
+              </CardTitle>
+              <span className="rounded-control bg-brand-accent/10 px-2 py-0.5 text-caption font-medium text-brand-accent">
+                {d.issuanceTrend[d.issuanceTrend.length - 1] ?? 0} this month
+              </span>
+            </CardHeader>
+            <CardContent>
+              <AreaTrend points={d.issuanceTrend} ariaLabel="Issuance trend over the last 12 months" />
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>
@@ -222,7 +309,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <Donut
-              segments={algoSegments(d.algoMix)}
+              segments={algoSegments(useDemo ? d.algoMix : servedAlgoMix(servedCertificates))}
               ariaLabel="Algorithm mix by key type"
               centerLabel={formatNumber(kpis.certificates)}
               centerSub="certificates"
@@ -230,20 +317,34 @@ export function Dashboard() {
             />
           </CardContent>
         </Card>
+        {!useDemo && (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>
+                Expiry bands <span className="ml-1 text-caption font-normal text-muted-foreground">time to expiry</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Bands bands={servedExpiryBands(servedCertificates)} />
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Expiry bands + rotate first + recent activity */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Expiry bands <span className="ml-1 text-caption font-normal text-muted-foreground">time to expiry</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Bands bands={d.expiryBands} />
-          </CardContent>
-        </Card>
+        {useDemo && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Expiry bands <span className="ml-1 text-caption font-normal text-muted-foreground">time to expiry</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Bands bands={d.expiryBands} />
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="flex-row items-baseline justify-between space-y-0">
@@ -279,30 +380,34 @@ export function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <ul className="-mt-1 divide-y divide-border">
-              {d.recentActivity.map((a, i) => (
-                <li key={`${a.action}-${i}`} className="flex items-center justify-between gap-3 py-2">
-                  <span className="min-w-0">
-                    <span className="block truncate font-mono text-caption font-medium">{a.action}</span>
-                    <span className="block truncate text-caption text-muted-foreground">{a.detail}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <span
-                      className={
-                        a.result === "ok"
-                          ? "rounded-control bg-status-success/10 px-1.5 py-0.5 text-caption font-medium text-status-success"
-                          : a.result === "retry"
-                            ? "rounded-control bg-status-warning/10 px-1.5 py-0.5 text-caption font-medium text-status-warning"
-                            : "rounded-control bg-destructive/10 px-1.5 py-0.5 text-caption font-medium text-destructive"
-                      }
-                    >
-                      {a.result === "retry" ? "retry(2)" : a.result}
+            {useDemo ? (
+              <ul className="-mt-1 divide-y divide-border">
+                {d.recentActivity.map((a, i) => (
+                  <li key={`${a.action}-${i}`} className="flex items-center justify-between gap-3 py-2">
+                    <span className="min-w-0">
+                      <span className="block truncate font-mono text-caption font-medium">{a.action}</span>
+                      <span className="block truncate text-caption text-muted-foreground">{a.detail}</span>
                     </span>
-                    <span className="font-mono text-caption text-muted-foreground">{a.ts}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={
+                          a.result === "ok"
+                            ? "rounded-control bg-status-success/10 px-1.5 py-0.5 text-caption font-medium text-status-success"
+                            : a.result === "retry"
+                              ? "rounded-control bg-status-warning/10 px-1.5 py-0.5 text-caption font-medium text-status-warning"
+                              : "rounded-control bg-destructive/10 px-1.5 py-0.5 text-caption font-medium text-destructive"
+                        }
+                      >
+                        {a.result === "retry" ? "retry(2)" : a.result}
+                      </span>
+                      <span className="font-mono text-caption text-muted-foreground">{a.ts}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <RecentAuditList events={recentAudit.data ?? []} />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -409,6 +514,31 @@ function Kpi({
     </Link>
   ) : (
     <div className="group">{inner}</div>
+  );
+}
+
+/** RecentAuditList renders the SERVED audit stream (S-N0): event type, short
+ * hash, and event time — no fabricated ok/retry chips, because audit events
+ * are facts, not delivery attempts. */
+function RecentAuditList({ events }: { events: AuditEvent[] }) {
+  const { locale, timeZone } = useTranslation();
+  if (events.length === 0) {
+    return <p className="py-2 text-caption text-muted-foreground">No audit events yet.</p>;
+  }
+  return (
+    <ul className="-mt-1 divide-y divide-border">
+      {events.map((event) => (
+        <li key={`${event.sequence}-${event.hash ?? ""}`} className="flex items-center justify-between gap-3 py-2">
+          <span className="min-w-0">
+            <span className="block truncate font-mono text-caption font-medium">{event.type}</span>
+            {event.hash && <span className="block truncate text-caption text-muted-foreground">{event.hash.slice(0, 12)}…</span>}
+          </span>
+          <span className="shrink-0 font-mono text-caption text-muted-foreground">
+            {new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", timeZone }).format(new Date(event.time))}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
