@@ -315,7 +315,7 @@ describe("posture collector disclosures", () => {
     const user = userEvent.setup();
     await renderPosture();
 
-    expect(screen.getByRole("heading", { name: "Posture" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Crypto posture" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Certificate Transparency monitoring" })).toBeInTheDocument();
     expect(screen.getAllByText("https://ct.googleapis.com/logs/argon2026/").length).toBeGreaterThan(0);
     expect(screen.getByText("42")).toBeInTheDocument();

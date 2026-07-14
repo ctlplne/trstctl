@@ -47,6 +47,7 @@ const factorLabels: Record<RiskFactor, string> = {
 };
 
 export function Risk() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const initialSort = searchParams.get("sort") === "expiry" ? "expiry" : "score";
   const [data, setData] = useState<CredentialRisk[] | null>(null);
@@ -317,7 +318,7 @@ export function Risk() {
     <section aria-labelledby="risk-heading">
       <PageHeader
         titleId="risk-heading"
-        title="Credential risk"
+        title={t("nav.item.risk")}
         description="A ranked list of individual credentials by urgency — what to rotate first. For fleet-wide crypto hygiene like configuration drift and post-quantum readiness, see Crypto posture."
       />
 

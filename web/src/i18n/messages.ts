@@ -160,6 +160,10 @@ export const messages = {
     defaultMessage: "System posture",
     description: "Platform page tab: read-only packaging, regional, scale, and support disclosures.",
   },
+  "platform.tabs.editions": {
+    defaultMessage: "Editions & license",
+    description: "Platform page tab: offline license state, edition/feature rows, and commercial packaging (quarantined from operational surfaces, S-A3/DA-26).",
+  },
   "identities.decommission.heading": {
     defaultMessage: "Decommission by signal",
     description: "Heading for the identity decommission workflow section.",
@@ -2152,8 +2156,8 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.risk": {
-    defaultMessage: "Risk",
-    description: "Primary navigation item.",
+    defaultMessage: "Credential risk",
+    description: "Primary navigation item. Matches the Risk page H1 and title (S-A2 naming parity).",
   },
   "nav.item.posture": {
     defaultMessage: "Crypto posture",
@@ -2957,8 +2961,8 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.integrate": {
-    defaultMessage: "Integration & SDKs",
-    description: "Primary navigation item.",
+    defaultMessage: "Integrate",
+    description: "Primary navigation item. Matches the Integrate page H1 (integrate.title) for naming parity (S-A2).",
   },
   "nav.item.apiExplorer": {
     defaultMessage: "API explorer",
@@ -6855,6 +6859,7 @@ const esESCatalog = {
   "discovery.tabs.runs": "Ejecuciones",
   "platform.tabs.access": "Administración de acceso",
   "platform.tabs.posture": "Postura del sistema",
+  "platform.tabs.editions": "Ediciones y licencia",
   "identities.decommission.heading": "Retirada por señal",
   "request.wizard.profile.label": "Elegir perfil",
   "request.wizard.profile.description": "El perfil de emisión determina el tipo de clave, la vigencia y cuántas aprobaciones necesita la solicitud.",
@@ -7408,7 +7413,7 @@ const esESCatalog = {
   "nav.item.secretSharing": "Compartición de secretos",
   "nav.item.connectors": "Conectores de despliegue",
   "nav.item.plugins": "Plugins",
-  "nav.item.risk": "Riesgo",
+  "nav.item.risk": "Riesgo de credenciales",
   "nav.item.posture": "Postura criptográfica",
   "nav.item.graph": "Grafo de credenciales",
   "nav.item.assistant": "Asistente",
@@ -7615,7 +7620,7 @@ const esESCatalog = {
   "policy.nhiCompliance.mappedSignals": "{count} señales mapeadas",
   "policy.nhiCompliance.residualAttestations": "Atestaciones residuales",
   "nav.item.privacy": "Privacidad",
-  "nav.item.integrate": "Integración y SDK",
+  "nav.item.integrate": "Integrar",
   "nav.item.apiExplorer": "Explorador de API",
   "nav.item.operations": "Operaciones",
   "nav.item.notifications": "Notificaciones",

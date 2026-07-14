@@ -4,6 +4,7 @@ import { api, ApiError, type Profile } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
@@ -35,6 +36,7 @@ const defaultBuilder: BuilderFields = {
 };
 
 export function Profiles() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<Profile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -120,7 +122,7 @@ export function Profiles() {
     <section aria-labelledby="profiles-heading" className="grid gap-6">
       <PageHeader
         titleId="profiles-heading"
-        title="Profiles"
+        title={t("nav.item.profiles")}
         description="Versioned rulebooks for what may be issued: key strength, allowed key usages (EKUs), maximum validity, enrollment protocols, and which DNS names (SANs) are permitted."
         actions={
           <Button type="button" onClick={() => setShowForm((s) => !s)}>

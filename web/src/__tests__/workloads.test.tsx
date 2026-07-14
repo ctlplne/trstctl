@@ -34,7 +34,7 @@ describe("workload identity disclosure surface", () => {
   it("renders dynamic lease controls with expiry visualization and no fixture lease rows", async () => {
     renderWorkloads();
 
-    expect(screen.getByRole("heading", { name: "Workload identity" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Workloads" })).toBeInTheDocument();
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(await screen.findByText("CAP-K8S-07")).toBeInTheDocument();
     expect(screen.getByText("trustbundles/status: update, patch")).toBeInTheDocument();

@@ -76,7 +76,7 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/profiles");
 
-    expect(await screen.findByRole("heading", { name: "Profiles" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Certificate profiles" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /New profile/i })).toBeInTheDocument();
     expect(await screen.findByText("server")).toBeInTheDocument();
 
@@ -321,7 +321,7 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/graph");
 
-    expect(await screen.findByRole("heading", { name: "Graph" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Credential graph" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Graph/i })).toHaveAttribute("href", "/graph");
     expect((await screen.findAllByText("payments-cert")).length).toBeGreaterThan(0);
 

@@ -13,6 +13,7 @@ import {
   graphNodeKindStyle,
 } from "@/components/GraphView";
 import { PageHeader } from "@/components/PageHeader";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { BlastRadiusExplorer } from "@/components/graph";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 type Notice = { kind: "permission" | "error"; message: string };
 
 export function Graph() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const [graph, setGraph] = useState<{ data: GraphResponse | null; loading: boolean; error: Notice | null }>({
     data: null,
@@ -154,7 +156,7 @@ export function Graph() {
     <section aria-labelledby="graph-heading">
       <PageHeader
         titleId="graph-heading"
-        title="Graph"
+        title={t("nav.item.graph")}
         description="Tenant-scoped credential graph: explore nodes and edges, compute blast radius and reachability, and run read-only graph queries."
       />
 

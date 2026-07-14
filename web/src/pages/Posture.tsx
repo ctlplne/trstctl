@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { PQCReadinessSummary } from "@/components/pqc";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -32,6 +33,7 @@ const emptyCBOMProgress: CBOMMigrationProgress = {
 };
 
 export function Posture() {
+  const { t } = useTranslation();
   const [discoverySources, setDiscoverySources] = useState<DiscoverySource[]>([]);
   const [discoveryRuns, setDiscoveryRuns] = useState<DiscoveryRun[]>([]);
   const [discoveryFindings, setDiscoveryFindings] = useState<DiscoveryFinding[]>([]);
@@ -248,7 +250,7 @@ export function Posture() {
     <section aria-labelledby="posture-heading" className="grid gap-6">
       <PageHeader
         titleId="posture-heading"
-        title="Posture"
+        title={t("nav.item.posture")}
         description="Your fleet's cryptographic health: certificate-transparency findings, configuration drift, and a cryptographic bill of materials (which algorithms you run and how post-quantum-ready they are). For per-credential rotation urgency see Risk; for scan setup see Discovery."
       />
 

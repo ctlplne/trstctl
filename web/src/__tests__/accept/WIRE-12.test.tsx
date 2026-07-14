@@ -296,21 +296,28 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
     expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
 
-    // Posture disclosures render behind the System posture workspace tab.
-    await user.click(screen.getByRole("tab", { name: "System posture" }));
-    expect(screen.getByText("tenant-platform")).toBeInTheDocument();
+    // Editions/licensing/commercial rows are quarantined to their own tab (S-A3/DA-26).
+    await user.click(screen.getByRole("tab", { name: "Editions & license" }));
     expect(screen.getByRole("heading", { name: "Editions" })).toBeInTheDocument();
     expect(screen.getByText("ENTERPRISE")).toBeInTheDocument();
     expect(screen.getByText("Acme Robotics")).toBeInTheDocument();
     expect(screen.getByText("self host")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Packaging" })).toBeInTheDocument();
-    expect(screen.getByText("Machine Identity Security Control Plane")).toBeInTheDocument();
-    expect(screen.getByText("control_plane_deployment")).toBeInTheDocument();
-    expect(screen.getByText(/No per-certificate or ephemeral-identity billing/i)).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Free Enterprise self-host Provider \/ MSP/i })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
     expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();
     expect(screen.getByText(/self-test passed/i)).toBeInTheDocument();
+    // Regional issuance HA is an edition-gated capability disclosed with the license matrix.
+    expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
+    expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
+    expect(screen.getByText("regional-smoke")).toBeInTheDocument();
+
+    // Posture disclosures render behind the System posture workspace tab.
+    await user.click(screen.getByRole("tab", { name: "System posture" }));
+    expect(screen.getByText("tenant-platform")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Packaging" })).toBeInTheDocument();
+    expect(screen.getByText("Machine Identity Security Control Plane")).toBeInTheDocument();
+    expect(screen.getByText("control_plane_deployment")).toBeInTheDocument();
+    expect(screen.getByText(/No per-certificate or ephemeral-identity billing/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Enterprise support" })).toBeInTheDocument();
     expect(screen.getByText("support enabled")).toBeInTheDocument();
     expect(screen.getByText("Enterprise 24x7 production support")).toBeInTheDocument();
@@ -322,9 +329,6 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-01 active")).toBeInTheDocument();
     expect(screen.getByText("perf-live")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
-    expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
-    expect(screen.getByText("regional-smoke")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Access administration" }));
     expect(screen.getAllByText("platform-owner").length).toBeGreaterThan(0);

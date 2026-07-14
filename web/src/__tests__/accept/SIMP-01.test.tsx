@@ -253,6 +253,24 @@ describe("SIMP-01 Platform served-data reduction", () => {
     apiMock.logout.mockResolvedValue(undefined);
   });
 
+  it("quarantines editions & license behind its own tab, off Access and System (S-A3/DA-26)", async () => {
+    const user = userEvent.setup();
+    renderPlatform();
+
+    // Default (Access administration) tab shows no license/edition framing.
+    await screen.findByRole("heading", { name: "Platform" });
+    expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
+
+    // System posture keeps deployment posture but not the license/edition rows.
+    await user.click(screen.getByRole("tab", { name: "System posture" }));
+    expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
+
+    // The dedicated tab is where license state and the edition matrix live.
+    await user.click(screen.getByRole("tab", { name: "Editions & license" }));
+    expect(screen.getByRole("heading", { name: "Editions" })).toBeInTheDocument();
+  });
+
   it("keeps only served access-admin data plus session posture on Platform", async () => {
     const user = userEvent.setup();
     renderPlatform();
@@ -278,6 +296,9 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-01 active")).toBeInTheDocument();
     expect(screen.getByText("SCALE-1M")).toBeInTheDocument();
+
+    // Regional issuance HA is edition-gated and disclosed on the Editions & license tab.
+    await user.click(screen.getByRole("tab", { name: "Editions & license" }));
     expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
     expect(screen.getByText("idempotency")).toBeInTheDocument();

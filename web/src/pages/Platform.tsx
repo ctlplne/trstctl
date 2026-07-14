@@ -93,10 +93,12 @@ const defaultPAMSessionForm: PAMSessionFormState = {
 /** Access administration is the page's one operational surface, so it renders
  * as the default tab; the read-only posture panels live behind "System
  * posture" (audit P0: Access was buried under six disclosure panels). */
-type PlatformTab = "access" | "posture";
+type PlatformTab = "access" | "posture" | "editions";
 
 function platformTabFromSearchParam(value: string | null): PlatformTab {
-  return value === "posture" ? "posture" : "access";
+  if (value === "posture") return "posture";
+  if (value === "editions") return "editions";
+  return "access";
 }
 
 export function Platform() {
@@ -437,6 +439,7 @@ export function Platform() {
         tabs={[
           { id: "access", label: t("platform.tabs.access") },
           { id: "posture", label: t("platform.tabs.posture") },
+          { id: "editions", label: t("platform.tabs.editions") },
         ]}
       />
 
@@ -515,316 +518,6 @@ export function Platform() {
               </p>
             </section>
           </div>
-
-          <section className="ui-panel p-comfortable" aria-labelledby="editions-heading">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 id="editions-heading" className="text-title font-semibold">
-                  Editions
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">Offline license state, feature rows, and the live crypto posture.</p>
-              </div>
-              <span className={editionStateClass(editions?.state)}>{editionStateLabel(editions?.state)}</span>
-            </div>
-            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
-              <div className="grid gap-4">
-                <div className="overflow-x-auto rounded-panel border border-border">
-                  <table className="ui-table min-w-[42rem]">
-                    <caption className="sr-only">Packaging edition matrix</caption>
-                    <thead>
-                      <tr>
-                        {packaging.editions.map((edition) => (
-                          <th scope="col" key={edition.id}>
-                            {edition.column}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        {packaging.editions.map((edition) => (
-                          <td key={edition.id}>{edition.name}</td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div className="overflow-x-auto rounded-panel border border-border">
-                  <table className="ui-table min-w-[32rem]">
-                    <caption className="sr-only">Edition feature table</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Feature</th>
-                        <th scope="col">Tier</th>
-                        <th scope="col">State</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(editions?.features ?? []).map((feature) => (
-                        <tr key={feature.name}>
-                          <td className="font-mono text-xs">{feature.name}</td>
-                          <td>{feature.tier}</td>
-                          <td>{featureStateLabel(feature.licensed, feature.mode)}</td>
-                        </tr>
-                      ))}
-                      {editions && editions.features.length === 0 ? (
-                        <tr>
-                          <td colSpan={3} className="text-muted-foreground">
-                            No commercial feature rows.
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <dl className="grid gap-2 text-sm">
-                <div>
-                  <dt className="font-medium text-muted-foreground">Tier</dt>
-                  <dd className="text-base font-semibold">{(editions?.tier ?? "community").toUpperCase()}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">Customer</dt>
-                  <dd>{editions?.customer ?? "community core"}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">Expiry</dt>
-                  <dd>{formatOptionalDate(editions?.expires_at, formatPolicy)}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("platform.editions.useRights")}</dt>
-                  <dd>{(editions?.rights ?? ["self_host"]).map((right) => right.replaceAll("_", " ")).join(", ")}</dd>
-                </div>
-                {editions?.tier === "provider" ? (
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("platform.editions.managedCustomerBand")}</dt>
-                    <dd>{editions.managed_customer_band ? formatNumberPolicy(editions.managed_customer_band, formatPolicy) : "Negotiated / unlimited"}</dd>
-                  </div>
-                ) : null}
-                <div>
-                  <dt className="font-medium text-muted-foreground">FIPS posture</dt>
-                  <dd className="grid gap-1">
-                    <span>
-                      {editions?.fips?.module_active ? "FIPS module active" : "FIPS module inactive"}
-                      {editions?.fips?.required ? " · required" : ""}
-                      {editions?.fips?.self_test_passed ? " · self-test passed" : " · self-test not confirmed"}
-                    </span>
-                    {editions?.fips?.validated_module_path ? (
-                      <span>
-                        {editions.fips.standard ?? "FIPS 140-3"} · {editions.fips.module ?? "Go Cryptographic Module"} ·{" "}
-                        {editions.fips.build_target ?? "make fips-build"}
-                      </span>
-                    ) : null}
-                    {editions?.fips?.ci_gate ? <span>{editions.fips.ci_gate}</span> : null}
-                    {editions?.fips?.product_certification_residual ? (
-                      <span className="text-muted-foreground">{editions.fips.product_certification_residual}</span>
-                    ) : null}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </section>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="platform-region-heading">
-              <h2 id="platform-region-heading" className="text-title font-semibold">
-                Multi-region posture
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
-              </p>
-              {/* TRACE-014 source anchor: served worker */}
-            </section>
-            {distribution && (
-              <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="distribution-posture-heading">
-                <h2 id="distribution-posture-heading" className="text-title font-semibold">
-                  {t("parity.distributionPosture_10c8b4")}
-                </h2>
-                <dl className="grid gap-2 text-sm">
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("parity.productionMode_1737a4")}</dt>
-                    <dd>{humanizeToken(distribution.production_mode)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("parity.controlPlaneLineage_513399")}</dt>
-                    <dd>{humanizeToken(distribution.control_plane_lineage)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("parity.builtInGuarantees_21db16")}</dt>
-                    <dd className="flex flex-wrap gap-2">
-                      <StatusBadge
-                        value={distribution.offline_license_verifier ? "included" : "absent"}
-                        label={distribution.offline_license_verifier ? "Licenses verified offline" : "No offline license verifier"}
-                        tone={distribution.offline_license_verifier ? "success" : "neutral"}
-                      />
-                      <StatusBadge
-                        value={distribution.core_audit_and_export ? "included" : "absent"}
-                        label={distribution.core_audit_and_export ? "Audit log and export in core" : "Audit and export not in core"}
-                        tone={distribution.core_audit_and_export ? "success" : "neutral"}
-                      />
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("parity.runModes_6fced8")}</dt>
-                    <dd className="grid gap-1">
-                      {distribution.run_modes.map((mode) => (
-                        <span key={mode.id}>
-                          <span className="font-medium">{mode.label}</span>
-                          <span className="text-muted-foreground"> — {mode.intended_use}</span>
-                        </span>
-                      ))}
-                      {distribution.run_modes.length === 0 && <span className="text-muted-foreground">-</span>}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("parity.supportedHostArchives_38c6c0")}</dt>
-                    <dd className="grid gap-1">
-                      {distribution.supported_host_archives.map((archive) => (
-                        <span key={`${archive.os_arch}-${archive.postgres_version}`} className="font-mono text-xs">
-                          {archive.os_arch} · PostgreSQL {archive.postgres_version}
-                          {archive.evaluation_only ? " · evaluation only" : ""}
-                        </span>
-                      ))}
-                      {distribution.supported_host_archives.length === 0 && <span className="text-muted-foreground">-</span>}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("parity.airGap_a0134a")}</dt>
-                    <dd>{airGapSummary(distribution.air_gap)}</dd>
-                  </div>
-                </dl>
-              </section>
-            )}
-          </div>
-
-          <section className="ui-panel p-comfortable" aria-labelledby="regional-issuance-heading">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Network className="h-4 w-4 text-status-success" aria-hidden="true" />
-                <h2 id="regional-issuance-heading" className="text-title font-semibold">
-                  {t("platform.ha.heading")}
-                </h2>
-              </div>
-              <span className={scaleServedClass(activeActiveIssuance?.served)}>
-                {activeActiveIssuance?.served ? t("platform.ha.active") : t("platform.ha.unavailable")}
-              </span>
-            </div>
-            <p className="mt-3 text-sm text-muted-foreground">{t("platform.ha.description")}</p>
-            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(18rem,0.45fr)_minmax(0,1fr)]">
-              <dl className="grid content-start gap-2 text-sm">
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("platform.ha.topology")}</dt>
-                  <dd>{activeActiveIssuance?.topology ?? "-"}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("platform.ha.writeModel")}</dt>
-                  <dd>{activeActiveIssuance?.write_model ?? "-"}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("platform.ha.rpoRto")}</dt>
-                  <dd>
-                    {t("platform.ha.rpoRtoValue", {
-                      rpo: formatOptionalNumber(activeActiveIssuance?.rpo_seconds, formatPolicy),
-                      rto: formatOptionalNumber(activeActiveIssuance?.rto_seconds, formatPolicy),
-                    })}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("platform.ha.invariants")}</dt>
-                  <dd className="font-mono text-xs">{(activeActiveIssuance?.architecture_invariants ?? []).join(", ") || "-"}</dd>
-                </div>
-              </dl>
-              <div className="grid gap-4">
-                <div className="overflow-x-auto rounded-panel border border-border">
-                  <table className="ui-table min-w-[44rem]">
-                    <caption className="sr-only">{t("platform.ha.regionCaption")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("platform.ha.region")}</th>
-                        <th scope="col">{t("platform.ha.role")}</th>
-                        <th scope="col">{t("platform.ha.writeScope")}</th>
-                        <th scope="col">{t("platform.ha.health")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(activeActiveIssuance?.regions ?? []).slice(0, 3).map((region) => (
-                        <tr key={region.id} className="align-top">
-                          <td>
-                            <span className="font-medium">{region.region}</span>
-                            <span className="mt-1 block font-mono text-xs text-muted-foreground">{region.id}</span>
-                          </td>
-                          <td>{region.role}</td>
-                          <td>{region.writable_scope}</td>
-                          <td>{region.health_signal}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <div className="overflow-x-auto rounded-panel border border-border">
-                    <table className="ui-table min-w-[34rem]">
-                      <caption className="sr-only">{t("platform.ha.fenceCaption")}</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">{t("platform.ha.fence")}</th>
-                          <th scope="col">{t("platform.ha.scope")}</th>
-                          <th scope="col">{t("platform.ha.mechanism")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(activeActiveIssuance?.tenant_write_fences ?? []).map((fence) => (
-                          <tr key={fence.id} className="align-top">
-                            <td className="font-medium">{fence.id}</td>
-                            <td>{fence.scope}</td>
-                            <td>{fence.mechanism}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="overflow-x-auto rounded-panel border border-border">
-                    <table className="ui-table min-w-[28rem]">
-                      <caption className="sr-only">{t("platform.ha.failoverCaption")}</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">{t("platform.ha.step")}</th>
-                          <th scope="col">{t("platform.ha.action")}</th>
-                          <th scope="col">{t("platform.ha.gate")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(activeActiveIssuance?.failover_runbook ?? []).map((step) => (
-                          <tr key={step.id} className="align-top">
-                            <td className="font-medium">{step.id}</td>
-                            <td>{step.action}</td>
-                            <td>{step.gate}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(activeActiveIssuance?.release_gates ?? []).map((gate) => (
-                    <span key={gate.id} className="rounded-control border border-border bg-muted px-2 py-1 font-mono text-xs">
-                      {gate.id}
-                    </span>
-                  ))}
-                </div>
-                <div className="grid gap-2 text-sm md:grid-cols-2">
-                  {(activeActiveIssuance?.residuals ?? []).slice(0, 2).map((residual) => (
-                    <p key={residual} className="rounded-panel border border-border bg-muted/40 p-3 text-muted-foreground">
-                      {residual}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
 
           <section className="ui-panel p-comfortable" aria-labelledby="scale-orchestration-heading">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1163,6 +856,320 @@ export function Platform() {
                   Provision tenant
                 </Button>
               </form>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === "editions" && (
+        <div {...tabPanelProps("platform", "editions")} className="grid gap-6">
+          <section className="ui-panel p-comfortable" aria-labelledby="editions-heading">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="editions-heading" className="text-title font-semibold">
+                  Editions
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">Offline license state, feature rows, and the live crypto posture.</p>
+              </div>
+              <span className={editionStateClass(editions?.state)}>{editionStateLabel(editions?.state)}</span>
+            </div>
+            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
+              <div className="grid gap-4">
+                <div className="overflow-x-auto rounded-panel border border-border">
+                  <table className="ui-table min-w-[42rem]">
+                    <caption className="sr-only">Packaging edition matrix</caption>
+                    <thead>
+                      <tr>
+                        {packaging.editions.map((edition) => (
+                          <th scope="col" key={edition.id}>
+                            {edition.column}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {packaging.editions.map((edition) => (
+                          <td key={edition.id}>{edition.name}</td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="overflow-x-auto rounded-panel border border-border">
+                  <table className="ui-table min-w-[32rem]">
+                    <caption className="sr-only">Edition feature table</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Feature</th>
+                        <th scope="col">Tier</th>
+                        <th scope="col">State</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(editions?.features ?? []).map((feature) => (
+                        <tr key={feature.name}>
+                          <td className="font-mono text-xs">{feature.name}</td>
+                          <td>{feature.tier}</td>
+                          <td>{featureStateLabel(feature.licensed, feature.mode)}</td>
+                        </tr>
+                      ))}
+                      {editions && editions.features.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="text-muted-foreground">
+                            No commercial feature rows.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <dl className="grid gap-2 text-sm">
+                <div>
+                  <dt className="font-medium text-muted-foreground">Tier</dt>
+                  <dd className="text-base font-semibold">{(editions?.tier ?? "community").toUpperCase()}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">Customer</dt>
+                  <dd>{editions?.customer ?? "community core"}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">Expiry</dt>
+                  <dd>{formatOptionalDate(editions?.expires_at, formatPolicy)}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("platform.editions.useRights")}</dt>
+                  <dd>{(editions?.rights ?? ["self_host"]).map((right) => right.replaceAll("_", " ")).join(", ")}</dd>
+                </div>
+                {editions?.tier === "provider" ? (
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.editions.managedCustomerBand")}</dt>
+                    <dd>{editions.managed_customer_band ? formatNumberPolicy(editions.managed_customer_band, formatPolicy) : "Negotiated / unlimited"}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt className="font-medium text-muted-foreground">FIPS posture</dt>
+                  <dd className="grid gap-1">
+                    <span>
+                      {editions?.fips?.module_active ? "FIPS module active" : "FIPS module inactive"}
+                      {editions?.fips?.required ? " · required" : ""}
+                      {editions?.fips?.self_test_passed ? " · self-test passed" : " · self-test not confirmed"}
+                    </span>
+                    {editions?.fips?.validated_module_path ? (
+                      <span>
+                        {editions.fips.standard ?? "FIPS 140-3"} · {editions.fips.module ?? "Go Cryptographic Module"} ·{" "}
+                        {editions.fips.build_target ?? "make fips-build"}
+                      </span>
+                    ) : null}
+                    {editions?.fips?.ci_gate ? <span>{editions.fips.ci_gate}</span> : null}
+                    {editions?.fips?.product_certification_residual ? (
+                      <span className="text-muted-foreground">{editions.fips.product_certification_residual}</span>
+                    ) : null}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </section>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="platform-region-heading">
+              <h2 id="platform-region-heading" className="text-title font-semibold">
+                Multi-region posture
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
+              </p>
+              {/* TRACE-014 source anchor: served worker */}
+            </section>
+            {distribution && (
+              <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="distribution-posture-heading">
+                <h2 id="distribution-posture-heading" className="text-title font-semibold">
+                  {t("parity.distributionPosture_10c8b4")}
+                </h2>
+                <dl className="grid gap-2 text-sm">
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("parity.productionMode_1737a4")}</dt>
+                    <dd>{humanizeToken(distribution.production_mode)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("parity.controlPlaneLineage_513399")}</dt>
+                    <dd>{humanizeToken(distribution.control_plane_lineage)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("parity.builtInGuarantees_21db16")}</dt>
+                    <dd className="flex flex-wrap gap-2">
+                      <StatusBadge
+                        value={distribution.offline_license_verifier ? "included" : "absent"}
+                        label={distribution.offline_license_verifier ? "Licenses verified offline" : "No offline license verifier"}
+                        tone={distribution.offline_license_verifier ? "success" : "neutral"}
+                      />
+                      <StatusBadge
+                        value={distribution.core_audit_and_export ? "included" : "absent"}
+                        label={distribution.core_audit_and_export ? "Audit log and export in core" : "Audit and export not in core"}
+                        tone={distribution.core_audit_and_export ? "success" : "neutral"}
+                      />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("parity.runModes_6fced8")}</dt>
+                    <dd className="grid gap-1">
+                      {distribution.run_modes.map((mode) => (
+                        <span key={mode.id}>
+                          <span className="font-medium">{mode.label}</span>
+                          <span className="text-muted-foreground"> — {mode.intended_use}</span>
+                        </span>
+                      ))}
+                      {distribution.run_modes.length === 0 && <span className="text-muted-foreground">-</span>}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("parity.supportedHostArchives_38c6c0")}</dt>
+                    <dd className="grid gap-1">
+                      {distribution.supported_host_archives.map((archive) => (
+                        <span key={`${archive.os_arch}-${archive.postgres_version}`} className="font-mono text-xs">
+                          {archive.os_arch} · PostgreSQL {archive.postgres_version}
+                          {archive.evaluation_only ? " · evaluation only" : ""}
+                        </span>
+                      ))}
+                      {distribution.supported_host_archives.length === 0 && <span className="text-muted-foreground">-</span>}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("parity.airGap_a0134a")}</dt>
+                    <dd>{airGapSummary(distribution.air_gap)}</dd>
+                  </div>
+                </dl>
+              </section>
+            )}
+          </div>
+
+          <section className="ui-panel p-comfortable" aria-labelledby="regional-issuance-heading">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Network className="h-4 w-4 text-status-success" aria-hidden="true" />
+                <h2 id="regional-issuance-heading" className="text-title font-semibold">
+                  {t("platform.ha.heading")}
+                </h2>
+              </div>
+              <span className={scaleServedClass(activeActiveIssuance?.served)}>
+                {activeActiveIssuance?.served ? t("platform.ha.active") : t("platform.ha.unavailable")}
+              </span>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">{t("platform.ha.description")}</p>
+            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(18rem,0.45fr)_minmax(0,1fr)]">
+              <dl className="grid content-start gap-2 text-sm">
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("platform.ha.topology")}</dt>
+                  <dd>{activeActiveIssuance?.topology ?? "-"}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("platform.ha.writeModel")}</dt>
+                  <dd>{activeActiveIssuance?.write_model ?? "-"}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("platform.ha.rpoRto")}</dt>
+                  <dd>
+                    {t("platform.ha.rpoRtoValue", {
+                      rpo: formatOptionalNumber(activeActiveIssuance?.rpo_seconds, formatPolicy),
+                      rto: formatOptionalNumber(activeActiveIssuance?.rto_seconds, formatPolicy),
+                    })}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("platform.ha.invariants")}</dt>
+                  <dd className="font-mono text-xs">{(activeActiveIssuance?.architecture_invariants ?? []).join(", ") || "-"}</dd>
+                </div>
+              </dl>
+              <div className="grid gap-4">
+                <div className="overflow-x-auto rounded-panel border border-border">
+                  <table className="ui-table min-w-[44rem]">
+                    <caption className="sr-only">{t("platform.ha.regionCaption")}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t("platform.ha.region")}</th>
+                        <th scope="col">{t("platform.ha.role")}</th>
+                        <th scope="col">{t("platform.ha.writeScope")}</th>
+                        <th scope="col">{t("platform.ha.health")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(activeActiveIssuance?.regions ?? []).slice(0, 3).map((region) => (
+                        <tr key={region.id} className="align-top">
+                          <td>
+                            <span className="font-medium">{region.region}</span>
+                            <span className="mt-1 block font-mono text-xs text-muted-foreground">{region.id}</span>
+                          </td>
+                          <td>{region.role}</td>
+                          <td>{region.writable_scope}</td>
+                          <td>{region.health_signal}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="overflow-x-auto rounded-panel border border-border">
+                    <table className="ui-table min-w-[34rem]">
+                      <caption className="sr-only">{t("platform.ha.fenceCaption")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("platform.ha.fence")}</th>
+                          <th scope="col">{t("platform.ha.scope")}</th>
+                          <th scope="col">{t("platform.ha.mechanism")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(activeActiveIssuance?.tenant_write_fences ?? []).map((fence) => (
+                          <tr key={fence.id} className="align-top">
+                            <td className="font-medium">{fence.id}</td>
+                            <td>{fence.scope}</td>
+                            <td>{fence.mechanism}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="overflow-x-auto rounded-panel border border-border">
+                    <table className="ui-table min-w-[28rem]">
+                      <caption className="sr-only">{t("platform.ha.failoverCaption")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("platform.ha.step")}</th>
+                          <th scope="col">{t("platform.ha.action")}</th>
+                          <th scope="col">{t("platform.ha.gate")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(activeActiveIssuance?.failover_runbook ?? []).map((step) => (
+                          <tr key={step.id} className="align-top">
+                            <td className="font-medium">{step.id}</td>
+                            <td>{step.action}</td>
+                            <td>{step.gate}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(activeActiveIssuance?.release_gates ?? []).map((gate) => (
+                    <span key={gate.id} className="rounded-control border border-border bg-muted px-2 py-1 font-mono text-xs">
+                      {gate.id}
+                    </span>
+                  ))}
+                </div>
+                <div className="grid gap-2 text-sm md:grid-cols-2">
+                  {(activeActiveIssuance?.residuals ?? []).slice(0, 2).map((residual) => (
+                    <p key={residual} className="rounded-panel border border-border bg-muted/40 p-3 text-muted-foreground">
+                      {residual}
+                    </p>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
         </div>

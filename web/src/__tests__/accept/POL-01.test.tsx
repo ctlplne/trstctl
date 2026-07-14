@@ -55,7 +55,7 @@ describe("POL-01 graph polish", () => {
     const user = userEvent.setup();
     renderGraph();
 
-    expect(await screen.findByRole("heading", { name: "Graph" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Credential graph" })).toBeInTheDocument();
     expect((await screen.findAllByText("payments-cert")).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText("Cypher-style query")).not.toBeInTheDocument();
 

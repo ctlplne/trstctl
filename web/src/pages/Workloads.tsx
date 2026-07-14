@@ -287,7 +287,7 @@ export function Workloads() {
     <section aria-labelledby="workload-heading" className="grid gap-6">
       <PageHeader
         titleId="workload-heading"
-        title="Workload identity"
+        title={t("nav.item.workloads")}
         description="Short-lived identities for software workloads (services, pods, jobs): SPIFFE/SVID workload certificates, just-in-time (JIT) leases, and broker identities. Raw key material stays out of the browser — you see lease metadata here."
       />
 

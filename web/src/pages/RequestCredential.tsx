@@ -214,7 +214,7 @@ export function RequestCredential() {
   return (
     <section aria-labelledby="request-credential-heading" className="grid gap-6">
       <PageHeader
-        title="Request a credential"
+        title={t("nav.item.requestCredential")}
         titleId="request-credential-heading"
         description="Request a certificate against an issuance profile. Requesting and approving stay separate steps, so no one can self-issue."
       />
