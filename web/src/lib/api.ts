@@ -1198,6 +1198,9 @@ export interface Api {
   createSecret(input: SecretRequest): Promise<SecretMeta>;
   importSecrets(input: SecretImportRequest): Promise<SecretMetaList>;
   getSecret(name: string, options?: { resolve?: boolean }): Promise<SecretValue>;
+  /** Read one secret as the granted workload credential, without falling back
+   * to the browser's human session cookie. The caller must discard the value. */
+  getSecretWithToken(name: string, token: string): Promise<SecretValue>;
   getSecretVersion(name: string, version: number): Promise<SecretValue>;
   recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
   rotateSecret(name: string, input: SecretRequest): Promise<SecretMeta>;
@@ -1521,6 +1524,11 @@ export const api: Api = {
     const suffix = qs.toString();
     return req<SecretValue>(`/api/v1/secrets/store/${encodeURIComponent(name)}${suffix ? `?${suffix}` : ""}`);
   },
+  getSecretWithToken: (name, token) =>
+    req<SecretValue>(`/api/v1/secrets/store/${encodeURIComponent(name)}`, {
+      credentials: "omit",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
   getSecretVersion: (name, version) =>
     req<SecretValue>(`/api/v1/secrets/store/history/${encodeURIComponent(name)}?version=${encodeURIComponent(String(version))}`),
   recoverSecret: (name, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/store/recover/${encodeURIComponent(name)}`, input),

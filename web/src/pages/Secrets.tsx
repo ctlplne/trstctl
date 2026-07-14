@@ -141,6 +141,9 @@ export function Secrets() {
   const [grantBusy, setGrantBusy] = useState(false);
   const [grantError, setGrantError] = useState<string | null>(null);
   const [grantResult, setGrantResult] = useState<{ token: string; subject: string; expiresAt?: string } | null>(null);
+  const [grantVerifyBusy, setGrantVerifyBusy] = useState(false);
+  const [grantVerifyError, setGrantVerifyError] = useState<string | null>(null);
+  const [grantVerifyResult, setGrantVerifyResult] = useState<{ name: string; version?: number } | null>(null);
   const [tokenRows, setTokenRows] = useState<APIToken[] | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
   // C-S4 (DA-02 faithful): auth-method console state over the C-S2/C-S3
@@ -702,6 +705,8 @@ export function Secrets() {
     event.preventDefault();
     setGrantError(null);
     setGrantResult(null);
+    setGrantVerifyError(null);
+    setGrantVerifyResult(null);
     setGrantBusy(true);
     try {
       const subject = grantSubject.trim();
@@ -723,6 +728,29 @@ export function Secrets() {
       setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
     } finally {
       setGrantBusy(false);
+    }
+  }
+
+  async function verifyGrantedSecretAccess() {
+    if (!grantResult) return;
+    const name = accessName.trim() || selectedMeta?.name || "";
+    if (!name) {
+      setGrantVerifyError(t("secrets.grant.verifyMissingSecret"));
+      return;
+    }
+    setGrantVerifyBusy(true);
+    setGrantVerifyError(null);
+    setGrantVerifyResult(null);
+    try {
+      // This request deliberately omits the human session cookie. The raw
+      // reveal-once bearer token must authorize the read; only metadata enters
+      // React state, and the returned secret value is never rendered or stored.
+      const value = await api.getSecretWithToken(name, grantResult.token);
+      setGrantVerifyResult({ name: value.name, version: value.version });
+    } catch (err) {
+      setGrantVerifyError(apiProblemMessage(err, t("secrets.grant.verifyFailedTitle")));
+    } finally {
+      setGrantVerifyBusy(false);
     }
   }
 
@@ -1659,8 +1687,8 @@ export function Secrets() {
         <div className="grid gap-6">
           {/* C-S1 (DA-02 interim): Job 2's grant step, in-console, over the
               existing idempotent /access/api-tokens and /ephemeral/api-keys
-              mutations. Create (Store tab) → grant (here) → verify (login
-              below). */}
+              mutations. Create (Store tab) → grant (here) → verify the
+              selected secret with that exact reveal-once bearer credential. */}
           {canGrant && (
             <section aria-labelledby="grant-access-heading" className="grid gap-4 border-y border-border py-4">
               <div>
@@ -1718,13 +1746,25 @@ export function Secrets() {
                 <div role="status" className="rounded-panel border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-medium">{t("secrets.grant.revealTitle")}</p>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => setGrantResult(null)}>
-                      {t("secrets.grant.dismiss")}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" disabled={grantVerifyBusy} onClick={() => void verifyGrantedSecretAccess()}>
+                        {grantVerifyBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                        {t("secrets.grant.verify")}
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setGrantResult(null)}>
+                        {t("secrets.grant.dismiss")}
+                      </Button>
+                    </div>
                   </div>
                   <code className="mt-2 block break-all rounded bg-background px-2 py-1 text-xs">{grantResult.token}</code>
                   <p className="mt-1 text-xs text-muted-foreground">{t("secrets.grant.revealNote")}</p>
                 </div>
+              )}
+              {grantVerifyError && <ErrorState title={t("secrets.grant.verifyFailedTitle")}>{grantVerifyError}</ErrorState>}
+              {grantVerifyResult && (
+                <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+                  {t("secrets.grant.verifyPassed", { name: grantVerifyResult.name, version: String(grantVerifyResult.version ?? "latest") })}
+                </p>
               )}
               {canReadTokens && tokenRows && (
                 <div className="overflow-x-auto rounded-panel border border-border">

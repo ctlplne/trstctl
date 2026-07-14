@@ -75,6 +75,8 @@ var TenantScopedTables = []string{
 	"policy_bindings",
 	"tenant_members",
 	"api_tokens",
+	"machine_sessions",
+	"machine_auth_method_overrides",
 	"ca_authorities",
 	"ca_issued_certs",
 	"ca_crls",

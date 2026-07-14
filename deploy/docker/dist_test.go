@@ -101,6 +101,11 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	// Unprivileged runtime + an entrypoint.
 	mustContainAny(t, "Dockerfile non-root user", df, "nonroot", "USER 65532")
 	mustContainAll(t, "Dockerfile entrypoint", df, "ENTRYPOINT")
+	mustContainAll(t, "Dockerfile builds the web console before Go embeds it", df,
+		"FROM ${WEB_BUILD_IMAGE} AS web-build",
+		"npm --prefix web ci",
+		"npm --prefix web run build",
+		"COPY --from=web-build /src/internal/webui/dist ./internal/webui/dist")
 
 	// Mutation proof: a Dockerfile line building a non-existent ./cmd/<bin> is detected
 	// by the same extractor (the cmd dir would not exist); a real one resolves.
@@ -915,12 +920,13 @@ func TestServerCoverageIsReportedAndGated(t *testing.T) {
 
 // TestReleasePinsContainerBasesByDigest encodes the R4.5/SUPPLY-001 build-comment
 // honesty: the Dockerfile no longer hard-codes tag-tracked external bases — it
-// takes BUILD_IMAGE and BASE_IMAGE args — and the release pipeline resolves both
-// the Go builder and distroless runtime bases to immutable @sha256 digests, builds
-// with them, and records them.
+// takes WEB_BUILD_IMAGE, BUILD_IMAGE, and BASE_IMAGE args — and the release pipeline
+// resolves the Node web builder, Go builder, and distroless runtime bases to immutable
+// @sha256 digests, builds with them, and records them.
 func TestReleasePinsContainerBasesByDigest(t *testing.T) {
 	df := readArtifact(t, "Dockerfile")
-	mustContainAll(t, "Dockerfile takes pin-able build and runtime image args", df,
+	mustContainAll(t, "Dockerfile takes pin-able web, Go, and runtime image args", df,
+		"ARG WEB_BUILD_IMAGE", "FROM ${WEB_BUILD_IMAGE} AS web-build",
 		"ARG BUILD_IMAGE", "FROM ${BUILD_IMAGE} AS build",
 		"ARG BASE_IMAGE", "FROM ${BASE_IMAGE}")
 
@@ -928,8 +934,12 @@ func TestReleasePinsContainerBasesByDigest(t *testing.T) {
 	// A variable used in a FROM is only substituted from globally-scoped ARGs, so
 	// an ARG placed after the build stage's FROM leaves the FROM value blank.
 	firstFROM := strings.Index(df, "\nFROM ")
+	argWebBuild := strings.Index(df, "ARG WEB_BUILD_IMAGE")
 	argBuild := strings.Index(df, "ARG BUILD_IMAGE")
 	argBase := strings.Index(df, "ARG BASE_IMAGE")
+	if argWebBuild < 0 || firstFROM < 0 || argWebBuild > firstFROM {
+		t.Error("ARG WEB_BUILD_IMAGE must be declared before the first FROM (global scope), else FROM ${WEB_BUILD_IMAGE} resolves to blank at build time")
+	}
 	if argBuild < 0 || firstFROM < 0 || argBuild > firstFROM {
 		t.Error("ARG BUILD_IMAGE must be declared before the first FROM (global scope), else FROM ${BUILD_IMAGE} resolves to blank at build time")
 	}
@@ -938,11 +948,11 @@ func TestReleasePinsContainerBasesByDigest(t *testing.T) {
 	}
 
 	rel := repoFile(t, ".github", "workflows", "release.yml")
-	// The pipeline resolves both bases to digests...
-	mustContainAll(t, "release resolves the builder and runtime base digests", rel,
-		"golang:", "gcr.io/distroless/static-debian12", "imagetools inspect", "Manifest.Digest")
+	// The pipeline resolves all three bases to digests...
+	mustContainAll(t, "release resolves the web builder, Go builder, and runtime base digests", rel,
+		"node:", "golang:", "gcr.io/distroless/static-debian12", "imagetools inspect", "Manifest.Digest")
 	// ...builds with them...
-	mustContainAll(t, "release builds FROM the resolved bases", rel, "BUILD_IMAGE=", "BASE_IMAGE=")
+	mustContainAll(t, "release builds FROM the resolved bases", rel, "WEB_BUILD_IMAGE=", "BUILD_IMAGE=", "BASE_IMAGE=")
 	// ...and records it.
 	mustContainAny(t, "release records the pinned bases", rel, "GITHUB_STEP_SUMMARY", "pinned container base")
 }

@@ -20,15 +20,58 @@ vi.mock("@/lib/api", async (orig) => {
   // (header + H1) regardless of data. Permissions listed inline because the
   // vi.mock factory is hoisted above module-scope consts.
   const permissions = [
-    "access:read", "agents:read", "agents:write", "audit:read", "certs:issue", "certs:read", "certs:request",
-    "connectors:read", "discovery:read", "graph:read", "identities:read", "incidents:read", "issuers:read",
-    "keys:write", "lifecycle:read", "notifications:read", "owners:read", "policy:read", "privacy:read",
-    "profiles:read", "risk:read", "secrets:read", "secrets:write",
+    "access:read",
+    "agents:read",
+    "agents:write",
+    "audit:read",
+    "certs:issue",
+    "certs:read",
+    "certs:request",
+    "connectors:read",
+    "discovery:read",
+    "graph:read",
+    "identities:read",
+    "incidents:read",
+    "issuers:read",
+    "keys:write",
+    "lifecycle:read",
+    "notifications:read",
+    "owners:read",
+    "policy:read",
+    "privacy:read",
+    "profiles:read",
+    "risk:read",
+    "secrets:read",
+    "secrets:write",
   ];
   // A value that satisfies BOTH array-returning api methods (.filter/.map) and
   // paged/object-returning ones (.items/.events/…): an array with the common
   // container fields attached.
-  const dual = () => Object.assign([] as unknown[], { items: [], events: [], summary: {}, coverage: [], next_cursor: undefined });
+  const dual = () =>
+    Object.assign([] as unknown[], {
+      items: [],
+      events: [],
+      summary: {},
+      coverage: [],
+      targets: [],
+      sources: [],
+      findings: [],
+      logs: [],
+      nodes: [],
+      edges: [],
+      features: [],
+      tools: [],
+      report_types: [],
+      routes: [],
+      residuals: [],
+      schedules: [],
+      controls: [],
+      frameworks: [],
+      telemetry: { allowed: 0, denied: 0, replay_rejected: 0 },
+      signed_export: { manifest: { controls: [] } },
+      public_key_der: "",
+      next_cursor: undefined,
+    });
   const base: Record<string, unknown> = {};
   for (const key of Object.keys(actual.api)) {
     base[key] = vi.fn().mockResolvedValue(dual());

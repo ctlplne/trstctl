@@ -5,13 +5,139 @@ package projections_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// TestCertificateProjectionRejectsIDReuseAsDomainCorruption distinguishes a
+// legitimate at-least-once replay from a corrupt event that reuses one UUID for
+// different certificate bytes. The sink must return a stable domain error; a raw
+// certificates_pkey error is both opaque and indistinguishable from the live
+// inline/tail race above.
+func TestCertificateProjectionRejectsIDReuseAsDomainCorruption(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	proj := projections.New(s)
+	const certID = "10000000-0000-4000-8000-000000000098"
+	first := projectorEvent(t, projections.EventCertificateRecorded, projections.CertificateRecorded{
+		ID: certID, Subject: "CN=first.example", Fingerprint: "sha256:first", Serial: "98",
+	})
+	if err := proj.Apply(ctx, first); err != nil {
+		t.Fatalf("first certificate: %v", err)
+	}
+	corrupt := projectorEvent(t, projections.EventCertificateRecorded, projections.CertificateRecorded{
+		ID: certID, Subject: "CN=different.example", Fingerprint: "sha256:different", Serial: "99",
+	})
+	err := proj.Apply(ctx, corrupt)
+	if err == nil || !strings.Contains(err.Error(), "reuses id") || strings.Contains(err.Error(), "certificates_pkey") {
+		t.Fatalf("corrupt certificate id reuse error = %v, want stable domain error without raw SQL constraint", err)
+	}
+}
+
+// TestConnectorReceiptProjectionConvergesByOutbox pins the second natural key
+// on connector evidence. A retry may carry a fresh receipt UUID, but one outbox
+// command still has one canonical receipt whose latest status wins.
+func TestConnectorReceiptProjectionConvergesByOutbox(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	proj := projections.New(s)
+	outboxID := int64(42)
+	for _, candidate := range []projections.ConnectorDeliveryRecorded{
+		{ID: "10000000-0000-4000-8000-000000000096", OutboxID: &outboxID, Destination: "connector.deploy", Connector: "nginx", Target: "edge", Status: "failed", Attempts: 1},
+		{ID: "10000000-0000-4000-8000-000000000097", OutboxID: &outboxID, Destination: "connector.deploy", Connector: "nginx", Target: "edge", Status: "delivered", Attempts: 2},
+	} {
+		if err := proj.Apply(ctx, projectorEvent(t, projections.EventConnectorDeliveryRecorded, candidate)); err != nil {
+			t.Fatalf("apply connector receipt %s: %v", candidate.Status, err)
+		}
+	}
+	receipts, err := s.ListConnectorDeliveryReceiptsPage(ctx, tenantA, "", store.ZeroUUID, 10)
+	if err != nil {
+		t.Fatalf("list connector receipts: %v", err)
+	}
+	if len(receipts) != 1 || receipts[0].Status != "delivered" || receipts[0].Attempts != 2 {
+		t.Fatalf("connector receipts = %+v, want one converged delivered receipt", receipts)
+	}
+}
+
+// TestCertificateProjectionConvergesWithInlineTailRace reproduces the served
+// at-least-once race: the event is visible in JetStream while the inline SQL
+// projection is still committing, so the durable tail can try the same insert
+// concurrently. Either writer may discover the id or fingerprint uniqueness
+// conflict first; both must converge to the same one-row inventory.
+func TestCertificateProjectionConvergesWithInlineTailRace(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+
+	const certID = "10000000-0000-4000-8000-000000000099"
+	event := projectorEvent(t, projections.EventCertificateRecorded, projections.CertificateRecorded{
+		ID: certID, Subject: "CN=race.example", SANs: []string{"race.example"},
+		Fingerprint: "sha256:projection-race", Serial: "99", Source: "issued",
+	})
+	cert := store.Certificate{
+		ID: certID, TenantID: tenantA, Subject: "CN=race.example", SANs: []string{"race.example"},
+		Fingerprint: "sha256:projection-race", Serial: "99", Source: "issued", CreatedAt: event.Time,
+	}
+
+	rowInserted := make(chan struct{})
+	releaseCommit := make(chan struct{})
+	inlineDone := make(chan error, 1)
+	go func() {
+		inlineDone <- s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			if err := s.ApplyCertificateRecordedTx(ctx, tx, cert); err != nil {
+				return err
+			}
+			close(rowInserted)
+			<-releaseCommit
+			return nil
+		})
+	}()
+	select {
+	case <-rowInserted:
+	case err := <-inlineDone:
+		t.Fatalf("inline projection insert: %v", err)
+	}
+
+	tailDone := make(chan error, 1)
+	go func() { tailDone <- projections.New(s).Apply(ctx, event) }()
+	select {
+	case err := <-tailDone:
+		close(releaseCommit)
+		t.Fatalf("tail projection returned before the inline uniqueness lock committed: %v", err)
+	case <-time.After(100 * time.Millisecond):
+		// The second transaction is waiting on the first transaction's unique row.
+	}
+	close(releaseCommit)
+	if err := <-inlineDone; err != nil {
+		t.Fatalf("inline projection commit: %v", err)
+	}
+	if err := <-tailDone; err != nil {
+		t.Fatalf("tail projection after inline commit: %v", err)
+	}
+
+	items, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 10, nil)
+	if err != nil {
+		t.Fatalf("list certificates: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != certID || items[0].Fingerprint != cert.Fingerprint {
+		t.Fatalf("racing projections = %+v, want one canonical certificate", items)
+	}
+}
 
 // TestProjectorCreateEventsAreReplayIdempotentWithTenantCompositeKeys pins the
 // live-writer contract used by the API's inline projector and the durable tailer:

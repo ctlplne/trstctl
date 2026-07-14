@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     secretPage: vi.fn(),
     createSecret: vi.fn(),
     getSecret: vi.fn(),
+    getSecretWithToken: vi.fn(),
     rotateSecret: vi.fn(),
     deleteSecret: vi.fn(),
     approveSecretChange: vi.fn(),
@@ -78,6 +79,7 @@ function primeSecretsMocks() {
   });
   apiMock.createSecret.mockResolvedValue({ name: "app/cache/token", version: 1 });
   apiMock.getSecret.mockResolvedValue({ name: "app/db/password", value: "SUPER-SECRET", version: 3 });
+  apiMock.getSecretWithToken.mockResolvedValue({ name: "app/db/password", value: "WORKLOAD-SECRET", version: 3 });
   apiMock.rotateSecret.mockResolvedValue({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
   apiMock.deleteSecret.mockResolvedValue(undefined);
   apiMock.approveSecretChange.mockResolvedValue({
@@ -1046,6 +1048,21 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
     expect(screen.getByText(/never shown again/i)).toBeInTheDocument();
     // Ledger refreshes after the mint.
     expect(apiMock.apiTokens.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("verifies the minted bearer token with a real scoped secret read and never renders the value", async () => {
+    const storageSpy = vi.spyOn(Storage.prototype, "setItem");
+    const user = await openAccessTab();
+    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
+
+    await user.type(grant.getByLabelText("Workload / subject"), "wl-1111");
+    await user.click(grant.getByRole("button", { name: "Grant access" }));
+    await user.click(await screen.findByRole("button", { name: "Verify scoped read" }));
+
+    await waitFor(() => expect(apiMock.getSecretWithToken).toHaveBeenCalledWith("app/db/password", "trst_REVEAL_ONCE_abc"));
+    expect(await screen.findByText(/Scoped read passed for app\/db\/password; version 3/)).toBeInTheDocument();
+    expect(screen.queryByText("WORKLOAD-SECRET")).not.toBeInTheDocument();
+    expect(storageSpy).not.toHaveBeenCalled();
   });
 
   it("offers the identity roster on the subject picker", async () => {

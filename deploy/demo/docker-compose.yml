@@ -51,27 +51,64 @@ services:
       - demoidp:/demo-oidc
       - ./oidc-keygen.mjs:/demo/oidc-keygen.mjs:ro
 
+  managedkeys-config:
+    image: node:22-alpine
+    command:
+      - "node"
+      - "-e"
+      - |
+        const fs = require("node:fs");
+        const dir = "/demo-managed-keys";
+        const secretPath = `$${dir}/aws-secret-access-key`;
+        const configPath = `$${dir}/provider.json`;
+        fs.writeFileSync(secretPath, "test", { mode: 0o600 });
+        fs.writeFileSync(configPath, JSON.stringify({
+          enabled: true,
+          provider: "aws",
+          aws: {
+            region: "us-east-1",
+            endpoint: "http://127.0.0.1:4566",
+            allow_insecure_loopback: true,
+            access_key_id: "test",
+            secret_access_key_file: secretPath,
+          },
+        }), { mode: 0o600 });
+        fs.chownSync(secretPath, 65532, 65532);
+        fs.chownSync(configPath, 65532, 65532);
+    volumes:
+      - managedkeys:/demo-managed-keys
+
   signer:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
+      target: demo
     image: ctlplne-demo-control:local
     restart: on-failure
+    depends_on:
+      localstack:
+        condition: service_started
+      managedkeys-config:
+        condition: service_completed_successfully
     entrypoint: ["/usr/local/bin/trstctl-signer"]
     command:
       - "--socket=/run/trstctl/signer.sock"
       - "--keystore=/data/signer/keys"
       - "--kek=/data/secrets/kek.bin"
       - "--auth-secret=/data/secrets/sign-auth.bin"
+      - "--license=/etc/trstctl/demo-provider-license.json"
+      - "--managed-keys-config=/demo-managed-keys/provider.json"
     volumes:
       - signersock:/run/trstctl
       - signerkeys:/data/signer
       - secrets:/data/secrets
+      - managedkeys:/demo-managed-keys:ro
 
   trstctl:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
+      target: demo
     image: ctlplne-demo-control:local
     restart: on-failure
     depends_on:
@@ -83,6 +120,8 @@ services:
         condition: service_started
       localstack:
         condition: service_started
+      managedkeys-config:
+        condition: service_completed_successfully
       oidc-keys:
         condition: service_completed_successfully
     environment:
@@ -117,6 +156,15 @@ services:
       TRSTCTL_SIGNER_AUTH_SECRET_FILE: /data/secrets/sign-auth.bin
       TRSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
       TRSTCTL_SECRETS_ENABLE_API: "true"
+      # The Access-tab Job 2 uses the built-in HMAC machine-login method. The
+      # server creates this root 0600 on first boot in the existing secrets
+      # volume; it is never placed inline in Compose or rendered by the UI.
+      TRSTCTL_SECRETS_AUTH_SECRET_FILE: /data/secrets/machine-auth.bin
+      TRSTCTL_LICENSE_FILE: /etc/trstctl/demo-provider-license.json
+      # Demo-issued leaf certificates live for 30 days. Keep automatic renewal
+      # below that lifetime so the 30-day worklist stays stable for the human
+      # "find expiring, renew one" job instead of renewing every minute.
+      TRSTCTL_LIFECYCLE_RENEW_BEFORE: "168h"
       TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
       TRSTCTL_AUTH_OIDC_ENABLED: "true"
       TRSTCTL_AUTH_OIDC_ISSUER: "http://127.0.0.1:19081"
@@ -134,9 +182,10 @@ services:
       TRSTCTL_MANAGED_KEYS_ENABLED: "true"
       TRSTCTL_MANAGED_KEYS_PROVIDER: aws
       TRSTCTL_MANAGED_KEYS_AWS_REGION: us-east-1
-      TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT: "http://localstack:4566"
+      TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT: "http://127.0.0.1:4566"
+      TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK: "true"
       TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID: test
-      TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY: test
+      TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE: /demo-managed-keys/aws-secret-access-key
       TRSTCTL_PROTOCOLS_ACME_ENABLED: "true"
       TRSTCTL_PROTOCOLS_ACME_TENANT_ID: "11111111-1111-4111-8111-111111111111"
       TRSTCTL_PROTOCOLS_EST_ENABLED: "true"
@@ -146,6 +195,7 @@ services:
       - secrets:/data/secrets
       - trstctldata:/data
       - demoidp:/demo-oidc:ro
+      - managedkeys:/demo-managed-keys:ro
     ports:
       - "9443:8443"
     healthcheck:
@@ -203,6 +253,54 @@ services:
           console.log("demo OIDC loopback proxy listening on 127.0.0.1:19081");
         });
 
+  localstack-loopback:
+    image: node:22-alpine
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+      localstack:
+        condition: service_started
+    command:
+      - "node"
+      - "-e"
+      - |
+        const net = require("node:net");
+        net.createServer((client) => {
+          const upstream = net.connect(4566, "localstack");
+          client.pipe(upstream);
+          upstream.pipe(client);
+          upstream.on("error", () => client.destroy());
+          client.on("error", () => upstream.destroy());
+        }).listen(4566, "127.0.0.1", () => {
+          console.log("LocalStack loopback proxy listening on 127.0.0.1:4566");
+        });
+
+  localstack-signer-loopback:
+    image: node:22-alpine
+    network_mode: "service:signer"
+    restart: on-failure
+    depends_on:
+      signer:
+        condition: service_started
+      localstack:
+        condition: service_started
+    command:
+      - "node"
+      - "-e"
+      - |
+        const net = require("node:net");
+        net.createServer((client) => {
+          const upstream = net.connect(4566, "localstack");
+          client.pipe(upstream);
+          upstream.pipe(client);
+          upstream.on("error", () => client.destroy());
+          client.on("error", () => upstream.destroy());
+        }).listen(4566, "127.0.0.1", () => {
+          console.log("signer LocalStack loopback proxy listening on 127.0.0.1:4566");
+        });
+
   demo-seed:
     build:
       context: ../..
@@ -214,6 +312,10 @@ services:
       demo-oidc:
         condition: service_started
       localstack:
+        condition: service_started
+      localstack-loopback:
+        condition: service_started
+      localstack-signer-loopback:
         condition: service_started
     environment:
       TRSTCTL_POSTGRES_MODE: external
@@ -238,3 +340,4 @@ volumes:
   secrets:
   trstctldata:
   demoidp:
+  managedkeys:

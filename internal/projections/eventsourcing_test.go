@@ -163,6 +163,17 @@ func TestServedReadModelIsAProjectionOfTheLog(t *testing.T) {
 	}
 	before := readModelSnapshot(t, s)
 
+	// The live tail is at-least-once: an event can already have been projected
+	// synchronously and then arrive again from JetStream after a restart or an ack
+	// failure. Replaying the complete log over the populated read model must be a
+	// no-op, not a primary-key failure that wedges every later projection.
+	if err := projections.New(s).Project(ctx, log); err != nil {
+		t.Fatalf("Project over populated read model (at-least-once replay): %v", err)
+	}
+	if afterReplay := readModelSnapshot(t, s); afterReplay != before {
+		t.Fatalf("at-least-once replay changed the populated read model\nbefore:\n%s\nafter:\n%s", before, afterReplay)
+	}
+
 	// Empty the read model: it now holds nothing of its own.
 	if err := s.TruncateReadModel(ctx); err != nil {
 		t.Fatalf("TruncateReadModel: %v", err)

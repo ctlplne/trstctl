@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -192,8 +193,8 @@ describe("i18n boundary", () => {
     const realNonEnglishLocales = productionLocales.filter((locale) => locale !== defaultLocale);
     expect(realNonEnglishLocales).toContain("es-ES");
     expect(realNonEnglishLocales).toContain("de-DE");
-    // Each production catalog is a real human translation of the anchor key,
-    // not the English default and not a pseudo-localized transform (C-L1).
+    // Each production catalog contains reviewed production copy for the anchor
+    // key, not the English default and not a pseudo-localized transform (C-L1).
     const expectedNeedsAction: Record<string, string> = { "es-ES": "Acción requerida", "de-DE": "Aktion erforderlich" };
     for (const locale of realNonEnglishLocales) {
       const translatedKeys = (Object.keys(messages) as MessageKey[]).filter((key) => catalogs[locale][key] !== catalogs[defaultLocale][key]);
@@ -201,6 +202,34 @@ describe("i18n boundary", () => {
       expect(catalogs[locale]["nav.section.needsAction"]).toBe(expectedNeedsAction[locale]);
       expect(catalogs[locale]["nav.section.needsAction"]).not.toBe(pseudoLocalize(messages["nav.section.needsAction"].defaultMessage));
     }
+  });
+
+  it("preserves every interpolation placeholder in each production translation", () => {
+    const placeholders = (message: string) => Array.from(message.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g), (match) => match[1]).sort();
+
+    for (const locale of productionLocales.filter((candidate) => candidate !== defaultLocale)) {
+      for (const key of Object.keys(messages) as MessageKey[]) {
+        expect(placeholders(catalogs[locale][key]), `${locale}:${key}`).toEqual(placeholders(catalogs[defaultLocale][key]));
+      }
+    }
+  });
+
+  it("pins the reviewed production catalogs against English-fallback regressions", () => {
+    const digest = (locale: (typeof productionLocales)[number]) => {
+      const payload = (Object.keys(messages) as MessageKey[]).map((key) => `${key}\0${catalogs[locale][key]}`).join("\0");
+      return createHash("sha256").update(payload).digest("hex");
+    };
+
+    // Updating either digest is a deliberate translation-review decision. The
+    // ratchet catches a long-tail value being reset to its English seed just as
+    // it catches any other unreviewed production-catalog edit.
+    expect({
+      "es-ES": digest("es-ES"),
+      "de-DE": digest("de-DE"),
+    }).toEqual({
+      "es-ES": "bf97a85cddbb88b31b3ec1e364a7ae6a04148dc10e829204ab81d2746f783d10",
+      "de-DE": "9171adb6765d3c01eacef880887074c27326b3e020023a43e928835e05f3f326",
+    });
   });
 
   it("blocks new hard-coded UI strings outside the extracted catalog", () => {

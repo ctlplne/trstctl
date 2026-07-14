@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -62,24 +63,54 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 		         fingerprint, status, attempts, reason, detail, rollback_ref,
 		         idempotency_key, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		 ON CONFLICT (id) DO UPDATE
-		    SET outbox_id = EXCLUDED.outbox_id,
-		        identity_id = EXCLUDED.identity_id,
-		        destination = EXCLUDED.destination,
-		        connector = EXCLUDED.connector,
-		        target = EXCLUDED.target,
-		        fingerprint = EXCLUDED.fingerprint,
-		        status = EXCLUDED.status,
-		        attempts = EXCLUDED.attempts,
-		        reason = EXCLUDED.reason,
-		        detail = EXCLUDED.detail,
-		        rollback_ref = EXCLUDED.rollback_ref,
-		        idempotency_key = EXCLUDED.idempotency_key,
-		        updated_at = EXCLUDED.updated_at`,
+		 ON CONFLICT DO NOTHING`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
 		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	// One outbox command has one receipt even when a retry constructs a fresh
+	// receipt UUID. Converge through (tenant, outbox) when present; id is the
+	// fallback natural key for receipts without an outbox row.
+	tag, err := tx.Exec(ctx,
+		`UPDATE connector_delivery_receipts
+		    SET outbox_id = $3,
+		        identity_id = $4,
+		        destination = $5,
+		        connector = $6,
+		        target = $7,
+		        fingerprint = $8,
+		        status = $9,
+		        attempts = $10,
+		        reason = $11,
+		        detail = $12,
+		        rollback_ref = $13,
+		        idempotency_key = $14,
+		        updated_at = $15
+		  WHERE tenant_id = $2
+		    AND (($3::bigint IS NOT NULL AND outbox_id = $3)
+		      OR ($3::bigint IS NULL AND id = $1))`,
+		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
+		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
+		r.IdempotencyKey, r.UpdatedAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() > 0 {
+		return nil
+	}
+	var existingOutbox sql.NullInt64
+	queryErr := tx.QueryRow(ctx,
+		`SELECT outbox_id FROM connector_delivery_receipts WHERE tenant_id = $1 AND id = $2`,
+		r.TenantID, r.ID).Scan(&existingOutbox)
+	if queryErr == nil {
+		return fmt.Errorf("connector delivery receipt reuses id %s for a different outbox command", r.ID)
+	}
+	if queryErr != pgx.ErrNoRows {
+		return queryErr
+	}
+	return fmt.Errorf("connector delivery receipt id %s conflicts outside tenant %s or references an unavailable row", r.ID, r.TenantID)
 }
 
 // ApplyRotationRunRecordedTx projects a lifecycle.rotation.recorded event.

@@ -589,12 +589,23 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 		read(t, "../web/src/components/StatePrimitives.tsx"),
 		"UnavailableState")
 
+	// User-visible copy lives in the typed catalog after C-I2/C-I3. Guard both
+	// halves of the wire: the page must reference the intended key, and the key
+	// must still carry the honest English disclosure. ELI5: checking only the page
+	// now sees the label on the cable, while checking only the catalog sees the
+	// loose cable; this checks that the labeled cable is plugged into the page.
+	messages := read(t, "../web/src/i18n/messages.ts")
 	platform := read(t, "../web/src/pages/Platform.tsx")
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Platform.tsx", platform,
+		`"platform.tabs.access"`,
+		`"source.oidc.mapping.status.358515bade"`,
+		`"source.passive.read.state.model.projections.can.b.9f2d6a2da6"`,
+		"served worker",
+	)
+	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/i18n/messages.ts", messages,
 		"Access administration",
 		"OIDC mapping status",
 		"Passive-read-state model",
-		"served worker",
 		"one writable region per tenant",
 	)
 	if strings.Contains(platform, "UnavailableState") || strings.Contains(strings.ToLower(platform), "not served yet") {
@@ -603,11 +614,17 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 
 	discovery := read(t, "../web/src/pages/Discovery.tsx")
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Discovery.tsx", discovery,
+		`"source.discovery.unavailable.839198b6dc"`)
+	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/i18n/messages.ts", messages,
 		"Discovery unavailable")
 
 	connectors := read(t, "../web/src/pages/Connectors.tsx")
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Connectors.tsx", connectors,
 		"Target setup, identity binding, delivery actions, and receipt evidence from the served connector API.",
+		`"source.create.connector.target.bb8ec59505"`,
+		`"source.target.actions.4d6d059ed8"`,
+		`"source.deploy.4c236daafb"`)
+	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/i18n/messages.ts", messages,
 		"Create connector target",
 		"Target actions",
 		"Deploy")

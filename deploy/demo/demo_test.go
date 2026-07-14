@@ -20,6 +20,7 @@ type composeFile struct {
 		Image       string         `yaml:"image"`
 		Build       map[string]any `yaml:"build"`
 		Environment map[string]any `yaml:"environment"`
+		Command     []string       `yaml:"command"`
 		Ports       []string       `yaml:"ports"`
 		DependsOn   map[string]struct {
 			Condition string `yaml:"condition"`
@@ -52,26 +53,34 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if cf.Name != "trstctl-demo" {
 		t.Fatalf("demo compose name = %q, want trstctl-demo", cf.Name)
 	}
-	for _, want := range []string{"postgres", "nats", "localstack", "oidc-keys", "demo-oidc", "oidc-loopback", "signer", "trstctl", "demo-seed"} {
+	for _, want := range []string{"postgres", "nats", "localstack", "localstack-loopback", "localstack-signer-loopback", "managedkeys-config", "oidc-keys", "demo-oidc", "oidc-loopback", "signer", "trstctl", "demo-seed"} {
 		if _, ok := cf.Services[want]; !ok {
 			t.Fatalf("demo compose missing %s service", want)
 		}
 	}
 	cp := cf.Services["trstctl"]
+	if got := stringValue(cp.Build["target"]); got != "demo" {
+		t.Fatalf("demo trstctl build target = %q, want demo", got)
+	}
 	if !contains(cp.Ports, "9443:8443") || contains(cp.Ports, "19081:19081") {
 		t.Fatalf("demo trstctl ports = %v, want only the browser/API port 9443:8443", cp.Ports)
 	}
 	for k, want := range map[string]string{
-		"TRSTCTL_AUTH_OIDC_ENABLED":            "true",
-		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":       "https://localhost:9443/auth/callback",
-		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":      "http://127.0.0.1:19081/authorize",
-		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":     "http://127.0.0.1:19081/token",
-		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS": "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
-		"TRSTCTL_SECRETS_ENABLE_API":           "true",
-		"TRSTCTL_MANAGED_KEYS_ENABLED":         "true",
-		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":    "http://localstack:4566",
-		"TRSTCTL_PROTOCOLS_ACME_TENANT_ID":     "11111111-1111-4111-8111-111111111111",
-		"TRSTCTL_PROTOCOLS_EST_TENANT_ID":      "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_AUTH_OIDC_ENABLED":                        "true",
+		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":                   "https://localhost:9443/auth/callback",
+		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":                  "http://127.0.0.1:19081/authorize",
+		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":                 "http://127.0.0.1:19081/token",
+		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS":             "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
+		"TRSTCTL_SECRETS_ENABLE_API":                       "true",
+		"TRSTCTL_SECRETS_AUTH_SECRET_FILE":                 "/data/secrets/machine-auth.bin",
+		"TRSTCTL_LICENSE_FILE":                             "/etc/trstctl/demo-provider-license.json",
+		"TRSTCTL_MANAGED_KEYS_ENABLED":                     "true",
+		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":                "http://127.0.0.1:4566",
+		"TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK": "true",
+		"TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE":  "/demo-managed-keys/aws-secret-access-key",
+		"TRSTCTL_LIFECYCLE_RENEW_BEFORE":                   "168h",
+		"TRSTCTL_PROTOCOLS_ACME_TENANT_ID":                 "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_PROTOCOLS_EST_TENANT_ID":                  "11111111-1111-4111-8111-111111111111",
 	} {
 		if got := stringValue(cp.Environment[k]); got != want {
 			t.Fatalf("demo trstctl env %s = %q, want %q", k, got, want)
@@ -87,12 +96,46 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if got := cf.Services["oidc-loopback"].NetworkMode; got != "service:trstctl" {
 		t.Fatalf("demo OIDC loopback proxy network_mode = %q, want service:trstctl for the validated loopback token endpoint", got)
 	}
+	if got := cf.Services["localstack-loopback"].NetworkMode; got != "service:trstctl" {
+		t.Fatalf("demo LocalStack loopback proxy network_mode = %q, want service:trstctl for the SSRF-guarded KMS endpoint", got)
+	}
+	if got := cf.Services["localstack-signer-loopback"].NetworkMode; got != "service:signer" {
+		t.Fatalf("demo signer LocalStack proxy network_mode = %q, want service:signer for the signer-local SSRF-guarded KMS endpoint", got)
+	}
+	signer := cf.Services["signer"]
+	if got := stringValue(signer.Build["target"]); got != "demo" {
+		t.Fatalf("demo signer build target = %q, want demo", got)
+	}
+	if !contains(signer.Command, "--license=/etc/trstctl/demo-provider-license.json") {
+		t.Fatalf("demo signer command = %v, want signed demo license", signer.Command)
+	}
+	if !contains(signer.Command, "--managed-keys-config=/demo-managed-keys/provider.json") {
+		t.Fatalf("demo signer command = %v, want file-backed managed-key provider descriptor", signer.Command)
+	}
+	if got := signer.DependsOn["managedkeys-config"].Condition; got != "service_completed_successfully" {
+		t.Fatalf("demo signer must wait for managed-key config, got %q", got)
+	}
 	seed := cf.Services["demo-seed"]
 	if got := stringValue(seed.Build["dockerfile"]); got != "deploy/demo/Dockerfile.seed" {
 		t.Fatalf("demo seed Dockerfile = %q", got)
 	}
 	if got := seed.DependsOn["trstctl"].Condition; got != "service_healthy" {
 		t.Fatalf("demo seed must wait for a healthy control plane, got %q", got)
+	}
+}
+
+func TestDemoImageUsesRealOfflineLicenseWithoutShippingItsSigningKey(t *testing.T) {
+	body := read(t, "..", "docker", "Dockerfile")
+	for _, want := range []string{
+		"FROM build AS demo-build",
+		"FROM runtime AS demo",
+		"trstctl-license sign",
+		"internal/license.builtinPubKeysB64",
+		"rm -f /tmp/trstctl-license /tmp/demo-license-private.pem /tmp/demo-license-public.pem",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("demo image license path missing %q", want)
+		}
 	}
 }
 
@@ -145,6 +188,20 @@ func TestDemoSeedCheckModeCoversHistoryAndSurfaces(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("demo seed --check output missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestDemoSeedExercisesManagedKeyDualControl(t *testing.T) {
+	body := read(t, "seed.mjs")
+	for _, want := range []string{
+		`"/api/v1/managed-keys/approvals"`,
+		`"demo-key-custodian-one"`,
+		`"demo-key-custodian-two"`,
+		`rotateKey, [403]`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("demo managed-key seed missing dual-control proof %q", want)
 		}
 	}
 }

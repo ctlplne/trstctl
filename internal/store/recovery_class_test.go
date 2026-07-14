@@ -15,6 +15,20 @@ func TestDeploymentTargetsAreExcludedFromEventRebuildAndSnapshots(t *testing.T) 
 	}
 }
 
+func TestMachineAuthReadModelsUseEventRecoveryAndSnapshots(t *testing.T) {
+	for _, table := range []string{"machine_sessions", "machine_auth_method_overrides"} {
+		if !containsRecoveryTable(ReadModelTables, table) {
+			t.Errorf("%s is event-derived but missing from ReadModelTables", table)
+		}
+		if !containsRecoveryTable(snapshotTables, table) {
+			t.Errorf("%s is event-derived but missing from snapshotTables", table)
+		}
+	}
+	if SnapshotFormatVersion < 4 {
+		t.Errorf("SnapshotFormatVersion = %d; adding machine-auth projections must invalidate older snapshots whose covered offset would skip their historical events", SnapshotFormatVersion)
+	}
+}
+
 func containsRecoveryTable(tables []string, want string) bool {
 	for _, table := range tables {
 		if table == want {

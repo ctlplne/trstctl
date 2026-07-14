@@ -2181,7 +2181,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/backup/backup.go", []string{"trstctl-event-log-backup", "version    = 1", "unsupported backup version"}},
 		{"../internal/backup/full_manifest.go", []string{"trstctl-full-backup", "fullVersion      = 1", "unsupported full backup manifest version"}},
 		{"../internal/backup/postgres_state.go", []string{"trstctl-postgres-state-backup", "postgresStateVersion    = 1", "unsupported postgres-state backup version"}},
-		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 3", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
+		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 4", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
 	} {
 		body := read(t, file.path)
 		for _, want := range file.want {
@@ -2922,7 +2922,9 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	storeProjection := read(t, "../internal/store/projection.go")
 	for _, want := range []string{
-		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "kubernetes_controller_posture", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "mdm_scep_policies", "workload_attester_trust_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions"}`,
+		"var ReadModelTables = []string{",
+		`"machine_sessions"`,
+		`"machine_auth_method_overrides"`,
 		"func (s *Store) RebuildReadModelTx(",
 		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
 		"func (s *Store) RestoreReadModelTx(",
@@ -2950,7 +2952,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	}
 	snapshotGo := read(t, "../internal/store/snapshot.go")
 	for _, want := range []string{
-		"const SnapshotFormatVersion = 3",
+		"const SnapshotFormatVersion = 4",
 		"func (s *Store) WriteTenantSnapshot(",
 		"func (s *Store) LatestSnapshotOffset(",
 		"func (s *Store) RestoreSnapshotsTx(",
@@ -3206,7 +3208,11 @@ func TestInternalPackageCountMatchesReadme(t *testing.T) {
 // assembled at runtime so this guard does not create extra scan hits by existing.
 func TestDebtMarkersRequireOwnerOrIssue(t *testing.T) {
 	markers := []string{"TO" + "DO", "FIX" + "ME", "HA" + "CK", "X" + "XX"}
-	markerRE := regexp.MustCompile(`(?i)\b(?:` + strings.Join(markers, "|") + `)\b`)
+	// Go's \b is ASCII-only, so it sees the accented letter before the final four
+	// letters of Spanish "método" as a word boundary and invents a debt marker.
+	// Unicode letter/number boundaries keep ordinary translated words ordinary while
+	// still finding standalone configured marker tokens in source and prose.
+	markerRE := regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}_])(?:` + strings.Join(markers, "|") + `)(?:$|[^\p{L}\p{N}_])`)
 	ownerRE := regexp.MustCompile(`(?i)(\b[A-Z][A-Z0-9]+-[0-9]+\b|#[0-9]+\b|@[a-z0-9][a-z0-9_-]*\b|\bowner\s*:)`)
 
 	cmd := exec.Command("git", "ls-files", "-z")

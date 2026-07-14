@@ -47,8 +47,9 @@ component there comes from the real implementation.
    hand-picked hues; several tokens alias in dark mode, so check `/styleguide`
    when composing multi-series charts.
 10. **New user-facing strings are typed message keys.** Add to
-    `src/i18n/messages.ts` (with an es-ES entry) or the extraction ratchet in
-    `extractedMessages.budget.json` will fail — never raise the budget.
+    `src/i18n/messages.ts` with `es-ES` and `de-DE` entries or the extraction
+    ratchet in `extractedMessages.budget.json` will fail — never raise the
+    budget.
 11. **Multi-input operator tasks are wizards, not flat forms.** Anything with
     three or more decisions renders as a `StepShell` stepper (see Setup,
     Request Credential, Add Certificate): one job per step, validation gates

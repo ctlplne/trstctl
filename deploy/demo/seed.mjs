@@ -154,6 +154,8 @@ function plannedAPICalls(history) {
     "POST /api/v1/transit/sign",
     "POST /api/v1/transit/verify",
     "POST /api/v1/managed-keys",
+    "POST /api/v1/managed-keys/approvals",
+    "POST /api/v1/managed-keys/approvals",
     "POST /api/v1/managed-keys/rotate",
     "POST /api/v1/access/api-tokens",
     "POST /api/v1/ephemeral/api-keys",
@@ -245,7 +247,7 @@ async function waitForHealth() {
   throw new Error(`trstctl did not become healthy at ${server}`);
 }
 
-function mintBootstrapToken() {
+function mintBootstrapToken(subject = "demo-seeder") {
   const env = { ...process.env };
   return run("/usr/local/bin/trstctl", [
     "token",
@@ -255,14 +257,14 @@ function mintBootstrapToken() {
     "--tenant-name",
     "Acme Robotics Demo",
     "--subject",
-    "demo-seeder",
+    subject,
     "--scopes",
     "*",
   ], { env });
 }
 
-async function api(method, path, body, idem, okStatuses = []) {
-  const headers = { authorization: `Bearer ${bearer}` };
+async function api(method, path, body, idem, okStatuses = [], actorBearer = bearer) {
+  const headers = { authorization: `Bearer ${actorBearer}` };
   if (body !== undefined) {
     headers["content-type"] = "application/json";
   }
@@ -529,9 +531,27 @@ async function main() {
     }
   }
   if (managedKey?.key_id) {
+    const rotateBody = { key_id: managedKey.key_id };
+    const rotateKey = stableKey("managed-key-rsa-rotate");
+    // The first attempt opens the request and proves that destructive key actions
+    // fail closed. Two separately authenticated principals then approve the exact
+    // key/action pair before the original requester retries it.
     await api("POST", "/api/v1/managed-keys/rotate", {
       key_id: managedKey.key_id,
-    }, stableKey("managed-key-rsa-rotate"));
+    }, rotateKey, [403]);
+    const approvalBody = { key_id: managedKey.key_id, action: "rotate" };
+    for (const [index, subject] of ["demo-key-custodian-one", "demo-key-custodian-two"].entries()) {
+      const approverBearer = mintBootstrapToken(subject);
+      await api(
+        "POST",
+        "/api/v1/managed-keys/approvals",
+        approvalBody,
+        stableKey(`managed-key-rsa-rotate-approval-${index + 1}`),
+        [],
+        approverBearer,
+      );
+    }
+    await api("POST", "/api/v1/managed-keys/rotate", rotateBody, rotateKey);
   }
 
   const demoAPIToken = await api("POST", "/api/v1/access/api-tokens", {

@@ -268,23 +268,29 @@ jobs:
       - name: Resolve and record container base images by digest
         id: basedigest
         run: |
-          # Pin both external Dockerfile bases to immutable digests so the
-          # released image cannot silently inherit a changed Go builder or runtime
-          # base (SUPPLY-001).
+          # Pin all external Dockerfile bases to immutable digests so the released
+          # image cannot silently inherit a changed Node builder, Go builder, or
+          # runtime base (SUPPLY-001).
+          web_base="node:22-bookworm-slim"
           go_version="$(awk '/^toolchain / {sub(/^go/, "", $2); print $2}' go.mod)"
           build_base="golang:${go_version}-bookworm"
           runtime_base="gcr.io/distroless/static-debian12:nonroot"
+          web_digest="$(docker buildx imagetools inspect "$web_base" --format '{{.Manifest.Digest}}')"
           build_digest="$(docker buildx imagetools inspect "$build_base" --format '{{.Manifest.Digest}}')"
           runtime_digest="$(docker buildx imagetools inspect "$runtime_base" --format '{{.Manifest.Digest}}')"
+          web_ref="node@${web_digest}"
           build_ref="golang@${build_digest}"
           runtime_ref="gcr.io/distroless/static-debian12@${runtime_digest}"
+          echo "web_ref=${web_ref}" >> "$GITHUB_OUTPUT"
           echo "build_ref=${build_ref}" >> "$GITHUB_OUTPUT"
           echo "runtime_ref=${runtime_ref}" >> "$GITHUB_OUTPUT"
+          echo ">> pinned Node web-builder base: ${web_ref}"
           echo ">> pinned Go builder base: ${build_ref}"
           echo ">> pinned distroless runtime base: ${runtime_ref}"
           {
             echo "### Pinned container base images"
             echo ""
+            echo "- web build: \`${web_ref}\`"
             echo "- build: \`${build_ref}\`"
             echo "- runtime: \`${runtime_ref}\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -315,6 +321,7 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT=${{ steps.meta.outputs.commit }}
             DATE=${{ steps.meta.outputs.date }}
+            WEB_BUILD_IMAGE=${{ steps.basedigest.outputs.web_ref }}
             BUILD_IMAGE=${{ steps.basedigest.outputs.build_ref }}
             BASE_IMAGE=${{ steps.basedigest.outputs.runtime_ref }}
           tags: trstctl:sizecheck
@@ -352,6 +359,7 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT=${{ steps.meta.outputs.commit }}
             DATE=${{ steps.meta.outputs.date }}
+            WEB_BUILD_IMAGE=${{ steps.basedigest.outputs.web_ref }}
             BUILD_IMAGE=${{ steps.basedigest.outputs.build_ref }}
             BASE_IMAGE=${{ steps.basedigest.outputs.runtime_ref }}
           # Rewrite layer timestamps to SOURCE_DATE_EPOCH for reproducibility.

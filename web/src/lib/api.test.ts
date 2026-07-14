@@ -605,6 +605,17 @@ describe("secrets contract", () => {
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
   });
 
+  it("verifies a secret read with only the workload bearer credential", async () => {
+    mockFetch(200, JSON.stringify({ name: "app/db/password", value: "read-once", version: 3 }));
+
+    await api.getSecretWithToken("app/db/password", "trst_workload_reveal_once");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
+    expect(call[1]?.credentials).toBe("omit");
+    expect((call[1]?.headers as Record<string, string>).Authorization).toBe("Bearer trst_workload_reveal_once");
+  });
+
   it("imports a secret tree as an idempotent mutation", async () => {
     document.cookie = "trstctl_csrf=csrf-secret-import; path=/";
     mockFetch(
