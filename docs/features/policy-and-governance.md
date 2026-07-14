@@ -272,7 +272,7 @@ boundary, not an over-claim. Reports are signed through the single crypto path.
 The `fips-140` pack records the FIPS-capable build artifact gate, `--fips`
 fail-closed power-on self-test, single crypto boundary, and CI evidence while
 keeping the NIST CMVP certificate and approved deployment configuration as
-external residuals. The Platform posture (`GET /api/v1/editions` and `/platform`)
+external residuals. The editions posture (`GET /api/v1/editions` and `/admin/editions`)
 serves the same live module state, build target, CI gate, and residual for operators
 who need the key-management view rather than a signed audit pack. The
 `common-criteria` pack maps TOE/security-target evidence

@@ -13,6 +13,33 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### IA closeout train (design-audit follow-ups, 2026-07-14)
+- **DA-02 closed — the secrets auth-method console.** Secrets → Access now grants
+  workload credentials in-console (scoped standing tokens or TTL-bound ephemeral
+  keys, reveal-once, list + revoke), projects the configured machine-auth methods
+  (issuer, audience rules, scopes, source) with a per-tenant, event-sourced
+  disable/enable overlay enforced at the login exchange, and serves the
+  issued-session ledger (`GET /api/v1/secrets/sessions`) with idempotent,
+  event-sourced revocation (`machine_sessions` projection, migration 0086).
+  New API surface: `GET /api/v1/secrets/auth-methods`,
+  `POST /api/v1/secrets/sessions/{id}/revoke`,
+  `POST /api/v1/secrets/auth-methods/{name}/disable|enable` — with CLI parity
+  (`secrets auth-methods list|disable|enable`, `secrets sessions list|revoke`).
+- **The `/platform` grab-bag became three routes** — `/admin/access`,
+  `/admin/system`, `/admin/editions` — each deep-linkable and fetch-scoped.
+  This is the train's only URL change and every historical `/platform` (and
+  tab) link redirects permanently; rollback is a nav-config revert.
+- **DA-10:** incident intake uses identity pickers and served vocabularies —
+  no more pasting raw UUIDs on faith. **DA-14 closed as a class:** the i18n
+  extraction ratchet (now AST-based) reads zero hardcoded user-facing strings
+  and is sealed at zero. **47-day readiness** panel now lives on the global
+  home, ahead of the 2027-03-15 100-day step.
+- **Locales:** Spanish is joined by **German (de-DE)** as a production locale;
+  both catalogs are completeness-enforced by the type system. Long-tail
+  machine-seeded entries are enumerated for human translation passes.
+- Rail budget consciously re-set 32 → 34 rows for the admin split; entity-noun
+  consolidation deliberately deferred behind an evidence checklist.
+
 ### Security & hardening
 - Remediation pass (R0–R9) hardening the served, multi-tenant profile: served
   end-to-end **revocation** (a revoked credential stops validating in the product's

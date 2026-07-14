@@ -1811,7 +1811,7 @@ export function Secrets() {
           </section>
 
           {/* C-S4 (DA-02 faithful): the auth-method console over the C-S2/C-S3
-              endpoints. The "isn't in the console yet" placeholder is dead —
+              endpoints. The DA-02 dead-end placeholder is dead —
               methods (with the per-tenant disable overlay) and the issued-
               session ledger are served surfaces now. Methods stay declared in
               server config: the console projects and overlays, it never edits

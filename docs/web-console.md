@@ -119,6 +119,16 @@ and a **transit console** for encrypt / decrypt / HMAC against a managed key. Se
 **[Secrets](features/secrets.md)**. Backed by `/api/v1/secrets/store`,
 `/api/v1/secrets/store/{name}`, and `/api/v1/transit/*`.
 
+The **Access** tab is the machine-auth console (DA-02 closed by the closeout
+train): grant a workload a scoped credential (standing API token or TTL-bound
+ephemeral key) with a reveal-once display and a list+revoke ledger; inspect the
+**configured auth methods** — issuer, audience rules, scopes, source — and
+disable/enable a method per tenant (a disabled method is refused at the login
+exchange itself); and review the **issued-session ledger**
+(`GET /api/v1/secrets/sessions`), where revocation is an idempotent,
+event-sourced evidence record. The login test exchange completes the
+create → grant → verify loop in-console.
+
 ### Graph & blast radius (`/graph`)
 
 The credential graph as an explorer: pick a node and see its **blast radius** — every
@@ -203,12 +213,17 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
   open a PR/ticket/CAB-backed request, review evidence refs, and approve or deny with a
   distinct reviewer. The panel stores metadata and evidence references only, never
   credential values.
-- **Platform** (`/platform`) starts with the Packaging first viewport: the NHI /
-  Machine Identity Security Control Plane category label, `control_plane_deployment`, `managed_customer_band`,
-  and the no per-certificate / no ephemeral-identity billing posture from
-  `GET /api/v1/editions`. It also administers tenants, members, roles, OIDC
-  mapping, and API tokens; **Connectors** (`/connectors`) is the
-  deployment-connector registry.
+- **Administration** is three routes (the old `/platform` grab-bag split; every
+  historical `/platform` tab deep link redirects permanently):
+  **Access administration** (`/admin/access`) administers members, roles, OIDC
+  mapping, API tokens, offboarding, and JIT privileged sessions;
+  **System posture** (`/admin/system`) carries the read-only packaging, tenant-
+  boundary, transport, scale, support, and managed-offering disclosures; and
+  **Editions & license** (`/admin/editions`) is the console's one commercial
+  surface — offline license state, edition/feature rows, FIPS posture, and the
+  `GET /api/v1/editions` packaging (`control_plane_deployment`,
+  `managed_customer_band`, no per-certificate / no ephemeral-identity billing).
+  **Connectors** (`/connectors`) is the deployment-connector registry.
 - **Wizard** (`/wizard`) is the onboarding carousel: connect an issuer, enable the
   evaluation enrollment profile, issue the first certificate, optionally prove a
   configured connector/upstream-CA/dynamic-secret backend through its served route,

@@ -375,7 +375,7 @@
           <li><a href="#stop-12">12. Governance</a></li>
           <li><a href="#stop-13">13. Incidents</a></li>
           <li><a href="#stop-14">14. Connectors</a></li>
-          <li><a href="#stop-15">15. Platform</a></li>
+          <li><a href="#stop-15">15. Administration</a></li>
           <li><a href="#optional-lab">Optional lab</a></li>
           <li><a href="#glossary">Glossary</a></li>
           <li><a href="#troubleshooting">Troubleshooting</a></li>
@@ -581,7 +581,7 @@
           <ol>
             <li>In the <strong>Module</strong> switcher select <strong>Secrets</strong>, then click <strong>Secrets</strong>.</li>
             <li>On <strong>Store</strong>, expand the demo folders. Notice familiar path-like organization such as <code>demo/github/actions</code>.</li>
-            <li>Click <strong>Access</strong> to see the API-key/token access surface.</li>
+            <li>Click <strong>Access</strong>: the machine-auth console. Grant a workload a scoped credential (reveal-once, then a list+revoke ledger), review the configured auth methods with their per-tenant disable overlay, and read the event-sourced issued-session ledger. Read-only during the tour.</li>
             <li>Click <strong>Sharing</strong>. One-time shares expose material once and then expire.</li>
             <li>Click <strong>Engines</strong> for dynamic credentials, PKI, and transit-style cryptographic operations.</li>
             <li>Click <strong>CI scanning</strong> for secret detection in delivery pipelines.</li>
@@ -720,9 +720,8 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Click <strong>Platform</strong>.</li>
-            <li>On <strong>Access administration</strong>, inspect the role catalog, tenant members, OIDC mapping, and API-token metadata. Do not mint or offboard during the tour.</li>
-            <li>Click the <strong>System posture</strong> tab, then the <strong>Editions &amp; license</strong> tab. Licensing and commercial-edition rows now live on their own tab, separate from operational access and system posture.</li>
+            <li>Under <strong>Govern &amp; administer</strong>, click <strong>Access administration</strong>. Inspect the role catalog, tenant members, OIDC mapping, API-token metadata, and privileged sessions. Do not mint or offboard during the tour. (The old <code>/platform</code> tabs are three rail routes now; historical links redirect.)</li>
+            <li>Click <strong>System posture</strong>, then <strong>Editions &amp; license</strong>. Licensing and commercial-edition rows live on their own route, separate from operational access and system posture.</li>
             <li>Read <strong>Packaging</strong>: credentials and rotations are not billing units.</li>
             <li>Read <strong>Tenant boundary</strong>, <strong>Transport</strong>, and <strong>Auth session</strong>.</li>
             <li>In <strong>Editions</strong>, confirm the offline Provider license is active and review the enabled Enterprise/Provider feature rows.</li>

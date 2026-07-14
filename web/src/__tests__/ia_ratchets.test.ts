@@ -49,9 +49,31 @@ describe("IA ratchets (S-R1)", () => {
 
   it("keeps the behavioural IA guards present in the test suite", () => {
     const tests = path.join(SRC, "__tests__");
-    for (const guard of ["naming_parity.test.tsx", "nav_completeness.test.ts", "module_map.test.ts", "module_switcher.test.tsx"]) {
+    for (const guard of [
+      "naming_parity.test.tsx",
+      "nav_completeness.test.ts",
+      "module_map.test.ts",
+      "module_switcher.test.tsx",
+      // C-R1: the closeout train's own permanent guards.
+      "admin_split.test.tsx",
+      "docs_ia_parity.test.ts",
+    ]) {
       expect(existsSync(path.join(tests, guard)), `${guard} guard is missing`).toBe(true);
     }
+  });
+
+  it("keeps the i18n extraction budget sealed at zero (DA-14 closed, C-I3)", () => {
+    const budget = JSON.parse(readFileSync(path.join(SRC, "i18n", "extractedMessages.budget.json"), "utf8")) as {
+      maxExtractedMessages: number;
+    };
+    expect(budget.maxExtractedMessages).toBe(0);
+  });
+
+  it("keeps the DA-02 dead-end exit gate in the secrets suite (C-S4)", () => {
+    const suite = readFileSync(path.join(SRC, "__tests__", "secrets.test.tsx"), "utf8");
+    expect(suite).toMatch(/zero 'isn't in the console yet' text/);
+    const page = readFileSync(path.join(SRC, "pages", "Secrets.tsx"), "utf8");
+    expect(page).not.toMatch(/isn't in the console yet/);
   });
 
   it("keeps every rail nav item pointing at a registered route (no orphan chrome)", async () => {

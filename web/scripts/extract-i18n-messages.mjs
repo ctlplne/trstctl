@@ -159,7 +159,7 @@ function emit(entries) {
     "// to typed runtime message keys. The --check mode blocks new hard-coded UI",
     "// copy unless the catalog is intentionally regenerated.",
     "",
-    "export const extractedMessages = [",
+    "export const extractedMessages: Array<{ key: string; defaultMessage: string; sources: string[] }> = [",
     rows,
     "] as const;",
     "",

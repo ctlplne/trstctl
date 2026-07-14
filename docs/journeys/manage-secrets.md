@@ -83,6 +83,19 @@ The shipped path is precise (see [Current limitations](../limitations.md) and
    -> the `/api/v1/secrets/*` routes answer for your tenant; with the key file absent
    they fail closed.
 
+   **Grant, verify, and administer in the console (Job 2, end to end).** The
+   Secrets → **Access** tab covers the whole grant flow without leaving the
+   browser: *Grant workload access* mints a scoped standing API token or a
+   TTL-bound ephemeral key (reveal-once, then a list + revoke ledger), the
+   *Auth methods* table projects the `machine_auth` methods declared above —
+   issuer, audience rules, scopes, source — with a per-tenant disable/enable
+   overlay enforced at the login exchange, and *Issued sessions* is the
+   event-sourced machine-login ledger with idempotent revocation evidence.
+   The login test on the same tab completes create → grant → verify. The CLI
+   below remains the automation variant of the same served routes
+   (`trstctl-cli access tokens create`, `secrets auth-methods list|disable|enable`,
+   `secrets sessions list|revoke`, `secrets login`).
+
 2. Store a secret. Each value is sealed under envelope encryption (a fresh per-secret
    data key wrapped by the master key), bound to your tenant and path, and held only in
    wipeable memory — never as a copyable string. Every write is an immutable

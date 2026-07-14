@@ -32,6 +32,18 @@ describe("docs IA parity (S-R2)", () => {
     });
   }
 
+  for (const file of FILES.concat(["journeys/manage-secrets.md"])) {
+    it(`${file} routes admin traffic to /admin/* and keeps no console dead-end copy (C-R1)`, () => {
+      const full = path.join(dir, file);
+      if (!existsSync(full)) return;
+      const src = readFileSync(full, "utf8");
+      // C-A1: the /platform tab query params are redirect legacy, not doc targets.
+      expect(src.includes("/platform?tab="), `${file} still targets /platform?tab=`).toBe(false);
+      // C-S4: the DA-02 dead-end phrasing may not reappear in operator docs.
+      expect(src.includes("isn't in the console yet"), `${file} resurrects the console dead-end`).toBe(false);
+    });
+  }
+
   it("the demo click-through names the new module switcher and groups", () => {
     const full = path.join(dir, "demo-click-through.html");
     if (!existsSync(full)) return;
