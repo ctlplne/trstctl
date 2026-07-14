@@ -34,6 +34,9 @@
     "/integrate/api",
     "/assistant",
     "/wizard",
+    "/admin/access",
+    "/admin/system",
+    "/admin/editions",
     "/platform"
   ],
   "status_values": [
@@ -3235,7 +3238,7 @@
         },
         "ui": {
           "evidence": [
-        "current_frontend_mapping: conditional action: CAHierarchy at /ca-hierarchy shows configured AWS, Azure, GCP, PKCS#11, TPM 2.0, and YubiHSM 2 metadata/actions backed by required census receipts; Platform at /platform shows the separate FIPS build posture and product CMVP residual",
+            "current_frontend_mapping: conditional action: CAHierarchy at /ca-hierarchy shows configured AWS, Azure, GCP, PKCS#11, TPM 2.0, and YubiHSM 2 metadata/actions backed by required census receipts; Platform at /platform shows the separate FIPS build posture and product CMVP residual",
             "target_gui_mapping: Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state."
           ],
           "refs": [
@@ -3247,7 +3250,7 @@
         },
         "cli": {
           "evidence": [
-        "CLI parity exposes managed-keys generate, approve, rotate, revoke, and zeroize against the same licensed/configured API; approvers hold keys:approve without needing provider-mutation authority, and the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
+            "CLI parity exposes managed-keys generate, approve, rotate, revoke, and zeroize against the same licensed/configured API; approvers hold keys:approve without needing provider-mutation authority, and the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
           ],
           "refs": [
             "internal/cli/command.go",
@@ -3278,7 +3281,7 @@
             "KMS-03 acceptance: TestPKCS11SoftHSMContainerGenerateSign initializes a SoftHSM token in Docker and runs the cgo-tagged real binding conformance test.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
-        "TestDODManagedKeyProductionAssembly proves all six providers through the shipped binary composition using faithful cloud wire emulators, SoftHSM, and swtpm; it intentionally does not claim a live customer cloud account or physical-device certification."
+            "TestDODManagedKeyProductionAssembly proves all six providers through the shipped binary composition using faithful cloud wire emulators, SoftHSM, and swtpm; it intentionally does not claim a live customer cloud account or physical-device certification."
           ],
           "refs": [
             "ee/managedkeys/managedkeys_test.go",
@@ -3326,7 +3329,7 @@
         },
         "telemetry": {
           "evidence": [
-        "The DoD census is the shipped-backend runtime signal; dedicated continuous HSM health metrics remain a separate observability enhancement and do not reduce the served lifecycle breadth."
+            "The DoD census is the shipped-backend runtime signal; dedicated continuous HSM health metrics remain a separate observability enhancement and do not reduce the served lifecycle breadth."
           ],
           "refs": [
             "internal/server/managedkeys_seam_test.go",
@@ -3361,7 +3364,7 @@
       "dod_capabilities": [
         "hsm_kms"
       ],
-  "dod_residuals": {}
+      "dod_residuals": {}
     },
     {
       "id": "GUI-F018",

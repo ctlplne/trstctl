@@ -19,7 +19,7 @@ import { Assistant } from "@/pages/Assistant";
 import { Profiles } from "@/pages/Profiles";
 import { Audit } from "@/pages/Audit";
 import { Graph } from "@/pages/Graph";
-import { Platform } from "@/pages/Platform";
+import { AdminAccess, AdminEditions, AdminSystem, PlatformRedirect } from "@/pages/Platform";
 import { Protocols } from "@/pages/Protocols";
 import { Secrets } from "@/pages/Secrets";
 import { Policy } from "@/pages/Policy";
@@ -100,7 +100,12 @@ export function AppRoutes() {
           <Route path="integrate/api" element={<ApiExplorer />} />
           <Route path="assistant" element={<Assistant />} />
           <Route path="wizard" element={<Wizard />} />
-          <Route path="platform" element={<Platform />} />
+          <Route path="admin/access" element={<AdminAccess />} />
+          <Route path="admin/system" element={<AdminSystem />} />
+          <Route path="admin/editions" element={<AdminEditions />} />
+          {/* C-A1: /platform (and its historical ?tab= deep links) redirects
+              permanently to the split /admin/* routes. */}
+          <Route path="platform" element={<PlatformRedirect />} />
           <Route path="styleguide" element={<Styleguide />} />
           <Route path="journeys" element={<Journeys />} />
         </Route>

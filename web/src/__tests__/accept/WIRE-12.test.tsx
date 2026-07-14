@@ -2,10 +2,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
-import { Platform } from "@/pages/Platform";
+import { AdminAccess, AdminEditions, AdminSystem } from "@/pages/Platform";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -32,12 +31,11 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-function renderPlatform() {
+function renderAdminPage(page: "access" | "system" | "editions") {
+  const element = page === "access" ? <AdminAccess /> : page === "system" ? <AdminSystem /> : <AdminEditions />;
   return render(
     <AuthProvider>
-      <MemoryRouter>
-        <Platform />
-      </MemoryRouter>
+      <MemoryRouter>{element}</MemoryRouter>
     </AuthProvider>,
   );
 }
@@ -282,23 +280,11 @@ describe("WIRE-12 Platform served admin surface", () => {
   });
 
   it("renders remaining Platform admin data from served access endpoints and hides unbacked status panels", async () => {
-    const user = userEvent.setup();
-    renderPlatform();
-
-    expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
-    await waitFor(() => expect(apiMock.accessRoles).toHaveBeenCalledTimes(1));
-    expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
-    expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
-    expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
-    expect(apiMock.editions).toHaveBeenCalledTimes(1);
-    expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1);
-    expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
-    expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
+    // Editions/licensing/commercial rows are quarantined to their own route (S-A3/DA-26, C-A1).
+    const editionsPage = renderAdminPage("editions");
+    expect(await screen.findByRole("heading", { name: "Editions" })).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.editions).toHaveBeenCalledTimes(1));
     expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
-
-    // Editions/licensing/commercial rows are quarantined to their own tab (S-A3/DA-26).
-    await user.click(screen.getByRole("tab", { name: "Editions & license" }));
-    expect(screen.getByRole("heading", { name: "Editions" })).toBeInTheDocument();
     expect(screen.getByText("ENTERPRISE")).toBeInTheDocument();
     expect(screen.getByText("Acme Robotics")).toBeInTheDocument();
     expect(screen.getByText("self host")).toBeInTheDocument();
@@ -310,10 +296,14 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
     expect(screen.getByText("regional-smoke")).toBeInTheDocument();
+    editionsPage.unmount();
 
-    // Posture disclosures render behind the System posture workspace tab.
-    await user.click(screen.getByRole("tab", { name: "System posture" }));
-    expect(screen.getByText("tenant-platform")).toBeInTheDocument();
+    // Posture disclosures render on /admin/system.
+    const systemPage = renderAdminPage("system");
+    expect(await screen.findByText("tenant-platform")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1));
+    expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
+    expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("heading", { name: "Packaging" })).toBeInTheDocument();
     expect(screen.getByText("Machine Identity Security Control Plane")).toBeInTheDocument();
     expect(screen.getByText("control_plane_deployment")).toBeInTheDocument();
@@ -329,9 +319,14 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-01 active")).toBeInTheDocument();
     expect(screen.getByText("perf-live")).toBeInTheDocument();
+    systemPage.unmount();
 
-    await user.click(screen.getByRole("tab", { name: "Access administration" }));
-    expect(screen.getAllByText("platform-owner").length).toBeGreaterThan(0);
+    renderAdminPage("access");
+    await waitFor(() => expect(apiMock.accessRoles).toHaveBeenCalledTimes(1));
+    expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
+    expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
+    expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
+    expect(await screen.findAllByText("platform-owner")).not.toHaveLength(0);
     expect(screen.getByText("platform-admins")).toBeInTheDocument();
     expect(screen.getAllByText("admin@example.test").length).toBeGreaterThan(0);
     expect(screen.getByText("automation-client")).toBeInTheDocument();

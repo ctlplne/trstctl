@@ -250,7 +250,7 @@ export const journeys: Journey[] = [
         command:
           "export TRSTCTL_AUTH_OIDC_ISSUER=https://login.example.com/\nexport TRSTCTL_AUTH_OIDC_CLIENT_ID=trstctl-web\nexport TRSTCTL_AUTH_OIDC_REDIRECT_URI=https://trstctl.example.com/auth/callback",
       },
-      { id: "roles", titleKey: "journeys.team.roles.title", bodyKey: "journeys.team.roles.body", to: "/platform", detect: "members" },
+      { id: "roles", titleKey: "journeys.team.roles.title", bodyKey: "journeys.team.roles.body", to: "/admin/access", detect: "members" },
       { id: "policy", titleKey: "journeys.team.policy.title", bodyKey: "journeys.team.policy.body", to: "/policy" },
       {
         id: "audit",
@@ -311,7 +311,7 @@ export const journeys: Journey[] = [
         id: "health",
         titleKey: "journeys.prod.health.title",
         bodyKey: "journeys.prod.health.body",
-        to: "/platform?tab=posture",
+        to: "/admin/system",
         command: "curl -fksS https://localhost:8443/readyz",
       },
       {
@@ -328,7 +328,7 @@ export const journeys: Journey[] = [
         command: "trstctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --limit 100",
         detect: "audit",
       },
-      { id: "resilience", titleKey: "journeys.prod.resilience.title", bodyKey: "journeys.prod.resilience.body", to: "/platform?tab=posture" },
+      { id: "resilience", titleKey: "journeys.prod.resilience.title", bodyKey: "journeys.prod.resilience.body", to: "/admin/system" },
     ],
   },
   {

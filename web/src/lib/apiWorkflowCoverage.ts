@@ -12,7 +12,7 @@ export interface ApiWorkflowCoverage {
 export const apiWorkflowCoverage = [
   {
     path: "/api/v1/access/sessions",
-    route: "/platform",
+    route: "/admin/access",
     owner: "SURFACE/access",
     kind: "console-flow",
     workflow: "Privileged access session ledger",
@@ -21,7 +21,7 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/access/sessions/{id}",
-    route: "/platform",
+    route: "/admin/access",
     owner: "SURFACE/access",
     kind: "console-flow",
     workflow: "Privileged access session detail",
@@ -325,7 +325,7 @@ export const apiWorkflowCoverage = [
   },
   {
     path: "/api/v1/platform/distribution",
-    route: "/platform",
+    route: "/admin/editions",
     owner: "SURFACE/platform",
     kind: "console-flow",
     workflow: "Distribution posture disclosure",

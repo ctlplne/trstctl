@@ -2,10 +2,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
-import { Platform } from "@/pages/Platform";
+import { AdminAccess, AdminEditions, AdminSystem } from "@/pages/Platform";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -32,12 +31,11 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-function renderPlatform() {
+function renderAdminPage(page: "access" | "system" | "editions") {
+  const element = page === "access" ? <AdminAccess /> : page === "system" ? <AdminSystem /> : <AdminEditions />;
   return render(
     <AuthProvider>
-      <MemoryRouter>
-        <Platform />
-      </MemoryRouter>
+      <MemoryRouter>{element}</MemoryRouter>
     </AuthProvider>,
   );
 }
@@ -253,68 +251,71 @@ describe("SIMP-01 Platform served-data reduction", () => {
     apiMock.logout.mockResolvedValue(undefined);
   });
 
-  it("quarantines editions & license behind its own tab, off Access and System (S-A3/DA-26)", async () => {
-    const user = userEvent.setup();
-    renderPlatform();
-
-    // Default (Access administration) tab shows no license/edition framing.
-    await screen.findByRole("heading", { name: "Platform" });
+  it("quarantines editions & license on its own route, off Access and System (S-A3/DA-26, C-A1)", async () => {
+    // /admin/access shows no license/edition framing.
+    const access = renderAdminPage("access");
+    await screen.findByRole("heading", { name: "Access administration" });
     expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
+    access.unmount();
 
-    // System posture keeps deployment posture but not the license/edition rows.
-    await user.click(screen.getByRole("tab", { name: "System posture" }));
-    expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
+    // /admin/system keeps deployment posture but not the license/edition rows.
+    const system = renderAdminPage("system");
+    expect(await screen.findByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
+    system.unmount();
 
-    // The dedicated tab is where license state and the edition matrix live.
-    await user.click(screen.getByRole("tab", { name: "Editions & license" }));
-    expect(screen.getByRole("heading", { name: "Editions" })).toBeInTheDocument();
+    // /admin/editions is where license state and the edition matrix live.
+    renderAdminPage("editions");
+    expect(await screen.findByRole("heading", { name: "Editions" })).toBeInTheDocument();
   });
 
-  it("keeps only served access-admin data plus session posture on Platform", async () => {
-    const user = userEvent.setup();
-    renderPlatform();
-
-    expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
+  it("keeps each admin route fetch-scoped to what it renders (C-A1)", async () => {
+    // /admin/access loads only access-admin data.
+    const access = renderAdminPage("access");
+    expect(await screen.findByRole("heading", { name: "Access administration" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.accessRoles).toHaveBeenCalledTimes(1));
     expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
     expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
-    expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1);
-    expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
-    expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
-    expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
+    expect(apiMock.enterpriseSupportStatus).not.toHaveBeenCalled();
+    expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
+    expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
+    expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
+    expect(await screen.findByText("access-admins")).toBeInTheDocument();
+    expect(screen.getAllByText("access-admin@example.test").length).toBeGreaterThan(0);
+    expect(screen.getByText("ops-automation")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "API capability view" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "CLI companion" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Required permission scopes by feature")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/trstctl-cli|OpenAPI|Capability view|API capability groups|Token-safe command/i);
+    expect(document.body.textContent).not.toMatch(/certs:issue|graph:read|secrets:write|static capability|fixture|coming soon|not served yet/i);
+    access.unmount();
 
-    // Read-only posture panels live behind the System posture workspace tab.
-    await user.click(screen.getByRole("tab", { name: "System posture" }));
-    expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
+    // /admin/system renders the posture disclosures without token/member reads.
+    for (const mock of Object.values(apiMock)) mock.mockClear();
+    const system = renderAdminPage("system");
+    expect(await screen.findByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Transport" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Auth session" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Enterprise support" })).toBeInTheDocument();
     expect(screen.getByText("CAP-MODEL-04")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
-    expect(screen.getByText("CAP-SCALE-01 active")).toBeInTheDocument();
+    expect(await screen.findByText("CAP-SCALE-01 active")).toBeInTheDocument();
     expect(screen.getByText("SCALE-1M")).toBeInTheDocument();
+    expect(apiMock.members).not.toHaveBeenCalled();
+    expect(apiMock.apiTokens).not.toHaveBeenCalled();
+    expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
+    system.unmount();
 
-    // Regional issuance HA is edition-gated and disclosed on the Editions & license tab.
-    await user.click(screen.getByRole("tab", { name: "Editions & license" }));
-    expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
+    // /admin/editions carries the HA/regional disclosure with the license rows.
+    for (const mock of Object.values(apiMock)) mock.mockClear();
+    renderAdminPage("editions");
+    expect(await screen.findByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
     expect(screen.getByText("idempotency")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("tab", { name: "Access administration" }));
-    expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
-    expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
-    expect(screen.getByText("access-admins")).toBeInTheDocument();
-    expect(screen.getAllByText("access-admin@example.test").length).toBeGreaterThan(0);
-    expect(screen.getByText("ops-automation")).toBeInTheDocument();
-
-    expect(screen.queryByRole("heading", { name: "API capability view" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "CLI companion" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Required permission scopes by feature")).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/trstctl-cli|OpenAPI|Capability view|API capability groups|Token-safe command/i);
-    expect(document.body.textContent).not.toMatch(/certs:issue|graph:read|secrets:write|static capability|fixture|coming soon|not served yet/i);
+    expect(apiMock.members).not.toHaveBeenCalled();
+    expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
   });
 
   it("removes the static Platform API, CLI, and scope-map fixtures from the module", () => {

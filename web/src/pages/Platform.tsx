@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { Building2, Gauge, Headphones, KeyRound, Loader2, Network, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
-import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -90,66 +89,57 @@ const defaultPAMSessionForm: PAMSessionFormState = {
   ssh_public_key: "",
 };
 
-/** Access administration is the page's one operational surface, so it renders
- * as the default tab; the read-only posture panels live behind "System
- * posture" (audit P0: Access was buried under six disclosure panels). */
-type PlatformTab = "access" | "posture" | "editions";
-
-function platformTabFromSearchParam(value: string | null): PlatformTab {
-  if (value === "posture") return "posture";
-  if (value === "editions") return "editions";
-  return "access";
+/** C-A1 (07-closeout plan): the /platform tab grab-bag became three real
+ * routes — /admin/access, /admin/system, /admin/editions — each deep-linkable
+ * and individually fetch-scoped. /platform stays registered forever as a
+ * redirector so historical deep links, docs, and muscle memory keep working. */
+export function PlatformRedirect() {
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get("tab");
+  if (tab === "posture") return <Navigate to="/admin/system" replace />;
+  if (tab === "editions") return <Navigate to="/admin/editions" replace />;
+  return <Navigate to="/admin/access" replace />;
 }
 
-export function Platform() {
+/** Shared header quick links (Privacy / Integrate) for the three admin pages. */
+function AdminHeaderActions() {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Link
+        to="/privacy"
+        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+      >
+        <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+        {t("nav.item.privacy")}
+      </Link>
+      <Link
+        to="/integrate"
+        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+      >
+        <Network className="h-4 w-4" aria-hidden="true" />
+        {t("nav.item.integrate")}
+      </Link>
+    </>
+  );
+}
+
+/** /admin/system — read-only posture disclosures plus the managed-offering
+ * provisioning flow. Fetches only what this page renders. */
+export function AdminSystem() {
   const { user, preview } = useAuth();
   const { locale, timeZone, t } = useTranslation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useState<PlatformTab>(() => platformTabFromSearchParam(searchParams.get("tab")));
-
-  function selectTab(next: string) {
-    const value = platformTabFromSearchParam(next);
-    setTab(value);
-    setSearchParams(
-      (current) => {
-        const nextParams = new URLSearchParams(current);
-        if (value === "access") {
-          nextParams.delete("tab");
-        } else {
-          nextParams.set("tab", value);
-        }
-        return nextParams;
-      },
-      { replace: true },
-    );
-  }
-
   const formatPolicy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
   const transport = browserTransport();
   const csrfPresent = typeof document !== "undefined" && document.cookie.includes("trstctl_csrf=");
-  const [roles, setRoles] = useState<RoleList | null>(null);
-  const [oidc, setOIDC] = useState<OIDCMappingStatus | null>(null);
   const [editions, setEditions] = useState<EditionsInfo | null>(null);
   const [enterpriseSupport, setEnterpriseSupport] = useState<EnterpriseSupportStatus | null>(null);
   const [managedOffering, setManagedOffering] = useState<ManagedOfferingStatus | null>(null);
   const [scaleOrchestration, setScaleOrchestration] = useState<ScaleOrchestrationPlan | null>(null);
-  const [activeActiveIssuance, setActiveActiveIssuance] = useState<ActiveActiveIssuancePlan | null>(null);
   const [lastManagedTenant, setLastManagedTenant] = useState<ManagedTenant | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [tokens, setTokens] = useState<APIToken[]>([]);
-  const [accessLoading, setAccessLoading] = useState(true);
-  const [accessBusy, setAccessBusy] = useState(false);
-  const [accessError, setAccessError] = useState<string | null>(null);
-  const [accessNotice, setAccessNotice] = useState<string | null>(null);
-  const [revealedToken, setRevealedToken] = useState<string | null>(null);
-  const [memberSubject, setMemberSubject] = useState("");
-  const [memberDisplayName, setMemberDisplayName] = useState("");
-  const [memberEmail, setMemberEmail] = useState("");
-  const [memberRoles, setMemberRoles] = useState("operator");
-  const [tokenSubject, setTokenSubject] = useState("");
-  const [tokenScopes, setTokenScopes] = useState("access:read");
-  const [offboardSubject, setOffboardSubject] = useState("");
-  const [offboardReason, setOffboardReason] = useState("");
+  const [systemBusy, setSystemBusy] = useState(false);
+  const [systemError, setSystemError] = useState<string | null>(null);
+  const [systemNotice, setSystemNotice] = useState<string | null>(null);
   const [hostedTenantID, setHostedTenantID] = useState("");
   const [hostedTenantName, setHostedTenantName] = useState("");
   const [hostedRegion, setHostedRegion] = useState("us-east-1");
@@ -157,230 +147,31 @@ export function Platform() {
   const [hostedPlan, setHostedPlan] = useState("enterprise");
   const [hostedSupportTier, setHostedSupportTier] = useState("24x7");
   const [hostedSLOTier, setHostedSLOTier] = useState("99.95");
-  const [distribution, setDistribution] = useState<PlatformDistributionStatus | null>(null);
-  const [pamRows, setPAMRows] = useState<PAMSession[] | null>(null);
-  const [pamCursor, setPAMCursor] = useState<string | undefined>(undefined);
-  const [pamLoadingMore, setPAMLoadingMore] = useState(false);
-  const [pamDetail, setPAMDetail] = useState<PAMSession | null>(null);
-  const [pamFormOpen, setPAMFormOpen] = useState(false);
-  const [pamForm, setPAMForm] = useState<PAMSessionFormState>(defaultPAMSessionForm);
-  const [pamBusy, setPAMBusy] = useState(false);
-  const [pamFormError, setPAMFormError] = useState<string | null>(null);
-  const [pamCreated, setPAMCreated] = useState<PAMSession | null>(null);
-  const [pamCopied, setPAMCopied] = useState(false);
-  const roleRows = useMemo(() => roles?.items ?? [], [roles]);
   const packaging = editions?.packaging ?? defaultPackaging;
-  const pamColumns = useMemo<DataGridColumn<PAMSession>[]>(
-    () => [
-      { id: "started", header: "Started", cell: (session) => formatOptionalDate(session.started_at, formatPolicy) },
-      {
-        id: "subject",
-        header: "Subject",
-        cell: (session) => <span className="break-all font-mono text-xs">{session.subject}</span>,
-      },
-      { id: "role", header: "Role", cell: (session) => session.role },
-      {
-        id: "target",
-        header: "Target",
-        cell: (session) => (
-          <div className="grid gap-1">
-            <span>{session.target_type}</span>
-            <span className="break-all font-mono text-xs text-muted-foreground">{session.target_id}</span>
-          </div>
-        ),
-      },
-      {
-        id: "status",
-        header: "Status",
-        cell: (session) => <StatusBadge value={session.status} label={session.status} tone={pamStatusTone(session.status)} />,
-      },
-      { id: "expires", header: "Expires", cell: (session) => formatOptionalDate(session.expires_at, formatPolicy) },
-    ],
-    [formatPolicy],
-  );
-
-  async function loadAccessAdmin() {
-    setAccessLoading(true);
-    setAccessError(null);
-    try {
-      const [roleCatalog, oidcStatus, memberPage, tokenPage, editionInfo, supportStatus, managedStatus, scaleStatus, haIssuanceStatus] = await Promise.all([
-        api.accessRoles(),
-        api.oidcMappingStatus(),
-        api.members({ includeOffboarded: true, limit: 50 }),
-        api.apiTokens({ includeRevoked: true, limit: 50 }),
-        api.editions(),
-        api.enterpriseSupportStatus(),
-        api.managedOfferingStatus(),
-        api.scaleOrchestration(),
-        api.activeActiveIssuance(),
-      ]);
-      setRoles(roleCatalog);
-      setOIDC(oidcStatus);
-      setEditions(editionInfo);
-      setEnterpriseSupport(supportStatus);
-      setManagedOffering(managedStatus);
-      setScaleOrchestration(scaleStatus);
-      setActiveActiveIssuance(haIssuanceStatus);
-      setMembers(memberPage.items ?? []);
-      setTokens(tokenPage.items ?? []);
-    } catch (err) {
-      setAccessError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAccessLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadAccessAdmin();
-  }, []);
 
   useEffect(() => {
     let active = true;
-    Promise.resolve()
-      .then(() => api.pamSessions({ limit: 20 }))
-      .then((page) => {
+    Promise.all([api.editions(), api.enterpriseSupportStatus(), api.managedOfferingStatus(), api.scaleOrchestration()])
+      .then(([editionInfo, supportStatus, managedStatus, scaleStatus]) => {
         if (!active) return;
-        setPAMRows(page.items ?? []);
-        setPAMCursor(page.next_cursor);
+        setEditions(editionInfo);
+        setEnterpriseSupport(supportStatus);
+        setManagedOffering(managedStatus);
+        setScaleOrchestration(scaleStatus);
       })
-      .catch(() => null);
-    Promise.resolve()
-      .then(() => api.platformDistribution())
-      .then((status) => {
-        if (active) setDistribution(status);
-      })
-      .catch(() => null);
+      .catch((err) => {
+        if (active) setSystemError(err instanceof Error ? err.message : String(err));
+      });
     return () => {
       active = false;
     };
   }, []);
 
-  async function loadMorePAMSessions() {
-    if (!pamCursor) return;
-    setPAMLoadingMore(true);
-    try {
-      const page = await api.pamSessions({ limit: 20, cursor: pamCursor });
-      setPAMRows((current) => [...(current ?? []), ...(page.items ?? [])]);
-      setPAMCursor(page.next_cursor);
-    } catch (err) {
-      setAccessError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPAMLoadingMore(false);
-    }
-  }
-
-  function closePAMDialog() {
-    setPAMFormOpen(false);
-    setPAMFormError(null);
-    setPAMCreated(null);
-    setPAMCopied(false);
-  }
-
-  async function openPrivilegedSession(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPAMBusy(true);
-    setPAMFormError(null);
-    try {
-      const ttl = Number(pamForm.ttl_seconds.trim());
-      const input: PAMSessionRequest = {
-        method: pamForm.method.trim(),
-        payload_base64: pamForm.payload_base64.trim(),
-        role: pamForm.role.trim(),
-        target_id: pamForm.target_id.trim(),
-        target_type: pamForm.target_type,
-        ...(pamForm.reason.trim() ? { reason: pamForm.reason.trim() } : {}),
-        ...(pamForm.ttl_seconds.trim() && Number.isFinite(ttl) && ttl > 0 ? { ttl_seconds: Math.floor(ttl) } : {}),
-        ...(pamForm.target_type === "ssh" && pamForm.ssh_principal.trim() ? { ssh_principal: pamForm.ssh_principal.trim() } : {}),
-        ...(pamForm.target_type === "ssh" && pamForm.ssh_public_key.trim() ? { ssh_public_key: pamForm.ssh_public_key.trim() } : {}),
-      };
-      const created = await api.openPAMSession(input);
-      setPAMCreated(created);
-      setPAMRows((current) => [created, ...(current ?? []).filter((item) => item.id !== created.id)]);
-      setPAMForm(defaultPAMSessionForm);
-    } catch (err) {
-      setPAMFormError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPAMBusy(false);
-    }
-  }
-
-  async function copyPAMSessionID(id: string) {
-    try {
-      await navigator.clipboard.writeText(id);
-      setPAMCopied(true);
-    } catch {
-      setPAMCopied(false);
-    }
-  }
-
-  async function onboardMember(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAccessBusy(true);
-    setAccessError(null);
-    setAccessNotice(null);
-    try {
-      await api.upsertMember(memberSubject.trim(), {
-        display_name: memberDisplayName.trim(),
-        email: memberEmail.trim(),
-        roles: csvList(memberRoles),
-        source: "manual",
-      });
-      setAccessNotice(`Onboarded ${memberSubject.trim()}`);
-      setMemberSubject("");
-      setMemberDisplayName("");
-      setMemberEmail("");
-      await loadAccessAdmin();
-    } catch (err) {
-      setAccessError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAccessBusy(false);
-    }
-  }
-
-  async function mintToken(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAccessBusy(true);
-    setAccessError(null);
-    setAccessNotice(null);
-    setRevealedToken(null);
-    try {
-      const created = await api.createAPIToken({ subject: tokenSubject.trim(), scopes: csvList(tokenScopes) });
-      setRevealedToken(created.token);
-      setAccessNotice(`Minted API token for ${created.subject}`);
-      setTokenSubject("");
-      await loadAccessAdmin();
-    } catch (err) {
-      setAccessError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAccessBusy(false);
-    }
-  }
-
-  async function offboardMember(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAccessBusy(true);
-    setAccessError(null);
-    setAccessNotice(null);
-    setRevealedToken(null);
-    try {
-      const result = await api.offboardMember(offboardSubject.trim(), { reason: offboardReason.trim() });
-      setAccessNotice(`Offboarded ${result.member.subject}; revoked ${result.revoked_token_count} token(s)`);
-      setOffboardSubject("");
-      setOffboardReason("");
-      await loadAccessAdmin();
-    } catch (err) {
-      setAccessError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAccessBusy(false);
-    }
-  }
-
   async function provisionHostedTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setAccessBusy(true);
-    setAccessError(null);
-    setAccessNotice(null);
-    setRevealedToken(null);
+    setSystemBusy(true);
+    setSystemError(null);
+    setSystemNotice(null);
     try {
       const input: ManagedTenantProvisionRequest = {
         tenant_id: hostedTenantID.trim(),
@@ -393,58 +184,35 @@ export function Platform() {
       };
       const created = await api.provisionManagedTenant(input);
       setLastManagedTenant(created);
-      setAccessNotice(`Provisioned managed tenant ${created.name}`);
+      setSystemNotice(`Provisioned managed tenant ${created.name}`);
       setHostedTenantID("");
       setHostedTenantName("");
-      await loadAccessAdmin();
     } catch (err) {
-      setAccessError(err instanceof Error ? err.message : String(err));
+      setSystemError(err instanceof Error ? err.message : String(err));
     } finally {
-      setAccessBusy(false);
+      setSystemBusy(false);
     }
   }
 
   return (
-    <section aria-labelledby="platform-heading" className="grid gap-6">
+    <section aria-labelledby="admin-system-heading" className="grid gap-6">
       <PageHeader
-        titleId="platform-heading"
-        title="Platform"
-        description="Self-hosted NHI management / Machine IAM packaging, tenant boundary, access evidence, browser transport, and auth status."
-        actions={
-          <>
-            <Link
-              to="/privacy"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-            >
-              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-              {t("nav.item.privacy")}
-            </Link>
-            <Link
-              to="/integrate"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-            >
-              <Network className="h-4 w-4" aria-hidden="true" />
-              {t("nav.item.integrate")}
-            </Link>
-          </>
-        }
+        titleId="admin-system-heading"
+        title={t("platform.tabs.posture")}
+        description={t("admin.system.description")}
+        actions={<AdminHeaderActions />}
       />
-
-      <PageTabs
-        idPrefix="platform"
-        ariaLabel="Platform workspaces"
-        active={tab}
-        onChange={selectTab}
-        className="mb-0"
-        tabs={[
-          { id: "access", label: t("platform.tabs.access") },
-          { id: "posture", label: t("platform.tabs.posture") },
-          { id: "editions", label: t("platform.tabs.editions") },
-        ]}
-      />
-
-      {tab === "posture" && (
-        <div {...tabPanelProps("platform", "posture")} className="grid gap-6">
+      {systemError && (
+        <p role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {systemError}
+        </p>
+      )}
+      {systemNotice && (
+        <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+          {systemNotice}
+        </p>
+      )}
+      <div className="grid gap-6">
           <div className="grid gap-4 lg:grid-cols-4">
             <section className="ui-panel p-comfortable" aria-labelledby="packaging-heading">
               <h2 id="packaging-heading" className="text-title font-semibold">
@@ -850,7 +618,7 @@ export function Platform() {
                 </label>
                 <Button
                   type="submit"
-                  disabled={accessBusy || !hostedTenantID.trim() || !hostedTenantName.trim() || managedOffering?.provider_plane_mode !== "enabled"}
+                  disabled={systemBusy || !hostedTenantID.trim() || !hostedTenantName.trim() || managedOffering?.provider_plane_mode !== "enabled"}
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   Provision tenant
@@ -858,11 +626,59 @@ export function Platform() {
               </form>
             </div>
           </section>
-        </div>
-      )}
+      </div>
+    </section>
+  );
+}
 
-      {tab === "editions" && (
-        <div {...tabPanelProps("platform", "editions")} className="grid gap-6">
+/** /admin/editions — the console's one commercial surface (S-A3/DA-26):
+ * offline license state, edition/feature rows, FIPS, distribution, and the
+ * regional issuance posture. */
+export function AdminEditions() {
+  const { locale, timeZone, t } = useTranslation();
+  const formatPolicy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
+  const [editions, setEditions] = useState<EditionsInfo | null>(null);
+  const [activeActiveIssuance, setActiveActiveIssuance] = useState<ActiveActiveIssuancePlan | null>(null);
+  const [distribution, setDistribution] = useState<PlatformDistributionStatus | null>(null);
+  const [editionsError, setEditionsError] = useState<string | null>(null);
+  const packaging = editions?.packaging ?? defaultPackaging;
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([api.editions(), api.activeActiveIssuance()])
+      .then(([editionInfo, haIssuanceStatus]) => {
+        if (!active) return;
+        setEditions(editionInfo);
+        setActiveActiveIssuance(haIssuanceStatus);
+      })
+      .catch((err) => {
+        if (active) setEditionsError(err instanceof Error ? err.message : String(err));
+      });
+    Promise.resolve()
+      .then(() => api.platformDistribution())
+      .then((status) => {
+        if (active) setDistribution(status);
+      })
+      .catch(() => null);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <section aria-labelledby="admin-editions-heading" className="grid gap-6">
+      <PageHeader
+        titleId="admin-editions-heading"
+        title={t("platform.tabs.editions")}
+        description={t("admin.editions.description")}
+        actions={<AdminHeaderActions />}
+      />
+      {editionsError && (
+        <p role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {editionsError}
+        </p>
+      )}
+      <div className="grid gap-6">
           <section className="ui-panel p-comfortable" aria-labelledby="editions-heading">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -1172,16 +988,246 @@ export function Platform() {
               </div>
             </div>
           </section>
-        </div>
-      )}
+      </div>
+    </section>
+  );
+}
 
-      {tab === "access" && (
-        <div {...tabPanelProps("platform", "access")} className="grid gap-6">
-          <section aria-labelledby="access-heading">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h2 id="access-heading" className="text-title font-semibold">
-                Access administration
-              </h2>
+/** /admin/access — the tenant's operational access surface: membership, API
+ * tokens, offboarding, and JIT privileged sessions. */
+export function AdminAccess() {
+  const { locale, timeZone, t } = useTranslation();
+  const formatPolicy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
+  const [roles, setRoles] = useState<RoleList | null>(null);
+  const [oidc, setOIDC] = useState<OIDCMappingStatus | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [tokens, setTokens] = useState<APIToken[]>([]);
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [accessNotice, setAccessNotice] = useState<string | null>(null);
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [memberSubject, setMemberSubject] = useState("");
+  const [memberDisplayName, setMemberDisplayName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRoles, setMemberRoles] = useState("operator");
+  const [tokenSubject, setTokenSubject] = useState("");
+  const [tokenScopes, setTokenScopes] = useState("access:read");
+  const [offboardSubject, setOffboardSubject] = useState("");
+  const [offboardReason, setOffboardReason] = useState("");
+  const [pamRows, setPAMRows] = useState<PAMSession[] | null>(null);
+  const [pamCursor, setPAMCursor] = useState<string | undefined>(undefined);
+  const [pamLoadingMore, setPAMLoadingMore] = useState(false);
+  const [pamDetail, setPAMDetail] = useState<PAMSession | null>(null);
+  const [pamFormOpen, setPAMFormOpen] = useState(false);
+  const [pamForm, setPAMForm] = useState<PAMSessionFormState>(defaultPAMSessionForm);
+  const [pamBusy, setPAMBusy] = useState(false);
+  const [pamFormError, setPAMFormError] = useState<string | null>(null);
+  const [pamCreated, setPAMCreated] = useState<PAMSession | null>(null);
+  const [pamCopied, setPAMCopied] = useState(false);
+  const roleRows = useMemo(() => roles?.items ?? [], [roles]);
+  const pamColumns = useMemo<DataGridColumn<PAMSession>[]>(
+    () => [
+      { id: "started", header: "Started", cell: (session) => formatOptionalDate(session.started_at, formatPolicy) },
+      {
+        id: "subject",
+        header: "Subject",
+        cell: (session) => <span className="break-all font-mono text-xs">{session.subject}</span>,
+      },
+      { id: "role", header: "Role", cell: (session) => session.role },
+      {
+        id: "target",
+        header: "Target",
+        cell: (session) => (
+          <div className="grid gap-1">
+            <span>{session.target_type}</span>
+            <span className="break-all font-mono text-xs text-muted-foreground">{session.target_id}</span>
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (session) => <StatusBadge value={session.status} label={session.status} tone={pamStatusTone(session.status)} />,
+      },
+      { id: "expires", header: "Expires", cell: (session) => formatOptionalDate(session.expires_at, formatPolicy) },
+    ],
+    [formatPolicy],
+  );
+
+  async function loadAccessAdmin() {
+    setAccessLoading(true);
+    setAccessError(null);
+    try {
+      const [roleCatalog, oidcStatus, memberPage, tokenPage] = await Promise.all([
+        api.accessRoles(),
+        api.oidcMappingStatus(),
+        api.members({ includeOffboarded: true, limit: 50 }),
+        api.apiTokens({ includeRevoked: true, limit: 50 }),
+      ]);
+      setRoles(roleCatalog);
+      setOIDC(oidcStatus);
+      setMembers(memberPage.items ?? []);
+      setTokens(tokenPage.items ?? []);
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadAccessAdmin();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve()
+      .then(() => api.pamSessions({ limit: 20 }))
+      .then((page) => {
+        if (!active) return;
+        setPAMRows(page.items ?? []);
+        setPAMCursor(page.next_cursor);
+      })
+      .catch(() => null);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function loadMorePAMSessions() {
+    if (!pamCursor) return;
+    setPAMLoadingMore(true);
+    try {
+      const page = await api.pamSessions({ limit: 20, cursor: pamCursor });
+      setPAMRows((current) => [...(current ?? []), ...(page.items ?? [])]);
+      setPAMCursor(page.next_cursor);
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPAMLoadingMore(false);
+    }
+  }
+
+  function closePAMDialog() {
+    setPAMFormOpen(false);
+    setPAMFormError(null);
+    setPAMCreated(null);
+    setPAMCopied(false);
+  }
+
+  async function openPrivilegedSession(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPAMBusy(true);
+    setPAMFormError(null);
+    try {
+      const ttl = Number(pamForm.ttl_seconds.trim());
+      const input: PAMSessionRequest = {
+        method: pamForm.method.trim(),
+        payload_base64: pamForm.payload_base64.trim(),
+        role: pamForm.role.trim(),
+        target_id: pamForm.target_id.trim(),
+        target_type: pamForm.target_type,
+        ...(pamForm.reason.trim() ? { reason: pamForm.reason.trim() } : {}),
+        ...(pamForm.ttl_seconds.trim() && Number.isFinite(ttl) && ttl > 0 ? { ttl_seconds: Math.floor(ttl) } : {}),
+        ...(pamForm.target_type === "ssh" && pamForm.ssh_principal.trim() ? { ssh_principal: pamForm.ssh_principal.trim() } : {}),
+        ...(pamForm.target_type === "ssh" && pamForm.ssh_public_key.trim() ? { ssh_public_key: pamForm.ssh_public_key.trim() } : {}),
+      };
+      const created = await api.openPAMSession(input);
+      setPAMCreated(created);
+      setPAMRows((current) => [created, ...(current ?? []).filter((item) => item.id !== created.id)]);
+      setPAMForm(defaultPAMSessionForm);
+    } catch (err) {
+      setPAMFormError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPAMBusy(false);
+    }
+  }
+
+  async function copyPAMSessionID(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      setPAMCopied(true);
+    } catch {
+      setPAMCopied(false);
+    }
+  }
+
+  async function onboardMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAccessBusy(true);
+    setAccessError(null);
+    setAccessNotice(null);
+    try {
+      await api.upsertMember(memberSubject.trim(), {
+        display_name: memberDisplayName.trim(),
+        email: memberEmail.trim(),
+        roles: csvList(memberRoles),
+        source: "manual",
+      });
+      setAccessNotice(`Onboarded ${memberSubject.trim()}`);
+      setMemberSubject("");
+      setMemberDisplayName("");
+      setMemberEmail("");
+      await loadAccessAdmin();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function mintToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAccessBusy(true);
+    setAccessError(null);
+    setAccessNotice(null);
+    setRevealedToken(null);
+    try {
+      const created = await api.createAPIToken({ subject: tokenSubject.trim(), scopes: csvList(tokenScopes) });
+      setRevealedToken(created.token);
+      setAccessNotice(`Minted API token for ${created.subject}`);
+      setTokenSubject("");
+      await loadAccessAdmin();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function offboardMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAccessBusy(true);
+    setAccessError(null);
+    setAccessNotice(null);
+    setRevealedToken(null);
+    try {
+      const result = await api.offboardMember(offboardSubject.trim(), { reason: offboardReason.trim() });
+      setAccessNotice(`Offboarded ${result.member.subject}; revoked ${result.revoked_token_count} token(s)`);
+      setOffboardSubject("");
+      setOffboardReason("");
+      await loadAccessAdmin();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="admin-access-heading" className="grid gap-6">
+      <PageHeader
+        titleId="admin-access-heading"
+        title={t("platform.tabs.access")}
+        description={t("admin.access.description")}
+        actions={<AdminHeaderActions />}
+      />
+      <div className="grid gap-6">
+          {/* The page H1 above already says "Access administration" (naming
+              parity), so this block only carries the refresh affordance. */}
+          <div>
+            <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
               <Button type="button" size="sm" variant="outline" onClick={() => void loadAccessAdmin()} disabled={accessLoading}>
                 {accessLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
                 Refresh
@@ -1404,7 +1450,7 @@ export function Platform() {
                 </table>
               </div>
             </div>
-          </section>
+          </div>
 
           {pamDetail && (
             <Dialog
@@ -1627,8 +1673,7 @@ export function Platform() {
               )}
             </Dialog>
           )}
-        </div>
-      )}
+      </div>
     </section>
   );
 }

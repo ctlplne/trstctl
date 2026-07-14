@@ -39,7 +39,6 @@ const workspaceTabs: Record<string, string[]> = {
   "/certificates": ["inventory", "health", "crlct", "renewal"],
   "/secrets": ["store", "access", "sharing", "engines", "scanning", "sync"],
   "/discovery": ["findings", "sources", "schedules", "runs"],
-  "/platform": ["access", "posture"],
 };
 
 function basePath(to: string): string {

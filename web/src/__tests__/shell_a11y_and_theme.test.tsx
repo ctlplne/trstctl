@@ -6,7 +6,7 @@ import { axe } from "vitest-axe";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
-import { Platform } from "@/pages/Platform";
+import { AdminAccess, AdminEditions, AdminSystem, PlatformRedirect } from "@/pages/Platform";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -50,7 +50,10 @@ function renderShell(initialEntries = ["/"]) {
               <Route index element={<h1>Overview</h1>} />
               <Route path="certificates" element={<h1>Certificates</h1>} />
               <Route path="identities" element={<h1>Identities</h1>} />
-              <Route path="platform" element={<Platform />} />
+              <Route path="admin/access" element={<AdminAccess />} />
+              <Route path="admin/system" element={<AdminSystem />} />
+              <Route path="admin/editions" element={<AdminEditions />} />
+              <Route path="platform" element={<PlatformRedirect />} />
               <Route path="secrets" element={<h1>Secrets</h1>} />
               <Route
                 path="custom-tools"
@@ -484,10 +487,10 @@ describe("app shell accessibility and theme", () => {
     await user.click(opener);
     palette = await screen.findByRole("dialog", { name: "Command palette" });
     search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
-    await user.type(search, "platform");
+    await user.type(search, "editions");
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Editions & license" })).toBeInTheDocument();
   });
 
   it("opens the keyboard shortcuts overlay from ? and the help button", async () => {
@@ -545,7 +548,7 @@ describe("app shell accessibility and theme", () => {
     }
 
     // Global planes are always present regardless of module.
-    for (const link of ["Discovery", "Incidents", "Deployment connectors", "Platform", "Credential graph"]) {
+    for (const link of ["Discovery", "Incidents", "Deployment connectors", "Access administration", "Credential graph"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
 
@@ -602,34 +605,32 @@ describe("app shell accessibility and theme", () => {
     expect(within(nav).queryByText(/^map$/i)).not.toBeInTheDocument();
   });
 
-  it("routes to the platform posture page from grouped navigation", async () => {
+  it("routes to the split admin pages from grouped navigation (C-A1)", async () => {
     const user = userEvent.setup();
     renderShell();
     await screen.findByText("u@example.test");
 
-    await user.click(screen.getByRole("link", { name: /^Platform$/i }));
+    await user.click(screen.getByRole("link", { name: /^Access administration$/i }));
+    expect(await screen.findByRole("heading", { name: "Access administration" })).toBeInTheDocument();
 
-    expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "System posture" }));
+    await user.click(screen.getByRole("link", { name: /^System posture$/i }));
+    expect(await screen.findByRole("heading", { name: "System posture" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
   });
 
   it("renders tenant context from the served session without an editable tenant input", async () => {
-    const user = userEvent.setup();
-    renderShell(["/platform"]);
-    await screen.findByRole("heading", { name: "Platform" });
+    renderShell(["/admin/system"]);
+    await screen.findByRole("heading", { name: "System posture" });
 
-    await user.click(screen.getByRole("tab", { name: "System posture" }));
     expect(screen.getByText("Tenant ID from session")).toBeInTheDocument();
     expect(within(screen.getByRole("main")).getByText("t1")).toBeInTheDocument();
     expect(screen.getByText(/browser never chooses a tenant id/i)).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /tenant/i })).not.toBeInTheDocument();
   });
 
-  it("shows access administration from served data", async () => {
+  it("shows access administration from served data (via the /platform redirect)", async () => {
     renderShell(["/platform"]);
-    await screen.findByRole("heading", { name: "Platform" });
+    expect(await screen.findByRole("heading", { name: "Access administration" })).toBeInTheDocument();
 
     expect((await screen.findAllByText("operator")).length).toBeGreaterThan(0);
     expect(screen.getByText("ra-officer")).toBeInTheDocument();
@@ -647,8 +648,8 @@ describe("app shell accessibility and theme", () => {
   });
 
   it("hides the static API capability table", async () => {
-    renderShell(["/platform"]);
-    await screen.findByRole("heading", { name: "Platform" });
+    renderShell(["/admin/access"]);
+    await screen.findByRole("heading", { name: "Access administration" });
 
     expect(screen.queryByRole("heading", { name: "API capability view" })).not.toBeInTheDocument();
     expect(screen.queryByText(/capability groups/i)).not.toBeInTheDocument();
@@ -659,11 +660,9 @@ describe("app shell accessibility and theme", () => {
   });
 
   it("shows honest auth and transport status without exposing key material", async () => {
-    const user = userEvent.setup();
-    renderShell(["/platform"]);
-    await screen.findByRole("heading", { name: "Platform" });
+    renderShell(["/admin/system"]);
+    await screen.findByRole("heading", { name: "System posture" });
 
-    await user.click(screen.getByRole("tab", { name: "System posture" }));
     expect(screen.getByText(/Plaintext local preview/i)).toBeInTheDocument();
     expect(screen.getByText(/No private cert\/key bytes are exposed/i)).toBeInTheDocument();
     expect(screen.getByText(/OIDC mapping status and API-token administration/i)).toBeInTheDocument();
@@ -673,16 +672,16 @@ describe("app shell accessibility and theme", () => {
   });
 
   it("hides static CLI companion commands", async () => {
-    renderShell(["/platform"]);
-    await screen.findByRole("heading", { name: "Platform" });
+    renderShell(["/admin/access"]);
+    await screen.findByRole("heading", { name: "Access administration" });
 
     expect(screen.queryByRole("heading", { name: "CLI companion" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/trstctl-cli|Authorization: Bearer|trst_[A-Za-z0-9]/);
   });
 
   it("hides unbacked runtime, plugin, and passive federation disclosures", async () => {
-    renderShell(["/platform"]);
-    await screen.findByRole("heading", { name: "Platform" });
+    renderShell(["/admin/access"]);
+    await screen.findByRole("heading", { name: "Access administration" });
 
     expect(screen.queryByRole("heading", { name: "Single-binary runtime" })).not.toBeInTheDocument();
     expect(screen.queryByText("Runtime status view coming soon")).not.toBeInTheDocument();

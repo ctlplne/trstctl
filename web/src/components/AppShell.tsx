@@ -313,11 +313,11 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 const Icon = iconMap[module.icon];
                 const selected = module.id === activeModule;
                 if (lockedModuleSet.has(module.id)) {
-                  // S-B5: one graceful upsell row, linking to Platform → Editions.
+                  // S-B5: one graceful upsell row, linking to Editions & license (C-A1: /admin/editions).
                   return (
                     <NavLink
                       key={module.id}
-                      to="/platform?tab=editions"
+                      to="/admin/editions"
                       onClick={onNavigate}
                       className="inline-flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-semibold text-sidebar-foreground/50 transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
                       title={t("nav.module.upsell")}

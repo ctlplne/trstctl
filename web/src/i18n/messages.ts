@@ -206,15 +206,27 @@ export const messages = {
   },
   "platform.tabs.access": {
     defaultMessage: "Access administration",
-    description: "Platform page tab: membership, tokens, and offboarding — the operational surface.",
+    description: "Nav label + H1 for /admin/access: membership, tokens, offboarding, JIT sessions — the operational access surface (C-A1 split from /platform).",
   },
   "platform.tabs.posture": {
     defaultMessage: "System posture",
-    description: "Platform page tab: read-only packaging, regional, scale, and support disclosures.",
+    description: "Nav label + H1 for /admin/system: read-only packaging, regional, scale, and support disclosures (C-A1 split from /platform).",
   },
   "platform.tabs.editions": {
     defaultMessage: "Editions & license",
-    description: "Platform page tab: offline license state, edition/feature rows, and commercial packaging (quarantined from operational surfaces, S-A3/DA-26).",
+    description: "Nav label + H1 for /admin/editions: offline license state, edition/feature rows, and commercial packaging — the one commercial surface (S-A3/DA-26, C-A1).",
+  },
+  "admin.access.description": {
+    defaultMessage: "Membership, API tokens, offboarding, and just-in-time privileged sessions for this tenant.",
+    description: "Page description for /admin/access.",
+  },
+  "admin.system.description": {
+    defaultMessage: "Read-only posture disclosures: packaging, tenant boundary, transport, scale, support, and the managed offering.",
+    description: "Page description for /admin/system.",
+  },
+  "admin.editions.description": {
+    defaultMessage: "Offline license state, edition and feature rows, FIPS posture, and distribution.",
+    description: "Page description for /admin/editions.",
   },
   "identities.decommission.heading": {
     defaultMessage: "Decommission by signal",
@@ -3062,10 +3074,6 @@ export const messages = {
   },
   "nav.item.notifications": {
     defaultMessage: "Notifications",
-    description: "Primary navigation item.",
-  },
-  "nav.item.platform": {
-    defaultMessage: "Platform",
     description: "Primary navigation item.",
   },
   "nav.item.sso": {
@@ -6965,6 +6973,9 @@ const esESCatalog = {
   "platform.tabs.access": "Administración de acceso",
   "platform.tabs.posture": "Postura del sistema",
   "platform.tabs.editions": "Ediciones y licencia",
+  "admin.access.description": "Membresía, tokens de API, bajas y sesiones privilegiadas just-in-time para este tenant.",
+  "admin.system.description": "Divulgaciones de postura de solo lectura: empaquetado, límite de tenant, transporte, escala, soporte y la oferta gestionada.",
+  "admin.editions.description": "Estado de licencia sin conexión, filas de ediciones y funciones, postura FIPS y distribución.",
   "identities.decommission.heading": "Retirada por señal",
   "request.wizard.profile.label": "Elegir perfil",
   "request.wizard.profile.description": "El perfil de emisión determina el tipo de clave, la vigencia y cuántas aprobaciones necesita la solicitud.",
@@ -7738,7 +7749,6 @@ const esESCatalog = {
   "nav.item.apiExplorer": "Explorador de API",
   "nav.item.operations": "Operaciones",
   "nav.item.notifications": "Notificaciones",
-  "nav.item.platform": "Plataforma",
   "nav.item.sso": "SSO",
   "nav.item.apiDistribution": "API y distribución",
   "command.title": "Paleta de comandos",
