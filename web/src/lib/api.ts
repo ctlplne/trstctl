@@ -167,8 +167,11 @@ import type {
   KubernetesTrustBundleDistribution,
   MachineAuthMethod,
   MachineAuthMethodList,
+  MachineAuthMethodOverride,
   MachineLoginRequest,
   MachineLoginResponse,
+  MachineSession,
+  MachineSessionList,
   ManagedKey,
   ManagedKeyGenerateRequest,
   ManagedOfferingStatus,
@@ -480,8 +483,11 @@ export type {
   KubernetesTrustBundleDistribution,
   MachineAuthMethod,
   MachineAuthMethodList,
+  MachineAuthMethodOverride,
   MachineLoginRequest,
   MachineLoginResponse,
+  MachineSession,
+  MachineSessionList,
   ManagedKey,
   ManagedKeyGenerateRequest,
   ManagedOfferingStatus,
@@ -1216,6 +1222,11 @@ export interface Api {
   machineLogin(input: MachineLoginRequest): Promise<MachineLoginResponse>;
   /** C-S2 (DA-02): secret-free projection of the configured machine-auth methods. */
   machineAuthMethods(): Promise<MachineAuthMethodList>;
+  /** C-S3 (DA-02): the event-sourced issued-session ledger. */
+  machineSessions(options?: { limit?: number }): Promise<MachineSessionList>;
+  revokeMachineSession(id: string): Promise<MachineSession>;
+  disableMachineAuthMethod(name: string): Promise<MachineAuthMethodOverride>;
+  enableMachineAuthMethod(name: string): Promise<MachineAuthMethodOverride>;
   createShare(input: ShareRequest): Promise<ShareToken>;
   redeemShare(input: ShareRedeemRequest): Promise<ShareValue>;
   createTransitKey(input: TransitKeyRequest): Promise<TransitKey>;
@@ -1536,6 +1547,10 @@ export const api: Api = {
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
   machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
   machineAuthMethods: () => req<MachineAuthMethodList>("/api/v1/secrets/auth-methods"),
+  machineSessions: (options) => req<MachineSessionList>(`/api/v1/secrets/sessions${options?.limit ? `?limit=${options.limit}` : ""}`),
+  revokeMachineSession: (id) => mutate<MachineSession>("POST", `/api/v1/secrets/sessions/${encodeURIComponent(id)}/revoke`),
+  disableMachineAuthMethod: (name) => mutate<MachineAuthMethodOverride>("POST", `/api/v1/secrets/auth-methods/${encodeURIComponent(name)}/disable`),
+  enableMachineAuthMethod: (name) => mutate<MachineAuthMethodOverride>("POST", `/api/v1/secrets/auth-methods/${encodeURIComponent(name)}/enable`),
   createShare: (input) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input),
   redeemShare: (input) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input),
   createTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys", input),

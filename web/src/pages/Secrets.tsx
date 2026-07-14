@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useSearchParams , Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -26,7 +26,9 @@ import {
   type EphemeralCredential,
   type Identity,
   type KubernetesSecretOperator,
+  type MachineAuthMethod,
   type MachineLoginResponse,
+  type MachineSession as MachineSessionRecord,
   type PKISecret,
   type SecretApprovalAction,
   type SecretMeta,
@@ -141,6 +143,15 @@ export function Secrets() {
   const [grantResult, setGrantResult] = useState<{ token: string; subject: string; expiresAt?: string } | null>(null);
   const [tokenRows, setTokenRows] = useState<APIToken[] | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
+  // C-S4 (DA-02 faithful): auth-method console state over the C-S2/C-S3
+  // endpoints — methods projection + overlay, and the issued-session ledger.
+  const canAdminMethods = useCan("secrets:write");
+  const [authMethods, setAuthMethods] = useState<MachineAuthMethod[] | null>(null);
+  const [machineSessions, setMachineSessions] = useState<MachineSessionRecord[] | null>(null);
+  const [methodBusy, setMethodBusy] = useState<string | null>(null);
+  const [methodError, setMethodError] = useState<string | null>(null);
+  const [sessionBusy, setSessionBusy] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   const [shareValueInput, setShareValueInput] = useState("");
   const [shareTTL, setShareTTL] = useState("300");
@@ -628,6 +639,46 @@ export function Secrets() {
     setTokenRows(page?.items ?? null);
   }
 
+  async function refreshAuthMethods() {
+    const page = await readGrantRoster(() => api.machineAuthMethods());
+    setAuthMethods(page?.items ?? null);
+  }
+
+  async function refreshMachineSessions() {
+    const page = await readGrantRoster(() => api.machineSessions({ limit: 50 }));
+    setMachineSessions(page?.items ?? null);
+  }
+
+  async function toggleAuthMethod(name: string, disable: boolean) {
+    setMethodBusy(name);
+    setMethodError(null);
+    try {
+      if (disable) {
+        await api.disableMachineAuthMethod(name);
+      } else {
+        await api.enableMachineAuthMethod(name);
+      }
+      await refreshAuthMethods();
+    } catch (err) {
+      setMethodError(apiProblemMessage(err, t("secrets.methods.failedTitle")));
+    } finally {
+      setMethodBusy(null);
+    }
+  }
+
+  async function revokeMachineSessionRow(id: string) {
+    setSessionBusy(id);
+    setSessionError(null);
+    try {
+      await api.revokeMachineSession(id);
+      await refreshMachineSessions();
+    } catch (err) {
+      setSessionError(apiProblemMessage(err, t("secrets.sessions.failedTitle")));
+    } finally {
+      setSessionBusy(null);
+    }
+  }
+
   useEffect(() => {
     let active = true;
     void readGrantRoster(() => api.identities()).then((items) => {
@@ -638,6 +689,12 @@ export function Secrets() {
         if (active) setTokenRows(page?.items ?? null);
       });
     }
+    void readGrantRoster(() => api.machineAuthMethods()).then((page) => {
+      if (active) setAuthMethods(page?.items ?? null);
+    });
+    void readGrantRoster(() => api.machineSessions({ limit: 50 })).then((page) => {
+      if (active) setMachineSessions(page?.items ?? null);
+    });
     return () => {
       active = false;
     };
@@ -1779,18 +1836,147 @@ export function Secrets() {
             </form>
             {loginError && <ErrorState title="Machine login failed">{loginError}</ErrorState>}
             {session && <MachineSession session={session} />}
-            {/* C-S1 shrank the DA-02 dead-end to the half that genuinely waits
-                for the C-S2..C-S4 backend: method/audience/session admin. The
-                grant step itself now lives above, and the CLI interim 02 asked
-                for is spelled out verbatim. */}
-            <UnavailableState title={t("secrets.access.adminPendingTitle")}>
-              {t("secrets.access.adminPendingBody")}
-              <code className="mt-2 block break-all rounded bg-background px-2 py-1 text-xs">{t("secrets.access.cliGrant")}</code>
-              <code className="mt-1 block break-all rounded bg-background px-2 py-1 text-xs">{t("secrets.access.cliVerify")}</code>
-              <Link to="/journeys" className="mt-2 inline-block text-sm font-medium text-brand-accent hover:underline">
-                {t("secrets.access.cliJourney")}
-              </Link>
-            </UnavailableState>
+          </section>
+
+          {/* C-S4 (DA-02 faithful): the auth-method console over the C-S2/C-S3
+              endpoints. The "isn't in the console yet" placeholder is dead —
+              methods (with the per-tenant disable overlay) and the issued-
+              session ledger are served surfaces now. Methods stay declared in
+              server config: the console projects and overlays, it never edits
+              config. */}
+          <section aria-labelledby="auth-methods-heading" className="grid gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="auth-methods-heading" className="text-title font-semibold">
+                {t("secrets.methods.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.methods.description")}</p>
+            </div>
+            {methodError && <ErrorState title={t("secrets.methods.failedTitle")}>{methodError}</ErrorState>}
+            {authMethods === null ? (
+              <p className="text-sm text-muted-foreground">{t("secrets.methods.unavailable")}</p>
+            ) : (
+              <div className="overflow-x-auto rounded-panel border border-border">
+                <table className="ui-table min-w-[52rem]">
+                  <caption className="sr-only">{t("secrets.methods.heading")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("secrets.methods.name")}</th>
+                      <th scope="col">{t("secrets.methods.type")}</th>
+                      <th scope="col">{t("secrets.methods.issuer")}</th>
+                      <th scope="col">{t("secrets.methods.audience")}</th>
+                      <th scope="col">{t("secrets.methods.scopes")}</th>
+                      <th scope="col">{t("secrets.methods.source")}</th>
+                      <th scope="col">{t("secrets.methods.status")}</th>
+                      {canAdminMethods && <th scope="col">{t("secrets.methods.actions")}</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {authMethods.map((method) => (
+                      <tr key={method.name} className="align-top">
+                        <td className="font-medium">{method.name}</td>
+                        <td className="font-mono text-xs">{method.type}</td>
+                        <td className="break-all font-mono text-xs">{method.issuer || "—"}</td>
+                        <td className="break-all font-mono text-xs">{method.audience || "—"}</td>
+                        <td className="font-mono text-xs">
+                          {method.scopes?.length
+                            ? method.scopes.join(", ")
+                            : method.scopes_by_principal
+                              ? t("secrets.methods.perPrincipal", { count: String(Object.keys(method.scopes_by_principal).length) })
+                              : "—"}
+                        </td>
+                        <td>{method.source}</td>
+                        <td>{method.disabled ? t("secrets.methods.disabled") : t("secrets.methods.enabled")}</td>
+                        {canAdminMethods && (
+                          <td>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={methodBusy === method.name}
+                              onClick={() => void toggleAuthMethod(method.name, !method.disabled)}
+                            >
+                              {method.disabled ? t("secrets.methods.enable") : t("secrets.methods.disable")}
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                    {authMethods.length === 0 && (
+                      <tr>
+                        <td colSpan={canAdminMethods ? 8 : 7} className="text-muted-foreground">
+                          {t("secrets.methods.empty")}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section aria-labelledby="machine-sessions-heading" className="grid gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="machine-sessions-heading" className="text-title font-semibold">
+                {t("secrets.sessions.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.sessions.description")}</p>
+            </div>
+            {sessionError && <ErrorState title={t("secrets.sessions.failedTitle")}>{sessionError}</ErrorState>}
+            {machineSessions === null ? (
+              <p className="text-sm text-muted-foreground">{t("secrets.sessions.unavailable")}</p>
+            ) : (
+              <div className="overflow-x-auto rounded-panel border border-border">
+                <table className="ui-table min-w-[52rem]">
+                  <caption className="sr-only">{t("secrets.sessions.heading")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("secrets.sessions.principal")}</th>
+                      <th scope="col">{t("secrets.sessions.method")}</th>
+                      <th scope="col">{t("secrets.sessions.scopes")}</th>
+                      <th scope="col">{t("secrets.sessions.status")}</th>
+                      <th scope="col">{t("secrets.sessions.issued")}</th>
+                      <th scope="col">{t("secrets.sessions.expires")}</th>
+                      {canAdminMethods && <th scope="col">{t("secrets.sessions.actions")}</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {machineSessions.map((row) => (
+                      <tr key={row.id} className="align-top">
+                        <td className="font-medium">{row.principal}</td>
+                        <td className="font-mono text-xs">{row.method}</td>
+                        <td className="font-mono text-xs">{row.scopes?.join(", ") || "—"}</td>
+                        <td>{row.status}</td>
+                        <td>{formatDate(row.issued_at)}</td>
+                        <td>{formatDate(row.expires_at)}</td>
+                        {canAdminMethods && (
+                          <td>
+                            {row.status === "active" && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={sessionBusy === row.id}
+                                onClick={() => void revokeMachineSessionRow(row.id)}
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                {t("secrets.sessions.revoke")}
+                              </Button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                    {machineSessions.length === 0 && (
+                      <tr>
+                        <td colSpan={canAdminMethods ? 7 : 6} className="text-muted-foreground">
+                          {t("secrets.sessions.empty")}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
       )}

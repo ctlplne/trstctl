@@ -40,6 +40,11 @@ const { apiMock } = vi.hoisted(() => ({
     apiTokens: vi.fn(),
     createAPIToken: vi.fn(),
     revokeAPIToken: vi.fn(),
+    machineAuthMethods: vi.fn(),
+    machineSessions: vi.fn(),
+    revokeMachineSession: vi.fn(),
+    disableMachineAuthMethod: vi.fn(),
+    enableMachineAuthMethod: vi.fn(),
   },
 }));
 
@@ -106,6 +111,55 @@ function primeSecretsMocks() {
     created_at: "2026-07-14T00:00:00Z",
   });
   apiMock.revokeAPIToken.mockResolvedValue(undefined);
+  // C-S4 auth-method console defaults.
+  apiMock.machineAuthMethods.mockResolvedValue({
+    items: [
+      { name: "token", type: "token", source: "builtin", jwks_configured: false },
+      {
+        name: "ci-jwt",
+        type: "jwt",
+        source: "config",
+        issuer: "https://ci.example.test",
+        audience: "trstctl",
+        scopes: ["secrets:read"],
+        jwks_configured: true,
+        disabled: true,
+      },
+    ],
+  });
+  apiMock.machineSessions.mockResolvedValue({
+    items: [
+      {
+        id: "sess-active-1",
+        principal: "payments-bot",
+        method: "token",
+        scopes: ["secrets:read"],
+        status: "active",
+        issued_at: "2026-07-14T00:00:00Z",
+        expires_at: "2026-07-14T01:00:00Z",
+      },
+      {
+        id: "sess-revoked-1",
+        principal: "retired-bot",
+        method: "token",
+        status: "revoked",
+        issued_at: "2026-07-01T00:00:00Z",
+        expires_at: "2026-07-01T01:00:00Z",
+        revoked_at: "2026-07-01T00:30:00Z",
+        revoked_by: "operator-1",
+      },
+    ],
+  });
+  apiMock.revokeMachineSession.mockResolvedValue({
+    id: "sess-active-1",
+    principal: "payments-bot",
+    method: "token",
+    status: "revoked",
+    issued_at: "2026-07-14T00:00:00Z",
+    expires_at: "2026-07-14T01:00:00Z",
+  });
+  apiMock.disableMachineAuthMethod.mockResolvedValue({ name: "token", disabled: true });
+  apiMock.enableMachineAuthMethod.mockResolvedValue({ name: "ci-jwt", disabled: false });
   apiMock.machineLogin.mockResolvedValue({
     session_id: "sess-1",
     principal: "svc-api",
@@ -567,10 +621,12 @@ describe("secrets surface", () => {
     expect(screen.queryByText("Secret-change approvals aren't in the console yet")).not.toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
 
-    // Machine-login disclosures live on the Access workspace tab.
+    // Machine-login administration is a served console surface now (C-S4):
+    // methods + session ledger render, and no dead-end text remains.
     await user.click(screen.getByRole("tab", { name: "Access" }));
-    expect(screen.getByText(/Method & session administration isn't in the console yet/)).toBeInTheDocument();
-    expect(screen.getByText(/land with the auth-method console/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Auth methods" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Issued sessions" })).toBeInTheDocument();
+    expect(screen.queryByText(/isn't in the console yet/)).not.toBeInTheDocument();
 
     // Sync and platform-integration posture live on the Sync workspace tab.
     await user.click(screen.getByRole("tab", { name: "Sync" }));
@@ -1031,15 +1087,10 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
     await waitFor(() => expect(apiMock.revokeAPIToken).toHaveBeenCalledWith("tok-1"));
   });
 
-  it("replaces the grant dead-end with the honest remaining scope + CLI interim", async () => {
+  it("contains zero 'isn't in the console yet' text (C-S4 exit gate)", async () => {
     await openAccessTab();
-    // The DA-02 blocker text is gone…
-    expect(screen.queryByText("Auth-method administration isn't in the console yet")).not.toBeInTheDocument();
-    // …replaced by the narrower truth (methods/sessions wait for C-S2..C-S4)…
-    expect(await screen.findByText(/Method & session administration isn't in the console yet/)).toBeInTheDocument();
-    // …plus the exact CLI interim 02 asked for, and the journey link.
-    expect(screen.getByText(/trstctl-cli access tokens create/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /manage-secrets journey/i })).toHaveAttribute("href", "/journeys");
+    await screen.findByRole("heading", { name: "Auth methods" });
+    expect(screen.queryByText(/isn't in the console yet/)).not.toBeInTheDocument();
   });
 
   it("keeps the login verify step working beside the grant flow", async () => {
@@ -1050,5 +1101,72 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
     await user.click(loginForm.getByRole("button", { name: /test login/i }));
     await waitFor(() => expect(apiMock.machineLogin).toHaveBeenCalled());
     expect(await screen.findByText("sess-1")).toBeInTheDocument();
+  });
+});
+
+// ------------------------------------------------------------------ C-S4 ----
+// DA-02 faithful: the auth-method console over the C-S2/C-S3 endpoints. All
+// four promised sub-surfaces exist (methods, audience rules, session ledger,
+// revoked view) and the placeholder class is dead.
+
+describe("secrets auth-method console (C-S4 / DA-02)", () => {
+  beforeEach(() => primeSecretsMocks());
+
+  async function openAccessTab() {
+    const user = userEvent.setup();
+    renderSecrets();
+    await screen.findByText("app/db/password");
+    await user.click(screen.getByRole("tab", { name: "Access" }));
+    return user;
+  }
+
+  it("renders the configured methods with issuer, audience, source, and overlay state", async () => {
+    await openAccessTab();
+    expect(await screen.findByText("ci-jwt")).toBeInTheDocument();
+    expect(screen.getByText("https://ci.example.test")).toBeInTheDocument();
+    expect(screen.getByText("builtin")).toBeInTheDocument();
+    // The overlay state renders per method: ci-jwt is disabled in the fixture.
+    const jwtRow = screen.getByText("ci-jwt").closest("tr") as HTMLTableRowElement;
+    expect(within(jwtRow).getByText("disabled")).toBeInTheDocument();
+    const tokenRow = screen.getAllByText("token")[0].closest("tr") as HTMLTableRowElement;
+    expect(within(tokenRow).getByText("enabled")).toBeInTheDocument();
+  });
+
+  it("disables and re-enables a method through the overlay endpoints", async () => {
+    const user = await openAccessTab();
+    const tokenRow = (await screen.findByText("builtin")).closest("tr") as HTMLTableRowElement;
+    await user.click(within(tokenRow).getByRole("button", { name: "Disable" }));
+    await waitFor(() => expect(apiMock.disableMachineAuthMethod).toHaveBeenCalledWith("token"));
+    // The projection refreshes after the action.
+    expect(apiMock.machineAuthMethods.mock.calls.length).toBeGreaterThan(1);
+
+    const jwtRow = screen.getByText("ci-jwt").closest("tr") as HTMLTableRowElement;
+    await user.click(within(jwtRow).getByRole("button", { name: "Enable" }));
+    await waitFor(() => expect(apiMock.enableMachineAuthMethod).toHaveBeenCalledWith("ci-jwt"));
+  });
+
+  it("renders the issued-session ledger with the revoked view inline", async () => {
+    await openAccessTab();
+    expect(await screen.findByText("payments-bot")).toBeInTheDocument();
+    const revokedRow = screen.getByText("retired-bot").closest("tr") as HTMLTableRowElement;
+    expect(within(revokedRow).getByText("revoked")).toBeInTheDocument();
+    // Revoked rows carry no revoke action; active rows do.
+    expect(within(revokedRow).queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+  });
+
+  it("revokes an active session and refreshes the ledger", async () => {
+    const user = await openAccessTab();
+    const activeRow = (await screen.findByText("payments-bot")).closest("tr") as HTMLTableRowElement;
+    await user.click(within(activeRow).getByRole("button", { name: "Revoke" }));
+    await waitFor(() => expect(apiMock.revokeMachineSession).toHaveBeenCalledWith("sess-active-1"));
+    expect(apiMock.machineSessions.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("degrades honestly when the ledger endpoints are not served", async () => {
+    apiMock.machineAuthMethods.mockRejectedValue(new ApiError(404, "not enabled"));
+    apiMock.machineSessions.mockRejectedValue(new ApiError(404, "not enabled"));
+    await openAccessTab();
+    expect(await screen.findByText(/Method projection unavailable/)).toBeInTheDocument();
+    expect(screen.getByText(/Session ledger unavailable/)).toBeInTheDocument();
   });
 });
