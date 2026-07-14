@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>trstctl demo — beginner click-through</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #5f6b76;
+      --paper: #f7f4ec;
+      --panel: #fffdf8;
+      --line: #ddd6c7;
+      --gold: #d6a928;
+      --gold-dark: #7a5a00;
+      --navy: #10293f;
+      --teal: #176b68;
+      --green: #157347;
+      --blue: #1e5aa8;
+      --red: #b33232;
+      --orange: #a75814;
+      --shadow: 0 14px 36px rgb(16 41 63 / 10%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 0%, rgb(214 169 40 / 14%), transparent 26rem),
+        linear-gradient(180deg, #fbfaf6 0, var(--paper) 32rem);
+      line-height: 1.58;
+    }
+    a { color: var(--blue); }
+    a:hover { color: #153e75; }
+    code, kbd {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: .92em;
+    }
+    code {
+      padding: .12rem .35rem;
+      border: 1px solid #e1dacb;
+      border-radius: .35rem;
+      background: #f2eee4;
+    }
+    kbd {
+      padding: .1rem .38rem;
+      border: 1px solid #b8b0a1;
+      border-bottom-width: 2px;
+      border-radius: .3rem;
+      background: white;
+    }
+    button, .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.55rem;
+      padding: .6rem .9rem;
+      border: 1px solid transparent;
+      border-radius: .55rem;
+      font: inherit;
+      font-weight: 750;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .button.primary { color: white; background: var(--navy); }
+    .button.primary:hover { color: white; background: #1a3b56; }
+    .button.secondary, button.secondary {
+      color: var(--navy);
+      border-color: var(--line);
+      background: var(--panel);
+    }
+    .button.small { min-height: 2.15rem; padding: .4rem .65rem; font-size: .88rem; }
+    .skip-link {
+      position: fixed;
+      top: .5rem;
+      left: .5rem;
+      z-index: 100;
+      transform: translateY(-160%);
+      padding: .6rem .8rem;
+      color: white;
+      background: var(--navy);
+    }
+    .skip-link:focus { transform: none; }
+
+    .hero {
+      color: white;
+      background:
+        linear-gradient(120deg, rgb(16 41 63 / 97%), rgb(18 69 80 / 94%)),
+        var(--navy);
+      border-bottom: 5px solid var(--gold);
+    }
+    .hero-inner {
+      width: min(1180px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 3.3rem 0 3rem;
+    }
+    .eyebrow {
+      margin: 0 0 .7rem;
+      color: #f1cd67;
+      font-size: .78rem;
+      font-weight: 850;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 820px;
+      margin: 0;
+      font-size: clamp(2.15rem, 5vw, 4.25rem);
+      line-height: 1.04;
+      letter-spacing: -.045em;
+    }
+    .hero .lede {
+      max-width: 760px;
+      margin: 1.1rem 0 0;
+      color: #dce8ec;
+      font-size: clamp(1rem, 2.2vw, 1.25rem);
+    }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.4rem; }
+    .hero .button.primary { color: var(--navy); background: var(--gold); }
+    .hero .button.primary:hover { background: #e6bd4a; }
+    .hero .button.secondary { color: white; border-color: rgb(255 255 255 / 35%); background: transparent; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 2rem;
+      width: min(1180px, calc(100% - 2rem));
+      margin: 2rem auto 5rem;
+    }
+    .sidebar {
+      position: sticky;
+      top: 1rem;
+      align-self: start;
+      max-height: calc(100vh - 2rem);
+      overflow: auto;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: .8rem;
+      background: rgb(255 253 248 / 92%);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+    .sidebar h2 { margin: 0 0 .45rem; font-size: .95rem; }
+    .progress-track { height: .55rem; overflow: hidden; border-radius: 999px; background: #e5dfd2; }
+    .progress-bar { width: 0; height: 100%; background: linear-gradient(90deg, var(--gold), var(--green)); transition: width .2s ease; }
+    .progress-copy { margin: .35rem 0 .8rem; color: var(--muted); font-size: .82rem; }
+    .toc { margin: 0; padding: 0; list-style: none; }
+    .toc a {
+      display: block;
+      padding: .33rem .4rem;
+      border-radius: .35rem;
+      color: var(--muted);
+      font-size: .87rem;
+      text-decoration: none;
+    }
+    .toc a:hover { color: var(--navy); background: #f0ebdf; }
+    .sidebar button { width: 100%; margin-top: .8rem; }
+
+    main { min-width: 0; }
+    .intro-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .mini-card, .tour-card, .callout, .glossary {
+      border: 1px solid var(--line);
+      border-radius: .8rem;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .mini-card { padding: 1rem; }
+    .mini-card strong { display: block; color: var(--navy); }
+    .mini-card p { margin: .35rem 0 0; color: var(--muted); font-size: .9rem; }
+
+    .mental-model {
+      margin: 1.5rem 0 2rem;
+      padding: 1.1rem;
+      border: 1px solid #c8d9dd;
+      border-radius: .8rem;
+      background: #f3fafb;
+    }
+    .mental-model h2 { margin-top: 0; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(110px, 1fr));
+      gap: .6rem;
+      align-items: stretch;
+      margin-top: 1rem;
+    }
+    .flow > div {
+      position: relative;
+      padding: .75rem;
+      border: 1px solid #c8d9dd;
+      border-radius: .55rem;
+      background: white;
+      text-align: center;
+      font-size: .83rem;
+    }
+    .flow strong { display: block; color: var(--teal); }
+    .flow > div:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -.62rem;
+      top: 50%;
+      z-index: 2;
+      color: var(--teal);
+      font-weight: 900;
+      transform: translateY(-50%);
+    }
+
+    .section-title { margin: 2.5rem 0 1rem; scroll-margin-top: 1rem; }
+    .section-title h2 { margin: 0; font-size: clamp(1.55rem, 3vw, 2.15rem); letter-spacing: -.025em; }
+    .section-title p { margin: .35rem 0 0; color: var(--muted); }
+
+    .tour-card {
+      margin: 0 0 1rem;
+      overflow: hidden;
+      scroll-margin-top: 1rem;
+    }
+    .tour-header {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: .9rem;
+      align-items: start;
+      padding: 1.15rem 1.2rem;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(90deg, #fffdf8, #f8f3e6);
+    }
+    .step-number {
+      display: grid;
+      place-items: center;
+      width: 2.3rem;
+      height: 2.3rem;
+      border-radius: 50%;
+      color: white;
+      background: var(--navy);
+      font-weight: 850;
+    }
+    .tour-header h3 { margin: 0; color: var(--navy); font-size: 1.2rem; }
+    .tour-header p { margin: .25rem 0 0; color: var(--muted); font-size: .9rem; }
+    .tour-body { padding: 1.15rem 1.2rem 1.25rem; }
+    .tour-body h4 { margin: 1rem 0 .35rem; }
+    .tour-body h4:first-child { margin-top: 0; }
+    .tour-body ol, .tour-body ul { padding-left: 1.35rem; }
+    .tour-body li + li { margin-top: .38rem; }
+    .tour-body .expected {
+      margin-top: .9rem;
+      padding: .75rem .85rem;
+      border-left: 4px solid var(--green);
+      background: #edf8f2;
+    }
+    .tour-body .meaning {
+      margin-top: .75rem;
+      padding: .75rem .85rem;
+      border-left: 4px solid var(--blue);
+      background: #eff5fc;
+    }
+    .complete {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      min-width: 8.3rem;
+      color: var(--green);
+      font-size: .88rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .complete input { width: 1.1rem; height: 1.1rem; accent-color: var(--green); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: .16rem .5rem;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 850;
+      letter-spacing: .045em;
+      text-transform: uppercase;
+    }
+    .badge.safe { color: #0e5d3b; background: #dcefe5; }
+    .badge.optional { color: #7c4009; background: #fae7cf; }
+    .badge.readonly { color: #194d83; background: #e2eefb; }
+
+    .callout { margin: 1rem 0; padding: 1rem 1.1rem; }
+    .callout h3 { margin: 0 0 .35rem; }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout.warning { border-color: #edc391; background: #fff8ec; }
+    .callout.danger { border-color: #e2aaaa; background: #fff2f2; }
+    .callout.tip { border-color: #accfc6; background: #f0faf6; }
+
+    .glossary { padding: 1rem 1.1rem; }
+    .glossary dl { display: grid; grid-template-columns: 170px 1fr; gap: .65rem 1rem; margin: 0; }
+    .glossary dt { color: var(--navy); font-weight: 800; }
+    .glossary dd { margin: 0; color: var(--muted); }
+    details {
+      margin: .6rem 0;
+      border: 1px solid var(--line);
+      border-radius: .55rem;
+      background: var(--panel);
+    }
+    summary { padding: .75rem .85rem; font-weight: 800; cursor: pointer; }
+    details > div { padding: 0 .85rem .85rem; }
+    footer {
+      padding: 2rem 1rem;
+      color: #dbe7eb;
+      background: var(--navy);
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: relative; top: auto; max-height: none; }
+      .toc { columns: 2; }
+      .intro-grid { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow > div:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -.8rem; transform: translateX(50%); }
+    }
+    @media (max-width: 620px) {
+      .tour-header { grid-template-columns: auto 1fr; }
+      .tour-header .complete { grid-column: 1 / -1; }
+      .glossary dl { grid-template-columns: 1fr; }
+      .glossary dd { margin-bottom: .5rem; }
+      .toc { columns: 1; }
+    }
+    @media print {
+      body { background: white; }
+      .hero { color: black; background: white; border-bottom: 2px solid black; }
+      .hero .lede, .eyebrow { color: black; }
+      .hero-actions, .sidebar, .complete, footer { display: none !important; }
+      .layout { display: block; width: 100%; margin: 0; }
+      .tour-card, .mini-card, .mental-model, .glossary { box-shadow: none; break-inside: avoid; }
+      a { color: black; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to walkthrough</a>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">Local Provider demo · beginner guide</p>
+      <h1>Learn trstctl by clicking through the real control plane</h1>
+      <p class="lede">No PKI background required. This guide explains what to click, what you should see, and why each screen matters. The main tour is read-only and safe.</p>
+      <div class="hero-actions">
+        <a class="button primary" href="http://127.0.0.1:18081/" target="_blank" rel="noopener">Open the trstctl demo</a>
+        <a class="button secondary" href="#before-you-start">Start the walkthrough</a>
+        <button class="secondary" type="button" onclick="window.print()">Print or save as PDF</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" aria-label="Walkthrough progress and contents">
+      <h2>Your progress</h2>
+      <div class="progress-track" aria-hidden="true"><div class="progress-bar" id="progress-bar"></div></div>
+      <p class="progress-copy" id="progress-copy" aria-live="polite">0 of 15 tour stops complete</p>
+      <nav aria-label="Walkthrough contents">
+        <ol class="toc">
+          <li><a href="#before-you-start">Before you start</a></li>
+          <li><a href="#stop-1">1. Sign in</a></li>
+          <li><a href="#stop-2">2. Dashboard</a></li>
+          <li><a href="#stop-3">3. Journeys</a></li>
+          <li><a href="#stop-4">4. Discovery</a></li>
+          <li><a href="#stop-5">5. Certificates</a></li>
+          <li><a href="#stop-6">6. Identities</a></li>
+          <li><a href="#stop-7">7. Protocols</a></li>
+          <li><a href="#stop-8">8. Secrets</a></li>
+          <li><a href="#stop-9">9. Posture</a></li>
+          <li><a href="#stop-10">10. Risk</a></li>
+          <li><a href="#stop-11">11. Graph</a></li>
+          <li><a href="#stop-12">12. Governance</a></li>
+          <li><a href="#stop-13">13. Incidents</a></li>
+          <li><a href="#stop-14">14. Connectors</a></li>
+          <li><a href="#stop-15">15. Platform</a></li>
+          <li><a href="#optional-lab">Optional lab</a></li>
+          <li><a href="#glossary">Glossary</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ol>
+      </nav>
+      <button class="secondary" id="reset-progress" type="button">Reset my checkmarks</button>
+    </aside>
+
+    <main id="main">
+      <section id="before-you-start" class="section-title">
+        <h2>Before you start</h2>
+        <p>Keep this guide in one tab and the demo in another. Plan on 35–50 minutes.</p>
+      </section>
+
+      <div class="intro-grid">
+        <article class="mini-card">
+          <strong>Demo address</strong>
+          <p><a href="http://127.0.0.1:18081/" target="_blank" rel="noopener">http://127.0.0.1:18081</a></p>
+        </article>
+        <article class="mini-card">
+          <strong>Demo user</strong>
+          <p><code>demo-admin@trstctl.local</code> via the automatic local SSO provider.</p>
+        </article>
+        <article class="mini-card">
+          <strong>Safety rule</strong>
+          <p>Inspect freely. Do not approve, revoke, rotate, offboard, deploy, or dispatch unless this guide marks it optional.</p>
+        </article>
+      </div>
+
+      <div class="callout tip">
+        <h3>Use two browser tabs</h3>
+        <p>Right-click <strong>Open the trstctl demo</strong> and choose “Open Link in New Tab.” Leave this walkthrough open so you can move back and forth.</p>
+      </div>
+
+      <section class="mental-model" aria-labelledby="mental-model-title">
+        <h2 id="mental-model-title">The whole product in one picture</h2>
+        <p><strong>trstctl manages credentials used by machines, not people.</strong> A machine might be a web service, build bot, Kubernetes workload, router, database, or AI agent. trstctl finds its credentials, applies policy, records every state change, and delivers replacements.</p>
+        <div class="flow" aria-label="trstctl capability flow">
+          <div><strong>Discover</strong>Find certificates, secrets, tokens, SSH keys, and workloads.</div>
+          <div><strong>Decide</strong>Apply tenant policy, ownership, risk, and approval rules.</div>
+          <div><strong>Issue</strong>Ask an isolated signer or external CA for a credential.</div>
+          <div><strong>Deliver</strong>Use a connector to place it where the machine needs it.</div>
+          <div><strong>Prove</strong>Keep immutable events, receipts, audit exports, and evidence packs.</div>
+        </div>
+      </section>
+
+      <div class="callout warning">
+        <h3>Demo numbers can move</h3>
+        <p>Background lifecycle workers keep running. Counts may differ from screenshots or from one refresh to the next. Focus on the names, workflow stages, and evidence—not an exact number.</p>
+      </div>
+
+      <section class="section-title">
+        <h2>The guided tour</h2>
+        <p>Complete each stop in order. Check the box when the expected result makes sense.</p>
+      </section>
+
+      <article class="tour-card" id="stop-1">
+        <header class="tour-header">
+          <span class="step-number">1</span>
+          <div><h3>Sign in and identify your tenant</h3><p><span class="badge safe">Safe</span> Establish the operator session and storage boundary.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="1"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <h4>Click</h4>
+          <ol>
+            <li><a class="button small primary" href="http://127.0.0.1:18081/" target="_blank" rel="noopener">Open demo home</a></li>
+            <li>If you see the sign-in page, click <strong>Sign in with SSO</strong>. The local identity provider signs you in automatically.</li>
+            <li>Look at the top-right corner for <code>demo-admin@trstctl.local</code>.</li>
+            <li>Look at the top bar for <strong>Tenant</strong> and the UUID beginning <code>11111111</code>.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> You land on <strong>Dashboard</strong>; the demo administrator and tenant are visible.</div>
+          <div class="meaning"><strong>Why it matters:</strong> The session supplies the tenant. The browser does not get to invent a tenant ID, and PostgreSQL row-level security enforces that boundary below the API.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-2">
+        <header class="tour-header">
+          <span class="step-number">2</span>
+          <div><h3>Read the control-plane dashboard</h3><p><span class="badge readonly">Read only</span> See inventory, alerts, expiry, issuance, and activity together.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="2"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <h4>Click and inspect</h4>
+          <ol>
+            <li>Click <strong>Dashboard</strong> in the left navigation.</li>
+            <li>Notice the left rail has three parts: a <strong>Module</strong> switcher (Certificates &amp; PKI, Secrets, SSH, Signing, Fleet) that scopes the middle band to one product; the always-present <strong>global</strong> bands (Inventory, Detect &amp; respond, Govern &amp; administer) for cross-product surfaces like Identities, Credential risk, Credential graph, and Audit; and the <strong>Needs action</strong> worklists. Switching modules changes only the scoped band—the global bands never move.</li>
+            <li>Read the four top counters: <strong>Certificates</strong>, <strong>Identities (NHI)</strong>, <strong>Secrets</strong>, and <strong>Agents online</strong>. The action tiles below (<strong>Expiring ≤7d</strong>, <strong>High-risk</strong>, <strong>Open incidents</strong>, <strong>Future-ready</strong>) are wired to live tenant data.</li>
+            <li>In <strong>Non-human identity inventory</strong>, compare certificates, tokens, and API keys. One control plane models several credential types.</li>
+            <li>Scroll through <strong>Alert center</strong>, <strong>Issuance rate</strong>, <strong>Renewal jobs</strong>, <strong>Expiration timeline</strong>, and <strong>Algorithm mix</strong>.</li>
+            <li>Find <strong>Rotate first</strong> and <strong>Recent activity</strong>. These connect posture to the next operator action and its audit evidence.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> A populated tenant overview, including expiring demo certificates and algorithm distribution.</div>
+          <div class="meaning"><strong>Capability:</strong> Unified inventory and lifecycle telemetry across X.509, machine identities, secrets, tokens, and agents.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-3">
+        <header class="tour-header">
+          <span class="step-number">3</span>
+          <div><h3>Use Journeys as the product map</h3><p><span class="badge safe">Safe</span> See complete operator outcomes instead of disconnected features.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="3"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Click <strong>Journeys</strong> in the left navigation, or <a href="http://127.0.0.1:18081/journeys" target="_blank" rel="noopener">open it directly</a>.</li>
+            <li>Notice the <strong>Verified path · shipped wiring 81/81</strong> badge. This means the journey is backed by capabilities wired into the shipped binary.</li>
+            <li>Select <strong>First certificate</strong>. Read its four steps: setup, request, approval, inventory.</li>
+            <li>Select <strong>Migrate from an existing CA</strong>, then <strong>Respond to a compromise</strong>. Observe how each journey crosses several product screens.</li>
+            <li>Click <strong>Refresh status</strong>. Completed steps are detected from live tenant data, not merely from browser checkmarks.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> Multiple guided paths, each carrying served wiring proof and live completion state.</div>
+          <div class="meaning"><strong>Capability:</strong> End-to-end outcomes that chain discovery, policy, issuance, delivery, revocation, and evidence.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-4">
+        <header class="tour-header">
+          <span class="step-number">4</span>
+          <div><h3>Find unmanaged credentials with Discovery</h3><p><span class="badge readonly">Read only</span> Turn unknown credentials into a triage queue.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="4"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Under <strong>Detect &amp; respond</strong>, click <strong>Discovery</strong>.</li>
+            <li>Read the <strong>Shadow inventory</strong> counters: findings, high risk, and finding types.</li>
+            <li>On the <strong>Findings</strong> tab, inspect the demo findings. A finding is something trstctl observed but does not yet fully manage.</li>
+            <li>Open <strong>Sources</strong>. Look for network, manual, CT-log, cloud certificate, cloud secret, and drift sources.</li>
+            <li>Open <strong>Schedules</strong> and <strong>Runs</strong> to see how repeatable scans are represented.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> A populated shadow-inventory summary and several configured discovery-source types.</div>
+          <div class="meaning"><strong>Capability:</strong> Discovery across networks, certificate-transparency logs, cloud stores, files, and declared drift targets—with every row tenant-scoped.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-5">
+        <header class="tour-header">
+          <span class="step-number">5</span>
+          <div><h3>Inspect certificate inventory and estate health</h3><p><span class="badge readonly">Read only</span> Understand what exists, who owns it, and when it expires.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="5"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>In the <strong>Module</strong> switcher select <strong>Certificates &amp; PKI</strong>, then click <strong>Certificates</strong>.</li>
+            <li>Stay on <strong>Inventory</strong>. Use the search box to search for <code>demo.trstctl.local</code>.</li>
+            <li>Open one row to inspect subject, issuer, owner, fingerprint, algorithm, validity, source, and deployment location.</li>
+            <li>Click <strong>Estate health</strong> to view expiry and inventory posture across the tenant.</li>
+            <li>Click <strong>CRL &amp; CT</strong> to see revocation and certificate-transparency evidence.</li>
+            <li>Click <strong>Renewal readiness</strong> to distinguish “expires soon” from “can be renewed automatically.”</li>
+            <li>Notice the links to <strong>CA hierarchy</strong> and <strong>Certificate profiles</strong>. CAs sign; profiles restrict what may be signed.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> Imported, discovered, and trstctl-issued certificates in one searchable inventory.</div>
+          <div class="meaning"><strong>Capability:</strong> Certificate lifecycle management from inventory through renewal, revocation, and transparency evidence.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-6">
+        <header class="tour-header">
+          <span class="step-number">6</span>
+          <div><h3>Follow a non-human identity lifecycle</h3><p><span class="badge readonly">Read only</span> Separate the machine identity from the credential it currently holds.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="6"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Click <strong>Identities</strong>.</li>
+            <li>Read the <strong>Issuance pipeline</strong>: issued, deployed, and revoked are lifecycle states.</li>
+            <li>Find a demo identity such as <code>payments-api.demo.trstctl.local</code> or <code>iot-est-gateway.demo.trstctl.local</code>.</li>
+            <li>Click <strong>View details</strong>. Inspect owner, issuer, status, attributes, and credential relationships.</li>
+            <li>Return to the list. Notice that <strong>Retire</strong> and other lifecycle actions are separate from viewing details.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> A lifecycle table with multiple identity states and detailed ownership/issuance metadata.</div>
+          <div class="meaning"><strong>Capability:</strong> Durable NHI lifecycle state. Rotating a certificate does not create an unrelated “new machine”; it advances the identity and records the replacement relationship.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-7">
+        <header class="tour-header">
+          <span class="step-number">7</span>
+          <div><h3>See every enabled enrollment protocol</h3><p><span class="badge readonly">Read only</span> Machines can request credentials using the protocol they already understand.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="7"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>In the <strong>Certificates &amp; PKI</strong> module, click <strong>Protocols</strong>.</li>
+            <li>Read <strong>Protocol responder status</strong> and the fail-closed explanation.</li>
+            <li>Scroll through the register. The evaluation profile activates <strong>ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE</strong>.</li>
+            <li>For ACME, connect “account + challenge + profile” to automated web-service certificates.</li>
+            <li>For EST/SCEP/CMP, think of devices, MDM, networking gear, and enterprise PKI enrollment.</li>
+            <li>For SPIFFE, think of short-lived workload identities delivered through a local workload socket.</li>
+            <li>Open <strong>SSH trust</strong> and <strong>Code signing</strong> from the page header to see adjacent credential families.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> Enabled/served responder rows with tenant-bound setup guidance.</div>
+          <div class="meaning"><strong>Capability:</strong> One policy and signer boundary behind several standards. KMIP is intentionally not part of the one-click eval profile because it needs appliance-grade mutual-TLS material.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-8">
+        <header class="tour-header">
+          <span class="step-number">8</span>
+          <div><h3>Explore secrets, tokens, engines, and sync</h3><p><span class="badge readonly">Read only</span> Manage more than certificates without treating reveal-once values as ordinary text.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="8"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>In the <strong>Module</strong> switcher select <strong>Secrets</strong>, then click <strong>Secrets</strong>.</li>
+            <li>On <strong>Store</strong>, expand the demo folders. Notice familiar path-like organization such as <code>demo/github/actions</code>.</li>
+            <li>Click <strong>Access</strong> to see the API-key/token access surface.</li>
+            <li>Click <strong>Sharing</strong>. One-time shares expose material once and then expire.</li>
+            <li>Click <strong>Engines</strong> for dynamic credentials, PKI, and transit-style cryptographic operations.</li>
+            <li>Click <strong>CI scanning</strong> for secret detection in delivery pipelines.</li>
+            <li>Click <strong>Sync</strong> to see outbound synchronization targets.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> Stored secret metadata and tabs for access, sharing, engines, scanning, and synchronization.</div>
+          <div class="meaning"><strong>Capability:</strong> Encrypted secret storage, reveal-once credentials, dynamic backends, and outbound sync—all behind the same tenant and audit boundary.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-9">
+        <header class="tour-header">
+          <span class="step-number">9</span>
+          <div><h3>Inspect fleet-wide cryptographic posture</h3><p><span class="badge readonly">Read only</span> Find weak algorithms, drift, and unexpected public certificates.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="9"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Under <strong>Detect &amp; respond</strong>, click <strong>Crypto posture</strong>.</li>
+            <li>Read <strong>Certificate Transparency monitoring</strong>. CT logs reveal publicly issued certificates, including ones trstctl did not request.</li>
+            <li>Read <strong>Drift detection</strong>. Drift means the deployed credential or file state no longer matches intent.</li>
+            <li>Find <strong>CBOM and cryptographic observability</strong>. CBOM means “cryptographic bill of materials”: algorithms, key sizes, and TLS posture.</li>
+            <li>Read <strong>Crypto-agility readiness</strong>. This is the migration view for weak or post-quantum-vulnerable algorithms.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> Separate CT, drift, CBOM, and crypto-agility sections with clear empty states where no live scan has run.</div>
+          <div class="meaning"><strong>Capability:</strong> Fleet posture is broader than certificate expiry. It includes where crypto is used, whether it drifted, and how safely it can be migrated.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-10">
+        <header class="tour-header">
+          <span class="step-number">10</span>
+          <div><h3>Prioritize what to rotate first</h3><p><span class="badge readonly">Read only</span> Convert many findings into an ordered worklist.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="10"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Under <strong>Detect &amp; respond</strong>, click <strong>Credential risk</strong>.</li>
+            <li>Read the summary: credentials scored, critical, high, orphaned, and average score.</li>
+            <li>In <strong>Contextual priorities</strong>, compare the base score with contextual score. Blast radius can make a moderate credential urgent.</li>
+            <li>Find the demo entries such as <code>old-vpn.demo.trstctl.local:443</code> and <code>ci/buildkite/release-token</code>.</li>
+            <li>Review <strong>NHI policy compliance</strong>, <strong>over-privilege</strong>, <strong>stale and dormant NHIs</strong>, <strong>static credentials</strong>, and <strong>exposed deployments</strong>.</li>
+            <li>Open <strong>Risk bands</strong> to see how scores map to critical, high, medium, low, and none.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> A ranked list with human-readable reasons such as blast radius, orphaned owner, near expiry, and stale rotation.</div>
+          <div class="meaning"><strong>Capability:</strong> Risk is explainable and actionable, not a mysterious score. The operator can see exactly why one credential ranks above another.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-11">
+        <header class="tour-header">
+          <span class="step-number">11</span>
+          <div><h3>Explore credential blast radius</h3><p><span class="badge safe">Safe</span> Ask “what breaks if this credential is compromised?”</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="11"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Click <strong>Credential graph</strong>.</li>
+            <li>Read the node and edge counts. Nodes are identities, credentials, owners, issuers, or resources; edges are relationships.</li>
+            <li>In <strong>Blast radius explorer</strong>, choose any populated credential.</li>
+            <li>Inspect the map and analysis rail. Use <strong>Zoom in</strong>, <strong>Zoom out</strong>, and <strong>Reset view</strong>.</li>
+            <li>Click a node such as <strong>Payments API</strong> or <strong>trstctl Demo Internal CA</strong> to see how relationships change the analysis.</li>
+            <li>Open <strong>Advanced query</strong> to see the read-only graph-query surface.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> A tenant-scoped node-link graph with owners, issuers, identities, and credentials connected.</div>
+          <div class="meaning"><strong>Capability:</strong> Incident scope and rotation priority come from relationships, not only from a flat certificate row.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-12">
+        <header class="tour-header">
+          <span class="step-number">12</span>
+          <div><h3>See governance and immutable evidence</h3><p><span class="badge readonly">Read only</span> Understand approval, policy, and audit as one chain.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="12"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Under <strong>Detect &amp; respond</strong>, click <strong>Approvals</strong>.</li>
+            <li>Inspect pending issue/rotate/revoke decisions. Do <strong>not</strong> click an approve button during the read-only tour.</li>
+            <li>Click an <strong>Audit trail</strong> link for a request.</li>
+            <li>Next click <strong>Policy</strong>. Read <strong>Enforcement path</strong>: the backend evaluates policy before it emits the state-change event.</li>
+            <li>Inspect <strong>Policy versions</strong> and the compliance framework buttons. Select <strong>SOC 2</strong>, <strong>FIPS 140</strong>, or another framework.</li>
+            <li>Click <strong>Audit</strong>. Read <strong>Hash-chain status</strong>, apply a type filter if desired, and click <strong>View event</strong> on one row.</li>
+            <li>Notice <strong>Export evidence</strong>. Audit/export remains part of the auditable core.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> Pending decisions, policy controls/evidence packs, and a long immutable event list with hashes.</div>
+          <div class="meaning"><strong>Capability:</strong> Dual control prevents one actor from silently performing sensitive operations; policy decisions and resulting events remain attributable and exportable.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-13">
+        <header class="tour-header">
+          <span class="step-number">13</span>
+          <div><h3>Preview credential-compromise response</h3><p><span class="badge safe">Safe preview</span> See replacement-before-revocation and response automation.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="13"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Click <strong>Incidents</strong>.</li>
+            <li>Read <strong>Credential compromise execution</strong>. The intended order is: scope, issue replacement, deploy replacement, then revoke the old credential.</li>
+            <li>Select an affected identity if the field is populated, then click <strong>Preview blast radius</strong>. Do not click <strong>Execute incident</strong>.</li>
+            <li>Review <strong>Automated remediation playbooks</strong>: revoke, rotate, and right-size.</li>
+            <li>Read <strong>SIEM / SOAR / ITSM dispatch</strong>. External actions are queued through the event/outbox path instead of being called inline.</li>
+            <li>Scroll to <strong>Execution evidence</strong> and <strong>Remediation evidence</strong>.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> A previewable compromise workflow, remediation playbooks, external-response forms, and evidence sections.</div>
+          <div class="meaning"><strong>Capability:</strong> Safe incident choreography avoids revoking first and causing an outage. External systems receive durable, retryable outbox work.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-14">
+        <header class="tour-header">
+          <span class="step-number">14</span>
+          <div><h3>Inspect connector delivery and receipts</h3><p><span class="badge readonly">Read only</span> See how credentials leave the control plane safely.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="14"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Under <strong>Govern &amp; administer</strong>, click <strong>Deployment connectors</strong>.</li>
+            <li>Read the four concepts: target setup, identity binding, action, and receipt evidence.</li>
+            <li>Scroll through <strong>Connector registry</strong>. The shipped registry covers infrastructure targets such as web servers, proxies, clouds, Kubernetes, and secret platforms.</li>
+            <li>Inspect <strong>Recent delivery receipts</strong>. A failed demo receipt is still useful evidence: it proves an attempted external delivery and its error path.</li>
+            <li>Inspect <strong>Outbox circuit breakers</strong>. An open circuit pauses a broken destination so it cannot exhaust the whole control plane.</li>
+            <li>Do not create a target or click Deploy without real target configuration.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> A served connector registry, delivery receipts, and per-destination circuit-breaker state.</div>
+          <div class="meaning"><strong>Capability:</strong> Connectors are runtime-wired delivery implementations. Bounded queues, receipts, retries, rollback metadata, and circuit breakers make external delivery operable.</div>
+        </div>
+      </article>
+
+      <article class="tour-card" id="stop-15">
+        <header class="tour-header">
+          <span class="step-number">15</span>
+          <div><h3>Confirm editions, licensing, tenancy, and scale posture</h3><p><span class="badge readonly">Read only</span> Finish with the product and deployment boundary.</p></div>
+          <label class="complete"><input class="step-check" type="checkbox" data-step="15"> Mark complete</label>
+        </header>
+        <div class="tour-body">
+          <ol>
+            <li>Click <strong>Platform</strong>.</li>
+            <li>On <strong>Access administration</strong>, inspect the role catalog, tenant members, OIDC mapping, and API-token metadata. Do not mint or offboard during the tour.</li>
+            <li>Click the <strong>System posture</strong> tab, then the <strong>Editions &amp; license</strong> tab. Licensing and commercial-edition rows now live on their own tab, separate from operational access and system posture.</li>
+            <li>Read <strong>Packaging</strong>: credentials and rotations are not billing units.</li>
+            <li>Read <strong>Tenant boundary</strong>, <strong>Transport</strong>, and <strong>Auth session</strong>.</li>
+            <li>In <strong>Editions</strong>, confirm the offline Provider license is active and review the enabled Enterprise/Provider feature rows.</li>
+            <li>Notice <strong>FIPS module inactive · self-test passed</strong>. The feature is licensed, but the ordinary demo image is not the separately built FIPS artifact.</li>
+            <li>Continue through regional issuance HA, scale orchestration, support, and managed-offering sections.</li>
+          </ol>
+          <div class="expected"><strong>Expected:</strong> Provider edition active, commercial feature rows enabled, offline license posture, and the standard-demo FIPS disclosure.</div>
+          <div class="meaning"><strong>Capability:</strong> One binary lineage supports free core, Enterprise, and Provider/MSP packaging. Commercial code attaches at a centralized edition seam after offline license verification.</div>
+        </div>
+      </article>
+
+      <section id="optional-lab" class="section-title">
+        <h2>Optional hands-on lab</h2>
+        <p>These actions change demo state. They are safe only because this is a disposable local environment.</p>
+      </section>
+
+      <div class="callout danger">
+        <h3>Stop here if you want the original seed unchanged</h3>
+        <p>The main tour is complete. The exercises below create records. Do not use them against a real deployment unless you understand the policy and operational impact.</p>
+      </div>
+
+      <details>
+        <summary>Exercise A — create a harmless owner record</summary>
+        <div>
+          <ol>
+            <li>Open <strong>Owners</strong> under <strong>Inventory</strong>.</li>
+            <li>Choose the create-owner action.</li>
+            <li>Use kind <code>team</code>, name <code>Walkthrough Team</code>, and an obviously fake local email such as <code>walkthrough@example.invalid</code>.</li>
+            <li>Submit once. If the UI asks for an idempotency key, keep the generated value rather than resubmitting with a different one.</li>
+            <li>Open <strong>Audit</strong> and search for the owner event.</li>
+          </ol>
+          <p><strong>Lesson:</strong> A mutation creates tenant-scoped state and immutable evidence.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Exercise B — inspect, but do not approve, a governed rotation</summary>
+        <div>
+          <ol>
+            <li>Open <strong>Approvals</strong>.</li>
+            <li>Select a pending rotate/revoke row and open its <strong>Audit trail</strong>.</li>
+            <li>Identify requester, requested action, target identity, and required approval posture.</li>
+            <li>Return without clicking Approve.</li>
+          </ol>
+          <p><strong>Lesson:</strong> Enterprise governance deliberately converts a sensitive direct action into a pending dual-control decision.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Exercise C — export evidence</summary>
+        <div>
+          <ol>
+            <li>Open <strong>Audit</strong>.</li>
+            <li>Apply a narrow event-type or time filter.</li>
+            <li>Click <strong>Export evidence</strong>.</li>
+            <li>Keep the export only as demo data; do not confuse it with a certification.</li>
+          </ol>
+          <p><strong>Lesson:</strong> trstctl can hand an auditor signed, tamper-evident product evidence while clearly separating operator attestations and external certification residuals.</p>
+        </div>
+      </details>
+
+      <section id="glossary" class="section-title">
+        <h2>Plain-language glossary</h2>
+        <p>The shortest useful definition of the terms used in the UI.</p>
+      </section>
+      <div class="glossary">
+        <dl>
+          <dt>NHI</dt><dd>Non-human identity: a service, workload, bot, device, agent, or other machine actor.</dd>
+          <dt>Credential</dt><dd>Proof a machine uses to authenticate, such as a certificate, secret, API key, token, SSH certificate, or SVID.</dd>
+          <dt>Identity</dt><dd>The durable machine record. It can hold different credentials over time as they rotate.</dd>
+          <dt>X.509 certificate</dt><dd>A signed digital identity document used mainly for TLS and device/workload authentication.</dd>
+          <dt>CA</dt><dd>Certificate authority: the system trusted to sign certificates.</dd>
+          <dt>Profile</dt><dd>Rules limiting what a CA may issue: lifetime, names, algorithms, purposes, and protocol.</dd>
+          <dt>Tenant</dt><dd>An isolated customer or organizational boundary. Every stored row and query is tenant-scoped.</dd>
+          <dt>RLS</dt><dd>PostgreSQL row-level security: the database itself prevents one tenant from reading another tenant’s rows.</dd>
+          <dt>Event</dt><dd>An immutable statement that something happened. Events are the source of truth for lifecycle state.</dd>
+          <dt>Projection</dt><dd>A query-friendly table built from events, such as the certificate inventory or audit view.</dd>
+          <dt>Outbox</dt><dd>A durable queue record written with the state change before an external call is attempted.</dd>
+          <dt>Connector</dt><dd>A runtime implementation that deploys, tests, rolls back, or right-sizes a credential at a target system.</dd>
+          <dt>Signer</dt><dd>The isolated process that performs private-key operations. It is separate from the web control plane.</dd>
+          <dt>Rotation</dt><dd>Issue a replacement credential, deploy it, verify it, and retire/revoke the predecessor.</dd>
+          <dt>Blast radius</dt><dd>The identities and resources affected if a credential is stolen, revoked, or unavailable.</dd>
+          <dt>CBOM</dt><dd>Cryptographic bill of materials: an inventory of algorithms, key sizes, TLS versions, and crypto dependencies.</dd>
+          <dt>SPIFFE / SVID</dt><dd>A workload-identity standard and its short-lived identity document.</dd>
+          <dt>FIPS</dt><dd>A regulated cryptographic-module posture. A license flag alone does not turn a normal binary into a FIPS-built artifact.</dd>
+        </dl>
+      </div>
+
+      <section id="troubleshooting" class="section-title">
+        <h2>Troubleshooting</h2>
+        <p>Simple recovery steps for the local demo.</p>
+      </section>
+      <details open>
+        <summary>The page says “token exchange failed”</summary>
+        <div><p>Close the error tab, reopen <a href="http://127.0.0.1:18081/" target="_blank" rel="noopener">the demo root</a>, and click <strong>Sign in with SSO</strong> again. If it repeats, the local OIDC sidecar needs to be reattached; ask the demo operator to restart it.</p></div>
+      </details>
+      <details>
+        <summary>The browser cannot connect</summary>
+        <div><p>Confirm the address is exactly <code>http://127.0.0.1:18081</code>—not HTTPS, not port 9443, and not a remote hostname. The demo stack must remain running on this Mac.</p></div>
+      </details>
+      <details>
+        <summary>A screen has no rows</summary>
+        <div><p>Read the empty-state explanation. Some integrations need a real external target or scan input. “No rows” is different from “not implemented”; the page should say what configuration or action is missing.</p></div>
+      </details>
+      <details>
+        <summary>A connector receipt says failed</summary>
+        <div><p>That is expected when the demo has no real vendor endpoint or credentials. The useful part is the durable attempt, error, retry/circuit-breaker state, and evidence receipt.</p></div>
+      </details>
+      <details>
+        <summary>The FIPS row says licensed but inactive</summary>
+        <div><p>Correct. The demo uses the standard image. Actual approved-mode testing requires the artifact produced by <code>make fips-build</code> plus the deployment-specific validation and operator artifacts listed on the Platform page.</p></div>
+      </details>
+
+      <div class="callout tip">
+        <h3>You have completed the product story</h3>
+        <p>You followed the complete loop: discover → inventory → model identity → enroll/issue → manage secrets → measure posture/risk → compute blast radius → govern → respond → deliver → prove.</p>
+      </div>
+    </main>
+  </div>
+
+  <footer>
+    <strong>trstctl local Provider demo walkthrough</strong><br>
+    Read-only by default. External integrations still require real operator-owned endpoints and credentials.
+  </footer>
+
+  <script>
+    (() => {
+      const storageKey = "trstctl-demo-walkthrough-progress-v1";
+      const boxes = Array.from(document.querySelectorAll(".step-check"));
+      const bar = document.getElementById("progress-bar");
+      const copy = document.getElementById("progress-copy");
+
+      function read() {
+        try {
+          const value = JSON.parse(localStorage.getItem(storageKey) || "[]");
+          return new Set(Array.isArray(value) ? value.map(String) : []);
+        } catch {
+          return new Set();
+        }
+      }
+
+      function render() {
+        const completed = boxes.filter((box) => box.checked).length;
+        const percent = boxes.length ? Math.round((completed / boxes.length) * 100) : 0;
+        bar.style.width = `${percent}%`;
+        copy.textContent = `${completed} of ${boxes.length} tour stops complete (${percent}%)`;
+      }
+
+      const saved = read();
+      boxes.forEach((box) => {
+        box.checked = saved.has(String(box.dataset.step));
+        box.addEventListener("change", () => {
+          const current = read();
+          if (box.checked) current.add(String(box.dataset.step));
+          else current.delete(String(box.dataset.step));
+          localStorage.setItem(storageKey, JSON.stringify(Array.from(current)));
+          render();
+        });
+      });
+
+      document.getElementById("reset-progress").addEventListener("click", () => {
+        if (!window.confirm("Clear all walkthrough checkmarks in this browser?")) return;
+        localStorage.removeItem(storageKey);
+        boxes.forEach((box) => { box.checked = false; });
+        render();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -184,7 +184,7 @@ describe("operational console surface", () => {
     renderAt("/audit");
 
     expect(await screen.findByRole("heading", { name: "Audit" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Audit/i })).toHaveAttribute("href", "/audit");
+    expect(screen.getByRole("link", { name: "Audit" })).toHaveAttribute("href", "/audit");
     expect(await screen.findByText("identity.issued")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Tenant audit events" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Columns/i })).toBeInTheDocument();

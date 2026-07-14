@@ -15,18 +15,24 @@ here you can also do through the [REST API](features/platform-and-api.md), the
 or visualizes (rather than adding capability), this page says so, and where a related
 capability is API-only today it is called out rather than implied.
 
-## Navigation is task-first
+## Navigation: a module switcher over shared global planes
 
-The sidebar is grouped around the *job* you came to do, not the table you want to read.
-The five groups, in order, are:
+The sidebar has three parts. A **Module** switcher scopes the middle band to one product;
+the **global** bands stay visible under every module; and a **Needs action** strip holds
+urgency worklists.
 
-- **Issue & renew** — set up, request a credential, certificates, identities, profiles,
-  CA hierarchy, enrollment protocols, secrets.
-- **Discover & inventory** — discovery, agents, workloads.
-- **Approve & respond** — the approvals inbox and the incident console.
-- **Monitor posture** — risk, the credential graph, posture (CBOM/PQC), and audit.
-- **Administer** — audit, policy, **privacy**, **integrate**, connectors, and platform
-  administration.
+- **Module switcher** — *Certificates & PKI* (certificates, request, profiles, CA hierarchy,
+  enrollment protocols), *Secrets*, *SSH*, *Signing*, and *Fleet* (agents, workloads).
+  Selecting a module swaps only its scoped band; deep-linking a module route auto-selects it.
+- **Inventory** (global) — identities and owners, the cross-product machine-identity records.
+- **Detect & respond** (global) — discovery, credential risk, crypto posture, credential
+  graph, incidents, approvals, operations, notifications.
+- **Govern & administer** (global) — policy, audit, privacy, connectors, integrate, API
+  explorer, and platform administration.
+
+The global bands are trstctl's cross-domain moat — one identity graph, one blast-radius
+view, one signed audit stream — so they never live inside a single module. From a module's
+band you can open **Audit (this module)** for a scoped lens over that one shared stream.
 
 Above the groups sit a few **quick tasks** (for example *Expiring ≤30 days*) that deep-link
 straight into a pre-filtered worklist. Every navigation row is gated by the same RBAC the

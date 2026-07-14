@@ -31,6 +31,31 @@ This file is the human-readable companion to the git tags; the
 ### Added
 - `CHANGELOG.md` (this file), linked from the README and SECURITY.md (DOCS-005).
 
+### Changed — web console information architecture (IA train)
+- **Option A — refined rail.** The sidebar is re-grouped into four question-shaped
+  bands (Inventory / Issue & automate / Detect & respond / Govern & administer) and
+  every previously hidden product surface (CA hierarchy, certificate profiles, SSH
+  trust, code signing, operations, notifications, privacy, integrate, API explorer)
+  is now visible in navigation. One name per surface: nav label, page `<h1>`, and
+  document title agree everywhere (a permanent `naming_parity` guard enforces it).
+  Platform gains a dedicated **Editions & license** tab, quarantining commercial
+  licensing rows off the operational Access and System tabs.
+- **Option B — module workspaces.** A top-of-rail **Module** switcher (Certificates &
+  PKI, Secrets, SSH, Signing, Fleet) scopes the middle band to one product; the
+  cross-domain global planes (identities, discovery, risk, posture, graph, incidents,
+  approvals, governance, audit) stay visible under every module. Module homes carry a
+  thin served KPI strip that deep-links into filtered lists. The shared audit stream
+  gains per-module lenses via `?module=` with a clearable scope chip — one stream, one
+  hash chain, N lenses, never per-module silos.
+- **Dashboard integrity & renew.** Real-mode dashboards render served data only (the
+  fabricated demo trend/activity/bands are gone) and the four action KPIs are wired to
+  live counts; the expiring-certificate worklist and detail drawer now offer Renew,
+  wired to the identity lifecycle transition.
+- **No route/URL changes.** The entire IA change is navigation chrome; every route
+  keeps its path, so deep links, journeys, and muscle memory survive. Permanent CI
+  guards (`naming_parity`, `nav_completeness`, `module_map`, demo-data isolation, docs
+  IA parity) keep the fixed defect classes from returning.
+
 ## [0.5.0] - 2026-06-13
 - Hardening milestone toward an enterprise-GA bar for the self-hosted, multi-tenant
   profile: isolated signer custody (sealed CA key persisted across restarts), the
