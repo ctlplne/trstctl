@@ -981,6 +981,10 @@ export const messages = {
     defaultMessage: "Needs action",
     description: "Primary nav section for urgent worklists.",
   },
+  "nav.section.module": {
+    defaultMessage: "Module",
+    description: "Primary nav section label above the S-B2 product module switcher.",
+  },
   "nav.section.needsActionWorklists": {
     defaultMessage: "Needs action worklists",
     description: "Accessible label for the urgent worklist list.",
@@ -7133,6 +7137,7 @@ const esESCatalog = {
   "locale.enXA": "Pseudolocalización inglesa",
   "locale.arXB": "Pseudolocalización RTL",
   "nav.section.needsAction": "Acción requerida",
+  "nav.section.module": "Módulo",
   "nav.section.needsActionWorklists": "Listas de trabajo que requieren acción",
   "nav.task.expiringSoon.label": "Vencen pronto",
   "nav.task.expiringSoon.description": "lista de certificados a 30 días",

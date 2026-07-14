@@ -1684,7 +1684,7 @@ export const extractedMessages = [
     key: "source.cmd.k.abdd8e293f",
     defaultMessage: "Cmd K",
     sources: [
-      "src/components/AppShell.tsx:447",
+      "src/components/AppShell.tsx:569",
     ],
   },
   {

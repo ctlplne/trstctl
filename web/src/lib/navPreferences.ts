@@ -36,3 +36,23 @@ export function persistCollapsedGroups(collapsed: Set<string>): void {
     // Storage unavailable: collapse state is a convenience only.
   }
 }
+
+/** Active module selection for the S-B2 switcher. Pure UI metadata (a module
+ * id string), same benign-persistence class as the collapse state above. */
+const NAV_MODULE_KEY = "trstctl-nav-module";
+
+export function readActiveModule(): string | null {
+  try {
+    return localStorage.getItem(NAV_MODULE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function persistActiveModule(moduleId: string): void {
+  try {
+    localStorage.setItem(NAV_MODULE_KEY, moduleId);
+  } catch {
+    // Storage unavailable: module selection is a convenience only.
+  }
+}

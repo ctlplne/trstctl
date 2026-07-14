@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Activity,
@@ -40,8 +40,20 @@ import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { hasAnyPermission } from "@/lib/access";
-import { contextualRouteItems, navGroups, permissionAnyForPath, primaryNavItems, taskNavItems, type NavIcon } from "@/lib/navigation";
-import { persistCollapsedGroups, readCollapsedGroups } from "@/lib/navPreferences";
+import {
+  contextualRouteItems,
+  globalBandRoutes,
+  moduleForRoute,
+  navGroups,
+  navModules,
+  permissionAnyForPath,
+  primaryNavItems,
+  taskNavItems,
+  type ModuleId,
+  type NavIcon,
+  type NavItem,
+} from "@/lib/navigation";
+import { persistActiveModule, persistCollapsedGroups, readActiveModule, readCollapsedGroups } from "@/lib/navPreferences";
 import { cn } from "@/lib/utils";
 import type { Me } from "@/lib/api";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
@@ -132,10 +144,76 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups());
   const visiblePrimaryItems = primaryNavItems.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to)));
   const visibleTaskItems = taskNavItems.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to)));
-  const visibleGroups = navGroups
-    .map((group) => ({ ...group, items: group.items.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to))) }))
-    .filter((group) => group.items.length > 0);
   const activeWorklist = visibleTaskItems.find((item) => worklistMatches(item.to, location.pathname, location.search));
+
+  // S-B2: the rail's middle band is scoped by a module switcher. A route is
+  // either global (always shown) or owned by exactly one module (shown only
+  // when that module is active). Build a lookup of every rail item so the
+  // module band can borrow each route's label and icon from the S-A1 groups.
+  const routeItemByPath = useMemo(() => {
+    const map = new Map<string, NavItem>();
+    for (const group of navGroups) for (const item of group.items) map.set(navBasePath(item.to), item);
+    return map;
+  }, []);
+  const globalRouteSet = useMemo(() => new Set(globalBandRoutes), []);
+
+  const permittedModules = useMemo(
+    () => navModules.filter((module) => module.routes.some((route) => hasAnyPermission(user, permissionAnyForPath(route)))),
+    [user],
+  );
+
+  const routeModule = moduleForRoute(location.pathname);
+  const [activeModule, setActiveModule] = useState<ModuleId | null>(() => {
+    if (routeModule) return routeModule;
+    const stored = readActiveModule();
+    if (stored && permittedModules.some((module) => module.id === stored)) return stored as ModuleId;
+    return permittedModules[0]?.id ?? null;
+  });
+
+  // Navigating to a module-owned route auto-selects that module, mirroring the
+  // collapsed-group re-open below. This keys on the pathname ONLY (not on
+  // activeModule) so a manual switch while staying on a module route is not
+  // immediately reverted. Global routes leave the selection alone.
+  useEffect(() => {
+    const owner = moduleForRoute(location.pathname);
+    if (owner) {
+      setActiveModule(owner);
+      persistActiveModule(owner);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally pathname-only
+  }, [location.pathname]);
+
+  // Keep a valid selection if the permitted set changes (e.g., session load).
+  useEffect(() => {
+    if (permittedModules.length === 0) return;
+    if (!activeModule || !permittedModules.some((module) => module.id === activeModule)) {
+      setActiveModule(permittedModules[0].id);
+    }
+  }, [permittedModules, activeModule]);
+
+  function selectModule(moduleId: ModuleId) {
+    setActiveModule(moduleId);
+    persistActiveModule(moduleId);
+  }
+
+  const activeModuleDef = permittedModules.find((module) => module.id === activeModule) ?? null;
+  const moduleBandItems: NavItem[] = activeModuleDef
+    ? activeModuleDef.routes
+        .filter((route) => hasAnyPermission(user, permissionAnyForPath(route)))
+        .map((route) => routeItemByPath.get(navBasePath(route)))
+        .filter((item): item is NavItem => Boolean(item))
+    : [];
+
+  // Global groups are the S-A1 bands with module-owned routes removed, so each
+  // route appears exactly once: in the module band or a global group.
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => globalRouteSet.has(navBasePath(item.to)) && hasAnyPermission(user, permissionAnyForPath(item.to)),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
 
   // Deep-linking into a collapsed group re-opens it so the active row is
   // always visible; manual collapse choices persist otherwise.
@@ -214,6 +292,50 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 );
               })}
             </ul>
+          </li>
+        )}
+        {permittedModules.length > 0 && (
+          <li>
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.module")}</p>
+            <div role="tablist" aria-label={t("nav.section.module")} className="mb-2 flex flex-wrap gap-1 px-1">
+              {permittedModules.map((module) => {
+                const Icon = iconMap[module.icon];
+                const selected = module.id === activeModule;
+                return (
+                  <button
+                    key={module.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => selectModule(module.id)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent",
+                      selected ? "bg-sidebar-active text-primary" : "text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-white",
+                    )}
+                  >
+                    <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{t(module.labelKey)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {moduleBandItems.length > 0 && (
+              <ul aria-label={activeModuleDef ? t(activeModuleDef.labelKey) : undefined} className="space-y-1">
+                {moduleBandItems.map((item) => {
+                  const { to, labelKey, icon, end } = item;
+                  const Icon = iconMap[icon];
+                  const suppressed = activeWorklist != null && navBasePath(activeWorklist.to) === navBasePath(to);
+                  return (
+                    <li key={`module-${to}-${labelKey}`}>
+                      <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive && !suppressed)}>
+                        <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{t(labelKey)}</span>
+                      </NavLink>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </li>
         )}
         {visibleGroups.map((group) => {

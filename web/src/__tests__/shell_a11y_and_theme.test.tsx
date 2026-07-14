@@ -521,19 +521,36 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
   });
 
-  it("exposes grouped non-certificate navigation domains", async () => {
+  it("exposes global groups plus the active module's scoped band", async () => {
     renderShell();
     await screen.findByText("u@example.test");
     const nav = screen.getByRole("navigation", { name: /Primary/i });
 
-    for (const group of ["Inventory", "Issue & automate", "Detect & respond", "Govern & administer"]) {
+    // S-B2: global groups always render; "Issue & automate" is now entirely
+    // module-scoped, so it no longer appears as a standalone global group.
+    for (const group of ["Inventory", "Detect & respond", "Govern & administer"]) {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
 
-    // S-A1: formerly-hidden product surfaces are now visible rail rows.
-    for (const link of ["Request credential", "Protocols", "Secrets", "Discovery", "Incidents", "Deployment connectors", "Platform", "CA hierarchy", "SSH trust", "Code signing"]) {
+    // The module switcher lists the curated products as tabs.
+    const switcher = within(nav).getByRole("tablist", { name: /Module/i });
+    for (const module of ["Certificates & PKI", "Secrets", "SSH", "Signing", "Fleet"]) {
+      expect(within(switcher).getByRole("tab", { name: new RegExp(module) })).toBeInTheDocument();
+    }
+
+    // Default active module (Certificates & PKI) shows its band, including the
+    // formerly-hidden CA hierarchy and Certificate profiles.
+    for (const link of ["Request credential", "Protocols", "CA hierarchy", "Certificate profiles"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
+
+    // Global planes are always present regardless of module.
+    for (const link of ["Discovery", "Incidents", "Deployment connectors", "Platform", "Credential graph"]) {
+      expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
+    }
+
+    // Other modules' routes are not in the rail until their module is active.
+    expect(within(nav).queryByRole("link", { name: /Code signing/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Coverage roadmap|RBAC/i })).not.toBeInTheDocument();
   });
 
