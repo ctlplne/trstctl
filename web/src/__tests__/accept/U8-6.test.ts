@@ -28,7 +28,10 @@ describe("U8-6 navigation & IA refresh", () => {
     expect(sidebarRoutes).toContain("/approvals");
     // Every product surface is now in the rail (no contextual-only routes), so
     // the budget grew from the old task-nav ceiling to the full IA.
-    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(32);
+    // C-A1 split the /platform grab-bag into three question-shaped admin
+    // rows (Access / System / Editions), consciously spending two more rows
+    // of rail budget to kill the DA-13 grab-bag. New ceiling: 34.
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(34);
 
     // S-A1 promoted the formerly-hidden surfaces into the rail; they are no
     // longer contextual-only.

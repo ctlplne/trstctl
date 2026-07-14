@@ -44,7 +44,7 @@ const routeCatalog = {
   incidents: { path: "/incidents", heading: "Incidents" },
   integrate: { path: "/integrate", heading: "Integrate" },
   operations: { path: "/operations", heading: "Operations queue" },
-  platform: { path: "/platform", heading: "Platform" },
+  platform: { path: "/platform", heading: "Access administration" },
   policy: { path: "/policy", heading: "Policy" },
   privacy: { path: "/privacy", heading: "Privacy & data governance" },
   profiles: { path: "/profiles", heading: "Certificate profiles" },

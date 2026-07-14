@@ -257,6 +257,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.access.administration.c301e7d84e",
+    defaultMessage: "Access administration",
+    sources: [
+      "src/lib/journeyMatrix.ts:47",
+    ],
+  },
+  {
     key: "source.access.test.failed.e280577658",
     defaultMessage: "Access test failed",
     sources: [
@@ -6216,13 +6223,6 @@ export const extractedMessages = [
     defaultMessage: "Plan",
     sources: [
       "src/pages/Platform.tsx:607",
-    ],
-  },
-  {
-    key: "source.platform.c78ffe1957",
-    defaultMessage: "Platform",
-    sources: [
-      "src/lib/journeyMatrix.ts:47",
     ],
   },
   {

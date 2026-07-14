@@ -14,7 +14,10 @@ describe("UX-03 task-based navigation", () => {
     // S-A1: the rail now shows every product surface (no contextual-only
     // routes), grouped into four question-shaped bands. Budget tracks the
     // served IA: three urgency shortcuts plus the grouped destinations.
-    expect(allSidebarItems.length).toBeLessThanOrEqual(32);
+    // C-A1 split the /platform grab-bag into three question-shaped admin
+    // rows (Access / System / Editions), consciously spending two more rows
+    // of rail budget to kill the DA-13 grab-bag. New ceiling: 34.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(34);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Inventory",
       "Issue & automate",
