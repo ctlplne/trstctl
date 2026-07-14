@@ -1,0 +1,88 @@
+import { describe, it, expect } from "vitest";
+import {
+  appRoutePaths,
+  globalBandRoutes,
+  moduleForRoute,
+  navModules,
+  realGuiSurfaces,
+  surfaceModule,
+  type ModuleId,
+} from "@/lib/navigation";
+
+/** module_map (S-B1, extends nav_completeness for the Option-B era): the module
+ * registry must partition every customer route into exactly one place — a
+ * global plane OR a single module — with no gaps and no overlaps. This is the
+ * guarantee the module switcher (S-B2) depends on and the permanent guard that
+ * keeps a route from silently belonging to two modules or none. */
+
+// Routes that are neither global planes nor module-scoped (pre-auth, onboarding
+// flow, dev-only styleguide).
+const EXEMPT = new Set<string>(["/login", "/wizard", "/styleguide"]);
+
+function basePath(to: string): string {
+  return to.split("?")[0] || "/";
+}
+
+describe("module map (S-B1)", () => {
+  it("assigns every customer route to exactly one of {global, one module}", () => {
+    const global = new Set(globalBandRoutes);
+    const problems: string[] = [];
+    for (const route of appRoutePaths) {
+      if (EXEMPT.has(route)) continue;
+      const owningModules = navModules.filter((m) => m.routes.includes(route)).map((m) => m.id);
+      const inGlobal = global.has(route);
+      const placements = owningModules.length + (inGlobal ? 1 : 0);
+      if (placements !== 1) {
+        problems.push(`${route}: ${inGlobal ? "global" : ""}${owningModules.length ? ` modules[${owningModules.join(",")}]` : ""} (placements=${placements})`);
+      }
+    }
+    expect(problems, `each route must be global XOR one module: ${problems.join("; ")}`).toEqual([]);
+  });
+
+  it("never lists the same route under two modules", () => {
+    const seen = new Map<string, ModuleId>();
+    for (const module of navModules) {
+      for (const route of module.routes) {
+        expect(seen.has(route), `${route} is claimed by both ${seen.get(route)} and ${module.id}`).toBe(false);
+        seen.set(route, module.id);
+      }
+    }
+  });
+
+  it("keeps global and module route sets disjoint", () => {
+    const global = new Set(globalBandRoutes);
+    for (const module of navModules) {
+      for (const route of module.routes) {
+        expect(global.has(route), `${route} is both global and in module ${module.id}`).toBe(false);
+      }
+    }
+  });
+
+  it("resolves module ownership consistently through the helpers", () => {
+    for (const module of navModules) {
+      for (const route of module.routes) {
+        expect(moduleForRoute(route)).toBe(module.id);
+      }
+    }
+    for (const route of globalBandRoutes) {
+      expect(moduleForRoute(route)).toBeUndefined();
+    }
+  });
+
+  it("classifies every realGuiSurface route to a real module or global", () => {
+    const validModules = new Set<string>(navModules.map((m) => m.id));
+    for (const surface of realGuiSurfaces) {
+      const resolved = surfaceModule(surface);
+      expect(resolved === "global" || validModules.has(resolved), `${surface.featureId} → ${resolved}`).toBe(true);
+      // Every route on the surface must be registered (no typos in the map).
+      for (const route of surface.routes) {
+        expect(appRoutePaths).toContain(basePath(route) as (typeof appRoutePaths)[number]);
+      }
+    }
+  });
+
+  it("keeps the curated module set small (Infisical lesson: shrink, do not sprawl)", () => {
+    expect(navModules.length).toBeLessThanOrEqual(5);
+    expect(navModules.map((m) => m.id)).toEqual(["certificates", "secrets", "ssh", "signing", "fleet"]);
+  });
+});

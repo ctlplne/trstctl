@@ -1393,6 +1393,26 @@ export const messages = {
     defaultMessage: "Certificates",
     description: "Primary navigation item.",
   },
+  "nav.module.certificates": {
+    defaultMessage: "Certificates & PKI",
+    description: "Module switcher label: certificate lifecycle, CA hierarchy, profiles, and enrollment protocols (S-B1/S-B2).",
+  },
+  "nav.module.secrets": {
+    defaultMessage: "Secrets",
+    description: "Module switcher label: the secrets management product.",
+  },
+  "nav.module.ssh": {
+    defaultMessage: "SSH",
+    description: "Module switcher label: SSH trust and user-certificate issuance.",
+  },
+  "nav.module.signing": {
+    defaultMessage: "Signing",
+    description: "Module switcher label: code and artifact signing.",
+  },
+  "nav.module.fleet": {
+    defaultMessage: "Fleet",
+    description: "Module switcher label: agents, devices, and workload identity.",
+  },
   "nav.item.identities": {
     defaultMessage: "Identities",
     description: "Primary navigation item.",
@@ -7218,6 +7238,11 @@ const esESCatalog = {
   "nav.item.setUp": "Configuración inicial",
   "nav.item.requestCredential": "Solicitar credencial",
   "nav.item.certificates": "Certificados",
+  "nav.module.certificates": "Certificados y PKI",
+  "nav.module.secrets": "Secretos",
+  "nav.module.ssh": "SSH",
+  "nav.module.signing": "Firma",
+  "nav.module.fleet": "Flota",
   "nav.item.identities": "Identidades",
   "nav.item.owners": "Propietarios",
   "nav.item.agents": "Agentes",

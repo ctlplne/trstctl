@@ -58,6 +58,98 @@ export interface ContextualRouteItem {
   featureIds: string[];
 }
 
+/* S-B1 (Option B foundation): the module registry. This is config only — it
+ * declares which product each issuance-style route belongs to and which routes
+ * are global (cross-module) planes. Nothing renders differently from this card;
+ * the module switcher (S-B2) reads `navModules`, and until then the flat
+ * `navGroups` rail from S-A1 is unchanged. Module ids are stable identifiers,
+ * not URLs. */
+export type ModuleId = "certificates" | "secrets" | "ssh" | "signing" | "fleet";
+
+export interface NavModule {
+  id: ModuleId;
+  labelKey: MessageKey;
+  icon: NavIcon;
+  /** Routes scoped to this module — its rail band when the module is active. */
+  routes: string[];
+  featureIds: string[];
+}
+
+/** navModules: the curated product set. Count is deliberately small and may
+ * shrink — if SSH/Signing stay thin they fold into Certificates & PKI, exactly
+ * as Infisical folded SSH into PAM (see 03-competitive-benchmark §1). */
+export const navModules: NavModule[] = [
+  {
+    id: "certificates",
+    labelKey: "nav.module.certificates",
+    icon: "certificate",
+    routes: ["/certificates", "/request", "/profiles", "/ca-hierarchy", "/protocols"],
+    featureIds: ["F1", "F4", "F5", "F26", "F48", "F53"],
+  },
+  {
+    id: "secrets",
+    labelKey: "nav.module.secrets",
+    icon: "vault",
+    routes: ["/secrets"],
+    featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
+  },
+  {
+    id: "ssh",
+    labelKey: "nav.module.ssh",
+    icon: "ssh",
+    routes: ["/ssh"],
+    featureIds: ["F43", "F44", "F45"],
+  },
+  {
+    id: "signing",
+    labelKey: "nav.module.signing",
+    icon: "signature",
+    routes: ["/codesign"],
+    featureIds: ["F50"],
+  },
+  {
+    id: "fleet",
+    labelKey: "nav.module.fleet",
+    icon: "agent",
+    routes: ["/agents", "/workloads"],
+    featureIds: ["F3", "F25", "F30", "F54", "F61"],
+  },
+];
+
+/** globalBand: routes that are never module-scoped. These are trstctl's
+ * cross-domain moat (one identity graph, one blast-radius view, one signed
+ * audit stream) plus the primary/administer surfaces. They stay visible in the
+ * rail regardless of the active module (S-B2). */
+export const globalBandRoutes: string[] = [
+  "/",
+  "/journeys",
+  "/identities",
+  "/owners",
+  "/discovery",
+  "/risk",
+  "/posture",
+  "/graph",
+  "/incidents",
+  "/approvals",
+  "/operations",
+  "/notifications",
+  "/policy",
+  "/audit",
+  "/privacy",
+  "/connectors",
+  "/integrate",
+  "/integrate/api",
+  "/platform",
+  "/assistant",
+];
+
+/** moduleForRoute maps a route to its owning module, or undefined if the route
+ * is a global plane (or exempt: /login, /wizard, /styleguide). */
+export function moduleForRoute(to: string): ModuleId | undefined {
+  const path = to.split("?")[0] || "/";
+  return navModules.find((module) => module.routes.includes(path))?.id;
+}
+
 export const appRoutePaths = [
   "/login",
   "/",
@@ -249,6 +341,21 @@ export interface RealGuiSurface {
   component: string;
   kind: "operate" | "observe";
   evidence: string;
+  /** S-B1: owning module, or "global" for a cross-module plane. Optional and
+   * normally derived from the surface's routes via `surfaceModule`; present on
+   * the type so a surface can pin an explicit module if routes are ambiguous. */
+  module?: ModuleId | "global";
+}
+
+/** surfaceModule resolves a surface to its module: an explicit `module` wins,
+ * otherwise the first module-owned route decides, else "global". */
+export function surfaceModule(surface: RealGuiSurface): ModuleId | "global" {
+  if (surface.module) return surface.module;
+  for (const route of surface.routes) {
+    const owner = moduleForRoute(route);
+    if (owner) return owner;
+  }
+  return "global";
 }
 
 export const realGuiSurfaces: RealGuiSurface[] = [
