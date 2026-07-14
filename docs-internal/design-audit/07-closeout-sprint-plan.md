@@ -5,24 +5,24 @@
 **Scope decision (2026-07-14, Shankar):** full closeout of the six deferred items. `/admin/*` split is **committed**; entity-noun consolidation is **spike-gated** (decision doc this train, implementation explicitly not).
 **Ship strategy:** rolling — each card lands on main individually green and individually revertable. No single release cut is required except C-R1, which gates the docs/CHANGELOG/screenshot refresh after the last feature card.
 
-## Execution status (2026-07-14)
+## Execution status (2026-07-14, second pass)
 
 | Card | Status | Commit |
 |---|---|---|
 | C-D1 readiness panel on global home | **DONE** | `a889986d` |
 | C-P1 incident pickers (DA-10) | **DONE** | `37ea9406` |
-| C-A1 /admin split + redirects | **DONE** | `97d5bb4a` (i18n 1243→1242) |
+| C-A1 /admin split + redirects | **DONE** | `97d5bb4a` + follow-up `1f6f9077` (a11y heading order, editions render resilience) + `df35f51b` (journey matrix, rail budget 32→34). i18n 1243→1242 |
 | C-N1 noun spike (decision doc) | **DONE** | `fee0efdf` → `08-entity-noun-decision.md`; verdict: keep 4 nouns, Fleet-merge card C-N2 pre-written behind evidence checklist |
 | C-S1 grant console (Job 2 interim) | **DONE** | `21418fec` (i18n 1242→1240) |
-| C-S2 auth-method read projection (Go) | open | — |
-| C-S3 session ledger + revocation (Go) | open | — |
-| C-S4 auth-method console UI | open — blocked by S1 ✓, S2, S3 | — |
+| C-S2 auth-method read projection (Go) | **DONE** | `827b3334` — GET /secrets/auth-methods, allow-listed + secret-free; drift chain turned (golden→SDKs→FE types→CLI→F58 parity, ops 270→271, CLI 276→277) |
+| C-S3 session ledger + revocation (Go) | **DONE** | `86a1ffbf` — secrets.session.\*/auth_method.\* events → machine_sessions + overrides projections (migration 0086, RLS); ledger GET, idempotent revoke, disable/enable overlay enforced at login (fail-closed); served proof vs real PostgreSQL + embedded JetStream; ops→275, CLI→281 |
+| C-S4 auth-method console UI | **DONE** | `7a56e454` — methods + audience rules + session ledger + revoked view on Secrets→Access; placeholder class dead (exit-gate test) |
 | C-I1 sweep: components+lib | open | — |
 | C-I2 sweep: top pages | open — unblocked (C-P1 ✓, C-A1 ✓) | — |
-| C-I3 sweep: remainder → budget 0 | open — blocked by C-S4 | — |
-| C-R1 docs/tour/ratchets/closeout | open | — |
+| C-I3 sweep: remainder → budget 0 | open — unblocked (C-S4 ✓) | — |
+| C-R1 docs/tour/ratchets/closeout | open — docs must also cover the new C-S2..S4 surfaces | — |
 
-Per-card suites, typecheck, eslint, and the i18n ratchet ran green at every commit; the FULL `make lint test` sweep is C-R1's gate.
+**DA-02 is closed end to end** (02's Job-2 FAIL verdict flips with no CLI asterisk pending C-R1's live tour re-run). Verified this pass: all 140 web test files (49 root + 91 accept) green in chunks; Go: internal/{api,store,projections,cli,featureparity,authmethod,events} green incl. the embedded-postgres served ledger proof; `go build ./...` green; architecture linter green on touched packages; `npm run typecheck`, eslint on touched files, `gen:api --check`, and the i18n ratchet (1240 = budget) green. Remaining before release: the I-phase sweep (1,240 entries → 0), C-R1 docs/tour/CHANGELOG + full `make lint test` on a full-resource machine (the sandbox verified per-package).
 
 ---
 
