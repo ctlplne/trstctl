@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { StatTile, Meter, BucketBar, type BucketDatum } from "@/components/charts";
 import { DashboardGrid, SectionCard, AttentionList, AttentionRow } from "@/components/dashboard";
@@ -113,7 +113,17 @@ export function CertificatesDashboard({ certificates, risks }: { certificates: C
   );
 }
 
-export function ReadinessPanel({ certificates, rotationRuns }: { certificates: Certificate[]; rotationRuns: RotationRun[] }) {
+export function ReadinessPanel({
+  certificates,
+  rotationRuns,
+  actions,
+}: {
+  certificates: Certificate[];
+  rotationRuns: RotationRun[];
+  /** Optional header action — the global home passes a link into the
+   * Certificates renewal-readiness tab (C-D1: numbers are doors). */
+  actions?: ReactNode;
+}) {
   const fingerprints = rotationFingerprints(rotationRuns);
   const active = certificates.filter((certificate) => certificate.status !== "revoked");
   const auto = active.filter((certificate) => fingerprints.has(certificate.fingerprint)).length;
@@ -121,7 +131,7 @@ export function ReadinessPanel({ certificates, rotationRuns }: { certificates: C
   const pct = active.length ? Math.round((auto / active.length) * 100) : 0;
   const manualAtRisk = active.filter((certificate) => !fingerprints.has(certificate.fingerprint) && daysUntil(certificate.not_after) <= 47).length;
   return (
-    <SectionCard title="47-day renewal readiness" description="short-lived certificates require automation">
+    <SectionCard title="47-day renewal readiness" description="short-lived certificates require automation" actions={actions}>
       <div className="flex items-baseline gap-2">
         <span className="text-[2.25rem] font-semibold leading-none tabular-nums">{pct}%</span>
         <span className="text-body text-muted-foreground">of certificates auto-renew</span>

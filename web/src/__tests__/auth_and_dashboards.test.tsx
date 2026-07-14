@@ -415,6 +415,46 @@ describe("auth + dashboards", () => {
     expect(await within(dash).findByText(/Issuance trend/)).toBeInTheDocument();
   });
 
+  // ---------------------------------------------------------------- C-D1 ----
+  // 47-day readiness on the global home (07-closeout plan): the panel renders
+  // from the certs + rotation runs the dashboard already fetches, and its
+  // at-risk number is a door into the Certificates renewal-readiness tab.
+
+  it("renders the 47-day readiness panel from served data on the global home (C-D1)", async () => {
+    seededTenant();
+    // c2 (f2) is rotation-managed; c1 (f1, expires in 3d) and c3 (f3, 120d)
+    // are manual → auto 1/3 = 33%, manual-at-risk (≤47d) = c1 only.
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [{ id: "r1", status: "succeeded", successor_fingerprint: "f2" }],
+    });
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+
+    expect(await within(dash).findByText("47-day renewal readiness")).toBeInTheDocument();
+    await waitFor(() => expect(within(dash).getByText("33%")).toBeInTheDocument());
+    expect(within(dash).getByText(/1 manual certs expiring within 47 days/)).toBeInTheDocument();
+    // The panel links into the certificates readiness tab (numbers are doors).
+    const link = within(dash).getByRole("link", { name: /View in Certificates/ });
+    expect(link).toHaveAttribute("href", "/certificates?tab=renewal");
+  });
+
+  it("keeps the readiness panel out of the demo showcase (C-D1)", async () => {
+    const { UnauthorizedError } = await import("@/lib/api");
+    apiMock.me.mockRejectedValue(new UnauthorizedError());
+    const user = userEvent.setup();
+
+    renderAt("/");
+    await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
+
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    await within(dash).findByText(/Issuance trend/);
+    // Preview has no served certs/rotation runs, so a 0% readiness statement
+    // would be noise beside the demo showcase — the panel is real-mode only,
+    // like every other served-data section on the dashboard.
+    expect(within(dash).queryByText("47-day renewal readiness")).not.toBeInTheDocument();
+  });
+
   // ---------------------------------------------------------------- S-N1 ----
   // The expiring worklist must not dead-end: managed rows carry Renew wired to
   // the identity lifecycle transition; unmanaged rows degrade honestly

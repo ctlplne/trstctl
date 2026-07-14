@@ -17,7 +17,7 @@ export const extractedMessages = [
     key: "source.100d.2027.a5960d51fb",
     defaultMessage: "100d · 2027",
     sources: [
-      "src/components/certs/index.tsx:141",
+      "src/components/certs/index.tsx:151",
     ],
   },
   {
@@ -31,7 +31,7 @@ export const extractedMessages = [
     key: "source.200d.2026.a78e5092ff",
     defaultMessage: "200d · 2026",
     sources: [
-      "src/components/certs/index.tsx:140",
+      "src/components/certs/index.tsx:150",
     ],
   },
   {
@@ -74,7 +74,7 @@ export const extractedMessages = [
     defaultMessage: "30–90d",
     sources: [
       "src/lib/demoData.ts:30",
-      "src/pages/Dashboard.tsx:125",
+      "src/pages/Dashboard.tsx:126",
     ],
   },
   {
@@ -102,28 +102,28 @@ export const extractedMessages = [
     key: "source.398d.today.066f1024a9",
     defaultMessage: "398d today",
     sources: [
-      "src/components/certs/index.tsx:139",
+      "src/components/certs/index.tsx:149",
     ],
   },
   {
     key: "source.47.day.readiness.simulator.6c79ae6d09",
     defaultMessage: "47-day readiness simulator",
     sources: [
-      "src/components/certs/index.tsx:155",
+      "src/components/certs/index.tsx:165",
     ],
   },
   {
     key: "source.47.day.renewal.readiness.971543ca36",
     defaultMessage: "47-day renewal readiness",
     sources: [
-      "src/components/certs/index.tsx:124",
+      "src/components/certs/index.tsx:134",
     ],
   },
   {
     key: "source.47d.2029.2add4e085d",
     defaultMessage: "47d · 2029",
     sources: [
-      "src/components/certs/index.tsx:142",
+      "src/components/certs/index.tsx:152",
     ],
   },
   {
@@ -138,7 +138,7 @@ export const extractedMessages = [
     defaultMessage: "7–30d",
     sources: [
       "src/lib/demoData.ts:29",
-      "src/pages/Dashboard.tsx:124",
+      "src/pages/Dashboard.tsx:125",
     ],
   },
   {
@@ -154,7 +154,7 @@ export const extractedMessages = [
     sources: [
       "src/lib/demoData.ts:28",
       "src/pages/Certificates.tsx:47",
-      "src/pages/Dashboard.tsx:123",
+      "src/pages/Dashboard.tsx:124",
     ],
   },
   {
@@ -176,7 +176,7 @@ export const extractedMessages = [
     defaultMessage: ">90d",
     sources: [
       "src/lib/demoData.ts:31",
-      "src/pages/Dashboard.tsx:126",
+      "src/pages/Dashboard.tsx:127",
     ],
   },
   {
@@ -502,7 +502,7 @@ export const extractedMessages = [
     key: "source.algorithm.mix.a5ab80b898",
     defaultMessage: "Algorithm mix",
     sources: [
-      "src/pages/Dashboard.tsx:306",
+      "src/pages/Dashboard.tsx:322",
     ],
   },
   {
@@ -873,7 +873,7 @@ export const extractedMessages = [
     key: "source.audit.stream.22c7391e55",
     defaultMessage: "audit stream",
     sources: [
-      "src/pages/Dashboard.tsx:376",
+      "src/pages/Dashboard.tsx:392",
     ],
   },
   {
@@ -943,7 +943,7 @@ export const extractedMessages = [
     key: "source.auto.929260ad9b",
     defaultMessage: "auto",
     sources: [
-      "src/components/certs/index.tsx:134",
+      "src/components/certs/index.tsx:144",
     ],
   },
   {
@@ -1234,7 +1234,7 @@ export const extractedMessages = [
     key: "source.by.key.type.7228596a06",
     defaultMessage: "by key type",
     sources: [
-      "src/pages/Dashboard.tsx:307",
+      "src/pages/Dashboard.tsx:323",
     ],
   },
   {
@@ -2263,7 +2263,7 @@ export const extractedMessages = [
     key: "source.credentials.issued.per.month.11bd254ee7",
     defaultMessage: "credentials issued per month",
     sources: [
-      "src/pages/Dashboard.tsx:293",
+      "src/pages/Dashboard.tsx:309",
     ],
   },
   {
@@ -2413,8 +2413,8 @@ export const extractedMessages = [
     key: "source.dashboard.67b6964686",
     defaultMessage: "Dashboard",
     sources: [
-      "src/pages/Dashboard.tsx:183",
-      "src/pages/Dashboard.tsx:203",
+      "src/pages/Dashboard.tsx:184",
+      "src/pages/Dashboard.tsx:204",
     ],
   },
   {
@@ -2677,7 +2677,7 @@ export const extractedMessages = [
     key: "source.discover.d4a33d5b78",
     defaultMessage: "Discover",
     sources: [
-      "src/pages/Dashboard.tsx:208",
+      "src/pages/Dashboard.tsx:209",
     ],
   },
   {
@@ -3194,7 +3194,7 @@ export const extractedMessages = [
     key: "source.expiration.timeline.d4a2b2aa1e",
     defaultMessage: "Expiration timeline",
     sources: [
-      "src/pages/Dashboard.tsx:433",
+      "src/pages/Dashboard.tsx:449",
     ],
   },
   {
@@ -3247,8 +3247,8 @@ export const extractedMessages = [
     key: "source.expiry.bands.cbfe64f7cb",
     defaultMessage: "Expiry bands",
     sources: [
-      "src/pages/Dashboard.tsx:323",
       "src/pages/Dashboard.tsx:339",
+      "src/pages/Dashboard.tsx:355",
     ],
   },
   {
@@ -3269,14 +3269,14 @@ export const extractedMessages = [
     key: "source.explore.the.console.1f6607ee75",
     defaultMessage: "Explore the console",
     sources: [
-      "src/pages/Dashboard.tsx:191",
+      "src/pages/Dashboard.tsx:192",
     ],
   },
   {
     key: "source.explorer.464ef011fa",
     defaultMessage: "Explorer →",
     sources: [
-      "src/pages/Dashboard.tsx:378",
+      "src/pages/Dashboard.tsx:394",
     ],
   },
   {
@@ -3319,7 +3319,7 @@ export const extractedMessages = [
     defaultMessage: "failed",
     sources: [
       "src/lib/statusVocab.ts:71",
-      "src/pages/Dashboard.tsx:582",
+      "src/pages/Dashboard.tsx:598",
     ],
   },
   {
@@ -3372,7 +3372,7 @@ export const extractedMessages = [
     key: "source.fingerprints.has.certificate.fingerprint.d.cd68074d72",
     defaultMessage: "!fingerprints.has(certificate.fingerprint) && daysUntil(certificate.not_after)",
     sources: [
-      "src/components/certs/index.tsx:122",
+      "src/components/certs/index.tsx:132",
     ],
   },
   {
@@ -3647,7 +3647,7 @@ export const extractedMessages = [
     key: "source.highest.risk.c56ed7dd58",
     defaultMessage: "highest-risk",
     sources: [
-      "src/pages/Dashboard.tsx:352",
+      "src/pages/Dashboard.tsx:368",
     ],
   },
   {
@@ -3986,14 +3986,14 @@ export const extractedMessages = [
     key: "source.issuance.rate.91f4b7ff0d",
     defaultMessage: "Issuance rate",
     sources: [
-      "src/pages/Dashboard.tsx:427",
+      "src/pages/Dashboard.tsx:443",
     ],
   },
   {
     key: "source.issuance.trend.b53089f166",
     defaultMessage: "Issuance trend",
     sources: [
-      "src/pages/Dashboard.tsx:292",
+      "src/pages/Dashboard.tsx:308",
     ],
   },
   {
@@ -4051,7 +4051,7 @@ export const extractedMessages = [
     defaultMessage: "Issue credential",
     sources: [
       "src/components/CommandPalette.tsx:130",
-      "src/pages/Dashboard.tsx:214",
+      "src/pages/Dashboard.tsx:215",
     ],
   },
   {
@@ -4743,7 +4743,7 @@ export const extractedMessages = [
     key: "source.manual.36bde66f28",
     defaultMessage: "manual",
     sources: [
-      "src/components/certs/index.tsx:135",
+      "src/components/certs/index.tsx:145",
     ],
   },
   {
@@ -5359,7 +5359,7 @@ export const extractedMessages = [
     key: "source.no.deployment.receipts.yet.439880ad78",
     defaultMessage: "No deployment receipts yet.",
     sources: [
-      "src/components/certs/index.tsx:198",
+      "src/components/certs/index.tsx:208",
     ],
   },
   {
@@ -5577,7 +5577,7 @@ export const extractedMessages = [
     key: "source.no.renewal.history.for.this.certificate.ye.d731b9489d",
     defaultMessage: "No renewal history for this certificate yet.",
     sources: [
-      "src/components/certs/index.tsx:218",
+      "src/components/certs/index.tsx:228",
     ],
   },
   {
@@ -5745,7 +5745,7 @@ export const extractedMessages = [
     key: "source.of.certificates.auto.renew.02d35aa265",
     defaultMessage: "of certificates auto-renew",
     sources: [
-      "src/components/certs/index.tsx:127",
+      "src/components/certs/index.tsx:137",
     ],
   },
   {
@@ -6486,10 +6486,10 @@ export const extractedMessages = [
       "src/lib/search.ts:98",
       "src/lib/useResource.ts:10",
       "src/pages/Certificates.tsx:160",
-      "src/pages/Dashboard.tsx:35",
-      "src/pages/Dashboard.tsx:58",
-      "src/pages/Dashboard.tsx:64",
-      "src/pages/Dashboard.tsx:73",
+      "src/pages/Dashboard.tsx:36",
+      "src/pages/Dashboard.tsx:59",
+      "src/pages/Dashboard.tsx:65",
+      "src/pages/Dashboard.tsx:74",
       "src/pages/Journeys.tsx:17",
       "src/pages/Owners.tsx:21",
       "src/pages/Policy.tsx:1662",
@@ -6756,7 +6756,7 @@ export const extractedMessages = [
     key: "source.recent.activity.6cb44b5633",
     defaultMessage: "Recent activity",
     sources: [
-      "src/pages/Dashboard.tsx:375",
+      "src/pages/Dashboard.tsx:391",
     ],
   },
   {
@@ -6778,7 +6778,7 @@ export const extractedMessages = [
     key: "source.recent.deployments.df97a4e11f",
     defaultMessage: "Recent deployments",
     sources: [
-      "src/components/certs/index.tsx:196",
+      "src/components/certs/index.tsx:206",
     ],
   },
   {
@@ -6908,7 +6908,7 @@ export const extractedMessages = [
     key: "source.renewal.jobs.ef0c816533",
     defaultMessage: "Renewal jobs",
     sources: [
-      "src/pages/Dashboard.tsx:430",
+      "src/pages/Dashboard.tsx:446",
     ],
   },
   {
@@ -7426,7 +7426,7 @@ export const extractedMessages = [
     defaultMessage: "Rotate",
     sources: [
       "src/pages/CAHierarchy.tsx:2506",
-      "src/pages/Dashboard.tsx:211",
+      "src/pages/Dashboard.tsx:212",
     ],
   },
   {
@@ -7440,7 +7440,7 @@ export const extractedMessages = [
     key: "source.rotate.first.f4ea83b5ca",
     defaultMessage: "Rotate first",
     sources: [
-      "src/pages/Dashboard.tsx:351",
+      "src/pages/Dashboard.tsx:367",
     ],
   },
   {
@@ -8058,7 +8058,7 @@ export const extractedMessages = [
     defaultMessage: "Set up trstctl",
     sources: [
       "src/lib/journeyMatrix.ts:54",
-      "src/pages/Dashboard.tsx:190",
+      "src/pages/Dashboard.tsx:191",
       "src/pages/Wizard.tsx:110",
       "src/pages/Wizard.tsx:75",
     ],
@@ -8480,7 +8480,7 @@ export const extractedMessages = [
     key: "source.succeeded.5dceaeceb6",
     defaultMessage: "succeeded",
     sources: [
-      "src/pages/Dashboard.tsx:581",
+      "src/pages/Dashboard.tsx:597",
     ],
   },
   {
@@ -8753,7 +8753,7 @@ export const extractedMessages = [
     key: "source.this.tenant.has.no.credentials.yet.the.fou.7b31a81e81",
     defaultMessage: "This tenant has no credentials yet. The four-step setup connects an issuer, issues your first certificate, and enrolls an agent — about five minutes. Prefer to look around first? Explore the console.",
     sources: [
-      "src/pages/Dashboard.tsx:192",
+      "src/pages/Dashboard.tsx:193",
     ],
   },
   {
@@ -8811,8 +8811,8 @@ export const extractedMessages = [
     key: "source.time.to.expiry.b1bf11183a",
     defaultMessage: "time to expiry",
     sources: [
-      "src/pages/Dashboard.tsx:324",
       "src/pages/Dashboard.tsx:340",
+      "src/pages/Dashboard.tsx:356",
     ],
   },
   {
@@ -9088,7 +9088,7 @@ export const extractedMessages = [
     key: "source.validity.cap.1e61e889d2",
     defaultMessage: "Validity cap",
     sources: [
-      "src/components/certs/index.tsx:156",
+      "src/components/certs/index.tsx:166",
     ],
   },
   {
@@ -9153,7 +9153,7 @@ export const extractedMessages = [
     key: "source.view.all.9a780508de",
     defaultMessage: "View all →",
     sources: [
-      "src/pages/Dashboard.tsx:354",
+      "src/pages/Dashboard.tsx:370",
     ],
   },
   {
@@ -9231,7 +9231,7 @@ export const extractedMessages = [
     key: "source.welcome.to.trstctl.let.cad71c5736",
     defaultMessage: "Welcome to trstctl — let",
     sources: [
-      "src/pages/Dashboard.tsx:189",
+      "src/pages/Dashboard.tsx:190",
     ],
   },
   {

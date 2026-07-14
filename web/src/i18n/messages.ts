@@ -120,6 +120,10 @@ export const messages = {
     defaultMessage: "No audit events yet.",
     description: "Dashboard recent-activity empty state when the served audit stream has no events.",
   },
+  "dashboard.readiness.viewAll": {
+    defaultMessage: "View in Certificates →",
+    description: "Dashboard 47-day readiness panel header link into the Certificates renewal-readiness tab (C-D1).",
+  },
   "certificates.tabs.health": {
     defaultMessage: "Estate health",
     description: "Certificates page tab: health, rogue findings, and KPI panels.",
@@ -3918,6 +3922,10 @@ export const messages = {
     defaultMessage: "identity/... or finding/...",
     description: "Placeholder for remediation playbook inventory id input.",
   },
+  "incidents.picker.identityHint": {
+    defaultMessage: "search by name or paste an id",
+    description: "Placeholder for identity picker inputs on incident intake forms (C-P1/DA-10).",
+  },
   "incidents.playbooks.connectorPlaceholder": {
     defaultMessage: "aws-iam",
     description: "Placeholder for remediation playbook connector input.",
@@ -6938,6 +6946,7 @@ const esESCatalog = {
   "certificates.lifecycle.renewStarted": "Renovación iniciada",
   "certificates.lifecycle.renewFailed": "No se pudo iniciar la renovación",
   "dashboard.recentActivity.empty": "Aún no hay eventos de auditoría.",
+  "dashboard.readiness.viewAll": "Ver en Certificados →",
   "certificates.tabs.health": "Salud del entorno",
   "certificates.tabs.crlct": "CRL y CT",
   "certificates.tabs.renewal": "Preparación de renovación",
@@ -7948,6 +7957,7 @@ const esESCatalog = {
   "incidents.playbooks.reason": "Motivo",
   "incidents.playbooks.defaultReason": "ajustar permisos sin uso",
   "incidents.playbooks.inventoryPlaceholder": "identity/... o finding/...",
+  "incidents.picker.identityHint": "busque por nombre o pegue un id",
   "incidents.playbooks.connectorPlaceholder": "aws-iam",
   "incidents.playbooks.providerTargetPlaceholder": "rol, cuenta de servicio o ruta de secreto",
   "incidents.playbooks.removeScopesPlaceholder": "subconjunto opcional separado por comas",

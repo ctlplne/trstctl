@@ -18,6 +18,7 @@ import {
 } from "@/components/charts";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { ReadinessPanel } from "@/components/certs";
 import { NhiInventory } from "@/components/nhi";
 import { NotificationCenter } from "@/components/notifications";
 import { demoDashboard } from "@/lib/demoData";
@@ -132,7 +133,7 @@ function servedExpiryBands(certificates: Certificate[]): Array<{ label: string; 
  * data so the console reads as a live product rather than an empty shell. */
 export function Dashboard() {
   const { preview } = useAuth();
-  const { formatNumber } = useTranslation();
+  const { formatNumber, t } = useTranslation();
   const certs = useResource(api.certificates);
   const risk = useResource(() => api.risk({ sort: "score" }));
   const identities = useResource(api.identities);
@@ -279,6 +280,21 @@ export function Dashboard() {
       {!useDemo && <NhiInventory identities={identities.data ?? []} inventory={nhiInventory.data ?? undefined} risks={riskRows} />}
       {!useDemo && <NotificationCenter risks={riskRows} certs={certs.data ?? []} />}
       {!useDemo && <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />}
+      {/* 47-day renewal readiness on the global home (C-D1, 07-closeout plan):
+          derived from the same served certs + rotation runs as the trend
+          charts — the posture statement lives here, the simulator stays on
+          Certificates. The 100-day SC-081 step lands 2027-03-15. */}
+      {!useDemo && (
+        <ReadinessPanel
+          certificates={servedCertificates}
+          rotationRuns={servedRotationRuns}
+          actions={
+            <Link to="/certificates?tab=renewal" className="text-caption font-medium text-brand-accent hover:underline">
+              {t("dashboard.readiness.viewAll")}
+            </Link>
+          }
+        />
+      )}
 
       {/* Trend + algorithm mix. The monthly issuance-trend card is demo-showcase
           only (S-N0/DA-01): real tenants already get the served daily charts above,
