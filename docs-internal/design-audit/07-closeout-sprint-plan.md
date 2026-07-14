@@ -17,10 +17,11 @@
 | C-S2 auth-method read projection (Go) | **DONE** | `827b3334` — GET /secrets/auth-methods, allow-listed + secret-free; drift chain turned (golden→SDKs→FE types→CLI→F58 parity, ops 270→271, CLI 276→277) |
 | C-S3 session ledger + revocation (Go) | **DONE** | `86a1ffbf` — secrets.session.\*/auth_method.\* events → machine_sessions + overrides projections (migration 0086, RLS); ledger GET, idempotent revoke, disable/enable overlay enforced at login (fail-closed); served proof vs real PostgreSQL + embedded JetStream; ops→275, CLI→281 |
 | C-S4 auth-method console UI | **DONE** | `7a56e454` — methods + audience rules + session ledger + revoked view on Secrets→Access; placeholder class dead (exit-gate test) |
-| C-I1 sweep: components+lib | open | — |
+| C-L1 German production locale (scope addition, user request 2026-07-14) | **DONE** | `237e5688` — complete 1,796-key deDECatalog, negotiation, selector, per-locale catalog test. Sweep rule now es+de |
+| C-I1 sweep: components+lib | open — each migration now needs en key + es + de | — |
 | C-I2 sweep: top pages | open — unblocked (C-P1 ✓, C-A1 ✓) | — |
 | C-I3 sweep: remainder → budget 0 | open — unblocked (C-S4 ✓) | — |
-| C-R1 docs/tour/ratchets/closeout | open — docs must also cover the new C-S2..S4 surfaces | — |
+| C-R1 docs/tour/ratchets/closeout | open — docs must also cover the new C-S2..S4 surfaces + the locale addition | — |
 
 **DA-02 is closed end to end** (02's Job-2 FAIL verdict flips with no CLI asterisk pending C-R1's live tour re-run). Verified this pass: all 140 web test files (49 root + 91 accept) green in chunks; Go: internal/{api,store,projections,cli,featureparity,authmethod,events} green incl. the embedded-postgres served ledger proof; `go build ./...` green; architecture linter green on touched packages; `npm run typecheck`, eslint on touched files, `gen:api --check`, and the i18n ratchet (1240 = budget) green. Remaining before release: the I-phase sweep (1,240 entries → 0), C-R1 docs/tour/CHANGELOG + full `make lint test` on a full-resource machine (the sandbox verified per-package).
 
@@ -59,7 +60,7 @@ C-D1, C-N1, C-P1, C-A1, C-I1, C-S1, C-S2 can all start immediately, in parallel.
 2. **Backend changes are banned except in C-S2/C-S3**, and there only under the parent `AGENTS.md` non-negotiables: tenant RLS on every query (AN-1), event-sourced state — ledger/status are projections, never directly-written tables (AN-2), idempotency key on every mutation (AN-5), bounded work (AN-7), architecture linter green. No new datastore. Signer untouched.
 3. **`ee/` stays at the attach seam** (AN-9). No `lic.Has` outside `attachEE`; `make editions-gate` + `scripts/check_editions_imports.sh` green where touched.
 4. **Tests first** (§7.3). Existing named suites stay green untouched: `route_parity`, `nav_completeness`, `module_map`, `naming_parity`, `ia_ratchets`, `docs_ia_parity`, `i18n`, `route_focus`, `shell_a11y_and_theme`, `rtl_logical_layout`, `global_search`, `journeys`.
-5. **i18n budget is monotone downward.** `extractedMessages.budget.json` sits at its exact ceiling (1243 entries / 1243 max — zero headroom). Every card ships new copy as typed `messages.ts` keys with es-ES entries (DESIGN rule 10); every C-I card lowers `maxExtractedMessages` to the new post-sweep count in the same PR.
+5. **i18n budget is monotone downward.** `extractedMessages.budget.json` sits at its exact ceiling (1243 entries / 1243 max — zero headroom). Every card ships new copy as typed `messages.ts` keys with es-ES entries (DESIGN rule 10); every C-I card lowers `maxExtractedMessages` to the new post-sweep count in the same PR. **Amended by C-L1 (2026-07-14): de-DE is a production locale — every keyed string ships es-ES AND de-DE entries; both catalogs are completeness-enforced by the type system.**
 6. **No demo data outside demo mode** (S-N0 principle; `ia_ratchets.test.ts` already enforces the Dashboard gate — nothing in this train may weaken it).
 7. **DESIGN rules hold** — esp. rule 6 (object list first on list pages; N/A to the global dashboard, which has no dashboard-specific rule), rule 7 (StatePrimitives), rule 13 (never make the operator retype a value the console already knows — the DA-10 rule).
 
