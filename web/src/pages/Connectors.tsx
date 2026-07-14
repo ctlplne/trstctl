@@ -8,7 +8,7 @@ import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/i18n/format";
 import { api, type ConnectorCatalogItem, type ConnectorDelivery, type DeploymentTarget, type Identity, type OutboxCircuit } from "@/lib/api";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 export function Connectors() {
   const { t } = useTranslation();
@@ -228,29 +228,26 @@ export function Connectors() {
     <section aria-labelledby="connectors-heading" className="grid gap-6">
       <PageHeader
         titleId="connectors-heading"
-        title="Deployment connectors"
+        title={translateNow("source.deployment.connectors.6bdaa16cc0")}
         description="Target setup, identity binding, delivery actions, and receipt evidence from the served connector API."
       />
       <h2 className="text-title font-semibold">{t("connectors.deliveryEvidence")}</h2>
 
-      {error && <ErrorState title="Connector workflow failed">{error}</ErrorState>}
-      {!catalog && !error && <LoadingState>Loading connector workflow...</LoadingState>}
+      {error && <ErrorState title={translateNow("source.connector.workflow.failed.9b83125cd7")}>{error}</ErrorState>}
+      {!catalog && !error && <LoadingState>{translateNow("source.loading.connector.workflow.f8e0fc1515")}</LoadingState>}
 
       {catalog && targets && (
         <section aria-labelledby="target-setup-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="target-setup-heading" className="text-title font-semibold">
-              Connector targets
-            </h2>
+              {translateNow("source.connector.targets.fb63eee9b5")}</h2>
           </div>
-          <form aria-label="Create connector target" className="ui-panel grid gap-3 md:grid-cols-[1fr_12rem] md:items-end" onSubmit={createTarget}>
+          <form aria-label={translateNow("source.create.connector.target.bb8ec59505")} className="ui-panel grid gap-3 md:grid-cols-[1fr_12rem] md:items-end" onSubmit={createTarget}>
             <label className="grid gap-1 text-sm">
-              Target
-              <input className="ui-input" value={targetName} onChange={(event) => setTargetName(event.target.value)} required />
+              {translateNow("source.target.978354db0c")}<input className="ui-input" value={targetName} onChange={(event) => setTargetName(event.target.value)} required />
             </label>
             <label className="grid gap-1 text-sm">
-              Connector
-              <select className="ui-input" value={connectorName} onChange={(event) => setConnectorName(event.target.value)}>
+              {translateNow("source.connector.8f0d706fff")}<select className="ui-input" value={connectorName} onChange={(event) => setConnectorName(event.target.value)}>
                 {connectorOptions.map((name) => (
                   <option key={name} value={name}>
                     {name}
@@ -259,42 +256,37 @@ export function Connectors() {
               </select>
             </label>
             <label className="grid gap-1 text-sm md:col-span-2">
-              Config JSON
-              <textarea className="ui-input min-h-24 font-mono text-xs" value={targetConfig} onChange={(event) => setTargetConfig(event.target.value)} />
+              {translateNow("source.config.json.eaa2c019f1")}<textarea className="ui-input min-h-24 font-mono text-xs" value={targetConfig} onChange={(event) => setTargetConfig(event.target.value)} />
             </label>
             <button className="ui-button md:col-span-2" type="submit">
-              Create target
-            </button>
+              {translateNow("source.create.target.00cf884cbc")}</button>
           </form>
 
-          <form aria-label="Create endpoint binding" className="ui-panel grid gap-3 md:grid-cols-3 md:items-end" onSubmit={createEndpointBinding}>
+          <form aria-label={translateNow("source.create.endpoint.binding.dd5b21a786")} className="ui-panel grid gap-3 md:grid-cols-3 md:items-end" onSubmit={createEndpointBinding}>
             <label className="grid gap-1 text-sm">
-              Owner ID
-              <input className="ui-input font-mono text-xs" value={bindingOwnerID} onChange={(event) => setBindingOwnerID(event.target.value)} required />
+              {translateNow("source.owner.id.1611f5e055")}<input className="ui-input font-mono text-xs" value={bindingOwnerID} onChange={(event) => setBindingOwnerID(event.target.value)} required />
             </label>
             <label className="grid gap-1 text-sm">
-              Identity DNS name
-              <input className="ui-input" value={bindingIdentityName} onChange={(event) => setBindingIdentityName(event.target.value)} required />
+              {translateNow("source.identity.dns.name.c79a6b3b97")}<input className="ui-input" value={bindingIdentityName} onChange={(event) => setBindingIdentityName(event.target.value)} required />
             </label>
             <button className="ui-button" type="submit">
-              Bind and enroll
-            </button>
+              {translateNow("source.bind.and.enroll.5cb885780a")}</button>
           </form>
 
           {targets && targets.length === 0 ? (
-            <EmptyState title="No connector targets">No tenant connector targets were returned.</EmptyState>
+            <EmptyState title={translateNow("source.no.connector.targets.5a8adcf783")}>{translateNow("source.no.tenant.connector.targets.were.returned.6c7baa9a8d")}</EmptyState>
           ) : (
             targets && (
               <div className="ui-panel overflow-x-auto">
                 <table className="ui-table min-w-[60rem]">
-                  <caption className="sr-only">Connector targets</caption>
+                  <caption className="sr-only">{translateNow("source.connector.targets.fb63eee9b5")}</caption>
                   <thead>
                     <tr>
-                      <th scope="col">Target</th>
-                      <th scope="col">Connector</th>
-                      <th scope="col">ID</th>
-                      <th scope="col">Created</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">{translateNow("source.target.978354db0c")}</th>
+                      <th scope="col">{translateNow("source.connector.8f0d706fff")}</th>
+                      <th scope="col">{translateNow("source.id.3843971dcf")}</th>
+                      <th scope="col">{translateNow("source.created.d70b9e24bc")}</th>
+                      <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -328,14 +320,12 @@ export function Connectors() {
         <section aria-labelledby="target-actions-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="target-actions-heading" className="text-title font-semibold">
-              Target actions
-            </h2>
+              {translateNow("source.target.actions.4d6d059ed8")}</h2>
           </div>
           <div className="ui-panel grid gap-3 md:grid-cols-3">
             <label className="grid gap-1 text-sm">
-              Target
-              <select className="ui-input" value={selectedTarget} onChange={(event) => setSelectedTarget(event.target.value)}>
-                <option value="">Select target</option>
+              {translateNow("source.target.978354db0c")}<select className="ui-input" value={selectedTarget} onChange={(event) => setSelectedTarget(event.target.value)}>
+                <option value="">{translateNow("source.select.target.adfbe7a33d")}</option>
                 {targets.map((target) => (
                   <option key={target.id} value={target.id}>
                     {target.name}
@@ -344,9 +334,8 @@ export function Connectors() {
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              Identity
-              <select className="ui-input" value={selectedIdentity} onChange={(event) => setSelectedIdentity(event.target.value)}>
-                <option value="">Select identity</option>
+              {translateNow("source.identity.999f23fcd7")}<select className="ui-input" value={selectedIdentity} onChange={(event) => setSelectedIdentity(event.target.value)}>
+                <option value="">{translateNow("source.select.identity.1b8c8195aa")}</option>
                 {identities.map((identity) => (
                   <option key={identity.id} value={identity.id}>
                     {identity.name}
@@ -355,22 +344,17 @@ export function Connectors() {
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              Reason
-              <input className="ui-input" value={reason} onChange={(event) => setReason(event.target.value)} />
+              {translateNow("source.reason.f81ab834de")}<input className="ui-input" value={reason} onChange={(event) => setReason(event.target.value)} />
             </label>
             <div className="flex flex-wrap gap-2 md:col-span-3">
               <button className="ui-button" type="button" onClick={() => runTargetAction("bind")} disabled={!selectedTarget || !selectedIdentity}>
-                Bind
-              </button>
+                {translateNow("source.bind.56b9b63d28")}</button>
               <button className="ui-button" type="button" onClick={() => runTargetAction("test")} disabled={!selectedTarget}>
-                Test
-              </button>
+                {translateNow("source.test.532eaabd95")}</button>
               <button className="ui-button" type="button" onClick={() => runTargetAction("deploy")} disabled={!selectedTarget || !selectedIdentity}>
-                Deploy
-              </button>
+                {translateNow("source.deploy.4c236daafb")}</button>
               <button className="ui-button" type="button" onClick={() => runTargetAction("rollback")} disabled={!selectedTarget}>
-                Rollback
-              </button>
+                {translateNow("source.rollback.c591f55749")}</button>
             </div>
             {actionResult && <output className="font-mono text-xs text-muted-foreground md:col-span-3">{actionResult}</output>}
           </div>
@@ -381,21 +365,20 @@ export function Connectors() {
         <section aria-labelledby="connectors-registry-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="connectors-registry-heading" className="text-title font-semibold">
-              Connector registry
-            </h2>
+              {translateNow("source.connector.registry.714802c316")}</h2>
           </div>
           {catalog.length === 0 ? (
-            <EmptyState title="No connectors registered">No connector catalog rows were returned.</EmptyState>
+            <EmptyState title={translateNow("source.no.connectors.registered.3752f19e55")}>{translateNow("source.no.connector.catalog.rows.were.returned.3a8d5bf05f")}</EmptyState>
           ) : (
             <div className="ui-panel overflow-x-auto">
               <table className="ui-table min-w-[54rem]">
-                <caption className="sr-only">Connector registry</caption>
+                <caption className="sr-only">{translateNow("source.connector.registry.714802c316")}</caption>
                 <thead>
                   <tr>
-                    <th scope="col">Connector</th>
-                    <th scope="col">Kind</th>
-                    <th scope="col">Delivery mode</th>
-                    <th scope="col">Rollback evidence</th>
+                    <th scope="col">{translateNow("source.connector.8f0d706fff")}</th>
+                    <th scope="col">{translateNow("source.kind.f5387f9bb6")}</th>
+                    <th scope="col">{translateNow("source.delivery.mode.c9585346ea")}</th>
+                    <th scope="col">{translateNow("source.rollback.evidence.bf960c995c")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -418,27 +401,26 @@ export function Connectors() {
         <section aria-labelledby="delivery-receipts-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="delivery-receipts-heading" className="text-title font-semibold">
-              Recent delivery receipts
-            </h2>
+              {translateNow("source.recent.delivery.receipts.a9cb8f42a9")}</h2>
           </div>
           {deliveries.length === 0 ? (
-            <EmptyState title="No connector delivery receipts">No deploy outbox attempt has produced a receipt yet.</EmptyState>
+            <EmptyState title={translateNow("source.no.connector.delivery.receipts.b8aaf68b4d")}>{translateNow("source.no.deploy.outbox.attempt.has.produced.a.re.6e3133a027")}</EmptyState>
           ) : (
             <>
               <div className="ui-panel overflow-x-auto">
                 <table className="ui-table min-w-[80rem]">
-                  <caption className="sr-only">Recent connector delivery receipts</caption>
+                  <caption className="sr-only">{translateNow("source.recent.connector.delivery.receipts.3a2bf7db18")}</caption>
                   <thead>
                     <tr>
-                      <th scope="col">Status</th>
-                      <th scope="col">Connector</th>
-                      <th scope="col">Destination</th>
-                      <th scope="col">Target</th>
-                      <th scope="col">Attempts</th>
-                      <th scope="col">Fingerprint</th>
-                      <th scope="col">Reason</th>
-                      <th scope="col">Rollback</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                      <th scope="col">{translateNow("source.connector.8f0d706fff")}</th>
+                      <th scope="col">{translateNow("source.destination.293d404a50")}</th>
+                      <th scope="col">{translateNow("source.target.978354db0c")}</th>
+                      <th scope="col">{translateNow("source.attempts.06e70139fc")}</th>
+                      <th scope="col">{translateNow("source.fingerprint.ba7af0b704")}</th>
+                      <th scope="col">{translateNow("source.reason.f81ab834de")}</th>
+                      <th scope="col">{translateNow("source.rollback.c591f55749")}</th>
+                      <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -494,12 +476,12 @@ export function Connectors() {
                 <caption className="sr-only">{t("parity.outboxCircuitBreakers_278ec6")}</caption>
                 <thead>
                   <tr>
-                    <th scope="col">Destination</th>
-                    <th scope="col">State</th>
+                    <th scope="col">{translateNow("source.destination.293d404a50")}</th>
+                    <th scope="col">{translateNow("source.state.a3b50c4767")}</th>
                     <th scope="col">{t("parity.failures_3eec15")}</th>
                     <th scope="col">{t("parity.openUntil_5c3e00")}</th>
                     <th scope="col">{t("parity.lastError_5e4df8")}</th>
-                    <th scope="col">Updated</th>
+                    <th scope="col">{translateNow("source.updated.3a5ecca188")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -581,8 +563,7 @@ export function Connectors() {
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeEdit}>
-                Cancel
-              </Button>
+                {translateNow("source.cancel.19766ed6cc")}</Button>
               <Button type="submit" disabled={editBusy}>
                 {t("parity.saveTarget_fa5df1")}
               </Button>
@@ -636,8 +617,7 @@ export function Connectors() {
               {t("parity.yesDeleteTarget_729269")}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={closeDelete}>
-              Cancel
-            </Button>
+              {translateNow("source.cancel.19766ed6cc")}</Button>
           </div>
         </Dialog>
       )}
@@ -696,8 +676,7 @@ export function Connectors() {
           </dl>
           <div className="flex justify-end border-t border-border px-5 py-4">
             <Button type="button" variant="outline" onClick={() => setDeliveryDetail(null)}>
-              Close
-            </Button>
+              {translateNow("source.close.7d9eb7acb1")}</Button>
           </div>
         </Dialog>
       )}

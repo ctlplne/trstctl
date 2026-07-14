@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { beginLogin, useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export function Login() {
   const { previewAvailable, startPreview } = useAuth();
@@ -23,28 +24,25 @@ export function Login() {
             </svg>
           </span>
           <div>
-            <p className="text-caption font-semibold uppercase tracking-wider text-brand-accent">Machine credential access</p>
-            <h1 className="text-heading font-semibold tracking-tight">trstctl</h1>
+            <p className="text-caption font-semibold uppercase tracking-wider text-brand-accent">{translateNow("source.machine.credential.access.bb586fcf38")}</p>
+            <h1 className="text-heading font-semibold tracking-tight">{translateNow("source.trstctl.74de2c6ee4")}</h1>
           </div>
         </div>
 
         <Card className="shadow-elevation2">
           <CardHeader>
-            <CardTitle>Sign in</CardTitle>
+            <CardTitle>{translateNow("source.sign.in.bfd402b2f6")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="mb-4 text-body text-muted-foreground">Authenticate with your organization's identity provider to manage credentials.</p>
+            <p className="mb-4 text-body text-muted-foreground">{translateNow("source.authenticate.with.your.organization.s.iden.c19821f6a0")}</p>
             <Button className="w-full" onClick={beginLogin}>
-              Sign in with SSO
-            </Button>
+              {translateNow("source.sign.in.with.sso.73e984e9b4")}</Button>
             {previewAvailable && (
               <div className="mt-4 border-t border-border pt-4">
                 <p className="mb-3 text-caption text-muted-foreground">
-                  Preview uses sample data in this browser and stores no sign-in token. Production builds still require SSO.
-                </p>
+                  {translateNow("source.preview.uses.sample.data.in.this.browser.a.7b39b478d2")}</p>
                 <Button className="w-full" variant="outline" onClick={enterPreview}>
-                  Preview UI without backend
-                </Button>
+                  {translateNow("source.preview.ui.without.backend.ad12297cd6")}</Button>
               </div>
             )}
           </CardContent>

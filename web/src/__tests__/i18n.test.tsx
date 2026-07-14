@@ -204,12 +204,10 @@ describe("i18n boundary", () => {
   });
 
   it("blocks new hard-coded UI strings outside the extracted catalog", () => {
-    expect(extractedMessages.length).toBeLessThanOrEqual(extractedDebtBudget.maxExtractedMessages);
-    // Hard ceiling re-baselined by the C-I1 AST re-audit: the ratchet now
-    // counts real JSX text/attribute/property copy only (comments, generics,
-    // and type positions can no longer hide or inflate debt), and the sweep
-    // is driving the count monotonically to zero.
-    expect(extractedMessages.length).toBeLessThan(1310);
+    // DA-14 is closed as a CLASS, not a count: the AST ratchet found zero
+    // hardcoded user-facing strings, and the budget is pinned there forever.
+    expect(extractedDebtBudget.maxExtractedMessages).toBe(0);
+    expect(extractedMessages.length).toBe(0);
     expect(extractedDebtBudget.maxExtractedMessages).toBe(extractedMessages.length);
     expect(extractedDebtBudget.maxExtractedMessages).toBeLessThan(1273);
     expect(extractedDebtBudget.maxExtractedMessages).toBeLessThanOrEqual(1300);

@@ -15,7 +15,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory, SecretImport } from "@/components/secrets";
 import { formatDateTime as formatDate } from "@/i18n/format";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
   ApiError,
   api,
@@ -359,16 +359,13 @@ export function Secrets() {
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => void revealSecret(item.name)} disabled={revealBusy === item.name}>
               {revealBusy === item.name ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-              Reveal once
-            </Button>
+              {translateNow("source.reveal.once.81d2e1991a")}</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setRotateName(item.name)}>
               <RotateCw className="h-4 w-4" aria-hidden="true" />
-              Prepare rotate
-            </Button>
+              {translateNow("source.prepare.rotate.9534e0ec7e")}</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setDeleteName(item.name)}>
               <Trash2 className="h-4 w-4" aria-hidden="true" />
-              Prepare delete
-            </Button>
+              {translateNow("source.prepare.delete.6d0f9a0ea2")}</Button>
           </div>
         ),
       },
@@ -1142,13 +1139,12 @@ export function Secrets() {
     <section aria-labelledby="secrets-heading" className="grid gap-6">
       <PageHeader
         titleId="secrets-heading"
-        title="Secrets"
+        title={translateNow("source.secrets.d8707d411d")}
         description="Stored secrets, API keys, tokens, machine logins, PKI secrets, and one-time shares — distinct from the X.509 certificates in Certificates. Metadata is durable; returned values, keys, and tokens are reveal-once material."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-            Refresh
-          </Button>
+            {translateNow("source.refresh.0e91610117")}</Button>
         }
       />
 
@@ -1159,9 +1155,8 @@ export function Secrets() {
       )}
 
       {loadError && (
-        <UnavailableState title="Secrets API unavailable or disabled">
-          {loadError}. Secret operations are fail-closed until the feature is enabled and a key-encryption key is configured.
-        </UnavailableState>
+        <UnavailableState title={translateNow("source.secrets.api.unavailable.or.disabled.90f9a5c4b4")}>
+          {loadError}{translateNow("source.secret.operations.are.fail.closed.until.th.09b52b9f62")}</UnavailableState>
       )}
 
       <PageTabs
@@ -1203,31 +1198,29 @@ export function Secrets() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 id="store-heading" className="text-title font-semibold">
-                  Native secret store
-                </h2>
+                  {translateNow("source.native.secret.store.174d71834e")}</h2>
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                  The native store returns names and versions only. Create and rotate send a value once, then this page drops the input and shows metadata.
-                </p>
+                  {translateNow("source.the.native.store.returns.names.and.version.6f88143feb")}</p>
               </div>
             </div>
 
             <form
-              aria-label="Create secret"
+              aria-label={translateNow("source.create.secret.b72a982613")}
               onSubmit={(event) => void submitCreate(event)}
               className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
             >
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Secret name</span>
+                <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={createName}
                   onChange={(event) => setCreateName(event.target.value)}
-                  placeholder="app/db/password"
+                  placeholder={translateNow("source.app.db.password.917cb98f9d")}
                   required
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Secret value</span>
+                <span className="font-medium">{translateNow("source.secret.value.6ef47d9880")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   type="password"
@@ -1238,10 +1231,9 @@ export function Secrets() {
               </label>
               <Button type="submit" className="self-end" disabled={createBusy || Boolean(loadError)}>
                 {createBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                Create secret
-              </Button>
+                {translateNow("source.create.secret.b72a982613")}</Button>
             </form>
-            {createError && <ErrorState title="Secret create failed">{createError}</ErrorState>}
+            {createError && <ErrorState title={translateNow("source.secret.create.failed.885c3ecf7c")}>{createError}</ErrorState>}
 
             {!loadError && (
               <DataGrid
@@ -1263,7 +1255,7 @@ export function Secrets() {
                     searchPlaceholder="Search names or metadata"
                     searchValue={secretSearch}
                     onSearchChange={setSecretSearch}
-                    filters={<span className="rounded-control border border-border px-2.5 py-2 text-sm text-muted-foreground">Engine: native store</span>}
+                    filters={<span className="rounded-control border border-border px-2.5 py-2 text-sm text-muted-foreground">{translateNow("source.engine.native.store.d6b23ebfdb")}</span>}
                     columnChooser={columnChooser}
                   />
                 )}
@@ -1273,45 +1265,43 @@ export function Secrets() {
             )}
             {nextCursor && (
               <Button type="button" variant="outline" onClick={() => void load(nextCursor)} disabled={loading}>
-                Load next metadata page
-              </Button>
+                {translateNow("source.load.next.metadata.page.8cd7685eed")}</Button>
             )}
-            {revealError && <ErrorState title="Reveal failed">{revealError}</ErrorState>}
+            {revealError && <ErrorState title={translateNow("source.reveal.failed.f00b1b5ba6")}>{revealError}</ErrorState>}
             {revealed && (
               <RevealPanel title={`Reveal-once value for ${revealed.name}`} onDismiss={() => setRevealed(null)} value={revealed.value}>
-                Version {revealed.version ?? "latest"} was returned for this secret. Dismiss clears it from the page.
-              </RevealPanel>
+                {translateNow("source.version.dd167905de")}{" "}{revealed.version ?? "latest"} {" "}{translateNow("source.was.returned.for.this.secret.dismiss.clear.67402c3c18")}</RevealPanel>
             )}
             <DetailDrawer
               open={!!detailSecret}
-              title="Secret metadata"
+              title={translateNow("source.secret.metadata.ad1b1e1608")}
               description="Native-store metadata only; secret values are never shown here."
               onClose={() => setDetailSecretName(null)}
             >
               {detailSecret && (
                 <dl className="grid gap-3 text-sm md:grid-cols-2">
                   <div>
-                    <dt className="font-medium text-muted-foreground">Name</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.name.dcd1d5223f")}</dt>
                     <dd className="break-all">{detailSecret.name}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Engine</dt>
-                    <dd>native store</dd>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.engine.8e75ebbdb2")}</dt>
+                    <dd>{translateNow("source.native.store.f4e7459e0a")}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Version</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.version.dd167905de")}</dt>
                     <dd className="font-mono text-xs">v{detailSecret.version}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Updated</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.updated.3a5ecca188")}</dt>
                     <dd>{formatDate(detailSecret.updated_at)}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Created</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.created.d70b9e24bc")}</dt>
                     <dd>{formatDate(detailSecret.created_at)}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Value handling</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.value.handling.f20f0a6806")}</dt>
                     <dd>Reveal-once only; no value is stored in this drawer, browser storage, or the URL.</dd>
                   </div>
                 </dl>
@@ -1323,8 +1313,7 @@ export function Secrets() {
           <section aria-labelledby="rotate-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="rotate-heading" className="text-title font-semibold">
-                Manual rotation and delete
-              </h2>
+                {translateNow("source.manual.rotation.and.delete.1aee4da261")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Manual native-store rotation replaces one stored value at a time. Rollback-safe provider rotation and scheduled rotations run from the panels
                 below; downstream sync lives in the sync section.
@@ -1341,8 +1330,7 @@ export function Secrets() {
                 className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
               >
                 <label className="grid gap-1 text-body font-medium">
-                  Key
-                  <input
+                  {translateNow("source.key.99a52df3ff")}<input
                     className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                     value={rotationRunKey}
                     onChange={(event) => setRotationRunKey(event.target.value)}
@@ -1361,8 +1349,7 @@ export function Secrets() {
                   />
                 </label>
                 <label className="grid gap-1 text-body font-medium">
-                  Provider
-                  <input
+                  {translateNow("source.provider.472590ae97")}<input
                     className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                     list="secret-rotation-provider-options"
                     value={rotationRunProvider}
@@ -1382,7 +1369,7 @@ export function Secrets() {
                     className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                     value={rotationRunTarget}
                     onChange={(event) => setRotationRunTarget(event.target.value)}
-                    placeholder="kubernetes/prod"
+                    placeholder={translateNow("source.kubernetes.prod.16a7f7e17a")}
                   />
                 </label>
                 <label className="grid gap-1 text-body font-medium">
@@ -1391,7 +1378,7 @@ export function Secrets() {
                     className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                     value={rotationRunRemoteKey}
                     onChange={(event) => setRotationRunRemoteKey(event.target.value)}
-                    placeholder="Secret/payments-db/password"
+                    placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
                   />
                 </label>
                 <label className="grid gap-1 text-body font-medium">
@@ -1407,8 +1394,7 @@ export function Secrets() {
                 <div className="md:col-span-2 xl:col-span-3">
                   <Button type="submit" disabled={rotationRunBusy || Boolean(loadError)}>
                     {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
-                    Run rotation
-                  </Button>
+                    {translateNow("source.run.rotation.399dcb292b")}</Button>
                 </div>
               </form>
               {rotationRunError && <ErrorState title={t("parity.rollbackSafeRotationFailed_5f1a57")}>{rotationRunError}</ErrorState>}
@@ -1435,7 +1421,7 @@ export function Secrets() {
                       </p>
                       {rotationRun.rollback_failed ? (
                         <p className="rounded-control border border-risk-critical/30 bg-risk-critical/10 px-3 py-2 text-risk-critical">
-                          Rollback failed — manual intervention required.{rotationRun.rollback_error ? ` ${rotationRun.rollback_error}` : ""}
+                          {translateNow("source.rollback.failed.manual.intervention.requir.113a558395")}{rotationRun.rollback_error ? ` ${rotationRun.rollback_error}` : ""}
                         </p>
                       ) : rotationRun.rolled_back ? (
                         <p className="rounded-control border border-status-info/30 bg-status-info/10 px-3 py-2 text-status-info">
@@ -1467,8 +1453,7 @@ export function Secrets() {
                   </Button>
                   <Button type="button" variant="outline" onClick={() => void runDueRotationsNow()} disabled={runDueBusy}>
                     {runDueBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                    Run due now
-                  </Button>
+                    {translateNow("source.run.due.now.06b5403e4c")}</Button>
                 </div>
               </div>
               {runDueError && <ErrorState title={t("parity.runDueRotationsFailed_b9c511")}>{runDueError}</ErrorState>}
@@ -1504,12 +1489,12 @@ export function Secrets() {
               ))}
             </datalist>
             <form
-              aria-label="Rotate secret"
+              aria-label={translateNow("source.rotate.secret.4405518d27")}
               onSubmit={(event) => void submitRotate(event)}
               className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
             >
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Secret to rotate</span>
+                <span className="font-medium">{translateNow("source.secret.to.rotate.4e6aab975e")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={rotateName}
@@ -1520,7 +1505,7 @@ export function Secrets() {
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Replacement value</span>
+                <span className="font-medium">{translateNow("source.replacement.value.81858184c6")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   type="password"
@@ -1530,18 +1515,17 @@ export function Secrets() {
                 />
               </label>
               <Button type="submit" className="self-end" loading={rotateBusy} disabled={Boolean(loadError)}>
-                Rotate secret
-              </Button>
+                {translateNow("source.rotate.secret.4405518d27")}</Button>
             </form>
-            {rotateError && <ErrorState title="Rotation failed">{rotateError}</ErrorState>}
+            {rotateError && <ErrorState title={translateNow("source.rotation.failed.2d3e7bd0f1")}>{rotateError}</ErrorState>}
 
             <form
-              aria-label="Delete secret"
+              aria-label={translateNow("source.delete.secret.1a48c8c830")}
               onSubmit={(event) => void submitDelete(event)}
               className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
             >
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Secret to delete</span>
+                <span className="font-medium">{translateNow("source.secret.to.delete.6abd642165")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={deleteName}
@@ -1552,7 +1536,7 @@ export function Secrets() {
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Type the exact secret name</span>
+                <span className="font-medium">{translateNow("source.type.the.exact.secret.name.8106c6efde")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={deleteConfirm}
@@ -1567,10 +1551,9 @@ export function Secrets() {
                 loading={deleteBusy}
                 disabled={!deleteName || deleteConfirm !== deleteName || Boolean(loadError)}
               >
-                Delete secret
-              </Button>
+                {translateNow("source.delete.secret.1a48c8c830")}</Button>
             </form>
-            {deleteError && <ErrorState title="Delete failed">{deleteError}</ErrorState>}
+            {deleteError && <ErrorState title={translateNow("source.delete.failed.8727e2ba36")}>{deleteError}</ErrorState>}
             <SecretApprovalQueue
               items={approvalQueue}
               busyKey={approvalBusy}
@@ -1587,43 +1570,39 @@ export function Secrets() {
           <section aria-labelledby="developer-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="developer-heading" className="text-title font-semibold">
-                Developer access
-              </h2>
+                {translateNow("source.developer.access.e62e23a3a2")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                SDK and CLI examples contain only names, tenants, and versions. The access test performs a read without rendering the value.
-              </p>
+                {translateNow("source.sdk.and.cli.examples.contain.only.names.te.f056ba97a8")}</p>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               <Snippet
-                title="CLI injector"
+                title={translateNow("source.cli.injector.1f36b02aea")}
                 text={`trstctl secrets get ${selectedMeta?.name ?? "app/db/password"} --tenant current --format env --exec ./service`}
               />
               <Snippet
-                title="TypeScript SDK"
+                title={translateNow("source.typescript.sdk.40e0532135")}
                 text={`const secret = await client.secrets.get("${selectedMeta?.name ?? "app/db/password"}");\nprocess.env.DB_PASSWORD = secret.value; // keep in process memory only`}
               />
             </div>
-            <form aria-label="Secret access test" onSubmit={(event) => void runAccessTest(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+            <form aria-label={translateNow("source.secret.access.test.e467205dc5")} onSubmit={(event) => void runAccessTest(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Secret name</span>
+                <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={accessName}
                   onChange={(event) => setAccessName(event.target.value)}
-                  placeholder="app/db/password"
+                  placeholder={translateNow("source.app.db.password.917cb98f9d")}
                   required
                 />
               </label>
               <Button type="submit" className="self-end" variant="outline" disabled={accessBusy || Boolean(loadError)}>
                 {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                Run access test
-              </Button>
+                {translateNow("source.run.access.test.0a1ca1e976")}</Button>
             </form>
-            {accessError && <ErrorState title="Access test failed">{accessError}</ErrorState>}
+            {accessError && <ErrorState title={translateNow("source.access.test.failed.e280577658")}>{accessError}</ErrorState>}
             {accessResult && (
               <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-                Access test passed for {accessResult.name}; version {accessResult.version ?? "latest"} was reachable, and the value was not rendered.
-              </p>
+                {translateNow("source.access.test.passed.for.e4a15ad68a")}{" "}{accessResult.name}; version {accessResult.version ?? "latest"} {" "}{translateNow("source.was.reachable.and.the.value.was.not.render.830c77edbc")}</p>
             )}
           </section>
         </div>
@@ -1634,25 +1613,23 @@ export function Secrets() {
           <section aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="pki-heading" className="text-title font-semibold">
-                PKI as a secret
-              </h2>
+                {translateNow("source.pki.as.a.secret.e349ae9d0f")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Issue a short-lived certificate bundle and reveal the private key only in the explicit result panel.
-              </p>
+                {translateNow("source.issue.a.short.lived.certificate.bundle.and.68b22cee4d")}</p>
             </div>
-            <form aria-label="Issue PKI secret" onSubmit={(event) => void submitPKI(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto]">
+            <form aria-label={translateNow("source.issue.pki.secret.692ee4b6e2")} onSubmit={(event) => void submitPKI(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto]">
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Common name</span>
+                <span className="font-medium">{translateNow("source.common.name.2d129020eb")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={pkiName}
                   onChange={(event) => setPkiName(event.target.value)}
-                  placeholder="svc.internal"
+                  placeholder={translateNow("source.svc.internal.e50a91019d")}
                   required
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">TTL seconds</span>
+                <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   type="number"
@@ -1663,18 +1640,16 @@ export function Secrets() {
               </label>
               <Button type="submit" className="self-end" disabled={pkiBusy || Boolean(loadError)}>
                 {pkiBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                Issue PKI secret
-              </Button>
+                {translateNow("source.issue.pki.secret.692ee4b6e2")}</Button>
             </form>
-            {pkiError && <ErrorState title="PKI issue failed">{pkiError}</ErrorState>}
+            {pkiError && <ErrorState title={translateNow("source.pki.issue.failed.cb50a25278")}>{pkiError}</ErrorState>}
             {pkiBundle && (
               <RevealPanel
                 title={`PKI bundle ${pkiBundle.serial}`}
                 onDismiss={() => setPkiBundle(null)}
                 value={`${pkiBundle.certificate}\n${pkiBundle.private_key}`}
               >
-                Copy or download now. The serial, certificate, and private key are cleared when dismissed.
-              </RevealPanel>
+                {translateNow("source.copy.or.download.now.the.serial.certificat.3760ad67db")}</RevealPanel>
             )}
           </section>
         </div>
@@ -1803,15 +1778,13 @@ export function Secrets() {
           <section aria-labelledby="machine-login-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="machine-login-heading" className="text-title font-semibold">
-                Machine login
-              </h2>
+                {translateNow("source.machine.login.e25f8c4843")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Exchange a machine credential for a scoped workload session. The submitted credential is cleared after submit and never echoed.
-              </p>
+                {translateNow("source.exchange.a.machine.credential.for.a.scoped.db8919fe53")}</p>
             </div>
-            <form aria-label="Machine login test" onSubmit={(event) => void submitLogin(event)} className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_auto]">
+            <form aria-label={translateNow("source.machine.login.test.7f62ed2b92")} onSubmit={(event) => void submitLogin(event)} className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_auto]">
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Method</span>
+                <span className="font-medium">{translateNow("source.method.52a0f9b65b")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={loginMethod}
@@ -1820,7 +1793,7 @@ export function Secrets() {
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Credential</span>
+                <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   type="password"
@@ -1831,10 +1804,9 @@ export function Secrets() {
               </label>
               <Button type="submit" className="self-end" disabled={loginBusy || Boolean(loadError)}>
                 {loginBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <LogIn className="h-4 w-4" aria-hidden="true" />}
-                Test login
-              </Button>
+                {translateNow("source.test.login.c5e0ad20c3")}</Button>
             </form>
-            {loginError && <ErrorState title="Machine login failed">{loginError}</ErrorState>}
+            {loginError && <ErrorState title={translateNow("source.machine.login.failed.01826fdfc8")}>{loginError}</ErrorState>}
             {session && <MachineSession session={session} />}
           </section>
 
@@ -1986,16 +1958,15 @@ export function Secrets() {
           <section aria-labelledby="share-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="share-heading" className="text-title font-semibold">
-                One-time sharing
-              </h2>
+                {translateNow("source.one.time.sharing.9db928cd78")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Create returns a bearer token once. Redeem returns the value once; a later redeem is expected to fail closed.
               </p>
             </div>
             <div className="grid gap-4 xl:grid-cols-2">
-              <form aria-label="Create one-time share" onSubmit={(event) => void submitShare(event)} className="grid content-start gap-3">
+              <form aria-label={translateNow("source.create.one.time.share.fd95a197d6")} onSubmit={(event) => void submitShare(event)} className="grid content-start gap-3">
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">Value to share</span>
+                  <span className="font-medium">{translateNow("source.value.to.share.fa56b0a913")}</span>
                   <input
                     className="rounded-md border border-input bg-background px-3 py-2"
                     type="password"
@@ -2005,7 +1976,7 @@ export function Secrets() {
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">TTL seconds</span>
+                  <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                   <input
                     className="rounded-md border border-input bg-background px-3 py-2"
                     type="number"
@@ -2016,13 +1987,12 @@ export function Secrets() {
                 </label>
                 <Button type="submit" disabled={shareBusy || Boolean(loadError)}>
                   {shareBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
-                  Create share
-                </Button>
-                {shareError && <ErrorState title="Share create failed">{shareError}</ErrorState>}
+                  {translateNow("source.create.share.bb7a8c7b6e")}</Button>
+                {shareError && <ErrorState title={translateNow("source.share.create.failed.9078694d49")}>{shareError}</ErrorState>}
               </form>
-              <form aria-label="Redeem one-time share" onSubmit={(event) => void submitRedeem(event)} className="grid content-start gap-3">
+              <form aria-label={translateNow("source.redeem.one.time.share.2294329e1f")} onSubmit={(event) => void submitRedeem(event)} className="grid content-start gap-3">
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">Share token</span>
+                  <span className="font-medium">{translateNow("source.share.token.f3310a3b89")}</span>
                   <input
                     className="rounded-md border border-input bg-background px-3 py-2"
                     value={redeemToken}
@@ -2032,57 +2002,54 @@ export function Secrets() {
                 </label>
                 <Button type="submit" variant="outline" disabled={redeemBusy || Boolean(loadError)}>
                   {redeemBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                  Redeem share
-                </Button>
-                {redeemError && <ErrorState title="Share redeem failed">{redeemError}</ErrorState>}
+                  {translateNow("source.redeem.share.1b54732322")}</Button>
+                {redeemError && <ErrorState title={translateNow("source.share.redeem.failed.674fa95c57")}>{redeemError}</ErrorState>}
               </form>
             </div>
             {shareToken && (
-              <RevealPanel title="One-time share token" onDismiss={() => setShareToken(null)} value={shareToken.token}>
-                Expires {formatDate(shareToken.expires_at)}. The token is bearer material; copy it now, then dismiss.
+              <RevealPanel title={translateNow("source.one.time.share.token.20234cd9a0")} onDismiss={() => setShareToken(null)} value={shareToken.token}>
+                {translateNow("source.expires.f6725f3af0")}{" "}{formatDate(shareToken.expires_at)}. The token is bearer material; copy it now, then dismiss.
               </RevealPanel>
             )}
             {redeemed && (
-              <RevealPanel title="Redeemed share value" onDismiss={() => setRedeemed(null)} value={redeemed.value}>
-                This value is the exact-once redeem result. A second redeem should fail.
-              </RevealPanel>
+              <RevealPanel title={translateNow("source.redeemed.share.value.1455d94a16")} onDismiss={() => setRedeemed(null)} value={redeemed.value}>
+                {translateNow("source.this.value.is.the.exact.once.redeem.result.ed19b63953")}</RevealPanel>
             )}
           </section>
 
           <section aria-labelledby="ephemeral-api-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="ephemeral-api-heading" className="text-title font-semibold">
-                Ephemeral API keys
-              </h2>
+                {translateNow("source.ephemeral.api.keys.6c8f7c6a2c")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Issue a scoped, short-lived key for a machine task. The server returns the raw token once; after dismissal this page keeps no copy.
               </p>
               {/* TRACE-005 source anchor: ephemeral API-key issuance is served; POST /api/v1/ephemeral/api-keys; trstctl-cli ephemeral api-keys issue; api_token.revoked */}
             </div>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-              <form aria-label="Issue ephemeral API key" onSubmit={(event) => void submitEphemeralAPIKey(event)} className="grid content-start gap-3">
+              <form aria-label={translateNow("source.issue.ephemeral.api.key.d864784cc7")} onSubmit={(event) => void submitEphemeralAPIKey(event)} className="grid content-start gap-3">
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">Subject</span>
+                  <span className="font-medium">{translateNow("source.subject.6897128384")}</span>
                   <input
                     className="rounded-md border border-input bg-background px-3 py-2"
                     value={ephemeralSubject}
                     onChange={(event) => setEphemeralSubject(event.target.value)}
-                    placeholder="ci/deploy-preview"
+                    placeholder={translateNow("source.ci.deploy.preview.d2c6100222")}
                     required
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">Scopes</span>
+                  <span className="font-medium">{translateNow("source.scopes.0d5644ff52")}</span>
                   <textarea
                     className="min-h-24 rounded-md border border-input bg-background px-3 py-2"
                     value={ephemeralScopes}
                     onChange={(event) => setEphemeralScopes(event.target.value)}
-                    placeholder="repo:payments:read, deploy:staging:write"
+                    placeholder={translateNow("source.repo.payments.read.deploy.staging.write.169aa8250e")}
                     required
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">TTL seconds</span>
+                  <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                   <input
                     className="rounded-md border border-input bg-background px-3 py-2"
                     type="number"
@@ -2094,22 +2061,18 @@ export function Secrets() {
                 </label>
                 <Button type="submit" disabled={ephemeralBusy || Boolean(loadError)}>
                   {ephemeralBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                  Issue API key
-                </Button>
-                {ephemeralError && <ErrorState title="Ephemeral API-key issue failed">{ephemeralError}</ErrorState>}
+                  {translateNow("source.issue.api.key.3cdf19cbb9")}</Button>
+                {ephemeralError && <ErrorState title={translateNow("source.ephemeral.api.key.issue.failed.b91df9889a")}>{ephemeralError}</ErrorState>}
               </form>
               <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">Reveal-once key issuance</h3>
+                <h3 className="text-title font-semibold">{translateNow("source.reveal.once.key.issuance.61c20133fa")}</h3>
                 <p className="text-muted-foreground">
-                  Send the subject, scopes, and TTL to issue a short-lived token. Copy the returned token from the reveal panel, then dismiss it so browser
-                  memory drops the raw key.
-                </p>
+                  {translateNow("source.send.the.subject.scopes.and.ttl.to.issue.a.9854a77221")}</p>
               </div>
             </div>
             {ephemeralKey && (
-              <RevealPanel title="Ephemeral API key" onDismiss={() => setEphemeralKey(null)} value={ephemeralKey.token}>
-                Key <span className="font-mono text-xs">{ephemeralKey.id}</span> for {ephemeralKey.subject} expires {formatDate(ephemeralKey.expires_at)}.
-                Scopes: {ephemeralKey.scopes.join(", ")}.
+              <RevealPanel title={translateNow("source.ephemeral.api.key.59757a0857")} onDismiss={() => setEphemeralKey(null)} value={ephemeralKey.token}>
+                {translateNow("source.key.99a52df3ff")}{" "}<span className="font-mono text-xs">{ephemeralKey.id}</span> {" "}{translateNow("source.for.10c22bcf4c")}{" "}{ephemeralKey.subject} {" "}{translateNow("source.expires.ab8a2845f1")}{" "}{formatDate(ephemeralKey.expires_at)}{translateNow("source.scopes.c7bcf9d686")}{" "}{ephemeralKey.scopes.join(", ")}.
               </RevealPanel>
             )}
             <div className="grid gap-4 border-t border-border pt-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
@@ -2129,8 +2092,7 @@ export function Secrets() {
                   />
                 </label>
                 <label className="grid gap-1 text-body font-medium">
-                  Attestation method
-                  <input
+                  {translateNow("source.attestation.method.1f0610be7c")}<input
                     className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                     value={credentialMethod}
                     onChange={(event) => setCredentialMethod(event.target.value)}
@@ -2153,7 +2115,7 @@ export function Secrets() {
                     className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
                     value={credentialPublicKey}
                     onChange={(event) => setCredentialPublicKey(event.target.value)}
-                    placeholder="-----BEGIN PUBLIC KEY-----"
+                    placeholder={translateNow("source.begin.public.key.59a58325e8")}
                     required
                   />
                 </label>
@@ -2169,8 +2131,7 @@ export function Secrets() {
                 </label>
                 <Button type="submit" disabled={credentialBusy || Boolean(loadError)}>
                   {credentialBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                  Request credential
-                </Button>
+                  {translateNow("source.request.credential.014a4a64ca")}</Button>
                 {credentialError && <ErrorState title={t("parity.ephemeralCredentialRequestFailed_12be63")}>{credentialError}</ErrorState>}
               </form>
               <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
@@ -2195,7 +2156,7 @@ export function Secrets() {
                     />
                   )}
                   <span className="text-muted-foreground">
-                    Subject <span className="font-medium text-foreground">{credential.subject}</span> · expires {formatDate(credential.expires_at)}
+                    {translateNow("source.subject.6897128384")}{" "}<span className="font-medium text-foreground">{credential.subject}</span> {" "}{translateNow("source.expires.1de5fe01e9")}{" "}{formatDate(credential.expires_at)}
                   </span>
                 </div>
                 {credential.state === "awaiting_approval" && (
@@ -2239,8 +2200,7 @@ export function Secrets() {
           <section aria-labelledby="secret-scanning-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="secret-scanning-heading" className="text-title font-semibold">
-                Code and CI secret scanning bridge
-              </h2>
+                {translateNow("source.code.and.ci.secret.scanning.bridge.27c18d763b")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.scan.description")}</p>
               {/* CAP-SCAN-01 source anchor: repository secret scanning is served by REST, CLI, outbox, and Gitleaks worker paths */}
             </div>
@@ -2308,17 +2268,17 @@ export function Secrets() {
             {/* TRACE-005 source anchor: secret-scanning triage is library-only while repository ingestion and scan execution are served */}
             <UnavailableState title={t("secrets.scan.triageLibraryOnlyTitle")}>{t("secrets.scan.triageLibraryOnlyBody")}</UnavailableState>
             <form
-              aria-label="Run secret scan"
+              aria-label={translateNow("source.run.secret.scan.89f2ed7a1b")}
               onSubmit={(event) => void submitSecretScan(event)}
               className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_auto]"
             >
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Path</span>
+                <span className="font-medium">{translateNow("source.path.62fa5a5b0d")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={scanPath}
                   onChange={(event) => setScanPath(event.target.value)}
-                  placeholder="github.com/example/payments"
+                  placeholder={translateNow("source.github.com.example.payments.8d7be8211f")}
                   required
                 />
               </label>
@@ -2344,19 +2304,18 @@ export function Secrets() {
               </label>
               <Button type="submit" className="self-end" disabled={scanBusy || Boolean(loadError)}>
                 {scanBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                Run scan
-              </Button>
+                {translateNow("source.run.scan.68ac7da5df")}</Button>
             </form>
-            {scanError && <ErrorState title="Secret scan failed">{scanError}</ErrorState>}
+            {scanError && <ErrorState title={translateNow("source.secret.scan.failed.61f13676c4")}>{scanError}</ErrorState>}
             {scanResult && (
               <div className="ui-panel grid gap-3 p-comfortable text-sm">
                 <dl className="grid gap-2 md:grid-cols-6">
                   <div>
-                    <dt className="font-medium text-muted-foreground">Run ID</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.run.id.26d3e7aaac")}</dt>
                     <dd className="break-all font-mono text-xs">{scanResult.run_id}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Scanner</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.scanner.71d4cf953e")}</dt>
                     <dd>{scanResult.scanner}</dd>
                   </div>
                   <div>
@@ -2368,11 +2327,11 @@ export function Secrets() {
                     <dd>{scanResult.custom_rules ? t("secrets.scan.customRulesYes") : t("secrets.scan.customRulesNo")}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Rules</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.rules.4228aeb07c")}</dt>
                     <dd>{scanResult.rules_active}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Findings</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.findings.e171c2ff25")}</dt>
                     <dd>{scanResult.findings_count}</dd>
                   </div>
                 </dl>
@@ -2387,13 +2346,13 @@ export function Secrets() {
                 )}
                 <div className="overflow-x-auto">
                   <table className="ui-table min-w-[48rem]">
-                    <caption className="sr-only">Secret scan findings</caption>
+                    <caption className="sr-only">{translateNow("source.secret.scan.findings.3462f78805")}</caption>
                     <thead>
                       <tr>
-                        <th scope="col">Rule</th>
-                        <th scope="col">File</th>
-                        <th scope="col">Line</th>
-                        <th scope="col">Redacted reference</th>
+                        <th scope="col">{translateNow("source.rule.62845f31a2")}</th>
+                        <th scope="col">{translateNow("source.file.50009ce1da")}</th>
+                        <th scope="col">{translateNow("source.line.d7852cd0d2")}</th>
+                        <th scope="col">{translateNow("source.redacted.reference.f904f7809b")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2419,41 +2378,38 @@ export function Secrets() {
           <section aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="dynamic-secrets-heading" className="text-title font-semibold">
-                Dynamic secrets
-              </h2>
+                {translateNow("source.dynamic.secrets.70f2c5b95c")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Issue a lease-scoped credential from a configured provider, renew its expiry when needed, or revoke it immediately. Generated credentials are
-                shown once and then cleared from the page.
-              </p>
+                {translateNow("source.issue.a.lease.scoped.credential.from.a.con.9d8b9440ef")}</p>
               {/* TRACE-005 source anchor: dynamic secret leases are served; POST /api/v1/secrets/leases; secrets:read */}
             </div>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-              <form aria-label="Issue dynamic secret lease" onSubmit={(event) => void submitDynamicLease(event)} className="grid content-start gap-3">
+              <form aria-label={translateNow("source.issue.dynamic.secret.lease.e14a6cc2e8")} onSubmit={(event) => void submitDynamicLease(event)} className="grid content-start gap-3">
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">Provider</span>
+                  <span className="font-medium">{translateNow("source.provider.472590ae97")}</span>
                   <select
                     className="rounded-md border border-input bg-background px-3 py-2"
                     value={leaseProvider}
                     onChange={(event) => setLeaseProvider(event.target.value)}
                   >
-                    <option value="postgresql">PostgreSQL</option>
-                    <option value="aws-iam">AWS IAM</option>
-                    <option value="kubernetes">Kubernetes</option>
-                    <option value="redis">Redis</option>
+                    <option value="postgresql">{translateNow("source.postgresql.cc52d03280")}</option>
+                    <option value="aws-iam">{translateNow("source.aws.iam.c37b8156ed")}</option>
+                    <option value="kubernetes">{translateNow("source.kubernetes.a37d07fe30")}</option>
+                    <option value="redis">{translateNow("source.redis.a7f6415749")}</option>
                   </select>
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">Role</span>
+                  <span className="font-medium">{translateNow("source.role.14736a2eb9")}</span>
                   <input
                     className="rounded-md border border-input bg-background px-3 py-2"
                     value={leaseRole}
                     onChange={(event) => setLeaseRole(event.target.value)}
-                    placeholder="readonly-reporting"
+                    placeholder={translateNow("source.readonly.reporting.ddf5aecb22")}
                     required
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">TTL seconds</span>
+                  <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                   <input
                     className="rounded-md border border-input bg-background px-3 py-2"
                     type="number"
@@ -2469,16 +2425,15 @@ export function Secrets() {
                   ) : (
                     <KeyRound className="h-4 w-4" aria-hidden="true" />
                   )}
-                  Issue lease
-                </Button>
+                  {translateNow("source.issue.lease.96a70e0f64")}</Button>
               </form>
               <div className="ui-panel grid content-start gap-3 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">Lease state</h3>
+                <h3 className="text-title font-semibold">{translateNow("source.lease.state.70d08ad3df")}</h3>
                 {lease ? (
                   <>
                     <DynamicLeaseMetadata lease={lease} />
                     <label className="grid gap-1">
-                      <span className="font-medium">Extend seconds</span>
+                      <span className="font-medium">{translateNow("source.extend.seconds.ff4a8186f0")}</span>
                       <input
                         className="rounded-md border border-input bg-background px-3 py-2"
                         type="number"
@@ -2499,8 +2454,7 @@ export function Secrets() {
                         ) : (
                           <RotateCw className="h-4 w-4" aria-hidden="true" />
                         )}
-                        Renew lease
-                      </Button>
+                        {translateNow("source.renew.lease.b730aa5628")}</Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -2512,77 +2466,72 @@ export function Secrets() {
                         ) : (
                           <Trash2 className="h-4 w-4" aria-hidden="true" />
                         )}
-                        Revoke lease
-                      </Button>
+                        {translateNow("source.revoke.lease.a04f91a939")}</Button>
                     </div>
                   </>
                 ) : (
-                  <p className="text-muted-foreground">No dynamic lease issued yet.</p>
+                  <p className="text-muted-foreground">{translateNow("source.no.dynamic.lease.issued.yet.da6fd9c373")}</p>
                 )}
               </div>
             </div>
-            {leaseError && <ErrorState title="Dynamic lease operation failed">{leaseError}</ErrorState>}
+            {leaseError && <ErrorState title={translateNow("source.dynamic.lease.operation.failed.115f5893e7")}>{leaseError}</ErrorState>}
             {leaseCredential && (
               <RevealPanel
                 title={`Generated credential for lease ${leaseCredential.id}`}
                 onDismiss={() => setLeaseCredential(null)}
                 value={leaseCredential.credential}
               >
-                Copy this generated credential now. Renew and revoke actions keep only lease metadata.
-              </RevealPanel>
+                {translateNow("source.copy.this.generated.credential.now.renew.a.811264cbb9")}</RevealPanel>
             )}
           </section>
 
           <section aria-labelledby="transit-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="transit-heading" className="text-title font-semibold">
-                Transit and KMIP
-              </h2>
+                {translateNow("source.transit.and.kmip.bbf61786e0")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Transit operations keep key material server-side. This page base64-encodes local plaintext for the API, clears plaintext inputs after encrypt,
-                and shows decrypted values only in a reveal panel.
-              </p>
+                {translateNow("source.transit.operations.keep.key.material.serve.be62c8b11a")}</p>
             </div>
             <form
-              aria-label="Transit encrypt and decrypt"
+              aria-label={translateNow("source.transit.encrypt.and.decrypt.f3ae0fd83f")}
               onSubmit={(event) => void encryptTransit(event)}
               className="grid gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]"
             >
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Key name</span>
+                <span className="font-medium">{translateNow("source.key.name.6f245e973f")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={transitKey}
                   onChange={(event) => setTransitKey(event.target.value)}
-                  placeholder="payments-pii"
+                  placeholder={translateNow("source.payments.pii.643f35ba95")}
                   required
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">AAD</span>
+                <span className="font-medium">{translateNow("source.aad.9adbaf62d8")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={transitAAD}
                   onChange={(event) => setTransitAAD(event.target.value)}
-                  placeholder="optional associated data"
+                  placeholder={translateNow("source.optional.associated.data.52eba643ce")}
                 />
               </label>
               <label className="grid gap-1 text-sm xl:col-span-2">
-                <span className="font-medium">Plaintext</span>
+                <span className="font-medium">{translateNow("source.plaintext.0707c5d972")}</span>
                 <textarea
                   className="min-h-24 rounded-md border border-input bg-background px-3 py-2"
                   value={transitPlaintext}
                   onChange={(event) => setTransitPlaintext(event.target.value)}
-                  placeholder="local plaintext to encrypt"
+                  placeholder={translateNow("source.local.plaintext.to.encrypt.a67b9e7b54")}
                 />
               </label>
               <label className="grid gap-1 text-sm xl:col-span-2">
-                <span className="font-medium">Ciphertext</span>
+                <span className="font-medium">{translateNow("source.ciphertext.47955e6673")}</span>
                 <textarea
                   className="min-h-24 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
                   value={transitCiphertextInput}
                   onChange={(event) => setTransitCiphertextInput(event.target.value)}
-                  placeholder="encrypted result or ciphertext to decrypt"
+                  placeholder={translateNow("source.encrypted.result.or.ciphertext.to.decrypt.88441adfe9")}
                 />
               </label>
               <div className="flex flex-wrap gap-2 xl:col-span-2">
@@ -2592,8 +2541,7 @@ export function Secrets() {
                   ) : (
                     <KeyRound className="h-4 w-4" aria-hidden="true" />
                   )}
-                  Encrypt
-                </Button>
+                  {translateNow("source.encrypt.4f03bf1cdf")}</Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -2601,8 +2549,7 @@ export function Secrets() {
                   disabled={transitBusy === "decrypt" || !transitCiphertextInput.trim() || Boolean(loadError)}
                 >
                   {transitBusy === "decrypt" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                  Decrypt
-                </Button>
+                  {translateNow("source.decrypt.2e4629449b")}</Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -2614,37 +2561,36 @@ export function Secrets() {
                   ) : (
                     <RotateCw className="h-4 w-4" aria-hidden="true" />
                   )}
-                  Rewrap
-                </Button>
+                  {translateNow("source.rewrap.49c8c07065")}</Button>
               </div>
             </form>
             <div className="grid gap-4 xl:grid-cols-2">
               <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">Transit result</h3>
+                <h3 className="text-title font-semibold">{translateNow("source.transit.result.7a54cd2a67")}</h3>
                 {transitCiphertext ? (
                   <dl className="grid gap-2">
                     <div>
-                      <dt className="font-medium text-muted-foreground">Ciphertext</dt>
+                      <dt className="font-medium text-muted-foreground">{translateNow("source.ciphertext.47955e6673")}</dt>
                       <dd className="break-all font-mono text-xs">{transitCiphertext.ciphertext}</dd>
                     </div>
                     <div>
-                      <dt className="font-medium text-muted-foreground">Key version</dt>
+                      <dt className="font-medium text-muted-foreground">{translateNow("source.key.version.aa5d87c789")}</dt>
                       <dd className="font-mono text-xs">v{transitCiphertext.version}</dd>
                     </div>
                   </dl>
                 ) : (
-                  <p className="text-muted-foreground">No transit ciphertext yet.</p>
+                  <p className="text-muted-foreground">{translateNow("source.no.transit.ciphertext.yet.f9d6c9870b")}</p>
                 )}
               </div>
               <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">HMAC and signing</h3>
+                <h3 className="text-title font-semibold">{translateNow("source.hmac.and.signing.a21f893b5b")}</h3>
                 <label className="grid gap-1">
-                  <span className="font-medium">Message</span>
+                  <span className="font-medium">{translateNow("source.message.2f77668a9d")}</span>
                   <textarea
                     className="min-h-20 rounded-md border border-input bg-background px-3 py-2"
                     value={transitMessage}
                     onChange={(event) => setTransitMessage(event.target.value)}
-                    placeholder="message bytes to MAC or sign"
+                    placeholder={translateNow("source.message.bytes.to.mac.or.sign.1400a97072")}
                   />
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -2659,8 +2605,7 @@ export function Secrets() {
                     ) : (
                       <KeyRound className="h-4 w-4" aria-hidden="true" />
                     )}
-                    Compute HMAC
-                  </Button>
+                    {translateNow("source.compute.hmac.4809a2f350")}</Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -2672,18 +2617,16 @@ export function Secrets() {
                     ) : (
                       <KeyRound className="h-4 w-4" aria-hidden="true" />
                     )}
-                    Sign message
-                  </Button>
+                    {translateNow("source.sign.message.516e35c2fc")}</Button>
                 </div>
-                {transitHMACResult && <Snippet title="HMAC" text={transitHMACResult.hmac} />}
-                {transitSignature && <Snippet title="Signature" text={`${transitSignature.signature}\npublic_der: ${transitSignature.public_der}`} />}
+                {transitHMACResult && <Snippet title={translateNow("source.hmac.32fd6f051c")} text={transitHMACResult.hmac} />}
+                {transitSignature && <Snippet title={translateNow("source.signature.f1a73e2204")} text={`${transitSignature.signature}\npublic_der: ${transitSignature.public_der}`} />}
               </div>
             </div>
-            {transitError && <ErrorState title="Transit operation failed">{transitError}</ErrorState>}
+            {transitError && <ErrorState title={translateNow("source.transit.operation.failed.22502fa40b")}>{transitError}</ErrorState>}
             {transitPlaintextResult && (
-              <RevealPanel title="Decrypted plaintext" onDismiss={() => setTransitPlaintextResult(null)} value={transitPlaintextResult}>
-                This plaintext was decoded locally from the transit response. Dismiss clears it from the page.
-              </RevealPanel>
+              <RevealPanel title={translateNow("source.decrypted.plaintext.675dd9b983")} onDismiss={() => setTransitPlaintextResult(null)} value={transitPlaintextResult}>
+                {translateNow("source.this.plaintext.was.decoded.locally.from.th.fbd3275222")}</RevealPanel>
             )}
           </section>
         </div>
@@ -2694,8 +2637,7 @@ export function Secrets() {
           <section aria-labelledby="secret-sync-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="secret-sync-heading" className="text-title font-semibold">
-                Secret sync and platform integrations
-              </h2>
+                {translateNow("source.secret.sync.and.platform.integrations.90c8c57a01")}</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Push a stored secret to a configured target. The browser sends the secret name and remote key only; the stored value is never rendered here.
               </p>
@@ -2931,12 +2873,12 @@ export function Secrets() {
               </div>
             )}
             <form
-              aria-label="Sync stored secret"
+              aria-label={translateNow("source.sync.stored.secret.b83b2d0767")}
               onSubmit={(event) => void submitSecretSync(event)}
               className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem_minmax(0,1fr)_auto]"
             >
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Secret name</span>
+                <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={syncName}
@@ -2946,13 +2888,13 @@ export function Secrets() {
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Target</span>
+                <span className="font-medium">{translateNow("source.target.978354db0c")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   list="secret-sync-target-options"
                   value={syncTarget}
                   onChange={(event) => setSyncTarget(event.target.value)}
-                  placeholder="kubernetes/prod"
+                  placeholder={translateNow("source.kubernetes.prod.16a7f7e17a")}
                   required
                 />
               </label>
@@ -2962,40 +2904,39 @@ export function Secrets() {
                 ))}
               </datalist>
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Remote key</span>
+                <span className="font-medium">{translateNow("source.remote.key.b698762058")}</span>
                 <input
                   className="rounded-md border border-input bg-background px-3 py-2"
                   value={syncRemoteKey}
                   onChange={(event) => setSyncRemoteKey(event.target.value)}
-                  placeholder="Secret/payments-db/password"
+                  placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
                 />
               </label>
               <Button type="submit" className="self-end" disabled={syncBusy || Boolean(loadError)}>
                 {syncBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
-                Sync secret
-              </Button>
+                {translateNow("source.sync.secret.4d3ab1c075")}</Button>
             </form>
-            {syncError && <ErrorState title="Secret sync failed">{syncError}</ErrorState>}
+            {syncError && <ErrorState title={translateNow("source.secret.sync.failed.b901ae57d8")}>{syncError}</ErrorState>}
             {syncResult && (
               <dl className="ui-panel grid gap-3 p-comfortable text-sm md:grid-cols-2 xl:grid-cols-5">
                 <div>
-                  <dt className="font-medium text-muted-foreground">Secret</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.secret.7e32a729b1")}</dt>
                   <dd>{syncResult.name}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Target</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.target.978354db0c")}</dt>
                   <dd>{syncResult.target}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Remote key</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.remote.key.b698762058")}</dt>
                   <dd className="break-all font-mono text-xs">{syncResult.remote_key}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Queue</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.queue.3b2fe03e36")}</dt>
                   <dd>{syncResult.enqueued ? "Queued" : "Not queued"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Delivery</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.delivery.52bfe584a5")}</dt>
                   <dd>{syncResult.delivered ? "Delivered" : "Not delivered"}</dd>
                 </div>
               </dl>
@@ -3034,8 +2975,7 @@ export function Secrets() {
               />
             </label>
             <label className="grid gap-1 text-body font-medium">
-              Key
-              <input
+              {translateNow("source.key.99a52df3ff")}<input
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                 value={scheduleKey}
                 onChange={(event) => setScheduleKey(event.target.value)}
@@ -3054,8 +2994,7 @@ export function Secrets() {
               />
             </label>
             <label className="grid gap-1 text-body font-medium">
-              Provider
-              <input
+              {translateNow("source.provider.472590ae97")}<input
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                 list="secret-rotation-provider-options"
                 value={scheduleProvider}
@@ -3065,8 +3004,7 @@ export function Secrets() {
               />
             </label>
             <label className="grid gap-1 text-body font-medium">
-              Interval seconds
-              <input
+              {translateNow("source.interval.seconds.5f0f5b832a")}<input
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                 type="number"
                 min="60"
@@ -3086,8 +3024,7 @@ export function Secrets() {
             </label>
             <label className="flex items-center gap-2 text-body font-medium">
               <input type="checkbox" checked={scheduleEnabled} onChange={(event) => setScheduleEnabled(event.target.checked)} />
-              Enabled
-            </label>
+              {translateNow("source.enabled.92c1cdfdf4")}</label>
             {scheduleError && (
               <p role="alert" className="text-sm text-destructive">
                 {scheduleError}
@@ -3095,12 +3032,10 @@ export function Secrets() {
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeScheduleDialog}>
-                Cancel
-              </Button>
+                {translateNow("source.cancel.19766ed6cc")}</Button>
               <Button type="submit" disabled={scheduleBusy}>
                 {scheduleBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                Create schedule
-              </Button>
+                {translateNow("source.create.schedule.5b08f3c719")}</Button>
             </div>
           </form>
         </Dialog>

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ToastProvider";
 import { OrphanGovernance } from "@/components/nhi";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 const ownerKinds: Owner["kind"][] = ["user", "team", "workload", "service"];
 
@@ -144,35 +144,33 @@ export function Owners() {
     <section aria-labelledby="owners-heading" className="space-y-4">
       <PageHeader
         titleId="owners-heading"
-        title="Owners"
+        title={translateNow("source.owners.58f5df9b24")}
         description="Search owner records — the people and teams accountable for credentials — by name, ID, kind, or email."
       />
       <OrphanGovernance owners={owners} />
-      {loading && <LoadingState>Loading owners…</LoadingState>}
-      {error && <ErrorState title="Could not load owners">{error}</ErrorState>}
+      {loading && <LoadingState>{translateNow("source.loading.owners.8fcc1cacd9")}</LoadingState>}
+      {error && <ErrorState title={translateNow("source.could.not.load.owners.f32406fb21")}>{error}</ErrorState>}
       {rows && (
         <>
           <form className="flex flex-wrap items-end gap-3" role="search" onSubmit={(event) => event.preventDefault()}>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-search">
-              Search owners
-              <input
+              {translateNow("source.search.owners.55a040f1a5")}<input
                 id="owner-search"
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 className="min-h-9 w-72 max-w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                placeholder="Owner name, ID, email, or kind"
+                placeholder={translateNow("source.owner.name.id.email.or.kind.d0081dd7f1")}
               />
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-kind">
-              Owner kind
-              <select
+              {translateNow("source.owner.kind.eb9923cec7")}<select
                 id="owner-kind"
                 value={kind}
                 onChange={(event) => setKind(event.target.value)}
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
               >
-                <option value="all">All kinds</option>
+                <option value="all">{translateNow("source.all.kinds.ddd0c2108e")}</option>
                 {kinds.map((ownerKind) => (
                   <option key={ownerKind} value={ownerKind}>
                     {ownerKind}
@@ -181,7 +179,7 @@ export function Owners() {
               </select>
             </label>
             <p className="pb-2 text-caption text-muted-foreground">
-              Showing {filteredOwners.length} of {rows.length}
+              {translateNow("source.showing.d604310a78")}{" "}{filteredOwners.length} {" "}{translateNow("source.of.28391d3bc6")}{" "}{rows.length}
             </p>
           </form>
 
@@ -232,11 +230,10 @@ export function Owners() {
             }}
           >
             <h2 id="owner-edit-title" className="text-title font-semibold">
-              Edit {editTarget.name}
+              {translateNow("source.edit.464c4ffd01")}{" "}{editTarget.name}
             </h2>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-name">
-              Name
-              <input
+              {translateNow("source.name.dcd1d5223f")}<input
                 id="owner-edit-name"
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                 value={editName}
@@ -245,8 +242,7 @@ export function Owners() {
               />
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-kind">
-              Owner kind
-              <select
+              {translateNow("source.owner.kind.eb9923cec7")}<select
                 id="owner-edit-kind"
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                 value={editKind}
@@ -272,8 +268,7 @@ export function Owners() {
             {editError && <p className="text-sm font-medium text-risk-critical">{editError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setEditTarget(null)} disabled={editBusy}>
-                Cancel
-              </Button>
+                {translateNow("source.cancel.19766ed6cc")}</Button>
               <Button type="submit" disabled={editBusy}>
                 {t("parity.saveOwner_b67638")}
               </Button>
@@ -303,7 +298,7 @@ export function Owners() {
           >
             <div>
               <h2 id="owner-delete-title" className="text-title font-semibold">
-                Delete {deleteTarget.name}
+                {translateNow("source.delete.e2d0a54968")}{" "}{deleteTarget.name}
               </h2>
               <p id="owner-delete-description" className="mt-1 text-sm text-muted-foreground">
                 {t("parity.deletingAnOwnerRemovesTheAccountability_cdfad5")}
@@ -325,8 +320,7 @@ export function Owners() {
             {deleteError && <p className="text-sm font-medium text-risk-critical">{deleteError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
-                Cancel
-              </Button>
+                {translateNow("source.cancel.19766ed6cc")}</Button>
               <Button
                 type="submit"
                 variant="outline"

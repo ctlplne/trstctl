@@ -90,7 +90,9 @@ describe("POL-01 graph polish", () => {
   it("removes the old query placement and chooser wall from the module", () => {
     const source = readFileSync(path.join(process.cwd(), "src/pages/Graph.tsx"), "utf8");
     expect(source).not.toMatch(/Choose \{node\.name|Show reachable/);
-    expect(source).toMatch(/Advanced query/);
-    expect(source).toMatch(/Node search results/);
+    // The tab/list copy went through the DA-14 sweep: the module references
+    // the typed keys, and the literals live in messages.ts.
+    expect(source).toMatch(/source\.advanced\.query\./);
+    expect(source).toMatch(/source\.node\.search\.results\./);
   });
 });

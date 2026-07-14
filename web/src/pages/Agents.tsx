@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
 import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 const staleAfterMs = 24 * 60 * 60 * 1000;
 const certRevocationReasons = [
@@ -232,8 +232,7 @@ export function Agents() {
       cell: (agent) => (
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => setSelectedID(agent.id)}>
-            View details
-          </Button>
+            {translateNow("source.view.details.d1bf045bb5")}</Button>
           {!isOffboarded(agent) && (
             <>
               <Button
@@ -254,8 +253,7 @@ export function Agents() {
                 onClick={() => openOffboard(agent)}
               >
                 <UserX className="h-4 w-4" aria-hidden="true" />
-                Offboard
-              </Button>
+                {translateNow("source.offboard.9053e68ef6")}</Button>
             </>
           )}
         </div>
@@ -267,13 +265,12 @@ export function Agents() {
     <section aria-labelledby="agents-heading" className="grid gap-6">
       <PageHeader
         titleId="agents-heading"
-        title="Agents"
+        title={translateNow("source.agents.279b44d2ab")}
         description="The in-network agents that deploy and rotate credentials on your hosts. Register a new agent with a one-time enrollment token."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-            Refresh
-          </Button>
+            {translateNow("source.refresh.0e91610117")}</Button>
         }
       />
 
@@ -281,18 +278,16 @@ export function Agents() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="enrollment-heading" className="text-title font-semibold">
-              Enrollment token
-            </h2>
+              {translateNow("source.enrollment.token.6c86be7863")}</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
               Mint a one-time bootstrap token. The token stays in component memory only; it is never written to browser storage.
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-[minmax(12rem,18rem)_auto] sm:items-end">
             <label className="grid gap-1 text-sm font-medium">
-              Agent identity
-              <input
+              {translateNow("source.agent.identity.698c87920a")}<input
                 className="rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
-                placeholder="node-a"
+                placeholder={translateNow("source.node.a.66570ff05a")}
                 value={tokenAllowedIdentity}
                 onChange={(event) => setTokenAllowedIdentity(event.target.value)}
                 disabled={tokenBusy}
@@ -302,18 +297,17 @@ export function Agents() {
             </label>
             <Button type="button" onClick={() => void mintToken()} disabled={tokenBusy}>
               {tokenBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              Mint enrollment token
-            </Button>
+              {translateNow("source.mint.enrollment.token.b50d28fa1d")}</Button>
           </div>
         </div>
 
-        {tokenError && <ErrorState title="Could not mint enrollment token">{tokenError}</ErrorState>}
+        {tokenError && <ErrorState title={translateNow("source.could.not.mint.enrollment.token.7b0b6374e9")}>{tokenError}</ErrorState>}
 
         {token && (
           <div className="mt-4 grid gap-3 rounded-md border border-border p-3 text-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="font-medium">Shown once</p>
+                <p className="font-medium">{translateNow("source.shown.once.22548d041f")}</p>
                 <p className="mt-1 text-muted-foreground">
                   Save the token to ./trstctl-bootstrap-token with 0600 permissions, then copy this command. Dismiss clears the token from the page state; the
                   console does not persist it.
@@ -321,18 +315,17 @@ export function Agents() {
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={() => setToken(null)}>
                 <X className="h-4 w-4" aria-hidden="true" />
-                Dismiss
-              </Button>
+                {translateNow("source.dismiss.48845bff33")}</Button>
             </div>
             <dl className="grid gap-2">
               <div>
-                <dt className="font-medium text-muted-foreground">Bootstrap token</dt>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.bootstrap.token.2996dc8b78")}</dt>
                 <dd className="mt-0.5">
                   <CredentialChip value={token.token} label="bootstrap token" head={14} tail={8} />
                 </dd>
               </div>
               <div>
-                <dt className="font-medium text-muted-foreground">Install command</dt>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.install.command.1ae9754205")}</dt>
                 <dd className="mt-1">
                   <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{command}</code>
                 </dd>
@@ -341,29 +334,26 @@ export function Agents() {
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => void copyCommand()}>
                 <Copy className="h-4 w-4" aria-hidden="true" />
-                Copy command
-              </Button>
-              {copied && <p className="text-xs text-muted-foreground">Copied once from memory.</p>}
+                {translateNow("source.copy.command.9a01feecae")}</Button>
+              {copied && <p className="text-xs text-muted-foreground">{translateNow("source.copied.once.from.memory.ffb61f0314")}</p>}
             </div>
           </div>
         )}
       </section>
 
-      {error && <ErrorState title="Could not load agents">{error}</ErrorState>}
-      {loading && <LoadingState>Loading agents...</LoadingState>}
+      {error && <ErrorState title={translateNow("source.could.not.load.agents.1d510cf246")}>{error}</ErrorState>}
+      {loading && <LoadingState>{translateNow("source.loading.agents.a4e0608f99")}</LoadingState>}
 
       {!loading && !error && agents.length === 0 && (
-        <EmptyState title="No agents enrolled yet">
-          Mint a one-time enrollment token, install an agent inside the tenant network, then refresh this page when it registers.
-        </EmptyState>
+        <EmptyState title={translateNow("source.no.agents.enrolled.yet.345799ad5d")}>
+          {translateNow("source.mint.a.one.time.enrollment.token.install.a.d9cbac0c9e")}</EmptyState>
       )}
 
       {!loading && !error && agents.length > 0 && (
         <section aria-labelledby="fleet-heading" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div>
             <h2 id="fleet-heading" className="mb-3 text-title font-semibold">
-              Agent fleet
-            </h2>
+              {translateNow("source.agent.fleet.ac46d1b700")}</h2>
             {offboardEvidence && <p className="mb-3 text-sm text-muted-foreground">{offboardEvidence}</p>}
             <DataGrid ariaLabel="Registered in-network agents" rows={agents} columns={agentColumns} getRowId={(agent) => agent.id} state="ready" />
           </div>
@@ -393,15 +383,13 @@ export function Agents() {
           >
             <div>
               <h2 id="agent-offboard-title" className="text-title font-semibold">
-                Offboard {offboardTarget.name}
+                {translateNow("source.offboard.9053e68ef6")}{" "}{offboardTarget.name}
               </h2>
               <p id="agent-offboard-description" className="mt-1 text-sm text-muted-foreground">
-                The agent row remains as an offboarded tombstone, and future mTLS RPCs from this agent are rejected.
-              </p>
+                {translateNow("source.the.agent.row.remains.as.an.offboarded.tom.42a25faa10")}</p>
             </div>
             <label className="grid gap-1 text-sm font-medium">
-              Reason
-              <textarea
+              {translateNow("source.reason.f81ab834de")}<textarea
                 className="min-h-24 rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
                 value={offboardReason}
                 onChange={(event) => setOffboardReason(event.target.value)}
@@ -410,12 +398,10 @@ export function Agents() {
             {offboardError && <p className="text-sm font-medium text-risk-critical">{offboardError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setOffboardTarget(null)} disabled={offboardBusy}>
-                Cancel
-              </Button>
+                {translateNow("source.cancel.19766ed6cc")}</Button>
               <Button ref={offboardConfirmRef} type="submit" disabled={offboardBusy}>
                 {offboardBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                Offboard agent
-              </Button>
+                {translateNow("source.offboard.agent.f673bf87e3")}</Button>
             </div>
           </form>
         )}
@@ -442,7 +428,7 @@ export function Agents() {
           >
             <div>
               <h2 id="agent-revoke-cert-title" className="text-title font-semibold">
-                Revoke certificate for {revokeTarget.name}
+                {translateNow("source.revoke.certificate.for.a0ed3562dc")}{" "}{revokeTarget.name}
               </h2>
               <p id="agent-revoke-cert-description" className="mt-1 text-sm text-muted-foreground">
                 Records a revocation for this agent's client certificate; mTLS RPCs presenting it are rejected once CRL and OCSP propagate. Leave serial and
@@ -450,8 +436,7 @@ export function Agents() {
               </p>
             </div>
             <label className="grid gap-1 text-body font-medium" htmlFor="agent-revoke-reason">
-              Reason
-              <select
+              {translateNow("source.reason.f81ab834de")}<select
                 id="agent-revoke-reason"
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                 value={revokeReason}
@@ -499,8 +484,7 @@ export function Agents() {
             {revokeError && <p className="text-sm font-medium text-risk-critical">{revokeError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setRevokeTarget(null)} disabled={revokeBusy}>
-                Cancel
-              </Button>
+                {translateNow("source.cancel.19766ed6cc")}</Button>
               <Button type="submit" disabled={revokeBusy || !revokeConfirmed}>
                 {revokeBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {t("parity.revokeCertificate_338ad7")}
@@ -526,42 +510,42 @@ function AgentDetail({ agent }: { agent: Agent }) {
         <h2 id="agent-detail-heading" className="text-title font-semibold">
           {agent.name}
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">Agent profile, heartbeat, and version details.</p>
+        <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.agent.profile.heartbeat.and.version.detail.fbb4a88e48")}</p>
       </div>
       <dl className="grid gap-2 text-sm">
         <div>
-          <dt className="font-medium text-muted-foreground">Agent ID</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.agent.id.510bce732d")}</dt>
           <dd className="mt-0.5">
             <CredentialChip value={agent.id} label="agent ID" />
           </dd>
         </div>
         <div>
-          <dt className="font-medium text-muted-foreground">Status</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
           <dd>{agent.status}</dd>
         </div>
         <div>
-          <dt className="font-medium text-muted-foreground">Version</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.version.dd167905de")}</dt>
           <dd className="font-mono text-xs">{agent.version || "-"}</dd>
         </div>
         <div>
-          <dt className="font-medium text-muted-foreground">Last seen</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.last.seen.21fd79c7de")}</dt>
           <dd>{formatDate(agent.last_seen_at)}</dd>
         </div>
         {isOffboarded(agent) && (
           <>
             <div>
-              <dt className="font-medium text-muted-foreground">Offboarded</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.offboarded.bc5f0c93d1")}</dt>
               <dd>{formatDate(agent.offboarded_at)}</dd>
             </div>
             {agent.offboarded_by && (
               <div>
-                <dt className="font-medium text-muted-foreground">Offboarded by</dt>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.offboarded.by.4c49b0d40c")}</dt>
                 <dd className="break-all font-mono text-xs">{agent.offboarded_by}</dd>
               </div>
             )}
             {agent.offboard_reason && (
               <div>
-                <dt className="font-medium text-muted-foreground">Offboard reason</dt>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.offboard.reason.6c2b7a820c")}</dt>
                 <dd>{agent.offboard_reason}</dd>
               </div>
             )}
@@ -601,12 +585,12 @@ function AgentDetail({ agent }: { agent: Agent }) {
 }
 
 function heartbeatFreshness(lastSeen?: string): { label: string; stale: boolean } {
-  if (!lastSeen) return { label: "No heartbeat timestamp", stale: true };
+  if (!lastSeen) return { label: translateNow("source.no.heartbeat.timestamp.7c01a4e0ea"), stale: true };
   const ts = Date.parse(lastSeen);
-  if (Number.isNaN(ts)) return { label: "Unparseable heartbeat timestamp", stale: true };
+  if (Number.isNaN(ts)) return { label: translateNow("source.unparseable.heartbeat.timestamp.bb97c8934b"), stale: true };
   const ageMs = Date.now() - ts;
-  if (ageMs > staleAfterMs) return { label: "Stale heartbeat", stale: true };
-  return { label: "Fresh heartbeat", stale: false };
+  if (ageMs > staleAfterMs) return { label: translateNow("source.stale.heartbeat.d8742526e2"), stale: true };
+  return { label: translateNow("source.fresh.heartbeat.39d75ce503"), stale: false };
 }
 
 function formatDate(value?: string): string {

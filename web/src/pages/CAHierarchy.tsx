@@ -25,7 +25,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
   api,
   ApiError,
@@ -305,19 +305,19 @@ export function CAHierarchy() {
   }
 
   async function testIssuerConnection(issuer: Issuer) {
-    setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "pending", message: "connection pending" });
+    setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "pending", message: translateNow("source.connection.pending.31378595b4") });
     if (issuer.internal) {
-      setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "passed", message: "connection passed" });
+      setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "passed", message: translateNow("source.connection.passed.49369abdb8") });
       return;
     }
     try {
       const externalCAs = await api.externalCAs();
       const upstream = findExternalCAForIssuer(issuer, externalCAs);
       if (upstream && externalCAAvailable(upstream)) {
-        setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "passed", message: "connection passed" });
+        setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "passed", message: translateNow("source.connection.passed.49369abdb8") });
         return;
       }
-      setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "failed", message: "connection failed" });
+      setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "failed", message: translateNow("source.connection.failed.1c43266b45") });
     } catch (err) {
       setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "failed", message: errorText(err, "connection failed") });
     }
@@ -537,7 +537,7 @@ export function CAHierarchy() {
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
         titleId="ca-heading"
-        title="CA hierarchy"
+        title={translateNow("source.ca.hierarchy.73e4cbcaf4")}
         description="Your certificate authorities — roots and intermediates — and their issuers, with multi-person approval ceremonies (no single admin can act alone) and custody controls for the signing keys."
         actions={
           <>
@@ -551,8 +551,7 @@ export function CAHierarchy() {
             </Button>
             <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              Refresh
-            </Button>
+              {translateNow("source.refresh.0e91610117")}</Button>
           </>
         }
       />
@@ -620,32 +619,28 @@ export function CAHierarchy() {
           <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="issuer-heading" className="text-title font-semibold">
-              Issuer visibility
-            </h2>
+              {translateNow("source.issuer.visibility.859e72db07")}</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              This view shows issuer name, kind, public key, custody boundary, and chain metadata. The ceremony and managed-key panels below drive the
-              corresponding protected workflows.
-            </p>
+              {translateNow("source.this.view.shows.issuer.name.kind.public.ke.5166a2828e")}</p>
           </div>
         </div>
-        {loading && <LoadingState>Loading issuers...</LoadingState>}
+        {loading && <LoadingState>{translateNow("source.loading.issuers.98644f83a7")}</LoadingState>}
         {renderNotice(notice)}
         {!loading && !notice && sortedIssuers.length === 0 && (
           <EmptyState
             icon={<Server className="h-5 w-5" aria-hidden="true" />}
-            title="No issuers yet"
+            title={translateNow("source.no.issuers.yet.fc838bfd4a")}
             primaryAction={{
-              label: "Connect first issuer",
+              label: translateNow("source.connect.first.issuer.ba893ce98c"),
               onClick: () => {
                 const firstIssuerType = issuerTypes.find((type) => !type.internal) ?? issuerTypes[0];
                 if (firstIssuerType) setIssuerDialogType(firstIssuerType);
               },
               icon: <Plus className="h-4 w-4" />,
             }}
-            secondaryAction={{ label: "Create a profile", to: "/profiles", icon: <ShieldCheck className="h-4 w-4" /> }}
+            secondaryAction={{ label: translateNow("source.create.a.profile.6d7beeefb5"), to: "/profiles", icon: <ShieldCheck className="h-4 w-4" /> }}
           >
-            Add a local authority or upstream CA before certificates can be issued from constrained profiles.
-          </EmptyState>
+            {translateNow("source.add.a.local.authority.or.upstream.ca.befor.ef39bb7995")}</EmptyState>
         )}
         {!loading && !notice && sortedIssuers.length > 0 && (
           <IssuerTable issuers={sortedIssuers} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />
@@ -657,24 +652,21 @@ export function CAHierarchy() {
           <FileKey2 className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="ceremony-heading" className="text-title font-semibold">
-              CA key ceremony
-            </h2>
+              {translateNow("source.ca.key.ceremony.244faa4ab3")}</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Start a root CA ceremony, then record a second custodian approval before using the ceremony for a signer-backed authority action.
-            </p>
+              {translateNow("source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848")}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" onClick={() => void startRootCeremony()} disabled={ceremonyBusy}>
-            Start root ceremony
-          </Button>
-          <span className="text-sm text-muted-foreground">Default request: Trust Root CA, 2 approvals, ECDSA-P256.</span>
+            {translateNow("source.start.root.ceremony.01836ae713")}</Button>
+          <span className="text-sm text-muted-foreground">{translateNow("source.default.request.trust.root.ca.2.approvals.246b100b12")}</span>
         </div>
-        {ceremonyError && <ErrorState title="Ceremony action failed">{ceremonyError}</ErrorState>}
+        {ceremonyError && <ErrorState title={translateNow("source.ceremony.action.failed.974d5f2180")}>{ceremonyError}</ErrorState>}
         {ceremony ? (
           <CeremonyPanel ceremony={ceremony} busy={ceremonyBusy} onApprove={(id) => void approveCeremony(id)} onView={(id) => void viewCeremony(id)} />
         ) : (
-          <EmptyState title="No ceremony loaded">Start a ceremony to see its purpose, approval threshold, and status.</EmptyState>
+          <EmptyState title={translateNow("source.no.ceremony.loaded.3e9d28986c")}>{translateNow("source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd")}</EmptyState>
         )}
       </section>
 
@@ -716,25 +708,21 @@ export function CAHierarchy() {
           <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="custody-heading" className="text-title font-semibold">
-              Managed key custody
-            </h2>
+              {translateNow("source.managed.key.custody.ba98c44d9c")}</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody
-              actions by key id.
-            </p>
+              {translateNow("source.aws.kms.azure.key.vault.hsm.gcp.cloud.kms.957ee3c57b")}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" onClick={() => void generateManagedKey()} disabled={keyBusy}>
-            Generate managed key
-          </Button>
-          <span className="text-sm text-muted-foreground">Default algorithm: ECDSA-P256.</span>
+            {translateNow("source.generate.managed.key.9ff7b150a0")}</Button>
+          <span className="text-sm text-muted-foreground">{translateNow("source.default.algorithm.ecdsa.p256.e268f7deba")}</span>
         </div>
-        {keyError && <ErrorState title="Managed-key action failed">{keyError}</ErrorState>}
+        {keyError && <ErrorState title={translateNow("source.managed.key.action.failed.934f359a98")}>{keyError}</ErrorState>}
         {managedKey ? (
           <ManagedKeyPanel managedKey={managedKey} busy={keyBusy} onAction={(action, keyId) => void runManagedKeyAction(action, keyId)} />
         ) : (
-          <EmptyState title="No managed key loaded">Generate a managed key to inspect its public metadata and lifecycle state.</EmptyState>
+          <EmptyState title={translateNow("source.no.managed.key.loaded.c921eb07f2")}>{translateNow("source.generate.a.managed.key.to.inspect.its.publ.0756dcae94")}</EmptyState>
         )}
       </section>
 
@@ -998,30 +986,26 @@ function CARotationPanel({
         <RefreshCw className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div>
           <h2 id="ca-rotation-heading" className="text-title font-semibold">
-            CA rotation
-          </h2>
+            {translateNow("source.ca.rotation.27b00eaa0b")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Activate an existing signer-backed successor while the predecessor issue URL remains valid for the overlap window.
-          </p>
+            {translateNow("source.activate.an.existing.signer.backed.success.ba9399274b")}</p>
         </div>
       </div>
-      {error && <ErrorState title="CA rotation failed">{error}</ErrorState>}
+      {error && <ErrorState title={translateNow("source.ca.rotation.failed.e781fb6f5f")}>{error}</ErrorState>}
       <section aria-labelledby="ca-rotation-form-heading" className="ui-panel p-comfortable text-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 id="ca-rotation-form-heading" className="text-title font-semibold">
-              Successor activation
-            </h3>
+              {translateNow("source.successor.activation.2c89a6285d")}</h3>
             {result && <p className="mt-1 font-mono text-xs">{result.issue_path}</p>}
           </div>
           <Button type="button" size="sm" onClick={onActivate} disabled={busy || !ready}>
             <RefreshCw className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            Activate CA rotation
-          </Button>
+            {translateNow("source.activate.ca.rotation.a7d096d68f")}</Button>
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
           <LabeledSelect id="ca-rotation-predecessor" label="Predecessor CA" value={predecessorID} onChange={onPredecessorChange}>
-            <option value="">Select predecessor</option>
+            <option value="">{translateNow("source.select.predecessor.ec02008346")}</option>
             {authorities.map((item) => (
               <option key={item.id} value={item.source_id}>
                 {item.name} ({item.status})
@@ -1029,7 +1013,7 @@ function CARotationPanel({
             ))}
           </LabeledSelect>
           <LabeledSelect id="ca-rotation-successor" label="Successor CA" value={successorID} onChange={onSuccessorChange}>
-            <option value="">Select successor</option>
+            <option value="">{translateNow("source.select.successor.ea343d0bff")}</option>
             {authorities.map((item) => (
               <option key={item.id} value={item.source_id}>
                 {item.name} ({item.status})
@@ -1038,7 +1022,7 @@ function CARotationPanel({
           </LabeledSelect>
           <LabeledInput id="ca-rotation-reason" label="Rotation reason" value={reason} onChange={onReasonChange} />
         </div>
-        {authorities.length < 2 && <p className="mt-3 text-sm text-muted-foreground">Create a signer-backed successor before activating rotation.</p>}
+        {authorities.length < 2 && <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.create.a.signer.backed.successor.before.ac.c0163adb05")}</p>}
         {result && (
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <KeyValue label="Predecessor" value={`${result.predecessor.common_name} (${result.predecessor.status})`} />
@@ -1096,36 +1080,31 @@ function CARekeyPanel({
         <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div>
           <h2 id="ca-rekey-heading" className="text-title font-semibold">
-            CA renewal and re-key
-          </h2>
+            {translateNow("source.ca.renewal.and.re.key.fb27d9e180")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Mint a fresh signer-backed CA key and certificate for the selected authority while the previous issue URL keeps routing to the active successor.
-          </p>
+            {translateNow("source.mint.a.fresh.signer.backed.ca.key.and.cert.4f35946ce6")}</p>
         </div>
       </div>
-      {error && <ErrorState title="CA re-key failed">{error}</ErrorState>}
+      {error && <ErrorState title={translateNow("source.ca.re.key.failed.c94515c43b")}>{error}</ErrorState>}
       <section aria-labelledby="ca-rekey-form-heading" className="ui-panel p-comfortable text-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 id="ca-rekey-form-heading" className="text-title font-semibold">
-              Fresh CA material
-            </h3>
+              {translateNow("source.fresh.ca.material.d1a53a627a")}</h3>
             {result && <p className="mt-1 font-mono text-xs">{result.active_issue_path}</p>}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" onClick={onStartCeremony} disabled={busy || !readyToStart}>
               <FileKey2 className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              Start re-key ceremony
-            </Button>
+              {translateNow("source.start.re.key.ceremony.c2e02a1a0c")}</Button>
             <Button type="button" size="sm" onClick={onActivate} disabled={busy || !readyToRekey}>
               <KeyRound className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              Re-key CA
-            </Button>
+              {translateNow("source.re.key.ca.4aadf37c7a")}</Button>
           </div>
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-4">
           <LabeledSelect id="ca-rekey-authority" label="CA authority" value={authorityID} onChange={onAuthorityChange}>
-            <option value="">Select authority</option>
+            <option value="">{translateNow("source.select.authority.b2858bf4f3")}</option>
             {authorities.map((item) => (
               <option key={item.id} value={item.source_id}>
                 {item.name} ({item.status})
@@ -1136,7 +1115,7 @@ function CARekeyPanel({
           <LabeledInput id="ca-rekey-ttl" label="Validity days" value={ttlDays} type="number" onChange={onTTLChange} />
           <LabeledInput id="ca-rekey-reason" label="Re-key reason" value={reason} onChange={onReasonChange} />
         </div>
-        {authorities.length === 0 && <p className="mt-3 text-sm text-muted-foreground">Create or import a signer-backed authority before re-key.</p>}
+        {authorities.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.create.or.import.a.signer.backed.authority.938d8e0658")}</p>}
         {result && (
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <KeyValue label="Predecessor" value={`${result.predecessor.common_name} (${result.predecessor.status})`} />
@@ -1573,8 +1552,7 @@ function CeremonyPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="active-ceremony-heading" className="text-title font-semibold">
-            Active ceremony
-          </h3>
+            {translateNow("source.active.ceremony.282727eb03")}</h3>
           <p className="mt-1 font-mono text-xs">{ceremony.id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1585,8 +1563,7 @@ function CeremonyPanel({
             onClick={() => onApprove(ceremony.id)}
             aria-label={`Approve ceremony ${ceremony.id}`}
           >
-            Approve
-          </Button>
+            {translateNow("source.approve.6007acbe30")}</Button>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => onView(ceremony.id)} aria-label={`View ceremony ${ceremony.id}`}>
             {t("parity.view_69bd4e")}
           </Button>
@@ -1638,8 +1615,7 @@ function CeremonyDetailDialog({ ceremony, onClose }: { ceremony: CAKeyCeremony; 
         </dl>
         <footer className="flex justify-end border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            Close
-          </Button>
+            {translateNow("source.close.7d9eb7acb1")}</Button>
         </footer>
       </div>
     </Dialog>
@@ -1843,8 +1819,7 @@ function CreateAuthorityDialog({
         </label>
         <footer className="flex justify-end gap-2 border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
+            {translateNow("source.cancel.19766ed6cc")}</Button>
           <Button type="submit" disabled={busy || ceremonyID.trim() === "" || (!isRoot && parentID === "")}>
             {isRoot ? t("parity.createRootCa_94fb33") : t("parity.createIntermediateCa_829ab7")}
           </Button>
@@ -1901,7 +1876,7 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            Issue leaf from {authority.common_name}
+            {translateNow("source.issue.leaf.from.47e7b2541d")}{" "}{authority.common_name}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">The CA key never leaves the signer; the CSR public key is certified as a leaf.</p>
         </div>
@@ -1914,8 +1889,7 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
           <IssuedCertificateResult certificatePEM={result.certificate_pem} notAfter={result.not_after} serial={result.serial} />
           <footer className="flex justify-end border-t border-border pt-4">
             <Button type="button" onClick={onClose}>
-              Close
-            </Button>
+              {translateNow("source.close.7d9eb7acb1")}</Button>
           </footer>
         </div>
       ) : (
@@ -1929,7 +1903,7 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
               rows={6}
               value={csrPEM}
               onChange={(event) => setCSRPEM(event.target.value)}
-              placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+              placeholder={translateNow("source.begin.certificate.request.929bb0afef")}
               className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
             />
           </label>
@@ -1946,8 +1920,7 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
           </label>
           <footer className="flex justify-end gap-2 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
+              {translateNow("source.cancel.19766ed6cc")}</Button>
             <Button type="submit" disabled={busy || csrPEM.trim() === ""}>
               {t("parity.issueLeafCertificate_bddf5d")}
             </Button>
@@ -2005,7 +1978,7 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            Sign intermediate CSR with {authority.common_name}
+            {translateNow("source.sign.intermediate.csr.with.64b849b64d")}{" "}{authority.common_name}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{t("parity.certifiesAnExternallyHeldIntermediateKey_d95cc4")}</p>
         </div>
@@ -2018,8 +1991,7 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
           <IssuedCertificateResult certificatePEM={result.certificate_pem} notAfter={result.not_after} serial={result.serial} />
           <footer className="flex justify-end border-t border-border pt-4">
             <Button type="button" onClick={onClose}>
-              Close
-            </Button>
+              {translateNow("source.close.7d9eb7acb1")}</Button>
           </footer>
         </div>
       ) : (
@@ -2043,7 +2015,7 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
               rows={6}
               value={csrPEM}
               onChange={(event) => setCSRPEM(event.target.value)}
-              placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+              placeholder={translateNow("source.begin.certificate.request.929bb0afef")}
               className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
             />
           </label>
@@ -2060,8 +2032,7 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
           </label>
           <footer className="flex justify-end gap-2 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
+              {translateNow("source.cancel.19766ed6cc")}</Button>
             <Button type="submit" disabled={busy || ceremonyID.trim() === "" || csrPEM.trim() === ""}>
               {t("parity.signIntermediateCsr_e1f90b")}
             </Button>
@@ -2107,8 +2078,7 @@ function AuthorityDetailDialog({ authority, onClose }: { authority: CAAuthority;
         <CertificatePEMBlock label="Certificate PEM" pem={authority.certificate_pem} />
         <footer className="flex justify-end border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            Close
-          </Button>
+            {translateNow("source.close.7d9eb7acb1")}</Button>
         </footer>
       </div>
     </Dialog>
@@ -2160,9 +2130,8 @@ function IssuerCatalog({ onConfigure }: { onConfigure: (type: IssuerTypeConfig) 
           <Server className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="issuer-catalog-heading" className="text-title font-semibold">
-              Issuer catalog
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Available CA integrations and local signing authority templates.</p>
+              {translateNow("source.issuer.catalog.add106b6a5")}</h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.available.ca.integrations.and.local.signin.a7967de86e")}</p>
           </div>
         </div>
       </div>
@@ -2190,8 +2159,7 @@ function IssuerCatalogCard({ onConfigure, type }: { type: IssuerTypeConfig; onCo
         </div>
         <Button type="button" size="sm" variant="outline" onClick={() => onConfigure(type)} aria-label={`Configure ${type.name}`}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Configure
-        </Button>
+          {translateNow("source.configure.6defafa2ca")}</Button>
       </div>
       <p className="text-sm text-muted-foreground">{type.description}</p>
       <div className="flex flex-wrap gap-1.5">
@@ -2244,25 +2212,23 @@ function CreateIssuerDialog({
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            Configure {type.name} issuer
-          </h2>
+            {translateNow("source.configure.6defafa2ca")}{" "}{type.name} {" "}{translateNow("source.issuer.535c6f8eb5")}</h2>
           <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
             {type.internal ? "Local signing authority" : "External CA integration"}
           </p>
         </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close issuer form">
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={translateNow("source.close.issuer.form.b40f6c2037")}>
           <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </header>
       <form className="grid max-h-[calc(100vh-8rem)] overflow-y-auto" onSubmit={submit}>
         <div className="grid gap-5 p-5">
-          {error && <ErrorState title="Issuer create failed">{error}</ErrorState>}
+          {error && <ErrorState title={translateNow("source.issuer.create.failed.1550974caf")}>{error}</ErrorState>}
           <div className="grid gap-4 md:grid-cols-2">
-            <LabeledInput inputRef={nameInputRef} id="issuer-name" label="Issuer name" value={name} required onChange={setName} placeholder="Production ACME" />
+            <LabeledInput inputRef={nameInputRef} id="issuer-name" label="Issuer name" value={name} required onChange={setName} placeholder={translateNow("source.production.acme.c76ba14398")} />
             <div className="grid gap-2">
               <label className="text-sm font-medium" htmlFor="issuer-kind">
-                Issuer kind
-              </label>
+                {translateNow("source.issuer.kind.9f06073f8d")}</label>
               <input
                 id="issuer-kind"
                 value="x509_ca"
@@ -2273,8 +2239,7 @@ function CreateIssuerDialog({
           </div>
           <div className="grid gap-2">
             <label className="text-sm font-medium" htmlFor="issuer-chain">
-              CA chain PEM
-            </label>
+              {translateNow("source.ca.chain.pem.add189510a")}</label>
             <textarea
               id="issuer-chain"
               required
@@ -2282,18 +2247,16 @@ function CreateIssuerDialog({
               value={chainPEM}
               onChange={(event) => setChainPEM(event.target.value)}
               className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
-              placeholder="-----BEGIN CERTIFICATE-----"
+              placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
             />
           </div>
           <IssuerConfigForm fields={type.configFields} values={config} onChange={(key, value) => setConfig((current) => ({ ...current, [key]: value }))} />
         </div>
         <footer className="flex flex-wrap justify-end gap-2 border-t border-border px-5 py-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
+            {translateNow("source.cancel.19766ed6cc")}</Button>
           <Button type="submit" disabled={busy || name.trim() === "" || chainPEM.trim() === ""}>
-            Create issuer
-          </Button>
+            {translateNow("source.create.issuer.83b848cf15")}</Button>
         </footer>
       </form>
     </Dialog>
@@ -2331,7 +2294,7 @@ function IssuerConfigFieldControl({ field, onChange, value }: { field: IssuerCon
           onChange={(event) => onChange(event.target.value)}
           className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
         >
-          <option value="">Select</option>
+          <option value="">{translateNow("source.select.2a78025de6")}</option>
           {field.options?.map((option) => (
             <option key={option} value={option}>
               {option || "default"}
@@ -2471,8 +2434,7 @@ function ProbeBanner({ onDismiss, probe }: { probe: ProbeState; onDismiss: () =>
         <p className="min-w-0 break-words font-medium">{`${probe.issuerName}: ${probe.message}`}</p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
-        Dismiss
-      </Button>
+        {translateNow("source.dismiss.48845bff33")}</Button>
     </div>
   );
 }
@@ -2491,8 +2453,7 @@ function ManagedKeyPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="managed-key-heading" className="text-title font-semibold">
-            Managed key
-          </h3>
+            {translateNow("source.managed.key.f08acca719")}</h3>
           <p className="mt-1 font-mono text-xs">{managedKey.key_id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2504,8 +2465,7 @@ function ManagedKeyPanel({
             onClick={() => onAction("rotate", managedKey.key_id)}
             aria-label={`Rotate key ${managedKey.key_id}`}
           >
-            Rotate
-          </Button>
+            {translateNow("source.rotate.c3613b1704")}</Button>
           <Button
             type="button"
             size="sm"
@@ -2514,8 +2474,7 @@ function ManagedKeyPanel({
             onClick={() => onAction("revoke", managedKey.key_id)}
             aria-label={`Revoke key ${managedKey.key_id}`}
           >
-            Revoke
-          </Button>
+            {translateNow("source.revoke.87e6d00bbf")}</Button>
           <Button
             type="button"
             size="sm"
@@ -2524,8 +2483,7 @@ function ManagedKeyPanel({
             onClick={() => onAction("zeroize", managedKey.key_id)}
             aria-label={`Zeroize key ${managedKey.key_id}`}
           >
-            Zeroize
-          </Button>
+            {translateNow("source.zeroize.9fb44dd187")}</Button>
         </div>
       </div>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -2552,16 +2510,16 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
   return (
     <div className="ui-panel overflow-x-auto">
       <table className="ui-table min-w-[60rem]">
-        <caption className="sr-only">Issuer list</caption>
+        <caption className="sr-only">{translateNow("source.issuer.list.477db22fd7")}</caption>
         <thead>
           <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Kind</th>
-            <th scope="col">Internal</th>
-            <th scope="col">Chain</th>
-            <th scope="col">Public key</th>
-            <th scope="col">Certificates</th>
-            <th scope="col">Connection</th>
+            <th scope="col">{translateNow("source.name.dcd1d5223f")}</th>
+            <th scope="col">{translateNow("source.kind.f5387f9bb6")}</th>
+            <th scope="col">{translateNow("source.internal.2ea1842b44")}</th>
+            <th scope="col">{translateNow("source.chain.dae0896cbc")}</th>
+            <th scope="col">{translateNow("source.public.key.4ee252fb73")}</th>
+            <th scope="col">{translateNow("source.certificates.16f637921e")}</th>
+            <th scope="col">{translateNow("source.connection.639a40e82b")}</th>
           </tr>
         </thead>
         <tbody>
@@ -2574,7 +2532,7 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
               <td className="max-w-sm break-all font-mono text-xs">{issuer.public_key || "-"}</td>
               <td>
                 <a className="text-brand-accent underline" href={`/certificates?issuer=${encodeURIComponent(issuer.id)}`}>
-                  Certificates for {issuer.name}
+                  {translateNow("source.certificates.for.143f183f89")}{" "}{issuer.name}
                 </a>
               </td>
               <td>
@@ -2586,8 +2544,7 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
                   onClick={() => onTestConnection(issuer)}
                   aria-label={`Test connection ${issuer.name}`}
                 >
-                  Test
-                </Button>
+                  {translateNow("source.test.532eaabd95")}</Button>
               </td>
             </tr>
           ))}
@@ -2701,7 +2658,7 @@ function renderNotice(notice: Notice | null) {
   if (notice.kind === "permission") {
     return <PermissionDeniedState>{notice.message}</PermissionDeniedState>;
   }
-  return <ErrorState title="Issuer metadata unavailable">{notice.message}</ErrorState>;
+  return <ErrorState title={translateNow("source.issuer.metadata.unavailable.5b4cf4fcb5")}>{notice.message}</ErrorState>;
 }
 
 function errorText(err: unknown, fallback: string): string {

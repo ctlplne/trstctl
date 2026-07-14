@@ -19,7 +19,7 @@ import { Dialog } from "@/components/Dialog";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 function countTotal(counts: Record<string, unknown>): number {
@@ -399,8 +399,7 @@ export function Privacy() {
               <form onSubmit={(event) => void recordArchiveAttestation(event)} className="grid gap-3 p-5">
                 {recordError ? <ErrorState title={t("parity.couldNotRecordAttestation_204858")}>{recordError}</ErrorState> : null}
                 <label className="grid gap-1 text-body font-medium">
-                  Subject
-                  <input
+                  {translateNow("source.subject.6897128384")}<input
                     className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                     value={recordForm.subject}
                     onChange={(event) => setRecordForm({ ...recordForm, subject: event.target.value })}
@@ -410,8 +409,7 @@ export function Privacy() {
                 </label>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="grid gap-1 text-body font-medium">
-                    Action
-                    <select
+                    {translateNow("source.action.64cff1319d")}<select
                       className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                       value={recordForm.action}
                       onChange={(event) => setRecordForm({ ...recordForm, action: event.target.value as PrivacyArchiveErasureAttestationRequest["action"] })}
@@ -422,8 +420,7 @@ export function Privacy() {
                     </select>
                   </label>
                   <label className="grid gap-1 text-body font-medium">
-                    Artifact type
-                    <select
+                    {translateNow("source.artifact.type.c4984fa09a")}<select
                       className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                       value={recordForm.artifactType}
                       onChange={(event) =>
@@ -458,12 +455,11 @@ export function Privacy() {
                   />
                 </label>
                 <label className="grid gap-1 text-body font-medium">
-                  Reason
-                  <input
+                  {translateNow("source.reason.f81ab834de")}<input
                     className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                     value={recordForm.reason}
                     onChange={(event) => setRecordForm({ ...recordForm, reason: event.target.value })}
-                    placeholder="optional"
+                    placeholder={translateNow("source.optional.ec91fdd925")}
                   />
                 </label>
                 <label className="grid gap-1 text-body font-medium">
@@ -476,8 +472,7 @@ export function Privacy() {
                 </label>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" onClick={closeRecordDialog}>
-                    Cancel
-                  </Button>
+                    {translateNow("source.cancel.19766ed6cc")}</Button>
                   <Button type="submit" disabled={recordBusy || !recordForm.subject.trim()}>
                     {recordBusy ? "Recording..." : "Record attestation"}
                   </Button>

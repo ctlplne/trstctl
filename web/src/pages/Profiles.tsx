@@ -4,7 +4,7 @@ import { api, ApiError, type Profile } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
@@ -127,8 +127,7 @@ export function Profiles() {
         actions={
           <Button type="button" onClick={() => setShowForm((s) => !s)}>
             <Plus className="h-4 w-4" aria-hidden="true" />
-            New profile
-          </Button>
+            {translateNow("source.new.profile.fcf4f3f4d5")}</Button>
         }
       />
 
@@ -141,20 +140,20 @@ export function Profiles() {
         />
       )}
 
-      {error && <ErrorState title="Profile list unavailable">{error}</ErrorState>}
+      {error && <ErrorState title={translateNow("source.profile.list.unavailable.3759c2905e")}>{error}</ErrorState>}
 
-      {!items && <LoadingState>Loading profiles...</LoadingState>}
+      {!items && <LoadingState>{translateNow("source.loading.profiles.12a7541833")}</LoadingState>}
 
       {items && items.length === 0 && !showForm && (
-        <EmptyState title="No profiles yet">Create a certificate profile before issuing from a constrained template.</EmptyState>
+        <EmptyState title={translateNow("source.no.profiles.yet.bd4729eb8f")}>{translateNow("source.create.a.certificate.profile.before.issuin.cdb32f2c2e")}</EmptyState>
       )}
 
       {items && items.length > 0 && (
         <DataGrid ariaLabel="Certificate profile versions" rows={profileGroups} columns={profileColumns} getRowId={(group) => group.name} state="ready" />
       )}
 
-      {detailLoading && <LoadingState>Loading profile version...</LoadingState>}
-      {detailError && <ErrorState title="Profile version unavailable">{detailError}</ErrorState>}
+      {detailLoading && <LoadingState>{translateNow("source.loading.profile.version.dc6b63b7c9")}</LoadingState>}
+      {detailError && <ErrorState title={translateNow("source.profile.version.unavailable.ec6a0646c4")}>{detailError}</ErrorState>}
       {selected && <ProfileVersionDetail profile={selected} listedProfiles={items ?? []} />}
     </section>
   );
@@ -213,25 +212,22 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
         <div className="space-y-4">
           <div className="space-y-1">
             <label htmlFor="profile-name" className="block text-sm font-medium">
-              Profile name
-            </label>
+              {translateNow("source.profile.name.d3663280e1")}</label>
             <input
               id="profile-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              placeholder="web-server"
+              placeholder={translateNow("source.web.server.e4d165cf07")}
               required
             />
           </div>
 
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Profile authoring mode">
+          <div className="flex flex-wrap gap-2" role="group" aria-label={translateNow("source.profile.authoring.mode.4bba88d160")}>
             <Button type="button" variant={mode === "guided" ? "default" : "outline"} size="sm" onClick={() => switchMode("guided")}>
-              Guided builder
-            </Button>
+              {translateNow("source.guided.builder.16111a6ae3")}</Button>
             <Button type="button" variant={mode === "json" ? "default" : "outline"} size="sm" onClick={() => switchMode("json")}>
-              JSON editor
-            </Button>
+              {translateNow("source.json.editor.b58c887f78")}</Button>
           </div>
 
           {mode === "guided" ? (
@@ -239,8 +235,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
           ) : (
             <div className="space-y-1">
               <label htmlFor="profile-spec" className="block text-sm font-medium">
-                JSON spec
-              </label>
+                {translateNow("source.json.spec.d53195334c")}</label>
               <textarea
                 id="profile-spec"
                 value={specText}
@@ -254,19 +249,17 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
 
         <section aria-labelledby="profile-preview-heading" className="border-y border-border py-3">
           <h2 id="profile-preview-heading" className="text-sm font-semibold">
-            Spec preview
-          </h2>
-          <p className="mt-1 text-xs text-muted-foreground">This JSON is sent to the profile workflow. The backend remains the source of truth.</p>
+            {translateNow("source.spec.preview.73cee36c4b")}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{translateNow("source.this.json.is.sent.to.the.profile.workflow.37a80f1c5b")}</p>
           <pre data-testid="profile-spec-preview" className="mt-3 max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
             {mode === "guided" ? formatSpec(builderSpec) : specText}
           </pre>
         </section>
       </div>
 
-      {error && <ErrorState title="Profile rejected">{error}</ErrorState>}
+      {error && <ErrorState title={translateNow("source.profile.rejected.e9c8593d8e")}>{error}</ErrorState>}
       <Button type="submit" disabled={busy}>
-        Create profile
-      </Button>
+        {translateNow("source.create.profile.61d30d997d")}</Button>
     </form>
   );
 }
@@ -287,7 +280,7 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
         onToggle={(value) => onChange({ ...fields, allowedEkus: toggleValue(fields.allowedEkus, value) })}
       />
       <label className="space-y-1 text-sm font-medium">
-        <span>Minimum RSA bits</span>
+        <span>{translateNow("source.minimum.rsa.bits.746e102467")}</span>
         <input
           type="number"
           min={0}
@@ -298,7 +291,7 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
         />
       </label>
       <label className="space-y-1 text-sm font-medium">
-        <span>Minimum ECDSA bits</span>
+        <span>{translateNow("source.minimum.ecdsa.bits.12eb67ca2f")}</span>
         <input
           type="number"
           min={0}
@@ -309,20 +302,20 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
         />
       </label>
       <label className="space-y-1 text-sm font-medium">
-        <span>Maximum validity</span>
+        <span>{translateNow("source.maximum.validity.e745f2ab18")}</span>
         <input
           value={fields.maxValidity}
           onChange={(e) => onChange({ ...fields, maxValidity: e.target.value })}
-          placeholder="2160h"
+          placeholder={translateNow("source.2160h.87eea7a9f3")}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
       </label>
       <label className="space-y-1 text-sm font-medium">
-        <span>Allowed DNS suffixes</span>
+        <span>{translateNow("source.allowed.dns.suffixes.c2747c3707")}</span>
         <input
           value={fields.allowedDnsSuffixes}
           onChange={(e) => onChange({ ...fields, allowedDnsSuffixes: e.target.value })}
-          placeholder="example.com, internal.example"
+          placeholder={translateNow("source.example.com.internal.example.501943e23c")}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
       </label>
@@ -399,7 +392,7 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
     <section aria-labelledby="profile-detail-heading" className="grid gap-4 border-y border-border py-4">
       <div>
         <h2 id="profile-detail-heading" className="text-title font-semibold">
-          {profile.name} version {profile.version}
+          {profile.name} {" "}{translateNow("source.version.5ca4f3850c")}{" "}{profile.version}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {profile.active ? "Active version." : "Historical version."} Certificates already bound to a profile keep audit evidence for the version that
@@ -410,17 +403,15 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
       <div className="grid gap-4 lg:grid-cols-2">
         <section aria-labelledby="selected-profile-spec-heading">
           <h3 id="selected-profile-spec-heading" className="mb-2 text-sm font-semibold">
-            Selected spec
-          </h3>
+            {translateNow("source.selected.spec.757c23e3eb")}</h3>
           <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">{formatSpec(profile.spec ?? {})}</pre>
         </section>
         <section aria-labelledby="profile-diff-heading">
           <h3 id="profile-diff-heading" className="mb-2 text-sm font-semibold">
-            Profile diff
-          </h3>
+            {translateNow("source.profile.diff.e8bc2bbc32")}</h3>
           <form onSubmit={loadComparison} className="mb-3 flex flex-wrap items-end gap-2">
             <label className="space-y-1 text-sm font-medium">
-              <span>Compare with version</span>
+              <span>{translateNow("source.compare.with.version.96965654cd")}</span>
               <input
                 value={compareVersion}
                 onChange={(e) => setCompareVersion(e.target.value)}
@@ -430,27 +421,26 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
             </label>
             <Button type="submit" variant="outline" disabled={loading}>
               <GitCompare className="h-4 w-4" aria-hidden="true" />
-              Diff version
-            </Button>
+              {translateNow("source.diff.version.b5aedae8c4")}</Button>
           </form>
-          {loading && <LoadingState>Loading comparison...</LoadingState>}
-          {error && <ErrorState title="Profile comparison unavailable">{error}</ErrorState>}
+          {loading && <LoadingState>{translateNow("source.loading.comparison.58742d9f20")}</LoadingState>}
+          {error && <ErrorState title={translateNow("source.profile.comparison.unavailable.70eb2b404e")}>{error}</ErrorState>}
           {compare && (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                Comparing selected v{profile.version} to v{compare.version}.
+                {translateNow("source.comparing.selected.v.4b46e29d45")}{profile.version} {" "}{translateNow("source.to.v.0969544edf")}{compare.version}.
               </p>
               {diffRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No spec differences.</p>
+                <p className="text-sm text-muted-foreground">{translateNow("source.no.spec.differences.de9813046a")}</p>
               ) : (
                 <div className="ui-panel overflow-x-auto">
                   <table className="ui-table min-w-[36rem]">
                     <thead>
                       <tr>
-                        <th scope="col">Change</th>
-                        <th scope="col">Path</th>
-                        <th scope="col">Selected</th>
-                        <th scope="col">Compared</th>
+                        <th scope="col">{translateNow("source.change.c0bf75bd78")}</th>
+                        <th scope="col">{translateNow("source.path.62fa5a5b0d")}</th>
+                        <th scope="col">{translateNow("source.selected.57fd7a0cf3")}</th>
+                        <th scope="col">{translateNow("source.compared.17c858fc6d")}</th>
                       </tr>
                     </thead>
                     <tbody>

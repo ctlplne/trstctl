@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn, type DataGridToolbarControls } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DiscoveryHero, CTDriftPanel } from "@/components/discovery";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
   api,
   ApiError,
@@ -763,20 +763,19 @@ export function Discovery() {
     <section aria-labelledby="discovery-heading" className="grid gap-6">
       <PageHeader
         titleId="discovery-heading"
-        title="Discovery"
+        title={translateNow("source.discovery.80fc402133")}
         description="Manage tenant discovery sources, schedules, runs, and findings."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            Refresh
-          </Button>
+            {translateNow("source.refresh.0e91610117")}</Button>
         }
       />
 
       <DiscoveryHero findings={findings} />
 
       {notice && renderNotice(notice)}
-      {loading && <LoadingState>Loading discovery records...</LoadingState>}
+      {loading && <LoadingState>{translateNow("source.loading.discovery.records.da1c8fab87")}</LoadingState>}
 
       <PageTabs
         idPrefix="discovery"
@@ -806,13 +805,11 @@ export function Discovery() {
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <h2 id="source-form-heading" className="text-title font-semibold">
-                Source
-              </h2>
+                {translateNow("source.source.0e570ca6fa")}</h2>
             </div>
             <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
               <label className="grid gap-1 text-sm font-medium">
-                Name
-                <input
+                {translateNow("source.name.dcd1d5223f")}<input
                   id="discovery-source-name"
                   ref={sourceNameRef}
                   className="ui-input"
@@ -822,8 +819,7 @@ export function Discovery() {
                 />
               </label>
               <label className="grid gap-1 text-sm font-medium">
-                Kind
-                <select className="ui-input" value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)}>
+                {translateNow("source.kind.f5387f9bb6")}<select className="ui-input" value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)}>
                   {sourceKinds.map((kind) => (
                     <option key={kind} value={kind}>
                       {sourceKindLabels[kind]}
@@ -834,8 +830,7 @@ export function Discovery() {
             </div>
             {sourceKind === "network" && (
               <label className="grid gap-1 text-sm font-medium">
-                Targets
-                <textarea
+                {translateNow("source.targets.27445f6ab6")}<textarea
                   className="ui-input min-h-24 font-mono text-xs"
                   value={targets}
                   onChange={(event) => setTargets(event.target.value)}
@@ -860,8 +855,7 @@ export function Discovery() {
             )}
             <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
               <Plus className="h-4 w-4" aria-hidden="true" />
-              Create source
-            </Button>
+              {translateNow("source.create.source.020457fb23")}</Button>
           </form>
         </div>
       )}
@@ -872,13 +866,11 @@ export function Discovery() {
             <div className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <h2 id="schedule-form-heading" className="text-title font-semibold">
-                Schedule
-              </h2>
+                {translateNow("source.schedule.f4830a1dae")}</h2>
             </div>
             <label className="grid gap-1 text-sm font-medium">
-              Source
-              <select className="ui-input" value={scheduleSourceID} onChange={(event) => setScheduleSourceID(event.target.value)} required>
-                {sources.length === 0 && <option value="">No source</option>}
+              {translateNow("source.source.0e570ca6fa")}<select className="ui-input" value={scheduleSourceID} onChange={(event) => setScheduleSourceID(event.target.value)} required>
+                {sources.length === 0 && <option value="">{translateNow("source.no.source.2eca7a588d")}</option>}
                 {sources.map((source) => (
                   <option key={source.id} value={source.id}>
                     {source.name}
@@ -887,8 +879,7 @@ export function Discovery() {
               </select>
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Name
-              <input
+              {translateNow("source.name.dcd1d5223f")}<input
                 id="discovery-schedule-name"
                 ref={scheduleNameRef}
                 className="ui-input"
@@ -898,8 +889,7 @@ export function Discovery() {
               />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Interval seconds
-              <input
+              {translateNow("source.interval.seconds.5f0f5b832a")}<input
                 className="ui-input"
                 type="number"
                 min={60}
@@ -911,8 +901,7 @@ export function Discovery() {
             </label>
             <Button type="submit" className="justify-self-start" disabled={busy === "schedule" || sources.length === 0}>
               <Plus className="h-4 w-4" aria-hidden="true" />
-              Create schedule
-            </Button>
+              {translateNow("source.create.schedule.5b08f3c719")}</Button>
           </form>
         </div>
       )}
@@ -920,17 +909,15 @@ export function Discovery() {
       {tab === "sources" && (
         <section aria-labelledby="sources-heading" className="grid gap-3 border-y border-border py-4">
           <h2 id="sources-heading" className="text-title font-semibold">
-            Sources
-          </h2>
+            {translateNow("source.sources.caf85b0888")}</h2>
           {!loading && sources.length === 0 ? (
             <EmptyState
               icon={<Search className="h-5 w-5" aria-hidden="true" />}
-              title="No discovery sources"
-              primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
-              secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
+              title={translateNow("source.no.discovery.sources.b70fd7af27")}
+              primaryAction={{ label: translateNow("source.create.first.source.4d63a7434c"), onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+              secondaryAction={{ label: translateNow("source.enroll.an.agent.43dbb20757"), to: "/agents", icon: <Search className="h-4 w-4" /> }}
             >
-              Add a network, cloud, CT log, NHI, OAuth, service-account, behavior, compromise, or agent source before discovery runs can be queued.
-            </EmptyState>
+              {translateNow("source.add.a.network.cloud.ct.log.nhi.oauth.servi.1798feb274")}</EmptyState>
           ) : (
             <SourceTable sources={sources} busy={busy} onStart={startRun} />
           )}
@@ -940,21 +927,19 @@ export function Discovery() {
       {tab === "schedules" && (
         <section aria-labelledby="schedules-heading" className="grid gap-3 border-y border-border py-4">
           <h2 id="schedules-heading" className="text-title font-semibold">
-            Schedules
-          </h2>
+            {translateNow("source.schedules.221ff19c90")}</h2>
           {!loading && schedules.length === 0 ? (
             <EmptyState
               icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
-              title="No discovery schedules"
+              title={translateNow("source.no.discovery.schedules.17183fb10e")}
               primaryAction={{
                 label: sources.length > 0 ? "Create schedule" : "Create source first",
                 onClick: sources.length > 0 ? focusScheduleForm : focusSourceForm,
                 icon: <Plus className="h-4 w-4" />,
               }}
-              secondaryAction={{ label: "Refresh records", onClick: () => void load(), icon: <RefreshCw className="h-4 w-4" /> }}
+              secondaryAction={{ label: translateNow("source.refresh.records.60bf2f8d78"), onClick: () => void load(), icon: <RefreshCw className="h-4 w-4" /> }}
             >
-              Schedule a recurring scan once a source exists, or refresh to pick up work created by another operator.
-            </EmptyState>
+              {translateNow("source.schedule.a.recurring.scan.once.a.source.ex.e7c14af000")}</EmptyState>
           ) : (
             <ScheduleTable schedules={schedules} sourceByID={sourceByID} />
           )}
@@ -964,17 +949,15 @@ export function Discovery() {
       {tab === "runs" && (
         <section {...tabPanelProps("discovery", "runs")} aria-labelledby="runs-heading" className="grid gap-3 border-y border-border py-4">
           <h2 id="runs-heading" className="text-title font-semibold">
-            Runs
-          </h2>
+            {translateNow("source.runs.848f54e896")}</h2>
           {!loading && runs.length === 0 ? (
             <EmptyState
               icon={<Play className="h-5 w-5" aria-hidden="true" />}
-              title="No discovery runs"
-              primaryAction={{ label: "Create source to run", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
-              secondaryAction={{ label: "View certificates", to: "/certificates", icon: <Search className="h-4 w-4" /> }}
+              title={translateNow("source.no.discovery.runs.e3ba4972a6")}
+              primaryAction={{ label: translateNow("source.create.source.to.run.8ef21d8f2a"), onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+              secondaryAction={{ label: translateNow("source.view.certificates.dcc999606f"), to: "/certificates", icon: <Search className="h-4 w-4" /> }}
             >
-              Runs appear here after a source is created and a tenant-scoped scan is queued.
-            </EmptyState>
+              {translateNow("source.runs.appear.here.after.a.source.is.created.da81c4a3c9")}</EmptyState>
           ) : (
             <RunTable runs={runs} sourceByID={sourceByID} />
           )}
@@ -984,17 +967,15 @@ export function Discovery() {
       {tab === "findings" && (
         <section {...tabPanelProps("discovery", "findings")} aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
           <h2 id="findings-heading" className="text-title font-semibold">
-            Findings
-          </h2>
+            {translateNow("source.findings.e171c2ff25")}</h2>
           {!loading && findings.length === 0 ? (
             <EmptyState
               icon={<Search className="h-5 w-5" aria-hidden="true" />}
-              title="No discovery findings"
-              primaryAction={{ label: "Create discovery source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
-              secondaryAction={{ label: "Open posture", to: "/posture", icon: <Search className="h-4 w-4" /> }}
+              title={translateNow("source.no.discovery.findings.7c8b4f0e23")}
+              primaryAction={{ label: translateNow("source.create.discovery.source.0371fe8d52"), onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+              secondaryAction={{ label: translateNow("source.open.posture.71199986c4"), to: "/posture", icon: <Search className="h-4 w-4" /> }}
             >
-              Findings populate after discovery observes certificates, secrets, SSH trust, or drift.
-            </EmptyState>
+              {translateNow("source.findings.populate.after.discovery.observes.9d8596dcef")}</EmptyState>
           ) : (
             <FindingTable
               findings={filteredFindings}
@@ -1069,8 +1050,7 @@ function StructuredSourceForm({
     <div className="grid gap-3">
       <div className="grid gap-3 md:grid-cols-[1fr_auto] xl:grid-cols-[1fr_auto_12rem]">
         <label className="grid gap-1 text-sm font-medium">
-          Source template
-          <select className="ui-input" value={selectedTemplate} onChange={(event) => onTemplateChange(event.target.value)}>
+          {translateNow("source.source.template.f2c4cfbcec")}<select className="ui-input" value={selectedTemplate} onChange={(event) => onTemplateChange(event.target.value)}>
             {config.templates.map((template) => (
               <option key={template.id} value={template.id}>
                 {template.templateName}
@@ -1080,11 +1060,9 @@ function StructuredSourceForm({
         </label>
         <Button type="button" variant="outline" className="self-end" onClick={loadSampleRows}>
           <Sparkles className="h-4 w-4" aria-hidden="true" />
-          Load sample
-        </Button>
+          {translateNow("source.load.sample.ac404ab475")}</Button>
         <label className="grid gap-1 text-sm font-medium">
-          CSV upload
-          <span className="relative">
+          {translateNow("source.csv.upload.1a9c1686fd")}<span className="relative">
             <Upload className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <input
               type="file"
@@ -1129,8 +1107,7 @@ function StructuredSourceForm({
                 onClick={() => onRowsChange(rows.filter((_, index) => index !== rowIndex))}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
-                Remove row
-              </Button>
+                {translateNow("source.remove.row.1810fddd9e")}</Button>
             )}
           </fieldset>
         ))}
@@ -1139,18 +1116,15 @@ function StructuredSourceForm({
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" onClick={() => onRowsChange([...rows, emptyStructuredRow(config)])}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Add row
-        </Button>
+          {translateNow("source.add.row.1868a8dd78")}</Button>
         <Button type="button" variant="ghost" onClick={onToggleJSONImport}>
           <Code2 className="h-4 w-4" aria-hidden="true" />
-          Advanced JSON import
-        </Button>
+          {translateNow("source.advanced.json.import.c72cfacdf6")}</Button>
       </div>
 
       {jsonImportOpen && (
         <label className="grid gap-1 text-sm font-medium">
-          {sourceKindLabels[kind]} JSON import
-          <textarea className="ui-input min-h-32 font-mono text-xs" value={jsonImport} onChange={(event) => onJSONImportChange(event.target.value)} />
+          {sourceKindLabels[kind]} {" "}{translateNow("source.json.import.bc2fd1db82")}<textarea className="ui-input min-h-32 font-mono text-xs" value={jsonImport} onChange={(event) => onJSONImportChange(event.target.value)} />
         </label>
       )}
     </div>
@@ -1481,11 +1455,9 @@ function SourceTable({ sources, busy, onStart }: { sources: DiscoverySource[]; b
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" onClick={() => onStart(source.id, false)} disabled={busy?.startsWith(`run:${source.id}`)}>
             <Play className="h-4 w-4" aria-hidden="true" />
-            Run
-          </Button>
+            {translateNow("source.run.00d60e31a4")}</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => onStart(source.id, true)} disabled={busy?.startsWith(`run:${source.id}`)}>
-            Dry run
-          </Button>
+            {translateNow("source.dry.run.d5da154d9f")}</Button>
         </div>
       ),
     },
@@ -1974,7 +1946,7 @@ function FindingTable({
                     className="ui-input"
                     value={managedIdentityID}
                     onChange={(event) => setManagedIdentityID(event.target.value)}
-                    placeholder="identity-id"
+                    placeholder={translateNow("source.identity.id.ff02cbf157")}
                   />
                 </label>
               ) : (
@@ -1994,7 +1966,7 @@ function FindingTable({
               </label>
               <label className="grid gap-1 text-sm font-medium">
                 {t("discovery.findings.columnTags")}
-                <input className="ui-input" value={tagText} onChange={(event) => setTagText(event.target.value)} placeholder="internet, tls" />
+                <input className="ui-input" value={tagText} onChange={(event) => setTagText(event.target.value)} placeholder={translateNow("source.internet.tls.f6752ebc7d")} />
               </label>
               <Button type="submit" className="self-end" disabled={actionBusy}>
                 {action === "claim" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <XCircle className="h-4 w-4" aria-hidden="true" />}
@@ -2360,7 +2332,7 @@ function renderNotice(notice: Notice) {
     );
   }
   if (notice.kind === "permission") return <PermissionDeniedState>{notice.message}</PermissionDeniedState>;
-  return <ErrorState title="Discovery unavailable">{notice.message}</ErrorState>;
+  return <ErrorState title={translateNow("source.discovery.unavailable.839198b6dc")}>{notice.message}</ErrorState>;
 }
 
 function noticeForError(err: unknown, fallback: string): Notice {

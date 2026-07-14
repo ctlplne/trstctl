@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 type Notice = { kind: "permission" | "error"; message: string };
 
@@ -97,9 +97,8 @@ export function Approvals() {
       {
         id: "quorum",
         header: (
-          <span className="inline-flex items-center gap-1" title="Recorded approvals and required approvals for this request.">
-            Approvals
-            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="inline-flex items-center gap-1" title={translateNow("source.recorded.approvals.and.required.approvals.4d359a312b")}>
+            {translateNow("source.approvals.2bfc347157")}<Info className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
         ),
         cell: (row) => row.approvals,
@@ -114,8 +113,7 @@ export function Approvals() {
         header: "Evidence",
         cell: (row) => (
           <Link className="text-brand-accent underline" to={approvalAuditHref(row)}>
-            Audit trail
-          </Link>
+            {translateNow("source.audit.trail.c1ada08ce1")}</Link>
         ),
       },
       {
@@ -152,7 +150,7 @@ export function Approvals() {
   return (
     <section aria-labelledby="approvals-heading" className="space-y-6">
       <PageHeader
-        title="Approvals"
+        title={translateNow("source.approvals.2bfc347157")}
         titleId="approvals-heading"
         description="Dual-control issue, rotate, and revoke decisions for a distinct approver. The queue is built from pending identities; quorum and requester details appear when identity attributes carry them."
       />
@@ -163,10 +161,10 @@ export function Approvals() {
         </p>
       )}
       {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
-      {error?.kind === "error" && <ErrorState title="Approvals unavailable">{error.message}</ErrorState>}
-      {!identities && !error && <LoadingState>Loading approvals...</LoadingState>}
+      {error?.kind === "error" && <ErrorState title={translateNow("source.approvals.unavailable.8071a7e2c8")}>{error.message}</ErrorState>}
+      {!identities && !error && <LoadingState>{translateNow("source.loading.approvals.192880172b")}</LoadingState>}
       {identities && rows.length === 0 && (
-        <EmptyState title="No pending approvals">No identities currently require an issue, rotate, or revoke approval.</EmptyState>
+        <EmptyState title={translateNow("source.no.pending.approvals.261de9be5f")}>{translateNow("source.no.identities.currently.require.an.issue.r.3200466dfb")}</EmptyState>
       )}
       {identities && rows.length > 0 && <DataGrid ariaLabel="Pending approvals" rows={rows} columns={columns} getRowId={rowKey} />}
 
@@ -192,8 +190,7 @@ export function Approvals() {
           </label>
           <div>
             <Button type="submit" disabled={ephemeralBusy || !ephemeralRequestID.trim()}>
-              Approve issue
-            </Button>
+              {translateNow("source.approve.issue.a4353290b7")}</Button>
           </div>
         </form>
         {ephemeralError && (
@@ -228,7 +225,7 @@ function statusForApprovalAction(action: ApprovalQueueRow["action"]): string {
 
 function noticeForError(err: unknown): Notice {
   if (err instanceof UnauthorizedError) {
-    return { kind: "permission", message: "Your session cannot read tenant approval requests." };
+    return { kind: "permission", message: translateNow("source.your.session.cannot.read.tenant.approval.r.220db554b4") };
   }
   return { kind: "error", message: apiProblemMessage(err, "Could not load approvals") };
 }

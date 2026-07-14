@@ -24,7 +24,7 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 /** action is a lifecycle transition offered for a given state. `to` is bound to the
  * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
@@ -66,28 +66,28 @@ const emptyBlastRadiusState: BlastRadiusState = {
 
 const kindCopy: Record<Identity["kind"], { title: string; description: string }> = {
   x509_certificate: {
-    title: "X.509 certificate identity",
-    description: "A TLS or mTLS identity whose lifecycle is backed by certificate issuance, revocation, and expiry evidence.",
+    title: translateNow("source.x.509.certificate.identity.ac455e032b"),
+    description: translateNow("source.a.tls.or.mtls.identity.whose.lifecycle.is.d720dfba65"),
   },
   ssh_certificate: {
-    title: "SSH certificate identity",
-    description: "A short-lived SSH host or user certificate identity controlled by the SSH CA and lifecycle state machine.",
+    title: translateNow("source.ssh.certificate.identity.d5833485f8"),
+    description: translateNow("source.a.short.lived.ssh.host.or.user.certificate.17848c47a5"),
   },
   ssh_key: {
-    title: "SSH key identity",
-    description: "A standing SSH key identity that should be owned, rotated, and retired like any other non-human credential.",
+    title: translateNow("source.ssh.key.identity.b8252e7aa8"),
+    description: translateNow("source.a.standing.ssh.key.identity.that.should.be.6e4dc64176"),
   },
   secret: {
-    title: "Secret identity",
-    description: "A password, shared secret, or opaque credential identity tracked separately from certificate inventory.",
+    title: translateNow("source.secret.identity.62453fba82"),
+    description: translateNow("source.a.password.shared.secret.or.opaque.credent.b98b0c5e45"),
   },
   api_key: {
-    title: "API key identity",
-    description: "An API token or service key identity where ownership, age, and retirement matter more than a certificate chain.",
+    title: translateNow("source.api.key.identity.bc78809131"),
+    description: translateNow("source.an.api.token.or.service.key.identity.where.8f7b48a2e6"),
   },
   workload_identity: {
-    title: "Workload identity",
-    description: "A service, job, agent, or workload identity that can be issued short-lived credentials instead of storing static secrets.",
+    title: translateNow("source.workload.identity.ebfedeba5e"),
+    description: translateNow("source.a.service.job.agent.or.workload.identity.t.dcc4188b56"),
   },
 };
 
@@ -125,21 +125,21 @@ function errorMessage(err: unknown): string {
 function actionsFor(state: string): Action[] {
   switch (state) {
     case "requested":
-      return [{ label: "Issue", to: "issued" }];
+      return [{ label: translateNow("source.issue.48dc76dfa2"), to: "issued" }];
     case "issued":
       return [
-        { label: "Deploy", to: "deployed" },
-        { label: "Revoke", to: "revoked" },
+        { label: translateNow("source.deploy.4c236daafb"), to: "deployed" },
+        { label: translateNow("source.revoke.87e6d00bbf"), to: "revoked" },
       ];
     case "deployed":
       return [
-        { label: "Renew", to: "renewing" },
-        { label: "Revoke", to: "revoked" },
+        { label: translateNow("source.renew.90c1689b0b"), to: "renewing" },
+        { label: translateNow("source.revoke.87e6d00bbf"), to: "revoked" },
       ];
     case "renewing":
-      return [{ label: "Revoke", to: "revoked" }];
+      return [{ label: translateNow("source.revoke.87e6d00bbf"), to: "revoked" }];
     case "revoked":
-      return [{ label: "Retire", to: "retired" }];
+      return [{ label: translateNow("source.retire.da8597f3f2"), to: "retired" }];
     default:
       return [];
   }
@@ -556,8 +556,7 @@ export function Identities() {
           return (
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => openDetail(identity)}>
-                View details
-              </Button>
+                {translateNow("source.view.details.d1bf045bb5")}</Button>
               {actions.map((a) => (
                 <div key={a.to} className="space-y-1">
                   <Button
@@ -589,12 +588,11 @@ export function Identities() {
     <section aria-labelledby="identities-heading">
       <PageHeader
         titleId="identities-heading"
-        title="Identities"
+        title={translateNow("source.identities.8d4d8fef65")}
         description="The non-human identities trstctl manages — services, agents, and workloads — and their lifecycle: issue, deploy, renew, revoke, retire. Each can hold certificates (see Certificates) and secrets (see Secrets)."
         actions={
           <Button type="button" onClick={() => setShowForm((s) => !s)}>
-            New identity
-          </Button>
+            {translateNow("source.new.identity.51c2e7c139")}</Button>
         }
       />
 
@@ -638,8 +636,7 @@ export function Identities() {
           <BlastRadiusImpactPanel state={pendingImpact} />
           <div className="mt-3 grid gap-3">
             <label className="block text-sm font-medium text-destructive" htmlFor="destructive-confirm-name">
-              Type credential name to confirm
-            </label>
+              {translateNow("source.type.credential.name.to.confirm.cc8d26a179")}</label>
             <input
               ref={pendingConfirmRef}
               id="destructive-confirm-name"
@@ -674,15 +671,14 @@ export function Identities() {
               {`Yes, ${pending.label.toLowerCase()}`}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={clearPending}>
-              Cancel
-            </Button>
+              {translateNow("source.cancel.19766ed6cc")}</Button>
           </div>
         </Dialog>
       )}
 
       {selectedRows.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted px-3 py-2 text-sm">
-          <span className="font-medium">{selectedRows.length} selected</span>
+          <span className="font-medium">{selectedRows.length} {" "}{translateNow("source.selected.d7cbbb688b")}</span>
           <Button
             type="button"
             size="sm"
@@ -692,11 +688,9 @@ export function Identities() {
               setBulkConfirmOpen(true);
             }}
           >
-            Bulk revoke selected
-          </Button>
+            {translateNow("source.bulk.revoke.selected.53f4891ce3")}</Button>
           <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-            Clear selection
-          </Button>
+            {translateNow("source.clear.selection.cea4d2e010")}</Button>
         </div>
       )}
 
@@ -713,15 +707,13 @@ export function Identities() {
           panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
         >
           <h2 id="bulk-revoke-title" className="text-title font-semibold text-destructive">
-            Revoke {selectedRows.length} selected identities?
-          </h2>
+            {translateNow("source.revoke.87e6d00bbf")}{" "}{selectedRows.length} {" "}{translateNow("source.selected.identities.a829228e71")}</h2>
           <p id="bulk-revoke-desc" className="mt-1 text-destructive">
-            This submits a single bulk revocation request for the {selectedRows.length} selected identities; the server reports revoked, skipped, and failed per
+            {translateNow("source.this.submits.a.single.bulk.revocation.requ.ab3df219e2")}{" "}{selectedRows.length} selected identities; the server reports revoked, skipped, and failed per
             item. Connector and downstream delivery still complete asynchronously through the outbox.
           </p>
           <label className="mt-3 grid gap-1 text-sm font-medium text-destructive" htmlFor="identity-bulk-revoke-reason">
-            Revocation reason
-            <select
+            {translateNow("source.revocation.reason.b11670420f")}<select
               id="identity-bulk-revoke-reason"
               value={bulkReason}
               onChange={(event) => setBulkReason(event.target.value as BulkRevokeRequest["reason"])}
@@ -737,11 +729,9 @@ export function Identities() {
           {bulkError && <p className="mt-3 text-sm font-medium text-risk-critical">{bulkError}</p>}
           <div className="mt-3 flex gap-2">
             <Button ref={bulkConfirmRef} type="button" size="sm" variant="destructive" loading={bulkBusy} onClick={() => void runBulkRevoke()}>
-              Confirm bulk revoke
-            </Button>
+              {translateNow("source.confirm.bulk.revoke.d613327838")}</Button>
             <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setBulkConfirmOpen(false)}>
-              Cancel
-            </Button>
+              {translateNow("source.cancel.19766ed6cc")}</Button>
           </div>
         </Dialog>
       )}
@@ -749,7 +739,7 @@ export function Identities() {
       {bulkResult && (
         <div role="status" className="mb-3 rounded-md border border-border p-3 text-sm">
           <p className="font-medium">
-            Revoked {bulkResult.total_revoked} of {bulkResult.total_matched} (skipped {bulkResult.total_skipped}, failed {bulkResult.total_failed})
+            {translateNow("source.revoked.f6f738d043")}{" "}{bulkResult.total_revoked} {" "}{translateNow("source.of.28391d3bc6")}{" "}{bulkResult.total_matched} {" "}{translateNow("source.skipped.22a5b0caf3")}{" "}{bulkResult.total_skipped}{translateNow("source.failed.ff18811f27")}{" "}{bulkResult.total_failed})
           </p>
           {bulkResult.items.some((item) => item.status !== "revoked") && (
             <ul className="mt-2 space-y-1">
@@ -766,26 +756,24 @@ export function Identities() {
         </div>
       )}
 
-      {!items && !error && <LoadingState>Loading identities...</LoadingState>}
-      {error && <ErrorState title="Identity action failed">{error}</ErrorState>}
+      {!items && !error && <LoadingState>{translateNow("source.loading.identities.45d7e0b5b9")}</LoadingState>}
+      {error && <ErrorState title={translateNow("source.identity.action.failed.5e3283fa66")}>{error}</ErrorState>}
 
       {items && items.length === 0 && !showForm && (
-        <EmptyState title="No identities yet" ctaTo="/wizard" ctaLabel="Set up your first certificate">
-          Issue your first certificate to start tracking and rotating credentials.
-        </EmptyState>
+        <EmptyState title={translateNow("source.no.identities.yet.c8697bd1bc")} ctaTo="/wizard" ctaLabel="Set up your first certificate">
+          {translateNow("source.issue.your.first.certificate.to.start.trac.355cebb739")}</EmptyState>
       )}
 
       {items && items.length > 0 && (
         <div id="manual-lifecycle-transitions" className="space-y-3">
           <label className="grid max-w-xs gap-1 text-sm font-medium" htmlFor="identity-kind-filter">
-            Kind
-            <select
+            {translateNow("source.kind.f5387f9bb6")}<select
               id="identity-kind-filter"
               value={kindFilter}
               onChange={(event) => setKindFilter(event.target.value as KindFilter)}
               className="rounded-md border border-border bg-background px-3 py-2"
             >
-              <option value="all">All kinds</option>
+              <option value="all">{translateNow("source.all.kinds.ddd0c2108e")}</option>
               {identityKinds.map((kind) => (
                 <option key={kind} value={kind}>
                   {kind}
@@ -854,8 +842,7 @@ export function Identities() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-reason">
-            Reason
-            <input
+            {translateNow("source.reason.f81ab834de")}<input
               id="nhi-decommission-reason"
               className="ui-input"
               value={decommissionReason}
@@ -873,13 +860,13 @@ export function Identities() {
         {decommissionResult && (
           <div role="status" className="rounded-md border border-border p-3 text-sm">
             <p className="font-medium">
-              CAP-GOV-04: matched {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked}; retired{" "}
+              {translateNow("source.cap.gov.04.matched.d376577cb5")}{" "}{decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked}; retired{" "}
               {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
             </p>
             <ul className="mt-2 space-y-1">
               {decommissionResult.items.slice(0, 5).map((item) => (
                 <li key={item.identity_id}>
-                  {item.name} {item.action} via {item.signal_type}
+                  {item.name} {item.action} {" "}{translateNow("source.via.4d327af41f")}{" "}{item.signal_type}
                 </li>
               ))}
             </ul>
@@ -889,7 +876,7 @@ export function Identities() {
 
       <DetailDrawer
         open={!!selectedId}
-        title="Identity detail"
+        title={translateNow("source.identity.detail.f34a3c7053")}
         description={detail ? `${detail.name} detail fields.` : "Identity detail."}
         onClose={() => setSelectedId(null)}
       >
@@ -933,38 +920,34 @@ function DeliveryEvidencePanel({
     <section aria-labelledby="delivery-evidence-heading" className="mb-4 border-y border-border py-4">
       <div className="mb-3">
         <h2 id="delivery-evidence-heading" className="text-title font-semibold">
-          Delivery and rotation evidence
-        </h2>
+          {translateNow("source.delivery.and.rotation.evidence.1fc4ef65bb")}</h2>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          The console reads projected connector delivery receipts and lifecycle rotation runs. These are audit-safe routing records: no certificate private key
-          or secret value is returned.
-        </p>
+          {translateNow("source.the.console.reads.projected.connector.deli.091ecd8115")}</p>
       </div>
-      {loading && <LoadingState>Loading delivery evidence...</LoadingState>}
-      {error && <ErrorState title="Delivery evidence failed to load">{error}</ErrorState>}
+      {loading && <LoadingState>{translateNow("source.loading.delivery.evidence.7f2cdadedd")}</LoadingState>}
+      {error && <ErrorState title={translateNow("source.delivery.evidence.failed.to.load.2625e33346")}>{error}</ErrorState>}
       {!loading && !error && recentDeliveries.length === 0 && recentRotations.length === 0 && (
-        <EmptyState title="No delivery or rotation receipts yet">Issue, deploy, or renew an identity to produce outbox-backed evidence.</EmptyState>
+        <EmptyState title={translateNow("source.no.delivery.or.rotation.receipts.yet.21fb574bf8")}>{translateNow("source.issue.deploy.or.renew.an.identity.to.produ.722d26ac6c")}</EmptyState>
       )}
       {(recentDeliveries.length > 0 || recentRotations.length > 0) && (
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="ui-panel overflow-x-auto">
             <table className="ui-table min-w-[42rem]">
-              <caption className="sr-only">Recent connector delivery receipts</caption>
+              <caption className="sr-only">{translateNow("source.recent.connector.delivery.receipts.3a2bf7db18")}</caption>
               <thead>
                 <tr>
-                  <th scope="col">Status</th>
-                  <th scope="col">Connector</th>
-                  <th scope="col">Target</th>
-                  <th scope="col">Fingerprint</th>
-                  <th scope="col">Reason</th>
+                  <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                  <th scope="col">{translateNow("source.connector.8f0d706fff")}</th>
+                  <th scope="col">{translateNow("source.target.978354db0c")}</th>
+                  <th scope="col">{translateNow("source.fingerprint.ba7af0b704")}</th>
+                  <th scope="col">{translateNow("source.reason.f81ab834de")}</th>
                 </tr>
               </thead>
               <tbody>
                 {recentDeliveries.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-muted-foreground">
-                      No connector receipts.
-                    </td>
+                      {translateNow("source.no.connector.receipts.86d1a1527d")}</td>
                   </tr>
                 ) : (
                   recentDeliveries.map((receipt) => (
@@ -982,22 +965,21 @@ function DeliveryEvidencePanel({
           </div>
           <div className="ui-panel overflow-x-auto">
             <table className="ui-table min-w-[42rem]">
-              <caption className="sr-only">Recent lifecycle rotation runs</caption>
+              <caption className="sr-only">{translateNow("source.recent.lifecycle.rotation.runs.4de11752b6")}</caption>
               <thead>
                 <tr>
-                  <th scope="col">Status</th>
-                  <th scope="col">Trigger</th>
-                  <th scope="col">Successor</th>
-                  <th scope="col">Rollback</th>
-                  <th scope="col">Completed</th>
+                  <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                  <th scope="col">{translateNow("source.trigger.8b9c643731")}</th>
+                  <th scope="col">{translateNow("source.successor.d29e68e27e")}</th>
+                  <th scope="col">{translateNow("source.rollback.c591f55749")}</th>
+                  <th scope="col">{translateNow("source.completed.22a970d2e5")}</th>
                 </tr>
               </thead>
               <tbody>
                 {recentRotations.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-muted-foreground">
-                      No rotation runs.
-                    </td>
+                      {translateNow("source.no.rotation.runs.cf68af2637")}</td>
                   </tr>
                 ) : (
                   recentRotations.map((run) => (
@@ -1023,8 +1005,7 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
   if (state.loading) {
     return (
       <div className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive">
-        Loading blast-radius impact from graph...
-      </div>
+        {translateNow("source.loading.blast.radius.impact.from.graph.771409e0df")}</div>
     );
   }
 
@@ -1042,12 +1023,9 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
       className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive"
     >
       <h3 id="destructive-blast-radius-heading" className="font-semibold">
-        Blast-radius impact
-      </h3>
+        {translateNow("source.blast.radius.impact.42dfddadef")}</h3>
       <p className="mt-1">
-        Graph node <span className="font-mono text-xs">{state.nodeId}</span> reports {affected} downstream affected node{affected === 1 ? "" : "s"} before this
-        destructive action.
-      </p>
+        {translateNow("source.graph.node.8779202b33")}{" "}<span className="font-mono text-xs">{state.nodeId}</span> {" "}{translateNow("source.reports.7f26104f77")}{" "}{affected} {" "}{translateNow("source.downstream.affected.node.0dfbe99d70")}{affected === 1 ? "" : "s"} {" "}{translateNow("source.before.this.destructive.action.b4c45f22e1")}</p>
       {byKind.length > 0 && (
         <dl className="mt-2 grid gap-2 sm:grid-cols-2">
           {byKind.map(([kind, value]) => (
@@ -1094,12 +1072,11 @@ function IdentityDetailPanel({
     <section aria-labelledby="identity-detail-content-heading" className="text-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase text-muted-foreground">Identity detail</p>
+          <p className="text-xs font-medium uppercase text-muted-foreground">{translateNow("source.identity.detail.f34a3c7053")}</p>
           <h2 id="identity-detail-content-heading" className="text-title font-semibold">
-            Detail fields
-          </h2>
+            {translateNow("source.detail.fields.6c69673d46")}</h2>
         </div>
-        {loading && <p role="status">Loading identity detail...</p>}
+        {loading && <p role="status">{translateNow("source.loading.identity.detail.0d1feafcee")}</p>}
       </div>
 
       {error && (
@@ -1120,39 +1097,39 @@ function IdentityDetailPanel({
 
           <dl className="grid gap-3 md:grid-cols-2">
             <div>
-              <dt className="font-medium text-muted-foreground">Name</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.name.dcd1d5223f")}</dt>
               <dd>{identity.name}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Status</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
               <dd>{state || "-"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Kind</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.kind.f5387f9bb6")}</dt>
               <dd>{identity.kind}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Not after</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.not.after.577c1c7930")}</dt>
               <dd>{formatDate(identity.not_after)}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Not before</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.not.before.69bf0cd3a1")}</dt>
               <dd>{formatDate(identity.not_before)}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Owner</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
               <dd>
                 <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(identity.owner_id)}`}>
-                  Owner {identity.owner_id}
+                  {translateNow("source.owner.4b1b8aa360")}{" "}{identity.owner_id}
                 </a>
               </dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Issuer</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.issuer.39e02c46a0")}</dt>
               <dd>
                 {identity.issuer_id ? (
                   <a className="text-primary underline" href={`/protocols?issuer=${encodeURIComponent(identity.issuer_id)}`}>
-                    Issuer {identity.issuer_id}
+                    {translateNow("source.issuer.39e02c46a0")}{" "}{identity.issuer_id}
                   </a>
                 ) : (
                   "No issuer bound"
@@ -1160,15 +1137,14 @@ function IdentityDetailPanel({
               </dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Identity ID</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.identity.id.2f8124d39c")}</dt>
               <dd className="break-all font-mono text-xs">{identity.id}</dd>
             </div>
           </dl>
 
           <section aria-labelledby="identity-attributes-heading" className="mt-4">
             <h3 id="identity-attributes-heading" className="font-semibold">
-              Kind attributes
-            </h3>
+              {translateNow("source.kind.attributes.9505322c06")}</h3>
             {rows.length > 0 ? (
               <dl className="mt-2 grid gap-2 md:grid-cols-2">
                 {rows.map(([key, value]) => (
@@ -1179,7 +1155,7 @@ function IdentityDetailPanel({
                 ))}
               </dl>
             ) : (
-              <p className="mt-1 text-muted-foreground">No extra kind attributes were returned.</p>
+              <p className="mt-1 text-muted-foreground">{translateNow("source.no.extra.kind.attributes.were.returned.9f899e73ae")}</p>
             )}
           </section>
 
@@ -1187,18 +1163,16 @@ function IdentityDetailPanel({
 
           <section aria-labelledby="identity-lifecycle-heading" className="mt-5 border-t border-border pt-4">
             <h3 id="identity-lifecycle-heading" className="font-semibold">
-              Lifecycle state machine
-            </h3>
-            <p className="mt-1 text-muted-foreground">Only valid next states are enabled. Disabled targets are not sent to the backend.</p>
+              {translateNow("source.lifecycle.state.machine.4fd45925e4")}</h3>
+            <p className="mt-1 text-muted-foreground">{translateNow("source.only.valid.next.states.are.enabled.disable.643c38f3f4")}</p>
             <label htmlFor="transition-reason" className="mt-3 block text-sm font-medium">
-              Transition reason
-            </label>
+              {translateNow("source.transition.reason.2b9e603491")}</label>
             <textarea
               id="transition-reason"
               value={reason}
               onChange={(e) => onReasonChange(e.target.value)}
               className="mt-1 min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              placeholder="e.g. change approved in CAB-1234"
+              placeholder={translateNow("source.e.g.change.approved.in.cab.1234.6a0cc1f9e3")}
             />
             <div className="mt-3 flex flex-wrap gap-2">
               {lifecycleTargets.map((target) => {
@@ -1216,7 +1190,7 @@ function IdentityDetailPanel({
                       aria-describedby={reasonId}
                       onClick={() => action && onTransition(target, action.label)}
                     >
-                      Move to {target}
+                      {translateNow("source.move.to.beb8194bc4")}{" "}{target}
                     </Button>
                     <p id={reasonId} className="text-xs text-muted-foreground">
                       {denied || (action ? `Valid from ${state}.` : target === state ? "Already in this state." : `Invalid from ${state || "unknown"}.`)}
@@ -1261,8 +1235,7 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
     <form onSubmit={submit} className="mb-4 flex items-end gap-3 rounded-md border border-border p-4">
       <div className="flex-1 space-y-1">
         <label htmlFor="new-identity-name" className="block text-sm font-medium">
-          Service name
-        </label>
+          {translateNow("source.service.name.1bb8870cc0")}</label>
         <input
           id="new-identity-name"
           value={name}
@@ -1271,7 +1244,7 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
             if (!e.target.value.trim().startsWith("*.")) setWildcardAck(false);
           }}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          placeholder="e.g. payments-api"
+          placeholder={translateNow("source.e.g.payments.api.b39781a2b3")}
         />
         {isWildcard && (
           <label className="mt-2 flex items-start gap-2 text-sm font-medium" htmlFor="wildcard-ack">
@@ -1283,15 +1256,13 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
               className="mt-1 h-4 w-4 rounded border-border"
             />
             <span>
-              Acknowledge wildcard blast radius
-              <span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
+              {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}<span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
             </span>
           </label>
         )}
       </div>
       <Button type="submit" disabled={busy || (isWildcard && !wildcardAck)}>
-        Issue
-      </Button>
+        {translateNow("source.issue.48dc76dfa2")}</Button>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

@@ -32,7 +32,7 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { BreakGlassReconcile } from "@/components/breakglass";
-import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
+import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime } from "@/i18n/format";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -525,7 +525,7 @@ export function Incidents() {
     <section aria-labelledby="incidents-heading" className="grid gap-6">
       <PageHeader
         titleId="incidents-heading"
-        title="Incidents"
+        title={translateNow("source.incidents.bfe8689315")}
         description="Respond to a compromised credential: see what it can reach (blast radius), issue a replacement before revoking, push it out through connectors, roll back failed targets, and capture a tamper-evident audit bundle."
         actions={
           <>
@@ -550,16 +550,13 @@ export function Incidents() {
       <section aria-labelledby="execute-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="execute-heading" className="text-title font-semibold">
-            Credential compromise execution
-          </h2>
+            {translateNow("source.credential.compromise.execution.3cfb067780")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Incident execution issues and deploys a replacement identity before revoking the compromised identity.
-          </p>
+            {translateNow("source.incident.execution.issues.and.deploys.a.re.c00d70d3f5")}</p>
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={executeIncident}>
           <label className="grid gap-1 text-sm font-medium" htmlFor="incident-affected-identity">
-            Affected identity
-            <IdentityPicker
+            {translateNow("source.affected.identity.031ba2eb6f")}<IdentityPicker
               id="incident-affected-identity"
               value={form.identity_id}
               onChange={(identityId) => setForm({ ...form, identity_id: identityId })}
@@ -568,21 +565,18 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            What happened
-            <input className="ui-input" value={form.reason ?? ""} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
+            {translateNow("source.what.happened.483bd49023")}<input className="ui-input" value={form.reason ?? ""} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Replacement identity name
-            <input
+            {translateNow("source.replacement.identity.name.503334612e")}<input
               className="ui-input"
               value={form.replacement_name ?? ""}
               onChange={(event) => setForm({ ...form, replacement_name: event.target.value })}
-              placeholder="optional"
+              placeholder={translateNow("source.optional.ec91fdd925")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Delivery method
-            <input
+            {translateNow("source.delivery.method.26b6ab1b68")}<input
               className="ui-input"
               value={form.connector ?? ""}
               onChange={(event) => setForm({ ...form, connector: event.target.value })}
@@ -590,21 +584,19 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Deployment target
-            <input
+            {translateNow("source.deployment.target.5b274e18ab")}<input
               className="ui-input"
               value={form.target ?? ""}
               onChange={(event) => setForm({ ...form, target: event.target.value })}
-              placeholder="edge/prod/payments"
+              placeholder={translateNow("source.edge.prod.payments.178b58c24e")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Rollback instructions
-            <input
+            {translateNow("source.rollback.instructions.8fb506160a")}<input
               className="ui-input"
               value={form.delivery_rollback_ref ?? ""}
               onChange={(event) => setForm({ ...form, delivery_rollback_ref: event.target.value })}
-              placeholder="restore previous binding"
+              placeholder={translateNow("source.restore.previous.binding.3e3a4f657d")}
             />
           </label>
           <div className="flex flex-wrap gap-2 md:col-span-2">
@@ -625,24 +617,23 @@ export function Incidents() {
             </option>
           ))}
         </datalist>
-        {previewError && <ErrorState title="Blast-radius preview unavailable">{previewError}</ErrorState>}
-        {executeError && <ErrorState title="Incident execution failed">{executeError}</ErrorState>}
+        {previewError && <ErrorState title={translateNow("source.blast.radius.preview.unavailable.00a241de01")}>{previewError}</ErrorState>}
+        {executeError && <ErrorState title={translateNow("source.incident.execution.failed.70db66b277")}>{executeError}</ErrorState>}
         {latestExecution && (
           <section role="status" aria-labelledby="incident-progress-heading" className="ui-panel p-comfortable">
             <h3 id="incident-progress-heading" className="text-title font-semibold">
-              Incident execution recorded
-            </h3>
+              {translateNow("source.incident.execution.recorded.2ea0b1ce57")}</h3>
             <dl className="mt-3 grid gap-2 md:grid-cols-3">
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Execution</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.execution.a45cd4bd09")}</dt>
                 <dd className="font-mono text-xs">{latestExecution.id}</dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
                 <dd>{latestExecution.status}</dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Current phase</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.current.phase.44c03cecc0")}</dt>
                 <dd className="break-all font-mono text-xs">{latestExecution.phase}</dd>
               </div>
             </dl>
@@ -1036,83 +1027,72 @@ export function Incidents() {
       <section aria-labelledby="servicenow-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="servicenow-heading" className="text-title font-semibold">
-            ServiceNow ITSM workflow
-          </h2>
+            {translateNow("source.servicenow.itsm.workflow.9ebb1f9288")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Queue a ServiceNow Table API ticket through the same event log and outbox used for credential workflows.
-          </p>
+            {translateNow("source.queue.a.servicenow.table.api.ticket.throug.0df778f34b")}</p>
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={queueServiceNowTicket}>
           <label className="grid gap-1 text-sm font-medium">
-            ServiceNow instance
-            <input
+            {translateNow("source.servicenow.instance.0da2a11806")}<input
               className="ui-input"
               value={ticketForm.instance_url}
               onChange={(event) => setTicketForm({ ...ticketForm, instance_url: event.target.value })}
-              placeholder="https://example.service-now.com"
+              placeholder={translateNow("source.https.example.service.now.com.1d3417de64")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Ticket table
-            <select
+            {translateNow("source.ticket.table.bfbfbeffa9")}<select
               className="ui-input"
               value={ticketForm.table ?? "incident"}
               onChange={(event) => setTicketForm({ ...ticketForm, table: event.target.value as ServiceNowTicketRequest["table"] })}
             >
-              <option value="incident">Incident</option>
-              <option value="change_request">Change request</option>
-              <option value="sc_task">Service catalog task</option>
+              <option value="incident">{translateNow("source.incident.36a606d488")}</option>
+              <option value="change_request">{translateNow("source.change.request.6946efe81c")}</option>
+              <option value="sc_task">{translateNow("source.service.catalog.task.6c47887640")}</option>
             </select>
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Token reference
-            <input
+            {translateNow("source.token.reference.f98f4b9710")}<input
               className="ui-input font-mono"
               value={ticketForm.token_ref}
               onChange={(event) => setTicketForm({ ...ticketForm, token_ref: event.target.value })}
-              placeholder="servicenow-ticket-token"
+              placeholder={translateNow("source.servicenow.ticket.token.77e4d20179")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Ticket summary
-            <input
+            {translateNow("source.ticket.summary.aafe32b23d")}<input
               className="ui-input"
               value={ticketForm.short_description}
               onChange={(event) => setTicketForm({ ...ticketForm, short_description: event.target.value })}
-              placeholder="Rotate exposed TLS private key"
+              placeholder={translateNow("source.rotate.exposed.tls.private.key.8868cb8fa7")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium md:col-span-2">
-            Ticket description
-            <textarea
+            {translateNow("source.ticket.description.a277a242bf")}<textarea
               className="ui-input min-h-24"
               value={ticketForm.description ?? ""}
               onChange={(event) => setTicketForm({ ...ticketForm, description: event.target.value })}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Category
-            <input
+            {translateNow("source.category.292c06f004")}<input
               className="ui-input"
               value={ticketForm.category ?? ""}
               onChange={(event) => setTicketForm({ ...ticketForm, category: event.target.value })}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Urgency
-            <input className="ui-input" value={ticketForm.urgency ?? ""} onChange={(event) => setTicketForm({ ...ticketForm, urgency: event.target.value })} />
+            {translateNow("source.urgency.03d37e9a53")}<input className="ui-input" value={ticketForm.urgency ?? ""} onChange={(event) => setTicketForm({ ...ticketForm, urgency: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Impact
-            <input className="ui-input" value={ticketForm.impact ?? ""} onChange={(event) => setTicketForm({ ...ticketForm, impact: event.target.value })} />
+            {translateNow("source.impact.d1f23f0d13")}<input className="ui-input" value={ticketForm.impact ?? ""} onChange={(event) => setTicketForm({ ...ticketForm, impact: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Correlation ID
-            <input
+            {translateNow("source.correlation.id.c267c186e8")}<input
               className="ui-input"
               value={ticketForm.correlation_id ?? ""}
               onChange={(event) => setTicketForm({ ...ticketForm, correlation_id: event.target.value })}
-              placeholder="optional"
+              placeholder={translateNow("source.optional.ec91fdd925")}
             />
           </label>
           <div className="md:col-span-2">
@@ -1121,27 +1101,26 @@ export function Incidents() {
             </Button>
           </div>
         </form>
-        {ticketError && <ErrorState title="ServiceNow ticket failed">{ticketError}</ErrorState>}
+        {ticketError && <ErrorState title={translateNow("source.servicenow.ticket.failed.75f1ff3ff8")}>{ticketError}</ErrorState>}
         {latestTicket && (
           <section role="status" aria-labelledby="servicenow-queued-heading" className="ui-panel p-comfortable">
             <h3 id="servicenow-queued-heading" className="text-title font-semibold">
-              ServiceNow ticket queued
-            </h3>
+              {translateNow("source.servicenow.ticket.queued.aaa6fd780e")}</h3>
             <dl className="mt-3 grid gap-2 md:grid-cols-4">
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Ticket request</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.ticket.request.17c5294c85")}</dt>
                 <dd className="font-mono text-xs">{latestTicket.id}</dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Outbox</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.outbox.49668afa92")}</dt>
                 <dd className="font-mono text-xs">{latestTicket.outbox_id}</dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Table</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.table.16d1c9050a")}</dt>
                 <dd>{latestTicket.table}</dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
                 <dd>{latestTicket.status}</dd>
               </div>
             </dl>
@@ -1152,14 +1131,12 @@ export function Incidents() {
       <section aria-labelledby="evidence-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="evidence-heading" className="text-title font-semibold">
-            Execution evidence
-          </h2>
+            {translateNow("source.execution.evidence.81ad27c5fa")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Each execution or playbook run is a projected event-sourced evidence pack with revocation, delivery, rollback, and audit state.
-          </p>
+            {translateNow("source.each.execution.or.playbook.run.is.a.projec.9af41ecb88")}</p>
         </div>
-        {loading && <LoadingState>Loading incident execution evidence...</LoadingState>}
-        {loadError && <ErrorState title="Incident evidence unavailable">{loadError}</ErrorState>}
+        {loading && <LoadingState>{translateNow("source.loading.incident.execution.evidence.83ace6ca73")}</LoadingState>}
+        {loadError && <ErrorState title={translateNow("source.incident.evidence.unavailable.248e285efe")}>{loadError}</ErrorState>}
         {!loading && !loadError && (
           <>
             <IncidentExecutionTable executions={executions} />
@@ -1210,13 +1187,11 @@ export function Incidents() {
       <section aria-labelledby="fleet-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="fleet-heading" className="text-title font-semibold">
-            Fleet re-issuance
-          </h2>
+            {translateNow("source.fleet.re.issuance.fa35f7921e")}</h2>
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={startFleetReissuance}>
           <label className="grid gap-1 text-sm font-medium">
-            Compromised issuer
-            <input
+            {translateNow("source.compromised.issuer.18ef83eabb")}<input
               className="ui-input font-mono"
               value={fleetForm.issuer_id}
               onChange={(event) => setFleetForm({ ...fleetForm, issuer_id: event.target.value })}
@@ -1224,8 +1199,7 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Batch size
-            <input
+            {translateNow("source.batch.size.8cfe32a041")}<input
               className="ui-input"
               type="number"
               min={1}
@@ -1235,12 +1209,10 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            What happened
-            <input className="ui-input" value={fleetForm.reason ?? ""} onChange={(event) => setFleetForm({ ...fleetForm, reason: event.target.value })} />
+            {translateNow("source.what.happened.483bd49023")}<input className="ui-input" value={fleetForm.reason ?? ""} onChange={(event) => setFleetForm({ ...fleetForm, reason: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Delivery method
-            <input
+            {translateNow("source.delivery.method.26b6ab1b68")}<input
               className="ui-input"
               value={fleetForm.connector ?? ""}
               onChange={(event) => setFleetForm({ ...fleetForm, connector: event.target.value })}
@@ -1248,21 +1220,19 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Deployment target
-            <input
+            {translateNow("source.deployment.target.5b274e18ab")}<input
               className="ui-input"
               value={fleetForm.target ?? ""}
               onChange={(event) => setFleetForm({ ...fleetForm, target: event.target.value })}
-              placeholder="edge/prod"
+              placeholder={translateNow("source.edge.prod.79b3e5ef21")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Rollback instructions
-            <input
+            {translateNow("source.rollback.instructions.8fb506160a")}<input
               className="ui-input"
               value={fleetForm.rollback_ref ?? ""}
               onChange={(event) => setFleetForm({ ...fleetForm, rollback_ref: event.target.value })}
-              placeholder="restore previous bindings"
+              placeholder={translateNow("source.restore.previous.bindings.ec8f60be98")}
             />
           </label>
           <div className="md:col-span-2">
@@ -1272,27 +1242,26 @@ export function Incidents() {
             </Button>
           </div>
         </form>
-        {fleetError && <ErrorState title="Fleet reissuance failed">{fleetError}</ErrorState>}
+        {fleetError && <ErrorState title={translateNow("source.fleet.reissuance.failed.734d656156")}>{fleetError}</ErrorState>}
         {latestFleetRun && (
           <section role="status" aria-labelledby="fleet-progress-heading" className="ui-panel p-comfortable">
             <h3 id="fleet-progress-heading" className="text-title font-semibold">
-              Fleet run recorded
-            </h3>
+              {translateNow("source.fleet.run.recorded.ff2d7b78ff")}</h3>
             <dl className="mt-3 grid gap-2 md:grid-cols-4">
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Run</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.run.00d60e31a4")}</dt>
                 <dd className="font-mono text-xs">{latestFleetRun.id}</dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
                 <dd>{latestFleetRun.status}</dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Batches</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.batches.56a8df948f")}</dt>
                 <dd>{latestFleetRun.batch_count}</dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-muted-foreground">Revoked</dt>
+                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.revoked.f6f738d043")}</dt>
                 <dd>{latestFleetRun.revoked_identity_ids.length}</dd>
               </div>
             </dl>
@@ -1301,8 +1270,7 @@ export function Incidents() {
         {fleetEvidence && (
           <section role="status" aria-labelledby="fleet-evidence-heading" className="ui-panel p-comfortable">
             <h3 id="fleet-evidence-heading" className="text-title font-semibold">
-              Fleet evidence exported
-            </h3>
+              {translateNow("source.fleet.evidence.exported.eecc6a3c77")}</h3>
             <p className="mt-2 max-w-full truncate font-mono text-xs text-muted-foreground">{fleetEvidence.evidence_bundle}</p>
             <p className="mt-2 text-sm text-muted-foreground">{fleetEvidence.rollback_refs.join(", ") || "No rollback refs recorded."}</p>
           </section>
@@ -1313,14 +1281,12 @@ export function Incidents() {
       <section aria-labelledby="incident-help-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="incident-help-heading" className="text-title font-semibold">
-            Incident response help
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Keep emergency issuance guidance close by without mixing it into the execution form.</p>
+            {translateNow("source.incident.response.help.7245c4b82c")}</h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.keep.emergency.issuance.guidance.close.by.6a05c2d327")}</p>
         </div>
         <div>
           <Button type="button" variant="outline" onClick={() => setShowBreakGlassHelp(true)}>
-            Break-glass help
-          </Button>
+            {translateNow("source.break.glass.help.9f8fde42af")}</Button>
         </div>
         {showBreakGlassHelp && (
           <Dialog
@@ -1336,15 +1302,12 @@ export function Incidents() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 id="break-glass-help-heading" className="text-title font-semibold">
-                  Break-glass help
-                </h3>
+                  {translateNow("source.break.glass.help.9f8fde42af")}</h3>
                 <p id="break-glass-help-description" className="mt-1 text-sm text-muted-foreground">
-                  Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and cleanup.
-                </p>
+                  {translateNow("source.emergency.issuance.requires.declaration.qu.24cf522826")}</p>
               </div>
               <Button ref={breakGlassCloseRef} type="button" variant="outline" onClick={() => setShowBreakGlassHelp(false)}>
-                Close help
-              </Button>
+                {translateNow("source.close.help.88f2b69280")}</Button>
             </div>
             <ul className="mt-3 grid gap-2 md:grid-cols-2">
               {breakGlassChecklist.map((item) => (
@@ -1419,7 +1382,7 @@ export function Incidents() {
           </dl>
           {evidenceRunDetail.connector_delivery && (
             <div className="border-t border-border px-5 py-4">
-              <h3 className="text-body font-semibold">Connector delivery</h3>
+              <h3 className="text-body font-semibold">{translateNow("source.connector.delivery.670c8c3d02")}</h3>
               <dl className="mt-2 grid gap-2 text-sm">
                 <IncidentDetailRow term="Delivery ID" mono>
                   {evidenceRunDetail.connector_delivery.id}
@@ -1447,8 +1410,7 @@ export function Incidents() {
           )}
           <div className="flex justify-end border-t border-border px-5 py-4">
             <Button type="button" variant="outline" onClick={() => setEvidenceRunDetail(null)}>
-              Close
-            </Button>
+              {translateNow("source.close.7d9eb7acb1")}</Button>
           </div>
         </Dialog>
       )}
@@ -1466,22 +1428,22 @@ function FleetReissuanceTable({
   onAction: (kind: "pause" | "resume" | "rollback" | "evidence", run: FleetReissuanceRun) => void;
 }) {
   if (runs.length === 0) {
-    return <p className="text-sm text-muted-foreground">No fleet reissuance runs have been recorded.</p>;
+    return <p className="text-sm text-muted-foreground">{translateNow("source.no.fleet.reissuance.runs.have.been.recorde.0f1169b466")}</p>;
   }
   return (
     <div className="overflow-x-auto rounded-panel border border-border">
       <table className="ui-table min-w-[76rem]">
-        <caption className="sr-only">Fleet reissuance runs</caption>
+        <caption className="sr-only">{translateNow("source.fleet.reissuance.runs.c1afb05039")}</caption>
         <thead>
           <tr>
-            <th scope="col">Run</th>
-            <th scope="col">Issuer</th>
-            <th scope="col">Status</th>
-            <th scope="col">Scope</th>
-            <th scope="col">Batches</th>
-            <th scope="col">Failed targets</th>
-            <th scope="col">Evidence</th>
-            <th scope="col">Actions</th>
+            <th scope="col">{translateNow("source.run.00d60e31a4")}</th>
+            <th scope="col">{translateNow("source.issuer.39e02c46a0")}</th>
+            <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+            <th scope="col">{translateNow("source.scope.b073f6c68e")}</th>
+            <th scope="col">{translateNow("source.batches.56a8df948f")}</th>
+            <th scope="col">{translateNow("source.failed.targets.4ffa850540")}</th>
+            <th scope="col">{translateNow("source.evidence.03867aea70")}</th>
+            <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
           </tr>
         </thead>
         <tbody>
@@ -1494,11 +1456,11 @@ function FleetReissuanceTable({
                 <p className="text-xs text-muted-foreground">{run.phase}</p>
               </td>
               <td>
-                <p>{run.affected_identity_ids.length} affected</p>
-                <p className="text-xs text-muted-foreground">{run.revoked_identity_ids.length} revoked</p>
+                <p>{run.affected_identity_ids.length} {" "}{translateNow("source.affected.19b6357dad")}</p>
+                <p className="text-xs text-muted-foreground">{run.revoked_identity_ids.length} {" "}{translateNow("source.revoked.4bb47f186d")}</p>
               </td>
               <td>
-                <p>{run.batch_count} batches</p>
+                <p>{run.batch_count} {" "}{translateNow("source.batches.467629e63d")}</p>
                 <p className="text-xs text-muted-foreground">{run.health_gates.map((gate) => `${gate.name}:${gate.status}`).join(", ")}</p>
               </td>
               <td>{run.failed_targets?.length ? run.failed_targets.join(", ") : "none"}</td>
@@ -1633,21 +1595,21 @@ function RemediationPlaybookRunTable({ runs, t }: { runs: RemediationPlaybookRun
 
 function IncidentExecutionTable({ executions }: { executions: IncidentExecution[] }) {
   if (executions.length === 0) {
-    return <p className="text-sm text-muted-foreground">No incident executions have been recorded.</p>;
+    return <p className="text-sm text-muted-foreground">{translateNow("source.no.incident.executions.have.been.recorded.b14b9f6701")}</p>;
   }
   return (
     <div className="overflow-x-auto rounded-panel border border-border">
       <table className="ui-table min-w-[68rem]">
-        <caption className="sr-only">Incident execution evidence</caption>
+        <caption className="sr-only">{translateNow("source.incident.execution.evidence.ed369964a3")}</caption>
         <thead>
           <tr>
-            <th scope="col">Execution</th>
-            <th scope="col">Compromised</th>
-            <th scope="col">Replacement</th>
-            <th scope="col">Status</th>
-            <th scope="col">Delivery</th>
-            <th scope="col">Failed targets</th>
-            <th scope="col">Evidence</th>
+            <th scope="col">{translateNow("source.execution.a45cd4bd09")}</th>
+            <th scope="col">{translateNow("source.compromised.05ab8ef2cf")}</th>
+            <th scope="col">{translateNow("source.replacement.cefd665229")}</th>
+            <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+            <th scope="col">{translateNow("source.delivery.52bfe584a5")}</th>
+            <th scope="col">{translateNow("source.failed.targets.4ffa850540")}</th>
+            <th scope="col">{translateNow("source.evidence.03867aea70")}</th>
           </tr>
         </thead>
         <tbody>
@@ -1683,10 +1645,9 @@ function BlastRadiusPreview({ impact }: { impact: GraphImpact }) {
   return (
     <section aria-labelledby="incident-blast-heading" className="ui-panel p-comfortable">
       <h3 id="incident-blast-heading" className="text-title font-semibold">
-        Blast-radius snapshot
-      </h3>
+        {translateNow("source.blast.radius.snapshot.c447c874b9")}</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Compromise of {impact.node.name || impact.node.id} affects {impact.affected.length} downstream node{impact.affected.length === 1 ? "" : "s"}.
+        {translateNow("source.compromise.of.988dd256bd")}{" "}{impact.node.name || impact.node.id} {" "}{translateNow("source.affects.e3e4b7e9f8")}{" "}{impact.affected.length} {" "}{translateNow("source.downstream.node.35861aa3d8")}{impact.affected.length === 1 ? "" : "s"}.
       </p>
       <dl className="mt-3 grid gap-2 md:grid-cols-3">
         {Object.entries(impact.by_kind ?? {}).map(([kind, value]) => (
@@ -1703,7 +1664,7 @@ function BlastRadiusPreview({ impact }: { impact: GraphImpact }) {
 
 function AffectedNodes({ nodes }: { nodes: GraphNode[] }) {
   if (nodes.length === 0) {
-    return <p className="mt-3 text-sm text-muted-foreground">No downstream affected nodes were returned.</p>;
+    return <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.no.downstream.affected.nodes.were.returned.58352b876f")}</p>;
   }
   return (
     <ul className="mt-3 grid gap-2 md:grid-cols-2">
@@ -1813,7 +1774,7 @@ function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue })
         <StatusBadge value={queue.status ?? "queued"} label={queue.status ?? "queued"} tone={remediationRunTone(queue.status)} />
       </div>
       <p className="text-xs text-muted-foreground">
-        Generated {formatDateTime(queue.generated_at)} · {queue.capability}
+        {translateNow("source.generated.827ec8d9f9")}{" "}{formatDateTime(queue.generated_at)} · {queue.capability}
       </p>
       {(queue.items ?? []).length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("parity.noOwnerRemediationActionsAreQueued_596b9b")}</p>
@@ -1835,7 +1796,7 @@ function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue })
               <p className="text-muted-foreground">{item.recommendation}</p>
               <p className="text-xs text-muted-foreground">
                 {item.playbook_id} · {item.action || item.kind} · {item.source} · {item.connector}
-                {item.target ? ` → ${item.target}` : ""} · risk {item.risk_score} · owner {item.owner_name}
+                {item.target ? ` → ${item.target}` : ""} {" "}{translateNow("source.risk.b422944f55")}{" "}{item.risk_score} {" "}{translateNow("source.owner.6f9e1d3981")}{" "}{item.owner_name}
                 {item.owner_email ? ` (${item.owner_email})` : ""}
               </p>
               {(item.remove_scopes.length > 0 || item.recommended_scopes.length > 0) && (
@@ -1845,10 +1806,10 @@ function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue })
                   {item.recommended_scopes.length > 0 ? `keep: ${item.recommended_scopes.join(", ")}` : ""}
                 </p>
               )}
-              {item.reason && <p className="text-xs text-muted-foreground">Reason: {item.reason}</p>}
-              {item.rollback_ref && <p className="break-all font-mono text-xs text-muted-foreground">rollback: {item.rollback_ref}</p>}
-              {item.evidence_refs.length > 0 && <p className="break-all font-mono text-xs text-muted-foreground">evidence: {item.evidence_refs.join(", ")}</p>}
-              {item.remediation_run_id && <p className="break-all font-mono text-xs text-muted-foreground">run: {item.remediation_run_id}</p>}
+              {item.reason && <p className="text-xs text-muted-foreground">{translateNow("source.reason.3425d10869")}{" "}{item.reason}</p>}
+              {item.rollback_ref && <p className="break-all font-mono text-xs text-muted-foreground">{translateNow("source.rollback.c48b9dea6f")}{" "}{item.rollback_ref}</p>}
+              {item.evidence_refs.length > 0 && <p className="break-all font-mono text-xs text-muted-foreground">{translateNow("source.evidence.5da3c91b4d")}{" "}{item.evidence_refs.join(", ")}</p>}
+              {item.remediation_run_id && <p className="break-all font-mono text-xs text-muted-foreground">{translateNow("source.run.ea64488842")}{" "}{item.remediation_run_id}</p>}
             </li>
           ))}
         </ul>

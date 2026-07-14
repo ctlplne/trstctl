@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Copy, Loader2, PlayCircle, ShieldCheck, X } from "lucide-react";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import {
   ApiError,
@@ -46,16 +46,14 @@ export function RevealPanel({ title, value, children, onDismiss }: { title: stri
         </div>
         <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
           <X className="h-4 w-4" aria-hidden="true" />
-          Dismiss
-        </Button>
+          {translateNow("source.dismiss.48845bff33")}</Button>
       </div>
       <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded bg-muted px-3 py-2 font-mono text-xs">{value}</pre>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" size="sm" variant="outline" onClick={() => void copyValue()}>
           <Copy className="h-4 w-4" aria-hidden="true" />
-          Copy once
-        </Button>
-        {copied && <span className="text-xs text-muted-foreground">Copied from this reveal panel.</span>}
+          {translateNow("source.copy.once.acfaa3d4d6")}</Button>
+        {copied && <span className="text-xs text-muted-foreground">{translateNow("source.copied.from.this.reveal.panel.0707425cf6")}</span>}
       </div>
     </div>
   );
@@ -74,23 +72,23 @@ export function MachineSession({ session }: { session: MachineLoginResponse }) {
   return (
     <dl className="ui-panel grid gap-2 p-3 text-sm md:grid-cols-2">
       <div>
-        <dt className="font-medium text-muted-foreground">Session ID</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.session.id.cb9ac5c561")}</dt>
         <dd className="break-all font-mono text-xs">{session.session_id}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">Principal</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.principal.afc19f1734")}</dt>
         <dd>{session.principal}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">Method</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.method.52a0f9b65b")}</dt>
         <dd>{session.method}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">Expires</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.expires.f6725f3af0")}</dt>
         <dd>{formatDate(session.expires_at)}</dd>
       </div>
       <div className="md:col-span-2">
-        <dt className="font-medium text-muted-foreground">Scopes</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.scopes.0d5644ff52")}</dt>
         <dd>{session.scopes.join(", ") || "No scopes"}</dd>
       </div>
     </dl>
@@ -101,27 +99,27 @@ export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
   return (
     <dl className="grid gap-2 md:grid-cols-2">
       <div>
-        <dt className="font-medium text-muted-foreground">Lease ID</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.lease.id.9730377afc")}</dt>
         <dd className="break-all font-mono text-xs">{lease.id}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">State</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.state.a3b50c4767")}</dt>
         <dd>{lease.state}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">Provider</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.provider.472590ae97")}</dt>
         <dd>{lease.provider}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">Role</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.role.14736a2eb9")}</dt>
         <dd>{lease.role}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">Issued</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.issued.0221e48751")}</dt>
         <dd>{formatDate(lease.issued_at)}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">Expires</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("source.expires.f6725f3af0")}</dt>
         <dd>{formatDate(lease.expires_at)}</dd>
       </div>
     </dl>

@@ -33,7 +33,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDate as formatDatePolicy, formatNumber as formatNumberPolicy } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 import { CertificatesDashboard, ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
@@ -43,10 +43,10 @@ import type { GridViewPrimitive } from "@/lib/gridViews";
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
 const expiryFilters: Array<{ value: ExpiryFilter; label: string; days?: number }> = [
-  { value: "all", label: "All" },
-  { value: "7d", label: "<7d", days: 7 },
-  { value: "30d", label: "7-30d", days: 30 },
-  { value: "90d", label: "30-90d", days: 90 },
+  { value: "all", label: translateNow("source.all.a52ace420f") },
+  { value: "7d", label: translateNow("source.7d.bf8cc07ad6"), days: 7 },
+  { value: "30d", label: translateNow("source.7.30d.425b95671a"), days: 30 },
+  { value: "90d", label: translateNow("source.30.90d.f8499e46ac"), days: 90 },
 ];
 
 function expiringBefore(filter: ExpiryFilter): string | undefined {
@@ -522,7 +522,7 @@ function CTSubmissionPanel({
               onChange={(event) => onCertificatePEM(event.target.value)}
               rows={6}
               className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-              placeholder="-----BEGIN CERTIFICATE-----"
+              placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
             />
           </label>
           <label className="grid gap-1 text-sm font-medium" htmlFor="ct-precertificate-pem">
@@ -533,7 +533,7 @@ function CTSubmissionPanel({
               onChange={(event) => onPrecertificatePEM(event.target.value)}
               rows={6}
               className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-              placeholder="-----BEGIN CERTIFICATE-----"
+              placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
             />
           </label>
         </div>
@@ -823,7 +823,7 @@ export function Certificates() {
     setIngestError(null);
     setIngestSuccess(null);
     if (!pem.trim()) {
-      setIngestError({ kind: "error", message: "PEM is required." });
+      setIngestError({ kind: "error", message: translateNow("source.pem.is.required.0a8b6ce9cc") });
       return;
     }
     setIngestLoading(true);
@@ -1013,7 +1013,7 @@ export function Certificates() {
     <section aria-labelledby="certs-heading">
       <PageHeader
         titleId="certs-heading"
-        title="Certificates"
+        title={translateNow("source.certificates.16f637921e")}
         description="Your X.509 certificate inventory — search, filter by expiry, import, and inspect. For the non-human identities that hold these certificates, see Identities."
         actions={
           <>
@@ -1045,8 +1045,7 @@ export function Certificates() {
       {showIngest && (
         <form onSubmit={submitIngest} aria-labelledby="ingest-heading" className="mb-6 grid gap-4">
           <h2 id="ingest-heading" className="sr-only">
-            Add certificate
-          </h2>
+            {translateNow("source.add.certificate.6fa2cfd67c")}</h2>
           <StepShell
             steps={ingestSteps(t)}
             currentIndex={ingestStep}
@@ -1057,22 +1056,20 @@ export function Certificates() {
           >
             {ingestStep === 0 && (
               <label className="grid gap-1 text-sm font-medium" htmlFor="cert-pem">
-                Certificate PEM
-                <textarea
+                {translateNow("source.certificate.pem.85627425ca")}<textarea
                   id="cert-pem"
                   value={pem}
                   onChange={(e) => setPem(e.target.value)}
                   rows={8}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                  placeholder="-----BEGIN CERTIFICATE-----"
+                  placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
                 />
               </label>
             )}
             {ingestStep === 1 && (
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="grid gap-1 text-sm font-medium" htmlFor="cert-owner">
-                  Owner ID
-                  {/* Autocomplete from the loaded owner roster — no pasting owner
+                  {translateNow("source.owner.id.1611f5e055")}{/* Autocomplete from the loaded owner roster — no pasting owner
                       UUIDs from another page. */}
                   <input
                     id="cert-owner"
@@ -1080,7 +1077,7 @@ export function Certificates() {
                     onChange={(e) => setOwnerID(e.target.value)}
                     list="cert-owner-options"
                     className="rounded-md border border-border bg-background px-3 py-2 text-sm font-normal"
-                    placeholder="optional"
+                    placeholder={translateNow("source.optional.ec91fdd925")}
                   />
                   <datalist id="cert-owner-options">
                     {owners.map((owner) => (
@@ -1091,8 +1088,7 @@ export function Certificates() {
                   </datalist>
                 </label>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="cert-source">
-                  Source
-                  <input
+                  {translateNow("source.source.0e570ca6fa")}<input
                     id="cert-source"
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
@@ -1100,13 +1096,12 @@ export function Certificates() {
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="cert-location">
-                  Deployment location
-                  <input
+                  {translateNow("source.deployment.location.5a9f62f9fc")}<input
                     id="cert-location"
                     value={deploymentLocation}
                     onChange={(e) => setDeploymentLocation(e.target.value)}
                     className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    placeholder="cluster/service/path"
+                    placeholder={translateNow("source.cluster.service.path.f9947d11c2")}
                   />
                 </label>
               </div>
@@ -1115,24 +1110,24 @@ export function Certificates() {
               <div className="grid max-w-xl gap-4">
                 <dl className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-caption text-muted-foreground">Certificate PEM</dt>
+                    <dt className="text-caption text-muted-foreground">{translateNow("source.certificate.pem.85627425ca")}</dt>
                     <dd className="font-mono text-xs">{`${pem.trim().split("\n").length} lines`}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-caption text-muted-foreground">Owner ID</dt>
+                    <dt className="text-caption text-muted-foreground">{translateNow("source.owner.id.1611f5e055")}</dt>
                     <dd>{owners.find((owner) => owner.id === ownerID)?.name ?? (ownerID.trim() || t("certificates.ingest.ownerUnassigned"))}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-caption text-muted-foreground">Source</dt>
+                    <dt className="text-caption text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
                     <dd>{source.trim() || "—"}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-caption text-muted-foreground">Deployment location</dt>
+                    <dt className="text-caption text-muted-foreground">{translateNow("source.deployment.location.5a9f62f9fc")}</dt>
                     <dd>{deploymentLocation.trim() || "—"}</dd>
                   </div>
                 </dl>
                 {ingestError?.kind === "permission" && <PermissionDeniedState>{ingestError.message}</PermissionDeniedState>}
-                {ingestError?.kind === "error" && <ErrorState title="Could not ingest certificate">{ingestError.message}</ErrorState>}
+                {ingestError?.kind === "error" && <ErrorState title={translateNow("source.could.not.ingest.certificate.f876a7f9c6")}>{ingestError.message}</ErrorState>}
                 {ingestSuccess && (
                   <p role="status" className="text-sm text-status-success">
                     {ingestSuccess}
@@ -1140,8 +1135,7 @@ export function Certificates() {
                 )}
                 <div>
                   <Button type="submit" loading={ingestLoading}>
-                    Ingest certificate
-                  </Button>
+                    {translateNow("source.ingest.certificate.6c25a63cd4")}</Button>
                 </div>
               </div>
             )}
@@ -1149,19 +1143,18 @@ export function Certificates() {
         </form>
       )}
 
-      {loading && <LoadingState>Loading certificates...</LoadingState>}
+      {loading && <LoadingState>{translateNow("source.loading.certificates.3ed54a94d8")}</LoadingState>}
       {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
-      {error?.kind === "error" && <ErrorState title="Could not load certificates">{error.message}</ErrorState>}
+      {error?.kind === "error" && <ErrorState title={translateNow("source.could.not.load.certificates.21ae8e6e19")}>{error.message}</ErrorState>}
 
       {!loading && certificates.length === 0 && !error && (
         <EmptyState
           icon={<FilePlus2 className="h-5 w-5" aria-hidden="true" />}
-          title="No certificates yet"
-          primaryAction={{ label: "Issue first certificate", to: "/request", icon: <FilePlus2 className="h-4 w-4" /> }}
-          secondaryAction={{ label: "Connect an issuer", to: "/ca-hierarchy", icon: <PlugZap className="h-4 w-4" /> }}
+          title={translateNow("source.no.certificates.yet.f1e2ab559a")}
+          primaryAction={{ label: translateNow("source.issue.first.certificate.4d8af98e7d"), to: "/request", icon: <FilePlus2 className="h-4 w-4" /> }}
+          secondaryAction={{ label: translateNow("source.connect.an.issuer.c155ecb073"), to: "/ca-hierarchy", icon: <PlugZap className="h-4 w-4" /> }}
         >
-          Start with a profile-bound request, or connect an issuer before the first certificate is minted.
-        </EmptyState>
+          {translateNow("source.start.with.a.profile.bound.request.or.conn.19cdbff548")}</EmptyState>
       )}
 
       {certificates.length > 0 && (
@@ -1257,7 +1250,7 @@ export function Certificates() {
                     setBulkRevokeOpen(true);
                   }}
                 >
-                  Revoke selected ({selectedIds.size})…
+                  {translateNow("source.revoke.selected.38b0352f6d")}{selectedIds.size})…
                 </Button>
               </BulkActionBar>
               <DataGrid
@@ -1294,14 +1287,13 @@ export function Certificates() {
                     filters={
                       <>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-issuer-filter">
-                          Issuer filter
-                          <select
+                          {translateNow("source.issuer.filter.32db997051")}<select
                             id="cert-issuer-filter"
                             value={issuerFilter}
                             onChange={(e) => selectFacet("issuer", e.target.value)}
                             className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
                           >
-                            <option value="all">All issuers</option>
+                            <option value="all">{translateNow("source.all.issuers.ab00116bbe")}</option>
                             {issuerOptions.map((issuer) => (
                               <option key={issuer} value={issuer}>
                                 {issuer}
@@ -1310,14 +1302,13 @@ export function Certificates() {
                           </select>
                         </label>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-profile-filter">
-                          Profile filter
-                          <select
+                          {translateNow("source.profile.filter.d447429270")}<select
                             id="cert-profile-filter"
                             value={profileFilter}
                             onChange={(e) => selectFacet("profile", e.target.value)}
                             className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
                           >
-                            <option value="all">All profiles</option>
+                            <option value="all">{translateNow("source.all.profiles.18f6aff3fe")}</option>
                             {profileOptions.map((profile) => (
                               <option key={profile} value={profile}>
                                 {profile}
@@ -1326,14 +1317,13 @@ export function Certificates() {
                           </select>
                         </label>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-team-filter">
-                          Team filter
-                          <select
+                          {translateNow("source.team.filter.f485fa9dcf")}<select
                             id="cert-team-filter"
                             value={teamFilter}
                             onChange={(e) => selectFacet("team", e.target.value)}
                             className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
                           >
-                            <option value="all">All teams</option>
+                            <option value="all">{translateNow("source.all.teams.bf65fc89ca")}</option>
                             {teamOptions.map((team) => (
                               <option key={team.value} value={team.value}>
                                 {team.label}
@@ -1342,14 +1332,13 @@ export function Certificates() {
                           </select>
                         </label>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-environment-filter">
-                          Environment filter
-                          <select
+                          {translateNow("source.environment.filter.3495eee74d")}<select
                             id="cert-environment-filter"
                             value={environmentFilter}
                             onChange={(e) => selectFacet("environment", e.target.value)}
                             className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
                           >
-                            <option value="all">All environments</option>
+                            <option value="all">{translateNow("source.all.environments.f19ac5a6af")}</option>
                             {environmentOptions.map((environment) => (
                               <option key={environment} value={environment}>
                                 {environment}
@@ -1358,7 +1347,7 @@ export function Certificates() {
                           </select>
                         </label>
                         <fieldset>
-                          <legend className="mb-1 text-sm font-medium">Server expiry filter</legend>
+                          <legend className="mb-1 text-sm font-medium">{translateNow("source.server.expiry.filter.129321a4ff")}</legend>
                           <div className="flex flex-wrap gap-2">
                             {expiryFilters.map((f) => (
                               <button
@@ -1376,8 +1365,7 @@ export function Certificates() {
                           </div>
                         </fieldset>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-limit">
-                          Page size
-                          <select
+                          {translateNow("source.page.size.bd69e66e00")}<select
                             id="cert-limit"
                             value={limit}
                             onChange={(e) => setLimit(Number(e.target.value))}
@@ -1409,7 +1397,7 @@ export function Certificates() {
                     {loadingMore ? "Loading next page..." : "Load next page"}
                   </button>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No more certificate pages.</p>
+                  <p className="text-sm text-muted-foreground">{translateNow("source.no.more.certificate.pages.e8cec79bea")}</p>
                 )}
               </div>
             </div>
@@ -1430,15 +1418,14 @@ export function Certificates() {
         panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
       >
         <h2 id="bulk-revoke-certs-title" className="text-title font-semibold text-destructive">
-          Revoke {selectedIds.size} selected certificate{selectedIds.size === 1 ? "" : "s"}?
+          {translateNow("source.revoke.87e6d00bbf")}{" "}{selectedIds.size} {" "}{translateNow("source.selected.certificate.4d9927e917")}{selectedIds.size === 1 ? "" : "s"}?
         </h2>
         <p id="bulk-revoke-certs-desc" className="mt-1 text-destructive">
-          This submits one bulk revocation request for all {selectedIds.size} selected certificates. Revocation cannot be undone; CRL and OCSP distribution
+          {translateNow("source.this.submits.one.bulk.revocation.request.f.f1809ceaf2")}{" "}{selectedIds.size} selected certificates. Revocation cannot be undone; CRL and OCSP distribution
           completes asynchronously.
         </p>
         <label className="mt-3 grid gap-1 text-sm font-medium text-destructive" htmlFor="bulk-revoke-reason">
-          Revocation reason
-          <select
+          {translateNow("source.revocation.reason.b11670420f")}<select
             id="bulk-revoke-reason"
             value={bulkReason}
             onChange={(event) => setBulkReason(event.target.value as BulkRevokeRequest["reason"])}
@@ -1454,11 +1441,9 @@ export function Certificates() {
         {bulkError && <p className="mt-3 text-sm font-medium text-risk-critical">{bulkError}</p>}
         <div className="mt-3 flex gap-2">
           <Button type="button" size="sm" variant="destructive" loading={bulkBusy} disabled={selectedIds.size === 0} onClick={() => void submitBulkRevoke()}>
-            Confirm bulk revoke
-          </Button>
+            {translateNow("source.confirm.bulk.revoke.d613327838")}</Button>
           <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setBulkRevokeOpen(false)}>
-            Cancel
-          </Button>
+            {translateNow("source.cancel.19766ed6cc")}</Button>
         </div>
       </Dialog>
 
@@ -1491,78 +1476,77 @@ export function Certificates() {
         />
         <div className="mt-3 flex justify-end">
           <Button type="button" size="sm" variant="ghost" disabled={ctLoading} onClick={() => setCTDialogOpen(false)}>
-            Close
-          </Button>
+            {translateNow("source.close.7d9eb7acb1")}</Button>
         </div>
       </Dialog>
 
       <DetailDrawer
         open={!!detailID}
-        title="Certificate details"
+        title={translateNow("source.certificate.details.fccff74faf")}
         description={detailID ? `Fetched certificate ${detailID}.` : undefined}
         onClose={() => setDetailID(null)}
       >
-        {detailLoading && <LoadingState>Loading certificate details...</LoadingState>}
+        {detailLoading && <LoadingState>{translateNow("source.loading.certificate.details.a52129b338")}</LoadingState>}
         {detailError?.kind === "permission" && <PermissionDeniedState>{detailError.message}</PermissionDeniedState>}
-        {detailError?.kind === "error" && <ErrorState title="Could not load certificate details">{detailError.message}</ErrorState>}
+        {detailError?.kind === "error" && <ErrorState title={translateNow("source.could.not.load.certificate.details.7999752b96")}>{detailError.message}</ErrorState>}
         {detail && (
           <dl className="grid gap-3 text-sm md:grid-cols-2">
             <div>
-              <dt className="font-medium text-muted-foreground">Subject</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
               <dd>{detail.subject}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Issuer</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.issuer.39e02c46a0")}</dt>
               <dd>{detail.issuer || "-"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">SANs</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.sans.7a15c9b7f6")}</dt>
               <dd>{detail.sans?.length ? detail.sans.join(", ") : "-"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Key algorithm</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.key.algorithm.36da451ea3")}</dt>
               <dd>{detail.key_algorithm || "-"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Serial</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.serial.8ea0949377")}</dt>
               <dd className="mt-0.5">{detail.serial ? <CredentialChip value={detail.serial} label="serial number" /> : "-"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Fingerprint</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.fingerprint.ba7af0b704")}</dt>
               <dd className="mt-0.5">{detail.fingerprint ? <CredentialChip value={detail.fingerprint} label="fingerprint" head={12} tail={8} /> : "-"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Validity</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.validity.9c3050e867")}</dt>
               <dd>
-                {formatDate(detail.not_before)} to {formatDate(detail.not_after)}
+                {formatDate(detail.not_before)} {" "}{translateNow("source.to.663ea1bfff")}{" "}{formatDate(detail.not_after)}
               </dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Status</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
               <dd>{detail.status}</dd>
             </div>
             {detail.status === "revoked" && (
               <>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Revoked at</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.revoked.at.144e77bcf0")}</dt>
                   <dd>{formatDate(detail.revoked_at)}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Revocation reason</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.revocation.reason.b11670420f")}</dt>
                   <dd>{detail.revocation_reason || "-"}</dd>
                 </div>
               </>
             )}
             <div>
-              <dt className="font-medium text-muted-foreground">Source</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
               <dd>{detail.source || "-"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Deployment location</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.deployment.location.5a9f62f9fc")}</dt>
               <dd>{detail.deployment_location || "-"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">Owner</dt>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
               <dd>
                 {detail.owner_id ? (
                   <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(detail.owner_id)}`}>
@@ -1575,8 +1559,7 @@ export function Certificates() {
             </div>
             <div className="md:col-span-2">
               <dt className="flex items-center justify-between gap-2 font-medium text-muted-foreground">
-                Renewal history
-                {(() => {
+                {translateNow("source.renewal.history.771f739290")}{(() => {
                   const identity = renewableIdentityFor(detail, identityByCN);
                   if (identity) {
                     const busy = renewingIds.has(detail.id);

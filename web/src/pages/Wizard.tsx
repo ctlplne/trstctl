@@ -6,22 +6,22 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { markOnboardingComplete, resetOnboarding } from "@/lib/onboardingState";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 type WizardStepID = "issuer" | "protocols" | "certificate" | "integrations" | "agent" | "complete";
 
 function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselStep[] {
   return [
-    { id: "issuer", label: "Connect issuer", description: "Confirm the signer-backed internal CA or connect an upstream authority later." },
+    { id: "issuer", label: translateNow("source.connect.issuer.abc8382bc1"), description: translateNow("source.confirm.the.signer.backed.internal.ca.or.c.b20abca15c") },
     { id: "protocols", label: t("wizard.protocols.stepLabel"), description: t("wizard.protocols.stepDescription") },
-    { id: "certificate", label: "Issue certificate", description: "Create the first workload identity and issue it with an operator credential." },
+    { id: "certificate", label: translateNow("source.issue.certificate.ff84c7ec37"), description: translateNow("source.create.the.first.workload.identity.and.iss.e199fc813f") },
     {
       id: "integrations",
       label: t("wizard.integrations.stepLabel"),
       description: t("wizard.integrations.stepDescription"),
     },
-    { id: "agent", label: "Enroll agent", description: "Mint a one-time enrollment token and wait for the first in-network agent." },
-    { id: "complete", label: "Complete", description: "Latch this first-run guide and jump into day-two certificate operations." },
+    { id: "agent", label: translateNow("source.enroll.agent.8592144d44"), description: translateNow("source.mint.a.one.time.enrollment.token.and.wait.41e91b176b") },
+    { id: "complete", label: translateNow("source.complete.143b270a32"), description: translateNow("source.latch.this.first.run.guide.and.jump.into.d.708bd1e5a1") },
   ];
 }
 
@@ -72,7 +72,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
     return (
       <section aria-labelledby="wizard-heading" className="mx-auto grid max-w-3xl gap-6">
         <PageHeader
-          title="Set up trstctl"
+          title={translateNow("source.set.up.trstctl.b56c208e41")}
           titleId="wizard-heading"
           description="First-run guide completed — trstctl will not prompt setup again on this browser."
         />
@@ -81,8 +81,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
             <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
             <div>
               <h2 id="setup-complete-heading" className="text-title font-semibold">
-                Setup complete
-              </h2>
+                {translateNow("source.setup.complete.aadaf35950")}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {certificate?.name ?? "Your first certificate"} is tracked. trstctl will alert before expiry; renewal is a manual, one-click action today.
               </p>
@@ -93,12 +92,10 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
               to="/certificates"
               className="inline-flex min-h-10 items-center justify-center rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              Track and renew certificates
-            </Link>
+              {translateNow("source.track.and.renew.certificates.f0f36882b6")}</Link>
             <Button type="button" variant="outline" onClick={resetWizard}>
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              Reopen setup guide
-            </Button>
+              {translateNow("source.reopen.setup.guide.0f10355fd2")}</Button>
           </div>
         </section>
       </section>
@@ -107,7 +104,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
 
   return (
     <section aria-labelledby="wizard-heading" className="mx-auto grid max-w-3xl gap-6">
-      <PageHeader title="Set up trstctl" titleId="wizard-heading" description={t("wizard.header.description")} />
+      <PageHeader title={translateNow("source.set.up.trstctl.b56c208e41")} titleId="wizard-heading" description={t("wizard.header.description")} />
 
       <StepShell
         steps={steps}
@@ -269,23 +266,19 @@ function IssuerStep({ issuerName, onReady, ready }: { issuerName: string | null;
         <Server className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
         <div>
           <h3 id="step-issuer-heading" className="text-title font-semibold">
-            Connect an issuer
-          </h3>
+            {translateNow("source.connect.an.issuer.c155ecb073")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            A fresh trstctl server provisions a signer-backed internal X.509 CA at boot. Confirm it before the first certificate is issued.
-          </p>
+            {translateNow("source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50")}</p>
         </div>
       </div>
       {ready ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {issuerName} is ready.
-        </p>
+          {issuerName} {" "}{translateNow("source.is.ready.17f5581890")}</p>
       ) : (
         <Button type="button" className="justify-self-start" onClick={() => void confirmIssuer()} disabled={busy}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          Use internal CA
-        </Button>
+          {translateNow("source.use.internal.ca.2181607010")}</Button>
       )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -327,8 +320,7 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
         <FileKey2 className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
         <div>
           <h3 id="step-cert-heading" className="text-title font-semibold">
-            Issue your first certificate
-          </h3>
+            {translateNow("source.issue.your.first.certificate.8fbb374ce0")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Name the service this certificate belongs to. This action uses an operator credential with certificate issuance authority; setup and agent tokens
             cannot issue certificates.
@@ -336,8 +328,7 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
         </div>
       </div>
       <label htmlFor="svc-name" className="grid gap-1 text-sm font-medium">
-        Service name
-        <input
+        {translateNow("source.service.name.1bb8870cc0")}<input
           id="svc-name"
           value={name}
           onChange={(event) => {
@@ -345,7 +336,7 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
             if (!event.target.value.trim().startsWith("*.")) setWildcardAck(false);
           }}
           className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
-          placeholder="payments-api"
+          placeholder={translateNow("source.payments.api.682a1c47a1")}
         />
       </label>
       {isWildcard && (
@@ -358,21 +349,18 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
             className="mt-1 h-4 w-4 rounded border-border"
           />
           <span>
-            Acknowledge wildcard blast radius
-            <span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
+            {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}<span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
           </span>
         </label>
       )}
       {certificate ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {certificate.name} was issued.
-        </p>
+          {certificate.name} {" "}{translateNow("source.was.issued.fe1574675b")}</p>
       ) : (
         <Button type="submit" className="justify-self-start" disabled={busy || (isWildcard && !wildcardAck)}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          Issue certificate
-        </Button>
+          {translateNow("source.issue.certificate.ff84c7ec37")}</Button>
       )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -514,8 +502,7 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
         </h4>
         <div className="grid gap-3 sm:grid-cols-2">
           <label htmlFor="wizard-connector-kind" className="grid gap-1 text-sm font-medium">
-            Connector
-            <select
+            {translateNow("source.connector.8f0d706fff")}<select
               id="wizard-connector-kind"
               value={connectorKind}
               onChange={(event) => {
@@ -557,8 +544,7 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
           <ProofStatus text={connectorStatus} />
         ) : (
           <Button type="submit" className="justify-self-start" disabled={busy !== null || !targetName.trim()}>
-            {busy === "connector" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Deploy through connector
-          </Button>
+            {busy === "connector" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {" "}{translateNow("source.deploy.through.connector.47966b95ca")}</Button>
         )}
       </form>
 
@@ -590,7 +576,7 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
             onChange={(event) => setCSRPEM(event.target.value)}
             rows={4}
             spellCheck={false}
-            placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+            placeholder={translateNow("source.begin.certificate.request.929bb0afef")}
             className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
           />
         </label>
@@ -608,8 +594,7 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
           <ProofStatus text={externalCAStatus} />
         ) : (
           <Button type="submit" className="justify-self-start" disabled={busy !== null || !externalCAID || !csrPEM.trim()}>
-            {busy === "external-ca" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Issue through external CA
-          </Button>
+            {busy === "external-ca" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {" "}{translateNow("source.issue.through.external.ca.671d1a629f")}</Button>
         )}
       </form>
 
@@ -644,8 +629,7 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
           <ProofStatus text={leaseStatus} />
         ) : (
           <Button type="submit" className="justify-self-start" disabled={busy !== null || !leaseProvider.trim() || !leaseRole.trim()}>
-            {busy === "lease" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Issue dynamic lease
-          </Button>
+            {busy === "lease" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {" "}{translateNow("source.issue.dynamic.lease.7f0d0fe084")}</Button>
         )}
       </form>
 
@@ -739,20 +723,16 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
         <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
         <div>
           <h3 id="step-agent-heading" className="text-title font-semibold">
-            Enroll an agent
-          </h3>
+            {translateNow("source.enroll.an.agent.43dbb20757")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane. Agent enrollment tokens cannot issue
-            certificates.
-          </p>
+            {translateNow("source.save.the.one.time.token.with.0600.permissi.b35e2c6935")}</p>
         </div>
       </div>
       <div className="grid gap-2 sm:grid-cols-[minmax(12rem,18rem)_auto] sm:items-end">
         <label className="grid gap-1 text-sm font-medium">
-          Agent identity
-          <input
+          {translateNow("source.agent.identity.698c87920a")}<input
             className="rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
-            placeholder="node-a"
+            placeholder={translateNow("source.node.a.66570ff05a")}
             value={agentIdentity}
             onChange={(event) => setAgentIdentity(event.target.value)}
             disabled={minting}
@@ -762,12 +742,11 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
         </label>
         <Button type="button" className="justify-self-start" onClick={() => void mintToken()} disabled={minting}>
           {minting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          Mint enrollment token
-        </Button>
+          {translateNow("source.mint.enrollment.token.b50d28fa1d")}</Button>
       </div>
       {token && (
         <div>
-          <p className="text-caption font-medium text-muted-foreground">Bootstrap token</p>
+          <p className="text-caption font-medium text-muted-foreground">{translateNow("source.bootstrap.token.2996dc8b78")}</p>
           <code className="mt-1 block break-all rounded-control bg-muted px-3 py-2 text-caption">{token.token}</code>
         </div>
       )}
@@ -777,17 +756,14 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
       {agent ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          Agent {agent.name} registered.
-        </p>
+          {translateNow("source.agent.11b39c9377")}{" "}{agent.name} {" "}{translateNow("source.registered.dfd1beafbf")}</p>
       ) : (
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           {checking && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          Waiting for the agent to register...
-        </p>
+          {translateNow("source.waiting.for.the.agent.to.register.3e78d9c8a6")}</p>
       )}
       <Button type="button" variant="outline" className="justify-self-start" onClick={() => void check()}>
-        Check for agent
-      </Button>
+        {translateNow("source.check.for.agent.1649b814df")}</Button>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -821,8 +797,7 @@ function CompleteStep({
     <section aria-labelledby="step-complete-heading" className="grid gap-4">
       <h3 id="step-complete-heading" className="flex items-center gap-2 text-title font-semibold">
         <CheckCircle2 className="h-5 w-5 text-status-success" aria-hidden="true" />
-        Ready for certificate operations
-      </h3>
+        {translateNow("source.ready.for.certificate.operations.e99f6e538f")}</h3>
       <dl className="grid gap-3 sm:grid-cols-2">
         <SummaryItem label="Issuer" value={issuerName ?? "Internal CA"} />
         <SummaryItem label="Protocols" value={protocolSummary ?? "Not configured"} />
@@ -830,10 +805,9 @@ function CompleteStep({
         <SummaryItem label="Integrations" value={integrationSummary ?? "Not exercised"} />
         <SummaryItem label="Agent" value={agent?.name ?? "not enrolled"} />
       </dl>
-      <p className="text-sm text-muted-foreground">trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.</p>
+      <p className="text-sm text-muted-foreground">{translateNow("source.trstctl.will.track.this.credential.and.ale.258f3fc1df")}</p>
       <Button type="button" className="justify-self-start" onClick={onComplete}>
-        Complete setup
-      </Button>
+        {translateNow("source.complete.setup.fe3da4e70b")}</Button>
     </section>
   );
 }

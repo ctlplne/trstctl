@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/StatePrimitives";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 type Mode = "key" | "keyless";
 
@@ -84,28 +84,25 @@ export function CodeSigning() {
     <section aria-labelledby="codesign-heading" className="grid gap-6">
       <PageHeader
         titleId="codesign-heading"
-        title="Code signing"
+        title={translateNow("source.code.signing.4871711be4")}
         description="Bind an artifact digest to a signature through the dedicated signer (key-backed) or a keyless provider (Fulcio). Only the digest is submitted — artifact bytes and private keys never enter the browser."
       />
 
-      <SectionCard title="Sign an artifact" description="Submit a digest for key-backed or keyless signing against the served endpoints.">
+      <SectionCard title={translateNow("source.sign.an.artifact.fb729a3d5b")} description="Submit a digest for key-backed or keyless signing against the served endpoints.">
         <form onSubmit={submit} className="grid gap-4">
           <fieldset className="grid gap-2">
-            <legend className="text-sm font-medium">Signing mode</legend>
+            <legend className="text-sm font-medium">{translateNow("source.signing.mode.0ba52a4363")}</legend>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant={mode === "key" ? "default" : "outline"} aria-pressed={mode === "key"} onClick={() => setMode("key")}>
-                Key-backed
-              </Button>
+                {translateNow("source.key.backed.4eae20ec94")}</Button>
               <Button type="button" variant={mode === "keyless" ? "default" : "outline"} aria-pressed={mode === "keyless"} onClick={() => setMode("keyless")}>
-                Keyless (Fulcio)
-              </Button>
+                {translateNow("source.keyless.fulcio.42a397ffc7")}</Button>
             </div>
           </fieldset>
 
           <div className="grid gap-3 md:grid-cols-2">
             <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-type">
-              Artifact type
-              <input
+              {translateNow("source.artifact.type.c4984fa09a")}<input
                 id="codesign-type"
                 value={artifactType}
                 onChange={(e) => setArtifactType(e.target.value)}
@@ -113,8 +110,7 @@ export function CodeSigning() {
               />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-digest">
-              Artifact digest
-              <input
+              {translateNow("source.artifact.digest.f7f37af3fe")}<input
                 id="codesign-digest"
                 value={digest}
                 onChange={(e) => setDigest(e.target.value)}
@@ -124,8 +120,7 @@ export function CodeSigning() {
             </label>
             {mode === "key" ? (
               <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-keyid">
-                Managed key id
-                <input
+                {translateNow("source.managed.key.id.8d05580702")}<input
                   id="codesign-keyid"
                   value={keyId}
                   onChange={(e) => setKeyId(e.target.value)}
@@ -135,8 +130,7 @@ export function CodeSigning() {
             ) : (
               <>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-id-method">
-                  Identity method
-                  <input
+                  {translateNow("source.identity.method.324ef3acce")}<input
                     id="codesign-id-method"
                     value={identityMethod}
                     onChange={(e) => setIdentityMethod(e.target.value)}
@@ -144,8 +138,7 @@ export function CodeSigning() {
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-id-payload">
-                  Identity payload
-                  <input
+                  {translateNow("source.identity.payload.7cafae50c5")}<input
                     id="codesign-id-payload"
                     value={identityPayload}
                     onChange={(e) => setIdentityPayload(e.target.value)}
@@ -163,31 +156,30 @@ export function CodeSigning() {
           </div>
         </form>
 
-        {error ? <ErrorState title="Could not sign artifact">{error}</ErrorState> : null}
+        {error ? <ErrorState title={translateNow("source.could.not.sign.artifact.67ae96a355")}>{error}</ErrorState> : null}
 
         {signature ? (
           <section aria-labelledby="signature-heading" className="mt-4 rounded-panel border border-border p-comfortable text-sm">
             <h3 id="signature-heading" className="text-title font-semibold">
-              Signature receipt
-            </h3>
+              {translateNow("source.signature.receipt.8d8dcf3028")}</h3>
             <dl className="mt-3 grid gap-2 sm:grid-cols-2">
               <div>
-                <dt className="font-medium text-muted-foreground">Algorithm</dt>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.algorithm.d704d8af25")}</dt>
                 <dd>{signature.algorithm}</dd>
               </div>
               <div>
-                <dt className="font-medium text-muted-foreground">Artifact type</dt>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.artifact.type.c4984fa09a")}</dt>
                 <dd>{signature.artifact_type}</dd>
               </div>
               {signature.key_id ? (
                 <div>
-                  <dt className="font-medium text-muted-foreground">Signing key</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.signing.key.49395b9594")}</dt>
                   <dd className="font-mono text-xs">{signature.key_id}</dd>
                 </div>
               ) : null}
               {signature.fulcio_issuer ? (
                 <div>
-                  <dt className="font-medium text-muted-foreground">Fulcio issuer</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.fulcio.issuer.6baae4cd90")}</dt>
                   <dd className="font-mono text-xs">{signature.fulcio_issuer}</dd>
                 </div>
               ) : null}
@@ -215,7 +207,7 @@ export function CodeSigning() {
                 </a>
               </div>
               <div className="sm:col-span-2">
-                <dt className="font-medium text-muted-foreground">Public key (DER)</dt>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.public.key.der.606443a2d8")}</dt>
                 <dd className="break-all font-mono text-xs">{signature.public_key_der}</dd>
               </div>
             </dl>
@@ -223,7 +215,7 @@ export function CodeSigning() {
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Audit and key boundary" description="What the browser can and cannot see during signing.">
+      <SectionCard title={translateNow("source.audit.and.key.boundary.1ff2138216")} description="What the browser can and cannot see during signing.">
         <ul className="grid gap-2 md:grid-cols-3">
           {auditReceipts.map((receipt) => (
             <li key={receipt} className="rounded-panel border border-border p-3 text-sm text-muted-foreground">

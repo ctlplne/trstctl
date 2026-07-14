@@ -23,7 +23,7 @@ import { NhiInventory } from "@/components/nhi";
 import { NotificationCenter } from "@/components/notifications";
 import { demoDashboard } from "@/lib/demoData";
 import { isOnboardingComplete } from "@/lib/onboardingState";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime, formatShortDate, type FormatPolicy } from "@/i18n/format";
 
 const highRiskThreshold = 70;
@@ -121,10 +121,10 @@ function servedExpiryBands(certificates: Certificate[]): Array<{ label: string; 
     else bLater += 1;
   }
   return [
-    { label: "<7d", n: b7, tone: "crit" },
-    { label: "7–30d", n: b30, tone: "warn" },
-    { label: "30–90d", n: b90, tone: "ok" },
-    { label: ">90d", n: bLater, tone: "ok" },
+    { label: translateNow("source.7d.bf8cc07ad6"), n: b7, tone: "crit" },
+    { label: translateNow("source.7.30d.59a2cd28cb"), n: b30, tone: "warn" },
+    { label: translateNow("source.30.90d.4e79b75fb1"), n: b90, tone: "ok" },
+    { label: translateNow("source.90d.3ba89ead35"), n: bLater, tone: "ok" },
   ];
 }
 
@@ -181,19 +181,17 @@ export function Dashboard() {
     return (
       <section aria-labelledby="dashboard-heading" className="space-y-6">
         <PageHeader
-          title="Dashboard"
+          title={translateNow("source.dashboard.67b6964686")}
           titleId="dashboard-heading"
           description="A single pane of glass over every non-human identity across your hybrid fleet."
         />
         <EmptyState
           icon={<Rocket className="h-5 w-5" aria-hidden="true" />}
-          title="Welcome to trstctl — let's set it up"
-          primaryAction={{ label: "Set up trstctl", to: "/wizard", icon: <Rocket className="h-4 w-4" aria-hidden="true" /> }}
-          secondaryAction={{ label: "Explore the console", onClick: () => setDismissed(true) }}
+          title={translateNow("source.welcome.to.trstctl.let.s.set.it.up.7d04de0c8b")}
+          primaryAction={{ label: translateNow("source.set.up.trstctl.b56c208e41"), to: "/wizard", icon: <Rocket className="h-4 w-4" aria-hidden="true" /> }}
+          secondaryAction={{ label: translateNow("source.explore.the.console.1f6607ee75"), onClick: () => setDismissed(true) }}
         >
-          This tenant has no credentials yet. The four-step setup connects an issuer, issues your first certificate, and enrolls an agent — about five minutes.
-          Prefer to look around first? Explore the console.
-        </EmptyState>
+          {translateNow("source.this.tenant.has.no.credentials.yet.the.fou.7b31a81e81")}</EmptyState>
       </section>
     );
   }
@@ -201,20 +199,17 @@ export function Dashboard() {
   return (
     <section aria-labelledby="dashboard-heading" className="space-y-6">
       <PageHeader
-        title="Dashboard"
+        title={translateNow("source.dashboard.67b6964686")}
         titleId="dashboard-heading"
         description="A single pane of glass over every non-human identity — certificates, workloads, secrets, SSH and AI agents — across your hybrid fleet."
         actions={
           <>
             <ActionLink to="/discovery" icon={<Search className="h-4 w-4" aria-hidden="true" />}>
-              Discover
-            </ActionLink>
+              {translateNow("source.discover.d4a33d5b78")}</ActionLink>
             <ActionLink to="/identities" icon={<RotateCw className="h-4 w-4" aria-hidden="true" />}>
-              Rotate
-            </ActionLink>
+              {translateNow("source.rotate.c3613b1704")}</ActionLink>
             <ActionLink to="/request" icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} primary>
-              Issue credential
-            </ActionLink>
+              {translateNow("source.issue.credential.ab0616c48f")}</ActionLink>
           </>
         }
       />
@@ -306,11 +301,10 @@ export function Dashboard() {
           <Card className="lg:col-span-2">
             <CardHeader className="flex-row items-baseline justify-between space-y-0">
               <CardTitle>
-                Issuance trend <span className="ml-1 text-caption font-normal text-muted-foreground">credentials issued per month</span>
+                {translateNow("source.issuance.trend.b53089f166")}{" "}<span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.credentials.issued.per.month.11bd254ee7")}</span>
               </CardTitle>
               <span className="rounded-control bg-brand-accent/10 px-2 py-0.5 text-caption font-medium text-brand-accent">
-                {d.issuanceTrend[d.issuanceTrend.length - 1] ?? 0} this month
-              </span>
+                {d.issuanceTrend[d.issuanceTrend.length - 1] ?? 0} {" "}{translateNow("source.this.month.5510b12a58")}</span>
             </CardHeader>
             <CardContent>
               <AreaTrend points={d.issuanceTrend} ariaLabel="Issuance trend over the last 12 months" />
@@ -320,7 +314,7 @@ export function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Algorithm mix <span className="ml-1 text-caption font-normal text-muted-foreground">by key type</span>
+              {translateNow("source.algorithm.mix.a5ab80b898")}{" "}<span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.by.key.type.7228596a06")}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -337,7 +331,7 @@ export function Dashboard() {
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>
-                Expiry bands <span className="ml-1 text-caption font-normal text-muted-foreground">time to expiry</span>
+                {translateNow("source.expiry.bands.cbfe64f7cb")}{" "}<span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.time.to.expiry.b1bf11183a")}</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -353,7 +347,7 @@ export function Dashboard() {
           <Card>
             <CardHeader>
               <CardTitle>
-                Expiry bands <span className="ml-1 text-caption font-normal text-muted-foreground">time to expiry</span>
+                {translateNow("source.expiry.bands.cbfe64f7cb")}{" "}<span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.time.to.expiry.b1bf11183a")}</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -365,11 +359,10 @@ export function Dashboard() {
         <Card>
           <CardHeader className="flex-row items-baseline justify-between space-y-0">
             <CardTitle>
-              Rotate first <span className="ml-1 text-caption font-normal text-muted-foreground">highest-risk</span>
+              {translateNow("source.rotate.first.f4ea83b5ca")}{" "}<span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.highest.risk.c56ed7dd58")}</span>
             </CardTitle>
             <Link to="/risk?sort=score" className="text-caption font-medium text-brand-accent hover:underline">
-              View all →
-            </Link>
+              {translateNow("source.view.all.9a780508de")}</Link>
           </CardHeader>
           <CardContent>
             <ul className="-mt-1 divide-y divide-border">
@@ -389,11 +382,10 @@ export function Dashboard() {
         <Card>
           <CardHeader className="flex-row items-baseline justify-between space-y-0">
             <CardTitle>
-              Recent activity <span className="ml-1 text-caption font-normal text-muted-foreground">audit stream</span>
+              {translateNow("source.recent.activity.6cb44b5633")}{" "}<span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.audit.stream.22c7391e55")}</span>
             </CardTitle>
             <Link to="/audit" className="text-caption font-medium text-brand-accent hover:underline">
-              Explorer →
-            </Link>
+              {translateNow("source.explorer.464ef011fa")}</Link>
           </CardHeader>
           <CardContent>
             {useDemo ? (
@@ -440,13 +432,13 @@ function DashboardTrendCharts({ certificates, rotationRuns }: { certificates: Ce
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
-      <TrendCard title="Issuance rate" description="certificates recorded by day">
+      <TrendCard title={translateNow("source.issuance.rate.91f4b7ff0d")} description="certificates recorded by day">
         <TimeBarChart ariaLabel="Certificate issuance rate by day" data={issuanceData} tone="brand" />
       </TrendCard>
-      <TrendCard title="Renewal jobs" description="success vs failure by day">
+      <TrendCard title={translateNow("source.renewal.jobs.ef0c816533")} description="success vs failure by day">
         <StackedTimeBarChart ariaLabel="Renewal job success and failure trend" data={renewalData} />
       </TrendCard>
-      <TrendCard title="Expiration timeline" description="next 90 days">
+      <TrendCard title={translateNow("source.expiration.timeline.d4a2b2aa1e")} description="next 90 days">
         <TimeBarChart ariaLabel="Certificate expirations over the next 90 days" data={expirationData} tone="warning" />
       </TrendCard>
     </div>
@@ -594,8 +586,8 @@ function renewalTrendData(rotationRuns: RotationRun[], policy: FormatPolicy): St
     .map(([key, count]) => ({
       label: shortDateLabel(key, policy),
       segments: [
-        { label: "succeeded", value: count.succeeded, tone: "success" as const },
-        { label: "failed", value: count.failed, tone: "critical" as const },
+        { label: translateNow("source.succeeded.5dceaeceb6"), value: count.succeeded, tone: "success" as const },
+        { label: translateNow("source.failed.5d28a90f44"), value: count.failed, tone: "critical" as const },
       ],
     }));
 }
@@ -651,7 +643,7 @@ function Bands({ bands }: { bands: Array<{ label: string; n: number; tone: "crit
         <li key={b.label}>
           <div className="mb-1 flex items-center justify-between text-caption">
             <span className="text-muted-foreground">{b.label}</span>
-            <span className="font-medium tabular-nums">{formatNumber(b.n)} certs</span>
+            <span className="font-medium tabular-nums">{formatNumber(b.n)} {" "}{translateNow("source.certs.254090ae56")}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-muted">
             <div className={`h-full rounded-full ${toneClass(b.tone)}`} style={{ width: `${Math.max(3, (b.n / max) * 100)}%` }} />

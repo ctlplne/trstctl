@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
   api,
   type SSHAttestedUserCert,
@@ -171,40 +171,39 @@ export function SSHTrust() {
     <section aria-labelledby="ssh-heading" className="grid gap-6">
       <PageHeader
         titleId="ssh-heading"
-        title="SSH trust"
+        title={translateNow("source.ssh.trust.8a25c0e13c")}
         description="SSH CA status, trust rollout evidence, attestation-gated user certificates, KRL revocation, and host retirement from the served SSH workflow API."
       />
 
-      {error && <ErrorState title="SSH workflow failed">{error}</ErrorState>}
-      {!status && !error && <LoadingState>Loading SSH workflow...</LoadingState>}
+      {error && <ErrorState title={translateNow("source.ssh.workflow.failed.e76cbdb07c")}>{error}</ErrorState>}
+      {!status && !error && <LoadingState>{translateNow("source.loading.ssh.workflow.eee4586266")}</LoadingState>}
       {actionResult && <output className="font-mono text-xs text-muted-foreground">{actionResult}</output>}
 
       {status && (
         <section aria-labelledby="ssh-status-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="ssh-status-heading" className="text-title font-semibold">
-              SSH CA and KRL status
-            </h2>
+              {translateNow("source.ssh.ca.and.krl.status.f38597dc96")}</h2>
           </div>
           <div className="ui-panel grid gap-3 md:grid-cols-4">
             <div>
-              <p className="text-xs text-muted-foreground">Workflow available</p>
+              <p className="text-xs text-muted-foreground">{translateNow("source.workflow.available.3946309163")}</p>
               <p className="font-mono text-sm">{status.served ? "true" : "false"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">KRL version</p>
+              <p className="text-xs text-muted-foreground">{translateNow("source.krl.version.2381c27676")}</p>
               <p className="font-mono text-sm">{status.krl_version}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Revoked certs</p>
+              <p className="text-xs text-muted-foreground">{translateNow("source.revoked.certs.267c0b721b")}</p>
               <p className="font-mono text-sm">{status.revoked_count}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Attestors</p>
+              <p className="text-xs text-muted-foreground">{translateNow("source.attestors.2e3ad3c00b")}</p>
               <p className="break-all font-mono text-sm">{attestors.join(", ")}</p>
             </div>
             <div className="md:col-span-4">
-              <p className="text-xs text-muted-foreground">Authority key</p>
+              <p className="text-xs text-muted-foreground">{translateNow("source.authority.key.60329d7d7b")}</p>
               <p className="break-all font-mono text-xs">{status.authority_key || "not published"}</p>
             </div>
           </div>
@@ -214,37 +213,28 @@ export function SSHTrust() {
       <section aria-labelledby="rollout-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="rollout-heading" className="text-title font-semibold">
-            SSH deployment and trust rollout
-          </h2>
+            {translateNow("source.ssh.deployment.and.trust.rollout.098d316f31")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A safe rollout names the candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation copy before
-            any host changes trust.
-          </p>
+            {translateNow("source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9")}</p>
         </div>
         <form aria-label="Record SSH trust rollout" className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void recordRollout(event)}>
           <label className="grid gap-1 text-sm">
-            Discovery source
-            <input className="ui-input" value={sourceId} onChange={(event) => setSourceId(event.target.value)} placeholder="source uuid" />
+            {translateNow("source.discovery.source.f533df1c0c")}<input className="ui-input" value={sourceId} onChange={(event) => setSourceId(event.target.value)} placeholder={translateNow("source.source.uuid.266dd280b0")} />
           </label>
           <label className="grid gap-1 text-sm">
-            Target hosts
-            <textarea className="ui-input min-h-20 font-mono text-xs" value={hosts} onChange={(event) => setHosts(event.target.value)} required />
+            {translateNow("source.target.hosts.b345027096")}<textarea className="ui-input min-h-20 font-mono text-xs" value={hosts} onChange={(event) => setHosts(event.target.value)} required />
           </label>
           <label className="grid gap-1 text-sm">
-            Candidate CA fingerprint
-            <input className="ui-input" value={fingerprint} onChange={(event) => setFingerprint(event.target.value)} />
+            {translateNow("source.candidate.ca.fingerprint.78e53d126d")}<input className="ui-input" value={fingerprint} onChange={(event) => setFingerprint(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm">
-            Reload command
-            <input className="ui-input" value={reloadCommand} onChange={(event) => setReloadCommand(event.target.value)} />
+            {translateNow("source.reload.command.cf1acb1111")}<input className="ui-input" value={reloadCommand} onChange={(event) => setReloadCommand(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm">
-            Health command
-            <input className="ui-input" value={healthCommand} onChange={(event) => setHealthCommand(event.target.value)} />
+            {translateNow("source.health.command.5ad9864488")}<input className="ui-input" value={healthCommand} onChange={(event) => setHealthCommand(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm">
-            Status
-            <select className="ui-input" value={rolloutStatus} onChange={(event) => setRolloutStatus(event.target.value as SSHTrustRolloutRequest["status"])}>
+            {translateNow("source.status.920e413c7d")}<select className="ui-input" value={rolloutStatus} onChange={(event) => setRolloutStatus(event.target.value as SSHTrustRolloutRequest["status"])}>
               {rolloutStatuses.map((value) => (
                 <option key={value} value={value}>
                   {value}
@@ -253,13 +243,11 @@ export function SSHTrust() {
             </select>
           </label>
           <label className="grid gap-1 text-sm md:col-span-3">
-            Rollback plan
-            <textarea className="ui-input min-h-20" value={rollbackPlan} onChange={(event) => setRollbackPlan(event.target.value)} />
+            {translateNow("source.rollback.plan.952efc8286")}<textarea className="ui-input min-h-20" value={rollbackPlan} onChange={(event) => setRollbackPlan(event.target.value)} />
           </label>
           <label className="flex items-center gap-2 text-sm md:col-span-3">
             <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-            Confirm high-blast-radius SSH trust rollout evidence
-          </label>
+            {translateNow("source.confirm.high.blast.radius.ssh.trust.rollou.31dcb6c476")}</label>
           <button className="ui-button md:col-span-3" type="submit" disabled={!confirmed || splitHosts(hosts).length === 0}>
             Record trust rollout
           </button>
@@ -270,14 +258,12 @@ export function SSHTrust() {
       <section aria-labelledby="jit-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="jit-heading" className="text-title font-semibold">
-            Attestation-gated SSH user certs
-          </h2>
+            {translateNow("source.attestation.gated.ssh.user.certs.d49d24e892")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("sshTrust.attested.description")}</p>
         </div>
-        <form aria-label="Issue attested SSH user certificate" className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void issueAttested(event)}>
+        <form aria-label={translateNow("source.issue.attested.ssh.user.certificate.f7e0f6ef66")} className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void issueAttested(event)}>
           <label className="grid gap-1 text-sm">
-            Attestation method
-            <select className="ui-input" value={method} onChange={(event) => setMethod(event.target.value as SSHAttestedUserCertRequest["method"])}>
+            {translateNow("source.attestation.method.1f0610be7c")}<select className="ui-input" value={method} onChange={(event) => setMethod(event.target.value as SSHAttestedUserCertRequest["method"])}>
               {attestors.map((value) => (
                 <option key={value} value={value}>
                   {value}
@@ -286,12 +272,10 @@ export function SSHTrust() {
             </select>
           </label>
           <label className="grid gap-1 text-sm">
-            Key ID
-            <input className="ui-input" value={keyId} onChange={(event) => setKeyId(event.target.value)} />
+            {translateNow("source.key.id.d54d56ee0a")}<input className="ui-input" value={keyId} onChange={(event) => setKeyId(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm">
-            TTL seconds
-            <input className="ui-input" inputMode="numeric" value={ttlSeconds} onChange={(event) => setTTLSeconds(event.target.value)} />
+            {translateNow("source.ttl.seconds.862d08de5a")}<input className="ui-input" inputMode="numeric" value={ttlSeconds} onChange={(event) => setTTLSeconds(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm">
             {t("sshTrust.attested.approver")}
@@ -310,8 +294,7 @@ export function SSHTrust() {
             <input className="ui-input font-mono text-xs" value={forceCommand} onChange={(event) => setForceCommand(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm md:col-span-3">
-            Attestation payload base64
-            <textarea
+            {translateNow("source.attestation.payload.base64.11bfdba122")}<textarea
               className="ui-input min-h-24 font-mono text-xs"
               value={payloadBase64}
               onChange={(event) => setPayloadBase64(event.target.value)}
@@ -319,16 +302,14 @@ export function SSHTrust() {
             />
           </label>
           <label className="grid gap-1 text-sm md:col-span-3">
-            SSH public key
-            <textarea className="ui-input min-h-24 font-mono text-xs" value={publicKey} onChange={(event) => setPublicKey(event.target.value)} required />
+            {translateNow("source.ssh.public.key.c9be6a369e")}<textarea className="ui-input min-h-24 font-mono text-xs" value={publicKey} onChange={(event) => setPublicKey(event.target.value)} required />
           </label>
           <button className="ui-button md:col-span-3" type="submit">
-            Issue attested SSH cert
-          </button>
+            {translateNow("source.issue.attested.ssh.cert.fba31f1beb")}</button>
           {issuedCert && (
             <div className="grid gap-2 md:col-span-3">
               <p className="font-mono text-xs text-muted-foreground">
-                serial {issuedCert.serial} | subject {issuedCert.subject} | valid before {issuedCert.valid_before}
+                {translateNow("source.serial.0144b1defc")}{" "}{issuedCert.serial} {" "}{translateNow("source.subject.5dcd66f2ed")}{" "}{issuedCert.subject} {" "}{translateNow("source.valid.before.8b8acd434a")}{" "}{issuedCert.valid_before}
               </p>
               <p className="font-mono text-xs text-muted-foreground">
                 {t("sshTrust.attested.resultConstraints", {
@@ -338,7 +319,7 @@ export function SSHTrust() {
                   force: issuedCert.force_command || "none",
                 })}
               </p>
-              <textarea className="ui-input min-h-24 font-mono text-xs" readOnly value={issuedCert.certificate} aria-label="Issued SSH certificate" />
+              <textarea className="ui-input min-h-24 font-mono text-xs" readOnly value={issuedCert.certificate} aria-label={translateNow("source.issued.ssh.certificate.3775bb2dee")} />
             </div>
           )}
         </form>
@@ -347,54 +328,43 @@ export function SSHTrust() {
       <section aria-labelledby="krl-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="krl-heading" className="text-title font-semibold">
-            KRL revocation
-          </h2>
+            {translateNow("source.krl.revocation.7e579fb6c5")}</h2>
         </div>
-        <form aria-label="Revoke SSH certificate" className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void revokeCertificate(event)}>
+        <form aria-label={translateNow("source.revoke.ssh.certificate.63b6e335c3")} className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void revokeCertificate(event)}>
           <label className="grid gap-1 text-sm">
-            Serial
-            <input className="ui-input" inputMode="numeric" value={revokeSerial} onChange={(event) => setRevokeSerial(event.target.value)} />
+            {translateNow("source.serial.8ea0949377")}<input className="ui-input" inputMode="numeric" value={revokeSerial} onChange={(event) => setRevokeSerial(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm">
-            Key ID
-            <input className="ui-input" value={revokeKeyId} onChange={(event) => setRevokeKeyId(event.target.value)} />
+            {translateNow("source.key.id.d54d56ee0a")}<input className="ui-input" value={revokeKeyId} onChange={(event) => setRevokeKeyId(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm">
-            Reason
-            <input className="ui-input" value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} />
+            {translateNow("source.reason.f81ab834de")}<input className="ui-input" value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} />
           </label>
           <button className="ui-button md:col-span-3" type="submit" disabled={!revokeSerial && !revokeKeyId}>
-            Revoke and publish KRL
-          </button>
+            {translateNow("source.revoke.and.publish.krl.d5e98fd13c")}</button>
         </form>
       </section>
 
       <section aria-labelledby="retire-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="retire-heading" className="text-title font-semibold">
-            Host retirement
-          </h2>
+            {translateNow("source.host.retirement.4f92fcc0ea")}</h2>
         </div>
-        <form aria-label="Retire SSH host" className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void retireHostSubmit(event)}>
+        <form aria-label={translateNow("source.retire.ssh.host.6d1acfd432")} className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void retireHostSubmit(event)}>
           <label className="grid gap-1 text-sm">
-            Host
-            <input className="ui-input" value={retireHost} onChange={(event) => setRetireHost(event.target.value)} required />
+            {translateNow("source.host.4a823118b9")}<input className="ui-input" value={retireHost} onChange={(event) => setRetireHost(event.target.value)} required />
           </label>
           <label className="grid gap-1 text-sm">
-            Discovery source
-            <input className="ui-input" value={retireSourceId} onChange={(event) => setRetireSourceId(event.target.value)} placeholder="source uuid" />
+            {translateNow("source.discovery.source.f533df1c0c")}<input className="ui-input" value={retireSourceId} onChange={(event) => setRetireSourceId(event.target.value)} placeholder={translateNow("source.source.uuid.266dd280b0")} />
           </label>
           <label className="grid gap-1 text-sm">
-            Discovery run
-            <input className="ui-input" value={retireRunId} onChange={(event) => setRetireRunId(event.target.value)} placeholder="run uuid" />
+            {translateNow("source.discovery.run.f6dd5be06b")}<input className="ui-input" value={retireRunId} onChange={(event) => setRetireRunId(event.target.value)} placeholder={translateNow("source.run.uuid.0b1b6844cb")} />
           </label>
           <label className="grid gap-1 text-sm">
-            Identity
-            <input className="ui-input" value={retireIdentityId} onChange={(event) => setRetireIdentityId(event.target.value)} placeholder="identity uuid" />
+            {translateNow("source.identity.999f23fcd7")}<input className="ui-input" value={retireIdentityId} onChange={(event) => setRetireIdentityId(event.target.value)} placeholder={translateNow("source.identity.uuid.ae37807bc4")} />
           </label>
           <label className="grid gap-1 text-sm md:col-span-2">
-            Reason
-            <input className="ui-input" value={retireReason} onChange={(event) => setRetireReason(event.target.value)} />
+            {translateNow("source.reason.f81ab834de")}<input className="ui-input" value={retireReason} onChange={(event) => setRetireReason(event.target.value)} />
           </label>
           <button className="ui-button md:col-span-3" type="submit">
             Record host retired

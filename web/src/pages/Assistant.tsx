@@ -7,16 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { cn } from "@/lib/utils";
-import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
+import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 
 type Tab = "query" | "rca" | "mcp";
 
 const surfaceOptions = [
-  { value: "certificates", label: "Certificates" },
-  { value: "owners", label: "Owners" },
-  { value: "graph", label: "Graph" },
-  { value: "cbom", label: "CBOM" },
-  { value: "log", label: "Audit log" },
+  { value: "certificates", label: translateNow("source.certificates.16f637921e") },
+  { value: "owners", label: translateNow("source.owners.58f5df9b24") },
+  { value: "graph", label: translateNow("source.graph.32ab018fd3") },
+  { value: "cbom", label: translateNow("source.cbom.b79109c7e7") },
+  { value: "log", label: translateNow("source.audit.log.e4d36f9a4e") },
 ];
 
 function formatError(err: unknown): string {
@@ -88,14 +88,14 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
   if (!answer) return null;
   const citations = answer.citations ?? [];
   return (
-    <section aria-label="Assistant answer" className="mt-5 ui-panel p-comfortable">
+    <section aria-label={translateNow("source.assistant.answer.ba33c88efb")} className="mt-5 ui-panel p-comfortable">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-caption font-medium">
-        {tool && <span className="rounded-control border border-border px-2 py-1">Tool: {tool}</span>}
+        {tool && <span className="rounded-control border border-border px-2 py-1">{translateNow("source.tool.ef19e27e34")}{" "}{tool}</span>}
         <span className="rounded-control border border-border px-2 py-1">
-          <HelpTerm title="Grounded means the answer cites tenant evidence returned by the API.">{answer.grounded ? "Grounded" : "No cited evidence"}</HelpTerm>
+          <HelpTerm title={translateNow("source.grounded.means.the.answer.cites.tenant.evi.0c488b912f")}>{answer.grounded ? "Grounded" : "No cited evidence"}</HelpTerm>
         </span>
         <span className="rounded-control border border-border px-2 py-1">
-          <HelpTerm title="Sufficient means the cited evidence is enough to answer without guessing.">
+          <HelpTerm title={translateNow("source.sufficient.means.the.cited.evidence.is.eno.07cb72f36c")}>
             {answer.sufficient ? "Sufficient" : "Insufficient"}
           </HelpTerm>
         </span>
@@ -104,9 +104,9 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
         {answer.text}
       </p>
       <div className="mt-4">
-        <h3 className="text-body font-semibold">Cited evidence</h3>
+        <h3 className="text-body font-semibold">{translateNow("source.cited.evidence.ca23c85308")}</h3>
         {citations.length === 0 ? (
-          <p className="mt-2 text-body text-muted-foreground">No citations returned.</p>
+          <p className="mt-2 text-body text-muted-foreground">{translateNow("source.no.citations.returned.4c4de9598c")}</p>
         ) : (
           <ul className="mt-2 space-y-1 text-body">
             {citations.map((citation) => (
@@ -132,29 +132,26 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
   return (
     <details className="group mb-6 border-b border-border pb-6" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary className="inline-flex cursor-pointer items-center rounded-control border border-border px-3 py-2 text-body font-medium hover:border-brand-accent/40 hover:bg-muted/60">
-        Advanced runtime diagnostics
-      </summary>
+        {translateNow("source.advanced.runtime.diagnostics.c1b601f9f3")}</summary>
       {open && (
         <div className="mt-4 grid gap-3">
           <div>
             <h2 id="assistant-runtime-heading" className="text-title font-semibold">
-              AI runtime boundary
-            </h2>
+              {translateNow("source.ai.runtime.boundary.0126aa890a")}</h2>
             <p className="mt-1 max-w-3xl text-body text-muted-foreground">
-              Query, RCA, and MCP fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
-            </p>
+              {translateNow("source.query.rca.and.mcp.fail.closed.when.disable.255478de84")}</p>
           </div>
           <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="ui-panel p-comfortable">
-              <dt className="text-caption text-muted-foreground">Surface</dt>
+              <dt className="text-caption text-muted-foreground">{translateNow("source.surface.0905f7f590")}</dt>
               <dd className="mt-1 text-title font-semibold">{loading ? "loading" : enabled}</dd>
             </div>
             <div className="ui-panel p-comfortable">
-              <dt className="text-caption text-muted-foreground">Model</dt>
+              <dt className="text-caption text-muted-foreground">{translateNow("source.model.5e2c614c23")}</dt>
               <dd className="mt-1 text-title font-semibold">{loading ? "loading" : model}</dd>
             </div>
             <div className="ui-panel p-comfortable">
-              <dt className="text-caption text-muted-foreground">Egress</dt>
+              <dt className="text-caption text-muted-foreground">{translateNow("source.egress.66a3afae15")}</dt>
               <dd className="mt-1 text-title font-semibold">{loading ? "loading" : egress}</dd>
             </div>
             <div className="ui-panel p-comfortable">
@@ -163,18 +160,17 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
               <p className="mt-2 text-caption text-muted-foreground">{loading ? t("assistant.runtime.statusLoading") : personalData.detail}</p>
             </div>
             <div className="ui-panel p-comfortable">
-              <dt className="text-caption text-muted-foreground">Endpoint host</dt>
+              <dt className="text-caption text-muted-foreground">{translateNow("source.endpoint.host.4f0d916bb9")}</dt>
               <dd className="mt-1 break-words text-title font-semibold">{loading ? "loading" : endpoint}</dd>
             </div>
           </dl>
           <p className="text-body text-muted-foreground">
-            Redaction boundary: {status?.redaction ?? "default-redactor"}; residual refusal gate:{" "}
+            {translateNow("source.redaction.boundary.134ed7be9f")}{" "}{status?.redaction ?? "default-redactor"}; residual refusal gate:{" "}
             {status?.residual_refusal_gate === false ? "inactive" : "active"}.
           </p>
           {error && (
-            <UnavailableState title="AI runtime status unavailable">
-              The console could not read runtime status, so it shows the safe baseline: no confirmed model means no confirmed prompt egress.
-            </UnavailableState>
+            <UnavailableState title={translateNow("source.ai.runtime.status.unavailable.b36957005d")}>
+              {translateNow("source.the.console.could.not.read.runtime.status.a01258a71d")}</UnavailableState>
           )}
         </div>
       )}
@@ -186,20 +182,19 @@ function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: stri
   return (
     <section aria-labelledby="query-preview-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="query-preview-heading" className="font-semibold">
-        Structured query preview
-      </h3>
+        {translateNow("source.structured.query.preview.706d53d9be")}</h3>
       <dl className="mt-2 grid gap-2 md:grid-cols-3">
         <div>
-          <dt className="text-caption text-muted-foreground">Surfaces</dt>
+          <dt className="text-caption text-muted-foreground">{translateNow("source.surfaces.fbb4dbb2d8")}</dt>
           <dd>{surfaces.join(", ") || "none selected"}</dd>
         </div>
         <div>
-          <dt className="text-caption text-muted-foreground">Subject</dt>
+          <dt className="text-caption text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
           <dd>{subject.trim() || "not scoped"}</dd>
         </div>
         <div>
-          <dt className="text-caption text-muted-foreground">Limit</dt>
-          <dd>25 cited records</dd>
+          <dt className="text-caption text-muted-foreground">{translateNow("source.limit.674b0ed54b")}</dt>
+          <dd>{translateNow("source.25.cited.records.8fedaba2c8")}</dd>
         </div>
       </dl>
       <p className="mt-2 text-muted-foreground">Tenant/RBAC filtering is applied below this request; a prompt cannot ask for another tenant.</p>
@@ -211,12 +206,9 @@ function RCAWorkspaceDisclosure() {
   return (
     <section aria-labelledby="rca-workspace-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="rca-workspace-heading" className="font-semibold">
-        RCA evidence workspace
-      </h3>
+        {translateNow("source.rca.evidence.workspace.418f458f5f")}</h3>
       <p className="mt-2 text-muted-foreground">
-        RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text
-        until a remediation workflow exists.
-      </p>
+        {translateNow("source.rca.answers.are.sufficient.or.insufficient.5a9397d141")}</p>
     </section>
   );
 }
@@ -225,12 +217,9 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
   return (
     <section aria-labelledby="mcp-boundary-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="mcp-boundary-heading" className="font-semibold">
-        <HelpTerm title="Model Context Protocol: read-only assistant tools exposed by policy.">MCP</HelpTerm> permission boundary
-      </h3>
+        <HelpTerm title={translateNow("source.model.context.protocol.read.only.assistant.6c1913a3c9")}>{translateNow("source.mcp.53f13ae99e")}</HelpTerm> {" "}{translateNow("source.permission.boundary.c0d351ef86")}</h3>
       <p className="mt-2 text-muted-foreground">
-        Tools are {readOnly ? "read-only" : "treated as unavailable until policy allows them"} and cannot remediate or mutate credentials. Model egress and
-        redaction posture are read from the runtime status above.
-      </p>
+        {translateNow("source.tools.are.7c933884d0")}{" "}{readOnly ? "read-only" : "treated as unavailable until policy allows them"} {" "}{translateNow("source.and.cannot.remediate.or.mutate.credentials.564b159ab9")}</p>
     </section>
   );
 }
@@ -334,7 +323,7 @@ export function Assistant() {
   return (
     <section aria-labelledby="assistant-heading">
       <PageHeader
-        title="Assistant"
+        title={translateNow("source.assistant.391e405152")}
         titleId="assistant-heading"
         description="Grounded query, root-cause analysis, and read-only MCP tools."
         actions={
@@ -347,16 +336,13 @@ export function Assistant() {
       />
       <AssistantRuntimeDisclosure status={runtime.data} error={runtime.error} loading={runtime.loading} />
 
-      <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Assistant workflow">
+      <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label={translateNow("source.assistant.workflow.8962351a8a")}>
         <ToggleTab active={tab === "query"} onClick={() => setTab("query")} icon={<Search aria-hidden="true" className="h-4 w-4" />}>
-          Query
-        </ToggleTab>
+          {translateNow("source.query.b80a37564f")}</ToggleTab>
         <ToggleTab active={tab === "rca"} onClick={() => setTab("rca")} icon={<ShieldAlert aria-hidden="true" className="h-4 w-4" />}>
-          RCA
-        </ToggleTab>
+          {translateNow("source.rca.d93580ed3a")}</ToggleTab>
         <ToggleTab active={tab === "mcp"} onClick={() => setTab("mcp")} icon={<Wrench aria-hidden="true" className="h-4 w-4" />}>
-          <HelpTerm title="Model Context Protocol: read-only assistant tools exposed by policy.">MCP</HelpTerm> tools
-        </ToggleTab>
+          <HelpTerm title={translateNow("source.model.context.protocol.read.only.assistant.6c1913a3c9")}>{translateNow("source.mcp.53f13ae99e")}</HelpTerm> {" "}{translateNow("source.tools.f9d35d4377")}</ToggleTab>
       </div>
 
       {error && (
@@ -368,40 +354,38 @@ export function Assistant() {
       {tab === "query" && (
         <Card>
           <CardHeader>
-            <CardTitle>Grounded query</CardTitle>
+            <CardTitle>{translateNow("source.grounded.query.2a3d813fd7")}</CardTitle>
           </CardHeader>
           <CardContent>
             <QueryPreview surfaces={surfaces} subject={subject} />
             <form onSubmit={runQuery} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
                 <label className="space-y-2 text-body font-medium">
-                  Question
-                  <textarea
+                  {translateNow("source.question.289aff12b0")}<textarea
                     className="min-h-24 w-full rounded-control border border-border bg-background p-3 text-body font-normal"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Which certificates should rotate first?"
+                    placeholder={translateNow("source.which.certificates.should.rotate.first.218489c622")}
                     required
                   />
                 </label>
                 <label className="space-y-2 text-body font-medium">
-                  Subject
-                  <input
+                  {translateNow("source.subject.6897128384")}<input
                     className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    placeholder="Optional"
+                    placeholder={translateNow("source.optional.59be71333c")}
                   />
                 </label>
               </div>
               <fieldset className="space-y-2">
-                <legend className="text-body font-medium">Evidence surfaces</legend>
+                <legend className="text-body font-medium">{translateNow("source.evidence.surfaces.6acbb05a44")}</legend>
                 <div className="flex flex-wrap gap-3">
                   {surfaceOptions.map((surface) => (
                     <label key={surface.value} className="inline-flex items-center gap-2 text-body">
                       <input type="checkbox" checked={surfaces.includes(surface.value)} onChange={() => toggleSurface(surface.value)} />
                       {surface.value === "cbom" ? (
-                        <HelpTerm title="Cryptographic Bill of Materials: an inventory of algorithms, key sizes, protocols, and crypto posture.">CBOM</HelpTerm>
+                        <HelpTerm title={translateNow("source.cryptographic.bill.of.materials.an.invento.b2a4a4fd81")}>{translateNow("source.cbom.b79109c7e7")}</HelpTerm>
                       ) : (
                         surface.label
                       )}
@@ -422,29 +406,27 @@ export function Assistant() {
       {tab === "rca" && (
         <Card>
           <CardHeader>
-            <CardTitle>Root-cause analysis</CardTitle>
+            <CardTitle>{translateNow("source.root.cause.analysis.fde4017d48")}</CardTitle>
           </CardHeader>
           <CardContent>
             <RCAWorkspaceDisclosure />
             <form onSubmit={runRCA} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
                 <label className="space-y-2 text-body font-medium">
-                  Question
-                  <textarea
+                  {translateNow("source.question.289aff12b0")}<textarea
                     className="min-h-24 w-full rounded-control border border-border bg-background p-3 text-body font-normal"
                     value={rcaQuestion}
                     onChange={(e) => setRCAQuestion(e.target.value)}
-                    placeholder="Why did this identity become high risk?"
+                    placeholder={translateNow("source.why.did.this.identity.become.high.risk.d0f95f73e1")}
                     required
                   />
                 </label>
                 <label className="space-y-2 text-body font-medium">
-                  Subject
-                  <input
+                  {translateNow("source.subject.6897128384")}<input
                     className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                     value={rcaSubject}
                     onChange={(e) => setRCASubject(e.target.value)}
-                    placeholder="Optional"
+                    placeholder={translateNow("source.optional.59be71333c")}
                   />
                 </label>
               </div>
@@ -461,21 +443,20 @@ export function Assistant() {
       {tab === "mcp" && (
         <Card>
           <CardHeader>
-            <CardTitle>MCP tools</CardTitle>
+            <CardTitle>{translateNow("source.mcp.tools.1a32c98e7f")}</CardTitle>
           </CardHeader>
           <CardContent>
             <MCPBoundary readOnly={tools.data?.read_only} />
             {tools.loading && (
               <p role="status" className="text-body text-muted-foreground">
-                Loading tools...
-              </p>
+                {translateNow("source.loading.tools.efc190cd4c")}</p>
             )}
             {tools.error && (
               <p role="alert" className="text-body text-destructive">
-                Could not load tools: {tools.error}
+                {translateNow("source.could.not.load.tools.2e7b9eae6f")}{" "}{tools.error}
               </p>
             )}
-            {tools.data && mcpToolCount === 0 && <p className="text-body text-muted-foreground">No MCP tools are available for this tenant.</p>}
+            {tools.data && mcpToolCount === 0 && <p className="text-body text-muted-foreground">{translateNow("source.no.mcp.tools.are.available.for.this.tenant.66ea7cda3e")}</p>}
             {tools.data && !mcpToolsAreReadOnly && mcpToolCount > 0 && (
               <UnavailableState title={t("assistant.mcp.writeToolsNeedControls")}>{t("assistant.mcp.writeToolsSubjectFormDisabled")}</UnavailableState>
             )}
@@ -483,8 +464,7 @@ export function Assistant() {
               <form onSubmit={runTool} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
                   <label className="space-y-2 text-body font-medium">
-                    Tool
-                    <select
+                    {translateNow("source.tool.2e53bdcd07")}<select
                       className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       value={selectedTool}
                       onChange={(e) => setSelectedTool(e.target.value)}
@@ -497,12 +477,11 @@ export function Assistant() {
                     </select>
                   </label>
                   <label className="space-y-2 text-body font-medium">
-                    Subject
-                    <input
+                    {translateNow("source.subject.6897128384")}<input
                       className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       value={toolSubject}
                       onChange={(e) => setToolSubject(e.target.value)}
-                      placeholder="Optional"
+                      placeholder={translateNow("source.optional.59be71333c")}
                     />
                   </label>
                 </div>

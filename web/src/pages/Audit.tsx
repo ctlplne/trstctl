@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { moduleLabelKey, moduleScopeTerm } from "@/lib/navigation";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 type Notice = { kind: "permission" | "error"; message: string };
 
@@ -149,12 +149,11 @@ export function Audit() {
     <section aria-labelledby="audit-heading" className="space-y-6">
       <PageHeader
         titleId="audit-heading"
-        title="Audit"
+        title={translateNow("source.audit.bb6aea2873")}
         description="Tenant-scoped immutable event evidence."
         actions={
           <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
-            Export evidence
-          </Button>
+            {translateNow("source.export.evidence.caab91492e")}</Button>
         }
       />
 
@@ -175,7 +174,7 @@ export function Audit() {
         </div>
       )}
 
-      {exportError && <ErrorState title="Evidence export unavailable">{exportError}</ErrorState>}
+      {exportError && <ErrorState title={translateNow("source.evidence.export.unavailable.9cb4129ff9")}>{exportError}</ErrorState>}
       {bundle && <EvidenceBundle bundle={bundle} />}
 
       {events && <HashChainPanel events={events} />}
@@ -224,21 +223,21 @@ export function Audit() {
                       label="Type"
                       value={filters.type}
                       onChange={(value) => updateFilter("type", value)}
-                      placeholder="identity.issued"
+                      placeholder={translateNow("source.identity.issued.08c478fa05")}
                     />
                     <AuditFilterInput
                       id="audit-since"
                       label="Since"
                       value={filters.since}
                       onChange={(value) => updateFilter("since", value)}
-                      placeholder="2026-06-17T00:00:00Z"
+                      placeholder={translateNow("source.2026.06.17t00.00.00z.f4debbb70c")}
                     />
                     <AuditFilterInput
                       id="audit-until"
                       label="Until"
                       value={filters.until}
                       onChange={(value) => updateFilter("until", value)}
-                      placeholder="2026-06-18T00:00:00Z"
+                      placeholder={translateNow("source.2026.06.18t00.00.00z.b4c7e74181")}
                     />
                     <AuditFilterInput
                       id="audit-as-of"
@@ -262,14 +261,11 @@ export function Audit() {
                 actions={
                   <>
                     <Button type="button" variant="outline" onClick={() => applyTypePreset("policy.decision")}>
-                      Policy decisions
-                    </Button>
+                      {translateNow("source.policy.decisions.988b13232e")}</Button>
                     <Button type="button" variant="outline" onClick={() => applyTypePreset("issuance.profile_evaluated")}>
-                      Profile evaluations
-                    </Button>
+                      {translateNow("source.profile.evaluations.fc73272085")}</Button>
                     <Button type="submit" disabled={loading}>
-                      Apply filters
-                    </Button>
+                      {translateNow("source.apply.filters.d80ab19b7e")}</Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -278,8 +274,7 @@ export function Audit() {
                         void loadEvents(toAuditQuery(defaultFilters));
                       }}
                     >
-                      Reset
-                    </Button>
+                      {translateNow("source.reset.daee7606b3")}</Button>
                   </>
                 }
               />
@@ -335,20 +330,19 @@ function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
   return (
     <section aria-labelledby="evidence-bundle-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="evidence-bundle-heading" className="text-title font-semibold">
-        Signed evidence bundle ready
-      </h2>
+        {translateNow("source.signed.evidence.bundle.ready.9ce177ede7")}</h2>
       <dl className="mt-3 grid gap-2 sm:grid-cols-3">
         <div>
-          <dt className="font-medium text-muted-foreground">Format</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.format.2f343666aa")}</dt>
           <dd>{bundle.format}</dd>
         </div>
         <div>
-          <dt className="font-medium text-muted-foreground">Bundle bytes</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.bundle.bytes.842399751d")}</dt>
           <dd>{bundle.bundle.length}</dd>
         </div>
         <div>
-          <dt className="font-medium text-muted-foreground">Scope</dt>
-          <dd>Current filters</dd>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.scope.b073f6c68e")}</dt>
+          <dd>{translateNow("source.current.filters.4e3b0ba1cb")}</dd>
         </div>
       </dl>
       <p className="mt-3 break-all rounded-md bg-muted p-3 font-mono text-xs">{payload}</p>
@@ -357,8 +351,7 @@ function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
         download={`audit-evidence.${bundle.format}.txt`}
         href={`data:application/octet-stream;charset=utf-8,${encodeURIComponent(payload)}`}
       >
-        Download signed bundle
-      </a>
+        {translateNow("source.download.signed.bundle.c6373a92cb")}</a>
     </section>
   );
 }
@@ -390,8 +383,7 @@ function HashChainPanel({ events }: { events: AuditEvent[] }) {
   return (
     <section aria-labelledby="hash-chain-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="hash-chain-heading" className="text-title font-semibold">
-        Hash-chain status
-      </h2>
+        {translateNow("source.hash.chain.status.f5491b14e9")}</h2>
       <p className="mt-1 text-muted-foreground">{message}</p>
     </section>
   );
@@ -401,36 +393,34 @@ function EventDetail({ event }: { event: AuditEvent | null }) {
   if (!event) {
     return (
       <div role="note" className="ui-panel p-comfortable text-sm text-muted-foreground">
-        Select an audit event to inspect its immutable sequence, hash, actor, and data payload.
-      </div>
+        {translateNow("source.select.an.audit.event.to.inspect.its.immut.b522affee1")}</div>
     );
   }
   return (
     <section aria-labelledby="audit-event-detail-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="audit-event-detail-heading" className="text-title font-semibold">
-        Event detail
-      </h2>
+        {translateNow("source.event.detail.097e77abc2")}</h2>
       <dl className="mt-3 grid gap-2">
         <div>
-          <dt className="font-medium text-muted-foreground">Sequence</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.sequence.0740f4bade")}</dt>
           <dd className="font-mono text-xs">{event.sequence}</dd>
         </div>
         <div>
-          <dt className="font-medium text-muted-foreground">Hash</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.hash.a91069147f")}</dt>
           <dd className="break-all font-mono text-xs">{event.hash ?? "-"}</dd>
         </div>
         <div>
-          <dt className="font-medium text-muted-foreground">Type</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.type.baaddf70fb")}</dt>
           <dd>{event.type}</dd>
         </div>
         <div>
-          <dt className="font-medium text-muted-foreground">Tenant</dt>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.tenant.e23969d284")}</dt>
           <dd className="break-all font-mono text-xs">{event.tenant_id}</dd>
         </div>
       </dl>
-      <h3 className="mt-4 font-semibold">Actor</h3>
+      <h3 className="mt-4 font-semibold">{translateNow("source.actor.449995c4fe")}</h3>
       <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.actor ?? {})}</pre>
-      <h3 className="mt-4 font-semibold">Data</h3>
+      <h3 className="mt-4 font-semibold">{translateNow("source.data.cec3a9b89b")}</h3>
       <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.data ?? {})}</pre>
     </section>
   );
@@ -496,7 +486,7 @@ function formatJSON(value: unknown): string {
 
 function noticeFor(err: unknown, fallback: string): Notice {
   if (err instanceof ApiError && err.status === 403) {
-    return { kind: "permission", message: "Your session cannot read tenant audit evidence." };
+    return { kind: "permission", message: translateNow("source.your.session.cannot.read.tenant.audit.evid.6c0890fb54") };
   }
   return { kind: "error", message: apiProblemMessage(err, fallback) };
 }

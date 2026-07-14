@@ -18,7 +18,7 @@ import {
   type WorkloadAttesterTrustSourceRotateRequest,
 } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
 type SafeAttestation = Pick<Attestation, "id" | "method" | "selectors" | "subject" | "verified_at">;
@@ -581,7 +581,7 @@ export function Workloads() {
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1 text-sm font-medium">
                 {t("workloads.attestation.trustSourceName")}
-                <input className="ui-input" name="name" placeholder="prod-k8s" required />
+                <input className="ui-input" name="name" placeholder={translateNow("source.prod.k8s.42d6181646")} required />
               </label>
               <label className="grid gap-1 text-sm font-medium">
                 {t("workloads.attestation.trustSourceMethod")}
@@ -600,11 +600,11 @@ export function Workloads() {
               </label>
               <label className="grid gap-1 text-sm font-medium">
                 {t("workloads.attestation.issuer")}
-                <input className="ui-input" name="issuer" placeholder="https://kubernetes.default.svc" />
+                <input className="ui-input" name="issuer" placeholder={translateNow("source.https.kubernetes.default.svc.1710ce7a0d")} />
               </label>
               <label className="grid gap-1 text-sm font-medium">
                 {t("workloads.attestation.audience")}
-                <input className="ui-input" name="audience" placeholder="trstctl" />
+                <input className="ui-input" name="audience" placeholder={translateNow("source.trstctl.74de2c6ee4")} />
               </label>
             </div>
             <label className="grid gap-1 text-sm font-medium">
@@ -613,7 +613,7 @@ export function Workloads() {
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {t("workloads.attestation.rootCerts")}
-              <textarea className="ui-input min-h-24 font-mono text-xs" name="root_certs_pem" placeholder="-----BEGIN CERTIFICATE-----" />
+              <textarea className="ui-input min-h-24 font-mono text-xs" name="root_certs_pem" placeholder={translateNow("source.begin.certificate.ddddb6cbd3")} />
             </label>
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <label className="grid gap-1 text-sm font-medium">
@@ -663,7 +663,7 @@ export function Workloads() {
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {t("workloads.attestation.rotationRootCerts")}
-              <textarea className="ui-input min-h-20 font-mono text-xs" name="root_certs_pem" placeholder="-----BEGIN CERTIFICATE-----" />
+              <textarea className="ui-input min-h-20 font-mono text-xs" name="root_certs_pem" placeholder={translateNow("source.begin.certificate.ddddb6cbd3")} />
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {t("workloads.attestation.rotationNonce")}
@@ -671,7 +671,7 @@ export function Workloads() {
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {t("workloads.attestation.rotationReason")}
-              <input className="ui-input" name="reason" placeholder="jwks rollover" />
+              <input className="ui-input" name="reason" placeholder={translateNow("source.jwks.rollover.8e2a5cc316")} />
             </label>
             <Button type="submit" className="justify-self-start" disabled={!rotateTrustSourceID || busy?.startsWith("trust-rotate:")}>
               {busy?.startsWith("trust-rotate:") ? (
@@ -799,20 +799,19 @@ export function Workloads() {
             <caption className="sr-only">{t("workloads.attestation.outcomesCaption")}</caption>
             <thead>
               <tr>
-                <th scope="col">Credential</th>
-                <th scope="col">Subject</th>
-                <th scope="col">Method</th>
-                <th scope="col">Selectors</th>
-                <th scope="col">Verified</th>
-                <th scope="col">Expires</th>
+                <th scope="col">{translateNow("source.credential.b1c42b3ce1")}</th>
+                <th scope="col">{translateNow("source.subject.6897128384")}</th>
+                <th scope="col">{translateNow("source.method.52a0f9b65b")}</th>
+                <th scope="col">{translateNow("source.selectors.d27e6f722c")}</th>
+                <th scope="col">{translateNow("source.verified.4f7838402f")}</th>
+                <th scope="col">{translateNow("source.expires.f6725f3af0")}</th>
               </tr>
             </thead>
             <tbody>
               {attestedSVIDs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-muted-foreground">
-                    No attested SVID has been issued in this browser session.
-                  </td>
+                    {translateNow("source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a")}</td>
                 </tr>
               ) : (
                 attestedSVIDs.map((row) => (
@@ -829,81 +828,69 @@ export function Workloads() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Raw attestation evidence stays out of the browser">
-          Submitted proof fields are cleared after issue. Returned certificate PEM and claim maps are discarded before the row is stored.
-        </UnavailableState>
+        <UnavailableState title={translateNow("source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc")}>
+          {translateNow("source.submitted.proof.fields.are.cleared.after.i.b9215d2471")}</UnavailableState>
       </section>
 
       <section aria-labelledby="broker-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="broker-heading" className="text-title font-semibold">
-            AI-agent / NHI broker
-          </h2>
+            {translateNow("source.ai.agent.nhi.broker.3c610aca90")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A broker turns an agent identity plus policy into a short credential lease. Submit proof once, then render only returned identity metadata.
-          </p>
+            {translateNow("source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad")}</p>
         </div>
         <form aria-labelledby="broker-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueBrokerIdentity}>
           <div>
             <h3 id="broker-issue-heading" className="text-title font-semibold">
-              Issue broker identity
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">Proof payloads are submitted directly and cleared after the broker returns identity metadata.</p>
+              {translateNow("source.issue.broker.identity.a95ac0066b")}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.proof.payloads.are.submitted.directly.and.893894a52b")}</p>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_12rem_1fr_8rem]">
             <label className="grid gap-1 text-sm font-medium">
-              Agent ID
-              <input className="ui-input" name="agent_id" defaultValue="agent-build-1" required />
+              {translateNow("source.agent.id.510bce732d")}<input className="ui-input" name="agent_id" defaultValue="agent-build-1" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Broker method
-              <input className="ui-input" name="method" defaultValue="github_oidc" required />
+              {translateNow("source.broker.method.86e0708911")}<input className="ui-input" name="method" defaultValue="github_oidc" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Broker scopes
-              <input className="ui-input" name="scopes" defaultValue="mcp:read-only, secrets:read:ci" required />
+              {translateNow("source.broker.scopes.60ad7540e2")}<input className="ui-input" name="scopes" defaultValue="mcp:read-only, secrets:read:ci" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Broker TTL seconds
-              <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={900} />
+              {translateNow("source.broker.ttl.seconds.7112a719ce")}<input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={900} />
             </label>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <label className="grid gap-1 text-sm font-medium">
-              Broker proof payload (base64)
-              <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
+              {translateNow("source.broker.proof.payload.base64.caf8633720")}<textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Broker public key
-              <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
+              {translateNow("source.broker.public.key.a2341b0f4e")}<textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
             </label>
             <Button type="submit" className="self-end" disabled={busy === "broker"}>
               {busy === "broker" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-              Issue broker identity
-            </Button>
+              {translateNow("source.issue.broker.identity.a95ac0066b")}</Button>
           </div>
         </form>
-        {brokerError && <ErrorState title="Broker identity failed">{brokerError}</ErrorState>}
+        {brokerError && <ErrorState title={translateNow("source.broker.identity.failed.90cf96d503")}>{brokerError}</ErrorState>}
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">AI agent broker identities</caption>
+            <caption className="sr-only">{translateNow("source.ai.agent.broker.identities.6ec86399a3")}</caption>
             <thead>
               <tr>
-                <th scope="col">Agent</th>
-                <th scope="col">Subject</th>
-                <th scope="col">Scopes</th>
-                <th scope="col">Method</th>
-                <th scope="col">Verified</th>
-                <th scope="col">Expires</th>
-                <th scope="col">Audit IDs</th>
+                <th scope="col">{translateNow("source.agent.11b39c9377")}</th>
+                <th scope="col">{translateNow("source.subject.6897128384")}</th>
+                <th scope="col">{translateNow("source.scopes.0d5644ff52")}</th>
+                <th scope="col">{translateNow("source.method.52a0f9b65b")}</th>
+                <th scope="col">{translateNow("source.verified.4f7838402f")}</th>
+                <th scope="col">{translateNow("source.expires.f6725f3af0")}</th>
+                <th scope="col">{translateNow("source.audit.ids.e1133f2a79")}</th>
               </tr>
             </thead>
             <tbody>
               {brokerIdentities.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-muted-foreground">
-                    No broker identity has been issued in this browser session.
-                  </td>
+                    {translateNow("source.no.broker.identity.has.been.issued.in.this.7bb702b9db")}</td>
                 </tr>
               ) : (
                 brokerIdentities.map((identity) => (
@@ -923,10 +910,8 @@ export function Workloads() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Broker history isn't in the console yet">
-          The broker API issues a single identity per request. A tenant-wide broker history list is not available in the browser contract yet, so this table
-          shows identities returned during this session.
-        </UnavailableState>
+        <UnavailableState title={translateNow("source.broker.history.isn.t.in.the.console.yet.7fc4ef9d7d")}>
+          {translateNow("source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b")}</UnavailableState>
       </section>
     </section>
   );

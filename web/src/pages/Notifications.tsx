@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/i18n/format";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { api, ApiError, type Notification, type NotificationChannel, type NotificationChannelTest, type NotificationRoutingPolicy } from "@/lib/api";
 import type { StatusTone } from "@/lib/statusVocab";
@@ -282,14 +282,13 @@ export function Notifications() {
   return (
     <section aria-labelledby="notifications-heading" className="grid gap-6">
       <PageHeader
-        title="Notifications"
+        title={translateNow("source.notifications.788011833a")}
         titleId="notifications-heading"
         description="Inbox for operator alerts, delivery failures, and dead-letter triage."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            Refresh
-          </Button>
+            {translateNow("source.refresh.0e91610117")}</Button>
         }
       />
 
@@ -392,12 +391,11 @@ export function Notifications() {
               {`Notification ${detail.id}`}
             </h2>
             <p id="notification-detail-description" className="mt-1 text-sm text-muted-foreground">
-              Created {formatDateTime(detail.created_at)} · full delivery, subject, ownership, and routing state.
-            </p>
+              {translateNow("source.created.d70b9e24bc")}{" "}{formatDateTime(detail.created_at)} {" "}{translateNow("source.full.delivery.subject.ownership.and.routin.32d5733727")}</p>
           </header>
           <div className="grid gap-4 p-5">
-            <section aria-label="Delivery">
-              <h3 className="text-sm font-semibold">Delivery</h3>
+            <section aria-label={translateNow("source.delivery.52bfe584a5")}>
+              <h3 className="text-sm font-semibold">{translateNow("source.delivery.52bfe584a5")}</h3>
               <dl className="mt-2 grid gap-2 text-sm">
                 <NotificationDetailRow term="Destination">{detail.destination}</NotificationDetailRow>
                 <NotificationDetailRow term="Status">
@@ -418,8 +416,8 @@ export function Notifications() {
                 </NotificationDetailRow>
               </dl>
             </section>
-            <section aria-label="Subject">
-              <h3 className="text-sm font-semibold">Subject</h3>
+            <section aria-label={translateNow("source.subject.6897128384")}>
+              <h3 className="text-sm font-semibold">{translateNow("source.subject.6897128384")}</h3>
               <dl className="mt-2 grid gap-2 text-sm">
                 <NotificationDetailRow term="Subject">{detail.subject || "-"}</NotificationDetailRow>
                 <NotificationDetailRow term="Detail">{detail.detail || "-"}</NotificationDetailRow>
@@ -476,8 +474,7 @@ export function Notifications() {
           </div>
           <div className="flex justify-end border-t border-border px-5 py-4">
             <Button type="button" variant="outline" onClick={() => setDetail(null)}>
-              Close
-            </Button>
+              {translateNow("source.close.7d9eb7acb1")}</Button>
           </div>
         </Dialog>
       )}
@@ -936,12 +933,12 @@ function EscalationSummary({ notification }: { notification: Notification }) {
     <div className="grid max-w-[18rem] gap-1 text-sm">
       {owner && (
         <span className="truncate" title={owner}>
-          Owner: {owner}
+          {translateNow("source.owner.9a638cfefd")}{" "}{owner}
         </span>
       )}
       {approvers.length > 0 && (
         <span className="truncate text-muted-foreground" title={approvers.join(", ")}>
-          Approvers: {approvers.join(", ")}
+          {translateNow("source.approvers.99f86511e2")}{" "}{approvers.join(", ")}
         </span>
       )}
     </div>

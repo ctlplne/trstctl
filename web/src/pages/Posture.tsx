@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { PQCReadinessSummary } from "@/components/pqc";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -259,16 +259,13 @@ export function Posture() {
           <Radar className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="ct-heading" className="text-title font-semibold">
-              Certificate Transparency monitoring
-            </h2>
+              {translateNow("source.certificate.transparency.monitoring.a0ad3241c4")}</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              CT monitoring watches public logs for certificates your tenant did not request. The discovery worker polls configured logs, records tenant-scoped
-              findings, and dispatches unexpected-issuance alerts through the notification outbox.
-            </p>
+              {translateNow("source.ct.monitoring.watches.public.logs.for.cert.3163770746")}</p>
           </div>
         </div>
         <DiscoveryFindingTable
-          title="Certificate Transparency findings"
+          title={translateNow("source.certificate.transparency.findings.55891f79b6")}
           findings={ctFindings}
           sourceByID={discoverySourceByID}
           runByID={discoveryRunByID}
@@ -279,28 +276,25 @@ export function Posture() {
         <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCTMonitoringSubmit}>
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem]">
             <label className="grid gap-1 text-sm font-medium" htmlFor="ct-watched-domains">
-              Watched domains
-              <textarea
+              {translateNow("source.watched.domains.0a60ff7e19")}<textarea
                 id="ct-watched-domains"
                 className="ui-input min-h-20 font-mono text-xs"
                 value={ctForm.watchedDomains}
                 onChange={(event) => setCTForm((current) => ({ ...current, watchedDomains: event.target.value }))}
-                placeholder="example.com"
+                placeholder={translateNow("source.example.com.a379a6f6ee")}
               />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="ct-log-urls">
-              CT log URLs
-              <textarea
+              {translateNow("source.ct.log.urls.20c5c9807c")}<textarea
                 id="ct-log-urls"
                 className="ui-input min-h-20 font-mono text-xs"
                 value={ctForm.logs}
                 onChange={(event) => setCTForm((current) => ({ ...current, logs: event.target.value }))}
-                placeholder="https://ct.googleapis.com/logs/argon2026/"
+                placeholder={translateNow("source.https.ct.googleapis.com.logs.argon2026.109b891d19")}
               />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="ct-max-batch">
-              Max entries per poll
-              <input
+              {translateNow("source.max.entries.per.poll.a77eca9293")}<input
                 id="ct-max-batch"
                 className="ui-input"
                 type="number"
@@ -328,7 +322,7 @@ export function Posture() {
               <Metric label="Open findings" value={String(ctMonitoring.summary.open_finding_count)} />
               <Metric label="Alert channels" value={String(ctMonitoring.summary.outbox_alert_channel_count)} />
             </dl>
-            <PreviewTable title="CT log checkpoints" headers={["Log URL", "Next index"]}>
+            <PreviewTable title={translateNow("source.ct.log.checkpoints.4f19929a7b")} headers={["Log URL", "Next index"]}>
               {ctMonitoring.logs.map((log) => (
                 <tr key={log.url} className="align-top">
                   <td className="font-mono text-xs">{log.url}</td>
@@ -345,16 +339,13 @@ export function Posture() {
           <FileWarning className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="drift-heading" className="text-title font-semibold">
-              Drift detection
-            </h2>
+              {translateNow("source.drift.detection.93e554780a")}</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Drift detection compares what trstctl intended to deploy with what the worker can verify from a configured watched credential path. Deleted,
-              replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.
-            </p>
+              {translateNow("source.drift.detection.compares.what.trstctl.inte.95457304d6")}</p>
           </div>
         </div>
         <DiscoveryFindingTable
-          title="Drift findings"
+          title={translateNow("source.drift.findings.cd56c69007")}
           findings={driftFindings}
           sourceByID={discoverySourceByID}
           runByID={discoveryRunByID}
@@ -377,28 +368,23 @@ export function Posture() {
           <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="cbom-heading" className="text-title font-semibold">
-              CBOM and cryptographic observability
-            </h2>
+              {translateNow("source.cbom.and.cryptographic.observability.11b90cf944")}</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              The CBOM scanner inventories algorithms, key sizes, TLS versions, and weak crypto posture. The policy floor is RSA-2048, EC-256, and TLS 1.2,
-              while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.
-            </p>
+              {translateNow("source.the.cbom.scanner.inventories.algorithms.ke.94de5272b7")}</p>
           </div>
         </div>
         <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCBOMScan}>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-tls-endpoints">
-              TLS endpoints
-              <textarea
+              {translateNow("source.tls.endpoints.c928457ec8")}<textarea
                 id="cbom-tls-endpoints"
                 className="ui-input min-h-20 font-mono text-xs"
                 name="tls_endpoints"
-                placeholder="https://api.example.com:443"
+                placeholder={translateNow("source.https.api.example.com.443.74d0333a40")}
               />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-host-configs">
-              Host config paths
-              <textarea id="cbom-host-configs" className="ui-input min-h-20 font-mono text-xs" name="host_configs" placeholder="/etc/ssh/sshd_config" />
+              {translateNow("source.host.config.paths.8b2c6c7bdd")}<textarea id="cbom-host-configs" className="ui-input min-h-20 font-mono text-xs" name="host_configs" placeholder={translateNow("source.etc.ssh.sshd.config.83ca950c7a")} />
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -406,8 +392,7 @@ export function Posture() {
               {cbomScanning ? "Running scan" : "Run CBOM scan"}
             </Button>
             <p className="text-sm text-muted-foreground">
-              The request sends endpoint and host-config locators only. Inventory rows are loaded from the tenant-scoped CBOM asset endpoint after the scan.
-            </p>
+              {translateNow("source.the.request.sends.endpoint.and.host.config.057e53f9e9")}</p>
           </div>
           {cbomError ? <p className="text-sm font-medium text-destructive">{cbomError}</p> : null}
         </form>
@@ -429,7 +414,7 @@ export function Posture() {
           </dl>
         ) : null}
 
-        <PreviewTable title="CBOM asset inventory" headers={["Asset", "Crypto", "Transport", "Policy", "Recommended action", "Evidence"]}>
+        <PreviewTable title={translateNow("source.cbom.asset.inventory.2ba70c3036")} headers={["Asset", "Crypto", "Transport", "Policy", "Recommended action", "Evidence"]}>
           {cbomInventory.items.map((asset) => (
             <tr key={asset.id} className="align-top">
               <td className="font-medium">
@@ -457,9 +442,8 @@ export function Posture() {
           ))}
         </PreviewTable>
         {!cbomLoading && cbomInventory.items.length === 0 ? (
-          <EmptyState title="No CBOM assets returned yet">
-            Run a scan against TLS endpoints or host config paths. The inventory table stays empty until trstctl returns tenant-scoped assets.
-          </EmptyState>
+          <EmptyState title={translateNow("source.no.cbom.assets.returned.yet.6164e1adf5")}>
+            {translateNow("source.run.a.scan.against.tls.endpoints.or.host.c.e657e656ce")}</EmptyState>
         ) : null}
       </section>
 
@@ -468,12 +452,9 @@ export function Posture() {
           <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="crypto-agility-heading" className="text-title font-semibold">
-              Crypto-agility readiness
-            </h2>
+              {translateNow("source.crypto.agility.readiness.7bc9bc7019")}</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only
-              state.
-            </p>
+              {translateNow("source.crypto.agility.means.the.system.can.see.we.6ff0a0d217")}</p>
           </div>
         </div>
         <CBOMReadinessTable assets={cbomInventory.items} loading={cbomLoading} />
@@ -483,11 +464,9 @@ export function Posture() {
         <Bell className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div>
           <h2 id="alert-heading" className="text-title font-semibold">
-            Alert routing is managed from Notifications
-          </h2>
+            {translateNow("source.alert.routing.is.managed.from.notification.f26eb33c8e")}</h2>
           <p className="mt-1 text-muted-foreground">
-            CT anomalies and drift findings can be routed through saved notification policies. Channel credentials stay in operator-managed configuration.
-          </p>
+            {translateNow("source.ct.anomalies.and.drift.findings.can.be.rou.360679ac1d")}</p>
         </div>
       </section>
     </section>
@@ -533,7 +512,7 @@ function DriftRemediationWorkflow({
   result: string | null;
   onDecision: (finding: DriftRemediationFinding, decision: DriftDecision) => void;
 }) {
-  if (loading) return <LoadingState>Loading drift remediation...</LoadingState>;
+  if (loading) return <LoadingState>{translateNow("source.loading.drift.remediation.c1b6240bc3")}</LoadingState>;
 
   const findings = state?.findings ?? [];
   return (
@@ -545,12 +524,12 @@ function DriftRemediationWorkflow({
         <Metric label="Permissions" value={String(state?.summary.permission_changed_count ?? 0)} />
         <Metric label="Decisions" value={String(state?.summary.remediation_decision_count ?? 0)} />
       </dl>
-      {error ? <ErrorState title="Drift remediation unavailable">{error}</ErrorState> : null}
+      {error ? <ErrorState title={translateNow("source.drift.remediation.unavailable.2da12cc33d")}>{error}</ErrorState> : null}
       {result ? <p className="text-sm font-medium text-status-success">{result}</p> : null}
       {findings.length === 0 ? (
-        <EmptyState title="No drift remediation findings returned yet" />
+        <EmptyState title={translateNow("source.no.drift.remediation.findings.returned.yet.5034b41d52")} />
       ) : (
-        <PreviewTable title="Drift remediation workflow" headers={["Credential", "Drift", "Risk", "Triage", "Recommended action", "Decision"]}>
+        <PreviewTable title={translateNow("source.drift.remediation.workflow.9456b591c4")} headers={["Credential", "Drift", "Risk", "Triage", "Recommended action", "Decision"]}>
           {findings.map((finding) => (
             <tr key={finding.finding_id} className="align-top">
               <td className="font-medium">
@@ -571,36 +550,33 @@ function DriftRemediationWorkflow({
                   <Button
                     type="button"
                     variant="outline"
-                    title="Investigate"
+                    title={translateNow("source.investigate.e264109347")}
                     aria-label={`Investigate ${finding.ref}`}
                     disabled={!finding.available_decisions.includes("investigate") || busy === `${finding.finding_id}:investigate`}
                     onClick={() => onDecision(finding, "investigate")}
                   >
                     <SearchCheck className="h-4 w-4" aria-hidden="true" />
-                    Investigate
-                  </Button>
+                    {translateNow("source.investigate.e264109347")}</Button>
                   <Button
                     type="button"
                     variant="outline"
-                    title="Mark managed"
+                    title={translateNow("source.mark.managed.61a3f9305a")}
                     aria-label={`Mark managed ${finding.ref}`}
                     disabled={!finding.available_decisions.includes("mark_managed") || busy === `${finding.finding_id}:mark_managed`}
                     onClick={() => onDecision(finding, "mark_managed")}
                   >
                     <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                    Managed
-                  </Button>
+                    {translateNow("source.managed.8f2de600bf")}</Button>
                   <Button
                     type="button"
                     variant="outline"
-                    title="Dismiss"
+                    title={translateNow("source.dismiss.48845bff33")}
                     aria-label={`Dismiss ${finding.ref}`}
                     disabled={!finding.available_decisions.includes("dismiss") || busy === `${finding.finding_id}:dismiss`}
                     onClick={() => onDecision(finding, "dismiss")}
                   >
                     <XCircle className="h-4 w-4" aria-hidden="true" />
-                    Dismiss
-                  </Button>
+                    {translateNow("source.dismiss.48845bff33")}</Button>
                 </div>
               </td>
             </tr>
@@ -628,11 +604,11 @@ function DiscoveryFindingTable({
   error: string | null;
   emptyTitle: string;
 }) {
-  if (loading) return <LoadingState>Loading discovery findings...</LoadingState>;
+  if (loading) return <LoadingState>{translateNow("source.loading.discovery.findings.6d4fa8ee4b")}</LoadingState>;
 
   return (
     <>
-      {error ? <ErrorState title="Discovery findings unavailable">{error}</ErrorState> : null}
+      {error ? <ErrorState title={translateNow("source.discovery.findings.unavailable.8112281292")}>{error}</ErrorState> : null}
       {findings.length === 0 ? (
         <EmptyState title={emptyTitle} />
       ) : (
@@ -742,11 +718,11 @@ function safeFindingSummary(finding: DiscoveryFinding): string {
 }
 
 function CBOMReadinessTable({ assets, loading }: { assets: CBOMAsset[]; loading: boolean }) {
-  if (loading) return <LoadingState>Loading CBOM readiness...</LoadingState>;
-  if (assets.length === 0) return <EmptyState title="No CBOM readiness assets returned yet" />;
+  if (loading) return <LoadingState>{translateNow("source.loading.cbom.readiness.0b111b06ca")}</LoadingState>;
+  if (assets.length === 0) return <EmptyState title={translateNow("source.no.cbom.readiness.assets.returned.yet.e6abce03d0")} />;
 
   return (
-    <PreviewTable title="Crypto-agility readiness" headers={["Asset", "Inventory", "Readiness", "Migration target", "Evidence"]}>
+    <PreviewTable title={translateNow("source.crypto.agility.readiness.7bc9bc7019")} headers={["Asset", "Inventory", "Readiness", "Migration target", "Evidence"]}>
       {assets.map((asset) => (
         <tr key={asset.id} className="align-top">
           <td className="font-medium">

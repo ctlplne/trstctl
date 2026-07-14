@@ -3,7 +3,7 @@ import { CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { api, ApiError, type ConnectorDelivery, type RotationRun } from "@/lib/api";
 import { formatDateTime } from "@/i18n/format";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -53,21 +53,21 @@ type OperationRow =
 
 function statusOptions(queuedLabel: string) {
   return [
-    { value: "", label: "All statuses" },
-    { value: "running", label: "Running" },
-    { value: "succeeded", label: "Succeeded" },
-    { value: "failed", label: "Failed" },
-    { value: "delivered", label: "Delivered" },
+    { value: "", label: translateNow("source.all.statuses.8ee57323a6") },
+    { value: "running", label: translateNow("source.running.f4ccae29e1") },
+    { value: "succeeded", label: translateNow("source.succeeded.6d9a6f97a5") },
+    { value: "failed", label: translateNow("source.failed.031a8f0f65") },
+    { value: "delivered", label: translateNow("source.delivered.9061156573") },
     { value: "queued", label: queuedLabel },
-    { value: "awaiting_approval", label: "Awaiting approval" },
+    { value: "awaiting_approval", label: translateNow("source.awaiting.approval.ae25c9b1d3") },
   ];
 }
 
 const typeOptions: Array<{ value: "" | OperationType; label: string }> = [
-  { value: "", label: "All types" },
-  { value: "rotation", label: "Rotation" },
-  { value: "deployment", label: "Deployment" },
-  { value: "approval", label: "Approval" },
+  { value: "", label: translateNow("source.all.types.f10988e79e") },
+  { value: "rotation", label: translateNow("source.rotation.57b5e2fc1b") },
+  { value: "deployment", label: translateNow("source.deployment.870a8ffd98") },
+  { value: "approval", label: translateNow("source.approval.147fb813a2") },
 ];
 
 export function Operations() {
@@ -148,7 +148,7 @@ export function Operations() {
   }
 
   function cancel(row: OperationRow) {
-    setNotice({ kind: "warning", message: "Cancel is not available for this operation yet. Use the owning workflow to stop or roll it back." });
+    setNotice({ kind: "warning", message: translateNow("source.cancel.is.not.available.for.this.operation.0210a0d77e") });
     setBusyKey(row.id);
     window.setTimeout(() => setBusyKey((current) => (current === row.id ? null : current)), 250);
   }
@@ -156,25 +156,23 @@ export function Operations() {
   return (
     <div className="grid gap-6">
       <PageHeader
-        title="Operations queue"
+        title={translateNow("source.operations.queue.42686cb416")}
         titleId="operations-heading"
         description="The execution queue — jobs in flight like credential rotations and connector deployments, with attempts and outcomes. To approve or deny pending requests, see Approvals."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            Refresh
-          </Button>
+            {translateNow("source.refresh.0e91610117")}</Button>
         }
       />
 
       {notice && <OperationNotice notice={notice} onDismiss={() => setNotice(null)} />}
-      {error && <ErrorState title="Operations unavailable">{error.message}</ErrorState>}
+      {error && <ErrorState title={translateNow("source.operations.unavailable.b176555a53")}>{error.message}</ErrorState>}
 
       <div className="ui-panel grid gap-3 p-comfortable sm:grid-cols-2 lg:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
         <label className="grid gap-2 text-sm font-medium">
-          Status filter
-          <select
-            aria-label="Status filter"
+          {translateNow("source.status.filter.9bfe8b184f")}<select
+            aria-label={translateNow("source.status.filter.9bfe8b184f")}
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
             className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
@@ -187,9 +185,8 @@ export function Operations() {
           </select>
         </label>
         <label className="grid gap-2 text-sm font-medium">
-          Type filter
-          <select
-            aria-label="Type filter"
+          {translateNow("source.type.filter.5607113309")}<select
+            aria-label={translateNow("source.type.filter.5607113309")}
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value as "" | OperationType)}
             className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
@@ -201,20 +198,19 @@ export function Operations() {
             ))}
           </select>
         </label>
-        <div className="flex items-end text-sm text-muted-foreground">{filteredRows.length} rows</div>
+        <div className="flex items-end text-sm text-muted-foreground">{filteredRows.length} {" "}{translateNow("source.rows.bc51e9e65d")}</div>
       </div>
 
       {loading ? (
-        <LoadingState>Loading operations...</LoadingState>
+        <LoadingState>{translateNow("source.loading.operations.f0b144434b")}</LoadingState>
       ) : filteredRows.length === 0 ? (
         <EmptyState
           icon={<RefreshCw className="h-5 w-5" aria-hidden="true" />}
-          title="No operations found"
-          primaryAction={{ label: "Review approvals", to: "/approvals", icon: <CheckCircle2 className="h-4 w-4" /> }}
-          secondaryAction={{ label: "Open expiring certificates", to: "/certificates?expiry=30d", icon: <RefreshCw className="h-4 w-4" /> }}
+          title={translateNow("source.no.operations.found.7472e6ceb1")}
+          primaryAction={{ label: translateNow("source.review.approvals.51320f88b0"), to: "/approvals", icon: <CheckCircle2 className="h-4 w-4" /> }}
+          secondaryAction={{ label: translateNow("source.open.expiring.certificates.45cc9bb64d"), to: "/certificates?expiry=30d", icon: <RefreshCw className="h-4 w-4" /> }}
         >
-          Adjust filters, refresh the queue, or move to the approval and certificate worklists that create operations.
-        </EmptyState>
+          {translateNow("source.adjust.filters.refresh.the.queue.or.move.t.4a4fa7f45b")}</EmptyState>
       ) : (
         <OperationsTable
           rows={filteredRows}
@@ -347,8 +343,7 @@ function RejectDialog({
       </header>
       <form className="grid gap-4 p-5" onSubmit={submit}>
         <label className="grid gap-2 text-sm font-medium">
-          Reason
-          <textarea
+          {translateNow("source.reason.f81ab834de")}<textarea
             ref={reasonRef}
             required
             rows={4}
@@ -359,11 +354,9 @@ function RejectDialog({
         </label>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
+            {translateNow("source.cancel.19766ed6cc")}</Button>
           <Button type="submit" disabled={busy || reason.trim() === ""}>
-            Reject request
-          </Button>
+            {translateNow("source.reject.request.33b1a3b501")}</Button>
         </div>
       </form>
     </Dialog>
@@ -388,8 +381,7 @@ function OperationNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () 
         <p className="min-w-0 break-words font-medium">{notice.message}</p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
-        Dismiss
-      </Button>
+        {translateNow("source.dismiss.48845bff33")}</Button>
     </div>
   );
 }
@@ -645,8 +637,7 @@ function RotationRunDetailDialog({ onClose, run }: { run: RotationRun; onClose: 
       </dl>
       <div className="flex justify-end border-t border-border px-5 py-4">
         <Button type="button" variant="outline" onClick={onClose}>
-          Close
-        </Button>
+          {translateNow("source.close.7d9eb7acb1")}</Button>
       </div>
     </Dialog>
   );

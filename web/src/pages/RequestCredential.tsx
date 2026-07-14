@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { api, ApiError, identityState, type Identity, type Profile } from "@/lib/api";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 function problemMessage(err: unknown, fallback: string): string {
@@ -227,8 +227,7 @@ export function RequestCredential() {
 
       <section aria-labelledby="new-request-heading">
         <h2 id="new-request-heading" className="sr-only">
-          New request
-        </h2>
+          {translateNow("source.new.request.5977ded363")}</h2>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
           <form aria-labelledby="new-request-heading" className="grid gap-4" onSubmit={submit}>
             <StepShell
@@ -241,14 +240,13 @@ export function RequestCredential() {
             >
               {step === 0 && (
                 <div className="grid gap-4">
-                  {profileError && <ErrorState title="Profile list unavailable">{profileError}</ErrorState>}
-                  {profiles == null && !profileError && <LoadingState>Loading profiles...</LoadingState>}
+                  {profileError && <ErrorState title={translateNow("source.profile.list.unavailable.3759c2905e")}>{profileError}</ErrorState>}
+                  {profiles == null && !profileError && <LoadingState>{translateNow("source.loading.profiles.12a7541833")}</LoadingState>}
                   {profiles && activeProfiles.length === 0 && (
-                    <EmptyState title="No active profiles">Create or activate a certificate profile before self-service requests can be accepted.</EmptyState>
+                    <EmptyState title={translateNow("source.no.active.profiles.d3f9395f41")}>{translateNow("source.create.or.activate.a.certificate.profile.b.246493dc15")}</EmptyState>
                   )}
                   <label className="grid max-w-xl gap-1 text-body font-medium" htmlFor="request-profile">
-                    Profile
-                    <select
+                    {translateNow("source.profile.d696a35bdd")}<select
                       id="request-profile"
                       value={selectedProfileKey}
                       onChange={(event) => setSelectedProfileKey(event.target.value)}
@@ -266,11 +264,11 @@ export function RequestCredential() {
                   {selectedProfile && (
                     <dl className="grid max-w-xl gap-2 rounded-panel border border-border bg-muted/40 p-3 text-body">
                       <div className="flex items-center justify-between gap-3">
-                        <dt className="text-caption text-muted-foreground">Profile</dt>
+                        <dt className="text-caption text-muted-foreground">{translateNow("source.profile.d696a35bdd")}</dt>
                         <dd className="font-medium">{`${selectedProfile.name} v${selectedProfile.version}`}</dd>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <dt className="text-caption text-muted-foreground">Status</dt>
+                        <dt className="text-caption text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
                         <dd>
                           <StatusBadge
                             vocabulary="lifecycle"
@@ -287,20 +285,18 @@ export function RequestCredential() {
               {step === 1 && (
                 <div className="grid max-w-xl gap-4">
                   <label className="grid gap-1 text-body font-medium" htmlFor="request-name">
-                    Credential name
-                    <input
+                    {translateNow("source.credential.name.911c43d9f0")}<input
                       id="request-name"
                       value={name}
                       onChange={(event) => setName(event.target.value)}
                       className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                      placeholder="payments-api"
+                      placeholder={translateNow("source.payments.api.682a1c47a1")}
                       required
                     />
                   </label>
                   <div className="grid gap-1">
                     <label className="grid gap-1 text-body font-medium" htmlFor="request-owner">
-                      Owner id
-                      <input
+                      {translateNow("source.owner.id.da58f15949")}<input
                         id="request-owner"
                         value={ownerId}
                         onChange={(event) => setOwnerId(event.target.value)}
@@ -311,13 +307,12 @@ export function RequestCredential() {
                     <p className="text-caption text-muted-foreground">{t("request.wizard.ownerHint")}</p>
                   </div>
                   <label className="grid gap-1 text-body font-medium" htmlFor="request-purpose">
-                    Business purpose
-                    <textarea
+                    {translateNow("source.business.purpose.286d11d720")}<textarea
                       id="request-purpose"
                       value={purpose}
                       onChange={(event) => setPurpose(event.target.value)}
                       className="min-h-20 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                      placeholder="service TLS for staging"
+                      placeholder={translateNow("source.service.tls.for.staging.7d9f743b3b")}
                     />
                   </label>
                 </div>
@@ -327,32 +322,31 @@ export function RequestCredential() {
                 <div className="grid max-w-xl gap-4">
                   <dl className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3 text-body">
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-caption text-muted-foreground">Profile</dt>
+                      <dt className="text-caption text-muted-foreground">{translateNow("source.profile.d696a35bdd")}</dt>
                       <dd className="font-medium">{selectedProfile ? `${selectedProfile.name} v${selectedProfile.version}` : "—"}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-caption text-muted-foreground">Credential name</dt>
+                      <dt className="text-caption text-muted-foreground">{translateNow("source.credential.name.911c43d9f0")}</dt>
                       <dd className="font-medium">{name.trim() || "—"}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-caption text-muted-foreground">Owner id</dt>
+                      <dt className="text-caption text-muted-foreground">{translateNow("source.owner.id.da58f15949")}</dt>
                       <dd>{ownerId.trim() || "—"}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-caption text-muted-foreground">Business purpose</dt>
+                      <dt className="text-caption text-muted-foreground">{translateNow("source.business.purpose.286d11d720")}</dt>
                       <dd className="text-end">{purpose.trim() || "—"}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-caption text-muted-foreground">Requester</dt>
+                      <dt className="text-caption text-muted-foreground">{translateNow("source.requester.b5687cf04a")}</dt>
                       <dd>{requester || "No session principal"}</dd>
                     </div>
                   </dl>
-                  {submitError && <ErrorState title="Request failed">{submitError}</ErrorState>}
+                  {submitError && <ErrorState title={translateNow("source.request.failed.cfce761bef")}>{submitError}</ErrorState>}
                   <div>
                     <Button type="submit" loading={busy} disabled={activeProfiles.length === 0}>
                       <Send className="h-4 w-4" aria-hidden="true" />
-                      Submit request
-                    </Button>
+                      {translateNow("source.submit.request.917e144e4b")}</Button>
                   </div>
                 </div>
               )}
@@ -360,18 +354,18 @@ export function RequestCredential() {
           </form>
 
           <div className="ui-panel grid content-start gap-3 p-comfortable text-body">
-            <h2 className="text-title font-semibold">Request boundary</h2>
+            <h2 className="text-title font-semibold">{translateNow("source.request.boundary.4ba2298c84")}</h2>
             <dl className="grid gap-2">
               <div>
-                <dt className="text-caption text-muted-foreground">Requester</dt>
+                <dt className="text-caption text-muted-foreground">{translateNow("source.requester.b5687cf04a")}</dt>
                 <dd>{requester || "No session principal"}</dd>
               </div>
               <div>
-                <dt className="text-caption text-muted-foreground">Mutation</dt>
-                <dd>Idempotent credential request</dd>
+                <dt className="text-caption text-muted-foreground">{translateNow("source.mutation.c26ee0e4b9")}</dt>
+                <dd>{translateNow("source.idempotent.credential.request.94e8630aea")}</dd>
               </div>
               <div>
-                <dt className="text-caption text-muted-foreground">Result</dt>
+                <dt className="text-caption text-muted-foreground">{translateNow("source.result.6e7d50e84f")}</dt>
                 <dd>accepted request; approval and issuance remain separate states</dd>
               </div>
             </dl>

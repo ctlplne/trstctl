@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import {
   api,
@@ -239,7 +239,7 @@ export function Policy() {
   const [policyVersionNotice, setPolicyVersionNotice] = useState<string | null>(null);
   const [policyVersionAction, setPolicyVersionAction] = useState<string | null>(null);
   const [policyVersionForm, setPolicyVersionForm] = useState({
-    description: "Emergency issuance guard",
+    description: translateNow("source.emergency.issuance.guard.5a3ad01167"),
     changeRef: "github:security/policy#42",
     evidenceRefs: "pr:policy-42, cab:2026-07-02",
     module: lifecycleDryRunModule,
@@ -979,8 +979,7 @@ export function Policy() {
             {exporting ? "Exporting..." : "Export audit evidence"}
           </Button>
           <Link className="text-sm underline" to="/audit">
-            Open audit explorer
-          </Link>
+            {translateNow("source.open.audit.explorer.e155d6131a")}</Link>
         </div>
         {evidenceBundle && (
           <p className="rounded-md border border-border bg-muted p-3 font-mono text-xs" role="status">
@@ -997,16 +996,14 @@ export function Policy() {
       <section aria-labelledby="nhi-access-review-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="nhi-access-review-heading" className="text-title font-semibold">
-            NHI access certification
-          </h2>
+            {translateNow("source.nhi.access.certification.3fd94ffdff")}</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Campaigns certify non-human identity access from identifiers and evidence references. The console never accepts credential values here.
-          </p>
+            {translateNow("source.campaigns.certify.non.human.identity.acces.5d99189fbe")}</p>
         </div>
 
         <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void startNHIReviewCampaign(event)}>
           <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">Campaign</span>
+            <span className="font-medium">{translateNow("source.campaign.268286d2ef")}</span>
             <input
               className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
               value={reviewForm.name}
@@ -1014,25 +1011,25 @@ export function Policy() {
             />
           </label>
           <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">Reviewer</span>
+            <span className="font-medium">{translateNow("source.reviewer.d29f46772c")}</span>
             <input
               className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
-              placeholder="current session subject"
+              placeholder={translateNow("source.current.session.subject.1f6510ea4d")}
               value={reviewForm.reviewer}
               onChange={(event) => setReviewForm((current) => ({ ...current, reviewer: event.target.value }))}
             />
           </label>
           <label className="grid gap-1">
-            <span className="font-medium">Risk</span>
+            <span className="font-medium">{translateNow("source.risk.0711a8d636")}</span>
             <select
               className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
               value={reviewForm.risk}
               onChange={(event) => setReviewForm((current) => ({ ...current, risk: event.target.value }))}
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
+              <option value="low">{translateNow("source.low.f793de205e")}</option>
+              <option value="medium">{translateNow("source.medium.8e588cd187")}</option>
+              <option value="high">{translateNow("source.high.c4ebc6d4a5")}</option>
+              <option value="critical">{translateNow("source.critical.427dd2969b")}</option>
             </select>
           </label>
           <div className="flex items-end">
@@ -1041,7 +1038,7 @@ export function Policy() {
             </Button>
           </div>
           <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">NHI id</span>
+            <span className="font-medium">{translateNow("source.nhi.id.52919bf0d5")}</span>
             <input
               className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
               value={reviewForm.nhiId}
@@ -1049,7 +1046,7 @@ export function Policy() {
             />
           </label>
           <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">Display name</span>
+            <span className="font-medium">{translateNow("source.display.name.2b7f6a84de")}</span>
             <input
               className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
               value={reviewForm.displayName}
@@ -1057,7 +1054,7 @@ export function Policy() {
             />
           </label>
           <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">Evidence refs</span>
+            <span className="font-medium">{translateNow("source.evidence.refs.edfa905c2f")}</span>
             <input
               className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
               value={reviewForm.evidenceRefs}
@@ -1065,7 +1062,7 @@ export function Policy() {
             />
           </label>
           <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">Resource</span>
+            <span className="font-medium">{translateNow("source.resource.eb7a842ff9")}</span>
             <input
               className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
               value={reviewForm.resource}
@@ -1073,7 +1070,7 @@ export function Policy() {
             />
           </label>
           <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">Entitlement</span>
+            <span className="font-medium">{translateNow("source.entitlement.0d8f0b2d3a")}</span>
             <input
               className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
               value={reviewForm.entitlement}
@@ -1082,8 +1079,8 @@ export function Policy() {
           </label>
         </form>
 
-        {reviewLoading && <LoadingState>Loading NHI access reviews.</LoadingState>}
-        {reviewError && <ErrorState title="NHI access review unavailable">{reviewError}</ErrorState>}
+        {reviewLoading && <LoadingState>{translateNow("source.loading.nhi.access.reviews.cd87c4f77e")}</LoadingState>}
+        {reviewError && <ErrorState title={translateNow("source.nhi.access.review.unavailable.7f4d6bdefd")}>{reviewError}</ErrorState>}
         {reviewNotice && (
           <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
             {reviewNotice}
@@ -1091,7 +1088,7 @@ export function Policy() {
         )}
 
         <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
-          <section aria-label="NHI access review campaigns" className="rounded-md border border-border">
+          <section aria-label={translateNow("source.nhi.access.review.campaigns.873389dac9")} className="rounded-md border border-border">
             {reviewCampaigns.length > 0 ? (
               <div className="divide-y divide-border">
                 {reviewCampaigns.map((campaign) => (
@@ -1103,13 +1100,12 @@ export function Policy() {
                   >
                     <span className="font-medium">{campaign.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {campaign.status} · {campaign.pending_count} pending · {campaign.certified_count} certified · {campaign.revoked_count} revoked
-                    </span>
+                      {campaign.status} · {campaign.pending_count} {" "}{translateNow("source.pending.64e6bbf0cf")}{" "}{campaign.certified_count} {" "}{translateNow("source.certified.3d4b25dc0b")}{" "}{campaign.revoked_count} {" "}{translateNow("source.revoked.4bb47f186d")}</span>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="p-3 text-sm text-muted-foreground">No access review campaigns.</p>
+              <p className="p-3 text-sm text-muted-foreground">{translateNow("source.no.access.review.campaigns.5e5e0fbd56")}</p>
             )}
           </section>
 
@@ -1155,10 +1151,10 @@ export function Policy() {
               value={accessForm.risk}
               onChange={(event) => setAccessForm((current) => ({ ...current, risk: event.target.value }))}
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
+              <option value="low">{translateNow("source.low.f793de205e")}</option>
+              <option value="medium">{translateNow("source.medium.8e588cd187")}</option>
+              <option value="high">{translateNow("source.high.c4ebc6d4a5")}</option>
+              <option value="critical">{translateNow("source.critical.427dd2969b")}</option>
             </select>
           </label>
           <label className="grid gap-1">
@@ -1443,17 +1439,15 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="compliance-pack-heading" className="text-title font-semibold">
-            {label} evidence pack
-          </h3>
-          <p className="mt-1 text-muted-foreground">Signed export plus offline verification key for auditor handoff.</p>
+            {label} {" "}{translateNow("source.evidence.pack.dbd6e1203e")}</h3>
+          <p className="mt-1 text-muted-foreground">{translateNow("source.signed.export.plus.offline.verification.ke.f03caf9838")}</p>
         </div>
         <a
           className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm underline"
           download={`${pack.framework}-evidence-pack.json`}
           href={`data:application/json;charset=utf-8,${encodeURIComponent(payload)}`}
         >
-          Download signed bundle
-        </a>
+          {translateNow("source.download.signed.bundle.c6373a92cb")}</a>
       </div>
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1470,12 +1464,12 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
       {controls.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[48rem]">
-            <caption className="sr-only">{label} controls</caption>
+            <caption className="sr-only">{label} {" "}{translateNow("source.controls.1e2135d1b5")}</caption>
             <thead>
               <tr>
-                <th scope="col">Control</th>
-                <th scope="col">Status</th>
-                <th scope="col">Evidence</th>
+                <th scope="col">{translateNow("source.control.32d7e82082")}</th>
+                <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                <th scope="col">{translateNow("source.evidence.03867aea70")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1495,8 +1489,8 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
       )}
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <EvidenceList title="Product evidence" items={productEvidence} />
-        <EvidenceList title="Operator attestations" items={operatorAttests} />
+        <EvidenceList title={translateNow("source.product.evidence.1b4586bcc7")} items={productEvidence} />
+        <EvidenceList title={translateNow("source.operator.attestations.bb1bff1074")} items={operatorAttests} />
       </div>
     </section>
   );
@@ -1673,7 +1667,7 @@ function NHIReviewCampaignPanel({
             {campaign.name}
           </h3>
           <p className="mt-1 text-muted-foreground">
-            {campaign.status} · requested by {campaign.requested_by} · reviewer {campaign.reviewer_subject}
+            {campaign.status} {" "}{translateNow("source.requested.by.42aea0b1dd")}{" "}{campaign.requested_by} {" "}{translateNow("source.reviewer.63c2827d64")}{" "}{campaign.reviewer_subject}
           </p>
         </div>
         <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{campaign.id}</span>
@@ -1690,14 +1684,14 @@ function NHIReviewCampaignPanel({
       {items.length > 0 ? (
         <div className="mt-4 overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[64rem]">
-            <caption className="sr-only">NHI access review items</caption>
+            <caption className="sr-only">{translateNow("source.nhi.access.review.items.d360cac314")}</caption>
             <thead>
               <tr>
-                <th scope="col">Identity</th>
-                <th scope="col">Resource</th>
-                <th scope="col">Evidence</th>
-                <th scope="col">Status</th>
-                <th scope="col">Decision</th>
+                <th scope="col">{translateNow("source.identity.999f23fcd7")}</th>
+                <th scope="col">{translateNow("source.resource.eb7a842ff9")}</th>
+                <th scope="col">{translateNow("source.evidence.03867aea70")}</th>
+                <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                <th scope="col">{translateNow("source.decision.640ae4baf9")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1721,20 +1715,17 @@ function NHIReviewCampaignPanel({
                         <div className="grid min-w-60 gap-2">
                           <input
                             className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
-                            placeholder="Reason for revoke or exception"
+                            placeholder={translateNow("source.reason.for.revoke.or.exception.5df8423828")}
                             value={reason}
                             onChange={(event) => onReasonChange((current) => ({ ...current, [item.item_id]: event.target.value }))}
                           />
                           <div className="flex flex-wrap gap-2">
                             <Button type="button" variant="outline" disabled={busy} onClick={() => void onDecision(item, "certified")}>
-                              Certify
-                            </Button>
+                              {translateNow("source.certify.c1567c2908")}</Button>
                             <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void onDecision(item, "revoked")}>
-                              Revoke
-                            </Button>
+                              {translateNow("source.revoke.87e6d00bbf")}</Button>
                             <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void onDecision(item, "exception")}>
-                              Exception
-                            </Button>
+                              {translateNow("source.exception.b4fe3d529d")}</Button>
                           </div>
                         </div>
                       ) : (
@@ -1751,7 +1742,7 @@ function NHIReviewCampaignPanel({
           </table>
         </div>
       ) : (
-        <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">No item details loaded.</p>
+        <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">{translateNow("source.no.item.details.loaded.e93e8c8e0d")}</p>
       )}
     </section>
   );
@@ -1790,7 +1781,7 @@ function AccessChangeRequestPanel({
             {request.display_name}
           </h3>
           <p className="mt-1 text-muted-foreground">
-            {request.requested_action} · {request.status} · requested by {request.requester_subject}
+            {request.requested_action} · {request.status} {" "}{translateNow("source.requested.by.42aea0b1dd")}{" "}{request.requester_subject}
           </p>
         </div>
         <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{request.id}</span>
@@ -1898,7 +1889,7 @@ function EvidenceList({ items, title }: { items: string[]; title: string }) {
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-muted-foreground">No labels in this pack.</p>
+        <p className="mt-2 text-muted-foreground">{translateNow("source.no.labels.in.this.pack.afb9ef5039")}</p>
       )}
     </div>
   );

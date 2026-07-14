@@ -7,7 +7,7 @@ import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatCurrency as formatCurrencyPolicy, formatDateTime, formatNumber as formatNumberPolicy, type FormatPolicy } from "@/i18n/format";
 import {
   api,
@@ -30,17 +30,17 @@ import type { StatusTone } from "@/lib/statusVocab";
 
 function browserTransport(): { label: string; detail: string; warning?: string } {
   if (typeof window === "undefined") {
-    return { label: "Unknown", detail: "Browser transport is evaluated at runtime." };
+    return { label: translateNow("source.unknown.b764cdc0ea"), detail: translateNow("source.browser.transport.is.evaluated.at.runtime.94214a825a") };
   }
   if (window.location.protocol === "https:") {
     return {
-      label: "HTTPS observed",
-      detail: "The console is currently loaded over an encrypted browser connection.",
+      label: translateNow("source.https.observed.50a13e2b41"),
+      detail: translateNow("source.the.console.is.currently.loaded.over.an.en.4e9bab4e91"),
     };
   }
   return {
-    label: "Local preview HTTP",
-    detail: "The local Vite preview is HTTP. Production should be HTTPS or mTLS-terminated before operators use it.",
+    label: translateNow("source.local.preview.http.957e66ac19"),
+    detail: translateNow("source.the.local.vite.preview.is.http.production.7f2e105c44"),
     warning: "Plaintext local preview. No private cert/key bytes are exposed in this browser view.",
   };
 }
@@ -216,51 +216,46 @@ export function AdminSystem() {
           <div className="grid gap-4 lg:grid-cols-4">
             <section className="ui-panel p-comfortable" aria-labelledby="packaging-heading">
               <h2 id="packaging-heading" className="text-title font-semibold">
-                Packaging
-              </h2>
+                {translateNow("source.packaging.0d62bb01df")}</h2>
               <dl className="mt-3 grid gap-2 text-sm">
                 <div>
-                  <dt className="font-medium text-muted-foreground">Category</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.category.292c06f004")}</dt>
                   <dd>{packaging.category_label}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Billable unit</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.billable.unit.2373d1d5f8")}</dt>
                   <dd className="font-mono text-xs">{packaging.billable_unit}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Provider unit</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.provider.unit.7e58335a9f")}</dt>
                   <dd className="font-mono text-xs">{packaging.provider_billing_unit}</dd>
                 </div>
               </dl>
               <p className="mt-3 text-sm text-muted-foreground">
-                No per-certificate or ephemeral-identity billing. Certificate counters are {packaging.certificate_counters_classification}.
+                {translateNow("source.no.per.certificate.or.ephemeral.identity.b.c797515fce")}{" "}{packaging.certificate_counters_classification}.
               </p>
             </section>
 
             <section className="ui-panel p-comfortable" aria-labelledby="tenant-heading">
               <h2 id="tenant-heading" className="text-title font-semibold">
-                Tenant boundary
-              </h2>
+                {translateNow("source.tenant.boundary.4b458df962")}</h2>
               <dl className="mt-3 grid gap-2 text-sm">
                 <div>
-                  <dt className="font-medium text-muted-foreground">Subject</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
                   <dd>{user?.email || user?.subject || "-"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Tenant ID from session</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.tenant.id.from.session.fb2bbbb246")}</dt>
                   <dd className="break-all font-mono text-xs">{user?.tenant_id || "-"}</dd>
                 </div>
               </dl>
               <p className="mt-3 text-sm text-muted-foreground">
-                The browser never chooses a tenant id through a route, query string, or form field. The backend session or API token supplies it, and PostgreSQL
-                RLS enforces it below the API.
-              </p>
+                {translateNow("source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3")}</p>
             </section>
 
             <section className="ui-panel p-comfortable" aria-labelledby="transport-heading">
               <h2 id="transport-heading" className="text-title font-semibold">
-                Transport
-              </h2>
+                {translateNow("source.transport.aaead4abf5")}</h2>
               <p className="mt-3 text-sm font-medium">{transport.label}</p>
               <p className="mt-1 text-sm text-muted-foreground">{transport.detail}</p>
               {transport.warning && <p className="mt-2 text-sm font-medium text-status-warning">{transport.warning}</p>}
@@ -268,22 +263,19 @@ export function AdminSystem() {
 
             <section className="ui-panel p-comfortable" aria-labelledby="auth-heading">
               <h2 id="auth-heading" className="text-title font-semibold">
-                Auth session
-              </h2>
+                {translateNow("source.auth.session.0e46f553a4")}</h2>
               <dl className="mt-3 grid gap-2 text-sm">
                 <div>
-                  <dt className="font-medium text-muted-foreground">Mode visible to UI</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.mode.visible.to.ui.8520f90032")}</dt>
                   <dd>{preview ? "local preview session" : "authenticated session"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">CSRF cookie</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.csrf.cookie.04ee351267")}</dt>
                   <dd>{csrfPresent ? "present for browser mutations" : "not visible in this browser context"}</dd>
                 </div>
               </dl>
               <p className="mt-3 text-sm text-muted-foreground">
-                OIDC mapping status and API-token administration are shown in Access administration below. This card only reflects the browser session and CSRF
-                posture.
-              </p>
+                {translateNow("source.oidc.mapping.status.and.api.token.administ.565d8d27fd")}</p>
             </section>
           </div>
 
@@ -428,40 +420,39 @@ export function AdminSystem() {
               <div className="flex items-center gap-2">
                 <Headphones className="h-4 w-4 text-status-success" aria-hidden="true" />
                 <h2 id="enterprise-support-heading" className="text-title font-semibold">
-                  Enterprise support
-                </h2>
+                  {translateNow("source.enterprise.support.b31b42b62d")}</h2>
               </div>
               <span className={supportModeClass(enterpriseSupport?.support_mode)}>{supportModeLabel(enterpriseSupport?.support_mode)}</span>
             </div>
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(16rem,0.45fr)_minmax(0,1fr)]">
               <dl className="grid content-start gap-2 text-sm">
                 <div>
-                  <dt className="font-medium text-muted-foreground">Capability</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.capability.5faf58a69d")}</dt>
                   <dd>{enterpriseSupport?.capability ?? "CAP-MODEL-04"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">License feature</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.license.feature.de93785a58")}</dt>
                   <dd className="font-mono text-xs">{enterpriseSupport?.license_feature ?? "ha_support"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">License tier</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.license.tier.0c9a751553")}</dt>
                   <dd>{enterpriseSupport?.tier ?? editions?.tier ?? "community"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Contract boundary</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.contract.boundary.67a4070e64")}</dt>
                   <dd>{enterpriseSupport?.contract_boundary ?? "Commercial support terms control legal SLA credits and named contacts."}</dd>
                 </div>
               </dl>
               <div className="grid gap-4">
                 <div className="overflow-x-auto rounded-panel border border-border">
                   <table className="ui-table min-w-[44rem]">
-                    <caption className="sr-only">Enterprise support tier table</caption>
+                    <caption className="sr-only">{translateNow("source.enterprise.support.tier.table.0b375fcc18")}</caption>
                     <thead>
                       <tr>
-                        <th scope="col">Tier</th>
-                        <th scope="col">Coverage</th>
-                        <th scope="col">Initial SLA</th>
-                        <th scope="col">Updates</th>
+                        <th scope="col">{translateNow("source.tier.cb9e8664ed")}</th>
+                        <th scope="col">{translateNow("source.coverage.523487a5de")}</th>
+                        <th scope="col">{translateNow("source.initial.sla.ee9124e35d")}</th>
+                        <th scope="col">{translateNow("source.updates.22e2bada8f")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -481,13 +472,13 @@ export function AdminSystem() {
                 </div>
                 <div className="overflow-x-auto rounded-panel border border-border">
                   <table className="ui-table min-w-[44rem]">
-                    <caption className="sr-only">Enterprise SLA target table</caption>
+                    <caption className="sr-only">{translateNow("source.enterprise.sla.target.table.dfd20c29f8")}</caption>
                     <thead>
                       <tr>
-                        <th scope="col">Severity</th>
-                        <th scope="col">Applies to</th>
-                        <th scope="col">Response</th>
-                        <th scope="col">Escalation</th>
+                        <th scope="col">{translateNow("source.severity.5e9f98120d")}</th>
+                        <th scope="col">{translateNow("source.applies.to.6687458bee")}</th>
+                        <th scope="col">{translateNow("source.response.9061383b8e")}</th>
+                        <th scope="col">{translateNow("source.escalation.35615b8245")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -504,12 +495,12 @@ export function AdminSystem() {
                 </div>
                 <div className="overflow-x-auto rounded-panel border border-border">
                   <table className="ui-table min-w-[44rem]">
-                    <caption className="sr-only">Professional services package table</caption>
+                    <caption className="sr-only">{translateNow("source.professional.services.package.table.60626ecbca")}</caption>
                     <thead>
                       <tr>
-                        <th scope="col">Service</th>
-                        <th scope="col">Model</th>
-                        <th scope="col">Deliverables</th>
+                        <th scope="col">{translateNow("source.service.d677190e0a")}</th>
+                        <th scope="col">{translateNow("source.model.5e2c614c23")}</th>
+                        <th scope="col">{translateNow("source.deliverables.c7ec4b92c2")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -535,23 +526,22 @@ export function AdminSystem() {
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-status-success" aria-hidden="true" />
                 <h2 id="managed-offering-heading" className="text-title font-semibold">
-                  Managed offering
-                </h2>
+                  {translateNow("source.managed.offering.f4e80765ae")}</h2>
               </div>
               <span className={providerPlaneClass(managedOffering?.provider_plane_mode)}>{providerPlaneLabel(managedOffering?.provider_plane_mode)}</span>
             </div>
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.75fr)_minmax(22rem,1fr)]">
               <dl className="grid content-start gap-2 text-sm">
                 <div>
-                  <dt className="font-medium text-muted-foreground">Deployment model</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.deployment.model.48b995f6f0")}</dt>
                   <dd>{managedOffering?.deployment_model ?? "-"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Provider plane</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.provider.plane.47b8ba879c")}</dt>
                   <dd>{managedOffering?.provider_plane_mode ?? "off"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">License tier</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.license.tier.0c9a751553")}</dt>
                   <dd>{managedOffering?.tier ?? editions?.tier ?? "community"}</dd>
                 </div>
                 <div>
@@ -569,16 +559,16 @@ export function AdminSystem() {
                   </div>
                 ) : null}
                 <div>
-                  <dt className="font-medium text-muted-foreground">Event source</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.event.source.60dbb37270")}</dt>
                   <dd>{managedOffering?.event_type ?? "tenant.registered"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Mutation idempotency</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.mutation.idempotency.e5fe0e928c")}</dt>
                   <dd>{managedOffering?.idempotency_required ? "required" : "-"}</dd>
                 </div>
                 {lastManagedTenant && (
                   <div>
-                    <dt className="font-medium text-muted-foreground">Last hosted tenant</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.last.hosted.tenant.ddd9f6cf68")}</dt>
                     <dd className="break-all">
                       {lastManagedTenant.name} · {lastManagedTenant.tenant_id}
                     </dd>
@@ -588,32 +578,32 @@ export function AdminSystem() {
               <form onSubmit={(event) => void provisionHostedTenant(event)} className="grid gap-3">
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">Hosted ID</span>
+                    <span className="font-medium text-muted-foreground">{translateNow("source.hosted.id.16f3dc88ea")}</span>
                     <input className="ui-input" value={hostedTenantID} onChange={(event) => setHostedTenantID(event.target.value)} required />
                   </label>
                   <label className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">Hosted name</span>
+                    <span className="font-medium text-muted-foreground">{translateNow("source.hosted.name.af1e0d31be")}</span>
                     <input className="ui-input" value={hostedTenantName} onChange={(event) => setHostedTenantName(event.target.value)} required />
                   </label>
                   <label className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">Region</span>
+                    <span className="font-medium text-muted-foreground">{translateNow("source.region.d3a008ef13")}</span>
                     <input className="ui-input" value={hostedRegion} onChange={(event) => setHostedRegion(event.target.value)} />
                   </label>
                   <label className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">Data residency</span>
+                    <span className="font-medium text-muted-foreground">{translateNow("source.data.residency.4ab08acdfa")}</span>
                     <input className="ui-input" value={hostedResidency} onChange={(event) => setHostedResidency(event.target.value)} />
                   </label>
                   <label className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">Plan</span>
+                    <span className="font-medium text-muted-foreground">{translateNow("source.plan.fa8ed0bdab")}</span>
                     <input className="ui-input" value={hostedPlan} onChange={(event) => setHostedPlan(event.target.value)} />
                   </label>
                   <label className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">Support tier</span>
+                    <span className="font-medium text-muted-foreground">{translateNow("source.support.tier.2dfba0f890")}</span>
                     <input className="ui-input" value={hostedSupportTier} onChange={(event) => setHostedSupportTier(event.target.value)} />
                   </label>
                 </div>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">SLO tier</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.slo.tier.9d31a12006")}</span>
                   <input className="ui-input" value={hostedSLOTier} onChange={(event) => setHostedSLOTier(event.target.value)} />
                 </label>
                 <Button
@@ -621,8 +611,7 @@ export function AdminSystem() {
                   disabled={systemBusy || !hostedTenantID.trim() || !hostedTenantName.trim() || managedOffering?.provider_plane_mode !== "enabled"}
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
-                  Provision tenant
-                </Button>
+                  {translateNow("source.provision.tenant.e6e411f04c")}</Button>
               </form>
             </div>
           </section>
@@ -683,9 +672,8 @@ export function AdminEditions() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 id="editions-heading" className="text-title font-semibold">
-                  Editions
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">Offline license state, feature rows, and the live crypto posture.</p>
+                  {translateNow("source.editions.c6a48dcca4")}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.offline.license.state.feature.rows.and.the.ee22ad090c")}</p>
               </div>
               <span className={editionStateClass(editions?.state)}>{editionStateLabel(editions?.state)}</span>
             </div>
@@ -693,7 +681,7 @@ export function AdminEditions() {
               <div className="grid gap-4">
                 <div className="overflow-x-auto rounded-panel border border-border">
                   <table className="ui-table min-w-[42rem]">
-                    <caption className="sr-only">Packaging edition matrix</caption>
+                    <caption className="sr-only">{translateNow("source.packaging.edition.matrix.265d443ef4")}</caption>
                     <thead>
                       <tr>
                         {packaging.editions.map((edition) => (
@@ -714,12 +702,12 @@ export function AdminEditions() {
                 </div>
                 <div className="overflow-x-auto rounded-panel border border-border">
                   <table className="ui-table min-w-[32rem]">
-                    <caption className="sr-only">Edition feature table</caption>
+                    <caption className="sr-only">{translateNow("source.edition.feature.table.9690596a9d")}</caption>
                     <thead>
                       <tr>
-                        <th scope="col">Feature</th>
-                        <th scope="col">Tier</th>
-                        <th scope="col">State</th>
+                        <th scope="col">{translateNow("source.feature.3d377ae910")}</th>
+                        <th scope="col">{translateNow("source.tier.cb9e8664ed")}</th>
+                        <th scope="col">{translateNow("source.state.a3b50c4767")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -733,8 +721,7 @@ export function AdminEditions() {
                       {editions && editions.features.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="text-muted-foreground">
-                            No commercial feature rows.
-                          </td>
+                            {translateNow("source.no.commercial.feature.rows.825b068dda")}</td>
                         </tr>
                       ) : null}
                     </tbody>
@@ -743,15 +730,15 @@ export function AdminEditions() {
               </div>
               <dl className="grid gap-2 text-sm">
                 <div>
-                  <dt className="font-medium text-muted-foreground">Tier</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.tier.cb9e8664ed")}</dt>
                   <dd className="text-base font-semibold">{(editions?.tier ?? "community").toUpperCase()}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Customer</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.customer.bf3763383a")}</dt>
                   <dd>{editions?.customer ?? "community core"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-muted-foreground">Expiry</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.expiry.6956d81401")}</dt>
                   <dd>{formatOptionalDate(editions?.expires_at, formatPolicy)}</dd>
                 </div>
                 <div>
@@ -765,7 +752,7 @@ export function AdminEditions() {
                   </div>
                 ) : null}
                 <div>
-                  <dt className="font-medium text-muted-foreground">FIPS posture</dt>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.fips.posture.4051e94687")}</dt>
                   <dd className="grid gap-1">
                     <span>
                       {editions?.fips?.module_active ? "FIPS module active" : "FIPS module inactive"}
@@ -791,14 +778,11 @@ export function AdminEditions() {
           <div className="grid gap-4 xl:grid-cols-2">
             <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="platform-region-heading">
               <h2 id="platform-region-heading" className="text-title font-semibold">
-                Multi-region posture
-              </h2>
+                {translateNow("source.multi.region.posture.e57c514674")}</h2>
               <p className="text-sm text-muted-foreground">
-                Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.
-              </p>
+                {translateNow("source.passive.read.state.model.projections.can.b.9f2d6a2da6")}</p>
               <p className="text-sm text-muted-foreground">
-                Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
-              </p>
+                {translateNow("source.background.jobs.perform.access.token.revoc.5f46484521")}</p>
               {/* TRACE-014 source anchor: served worker */}
             </section>
             {distribution && (
@@ -847,7 +831,7 @@ export function AdminEditions() {
                     <dd className="grid gap-1">
                       {(distribution.supported_host_archives ?? []).map((archive) => (
                         <span key={`${archive.os_arch}-${archive.postgres_version}`} className="font-mono text-xs">
-                          {archive.os_arch} · PostgreSQL {archive.postgres_version}
+                          {archive.os_arch} {" "}{translateNow("source.postgresql.17197ea102")}{" "}{archive.postgres_version}
                           {archive.evaluation_only ? " · evaluation only" : ""}
                         </span>
                       ))}
@@ -1230,8 +1214,7 @@ export function AdminAccess() {
             <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
               <Button type="button" size="sm" variant="outline" onClick={() => void loadAccessAdmin()} disabled={accessLoading}>
                 {accessLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-                Refresh
-              </Button>
+                {translateNow("source.refresh.0e91610117")}</Button>
             </div>
             {accessError && (
               <p role="alert" className="mb-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -1246,10 +1229,9 @@ export function AdminAccess() {
             {revealedToken && (
               <div className="mb-3 rounded-panel border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">Reveal-once API token</p>
+                  <p className="font-medium">{translateNow("source.reveal.once.api.token.8cfd65d574")}</p>
                   <Button type="button" size="sm" variant="ghost" onClick={() => setRevealedToken(null)}>
-                    Dismiss
-                  </Button>
+                    {translateNow("source.dismiss.48845bff33")}</Button>
                 </div>
                 <code className="mt-2 block break-all rounded bg-background px-2 py-1 text-xs">{revealedToken}</code>
               </div>
@@ -1258,54 +1240,52 @@ export function AdminAccess() {
               <form onSubmit={(event) => void onboardMember(event)} className="ui-panel grid gap-3 p-comfortable">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-status-success" aria-hidden="true" />
-                  <h2 className="text-body font-semibold">Onboard member</h2>
+                  <h2 className="text-body font-semibold">{translateNow("source.onboard.member.a6dfe12142")}</h2>
                 </div>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">Subject</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</span>
                   <input className="ui-input" value={memberSubject} onChange={(event) => setMemberSubject(event.target.value)} required />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">Display name</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.display.name.2b7f6a84de")}</span>
                   <input className="ui-input" value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">Email</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.email.969ccbd3cf")}</span>
                   <input className="ui-input" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">Roles</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.roles.c253370554")}</span>
                   <input className="ui-input" value={memberRoles} onChange={(event) => setMemberRoles(event.target.value)} required />
                 </label>
                 <Button type="submit" disabled={accessBusy || !memberSubject.trim()}>
                   <Plus className="h-4 w-4" aria-hidden="true" />
-                  Save
-                </Button>
+                  {translateNow("source.save.1509f561f2")}</Button>
               </form>
               <form onSubmit={(event) => void mintToken(event)} className="ui-panel grid gap-3 p-comfortable">
                 <div className="flex items-center gap-2">
                   <KeyRound className="h-4 w-4 text-status-warning" aria-hidden="true" />
-                  <h2 className="text-body font-semibold">Mint API token</h2>
+                  <h2 className="text-body font-semibold">{translateNow("source.mint.api.token.f6cf0efff0")}</h2>
                 </div>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">Subject</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</span>
                   <input className="ui-input" value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">Scopes</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.scopes.0d5644ff52")}</span>
                   <input className="ui-input" value={tokenScopes} onChange={(event) => setTokenScopes(event.target.value)} required />
                 </label>
                 <Button type="submit" disabled={accessBusy || !tokenSubject.trim()}>
                   <KeyRound className="h-4 w-4" aria-hidden="true" />
-                  Mint
-                </Button>
+                  {translateNow("source.mint.ced97cc4a3")}</Button>
               </form>
               <form onSubmit={(event) => void offboardMember(event)} className="ui-panel grid gap-3 p-comfortable">
                 <div className="flex items-center gap-2">
                   <UserMinus className="h-4 w-4 text-destructive" aria-hidden="true" />
-                  <h2 className="text-body font-semibold">Offboard member</h2>
+                  <h2 className="text-body font-semibold">{translateNow("source.offboard.member.8a27787595")}</h2>
                 </div>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">Subject</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</span>
                   {/* Autocomplete from the loaded member roster — no copy-pasting
                   subjects out of the table above. */}
                   <input
@@ -1324,13 +1304,12 @@ export function AdminAccess() {
                   </datalist>
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">Reason</span>
+                  <span className="font-medium text-muted-foreground">{translateNow("source.reason.f81ab834de")}</span>
                   <input className="ui-input" value={offboardReason} onChange={(event) => setOffboardReason(event.target.value)} />
                 </label>
                 <Button type="submit" variant="destructive" loading={accessBusy} disabled={!offboardSubject.trim()}>
                   <UserMinus className="h-4 w-4" aria-hidden="true" />
-                  Offboard
-                </Button>
+                  {translateNow("source.offboard.9053e68ef6")}</Button>
               </form>
             </div>
             {pamRows && (
@@ -1367,11 +1346,11 @@ export function AdminAccess() {
             <div className="mb-4 grid gap-4 xl:grid-cols-2">
               <div className="overflow-x-auto rounded-panel border border-border">
                 <table className="ui-table min-w-[34rem]">
-                  <caption className="sr-only">Role catalog</caption>
+                  <caption className="sr-only">{translateNow("source.role.catalog.d2bfa0ab0e")}</caption>
                   <thead>
                     <tr>
-                      <th scope="col">Role</th>
-                      <th scope="col">Permissions</th>
+                      <th scope="col">{translateNow("source.role.14736a2eb9")}</th>
+                      <th scope="col">{translateNow("source.permissions.abccc78cc9")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1385,18 +1364,18 @@ export function AdminAccess() {
                 </table>
               </div>
               <div className="ui-panel p-comfortable text-sm">
-                <h2 className="font-semibold">OIDC mapping status</h2>
+                <h2 className="font-semibold">{translateNow("source.oidc.mapping.status.358515bade")}</h2>
                 <dl className="mt-3 grid gap-2">
                   <div>
-                    <dt className="font-medium text-muted-foreground">Enabled</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.enabled.92c1cdfdf4")}</dt>
                     <dd>{oidc?.enabled ? "yes" : "no"}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Claims</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.claims.1c85c12229")}</dt>
                     <dd>{[oidc?.tenant_claim || "no tenant claim", oidc?.groups_claim || "no groups claim"].join(" · ")}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-muted-foreground">Mappings</dt>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.mappings.f64ec16b0d")}</dt>
                     <dd>{oidc?.tenant_mappings?.length ? oidc.tenant_mappings.map((m) => m.group || m.subject || m.claim).join(", ") : "none"}</dd>
                   </div>
                 </dl>
@@ -1405,13 +1384,13 @@ export function AdminAccess() {
             <div className="mb-4 grid gap-4 xl:grid-cols-2">
               <div className="overflow-x-auto rounded-panel border border-border">
                 <table className="ui-table min-w-[44rem]">
-                  <caption className="sr-only">Tenant members</caption>
+                  <caption className="sr-only">{translateNow("source.tenant.members.7c3b607c20")}</caption>
                   <thead>
                     <tr>
-                      <th scope="col">Subject</th>
-                      <th scope="col">Roles</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Updated</th>
+                      <th scope="col">{translateNow("source.subject.6897128384")}</th>
+                      <th scope="col">{translateNow("source.roles.c253370554")}</th>
+                      <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                      <th scope="col">{translateNow("source.updated.3a5ecca188")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1428,13 +1407,13 @@ export function AdminAccess() {
               </div>
               <div className="overflow-x-auto rounded-panel border border-border">
                 <table className="ui-table min-w-[48rem]">
-                  <caption className="sr-only">API token metadata</caption>
+                  <caption className="sr-only">{translateNow("source.api.token.metadata.d3e4dba811")}</caption>
                   <thead>
                     <tr>
-                      <th scope="col">Subject</th>
-                      <th scope="col">Scopes</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Created</th>
+                      <th scope="col">{translateNow("source.subject.6897128384")}</th>
+                      <th scope="col">{translateNow("source.scopes.0d5644ff52")}</th>
+                      <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                      <th scope="col">{translateNow("source.created.d70b9e24bc")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1514,8 +1493,7 @@ export function AdminAccess() {
               </dl>
               <div className="flex justify-end border-t border-border px-5 py-4">
                 <Button type="button" variant="outline" onClick={() => setPAMDetail(null)}>
-                  Close
-                </Button>
+                  {translateNow("source.close.7d9eb7acb1")}</Button>
               </div>
             </Dialog>
           )}
@@ -1559,8 +1537,7 @@ export function AdminAccess() {
                   </dl>
                   <div className="flex justify-end">
                     <Button type="button" variant="outline" onClick={closePAMDialog}>
-                      Close
-                    </Button>
+                      {translateNow("source.close.7d9eb7acb1")}</Button>
                   </div>
                 </div>
               ) : (
@@ -1592,8 +1569,7 @@ export function AdminAccess() {
                       />
                     </label>
                     <label className="grid gap-1 text-body font-medium">
-                      Role
-                      <input
+                      {translateNow("source.role.14736a2eb9")}<input
                         className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                         value={pamForm.role}
                         onChange={(event) => setPAMForm({ ...pamForm, role: event.target.value })}
@@ -1601,8 +1577,7 @@ export function AdminAccess() {
                       />
                     </label>
                     <label className="grid gap-1 text-body font-medium">
-                      Method
-                      <input
+                      {translateNow("source.method.52a0f9b65b")}<input
                         className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                         value={pamForm.method}
                         onChange={(event) => setPAMForm({ ...pamForm, method: event.target.value })}
@@ -1620,29 +1595,26 @@ export function AdminAccess() {
                       </label>
                     )}
                     <label className="grid gap-1 text-body font-medium">
-                      Reason
-                      <input
+                      {translateNow("source.reason.f81ab834de")}<input
                         className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                         value={pamForm.reason}
                         onChange={(event) => setPAMForm({ ...pamForm, reason: event.target.value })}
                       />
                     </label>
                     <label className="grid gap-1 text-body font-medium">
-                      TTL seconds
-                      <input
+                      {translateNow("source.ttl.seconds.862d08de5a")}<input
                         className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
                         type="number"
                         min={1}
                         value={pamForm.ttl_seconds}
                         onChange={(event) => setPAMForm({ ...pamForm, ttl_seconds: event.target.value })}
-                        placeholder="optional"
+                        placeholder={translateNow("source.optional.ec91fdd925")}
                       />
                     </label>
                   </div>
                   {pamForm.target_type === "ssh" && (
                     <label className="grid gap-1 text-body font-medium">
-                      SSH public key
-                      <textarea
+                      {translateNow("source.ssh.public.key.c9be6a369e")}<textarea
                         className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
                         value={pamForm.ssh_public_key}
                         onChange={(event) => setPAMForm({ ...pamForm, ssh_public_key: event.target.value })}
@@ -1660,8 +1632,7 @@ export function AdminAccess() {
                   </label>
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" onClick={closePAMDialog}>
-                      Cancel
-                    </Button>
+                      {translateNow("source.cancel.19766ed6cc")}</Button>
                     <Button
                       type="submit"
                       disabled={pamBusy || !pamForm.target_id.trim() || !pamForm.role.trim() || !pamForm.method.trim() || !pamForm.payload_base64.trim()}
