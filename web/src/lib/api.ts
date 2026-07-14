@@ -165,6 +165,8 @@ import type {
   KubernetesCSRSupport,
   KubernetesSecretOperator,
   KubernetesTrustBundleDistribution,
+  MachineAuthMethod,
+  MachineAuthMethodList,
   MachineLoginRequest,
   MachineLoginResponse,
   ManagedKey,
@@ -476,6 +478,8 @@ export type {
   KubernetesCSRSupport,
   KubernetesSecretOperator,
   KubernetesTrustBundleDistribution,
+  MachineAuthMethod,
+  MachineAuthMethodList,
   MachineLoginRequest,
   MachineLoginResponse,
   ManagedKey,
@@ -1210,6 +1214,8 @@ export interface Api {
   issueEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKey>;
   issuePKISecret(input: PKISecretRequest): Promise<PKISecret>;
   machineLogin(input: MachineLoginRequest): Promise<MachineLoginResponse>;
+  /** C-S2 (DA-02): secret-free projection of the configured machine-auth methods. */
+  machineAuthMethods(): Promise<MachineAuthMethodList>;
   createShare(input: ShareRequest): Promise<ShareToken>;
   redeemShare(input: ShareRedeemRequest): Promise<ShareValue>;
   createTransitKey(input: TransitKeyRequest): Promise<TransitKey>;
@@ -1529,6 +1535,7 @@ export const api: Api = {
   issueEphemeralAPIKey: (input) => mutate<EphemeralAPIKey>("POST", "/api/v1/ephemeral/api-keys", input),
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
   machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
+  machineAuthMethods: () => req<MachineAuthMethodList>("/api/v1/secrets/auth-methods"),
   createShare: (input) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input),
   redeemShare: (input) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input),
   createTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys", input),

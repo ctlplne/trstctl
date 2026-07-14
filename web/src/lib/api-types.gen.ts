@@ -2094,6 +2094,34 @@ export interface MDMSCEPTelemetry {
   replay_rejected: number;
 }
 
+export interface MachineAuthMethod {
+  allow_unexpiring?: boolean;
+  allowed_accounts?: string[];
+  allowed_arns?: string[];
+  allowed_azure_tenants?: string[];
+  allowed_namespaces?: string[];
+  allowed_projects?: string[];
+  allowed_service_accounts?: string[];
+  audience?: string;
+  issuer?: string;
+  jwks_configured: boolean;
+  name: string;
+  principal_prefix?: string;
+  required_claims?: Record<string, unknown>;
+  scopes?: string[];
+  scopes_by_principal?: Record<string, unknown>;
+  scopes_claim?: string;
+  source: string;
+  subject_claim?: string;
+  tenant_claim?: string;
+  type: string;
+}
+
+export interface MachineAuthMethodList {
+  items: MachineAuthMethod[];
+  next_cursor?: string;
+}
+
 export interface MachineLoginRequest {
   credential: string;
   method?: string;

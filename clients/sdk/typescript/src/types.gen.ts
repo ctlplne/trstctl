@@ -3050,6 +3050,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/auth-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List configured machine-auth login methods (secret-free projection) */
+        get: operations["listMachineAuthMethods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/cloud-secret-managers": {
         parameters: {
             query?: never;
@@ -6035,6 +6052,36 @@ export interface components {
             last_failure_reason?: string;
             last_transaction_id?: string;
             replay_rejected: number;
+        };
+        MachineAuthMethod: {
+            allow_unexpiring?: boolean;
+            allowed_accounts?: string[];
+            allowed_arns?: string[];
+            allowed_azure_tenants?: string[];
+            allowed_namespaces?: string[];
+            allowed_projects?: string[];
+            allowed_service_accounts?: string[];
+            audience?: string;
+            issuer?: string;
+            jwks_configured: boolean;
+            name: string;
+            principal_prefix?: string;
+            required_claims?: {
+                [key: string]: string;
+            };
+            scopes?: string[];
+            scopes_by_principal?: {
+                [key: string]: string[];
+            };
+            scopes_claim?: string;
+            source: string;
+            subject_claim?: string;
+            tenant_claim?: string;
+            type: string;
+        };
+        MachineAuthMethodList: {
+            items: components["schemas"]["MachineAuthMethod"][];
+            next_cursor?: string;
         };
         MachineLoginRequest: {
             credential: string;
@@ -17491,6 +17538,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScaleOrchestrationPlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMachineAuthMethods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineAuthMethodList"];
                 };
             };
             /** @description client error */

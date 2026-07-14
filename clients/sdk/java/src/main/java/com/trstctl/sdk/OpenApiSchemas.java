@@ -237,6 +237,8 @@ public final class OpenApiSchemas {
       "MDMSCEPPolicyRequest",
       "MDMSCEPStatus",
       "MDMSCEPTelemetry",
+      "MachineAuthMethod",
+      "MachineAuthMethodList",
       "MachineLoginRequest",
       "MachineLoginResponse",
       "ManagedKey",

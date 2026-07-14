@@ -2992,6 +2992,42 @@ MDMSCEPTelemetry = TypedDict(
     total=False,
 )
 
+MachineAuthMethod = TypedDict(
+    'MachineAuthMethod',
+    {
+        'allow_unexpiring': bool,
+        'allowed_accounts': list[str],
+        'allowed_arns': list[str],
+        'allowed_azure_tenants': list[str],
+        'allowed_namespaces': list[str],
+        'allowed_projects': list[str],
+        'allowed_service_accounts': list[str],
+        'audience': str,
+        'issuer': str,
+        'jwks_configured': bool,
+        'name': str,
+        'principal_prefix': str,
+        'required_claims': dict[str, Any],
+        'scopes': list[str],
+        'scopes_by_principal': dict[str, Any],
+        'scopes_claim': str,
+        'source': str,
+        'subject_claim': str,
+        'tenant_claim': str,
+        'type': str,
+    },
+    total=False,
+)
+
+MachineAuthMethodList = TypedDict(
+    'MachineAuthMethodList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 MachineLoginRequest = TypedDict(
     'MachineLoginRequest',
     {

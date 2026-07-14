@@ -1136,6 +1136,10 @@ func (a *API) routes() []route {
 
 		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Issue a dynamic PKI secret (short-lived cert + key)", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200", sensitiveResponse: true},
+		// C-S2 (DA-02): read-only projection of the configured machine-auth
+		// methods — exactly the set machineLogin accepts. Methods stay declared
+		// in server config; the console projects, it does not edit.
+		{method: "GET", path: "/api/v1/secrets/auth-methods", opID: "listMachineAuthMethods", summary: "List configured machine-auth login methods (secret-free projection)", handler: a.listMachineAuthMethods, resSchema: "MachineAuthMethodList", successCode: "200", perm: authz.SecretsRead},
 
 		// Transit/EaaS (KMS-01/F66): a served envelope-free cryptographic operation
 		// surface backed by compile-time Go interfaces behind internal/crypto. This

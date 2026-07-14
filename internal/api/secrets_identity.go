@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"net/http"
+	"sort"
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
@@ -329,6 +330,168 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 var errMachineLoginNotConfigured = errors.New("machine login is not configured")
+
+/* ---- machine auth-method projection (C-S2, DA-02) ------------------------ */
+
+// machineAuthMethodInfo is the allow-listed, secret-free projection of one
+// configured machine-login method. Fields are hand-copied per concrete type —
+// never json.Marshal a raw authmethod.Method: several carry secret-shaped
+// material (TokenMethod.Secret, verification JWKS) that must not cross the API
+// boundary (AN-8). JWKS presence is projected as a boolean only.
+type machineAuthMethodInfo struct {
+	Name                   string              `json:"name"`
+	Type                   string              `json:"type"`
+	Source                 string              `json:"source"`
+	Issuer                 string              `json:"issuer,omitempty"`
+	Audience               string              `json:"audience,omitempty"`
+	TenantClaim            string              `json:"tenant_claim,omitempty"`
+	SubjectClaim           string              `json:"subject_claim,omitempty"`
+	ScopesClaim            string              `json:"scopes_claim,omitempty"`
+	PrincipalPrefix        string              `json:"principal_prefix,omitempty"`
+	Scopes                 []string            `json:"scopes,omitempty"`
+	ScopesByPrincipal      map[string][]string `json:"scopes_by_principal,omitempty"`
+	AllowedNamespaces      []string            `json:"allowed_namespaces,omitempty"`
+	AllowedServiceAccounts []string            `json:"allowed_service_accounts,omitempty"`
+	AllowedProjects        []string            `json:"allowed_projects,omitempty"`
+	AllowedAzureTenants    []string            `json:"allowed_azure_tenants,omitempty"`
+	AllowedAccounts        []string            `json:"allowed_accounts,omitempty"`
+	AllowedARNs            []string            `json:"allowed_arns,omitempty"`
+	RequiredClaims         map[string]string   `json:"required_claims,omitempty"`
+	JWKSConfigured         bool                `json:"jwks_configured"`
+	AllowUnexpiring        bool                `json:"allow_unexpiring,omitempty"`
+}
+
+func sortedBoolKeys(m map[string]bool) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func copyScopesByPrincipal(m map[string][]string) map[string][]string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(m))
+	for principal, scopes := range m {
+		out[principal] = append([]string(nil), scopes...)
+	}
+	return out
+}
+
+func copyRequiredClaims(m map[string]string) map[string]string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+// machineAuthMethodProjection allow-lists the non-secret configuration of one
+// concrete method. Unknown method types degrade to name/type only rather than
+// risking reflection over unvetted fields.
+func machineAuthMethodProjection(m authmethod.Method, source string) machineAuthMethodInfo {
+	info := machineAuthMethodInfo{Name: m.Name(), Type: m.Name(), Source: source}
+	switch v := m.(type) {
+	case authmethod.TokenMethod:
+		info.Type = "token"
+		info.Audience = v.Audience
+		info.AllowUnexpiring = v.AllowUnexpiring
+		info.ScopesByPrincipal = copyScopesByPrincipal(v.Scopes)
+	case authmethod.OIDCMethod:
+		info.Type = "oidc"
+		info.Issuer = v.Issuer
+		info.Audience = v.Audience
+		info.TenantClaim = v.TenantClaim
+		info.PrincipalPrefix = v.PrincipalPrefix
+		info.RequiredClaims = copyRequiredClaims(v.RequiredClaims)
+		info.JWKSConfigured = len(v.JWKS.Keys) > 0
+	case authmethod.JWTMethod:
+		info.Type = "jwt"
+		info.Issuer = v.Issuer
+		info.Audience = v.Audience
+		info.TenantClaim = v.TenantClaim
+		info.SubjectClaim = v.SubjectClaim
+		info.ScopesClaim = v.ScopesClaim
+		info.PrincipalPrefix = v.PrincipalPrefix
+		info.Scopes = append([]string(nil), v.Scopes...)
+		info.RequiredClaims = copyRequiredClaims(v.RequiredClaims)
+		info.JWKSConfigured = len(v.JWKS.Keys) > 0
+	case authmethod.KubernetesSATMethod:
+		info.Type = "kubernetes"
+		info.Issuer = v.Issuer
+		info.Audience = v.Audience
+		info.TenantClaim = v.TenantClaim
+		info.AllowedNamespaces = sortedBoolKeys(v.AllowedNamespaces)
+		info.AllowedServiceAccounts = sortedBoolKeys(v.AllowedServiceAccounts)
+		info.Scopes = append([]string(nil), v.Scopes...)
+		info.JWKSConfigured = len(v.JWKS.Keys) > 0
+	case authmethod.GCPMethod:
+		info.Type = "gcp"
+		info.Issuer = v.Issuer
+		info.Audience = v.Audience
+		info.TenantClaim = v.TenantClaim
+		info.AllowedProjects = sortedBoolKeys(v.AllowedProjects)
+		info.Scopes = append([]string(nil), v.Scopes...)
+		info.JWKSConfigured = len(v.JWKS.Keys) > 0
+	case authmethod.AzureMethod:
+		info.Type = "azure"
+		info.Issuer = v.Issuer
+		info.Audience = v.Audience
+		info.TenantClaim = v.TenantClaim
+		info.SubjectClaim = v.PrincipalClaim
+		info.AllowedAzureTenants = sortedBoolKeys(v.AllowedAzureTenants)
+		info.Scopes = append([]string(nil), v.Scopes...)
+		info.JWKSConfigured = len(v.JWKS.Keys) > 0
+	case authmethod.AWSIAMMethod:
+		info.Type = "aws-iam"
+		info.AllowedAccounts = sortedBoolKeys(v.AllowedAccounts)
+		info.AllowedARNs = sortedBoolKeys(v.AllowedARNs)
+		info.Scopes = append([]string(nil), v.Scopes...)
+	}
+	return info
+}
+
+// listMachineAuthMethods serves GET /api/v1/secrets/auth-methods (C-S2,
+// DA-02): a read-only, tenant-scoped projection of exactly the method set the
+// machine-login exchange composes in authManager — the builtin token method
+// (when AuthSecret is configured) plus the per-tenant config factory. Methods
+// remain declared in server config; this endpoint projects, it does not edit.
+func (a *API) listMachineAuthMethods(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	items := make([]machineAuthMethodInfo, 0, 4)
+	if len(a.secrets.be.AuthSecret) > 0 {
+		// The builtin exchange is projected without constructing a TokenMethod:
+		// its only interesting fields here are name/type, and its Secret must
+		// never travel toward a response writer.
+		items = append(items, machineAuthMethodInfo{Name: "token", Type: "token", Source: "builtin"})
+	}
+	if a.secrets.be.MachineAuthMethods != nil {
+		for _, m := range a.secrets.be.MachineAuthMethods(tenantID) {
+			if m == nil {
+				continue
+			}
+			items = append(items, machineAuthMethodProjection(m, "config"))
+		}
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
+}
 
 // ---- per-request framework construction (tenant-scoped, AN-1) --------------
 

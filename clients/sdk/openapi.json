@@ -8047,6 +8047,124 @@
         ],
         "type": "object"
       },
+      "MachineAuthMethod": {
+        "properties": {
+          "allow_unexpiring": {
+            "type": "boolean"
+          },
+          "allowed_accounts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_arns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_azure_tenants": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_namespaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_projects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_service_accounts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "audience": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "jwks_configured": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "principal_prefix": {
+            "type": "string"
+          },
+          "required_claims": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scopes_by_principal": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "scopes_claim": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "subject_claim": {
+            "type": "string"
+          },
+          "tenant_claim": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "source",
+          "jwks_configured"
+        ],
+        "type": "object"
+      },
+      "MachineAuthMethodList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MachineAuthMethod"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "MachineLoginRequest": {
         "properties": {
           "credential": {
@@ -30173,6 +30291,53 @@
         ],
         "summary": "High-volume orchestration posture for 100k-1M+ credentials",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/secrets/auth-methods": {
+      "get": {
+        "operationId": "listMachineAuthMethods",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineAuthMethodList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List configured machine-auth login methods (secret-free projection)",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/cloud-secret-managers": {
