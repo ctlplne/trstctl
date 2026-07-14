@@ -191,7 +191,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
       setActiveModule(owner);
       persistActiveModule(owner);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally pathname-only
+    // Intentionally pathname-only: a manual module switch must not be reverted.
   }, [location.pathname]);
 
   // Keep a valid selection if the permitted set changes (e.g., session load).
