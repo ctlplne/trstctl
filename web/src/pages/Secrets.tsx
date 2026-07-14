@@ -7,6 +7,7 @@ import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { ModuleKpiStrip } from "@/components/ModuleKpiStrip";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -1032,6 +1033,14 @@ export function Secrets() {
 
       {tab === "store" && (
         <div {...tabPanelProps("secrets", "store")} className="grid gap-6">
+          <ModuleKpiStrip
+            ariaLabel="Secrets module metrics"
+            kpis={[
+              { id: "stored", label: t("moduleKpi.secrets.stored"), value: items.length, to: "/secrets" },
+              { id: "engines", label: t("moduleKpi.secrets.engines"), value: t("moduleKpi.view"), to: "/secrets?tab=engines" },
+              { id: "sync", label: t("moduleKpi.secrets.sync"), value: t("moduleKpi.view"), to: "/secrets?tab=sync" },
+            ]}
+          />
           <SecretTree secrets={items} />
 
           <div className="grid gap-4 lg:grid-cols-2">

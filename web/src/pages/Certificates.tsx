@@ -17,6 +17,7 @@ import {
   type RotationRun,
 } from "@/lib/api";
 import { CredentialChip } from "@/components/CredentialChip";
+import { ModuleKpiStrip } from "@/components/ModuleKpiStrip";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -1221,7 +1222,31 @@ export function Certificates() {
             </div>
           )}
           {tab === "inventory" && (
-            <div {...tabPanelProps("certs", "inventory")}>
+            <div {...tabPanelProps("certs", "inventory")} className="grid gap-4">
+              {health && (
+                <ModuleKpiStrip
+                  ariaLabel="Certificates & PKI module metrics"
+                  kpis={[
+                    {
+                      id: "expiring-30d",
+                      label: t("moduleKpi.certificates.expiring30d"),
+                      value: health.summary.expiring_30d,
+                      to: "/certificates?expiry=30d",
+                      tone: health.summary.expiring_30d > 0 ? "warn" : "ok",
+                      sub: health.summary.expiring_30d > 0 ? t("moduleKpi.certificates.renewSoon") : undefined,
+                    },
+                    {
+                      id: "expiring-7d",
+                      label: t("moduleKpi.certificates.expiring7d"),
+                      value: health.summary.expiring_7d,
+                      to: "/certificates?expiry=7d",
+                      tone: health.summary.expiring_7d > 0 ? "crit" : "ok",
+                    },
+                    { id: "active", label: t("moduleKpi.certificates.active"), value: health.summary.active, to: "/certificates" },
+                    { id: "ca-hierarchy", label: t("moduleKpi.certificates.authorities"), value: t("moduleKpi.view"), to: "/ca-hierarchy" },
+                  ]}
+                />
+              )}
               <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())} className="sticky top-0 z-10 mb-3 shadow-elevation1">
                 <Button
                   type="button"

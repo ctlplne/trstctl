@@ -56,6 +56,42 @@ export const messages = {
     defaultMessage: "Replace via request →",
     description: "Certificate row action for an unmanaged certificate: link to the self-service request flow.",
   },
+  "moduleKpi.view": {
+    defaultMessage: "View →",
+    description: "Module KPI value for a navigational (non-numeric) tile that links to a sub-surface.",
+  },
+  "moduleKpi.certificates.renewSoon": {
+    defaultMessage: "renew soon",
+    description: "Module KPI sub-label under the certificates expiring-30d metric.",
+  },
+  "moduleKpi.certificates.expiring30d": {
+    defaultMessage: "Expiring ≤30d",
+    description: "Certificates & PKI module KPI: certificates expiring within thirty days.",
+  },
+  "moduleKpi.certificates.expiring7d": {
+    defaultMessage: "Expiring ≤7d",
+    description: "Certificates & PKI module KPI: certificates expiring within seven days.",
+  },
+  "moduleKpi.certificates.active": {
+    defaultMessage: "Active",
+    description: "Certificates & PKI module KPI: active certificate count.",
+  },
+  "moduleKpi.certificates.authorities": {
+    defaultMessage: "CA hierarchy",
+    description: "Certificates & PKI module KPI: link to the certificate-authority hierarchy.",
+  },
+  "moduleKpi.secrets.stored": {
+    defaultMessage: "Stored secrets",
+    description: "Secrets module KPI: number of stored secrets in the native store.",
+  },
+  "moduleKpi.secrets.engines": {
+    defaultMessage: "Engines",
+    description: "Secrets module KPI: link to the dynamic/transit engines surface.",
+  },
+  "moduleKpi.secrets.sync": {
+    defaultMessage: "Sync targets",
+    description: "Secrets module KPI: link to the outbound sync surface.",
+  },
   "certificates.lifecycle.notManaged": {
     defaultMessage: "Not identity-managed — replace via request →",
     description: "Certificate detail affordance when no managing identity exists; links to the request flow.",
@@ -6862,6 +6898,15 @@ const esESCatalog = {
   "graph.explorer.delegatedHint": "Los resultados se pintan en el mapa inferior y se detallan en el panel de análisis.",
   "certificates.tabs.inventory": "Inventario",
   "certificates.lifecycle.replaceViaRequest": "Reemplazar mediante solicitud →",
+  "moduleKpi.view": "Ver →",
+  "moduleKpi.certificates.renewSoon": "renovar pronto",
+  "moduleKpi.certificates.expiring30d": "Caduca ≤30d",
+  "moduleKpi.certificates.expiring7d": "Caduca ≤7d",
+  "moduleKpi.certificates.active": "Activos",
+  "moduleKpi.certificates.authorities": "Jerarquía de CA",
+  "moduleKpi.secrets.stored": "Secretos almacenados",
+  "moduleKpi.secrets.engines": "Motores",
+  "moduleKpi.secrets.sync": "Destinos de sincronización",
   "certificates.lifecycle.notManaged": "No gestionado por identidad — reemplazar mediante solicitud →",
   "certificates.lifecycle.renewStarted": "Renovación iniciada",
   "certificates.lifecycle.renewFailed": "No se pudo iniciar la renovación",
