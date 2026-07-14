@@ -5,6 +5,25 @@
 **Scope decision (2026-07-14, Shankar):** full closeout of the six deferred items. `/admin/*` split is **committed**; entity-noun consolidation is **spike-gated** (decision doc this train, implementation explicitly not).
 **Ship strategy:** rolling — each card lands on main individually green and individually revertable. No single release cut is required except C-R1, which gates the docs/CHANGELOG/screenshot refresh after the last feature card.
 
+## Execution status (2026-07-14)
+
+| Card | Status | Commit |
+|---|---|---|
+| C-D1 readiness panel on global home | **DONE** | `a889986d` |
+| C-P1 incident pickers (DA-10) | **DONE** | `37ea9406` |
+| C-A1 /admin split + redirects | **DONE** | `97d5bb4a` (i18n 1243→1242) |
+| C-N1 noun spike (decision doc) | **DONE** | `fee0efdf` → `08-entity-noun-decision.md`; verdict: keep 4 nouns, Fleet-merge card C-N2 pre-written behind evidence checklist |
+| C-S1 grant console (Job 2 interim) | **DONE** | `21418fec` (i18n 1242→1240) |
+| C-S2 auth-method read projection (Go) | open | — |
+| C-S3 session ledger + revocation (Go) | open | — |
+| C-S4 auth-method console UI | open — blocked by S1 ✓, S2, S3 | — |
+| C-I1 sweep: components+lib | open | — |
+| C-I2 sweep: top pages | open — unblocked (C-P1 ✓, C-A1 ✓) | — |
+| C-I3 sweep: remainder → budget 0 | open — blocked by C-S4 | — |
+| C-R1 docs/tour/ratchets/closeout | open | — |
+
+Per-card suites, typecheck, eslint, and the i18n ratchet ran green at every commit; the FULL `make lint test` sweep is C-R1's gate.
+
 ---
 
 ## Backlog shape
