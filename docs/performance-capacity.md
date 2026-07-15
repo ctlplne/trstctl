@@ -44,13 +44,9 @@ with 30 days of event retention and a 1.35x headroom multiplier.
 
 ## Event-Spine Burst Receipt
 
-`scripts/perf/run-spine-burst.sh --profile cap-small --out
-scripts/perf/artifacts/spine-burst-cap-small.json` starts embedded PostgreSQL,
-applies the production migrations, seeds tenants and agents, starts embedded
-JetStream, appends a cap-small event burst, replay/decode-applies the event log,
-and pushes a bounded slow-upstream backlog through the outbox. The same
-`scripts/perf/soak.sh --in` analyzer used by the endurance gate turns that series
-into a pass/fail trend report.
+`scripts/perf/run-spine-burst.sh` runs the same embedded-PostgreSQL/JetStream
+replay-and-outbox-drain mechanism as [performance.md](performance.md)'s spine-burst
+gate, scaled per capacity tier — see there for how it works.
 
 The committed cap-small receipt captures:
 
@@ -61,8 +57,7 @@ The committed cap-small receipt captures:
 - A slow upstream destination whose backlog must stay bounded instead of growing
   without limit.
 
-The same executable harness has PERF/RUNOPS external profiles for the larger
-capacity rows:
+The same harness has PERF/RUNOPS external profiles for the larger capacity rows:
 
 | Profile | Capacity tier | Datastore requirement | Default burst workload | Artifact |
 | --- | --- | --- | --- | --- |
@@ -70,16 +65,15 @@ capacity rows:
 | `cap-large` | CAP-LARGE | `TRSTCTL_POSTGRES_DSN` plus `TRSTCTL_NATS_URL`, default `TRSTCTL_NATS_REPLICAS=3` | 250 tenants, 2,000 seeded agents, 40,000 events, 10,000 outbox intents | `scripts/perf/artifacts/spine-burst-cap-large.json` |
 
 Run them with `SPINE_BURST_PROFILE=cap-medium make spine-burst` or
-`SPINE_BURST_PROFILE=cap-large make spine-burst` against a dedicated performance
-PostgreSQL database and JetStream cluster. These profiles do not silently fall back
-to embedded datastores; a single-replica external JetStream run still requires the
-explicit `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true` evaluation opt-in.
+`SPINE_BURST_PROFILE=cap-large make spine-burst` against a dedicated
+PostgreSQL/JetStream cluster; these fail closed without a real external
+datastore, and a single-replica run still needs
+`TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true`.
 
-The cost model in the artifact uses visible monthly unit inputs: PostgreSQL
-storage at `$0.16/GiB`, JetStream storage at `$0.10/GiB`, control-plane compute
-at `$55/vCPU` and `$8/GiB`, signer compute at `$75/vCPU` and `$10/GiB`, plus each
-tier's explicit base operating cost. These are product-calibration defaults, not
-a customer quote.
+The cost model uses visible monthly unit inputs: PostgreSQL storage at
+`$0.16/GiB`, JetStream storage at `$0.10/GiB`, control-plane compute at `$55/vCPU`
+and `$8/GiB`, signer compute at `$75/vCPU` and `$10/GiB`, plus each tier's explicit
+base operating cost. These are product-calibration defaults, not a customer quote.
 
 ## Scale Triggers
 
@@ -103,76 +97,46 @@ Move from `CAP-MEDIUM` to `CAP-LARGE` when any of these becomes true:
 
 ## Artifact Contract
 
-Release CI must publish the perf smoke JSON artifact. The artifact is valid only
-when:
+Release CI and review publish three JSON artifacts as release-gating evidence,
+each requiring `summary.ok: true`:
 
-- It has one result for every `PERF-SLO-*` row in `docs/performance.md`.
-- Every result has `met: true`.
-- The artifact names the capacity tiers above.
-- `summary.ok` is true.
+- The **perf smoke artifact** (`scripts/perf/artifacts/smoke-baseline.json`) needs
+  one `met: true` result per `PERF-SLO-*` row in [performance.md](performance.md)
+  and must name the capacity tiers above.
+- The **served live-load artifact**
+  (`scripts/perf/artifacts/live-load-baseline.json`) needs `served_stack: true`
+  and its stack profile, an `event_spine_burst` reference to the CAP-SMALL
+  spine-burst receipt plus the capture-and-soak command,
+  `component_resource_metrics` for the control plane, signer, PostgreSQL, and
+  JetStream, and one `realistic` plus one `peak` result (p50/p95/p99/max latency,
+  throughput, error count, queue saturation, projection lag, resource metrics,
+  `met: true`) per row.
+- The **capacity calibration artifact**
+  (`scripts/perf/artifacts/capacity-measurement-baseline.json`, produced by
+  `scripts/perf/run-capacity-calibration.sh`) needs measured PostgreSQL row
+  deltas, JetStream file-store deltas, live resource counters, connection count,
+  signer footprint, and `component_resource_metrics`; its `derived_capacity_tiers`
+  must match the served CAP-SMALL/CAP-MEDIUM/CAP-LARGE rows, and its referenced
+  live artifact must be the served-route stack with `realistic`/`peak` results,
+  not synthetic self-test counters.
 
-Release review must also publish the served live-load JSON artifact. The live
-artifact is valid only when:
-
-- It has `served_stack: true` and names the stack profile used for the run.
-- It carries `event_spine_burst` pointing at the CAP-SMALL spine-burst receipt and
-  the capture-plus-soak command.
-- It carries `component_resource_metrics` for the control plane, signer, PostgreSQL,
-  and JetStream, with each entry tied to a process or container counter source.
-- It has one `realistic` and one `peak` result for every `PERF-SLO-*` row.
-- Every result carries p50, p95, p99, max latency, throughput, error count, queue
-  saturation, projection lag, and resource metrics.
-- Every result has `met: true` and `summary.ok` is true.
-
-Release CI must publish the capacity calibration JSON artifact. The capacity
-artifact is valid only when:
-
-- It names `scripts/perf/artifacts/capacity-measurement-baseline.json`.
-- It was produced by `scripts/perf/run-capacity-calibration.sh`.
-- It carries measured PostgreSQL row deltas, JetStream file-store deltas, live
-  resource counters, connection count, signer footprint, and
-  `component_resource_metrics` entries for `control_plane`, `signer`, `postgresql`,
-  and `jetstream`.
-- The referenced live artifact is rejected unless it is the served-route stack
-  profile with `realistic` and `peak` results for every hot path; synthetic
-  self-test counters are not valid capacity signoff inputs.
-- `derived_capacity_tiers` matches the CAP-SMALL, CAP-MEDIUM, and CAP-LARGE rows
-  served by `GET /api/v1/scale/orchestration`.
-- `summary.ok` is true.
-
-The scheduled captured-soak artifact is valid only when:
-
-- The input series came from `scripts/perf/capture-soak-series.sh` over the local
-  eval-stack hot paths, not from a synthetic self-test series.
-- `scripts/perf/soak.sh --in <series.json>` produced the trend report artifact.
-- The induced leak substitute step used `scripts/perf/soak.sh --selftest-fail` and
-  failed as expected.
-- The trend report has `summary.ok: true`.
-
-The scheduled spine-burst artifact is valid only when:
-
-- The input series came from `scripts/perf/run-spine-burst.sh --profile cap-small`,
-  not from a synthetic self-test series.
-- The artifact names `scripts/perf/artifacts/spine-burst-cap-small.json`.
-- The artifact records embedded PostgreSQL, embedded JetStream, seeded tenants and
-  agents, event-log replay, outbox drain, slow-upstream backlog, projection lag,
-  queue rejects, and DB-pool utilization.
-- `scripts/perf/soak.sh --in <spine-burst.json>` exits successfully and the trend
-  report has `summary.ok: true`.
-- The trend report carries `input_evidence` with the burst source, workload,
-  bounded slow-upstream, appended/replayed event counts, and pending outbox summary.
-
-External CAP-MEDIUM/CAP-LARGE spine-burst receipts are valid only when the same
-conditions hold for `--profile cap-medium` or `--profile cap-large`, and the series
-source records `external-postgresql+external-jetstream`. Those larger receipts are
-PERF/RUNOPS release-review evidence; the default scheduled CI gate remains
-CAP-SMALL so CI never depends on an operator-managed external cluster.
+The scheduled soak, spine-burst, and external CAP-MEDIUM/CAP-LARGE receipts follow
+the same pass/fail contract as [performance.md](performance.md): each input series
+must come from the real capture/burst scripts, not a synthetic self-test series,
+`scripts/perf/soak.sh --in` must produce a trend report with `summary.ok: true`
+carrying `input_evidence`, and the induced-leak self-test must still fail as
+expected. The spine-burst variant additionally records embedded PostgreSQL,
+embedded JetStream, seeded tenants/agents, event-log replay, outbox drain,
+slow-upstream backlog, projection lag, queue rejects, and DB-pool utilization; the
+external CAP-MEDIUM/CAP-LARGE receipts are PERF/RUNOPS release-review evidence
+whose series source records `external-postgresql+external-jetstream` (the default
+scheduled CI gate stays CAP-SMALL so CI never depends on an operator-managed
+external cluster).
 
 The same capacity denominator is served through
-`GET /api/v1/scale/orchestration` and `trstctl-cli scale orchestration`. That
-CAP-SCALE-01 posture chooses the 1M-credit `CAP-LARGE` tier, names the 100k/250k/1M
-credential bands, and exposes the execution lanes, sharding plan, release gates, and
-operator residuals without claiming a specific customer infrastructure SKU. The
-served plan names all three base measurement artifacts, including
-`scripts/perf/artifacts/capacity-measurement-baseline.json`, plus the spine-burst
-receipt at `scripts/perf/artifacts/spine-burst-cap-small.json`.
+`GET /api/v1/scale/orchestration` and `trstctl-cli scale orchestration`:
+CAP-SCALE-01 posture chooses the 1M-credit `CAP-LARGE` tier, names the
+100k/250k/1M credential bands, and exposes the execution lanes, sharding plan,
+release gates, and operator residuals without claiming a specific customer
+infrastructure SKU — naming all three base measurement artifacts plus the
+spine-burst receipt at `scripts/perf/artifacts/spine-burst-cap-small.json`.

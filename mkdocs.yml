@@ -101,6 +101,7 @@ nav:
       - Fleet rollout: runbooks/fleet-rollout.md
       - Fleet rollback: runbooks/fleet-rollback.md
       - Signer recovery: runbooks/signer-recovery.md
+      - PCAS operations: runbooks/pcas-operations.md
       - Upgrade rollback: runbooks/upgrade-rollback.md
   - Security:
       - Product threat model: security/threat-model.md

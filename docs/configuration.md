@@ -934,7 +934,7 @@ The related `TRSTCTL_PCAS_*` variable surface (about two dozen settings covering
 delegation, recovery, federation, KEM, checkpoints, monitors, and retirement for
 patent-covered credential algorithm succession) is off by default and gated by this
 same license check; it is documented together with the rest of the PCAS material in
-[PCAS operations](ops/pcas-operations.md) rather than duplicated here.
+[PCAS operations](runbooks/pcas-operations.md) rather than duplicated here.
 
 ## Conditional managed-key adapters (six served providers)
 

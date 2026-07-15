@@ -278,9 +278,10 @@ drain).
 ### Scenario B — loss of the signer host (recover the CA, no rotation)
 
 The issuing CA key lives in the out-of-process signer, isolated from the API
-process, and is now **persisted, sealed at rest** (R3.2). A signer-host loss does
-**not** mean a new CA
-— restore the sealed key store and its custody input and the **same CA is back**:
+process, persisted and sealed at rest (R3.2). A signer-host loss does not mean
+a new CA — restore the sealed key store and its custody input and the same CA
+is back. (The drilled step-by-step procedure is the
+[signer-recovery runbook](runbooks/signer-recovery.md); the essentials:)
 
 1. Provision a fresh signer host/container.
 2. **Restore the signer's sealed key store** (`--keystore` directory) and the signer
