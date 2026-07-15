@@ -30,8 +30,6 @@ var requiredPages = []string{
 	"operations.md",
 	"performance.md",
 	"performance-capacity.md",
-	"category-leadership.md",
-	"product-decision-register.md",
 	"usability.md",
 	"disaster-recovery.md",
 	"migrations.md",
@@ -2867,59 +2865,6 @@ func TestVulnerabilityManagementProcess(t *testing.T) {
 	}
 	if !strings.Contains(read(t, "../SECURITY.md"), "vulnerability-management.md") {
 		t.Error("SECURITY.md should link to the vulnerability-management process")
-	}
-}
-
-// TestSemanticQueryLayerDesignSpike (SF.6): the catastrophic-risk scoping-boundary
-// design spike is committed and complete — it specifies by-construction enforcement
-// over AN-1 RLS, enumerates every required leak/abuse vector with a mitigation,
-// defines the cost/timeout guard model, and enumerates the adversarial test plan
-// SF.7 must pass. This is a design gate (no code behavior), so the test locks the
-// design's completeness rather than any runtime behavior.
-func TestSemanticQueryLayerDesignSpike(t *testing.T) {
-	body := read(t, "design/semantic-query-layer.md")
-	low := strings.ToLower(body)
-
-	// By-construction enforcement over the AN-1 floor, not post-filtering.
-	for _, want := range []string{"by construction", "withtenant", "post-filtering", "rbac"} {
-		if !strings.Contains(low, want) {
-			t.Errorf("design must specify %q enforcement", want)
-		}
-	}
-	// Every required leak/abuse vector is enumerated.
-	for _, vector := range []string{
-		"cross-tenant join", "rbac-scope bypass", "injection",
-		"projection-staleness", "cost-exhaustion",
-	} {
-		if !strings.Contains(low, vector) {
-			t.Errorf("design must enumerate the %q vector with a mitigation", vector)
-		}
-	}
-	// Mitigations and the guard model are present.
-	for _, want := range []string{"mitigation", "statement_timeout", "deadline", "bulkhead"} {
-		if !strings.Contains(low, want) {
-			t.Errorf("design must specify %q (cost/timeout guard model)", want)
-		}
-	}
-	// The adversarial test plan SF.7 must pass is defined, incl. the property test.
-	if !strings.Contains(low, "adversarial test plan") || !strings.Contains(low, "property-based") {
-		t.Error("design must define the adversarial test plan, including the property-based no-leak test")
-	}
-	// Architectural guarantees honored. Rebound off the internal AN-1/AN-2/AN-7
-	// codenames to the customer-facing property phrases the design's "guarantees
-	// honored" section now uses, one per boundary, so dropping a guarantee fails the
-	// test — same protection, no internal codename:
-	//   AN-1 -> per-tenant isolation (RLS is the floor, scoping composes on top);
-	//   AN-2 -> event-sourced reads (consistent with a known projection offset);
-	//   AN-7 -> bulkheading (a dedicated bounded pool with cost/timeout guards).
-	for _, guarantee := range []string{
-		"Per-tenant isolation",
-		"Event-sourced reads",
-		"Bulkheading",
-	} {
-		if !strings.Contains(body, guarantee) {
-			t.Errorf("design must honor the architectural guarantee %q", guarantee)
-		}
 	}
 }
 

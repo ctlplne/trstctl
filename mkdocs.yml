@@ -111,9 +111,7 @@ nav:
       - Dependency freshness: security/dependency-freshness.md
       - Supply chain: supply-chain.md
       - Branch protection & required checks: branch-protection.md
-      - Audit finding ownership: audit-finding-ownership.md
       - Signing service design: design/signing-service.md
-      - Semantic query layer design: design/semantic-query-layer.md
   - Authoring guides:
       - Connectors: guides/connector-authoring.md
       - Plugins: guides/plugin-authoring.md

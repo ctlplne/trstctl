@@ -1,60 +1,54 @@
 # Branch protection & required checks (codified)
 
-This page is the human-readable companion to the in-repo branch-protection policy.
-It explains **which checks must pass before anything merges to `main`**, who must
-review which paths, and how an admin applies and verifies the rules — so the gate is
-**provable from the repository**, not an invisible server-side setting.
+This page is the human-readable companion to the in-repo branch-protection policy:
+**which checks must pass before merging to `main`**, who must review which paths,
+and how an admin applies and verifies the rules — so the gate is **provable from
+the repository**, not an invisible server-side setting.
 
-> Why this exists. The audit (TEST-006) flagged that "blocks merge" depended on a
-> repo admin having configured required checks / enforce-admins / linear-history
-> server-side — invisible to the repository and to a reviewer. A job that *runs* but
-> is **not required** is theater: a red build could merge, and an admin could
-> force-push, with no in-repo trace. Codifying the policy here (plus
-> [`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS)
-> and [`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json))
-> makes the gate auditable. Two reality-tests keep the codified policy honest:
-> `docs/codeowners_test.go` (every security-critical path is owned) and
-> `docs/branch_protection_test.go` (the required-check list matches the real CI job
-> names in both directions, with explicit reasons for any non-PR exemption).
+> Why this exists. The audit (TEST-006) found "blocks merge" depended on a repo
+> admin configuring required checks / enforce-admins / linear-history server-side
+> — invisible to the repository and to a reviewer. A job that *runs* but is **not
+> required** is theater: a red build could merge, an admin could force-push, and
+> nothing in-repo would show it. Codifying the policy in
+> [`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json)
+> (owners mirrored in [`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS))
+> makes the gate auditable; `docs/branch_protection_test.go` matches the
+> required-check list to real CI job names in both directions, with an explicit
+> reason for any non-PR exemption.
 
 ## The policy for `main`
 
 The canonical, machine-applicable form lives in
 [`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json).
-In words, merging to `main` requires:
+Merging to `main` requires:
 
-- **All required status checks green** (and the branch up to date — `strict`). The
-  required set is **every CI gate** plus the security scans (see the table below). A
-  check that runs but is not in this list does **not** block merge; a check in this
-  list that is missing/failing **does**.
-- **At least one approving review**, and — for the root-of-trust paths —
-  **approval from a code owner** (`require_code_owner_reviews`). Stale approvals are
-  dismissed on a new push (`dismiss_stale_reviews`), and the last push must itself be
-  approved (`require_last_push_approval`), so a sneak-in commit after approval cannot
-  ride in.
-- **Linear history** (`required_linear_history`) — squash/rebase, no merge commits.
-- **No force-pushes and no branch deletion** (`allow_force_pushes: false`,
-  `allow_deletions: false`) — history cannot be rewritten under the protection.
-- **Enforce on admins** (`enforce_admins: true`) — maintainers are bound by the same
-  rules; nobody bypasses the gate.
-- **Conversation resolution required** before merge.
+- **All required status checks green**, branch up to date (`strict`) — every CI
+  gate plus the security scans below. A check that runs but isn't listed doesn't
+  block merge; a listed, failing check **does**.
+- **At least one approving review**, plus code-owner approval on root-of-trust
+  paths (`require_code_owner_reviews`); a new push dismisses stale approvals
+  (`dismiss_stale_reviews`) and must itself be re-approved
+  (`require_last_push_approval`) — no sneak-in commit rides in unapproved.
+- **Linear history** (`required_linear_history`: squash/rebase, no merge commits),
+  **no force-pushes or deletion** (`allow_force_pushes: false`,
+  `allow_deletions: false`).
+- **Enforce on admins** (`enforce_admins: true`) and **conversation resolution
+  required** before merge.
 
 ### Required status checks
 
-These are the exact GitHub check names (the `name:` of each CI job). They are kept in
-sync with the workflows by `docs/branch_protection_test.go`, which fails if a
-required context stops matching a real job, if a fixed-name CI/security job runs
-without either blocking merge or having an explicit exemption, or if this page stops
-documenting a required context. That means a gate can never silently fall out of the
-required set.
+These are the exact GitHub check names (the `name:` of each CI job), kept in sync
+with the workflows by `docs/branch_protection_test.go`: a required context must
+match a real job, a fixed-name CI/security job must block merge or carry an
+exemption, and this page must document every required context.
 
 | Check (job name) | Workflow | What it guards |
 |---|---|---|
-| `build / test / lint` | `ci.yml` | Build all binaries, `make test` (race + coverage floors), full `make lint` (gofmt/vet/**trstctllint** AN-1/3/5/8, golangci-lint, actionlint), gate self-tests |
-| `definition of done / wiring census` | `ci.yml` | `make dod-gate`: exact `go list -deps ./cmd/trstctl` reachability, production `buildRunDeps` assembly, and executed non-sentinel served-handler receipts for every required manifest row |
-| `chaos (fault injection)` | `ci.yml` | `make chaos`: signer death, NATS restart/partition, PostgreSQL failover, store-write failure, restore interruption, memory-pressure bulkhead, and retry-backoff safe-failure assertions |
-| `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | Short PR fuzz smoke plus deeper scheduled parser fuzzing, so fuzz targets and committed seed corpora stay wired into the merge gate |
-| `ClusterFuzzLite / OSS-Fuzz (address)` | `ci.yml` | Hosted ClusterFuzzLite / OSS-Fuzz-family build and fuzz run for the Go fuzz target denominator, with SHA-pinned upstream actions, uploaded build/SARIF configuration, and archived run artifacts |
+| `build / test / lint` | `ci.yml` | Build all binaries, `make test` (race + coverage), full `make lint` (gofmt/vet/**trstctllint**, golangci-lint, actionlint), gate self-tests |
+| `definition of done / wiring census` | `ci.yml` | `make dod-gate`: `go list -deps` reachability, production `buildRunDeps` assembly, and non-sentinel served-handler receipts for every required manifest row |
+| `chaos (fault injection)` | `ci.yml` | `make chaos`: signer death, NATS restart/partition, PostgreSQL failover, store-write failure, restore interruption, memory-pressure bulkhead, retry-backoff assertions |
+| `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | PR fuzz smoke plus deeper scheduled parser fuzzing keep fuzz targets and seed corpora wired into the merge gate |
+| `ClusterFuzzLite / OSS-Fuzz (address)` | `ci.yml` | Hosted ClusterFuzzLite / OSS-Fuzz-family build and fuzz run, SHA-pinned upstream actions, uploaded build/SARIF, archived run artifacts |
 | `web ui (typecheck / test / build)` | `ci.yml` | Web console typecheck, Vitest + axe, Vite build, npm SCA |
 | `docs site (mkdocs build --strict)` | `ci.yml` | Docs build with no broken nav/links |
 | `actionlint (workflow lint)` | `ci.yml` | Workflow + shell lint of the pipelines themselves |
@@ -64,98 +58,82 @@ required set.
 | `helm (lint + render + schema)` | `ci.yml` | Control-plane chart lint + kubeconform |
 | `proto (buf lint + breaking-change gate)` | `ci.yml` | Signer gRPC contract (AN-4) wire-compat |
 | `acme conformance (Pebble differential)` | `ci.yml` | ACME protocol differential vs the reference CA |
-| `acme stock-client conformance (certbot transcript)` | `ci.yml` | Stock certbot manual DNS-01 issue, renew, and revoke against the served ACME endpoint, with public transcripts archived |
-| `est client conformance (libest estclient)` | `ci.yml` | Stock libest `estclient` performs simpleenroll against the served EST endpoint with a checksum-pinned build |
-| `cmp client conformance (OpenSSL transcript)` | `ci.yml` | Stock OpenSSL `cmp p10cr` enrollment against the served CMP endpoint, with request/response transcripts archived |
-| `tsa client conformance (OpenSSL ts transcript)` | `ci.yml` | Stock OpenSSL `ts -query` and `ts -verify` against the served `/tsa` RFC 3161 endpoint, with public request/response transcripts archived |
-| `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint, with PKIOperation request/response transcripts archived |
-| `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe fetches and validates X.509-SVID and JWT-SVID paths from the served Workload API Unix socket; spiffe-helper writes the served X.509-SVID, key, and trust bundle |
-| `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose eval stack boots real PostgreSQL, JetStream, isolated signer, served issuance/revocation, and PKI profile linting |
-| `vault compat (real openbao client)` | `ci.yml` | Runs the Vault-compat shim acceptance against a pinned real OpenBao CLI, non-skipped (TEST-VAULT-001) |
-| `ee / unit tests + vdec gates` | `ci.yml` | Runs `make ee-test` (ee/ unit tests + coverage floor) and the VDEC wire/release gates so commercial code is exercised every PR (TEST-EE-CI-001) |
-| `restore rehearsal / full DR loop` | `ci.yml` | Full backup from a populated instance restores through the shipped binary into a fresh instance that boots, reads old data, and issues new credentials; a corrupted backup fails closed (OPS-RESTORE-001) |
-| `reproducible build (byte-identical rebuild)` | `ci.yml` | Shipped binaries and image layers rebuild byte/layer-identical on every PR (OPS-CI-102) |
-| `scheduled gates / nightly freshness` | `ci.yml` | Fails closed unless the latest scheduled run is fresh (≤26h), green, and actually executed every promoted nightly gate — captured soak, spine burst, live branch-protection drift, and perf live (OPS-CI-101/105/106/107). This is how scheduled-only verifiers are REQUIRED in effect: a stale, red, or silently-skipped nightly blocks merge |
+| `acme stock-client conformance (certbot transcript)` | `ci.yml` | Stock certbot manual DNS-01 issue/renew/revoke against the served ACME endpoint; transcripts archived |
+| `est client conformance (libest estclient)` | `ci.yml` | Stock libest `estclient` simpleenroll against the served EST endpoint, checksum-pinned build |
+| `cmp client conformance (OpenSSL transcript)` | `ci.yml` | Stock OpenSSL `cmp p10cr` enrollment against the served CMP endpoint; transcripts archived |
+| `tsa client conformance (OpenSSL ts transcript)` | `ci.yml` | Stock OpenSSL `ts -query`/`ts -verify` against the served `/tsa` RFC 3161 endpoint; transcripts archived |
+| `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint; PKIOperation transcripts archived |
+| `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe fetches/validates X.509-SVID and JWT-SVID from the served Workload API socket; spiffe-helper writes the SVID, key, trust bundle |
+| `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose stack: real PostgreSQL, JetStream, isolated signer, served issuance/revocation, PKI profile linting |
+| `vault compat (real openbao client)` | `ci.yml` | Vault-compat shim acceptance against a pinned real OpenBao CLI, non-skipped |
+| `ee / unit tests + vdec gates` | `ci.yml` | `make ee-test` (ee/ unit tests + coverage floor) plus VDEC wire/release gates exercise commercial code every PR |
+| `restore rehearsal / full DR loop` | `ci.yml` | Backup from a populated instance restores via the shipped binary into a fresh instance that boots, reads data, and issues credentials; a corrupted backup fails closed |
+| `reproducible build (byte-identical rebuild)` | `ci.yml` | Shipped binaries and image layers rebuild byte/layer-identical on every PR |
+| `scheduled gates / nightly freshness` | `ci.yml` | Fails closed unless the latest scheduled run is fresh (≤26h), green, and ran every promoted gate — captured soak, spine burst, live branch-protection drift, perf live — making scheduled-only verifiers required in effect |
 | `windows cross-build` | `ci.yml` | Whole module cross-compiles for Windows |
-| `fips-capable build (GOFIPS140)` | `ci.yml` | All binaries build with the FIPS-capable Go toolchain setting (`GOFIPS140`) and run the FIPS crypto self-test path |
+| `fips-capable build (GOFIPS140)` | `ci.yml` | All binaries build with the FIPS-capable Go toolchain setting (`GOFIPS140`) and run the FIPS self-test path |
 | `windows / test + MSI` | `ci.yml` | Windows agent surface (real cert store) + MSI |
 | `kubernetes / kind e2e` | `ci.yml` | In-cluster e2e + cert-manager Certificate through trstctl ClusterIssuer |
-| `spire container e2e` | `ci.yml` | Real SPIRE server container loads the trstctl upstream-authority plugin, mints an X.509-SVID, and verifies the chain to the trstctl root |
+| `spire container e2e` | `ci.yml` | Real SPIRE server container loads the trstctl upstream-authority plugin, mints an X.509-SVID, and verifies the chain to the root |
 | `secret scan (gitleaks)` | `security.yml` | No committed secrets |
 | `container image scan (Trivy)` | `security.yml` | Image vulnerability scan |
 
-CodeQL (`codeql.yml`) also runs on every PR; because its check name is a build-matrix
-template (`analyze (<language>)`) rather than a fixed string, it is recommended as a
-required check but is configured in the GitHub UI rather than pinned by literal name
-here (the sync-test deliberately omits matrix-expanded names so it stays robust).
+CodeQL (`codeql.yml`) also runs on every PR. Its check name is a build-matrix
+template (`analyze (<language>)`), so it's recommended as required but set in the
+GitHub UI, not pinned here by literal name — the sync-test omits matrix-expanded
+names to stay robust.
 
-The scheduled/manual job `branch protection / live policy drift` is intentionally
-not listed as a required PR check because it does not run on pull requests. It audits
-the live GitHub settings separately, and `docs/branch_protection_test.go` records
-that exemption with a reason so future fixed-name CI jobs do not inherit it by
-accident.
-
-The scheduled/manual job `captured soak / leak gate` is intentionally not listed as
-a required PR check for the same reason: it captures a real sustained-load series
-from a running stack, uploads the soak trend artifacts, and verifies an induced leak
-series fails the analyzer outside the pull-request path. The job is still pinned by
-`docs/branch_protection_test.go` as an explicit non-PR exemption, so a normal CI job
-cannot accidentally run without blocking merge.
-
-The scheduled/manual job `spine burst / replay-outbox gate` is intentionally not
-listed as a required PR check for the same reason: it starts embedded PostgreSQL and
-JetStream, captures the cap-small replay/outbox burst artifact, analyzes it through
-`scripts/perf/soak.sh --in`, and uploads the trend evidence outside the
-pull-request path. The job is still pinned by
-`docs/branch_protection_test.go` as an explicit non-PR exemption.
+Three scheduled/manual jobs are intentionally **not** required PR checks — none
+run on pull requests: `branch protection / live policy drift` audits live GitHub
+settings; `captured soak / leak gate` captures a sustained-load series and verifies
+an induced leak fails the analyzer; `spine burst / replay-outbox gate` boots
+embedded PostgreSQL/JetStream and analyzes a cap-small replay/outbox burst via
+`scripts/perf/soak.sh --in`. All three publish evidence outside the pull-request
+path, and `docs/branch_protection_test.go` pins each as an explicit exemption with
+a reason, so no CI job silently escapes the merge gate.
 
 ### Release-time gate
 
-A version tag does **not** ship off an unverified commit. `release.yml` has three
-release blockers before any image, Windows agent, or Helm chart is built, signed, or
-published:
+A version tag never ships an unverified commit: `release.yml` sets three blockers
+before any image, Windows agent, or Helm chart builds, signs, or publishes:
 
 - `test` re-runs the release-local suite (`make build`, embedded-UI verification,
-  and `make test`) against the **exact tagged ref** (TEST-005).
-- `required-checks` runs `scripts/ci/verify-required-checks.sh`, reads the required
-  contexts from `.github/branch-protection.json`, and verifies the tag commit has
-  every required CI/security check green (TEST-003).
+  `make test`) against the **exact tagged ref**.
+- `required-checks` runs `scripts/ci/verify-required-checks.sh` and verifies the
+  tag commit has every required CI/security check green.
 - `release-evidence` runs `make chaos`, archives the `release-chaos-evidence`
-  workflow artifact, and publishes `trstctl-chaos-evidence.txt` to the tag's GitHub
-  Release so each GA candidate carries the fault-injection output (RUNOPS-007).
-  It also re-runs `make vuln` and the npm audit wrapper with pinned scanner versions,
-  then publishes `npm-audit-dependency-surfaces.json` so the release evidence includes
-  advisory counts by severity for the web and TypeScript SDK dependency surfaces.
+  artifact, and publishes `trstctl-chaos-evidence.txt` so each GA candidate carries
+  fault-injection output. It also re-runs `make vuln` and the npm audit wrapper,
+  publishing `npm-audit-dependency-surfaces.json` with advisory counts by severity
+  for the web/TypeScript SDK surfaces.
 
-Every build/sign/publish job `needs: [test, required-checks, release-evidence]`, so a
-tag placed on a commit whose broader CI/security surface was skipped, red, pending, or
-missing cannot publish a signed artifact, and a GA candidate cannot publish without
-the chaos evidence pack.
+Every build/sign/publish job `needs: [test, required-checks, release-evidence]`: a
+tag whose CI/security surface was skipped, red, pending, or missing cannot publish
+a signed artifact, nor can a GA candidate publish without the chaos evidence pack.
 
 ### Drift detection
 
 The scheduled/manual CI job `branch protection / live policy drift` runs
-`scripts/ci/verify-branch-protection.sh` against the GitHub API and fails if the live
-`main` protection differs from `.github/branch-protection.json` (TEST-001). That
-turns branch protection into a watched control instead of a one-time admin click.
-Each run uploads the `branch-protection-live-drift-receipt` artifact containing
+`scripts/ci/verify-branch-protection.sh` against the GitHub API and fails if live
+`main` protection differs from `.github/branch-protection.json` (TEST-001) — a
+watched control, not a one-time admin click. Each run uploads
+`branch-protection-live-drift-receipt`, containing
 `branch-protection-drift-receipt.json`; release review attaches the latest green
-scheduled receipt to the release evidence so the shipped tag is backed by the live
-GitHub protection state as well as the committed policy.
-If the default GitHub workflow token cannot read branch-protection settings, set the
-repository secret `TRSTCTL_BRANCH_PROTECTION_READ_TOKEN` to a token with read access
-to administration/branch-protection settings.
+receipt so the shipped tag is backed by live GitHub state, not just committed
+policy.
+If the default workflow token can't read branch-protection settings, set repository
+secret `TRSTCTL_BRANCH_PROTECTION_READ_TOKEN` to one with admin/branch-protection
+read access.
 
 ## Code ownership
 
 [`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS)
-assigns mandatory reviewers. The security-critical paths — the AN-3 crypto boundary
-(`internal/crypto`), the AN-4 isolated signer (`internal/signing`, `cmd/trstctl-signer`,
-`proto`), the AN-1 multi-tenant store (`internal/store`), and the architecture linter
-that enforces the guardrails in CI (`tools/trstctllint`) — are owned explicitly, so
-with `require_code_owner_reviews` enabled no change to the root of trust merges
-without a security review. `docs/codeowners_test.go` asserts each of these paths stays
-covered.
+assigns mandatory reviewers: the AN-3 crypto boundary (`internal/crypto`), the AN-4
+isolated signer (`internal/signing`, `cmd/trstctl-signer`, `proto`), the AN-1
+multi-tenant store (`internal/store`), and the architecture linter
+(`tools/trstctllint`) are owned explicitly, so `require_code_owner_reviews` means no
+change to the root of trust merges without a security review.
+`docs/codeowners_test.go` asserts each path stays covered.
 
 ## Apply it (repo admin)
 
@@ -165,8 +143,8 @@ gh api -X PUT repos/ctlplne/trstctl/branches/main/protection \
   -H "Accept: application/vnd.github+json" \
   --input .github/branch-protection.json
 
-# Or manage it as code with Terraform's github_branch_protection resource, mirroring
-# the same contexts / enforce_admins / linear-history / code-owner-review settings.
+# Or manage it as code via Terraform's github_branch_protection resource (same
+# contexts / enforce_admins / linear-history / code-owner-review settings).
 ```
 
 ## Verify it (anyone with read on the API)

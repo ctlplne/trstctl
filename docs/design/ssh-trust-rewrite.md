@@ -1,5 +1,10 @@
 # Design: SSH trust rewrite (S13.2, F44)
 
+> **Historical design record.** This rewrite shipped; F44 is served. Current
+> behavior is documented in [SSH](../features/ssh.md) — this page records the
+> design decisions and is kept for the served-state matrix reference.
+
+
 **Status:** reviewed — design gate for S13.3 (build).
 **Catastrophic-risk area.** A mistake in how the agent rewrites `sshd` / host
 trust can lock operators out of production. This document is the contract the

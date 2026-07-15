@@ -46,8 +46,7 @@ end to end:
   lifecycle thresholds.
 - [Performance SLOs](performance.md), [capacity planning](performance-capacity.md),
   and [usability outcome SLOs](usability.md).
-- [Compliance](compliance.md), [category leadership](category-leadership.md),
-  and the [product decision register](product-decision-register.md).
+- [Compliance](compliance.md) — framework mapping and evidence packs.
 - [Pricing](pricing.md) and [editions](editions.md) — the
   Free/Enterprise/Provider matrix and billable units.
 - [CLI](cli.md) — drive trstctl from scripts and CI with `trstctl-cli`.

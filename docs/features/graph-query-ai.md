@@ -183,7 +183,6 @@ answer. See [Current limitations](../limitations.md).
 [Observability & risk](observability-and-risk.md) (exposure scoring) ·
 [Incident response & JIT](incident-and-jit.md) (blast-radius remediation) ·
 [Workload identity](workload-identity.md) (the MCP server's own identity) ·
-[Semantic query layer design](../design/semantic-query-layer.md) ·
 glossary: [event sourcing](../glossary.md), [RLS](../glossary.md)
 
 **Covers:** F21, F75, F76, F77, F78

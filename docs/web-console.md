@@ -25,7 +25,7 @@ privacy, connectors, integrate, API explorer, platform administration, the
 assistant). A module's band can still open Audit (this module) for a scoped lens on
 that stream. Every nav row is gated by the same RBAC the API enforces, and every
 label resolves through the typed i18n catalog (see
-[Web internationalization](i18n.md)); a blank preview backs evaluation until the
+the web i18n catalog); a blank preview backs evaluation until the
 binary serves real data.
 
 ## The surfaces
@@ -391,7 +391,6 @@ trstctl-cli privacy retention run
 ## See also
 
 [Platform & API](features/platform-and-api.md) ·
-[Web internationalization](i18n.md) ·
 [All features](features.md) ·
 [Getting started](getting-started.md) ·
 [Current limitations](limitations.md)
