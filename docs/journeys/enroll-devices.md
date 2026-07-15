@@ -22,7 +22,6 @@ against its rules, and hands back a signed certificate.
 ## Before you start
 
 - A running trstctl control plane with a provisioned issuing CA. Bring one up via
-  [Issue your first certificate](first-certificate.md) or
   [Getting started](../getting-started.md).
 - A device (or a standard client such as a stock EST client) that speaks EST, SCEP,
   or CMP.
@@ -32,7 +31,7 @@ against its rules, and hands back a signed certificate.
 
 ## Steps
 
-1. **Enable the enrollment protocol your fleet speaks.** Each protocol server is off
+1. Enable the enrollment protocol your fleet speaks. Each protocol server is off
    by default and binds to a tenant. For EST, turn it on:
 
    ```yaml
@@ -47,7 +46,7 @@ against its rules, and hands back a signed certificate.
    protocols and what each industry uses are covered in
    [Enrollment protocols](../features/enrollment-protocols.md).
 
-2. **Fetch the CA chain to establish trust.** A device fetches the CA chain first
+2. Fetch the CA chain to establish trust. A device fetches the CA chain first
    (no auth) so it can bootstrap explicit trust before sending anything:
 
    ```sh
@@ -57,7 +56,7 @@ against its rules, and hands back a signed certificate.
    You should receive a certs-only PKCS#7 chain. The device installs it as its
    explicit TLS trust anchor.
 
-3. **Enroll: POST a CSR, get back a certificate.** The device generates its key
+3. Enroll: POST a CSR, get back a certificate. The device generates its key
    locally (the private half never crosses the wire), builds a PKCS#10 CSR, and
    enrolls. With a stock client this is a base64 CSR POSTed to `/simpleenroll`:
 
@@ -74,13 +73,13 @@ against its rules, and hands back a signed certificate.
    rejected. The profile model is described in
    [Issuance & certificate authorities](../features/issuance-and-cas.md).
 
-4. **Renew before expiry.** Before the certificate expires, the device re-enrolls
+4. Renew before expiry. Before the certificate expires, the device re-enrolls
    over the same protocol — for EST that is a `POST` to `/simplereenroll`, the same
    request and response shapes as the first enroll. You should see a fresh
    certificate issued the same way. Because issuance is idempotent, a retried
    enrollment never mints two certificates.
 
-5. **For the smallest devices, bootstrap with a one-time token.** Constrained IoT
+5. For the smallest devices, bootstrap with a one-time token. Constrained IoT
    hardware that cannot run a full agent bootstraps with a single-use token over the
    served endpoint; the device generates and keeps its own key and sends only a CSR:
 
@@ -93,7 +92,7 @@ against its rules, and hands back a signed certificate.
    You should receive a PEM certificate chain. The token is checked-and-deleted
    atomically, so it works exactly once.
 
-6. **For MDM-managed phones and laptops, gate enrollment with a challenge.** When a
+6. For MDM-managed phones and laptops, gate enrollment with a challenge. When a
    mobile-device-management platform (Intune, JAMF) pushes a SCEP profile, you want
    only MDM-provisioned devices to enroll. trstctl issues an HMAC-signed challenge
    token the MDM embeds in the device's SCEP profile `challengePassword`, and the

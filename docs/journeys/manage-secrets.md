@@ -17,8 +17,7 @@ out short-lived ones that expire on their own, and sharing one-off secrets throu
 links that self-destruct after a single view. The outcome is fewer long-lived secrets
 copied into config files and CI, each one encrypted at rest and recorded in a
 tamper-evident log. This is for a developer or platform engineer who wants their
-services to stop hard-coding secrets. Every command below stays on a route or listener
-the running binary serves today.
+services to stop hard-coding secrets.
 
 > **In the console:** the `/secrets` workspace presents the same store as a folder
 > tree with a reference resolver, an environment diff, version history, bulk import, and
@@ -36,25 +35,25 @@ the running binary serves today.
 
 ## Served scope and deliberate boundaries
 
-The shipped path is precise (see [Current limitations](../limitations.md) and
+Every command below stays on a route or listener the running binary serves
+today (see [Current limitations](../limitations.md) and
 [Secrets](../features/secrets.md)):
 
-- **Served** on the running binary under `/api/v1/secrets/*`: the secret store
-  (create, read, **rotate**, delete, recover, and dual-control approvals for sensitive changes),
-  dynamic secret leases, one-time secret sharing,
-  the dynamic PKI secret (a short-lived certificate *and* its key), machine login
-  (`token`, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT),
-  outbound **secret-sync** to configured external stores, and Gitleaks-backed
-  code/CI secret scanning. Short-lived API keys are served at
-  `/api/v1/ephemeral/api-keys`. Transit encryption-as-a-service is served separately
-  at `/api/v1/transit/*` and `trstctl-cli transit`. A Vault/OpenBao-compatible
-  common subset is served at `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, and
-  `/v1/pki/issue/*` for stock `vault` CLI migration. KMIP is served as an opt-in
-  mTLS listener for AES-256 SymmetricKey Create/Register/Get/Locate/Revoke/Destroy,
-  KMIP 1.4 Query/DiscoverVersions negotiation, and AES-GCM wrapped Get/Register.
-- **Deliberately outside this journey:** appliance-specific KMIP templates and
-  secret-store / API-key *discovery* of actual values. Discovery records references
-  only and stays covered by the discovery journey.
+- Served under `/api/v1/secrets/*`: the secret store (create, read, rotate,
+  delete, recover, dual-control approvals), dynamic secret leases, one-time
+  sharing, the dynamic PKI secret (a short-lived certificate *and* its key),
+  machine login (`token`, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, generic
+  JWT), outbound secret-sync, and Gitleaks-backed secret scanning. Short-lived
+  API keys: `/api/v1/ephemeral/api-keys`. Transit encryption-as-a-service:
+  `/api/v1/transit/*` and `trstctl-cli transit`. A Vault/OpenBao-compatible
+  subset (`/v1/auth/token/lookup-self`, `/v1/secret/data/*`, `/v1/pki/issue/*`)
+  serves stock `vault` CLI migration. KMIP is an opt-in mTLS listener for
+  AES-256 SymmetricKey Create/Register/Get/Locate/Revoke/Destroy, KMIP 1.4
+  Query/DiscoverVersions negotiation, and AES-GCM wrapped Get/Register.
+- Deliberately outside this journey: appliance-specific KMIP templates, tenant
+  self-service listener provisioning, and secret-store / API-key *discovery*
+  of actual values — discovery records references only, never values
+  ([Discovery & inventory](../features/discovery-and-inventory.md)).
 
 ## Steps
 
@@ -83,18 +82,11 @@ The shipped path is precise (see [Current limitations](../limitations.md) and
    -> the `/api/v1/secrets/*` routes answer for your tenant; with the key file absent
    they fail closed.
 
-   **Grant, verify, and administer in the console (Job 2, end to end).** The
-   Secrets → **Access** tab covers the whole grant flow without leaving the
-   browser: *Grant workload access* mints a scoped standing API token or a
-   TTL-bound ephemeral key (reveal-once, then a list + revoke ledger), the
-   *Auth methods* table projects the `machine_auth` methods declared above —
-   issuer, audience rules, scopes, source — with a per-tenant disable/enable
-   overlay enforced at the login exchange, and *Issued sessions* is the
-   event-sourced machine-login ledger with idempotent revocation evidence.
-   The login test on the same tab completes create → grant → verify. The CLI
-   below remains the automation variant of the same served routes
-   (`trstctl-cli access tokens create`, `secrets auth-methods list|disable|enable`,
-   `secrets sessions list|revoke`, `secrets login`).
+   The console's Secrets → **Access** tab covers the same grant flow in the
+   browser — token minting, auth-method administration, and the machine-login
+   session ledger; the CLI equivalents are `trstctl-cli access tokens create`,
+   `secrets auth-methods list|disable|enable`, `secrets sessions list|revoke`,
+   and `secrets login`.
 
 2. Store a secret. Each value is sealed under envelope encryption (a fresh per-secret
    data key wrapped by the master key), bound to your tenant and path, and held only in
@@ -192,56 +184,18 @@ The shipped path is precise (see [Current limitations](../limitations.md) and
    `Idempotency-Key` and the rotate succeeds. The requester cannot approve their own
    request.
 
-   ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotations \
-     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: $(uuidgen)" \
-     -H 'Content-Type: application/json' \
-     -d '{"provider":"postgresql","key":"db/reporting","old_ref":"sec05_old"}'
-   ```
-
-   -> a rollback-safe static credential rotation runs through the served API. The
-   response contains only metadata such as `old_ref`, `new_ref`, `completed`,
-   `rolled_back`, and `failed_phase`; it never returns the new credential value.
-
-   ```sh
-   cat > connector-rotation.json <<'JSON'
-   {"provider":"connector:ci","key":"db/password","old_ref":"version:2","remote_key":"DB_PASSWORD"}
-   JSON
-   trstctl-cli --idempotency-key rotate-db-password-ci secrets rotations run -f connector-rotation.json
-   ```
-
-   -> a connector-backed rotation writes a new native-store secret version and pushes
-   it through the configured secret-sync target. If connector delivery fails, trstctl
-   restores the prior `version:<n>` and records rollback evidence without logging the
-   secret value.
-
-   ```sh
-   cat > dynamic-rotation.json <<'JSON'
-   {"provider":"dynamic-lease:postgresql","key":"readonly","old_ref":"lease-abc","target":"ci","remote_key":"DB_READONLY_DSN","ttl_seconds":600}
-   JSON
-   trstctl-cli --idempotency-key rotate-readonly-lease secrets rotations run -f dynamic-rotation.json
-   ```
-
-   -> a dynamic-lease rotation issues a replacement lease, hands the one-time
-   credential to the configured connector target, and revokes the old lease after
-   cutover. The rotation response stays metadata-only.
-
-   ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotation-schedules \
-     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: $(uuidgen)" \
-     -H 'Content-Type: application/json' \
-     -d '{"name":"reporting-hourly","provider":"postgresql","key":"db/reporting","old_ref":"sec05_old","interval_seconds":3600}'
-
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotation-schedules/run-due \
-     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: $(uuidgen)"
-   ```
-
-   -> scheduled rotation records the cadence as projected event-sourced state; a due
-   run uses the same zero-downtime dual-phase engine and advances the schedule's
-   `old_ref` only after completion.
+   Beyond in-store version rotation, the same served engine runs three
+   rollback-safe variants — backend static credentials
+   (`POST /api/v1/secrets/rotations`, provider `postgresql` etc.: stage, cut
+   over, verify, retire, auto-rollback), connector-backed rotation
+   (`secrets rotations run` with `provider":"connector:<target>"`, restoring
+   the prior version if delivery fails), and dynamic-lease rotation
+   (`provider":"dynamic-lease:<backend>"`, replacing and revoking leases after
+   cutover) — plus event-sourced schedules
+   (`POST /api/v1/secrets/rotation-schedules`, then `/run-due`). Every
+   response is metadata-only; no variant returns the new credential value.
+   Payload shapes and the rotation-mode taxonomy are on the
+   [Secrets feature page](../features/secrets.md).
 
 5. Read history or recover to a timestamp. Historical reads are explicit value reads,
    and point-in-time recovery republishes the version that was current at `at` as the
@@ -380,17 +334,9 @@ The shipped path is precise (see [Current limitations](../limitations.md) and
    `GET /api/v1/secrets/syncs/targets` to see which targets are configured on the
    current control plane.
 
-   `GET /api/v1/secrets/cloud-secret-managers` and `trstctl-cli secrets
-   cloud-secret-managers` show the CAP-SEC-04 posture across read-only cloud-secret
-   discovery and sealed-outbox cloud secret-manager sync. That route reports AWS
-   Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV
-   discovery coverage plus AWS/GCP/Azure sync coverage without returning secret values.
-
    ```sh
    curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      "$TRSTCTL_URL/api/v1/secrets/syncs/targets"
-
-   trstctl-cli secrets cloud-secret-managers
 
    cat > secret-sync.json <<'JSON'
    {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
@@ -398,40 +344,18 @@ The shipped path is precise (see [Current limitations](../limitations.md) and
    trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
    ```
 
-   -> the response returns only metadata and delivery flags; it never echoes the secret
-   value.
+   -> the response returns only metadata and delivery flags; it never echoes the
+   secret value.
 
-   For Kubernetes clusters, inspect the operator posture before relying on CRD-driven
-   delivery:
-
-   ```sh
-   trstctl-cli secrets kubernetes-operator
-   ```
-
-   -> the response names the `TrstctlSecretSync` CRD, the Kubernetes workload kinds
-   that auto-reload through a pod-template annotation, and the residual operator
-   limits that remain Helm-owned.
-
-   For no-code workload injection, inspect the sidecar/env posture:
-
-   ```sh
-   trstctl-cli secrets workload-injection
-   ```
-
-   -> the response names the `TrstctlSecretInjection` CRD, the workload kinds it
-   patches, the `trstctl-agent --secret-inject` sidecar command, and the residual
-   limits around polling and rollout orchestration.
-
-   For unvaulted-secret detection and multi-vault visibility, inspect the served
-   posture:
-
-   ```sh
-   trstctl-cli secrets unvaulted
-   ```
-
-   -> the response reports configured repository and third-party scan sources,
-   redacted leaked-secret finding counts, visible AWS/GCP/Azure/Vault providers, and
-   configured vault-augmentation sync targets.
+   Four read-only posture commands map the wider sync/injection estate before
+   you rely on it: `trstctl-cli secrets cloud-secret-managers` (cloud
+   discovery + sync coverage), `secrets kubernetes-operator` (the
+   `TrstctlSecretSync` CRD and its Helm-owned residual limits),
+   `secrets workload-injection` (the `TrstctlSecretInjection` CRD and the
+   `trstctl-agent --secret-inject` sidecar), and `secrets unvaulted`
+   (leaked-secret findings and multi-vault visibility). Their response shapes
+   are on the [Secrets feature page](../features/secrets.md); none return
+   secret values.
 
 12. Scan a repository or CI workspace for committed secrets. Run
     `tools/gitleaks/install.sh` during image build or host provisioning to install the
@@ -468,23 +392,12 @@ The shipped path is precise (see [Current limitations](../limitations.md) and
 
    -> the served scan response shows the `run_id`, `mode`, `capabilities`,
    `rules_active`, and redacted findings. Deep mode scans full Git history with
-   additive custom rules. Third-party artifact mode covers CI logs, container
-   registry metadata, Slack exports, and Jira exports through artifact-path ingest;
-   native provider polling and signature validation remain documented shortfalls.
-   default Gitleaks rules plus additive custom `[[rules]]` fragments. The local
-   staged-diff scanner needs no server, scans only staged Git blobs or the head side
-   of an explicit CI diff, and also drops the raw secret value.
-
-13. Know the edges before you rely on them. Transit encryption-as-a-service is
-    served through `/api/v1/transit/*` and `trstctl-cli transit`. KMIP is served
-    through a separate `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey
-    Create/Register/Get/Locate/Revoke/Destroy, KMIP 1.4 Query/DiscoverVersions, and
-    AES-GCM wrapped Get/Register. Appliance-specific templates and tenant self-service
-    listener provisioning remain outside this journey.
-    Finding secrets already scattered across your estate (secret-store and API-key
-    discovery) records references only, never values — see
-    [Discovery & inventory](../features/discovery-and-inventory.md) and
-    [Current limitations](../limitations.md).
+   the default Gitleaks rules plus additive custom `[[rules]]` fragments.
+   Third-party artifact mode covers CI logs, container-registry metadata, and
+   Slack/Jira exports through artifact-path ingest; native provider polling
+   and signature validation remain documented shortfalls. The local
+   staged-diff scanner needs no server, scans only staged Git blobs or the
+   head side of an explicit CI diff, and also drops the raw secret value.
 
 ## Where next
 

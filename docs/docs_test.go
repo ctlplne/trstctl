@@ -2598,7 +2598,6 @@ func TestFirstCertDocBackedByRealIssuance(t *testing.T) {
 // copy aligned across docs, wizard, bootstrap tokens, and the served mutation gate.
 func TestDesign001FirstCertificateDocsMatchServedRAGate(t *testing.T) {
 	gettingStarted := read(t, "getting-started.md")
-	firstCertJourney := read(t, "journeys/first-certificate.md")
 	wizard := read(t, "../web/src/pages/Wizard.tsx")
 	bootstrap := read(t, "../internal/server/bootstrap.go")
 	gate := read(t, "../internal/api/gate.go")
@@ -2618,12 +2617,13 @@ func TestDesign001FirstCertificateDocsMatchServedRAGate(t *testing.T) {
 		`id: "complete"`,
 	})
 
+	// journeys/first-certificate.md merged into getting-started.md (docs overhaul,
+	// 2026-07-14); the credential-boundary copy is asserted on the surviving page.
 	for _, doc := range []struct {
 		name string
 		body string
 	}{
 		{"getting-started.md", gettingStarted},
-		{"journeys/first-certificate.md", firstCertJourney},
 	} {
 		normalized := strings.Join(strings.Fields(doc.body), " ")
 		for _, want := range []string{

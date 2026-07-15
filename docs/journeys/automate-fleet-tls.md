@@ -23,17 +23,16 @@ deployment happen on their own.
 ## Before you start
 
 - A running, reachable trstctl control plane with a provisioned issuing CA. Bring
-  one up via [Issue your first certificate](first-certificate.md) or
-  [Getting started](../getting-started.md).
+  one up via [Getting started](../getting-started.md).
 - A standard ACME client. This journey uses **certbot**.
 - Write access to a DNS zone you control — ideally a throwaway validation zone you
   delegate to (see step 4), so trstctl never holds your production DNS keys.
 - An API token exported as `TRSTCTL_TOKEN` if you want to inspect results from the
-  CLI (from the first-certificate journey).
+  CLI (from the getting-started CLI path).
 
 ## Steps
 
-1. **Enable the ACME server.** trstctl speaks the CA side of ACME. Turn it on and
+1. Enable the ACME server. trstctl speaks the CA side of ACME. Turn it on and
    bind it to your tenant in configuration:
 
    ```yaml
@@ -48,7 +47,7 @@ deployment happen on their own.
    issuing CA is provisioned. The whole ACME and DNS-validation toolkit is described
    in [ACME & DNS](../features/acme-and-dns.md).
 
-2. **Point a client at the directory and prove control via DNS-01.** With certbot,
+2. Point a client at the directory and prove control via DNS-01. With certbot,
    request a name (and a wildcard) using the DNS challenge:
 
    ```sh
@@ -63,13 +62,13 @@ deployment happen on their own.
    DNS-01 publish side and the propagation/preflight checks are detailed in
    [ACME & DNS](../features/acme-and-dns.md).
 
-3. **Let trstctl pick the challenge when you don't want to.** Rather than choosing a
-   method per name, trstctl can select one automatically: wildcards must use DNS-01,
-   an unreachable port 80 falls to DNS-01, otherwise HTTP-01 — and it records a
-   human-readable rationale in the tamper-evident audit trail and never silently
-   degrades. You should see the chosen method and its rationale captured per order.
+3. Let trstctl pick the challenge when you don't want to. It selects the method
+   automatically (wildcards and unreachable port 80 use DNS-01, otherwise
+   HTTP-01), records a human-readable rationale per order in the audit trail,
+   and never silently degrades — the selection rules are detailed in
+   [ACME & DNS](../features/acme-and-dns.md).
 
-4. **Keep production DNS untouched with CNAME delegation.** For the recommended
+4. Keep production DNS untouched with CNAME delegation. For the recommended
    production setup, add a one-time CNAME so trstctl only ever writes in an isolated
    validation zone:
 
@@ -82,14 +81,14 @@ deployment happen on their own.
    can mint for the name — both covered in
    [ACME & DNS](../features/acme-and-dns.md).
 
-5. **Plan renewal so the fleet doesn't stampede.** trstctl publishes ACME Renewal
+5. Plan renewal so the fleet doesn't stampede. trstctl publishes ACME Renewal
    Information (ARI) per certificate — a suggested renewal window (the last third of
    the certificate's life) that each client picks a spread-out point inside, served
    at `GET /acme/renewal-info/{certid}`. You should see clients renew within their
    window rather than all at once. The renewal model is described in
    [Lifecycle & PQC](../features/lifecycle-and-pqc.md).
 
-6. **Deploy the renewed certificate onto the thing that uses it.** Getting the cert
+6. Deploy the renewed certificate onto the thing that uses it. Getting the cert
    is only half the job; it has to land on the server or appliance that serves it. A
    deployment connector installs the credential on one kind of target (write to
    nginx and reload, import into AWS Certificate Manager, update PostgreSQL/MySQL

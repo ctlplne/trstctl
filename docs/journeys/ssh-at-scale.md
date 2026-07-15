@@ -11,21 +11,25 @@
 
 ## Goal
 
-You will replace the pile of standing SSH keys in everyone's `authorized_keys` with
-short-lived SSH certificates from a single authority. The outcome is hosts that trust
-*one* SSH certificate authority, users who get certificates that expire on their own
-(say, valid until 5 p.m.), and a clean inventory of any leftover keys still granting
-access. This is for an operator who wants central, time-bounded, auditable SSH access
-instead of per-host key copying. The running binary serves the CA, KRL, attested-cert,
-rollout-evidence, revocation, and retirement handoff; host file mutation remains in the
-operator-confirmed agent path.
+Replace the pile of standing SSH keys in everyone's `authorized_keys` with
+short-lived certificates from a single SSH certificate authority: hosts trust
+one CA, user certificates expire on their own, and leftover keys end up in a
+clean inventory for retirement. The running binary serves the CA, KRL,
+attested-cert, rollout-evidence, revocation, and retirement handoff; host file
+mutation stays in the operator-confirmed agent path.
 
 ## Before you start
 
 - A running control plane and an API token from
   [Getting started](../getting-started.md) (`trstctl token create`).
-- The CLI/API pointed at your server via `TRSTCTL_SERVER` and `TRSTCTL_TOKEN` — see
-  [Getting started](../getting-started.md).
+- The `trstctl ssh` verbs in this journey read three environment variables —
+  all required:
+
+  ```sh
+  export TRSTCTL_URL=https://localhost:8443
+  export TRSTCTL_TOKEN=trst_...
+  export TRSTCTL_TENANT=11111111-1111-1111-1111-111111111111
+  ```
 - An installed agent on the hosts you want to manage, enrolled as in
   [Getting started](../getting-started.md). For what the agent can see and change on a
   host, see [SSH](../features/ssh.md).
@@ -119,28 +123,20 @@ operator-confirmed agent path.
    TTL. Every issuance is an immutable `ssh.attested_cert.issued` event. See [SSH](../features/ssh.md).
 
    ```sh
-   cat > ssh-attested-user.json <<EOF
-   {
-     "method": "k8s_sat",
-     "payload_base64": "$K8S_SAT_B64",
-     "public_key": "$(cat ~/.ssh/id_ed25519.pub)",
-     "approver": "ssh-approver",
-     "principals": ["web"],
-     "source_addresses": ["10.0.0.0/24"],
-     "force_command": "/usr/local/bin/deploy",
-     "key_id": "jit-deployer",
-     "ttl_seconds": 900
-   }
-   EOF
-   trstctl ssh issue-attested-user -f ssh-attested-user.json
+   trstctl ssh issue-attested-user \
+     --method k8s_sat \
+     --payload-base64 "$K8S_SAT_B64" \
+     --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
+     --key-id jit-deployer \
+     --ttl-seconds 900
    ```
 
-   -> the user connects normally and `sshd` validates the certificate against the
-   trusted CA with no stored key. Access expires on its own, the approver cannot be the
-   attested subject, requested principals must match the attestation, and the issued cert
-   carries the source-address/force-command guardrails. The attestation-gated issuer is
-   served through the SSH workflow API/CLI/UI and still keeps the private key with the
-   user, never in trstctl.
+   -> the user connects normally and `sshd` validates the certificate against
+   the trusted CA with no stored key. Access expires on its own, the
+   certificate's principals come from the verified attestation (the caller
+   cannot request extras), and the private key stays with the user — never in
+   trstctl. The attestation-gated issuer is served through the SSH workflow
+   API, CLI, and UI.
 
 5. Pull a certificate back before it expires. Revoking it puts its serial on the SSH
    CA's key-revocation list, served in OpenSSH binary format at `/ssh/krl`, which a
@@ -149,7 +145,7 @@ operator-confirmed agent path.
    ```sh
    trstctl ssh status
    trstctl ssh revoke --serial <serial> --reason 'operator requested revocation'
-   curl -fsS "$TRSTCTL_SERVER/ssh/krl" -o trstctl.krl
+   curl -fsS "$TRSTCTL_URL/ssh/krl" -o trstctl.krl
    trstctl ssh retire-host --host edge-1.internal --source <source-id> --run <run-id> --reason 'standing SSH access replaced'
    ```
 

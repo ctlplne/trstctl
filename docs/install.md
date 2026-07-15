@@ -12,8 +12,8 @@ Pick the platform you are installing on.
 
 ## Docker (control plane)
 
-The published image is distroless, unprivileged, and under 80 MB. Run it
-against your datastores by digest, after verifying the release image:
+The published image is distroless and unprivileged. Run it against your
+datastores by digest, after verifying the release image:
 
 ```bash
 export TRSTCTL_IMAGE_REF='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
@@ -26,19 +26,10 @@ docker run --rm -p 8443:8443 \
   "$TRSTCTL_IMAGE_REF"
 ```
 
-For a self-contained blank evaluation that brings up Postgres and NATS for you,
-use the Compose stack from [Getting started](getting-started.md):
-
-```bash
-docker compose -f deploy/docker/docker-compose.yml up --build
-```
-
-For a pre-populated live demo with local SSO and seeded credential inventory, use
-the separate demo stack:
-
-```bash
-docker compose -f deploy/demo/docker-compose.yml up --build
-```
+For a self-contained blank evaluation that brings up Postgres and NATS for
+you, use the Compose stack from [Getting started](getting-started.md)
+(`deploy/docker/docker-compose.yml`); for a pre-populated demo with local SSO,
+the demo stack (`deploy/demo/docker-compose.yml`).
 
 Verify a published image before you run it — its keyless cosign signature and its
 CycloneDX SBOM attestation — with the helper:
@@ -72,11 +63,11 @@ running control plane.
 ## Kubernetes (control plane via Helm)
 
 The control plane installs with the Helm chart under `deploy/helm/trstctl`. It
-deploys the API/UI with the **signing service isolated** as a locked-down sidecar
-that has **no network listener** (it talks to the control plane only over a shared
-in-memory socket, so the private keys stay in their own isolated process),
-against **external PostgreSQL and NATS**, behind a default-deny `NetworkPolicy`,
-with TLS on by default (R1.3):
+deploys the API/UI with the signing service isolated as a locked-down sidecar
+with no network listener (it talks to the control plane only over a shared
+in-memory socket, so private keys stay in their own process), against external
+PostgreSQL and NATS, behind a default-deny `NetworkPolicy`, with TLS on by
+default:
 
 ```bash
 helm install trstctl deploy/helm/trstctl \
@@ -92,9 +83,9 @@ kubectl -n trstctl rollout status deploy/trstctl
 kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443 (-k)
 ```
 
-The release pipeline also publishes the **packaged chart as a cosign-signed OCI
-artifact** to GHCR, so you can verify the chart's provenance before
-installing — the same keyless-OIDC identity that signs the image:
+The release pipeline also publishes the packaged chart as a cosign-signed OCI
+artifact to GHCR, so you can verify the chart's provenance before installing —
+the same keyless-OIDC identity that signs the image:
 
 ```bash
 cosign verify ghcr.io/ctlplne/trstctl/charts/trstctl:<chart-version> \
@@ -112,9 +103,9 @@ datastore egress to operator-owned private CIDRs.
 See [`deploy/helm/trstctl/README.md`](https://github.com/ctlplne/trstctl/tree/main/deploy/helm/trstctl)
 for the full values reference. The chart runs the signer co-located (sidecar, over
 an in-memory UDS) by default; set `signer.mode=isolated` plus the required
-`signer.mtls.*` values to render a **separate signer pod reached over mutually
-pinned mTLS** (TLS 1.3, both-ways certificate pinning). A focused
-Kubernetes **Operator** binary (`cmd/trstctl-operator`) ships for CRD-driven
+`signer.mtls.*` values to render a separate signer pod reached over mutually
+pinned mTLS (TLS 1.3, both-ways certificate pinning). A focused Kubernetes
+Operator binary (`cmd/trstctl-operator`) ships for CRD-driven
 Deployment reconciliation: replicas, image, PostgreSQL DSN Secret reference,
 NATS URL/replica knobs, sidecar-signer socket/volumes, and managed-key provider
 enablement. Its manifest runs two replicas with real leader election through a

@@ -2,104 +2,95 @@
 
 ## What it is
 
-Governance is the layer that decides *whether* an action may happen, *who* may do it,
-*which runtime attributes narrow that permission*, *who gets told*, and *what record is
-kept*. trstctl's governance is six capabilities: a **policy engine** that allows or
+Governance decides *whether* an action may happen, *who* may do it, *which runtime
+attributes narrow that permission*, *who gets told*, and *what record is kept*.
+trstctl's governance is six capabilities: a **policy engine** that allows or
 denies each operation, **RBAC** that enforces who can do what, an **ABAC deny overlay**
 that blocks requests using environment, time, actor, and resource attributes,
 **notifications** that alert the right people, a **tamper-evident audit log** that
 records everything, and **compliance reporting** that turns that record into signed
 evidence for auditors.
 
-The mental model: this is the rulebook, the ID checkpoint, the pager, the flight
-recorder, and the auditor's evidence pack — the controls that turn a powerful tool into
-one a regulated enterprise can actually run.
+The mental model: the rulebook, the ID checkpoint, the pager, the flight recorder, and
+the auditor's evidence pack — controls that turn a powerful tool into one a regulated
+enterprise can run.
 
 ## Why it exists
 
-A credential platform is, by definition, powerful — it can mint and revoke the identities
-that hold your infrastructure together. That power needs guardrails: a way to encode
-"never issue a 10-year cert," a way to ensure only authorized people issue, a way to know
-immediately when something important happens, and an unforgeable record for the inevitable
-audit. Without these, the platform is a liability; with them, it's the thing that *proves*
-your machine-identity hygiene to a customer's security team.
+A credential platform is, by definition, powerful — it can mint and revoke the
+identities holding your infrastructure together. That power needs guardrails: a way
+to encode "never issue a 10-year cert," ensure only authorized people issue, know
+immediately when something important happens, and keep an unforgeable record for the
+inevitable audit. Without these, the platform is a liability; with them, it's what
+*proves* your machine-identity hygiene to a customer's security team.
 
 ## How it works
 
 ### The policy engine (F28)
 
 Every `issue`, `deploy`, and `revoke` passes through an embedded **[OPA](../glossary.md)
-/ Rego** policy gate before it executes. The Rego module is compiled once at startup — a
-module that doesn't compile is a hard startup error, so the system never runs without an
-enforceable policy. Each decision sees structured input (`action`, `profile`, `actor`,
-`tenant_id`, attributes) and is **fail-closed**: any evaluation error, ambiguous result,
-or overloaded pool returns *deny*. Evaluation runs in its own bounded lane — overload is
-rejected fast instead of starving issuance — and every decision is recorded as an
-immutable `policy.decision` event in the tamper-evident log. The default policy is
-safe-by-default: deny everything except revocation, and permit issuance/deployment only
-when a profile is bound.
+/ Rego** policy gate before it executes. The Rego module compiles once at startup — a
+module that fails to compile is a hard startup error, so the system never runs without
+an enforceable policy. Each decision sees structured input (`action`, `profile`, `actor`,
+`tenant_id`, attributes) and is fail-closed: an evaluation error, ambiguous result, or
+overloaded pool all return *deny*. Evaluation runs in its own bounded lane, so overload
+is rejected fast instead of starving issuance, and every decision is recorded as an
+immutable `policy.decision` event. The default policy denies everything except
+revocation and permits issuance/deployment only when a profile is bound.
+
+**Status:** served on the issuance path when `ca.policy.enabled`: the gate runs on every
+issue/deploy/revoke transition, the RA scope split (`certs:request` ≠ `certs:issue`)
+stops a requester from self-issuing, and `ca.policy.require_approval` requires a distinct
+approver — self-approval is rejected.
 
 ### RBAC (F8)
 
 Role-based access control decides *who* may do *what*. Permissions are
 `<resource>:<verb>` strings (`certs:issue`, `audit:read`); five built-in roles ship —
-`admin`, `operator`, `viewer`, `auditor`, and `ra-officer` (which can request but **not**
-self-issue certificates, the registration-authority separation). A principal's grants are
-scoped to a tenant, and a scope check **hard-blocks cross-tenant access** — each tenant's
-data is isolated at the database layer, so one tenant can never read another's. The
-API's `guard` middleware evaluates the required permission on every route and returns
-`403 application/problem+json` on failure; the acting principal is stamped into the
-immutable event record for audit attribution.
+`admin`, `operator`, `viewer`, `auditor`, and `ra-officer` (which can request but not
+self-issue, the registration-authority separation). Grants are scoped to a
+tenant, and a scope check hard-blocks cross-tenant access at the database layer, so one
+tenant can never read another's. The API's `guard` middleware checks the required
+permission on every route, returns `403 application/problem+json` on failure, and stamps
+the acting principal into the immutable event record for audit attribution.
 
-**Status: enforced** on every served route.
+**Status:** enforced on every served route.
 
-### Ownership attribution (CAP-GOV-01)
+### Ownership attribution
 
-Ownership attribution answers a simple governance question for every non-human
-identity: who is accountable for it right now? `GET
-/api/v1/ownership/attribution` (`nhi:read`) reads the tenant-scoped unified NHI
-inventory and joins it to projected owner records. Managed credentials resolve by
-`owner_id`; discovered credentials can resolve metadata-only owner, team, or
-vendor names to registered owner records. Anything unresolved is returned as
-`orphaned`, so a discovery note that merely says "owner: unknown" never counts as
-served accountability.
+Every non-human identity needs an accountable owner, not a discovery note that
+says "owner: unknown." `GET /api/v1/ownership/attribution` (`nhi:read`) resolves managed
+and discovered NHIs to a registered owner, team, or vendor, and marks anything
+unresolved as `orphaned` rather than counted as accountability. See
+[Discovery & inventory](discovery-and-inventory.md) for the resolution mechanics, owner
+kinds, and evidence-ref shape; the same data is available via
+`trstctl-cli owners attribution` and the Owners console.
 
-Owner kinds include `user`, `team`, `workload`, `service`, and `vendor`. The
-response includes a per-NHI attribution status, attribution source, evidence refs
-such as `owner_id:<uuid>` or `metadata.owner:<name>`, and a summary that counts
-attributed, orphaned, human/user, team, and vendor coverage. The same surface is
-available in the CLI as `trstctl-cli owners attribution`, and the Owners console
-shows the attribution table beside the owner registry.
+**Status:** served for managed identities plus discovery-fed NHIs.
 
-**Status: served** for managed identities plus discovery-fed NHIs from the served
-inventory path, including user, team, vendor, and orphaned coverage.
-
-### NHI policy compliance (CAP-GOV-03)
+### NHI policy compliance
 
 `GET /api/v1/nhi/policy/compliance` (`nhi:read`) evaluates governed non-human
-identities against explicit policy facts in the unified NHI inventory. It covers
-managed identities and discovery-fed NHIs, and checks the table-stakes controls buyers
-expect: rotation cadence, allowed scopes, allowed geographies, expiry / maximum TTL,
-and business purpose.
+identities — managed and discovery-fed — against policy facts in the unified NHI
+inventory: rotation cadence, allowed scopes/geographies, expiry/maximum TTL, and
+business purpose.
 
-The response is a policy posture view, not the raw source record. It returns counts for
-compliant and violating NHIs, per-control violation totals, severity, risk score,
-disallowed scopes/geographies, recommendation text, and evidence refs such as
-`inventory:<id>`, `discovery.finding:<id>`, and `metadata:allowed_scopes`. Raw
-credential values and raw discovery/source metadata are not returned. Rows without
-policy metadata are not counted as compliant just because they exist; a row becomes
-governed when it carries policy-required evidence, a rotation/TTL policy, an allowed
-scope or geography envelope, an expiry, or business-purpose metadata.
+The response is a posture view, not the raw source record: counts for compliant and
+violating NHIs, per-control violation totals, severity, risk score, disallowed
+scopes/geographies, recommendation text, and evidence refs such as `inventory:<id>` and
+`discovery.finding:<id>`. Raw credential values are never returned. A row isn't counted
+as compliant just for existing — it becomes governed only once it carries a rotation/TTL
+policy, a scope or geography envelope, an expiry, or business-purpose metadata.
 
-The same read path is available as `trstctl-cli nhi policy compliance`, and the Risk
-console shows the highest-severity CAP-GOV-03 violations beside over-privilege, stale,
-and static-credential posture.
+The same read path is available as `trstctl-cli nhi policy compliance`; the Risk console
+shows the highest-severity violations beside over-privilege, stale, and
+static-credential posture.
 
-**Status: served** for metadata-backed NHI policy compliance over managed and
-discovered NHIs. Authoring and activating the global live Rego module remains the
-deployment-time policy workflow described under the core policy engine.
+**Status:** served for metadata-backed policy compliance over managed and discovered
+NHIs; authoring and activating the live Rego module is the deployment-time workflow
+under the policy engine above.
 
-### Automated NHI decommissioning (CAP-GOV-04)
+### Automated NHI decommissioning
 
 `POST /api/v1/nhi/decommission` (`identities:write`) accepts governance signals
 from owner departure, vendor termination, or inactivity review and resolves them
@@ -117,31 +108,27 @@ nhi-decommission.json --force` and in the Identities console. It deliberately
 does not treat full tenant deletion or member/API-token offboarding as NHI
 decommissioning; those remain separate admin flows.
 
-**Status: served** for managed NHI identities selected by departure, vendor-term,
+**Status:** served for managed NHI identities selected by departure, vendor-term,
 and inactivity signals, using event-sourced revoke/retire transitions.
 
-### Access-change approvals (CAP-GOV-05)
+### Access-change approvals
 
 Access-change approvals answer "who approved this non-human identity change, and which
 change record justified it?" `POST /api/v1/access/requests` (`access:write`) opens a
-tenant-scoped request for an NHI entitlement change. The request records the action
-(`grant`, `modify`, `revoke`, `rotate`, `deploy`, or `break_glass`), NHI identifier and
-kind, resource, entitlement, PR/ticket/CAB reference, reason, risk, evidence refs, and
-required approval count. trstctl infers the change system from common GitHub, GitLab,
-Bitbucket, ServiceNow, and Jira references; unknown systems remain external instead of
-being counted as a supported integration.
+tenant-scoped request: action (`grant`, `modify`, `revoke`, `rotate`, `deploy`, or
+`break_glass`), NHI identifier and kind, resource, entitlement, PR/ticket/CAB reference,
+reason, risk, evidence refs, and required approval count. trstctl infers the change
+system from GitHub, GitLab, Bitbucket, ServiceNow, or Jira references; unknown systems
+stay external, not a supported integration.
 
 Decisions are recorded with `POST /api/v1/access/requests/{id}/decisions`
-(`access:write`). The acting subject, or an explicit approver subject, must be different
-from the requester. A second decision by the same approver is rejected. Approval moves the
-request to `approved` only when quorum is reached; any denial moves it to `denied`.
-Create and decide are idempotent mutations, so a retried request with the same
-`Idempotency-Key` returns the original result instead of duplicating an approval. The read
-side is projected from `access.change_request.created` and
-`access.change_request.decided` events and is available through
-`GET /api/v1/access/requests` and `GET /api/v1/access/requests/{id}` (`access:read`).
-
-The same workflow is exposed as:
+(`access:write`): the approver must differ from the requester, a second decision by the
+same approver is rejected, and the request reaches `approved` only at quorum (any
+denial moves it to `denied`). Create and decide are idempotent, so a retried
+`Idempotency-Key` returns the original result rather than duplicating an approval. The
+read side is projected from `access.change_request.created` and
+`access.change_request.decided` events, available at `GET /api/v1/access/requests` and
+`GET /api/v1/access/requests/{id}` (`access:read`).
 
 ```bash
 trstctl-cli access requests create -f access-request.json
@@ -150,55 +137,36 @@ trstctl-cli access requests get <request-id>
 trstctl-cli access requests decide <request-id> -f access-decision.json
 ```
 
-The Policy console shows recent access-change requests, their PR/ticket/CAB evidence,
-approval count, and approve/deny actions. It does not ask for or display credential
-material; the workflow stores only metadata and evidence references.
+The Policy console shows recent requests, their PR/ticket/CAB evidence, approval count,
+and approve/deny actions, never displaying credential material.
 
-**Status: served** for PR/ticket/CAB-backed NHI access-change requests with distinct
-approver enforcement, idempotency, event projection, API, CLI, and Policy-console
-coverage.
+**Status:** served for PR/ticket/CAB-backed access-change requests with distinct-approver
+enforcement, idempotency, event projection, API, CLI, and console coverage.
 
 ### ABAC deny overlay
 
-Attribute-based access control (ABAC) narrows a permission that RBAC already granted.
-The model is deliberately one-way: ABAC can **deny**, but it can never grant a route or
-certificate action the caller did not already hold through RBAC. This keeps the mental
-model simple: RBAC answers "is this caller allowed in principle?", then ABAC answers
-"is this exact request allowed right now?"
+Attribute-based access control (ABAC) narrows a permission RBAC already granted. It's
+one-way: ABAC can deny, but never grants a route or certificate action the caller
+didn't hold through RBAC. RBAC answers "is this caller allowed in principle?";
+ABAC answers "is this exact request allowed right now?"
 
 Enable it with `auth.abac.enabled` and a Rego module that declares
 `package trstctl.abac`. The module evaluates after RBAC on every guarded API route with
 request attributes (`input.permission`, `input.resource.request.method`,
-`input.resource.request.path`, optional project, actor roles, configured
-`input.env`, and time fields such as `input.now_hour_utc`). On the served
-issue/deploy/revoke lifecycle route, trstctl also adds identity resource attributes:
-`identity.id`, `identity.kind`, `identity.name`, `identity.status`, `owner_id`,
-`transition.to`, and flattened identity attributes such as `input.resource.env` or
+`input.resource.request.path`, optional project, actor roles, configured `input.env`,
+and time fields such as `input.now_hour_utc`); on the served issue/deploy/revoke
+lifecycle route it also adds identity attributes such as `identity.id`, `identity.kind`,
+`identity.status`, `owner_id`, `transition.to`, `input.resource.env`, and
 `input.resource.tags.service`.
 
-ABAC fails closed. A non-compiling ABAC module stops startup; an evaluation error
-denies with `403`; a saturated policy worker lane returns `503`; and every decision is
-recorded as an immutable `policy.abac.decision` event. A practical change-window
-overlay looks like this:
+ABAC fails closed: a non-compiling module stops startup, an evaluation error denies with
+`403`, a saturated policy worker lane returns `503`, and every decision is recorded as an
+immutable `policy.abac.decision` event. A practical change-window overlay — deny
+`certs:issue` in `prod` outside a configured window — is shown in full under
+[Use it](#use-it).
 
-```text
-package trstctl.abac
-
-default deny := false
-default reason := ""
-
-deny if {
-  input.permission == "certs:issue"
-  input.resource.env == "prod"
-  input.env.change_window != "true"
-}
-
-reason := "prod certificates may issue only during a change window" if {
-  input.permission == "certs:issue"
-  input.resource.env == "prod"
-  input.env.change_window != "true"
-}
-```
+**Status:** served after RBAC on every guarded route when `auth.abac.enabled`, plus
+identity-attribute evaluation on issue/deploy/revoke.
 
 ### The audit log (F9)
 
@@ -206,174 +174,124 @@ Buyer receipt for CAP-POL-06 Tamper-evident / signed audit log: the served audit
 surface is `GET /api/v1/audit/events` for tenant-scoped replay and `GET
 /api/v1/audit/export` for a signed offline evidence bundle.
 
-The audit log is a **hash-chained, tamper-evident** record where each entry's hash links
+The audit log is a hash-chained, tamper-evident record where each entry's hash links
 to the previous one (`hash_i = SHA256(hash_{i-1} || record_i)`; all hashing goes through
 the single crypto path). Altering, dropping, or reordering any record breaks the chain,
 and `VerifyChain` names the first broken link — offline. Every change is recorded as an
-immutable event, and the audit log is a **rebuilt view of that history**, not a separate
+immutable event, and the audit log is a rebuilt view of that history, not a separate
 write store, so it can't drift from what actually happened; it's tenant-isolated at the
 database layer. You can export a JOSE-signed evidence bundle an auditor verifies without
 touching the live system, and retention checkpoints keep the chain verifiable even after
 old segments are archived.
 
-**Status: served** — `GET /api/v1/audit/events` and `GET /api/v1/audit/export`.
+**Status:** served — `GET /api/v1/audit/events` and `GET /api/v1/audit/export`.
 
 ### Notifications (F29)
 
 When something matters — a certificate nearing expiry, a CT-log anomaly — trstctl alerts
-the right channel. Alerts use **reliable, journaled delivery**: the alert intent is
-written in the same transaction as the triggering change — so a crash can't drop it — and
-a separate dispatcher fans it out to every configured channel, retrying at-least-once if
-one fails. Channels include email (SMTP), Slack, Microsoft Teams, SMS gateway delivery,
-SIEM collector delivery, PagerDuty, OpsGenie, and HMAC-signed generic webhooks; each
-satisfies one small interface and passes a conformance check, and channel secrets
-(webhook URLs, routing keys, API tokens) are held in wipeable memory where the provider
-API allows it and never logged. HTTP-based channels default to the shared SSRF-safe
-client and accept only public HTTPS endpoints, so an operator-provided callback cannot
-turn the control plane into a request to loopback, RFC1918, or cloud metadata addresses.
+the right channel using reliable, journaled delivery: the alert intent is written in the
+same transaction as the triggering change so a crash can't drop it, and a dispatcher
+fans it to every configured channel, retrying at-least-once on failure.
+Channels (full list under [Reference](#reference)) each satisfy one small interface and
+pass a conformance check; channel secrets (webhook URLs, routing keys, API tokens) are
+held in wipeable memory where the provider allows it and never logged.
+HTTP-based channels default to the shared SSRF-safe client and accept only public HTTPS
+endpoints, so an operator callback can't turn the control plane into a request to
+loopback, RFC1918, or cloud-metadata addresses.
 
-**Status: served.** Expiry alerts are served by the running binary when the lifecycle
-alert window is set: the leader scheduler writes `notification.expiry` outbox work,
-stamps the certificate as alerted, and includes the owner id/contact plus active approver
-recipients from the tenant-member read model. Tenants can create, read, replace, and
-delete notification channels at `/api/v1/notification-channels`; channel rows store
-endpoint metadata and credential references only, redact credential references in
-responses, and are rebuilt from `notification.channel.*` events. The outbox dispatcher
-can resolve enabled tenant-authored channels at delivery time, while process-configured
-channels remain supported for bootstrap deployments. Severity and threshold-day metadata
-use the severity-to-channel routing matrix instead of fanning every alert to every
-channel. `EffectiveAlertChannels` resolves the policy-specific channel set at dispatch
-time. A per-(subject, threshold, channel) dedup ledger prevents the same expiry threshold
-for the same credential from being sent to the same channel again. Operators can list the
-supported/configured channel families, queue redacted channel tests through
-`/api/v1/notification-channels/{id}/test`, list/get the tenant-scoped notification inbox,
-inspect owner/approver escalation fields, mark rows read at
-`/api/v1/notifications/{id}/read`, and requeue failed notification dispatches from
-`/api/v1/notifications/{id}/requeue` with idempotency keys. Every successful fan-out
-channel records a tenant-scoped `notification.delivery.recorded` event before the
-outbox row is acknowledged; if a sibling fails or the worker restarts before ACK,
-retry skips channels whose receipts rebuild from the event log. Channel tests are
-`notification.test.queued` events with an authenticated request digest and durable
-response metadata, so an exact `Idempotency-Key` replay returns the original response
-after both bounded API-response and delivered-outbox retention, while a changed caller
-or body fails with `409` before any receiver call.
+**Status:** served. When the lifecycle alert window is set, the leader scheduler writes
+`notification.expiry` outbox work, stamps the certificate alerted, and includes the
+owner/contact plus active approver recipients. Tenants manage channels at
+`/api/v1/notification-channels` (create, read, replace, delete); rows store endpoint
+metadata and credential references only, redact those in responses, and rebuild from
+`notification.channel.*` events. The outbox dispatcher resolves enabled tenant-authored
+channels at delivery time; process-configured channels remain supported for bootstrap.
+Severity and threshold-day metadata route through the
+severity-to-channel routing matrix instead of fanning every alert to every channel;
+`EffectiveAlertChannels` resolves the policy-specific set at dispatch time, and a
+per-(subject, threshold, channel) dedup ledger stops the same threshold from firing
+twice on the same channel. Operators can list channel families, queue redacted tests at
+`/api/v1/notification-channels/{id}/test`, work the inbox (list, get, mark read), and
+requeue failed dispatches from `/api/v1/notifications/{id}/requeue`. Every successful
+fan-out records a `notification.delivery.recorded` event before the outbox row is acknowledged,
+so a retry after failure skips channels already rebuilt from the event log; channel
+tests replay through `notification.test.queued` events.
 
 ### Compliance reporting (F62)
 
 Compliance reporting turns the audit log and the [CBOM](observability-and-risk.md) into
-signed, reproducible **evidence packs** for PCI-DSS, HIPAA, SOC 2, NIST SP
-800-53, NIST CSF 2.0, FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria,
-CA/Browser Forum Baseline Requirements, WebTrust, ETSI, eIDAS, and NIS2.
-For each framework it marks controls *evidenced* or *gap* based on real audit records and
-crypto posture (e.g. CNSA 2.0's PQC control passes only when post-quantum assets exist and
-quantum-vulnerable ones don't). Crucially, it separates **what the product evidences**
-from **what the operator must still attest** (physical security, personnel) — an honest
-boundary, not an over-claim. Reports are signed through the single crypto path.
-The `fips-140` pack records the FIPS-capable build artifact gate, `--fips`
-fail-closed power-on self-test, single crypto boundary, and CI evidence while
-keeping the NIST CMVP certificate and approved deployment configuration as
-external residuals. The editions posture (`GET /api/v1/editions` and `/admin/editions`)
-serves the same live module state, build target, CI gate, and residual for operators
-who need the key-management view rather than a signed audit pack. The
-`common-criteria` pack maps TOE/security-target evidence
-for API, signer, tenant isolation, RBAC, audit, and crypto-boundary controls while
-keeping the lab evaluation report, certificate, protection profile, and evaluated
-configuration guide as external residuals.
-The `cabf-br` pack turns the same served route into CA/Browser Forum Baseline
-Requirements evidence: profile lint/zlint posture, CA issuance/revocation audit
-evidence, signer isolation, and HSM-capable key management are product-evidenced,
-while CP/CPS publication, domain-validation/CAA procedures, CA/Browser Forum policy
-operation, and independent public-trust audit remain operator/auditor residuals.
-WebTrust and ETSI packs add broader CA-audit posture controls while keeping
-practitioner opinion, qualified trust-service status, and external conformity
-assessment as explicit operator/auditor residuals.
-The `soc2` pack maps logical-access evidence for non-human credentials,
-security-event monitoring evidence, and change-management evidence to CC6/CC7/CC8
-style trust-services criteria from tenant RBAC, NHI posture, signed audit
-events, and the event-sourced change trail. It keeps trust-services category
-scope, management assertion, operating-effectiveness sampling, subservice
-organization carve-outs, and the independent CPA SOC 2 examination report as
-operator/auditor residuals.
+signed, reproducible evidence packs covering all 15 supported frameworks (full list
+under [Reference](#reference)). Each framework's controls are marked *evidenced* or
+*gap* from real audit records and crypto posture (e.g. CNSA 2.0's PQC control passes
+only when post-quantum assets exist and quantum-vulnerable ones don't), and the report
+separates what the product evidences from what the operator must still attest (physical
+security, personnel) — an honest boundary, not an over-claim. Reports are signed through
+the single crypto path.
 
-CAP-OBS-02 adds the inventory/reporting layer around those packs. `GET
-/api/v1/compliance/inventory-report` returns a tenant-scoped report that
-enumerates the served frameworks, supported report types, backing routes, evidence
-references, report-schedule rows, and inventory counts from certificates, CBOM
-assets, discovery schedules, and report schedules. `POST
-/api/v1/compliance/report-schedules` records an idempotent,
-event-sourced schedule definition, and `GET /api/v1/compliance/report-schedules`
-lists the tenant's definitions. Delivery is deliberately limited to
-`audit_export`; email, webhook, and ticket dispatch are not claimed until a
-served runner exists.
+Each pack states residuals honestly: `fips-140` evidences the
+FIPS-capable build gate, `--fips` fail-closed self-test, and crypto-boundary/CI proof
+(residual: NIST CMVP certificate, deployment configuration); `common-criteria` evidences
+API, signer, tenant-isolation, RBAC, audit, and crypto-boundary controls (residual: lab
+evaluation report, certificate, protection profile); `cabf-br` evidences profile
+lint/zlint, CA issuance/revocation audit, signer isolation, and HSM-capable key
+management (residual: CP/CPS publication, independent public-trust audit — WebTrust and
+ETSI add broader CA-audit posture on the same split); and `soc2` maps logical-access,
+security-event, and change-management evidence to CC6/CC7/CC8 criteria (residual: scope,
+management assertion, sampling, independent CPA report).
 
-CAP-CMP-04, CAP-CMP-05, and CAP-CMP-06 add compliance mappings for external table-stakes
-frameworks. `GET /api/v1/compliance/evidence-packs/{framework}` serves signed
-framework packs for PCI DSS, HIPAA, SOC 2, NIST SP 800-53, NIST CSF 2.0,
-FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR,
-WebTrust, ETSI, eIDAS, and NIS2. `GET /api/v1/compliance/nhi-report` builds an
-audit-ready, tenant-scoped mapping for NIST SP 800-53 Rev. 5, NIST CSF 2.0, PCI
-DSS 4.0, DORA, ISO/IEC 27001:2022 Annex A, FedRAMP, CMMC 2.0, eIDAS, and NIS2.
-The reports are generated from the served NHI inventory, NHI over-privilege
-posture, stale/orphan/dormant posture, static credential posture, CBOM posture,
-and audit export routes; they never treat documentation or unsupported claims as
-evidence. The output lists every mapped framework/control, the served evidence
-refs behind it, posture finding counts, supported report types including
-`nhi_compliance_mapping`, and residual attestations for legal scope, governance
-policy, control applicability, authorization packages, and auditor sampling.
+**Status:** served — evidence-pack export, inventory/schedule surface, and NHI
+compliance mapping below are all live REST/CLI/console routes. `GET
+/api/v1/compliance/inventory-report` enumerates served frameworks, report types, backing
+routes, evidence references, schedule rows, and inventory counts across certificates,
+CBOM assets, and discovery/report schedules; `POST`/`GET
+/api/v1/compliance/report-schedules` record and list idempotent, event-sourced
+schedules, with delivery limited to `audit_export` until a served runner exists. `GET
+/api/v1/compliance/nhi-report` builds a separate mapping (NIST SP 800-53 Rev. 5, NIST
+CSF 2.0, PCI DSS 4.0, DORA, ISO/IEC 27001:2022 Annex A, FedRAMP, CMMC 2.0, eIDAS, NIS2)
+from served NHI posture only — never documentation or unsupported claims — with finding
+counts and residual attestations for legal scope, control applicability, and auditor
+sampling.
 
-The same served governance surface now includes **NHI access certification campaigns**
-(CAP-GOV-02). A reviewer starts a campaign with non-secret NHI/resource/entitlement
-items and evidence references, then records each item decision as `certified`,
-`revoked`, or `exception`. Campaign state is event-sourced: `POST
-/api/v1/access/reviews` emits `nhi.access_review.campaign.started`, each `POST
-/api/v1/access/reviews/{id}/items/{item_id}/decision` emits
-`nhi.access_review.item.decided`, and the read model recomputes pending/certified/
-revoked/exception counts from those events. The request body accepts identifiers and
-evidence refs only; inline secrets, tokens, passwords, and credential values are rejected.
+The same surface runs NHI access certification campaigns: a reviewer starts a campaign
+with non-secret NHI/resource/entitlement items, then records each item decision as
+`certified`, `revoked`, or `exception` — event-sourced, with routes and events listed
+under [Reference](#reference). The request body accepts identifiers and evidence refs
+only; inline secrets and credential values are rejected.
 
 ### Privacy and data-subject controls (F79)
 
-Privacy controls are first-class governance surfaces rather than hidden compliance
-helpers. `POST /api/v1/privacy/subject-erasures` records a tenant-scoped subject erasure,
-emits `privacy.subject.erased`, and projects pseudonymized or cleared personal data across
-read models while keeping immutable audit evidence verifiable. `POST
-/api/v1/privacy/retention-runs` records a non-audit PII retention pass, emits
-`privacy.retention.enforced`, and applies configured retention windows to operational
-metadata. `POST /api/v1/privacy/subject-exports` answers access/portability requests as a
-read-only export; it deliberately does not mutate state and does not carry an
-`Idempotency-Key`. `GET /api/v1/privacy/catalog` exposes the maintained personal-data
-catalog so operators can see what fields are subject to erasure and retention.
+Privacy controls are first-class governance surfaces, not hidden compliance helpers.
+`POST /api/v1/privacy/subject-erasures` records a tenant-scoped subject erasure, emits
+`privacy.subject.erased`, and projects pseudonymized or cleared personal data while
+keeping audit evidence verifiable. `POST /api/v1/privacy/retention-runs` records a
+non-audit PII retention pass, emits `privacy.retention.enforced`, and applies configured
+retention windows to operational metadata. `POST /api/v1/privacy/subject-exports`
+answers access/portability requests as a read-only export that does not mutate state or
+carry an `Idempotency-Key`. `GET /api/v1/privacy/catalog` exposes the maintained
+personal-data catalog so operators can see what fields are subject to erasure and
+retention.
 
-The CLI exposes the same control family through `privacy erasures erase`,
-`privacy erasures list`, `privacy retention run`, `privacy retention list`,
-`privacy export`, and `privacy catalog`. The web console's `/privacy` screen is the
-operator-facing surface for erasure, retention enforcement, retention evidence, and the
-catalog. See [Privacy data catalog](../privacy-data-catalog.md) for the row-level map and
-erasure/retention behavior.
+The CLI exposes the same controls through `privacy erasures erase`, `privacy erasures
+list`, `privacy retention run`, `privacy retention list`, `privacy export`, and `privacy
+catalog`; the web console's `/privacy` screen covers erasure, retention enforcement,
+retention evidence, and the catalog. See [Privacy data catalog](../privacy-data-catalog.md)
+for the row-level map and erasure/retention behavior.
 
 ### In the console
 
-The `/policy` screen renders a **compliance evidence-pack dashboard** - pick a framework
-(PCI-DSS, HIPAA, SOC 2, NIST SP 800-53, NIST CSF 2.0, FedRAMP, CMMC 2.0,
-CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, eIDAS, or
-NIS2), render the signed pack, and export audit
-evidence - plus the CAP-OBS-02 **compliance inventory report** and audit-export
-schedule-definition form. It also renders the CAP-CMP-06 **NHI compliance
-mapping** for NIST, PCI DSS, DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2
-evidence, plus an **NHI access
-certification** panel for starting campaigns and recording reviewer decisions. The
-policy authoring workbench calls `POST /api/v1/policy/dry-run` to compile a
-candidate lifecycle or ABAC Rego module, force the authenticated tenant into the
-input, return allow/deny/error plus a bounded trace, and append
-`policy.dry_run.evaluated` without raw module/input values. The same screen serves
+The `/policy` screen is a compliance evidence-pack dashboard: pick any of the 15
+supported frameworks (list under [Reference](#reference)), render the signed pack, and
+export audit evidence, alongside the compliance inventory report, audit-export
+schedule form, NHI compliance mapping, and an NHI access certification panel for
+campaigns and reviewer decisions. The policy authoring workbench calls `POST
+/api/v1/policy/dry-run` to compile a candidate lifecycle or ABAC Rego module against the
+tenant's input, returning allow/deny/error plus a bounded trace and appending
+`policy.dry_run.evaluated` without raw values. The same screen serves
 lifecycle policy version authoring, listing, activation, and rollback through
-`/api/v1/policy/versions`, with `policy.version.*` events and activation into the
-running mutation gate only after the candidate module compiles. The `/audit` screen is
-a filterable **audit explorer** (type presets such as *Policy decisions*, time and
-sequence windows) that downloads a signed evidence bundle. See
-[The web console](../web-console.md).
-The `/privacy` screen renders the served data-subject controls and personal-data catalog
-for the F79 privacy feature.
+`/api/v1/policy/versions`, activating a candidate after it compiles. The `/audit`
+screen is a filterable audit explorer (type presets such as *Policy decisions*, time and
+sequence windows) that downloads a signed evidence bundle; the `/privacy` screen renders
+the served data-subject controls and catalog. See [The web console](../web-console.md).
 
 ## Use it
 
@@ -386,70 +304,41 @@ trstctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --l
 # download a signed evidence bundle for a date range
 trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:00Z
 
-# export a signed SOC 2 evidence pack with audit, access, and change evidence
+# export a signed SOC 2 evidence pack
 trstctl-cli compliance evidence-pack soc2
 
-# read CAP-OBS-02 inventory/reporting coverage
+# read compliance inventory coverage
 trstctl-cli compliance inventory-report
 
-# read CAP-CMP-06 NHI compliance mappings for NIST/PCI/DORA/ISO evidence
+# read NHI compliance mappings
 trstctl-cli compliance nhi-report
 
-# dry-run a candidate Rego module against tenant-scoped JSON input
+# dry-run a candidate Rego module, then author/activate a lifecycle policy version
 trstctl-cli policy dry-run --body policy-dry-run.json
-
-# author, activate, list, and rollback a live lifecycle policy version
-cat > lifecycle-policy-version.json <<'JSON'
-{"kind":"lifecycle","description":"Require a bound TLS profile for issuance","change_ref":"CAB-2026-07-02","evidence_refs":["pr:policy-42"],"module":"package trstctl.policy\n\ndefault allow := false\nallow if { input.action == \"revoke\" }\nallow if { input.action == \"issue\"; input.profile != \"\" }\n"}
-JSON
 trstctl-cli --idempotency-key policy-author-42 policy versions create -f lifecycle-policy-version.json
-trstctl-cli policy versions list
-printf '{"reason":"CAB approved policy-42","evidence_refs":["cab:2026-07-02"]}' | trstctl-cli --idempotency-key policy-activate-42 policy versions activate <version-id> -f -
-printf '{"reason":"Rollback failed rollout","evidence_refs":["incident:policy-42"]}' | trstctl-cli --idempotency-key policy-rollback-42 policy versions rollback <version-id> -f -
+printf '{"reason":"CAB approved"}' | trstctl-cli --idempotency-key policy-activate-42 policy versions activate <version-id> -f -
 
-# record an audit-export report schedule definition
+# record a report-schedule definition
 cat > soc2-schedule.json <<'JSON'
-{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
+{"framework":"soc2","name":"weekly-soc2-pack","interval_seconds":604800,"delivery":"audit_export"}
 JSON
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f soc2-schedule.json
-trstctl-cli compliance report-schedules list
 
-# start an NHI access certification campaign from metadata/evidence refs
+# start and decide an NHI access certification campaign
 trstctl-cli access reviews start -f nhi-review.json
-
-# record an item decision
 trstctl-cli access reviews decide <campaign-id> <item-id> -f nhi-review-decision.json
 
 # file and review data-subject privacy controls
 trstctl-cli privacy erasures erase -f subject-erasure.json
-trstctl-cli privacy erasures list
 trstctl-cli privacy retention run
 trstctl-cli privacy catalog
 ```
 
-Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`,
-`GET /api/v1/compliance/evidence-packs/{framework}`,
-`GET /api/v1/compliance/inventory-report`,
-`GET /api/v1/compliance/nhi-report`, `POST
-/api/v1/compliance/report-schedules`, and `GET
-/api/v1/compliance/report-schedules`. NHI certification campaigns map to
-`POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`, `GET
-/api/v1/access/reviews/{id}`, and `POST
-/api/v1/access/reviews/{id}/items/{item_id}/decision`; policy dry-run maps to
-`POST /api/v1/policy/dry-run`; policy version management maps to
-`POST /api/v1/policy/versions`, `GET /api/v1/policy/versions`,
-`POST /api/v1/policy/versions/{id}/activate`, and
-`POST /api/v1/policy/versions/{id}/rollback`. Privacy controls map to
-`POST /api/v1/privacy/subject-erasures`, `GET /api/v1/privacy/subject-erasures`,
-`POST /api/v1/privacy/retention-runs`, `GET /api/v1/privacy/retention-runs`,
-`POST /api/v1/privacy/subject-exports`, and `GET /api/v1/privacy/catalog`.
-All mutations require an `Idempotency-Key`.
-Evidence packs support `pci-dss`, `hipaa`, `soc2`, `nist-800-53`,
-`nist-csf-2.0`, `fedramp`, `cmmc-2.0`, `cnsa-2.0`, `fips-140`,
-`common-criteria`, `cabf-br`, `webtrust`, `etsi`, `eidas`, and `nis2`; the response
-contains a signed export plus `public_key_der` so an auditor can verify the
-manifest offline. RBAC is enforced on every route automatically. A default-deny
-policy looks like this in Rego:
+Routes for every command above are in [Reference](#reference); all mutations need an
+`Idempotency-Key`. Evidence packs support all 15 frameworks (path values in
+[Reference](#reference)) and return a signed export plus `public_key_der` so an auditor
+can verify the manifest offline. RBAC is enforced automatically. A default-deny policy
+looks like this in Rego:
 
 ```text
 package trstctl.policy
@@ -470,47 +359,35 @@ auth:
     module: |
       package trstctl.abac
       default deny := false
-      default reason := ""
       deny if {
         input.permission == "certs:issue"
         input.resource.env == "prod"
         input.env.change_window != "true"
       }
-      reason := "prod certificates may issue only during a change window" if {
-        deny
-      }
 ```
 
 ## Pitfalls & limits
 
-- **Served vs library:** RBAC (F8) is enforced, the ABAC deny overlay is served, and
-  the audit log (F9), framework evidence-pack export, compliance inventory report,
-  and audit-export report schedule definitions (F62/CAP-OBS-02) are served. The
-  **policy engine (F28) and the RA/dual-control gate are now served on the issuance
-  path**: with `ca.policy.enabled` the default-deny OPA/Rego gate runs
-  on every served issue/deploy/revoke transition (fail-closed), the RA scope split
-  (`certs:request` ≠ `certs:issue`) is enforced so a requester cannot self-issue, and
-  with `ca.policy.require_approval` a privileged action needs a **distinct** approver
-  (self-approval rejected). With `auth.abac.enabled`, the ABAC deny overlay runs after
-  RBAC on guarded API routes and with identity tags on issue/deploy/revoke.
-  Notifications (F29) now have served expiry-alert dispatch, tenant channel
-  credential-reference lifecycle, routing policy authoring, channel-test delivery,
-  inbox/dead-letter triage, and outbox-backed retries.
-- **Policy fails closed.** If your Rego is wrong or the engine is overloaded, operations
-  are denied, not allowed — by design. Test policy changes before rollout.
-- **Compliance reporting, privacy controls, NHI campaigns, and access-change approvals
-  evidence controls; they do not certify you.** Campaign decisions prove a reviewer attested to listed
-  machine access at a point in time. Access-change approvals prove who approved a scoped
-  NHI entitlement change against a PR/ticket/CAB reference. Privacy erasure and retention
-  evidence proves the product executed the configured data-subject controls; external
-  auditors still decide whether your whole program meets a framework — see also
-  [Audit & compliance](../compliance.md).
-- **Notifications are at-least-once**, so design channel handlers to tolerate a duplicate.
+- Read the status line in each section above: every capability here is served, but
+  several are gated behind a config flag (`ca.policy.enabled`, `ca.policy.require_approval`,
+  `auth.abac.enabled`); [Reference](#reference) gives the exact flag and route.
+- Policy fails closed. If your Rego is wrong or the engine is overloaded, operations
+  are denied, not allowed. Test policy changes before rollout.
+- Compliance reporting, privacy controls, NHI campaigns, and access-change approvals
+  evidence controls; they do not certify you. Campaigns prove a reviewer attested to
+  listed access at a point in time; approvals prove who approved a scoped NHI change
+  against a PR/ticket/CAB reference; privacy evidence proves the product executed the
+  configured controls. External auditors decide whether your whole program meets
+  a framework — see also [Audit & compliance](../compliance.md).
+- Notifications are at-least-once, so design channel handlers to tolerate a duplicate.
 
 ## Reference
 
 - **Policy:** `Engine.Evaluate(Input{Action, Profile, Actor, TenantID, Attrs})`;
-  actions `issue`, `deploy`, `revoke`; fail-closed; `policy.decision` events.
+  actions `issue`, `deploy`, `revoke`; fail-closed; `policy.decision` events; dry-run
+  and versioning at `POST /api/v1/policy/dry-run`, `POST|GET /api/v1/policy/versions`,
+  `POST /api/v1/policy/versions/{id}/activate`, and
+  `POST /api/v1/policy/versions/{id}/rollback`.
 - **ABAC deny overlay:** `package trstctl.abac`; `input.permission`,
   `input.resource.*`, `input.env.*`, `input.now_hour_utc`; deny-only; fail-closed;
   `policy.abac.decision` events.
@@ -519,32 +396,32 @@ auth:
 - **Audit (served):** `GET /api/v1/audit/events` (`type`, `since`, `until`, `as_of`, `q`,
   `limit`), `GET /api/v1/audit/export`; `Seal`/`VerifyChain`.
 - **Compliance reporting (served):** `GET /api/v1/compliance/evidence-packs/{framework}`,
-  `GET /api/v1/compliance/inventory-report`, `POST
-  /api/v1/compliance/report-schedules`, and `GET
-  /api/v1/compliance/report-schedules`; report-schedule delivery is `audit_export`
-  only.
-- **Access-change approvals (served):** `POST /api/v1/access/requests`, `GET
-  /api/v1/access/requests`, `GET /api/v1/access/requests/{id}`, and `POST
-  /api/v1/access/requests/{id}/decisions`; CLI commands `access requests create`,
-  `access requests list`, `access requests get`, and `access requests decide`.
+  `GET /api/v1/compliance/inventory-report`, `GET /api/v1/compliance/nhi-report`,
+  `POST|GET /api/v1/compliance/report-schedules`; report-schedule delivery is
+  `audit_export` only.
+- **Access-change approvals (served):** `POST|GET /api/v1/access/requests[/{id}]`, and
+  `POST /api/v1/access/requests/{id}/decisions`; CLI: `access requests create|list|get|decide`.
 - **Notifications:** email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie, webhook
-  (HMAC-signed); HTTP targets are public HTTPS by default; channel lifecycle routes
-  are `POST /api/v1/notification-channels`, `GET /api/v1/notification-channels`,
-  `GET /api/v1/notification-channels/{id}`, `PUT /api/v1/notification-channels/{id}`,
-  `DELETE /api/v1/notification-channels/{id}`, and
+  (HMAC-signed); HTTP targets are public HTTPS by default; channel routes are
+  `POST|GET /api/v1/notification-channels`,
+  `GET|PUT|DELETE /api/v1/notification-channels/{id}`, and
   `POST /api/v1/notification-channels/{id}/test`; inbox routes are
-  `GET /api/v1/notifications`, `GET /api/v1/notifications/{id}`,
-  `POST /api/v1/notifications/{id}/read`, and
+  `GET /api/v1/notifications[/{id}]`, `POST /api/v1/notifications/{id}/read`, and
   `POST /api/v1/notifications/{id}/requeue`.
-- **Compliance frameworks:** PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0.
-- **NHI access reviews:** `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`,
-  `GET /api/v1/access/reviews/{id}`, `POST
+- **Compliance frameworks (15, evidence packs):** PCI-DSS (`pci-dss`), HIPAA
+  (`hipaa`), SOC 2 (`soc2`), NIST SP 800-53 (`nist-800-53`), NIST CSF 2.0
+  (`nist-csf-2.0`), FedRAMP (`fedramp`), CMMC 2.0 (`cmmc-2.0`), CNSA 2.0
+  (`cnsa-2.0`), FIPS 140 (`fips-140`), Common Criteria (`common-criteria`),
+  CA/Browser Forum Baseline Requirements (`cabf-br`), WebTrust (`webtrust`), ETSI
+  (`etsi`), eIDAS (`eidas`), and NIS2 (`nis2`).
+- **NHI access reviews:** `POST|GET /api/v1/access/reviews[/{id}]`, `POST
   /api/v1/access/reviews/{id}/items/{item_id}/decision`; decisions `certified`,
   `revoked`, `exception`; events `nhi.access_review.campaign.started` and
   `nhi.access_review.item.decided`.
-- **Privacy controls:** subject erasure (`privacy.subject.erased`), non-audit retention
-  (`privacy.retention.enforced`), data-subject export, and the maintained personal-data
-  catalog.
+- **Privacy controls:** `POST|GET /api/v1/privacy/subject-erasures`,
+  `POST|GET /api/v1/privacy/retention-runs`, `POST /api/v1/privacy/subject-exports`,
+  `GET /api/v1/privacy/catalog`; events `privacy.subject.erased` and
+  `privacy.retention.enforced`.
 
 ## See also
 

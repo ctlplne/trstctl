@@ -111,7 +111,7 @@ group on a shared trstctl deployment.
    role edit.
 
 5. Decide who can do what with roles. trstctl ships `admin`, `operator`, `viewer`,
-   `auditor`, and `ra-officer` (which can request but **not** self-issue certificates).
+   `auditor`, and `ra-officer` (which can request but not self-issue certificates).
    The required permission is checked on every route and returns `403` on failure. See
    [Policy & governance](../features/policy-and-governance.md).
 

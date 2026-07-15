@@ -34,7 +34,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
 
 ## Steps
 
-1. **Serve over your own certificate, not the self-signed eval one.** TLS is on out
+1. Serve over your own certificate, not the self-signed eval one. TLS is on out
    of the box, but for production point it at a real certificate:
    Public deployments must use `server.tls.mode=file` with an operator-provided
    certificate chain from your CA rather than eval self-signed trust.
@@ -54,7 +54,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    isolation properties are covered in
    [Platform & API](../features/platform-and-api.md).
 
-2. **Confirm readiness against the real dependencies.** `/readyz` probes PostgreSQL,
+2. Confirm readiness against the real dependencies. `/readyz` probes PostgreSQL,
    NATS, and the signer, so make it your readiness probe:
 
    ```sh
@@ -64,7 +64,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    You should get `{"status":"ok",...}` with each dependency `ok`. If one drops,
    readiness flips to `503` while `/healthz` (liveness) stays green.
 
-3. **Scrape metrics and wire the alerts.** The control plane emits Prometheus metrics
+3. Scrape metrics and wire the alerts. The control plane emits Prometheus metrics
    at `/metrics`, served outside the API load-shedding lane so they keep answering
    under load:
 
@@ -77,7 +77,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    tenant over budget. The full metric and alert set is in
    [Observability & risk](../features/observability-and-risk.md).
 
-4. **Run a backup, then prove you can restore it.** Take a full DR artifact and
+4. Run a backup, then prove you can restore it. Take a full DR artifact and
    rehearse recovery into a fresh, empty datastore — recovery is not real until it is
    drilled:
 
@@ -90,7 +90,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    The complete backup set, restore procedure, and the DR scenarios are in the
    [disaster-recovery runbook](../disaster-recovery.md).
 
-5. **Query the tamper-evident audit log and export evidence.** Every change is
+5. Query the tamper-evident audit log and export evidence. Every change is
    recorded as an immutable event, and the audit log is a hash-chained view of that
    history. Pull events, download a signed bundle, and produce a framework pack:
 
@@ -105,7 +105,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    compliance-reporting and audit model is in
    [Policy & governance](../features/policy-and-governance.md).
 
-6. **Tune backpressure for your traffic.** Per-tenant rate limiting sheds a noisy
+6. Tune backpressure for your traffic. Per-tenant rate limiting sheds a noisy
    tenant before it can starve the rest. Set the budget for your load:
 
    ```sh
@@ -117,7 +117,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    degrading the whole control plane. The bulkheads, rate limiter, and graceful drain
    are described in [Operations & resilience](../operations.md).
 
-7. **Rehearse passive-region federation and failover.** On the passive cluster, point
+7. Rehearse passive-region federation and failover. On the passive cluster, point
    federation at the primary cluster's external NATS endpoint and set the RPO/RTO you
    will use in the runbook:
 
@@ -141,7 +141,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    writable region for a tenant at a time; federation is event-log import plus local
    projection, not a two-writer conflict resolver.
 
-8. **For disconnected environments, verify no public egress.** Enable air-gap mode
+8. For disconnected environments, verify no public egress. Enable air-gap mode
    and use the Helm overlay:
 
    ```sh

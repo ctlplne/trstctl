@@ -1,38 +1,23 @@
 # Feature index
 
-trstctl tracks **79 capabilities**. This page is the traceability matrix: every
-feature, its ID, and the page that explains it the trstctl way — *what* it is, *why*
-it exists, and *how* it works, for a reader who starts with [zero
-knowledge](glossary.md). The index is backed by served-state metadata in
-`internal/featureparity/feature-map-backlog.json` as `served_state`, using the
-vocabulary `served`, `conditional`, `partial`, `library`, and `roadmap`. The current
-export is fully served in GA, and the metadata remains the guardrail: current
-GA-facing catalog rows may not use `library` as a landing zone for
-built-but-unserved behavior. If a future capability is not wired to a served runtime
-surface, it must either be `roadmap` with explicit disclosure or be promoted to
-`served`, `conditional`, or `partial` with concrete evidence. The JSON also records
-`ga_served_scope` and `ga_scope_reason` for residual conditional/partial rows:
-`in_ga` rows must be fully `served`, while `out_of_ga` rows remain visible in the
-catalog with a row-specific residual reason and do not inflate the GA served
-denominator. The same JSON records
-`api_surface`, `api_na`, `cli_surface`, and `cli_na`; `internal/api` and `internal/cli` FeatureParity tests
-verify that every named OpenAPI operation/CLI command exists, or that the row has
-an explicit N/A reason. It also records `facet_evidence` for the served, UI, CLI,
-API, test, docs, RBAC, audit, telemetry, a11y, and i18n facets. The
-`FeatureFacetCoverage` test fails if any row is missing evidence or an explicit
-N/A, and GA-ish rows (`served`, `conditional`, `partial`) must carry concrete
-evidence for the facets that always apply to the shipped operator surface.
-`FeatureServedGACoverageCOVER001` recomputes the GA served denominator and fails
-unless it is 100% served after explicit residual exclusions. RBAC is
-tracked through feature-authz manifests: `/api/v1` rows bind each OpenAPI operation
-to a route permission or public credential-exchange rationale, while protocol rows
-bind ACME/EST/SCEP/CMP/SSH/SPIFFE/TSA mounts to either `certs:request` or an
-explicit protocol-public rationale plus tenant/principal mapping.
+trstctl tracks **79 capabilities**. This page answers "where is feature X
+documented?": every capability, its ID, and the primary page that teaches it —
+what it is, why it exists, how it works — for a reader who starts with
+[zero knowledge](glossary.md). What the running binary actually serves, versus
+what exists as library code, is the job of
+[Current limitations](limitations.md); check it before relying on any row.
 
-This page is the answer to "where is feature X documented?" Each capability has a
-**primary page** that teaches it; some are also referenced from related pages and
-from the honest [Current limitations](limitations.md) account of what the running
-binary serves today versus what is built as library code.
+The index cannot silently overclaim. Each row is backed by
+served-state metadata in `internal/featureparity/feature-map-backlog.json`: `served_state`
+uses the vocabulary `served`, `conditional`, `partial`, `library`, and
+`roadmap`, and a capability that is not wired to a served runtime surface must
+be `roadmap` with explicit disclosure — never `library` as a quiet landing
+zone. The same JSON names each row's `api_surface` and `cli_surface` (parity
+tests verify every named operation and command exists) and its
+`facet_evidence` across the served/UI/CLI/API/test/docs/RBAC/audit/telemetry/
+a11y/i18n facets, which the `FeatureFacetCoverage` test enforces. RBAC is
+tracked through feature-authz manifests binding every API operation and
+protocol mount to a permission or an explicit public rationale.
 
 ## Discovery & inventory
 

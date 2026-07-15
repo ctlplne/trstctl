@@ -34,65 +34,58 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 <a href="#license">License</a>
 </p>
 
-> **New here?** Start with **[Getting started](docs/getting-started.md)** (control
-> plane up and your first certificate in minutes), then follow the **journey that
-> matches your goal** — [issue your first certificate](docs/journeys/first-certificate.md),
-> [automate TLS across your fleet](docs/journeys/automate-fleet-tls.md), [give
-> Kubernetes workloads an identity](docs/journeys/kubernetes-workload-identity.md),
-> [migrate from your existing CA](docs/journeys/migrate-from-existing-ca.md), or
-> [respond to a compromise](docs/journeys/respond-to-compromise.md) (12 end-to-end,
-> plain-language walkthroughs in all, each chaining the features you need). Prefer the
-> reference? Browse the **[feature index](docs/features.md)** (all 79 capabilities,
-> each with a deep-dive page) and the **[glossary](docs/glossary.md)**. The docs are
-> written so a complete beginner and a domain expert both get value.
+> **New here?** Start with **[Getting started](docs/getting-started.md)** — control
+> plane up and your first certificate issued, wizard or CLI. Then follow the journey
+> that matches your goal: [automate TLS across your fleet](docs/journeys/automate-fleet-tls.md),
+> [give Kubernetes workloads an identity](docs/journeys/kubernetes-workload-identity.md),
+> [migrate from your existing CA](docs/journeys/migrate-from-existing-ca.md),
+> [respond to a compromise](docs/journeys/respond-to-compromise.md), and
+> [seven more](docs/index.md). Prefer the reference? The
+> [feature index](docs/features.md) covers all 79 capabilities, each with a
+> deep-dive page; the [glossary](docs/glossary.md) defines every term.
 
 > **Status — active development.** A core slice is **served end to end by the running
-> binary today** (certificate inventory, real X.509 issuance, the credential graph,
-> risk scoring, OIDC/SAML/LDAP login, SCIM provisioning, RBAC plus ABAC authorization,
-> the hash-chained audit log, observability, resilience,
-> backup/DR, migrations). Much of the broader surface is **library-complete and tested
-> but not yet wired into the served binary.** Each feature page states its own status,
-> and **[Current limitations](docs/limitations.md) is the single authority** on what
-> runs end to end versus what is library code. trstctl is **MPL-2.0 open core**:
-> the Free core is open-source, Enterprise capabilities live under proprietary
-> `ee/`, and Provider/MSP licenses inherit Enterprise plus managed-service and resale
-> rights. Enterprise bills per control-plane deployment; Provider/MSP wholesale
-> pricing uses a negotiable managed-customer band. Credentials and rotations are never billed
-> ([details](#license)).
+> binary today** — certificate inventory, real X.509 issuance, the credential graph,
+> risk scoring, OIDC/SAML/LDAP login, SCIM provisioning, RBAC plus ABAC,
+> the hash-chained audit log, observability, resilience, backup/DR, migrations.
+> Much of the broader surface is library-complete and tested but not yet wired into
+> the served binary. **[Current limitations](docs/limitations.md) is the single
+> authority** on which is which. trstctl is MPL-2.0 open core: the Free core is
+> open-source; Enterprise and Provider/MSP capabilities live under proprietary
+> `ee/`. Enterprise bills per control-plane deployment. Credentials and rotations
+> are never billed ([details](#license)).
 
 ---
 
 ## The 60-second version
 
-Imagine a large building. Every door has a lock, and every person, robot, and
-delivery cart needs the right key — keys that should expire, be re-cut on schedule,
-and be revoked the moment one is lost. Now imagine nobody keeps a master register of
-the locks and keys. That's machine-credential management at most companies today.
+Imagine a large building where every person, robot, and delivery cart needs the
+right key — keys that should expire, be re-cut on schedule, and be revoked the
+moment one is lost — and nobody keeps a register of the locks. That's
+machine-credential management at most companies today.
 
-**trstctl is the master key register *and* the locksmith *and* the courier.** It
-walks the building to find every lock and key (discovery), cuts and stamps new keys
-(issuance), drives them to the right doors (deployment), re-cuts them before they
-wear out (rotation), cancels lost ones (revocation), and keeps a tamper-proof log of
-everything (audit) — for the machine world, where the "keys" are
-[certificates](docs/glossary.md), SSH certs, [secrets](docs/glossary.md), tokens, and
-workload identities.
+trstctl is the key register, the locksmith, and the courier. It finds every
+lock and key (discovery), cuts new keys (issuance), delivers them to the right
+doors (deployment), re-cuts them before they wear out (rotation), cancels lost
+ones (revocation), and logs everything tamper-proof (audit) — where the "keys"
+are [certificates](docs/glossary.md), SSH certs, [secrets](docs/glossary.md),
+tokens, and workload identities.
 
-For experts: it's an **event-sourced, multi-tenant control plane** for the full
-**non-human-identity (NHI)** lifecycle — X.509, SSH, secrets, and
-[SPIFFE](docs/glossary.md) — with private-key operations isolated in their own process
-and all cryptography behind a single, swappable boundary. Skip to
+For experts: an event-sourced, multi-tenant control plane for the full
+non-human-identity (NHI) lifecycle — X.509, SSH, secrets, and
+[SPIFFE](docs/glossary.md) — with private-key operations isolated in their own
+process and all cryptography behind a single, swappable boundary. Skip to
 [How it's built](#how-its-built).
 
 ## Why trstctl
 
-Machine and workload identities now outnumber human ones by orders of magnitude, and
-most teams manage them with a *different* tool for each kind: one product for TLS
-certificates, another for secrets, something else for SSH, and a closed, SaaS-only
-suite for the enterprise features on top. The result is no single inventory, no
-shared ownership model, no consistent rotation — and, worst of all, no one view of
-**blast radius** (what else is exposed) when a credential leaks. You find out at
-2 a.m., a certificate has expired on a server nobody remembered, and the outage is
-already happening.
+Machine identities outnumber human ones by orders of magnitude, and most teams
+manage them with a different tool per kind: one for TLS certificates, one for
+secrets, one for SSH, and a closed SaaS suite for the enterprise features on
+top. The result: no single inventory, no shared ownership model, no consistent
+rotation, and no view of **blast radius** — what else is exposed — when a
+credential leaks. You find out at 2 a.m., when a certificate nobody remembered
+expires.
 
 Three choices set trstctl apart:
 
@@ -120,30 +113,30 @@ trstctl is organized around the questions operators actually ask:
 - *"What certificates, keys, and secrets do we even have — and which expire this
   week?"* → [discovery & inventory](docs/features/discovery-and-inventory.md) +
   [lifecycle](docs/features/lifecycle-and-pqc.md).
-- *"If this key leaks, what else is exposed?"* → the credential graph's **blast
-  radius** ([graph, query & AI](docs/features/graph-query-ai.md)).
-- *"What should we rotate first?"* → composite **risk scoring**
+- *"If this key leaks, what else is exposed?"* → the credential graph's blast
+  radius ([graph, query & AI](docs/features/graph-query-ai.md)).
+- *"What should we rotate first?"* → composite risk scoring
   ([observability & risk](docs/features/observability-and-risk.md)).
-- *"Who is allowed to issue — and can the requester quietly self-issue, or issue prod
-  outside a change window?"* → RBAC + ABAC + the registration-authority split
+- *"Who is allowed to issue — and can the requester quietly self-issue?"* →
+  RBAC + ABAC + the registration-authority split
   ([policy & governance](docs/features/policy-and-governance.md)).
-- *"Where are we still using weak or quantum-vulnerable crypto?"* → the **CBOM**
+- *"Where are we still using weak or quantum-vulnerable crypto?"* → the CBOM
   (Cryptographic Bill of Materials) ([observability & risk](docs/features/observability-and-risk.md)).
-- *"Did someone get a certificate in our name that we didn't request?"* → **Certificate
-  Transparency** monitoring ([discovery & inventory](docs/features/discovery-and-inventory.md)).
+- *"Did someone get a certificate in our name that we didn't request?"* →
+  Certificate Transparency monitoring
+  ([discovery & inventory](docs/features/discovery-and-inventory.md)).
 
-Or ask the built-in assistant in plain English — it answers with **cited evidence**,
-grounded in real data and scoped to exactly what the caller may see.
+Or ask the built-in assistant in plain English — it answers with cited
+evidence, scoped to exactly what the caller may see.
 
 ## Who it's for
 
-- **Platform & security teams** drowning in certificates, keys, and secrets spread
-  across a half-dozen disconnected tools who want one inventory they actually own.
-- **Regulated & sovereignty-conscious orgs** (finance, healthcare, public sector,
-  critical infrastructure) that need credential automation but cannot send anything to
-  a third-party cloud.
-- **MSPs & multi-team orgs** — self-host once, serve many hard-isolated tenants from
-  one control plane.
+Platform and security teams who want one credential inventory they actually
+own instead of a half-dozen disconnected tools; regulated and
+sovereignty-conscious orgs (finance, healthcare, public sector, critical
+infrastructure) that need credential automation but cannot send anything to a
+third-party cloud; and MSPs or multi-team orgs that self-host once and serve
+many hard-isolated tenants from one control plane.
 
 ## What it does
 
@@ -151,40 +144,37 @@ The same lifecycle, for every credential type:
 
 > **discover → issue → deploy → rotate → revoke → retire**
 
-- **Discover** what you already have — scans of the network and filesystem, SSH keys
-  and trust, agentless cloud-certificate enumeration straight from AWS/Azure/GCP APIs,
-  a CBOM with post-quantum posture, and Certificate Transparency monitoring for
-  unexpected issuance.
-- **Issue** certificates automatically — a built-in **ACME** server (the protocol that
-  auto-renews certs with no human in the loop), your own private **CA** (Certificate
-  Authority) hierarchy gated by an m-of-n key ceremony, and the older enrollment
-  protocols existing fleets already speak (EST, SCEP, CMP).
-- **Deploy** renewed credentials to where they live, through capability-scoped
-  connectors — web servers, load balancers, network appliances, and cloud certificate
-  stores. (The shipped connectors are trusted, in-process code scoped to the
-  capabilities they declare; the WASM sandbox isolates *third-party* plugins — see
-  [the plugin trust model](docs/security/threat-model.md).)
-- **Give workloads an identity** without planting secrets in them — the SPIFFE Workload
-  API plus [attestation](docs/glossary.md) (cryptographic proof of *what and where* a
-  workload is), including a purpose-built broker for AI agents.
-- **Manage secrets** end to end — a versioned, envelope-encrypted store, dynamic
-  secrets (created on demand and auto-revoked), encryption-as-a-service, and rotation.
-- **Understand & respond** — a credential graph (reachability and blast radius),
-  composite risk scoring, drift detection, and incident workflows (compromise
+- **Discover** what you already have — network and filesystem scans, SSH keys
+  and trust, agentless cloud-certificate enumeration from AWS/Azure/GCP APIs, a
+  CBOM with post-quantum posture, and Certificate Transparency monitoring.
+- **Issue** automatically — a built-in ACME server (auto-renewal with no human
+  in the loop), your own private CA hierarchy gated by an m-of-n key ceremony,
+  and the enrollment protocols existing fleets speak (EST, SCEP, CMP).
+- **Deploy** renewed credentials to where they live through capability-scoped
+  connectors — web servers, load balancers, appliances, cloud cert stores. The
+  shipped connectors are trusted, in-process code scoped to the capabilities
+  they declare; the WASM sandbox isolates *third-party* plugins
+  ([plugin trust model](docs/security/threat-model.md)).
+- **Give workloads an identity** without planting secrets in them — the SPIFFE
+  Workload API plus [attestation](docs/glossary.md) (cryptographic proof of
+  what and where a workload is), including a broker for AI agents.
+- **Manage secrets** — a versioned, envelope-encrypted store, dynamic secrets
+  (created on demand, auto-revoked), encryption-as-a-service, rotation.
+- **Understand & respond** — the credential graph (reachability, blast
+  radius), risk scoring, drift detection, and incident workflows (compromise
   remediation, just-in-time access, break-glass).
 
-**The full catalog — all 79 capabilities, each mapped to its primary docs page — is the
-[feature index](docs/features.md).**
+The full catalog — all 79 capabilities, each mapped to its primary docs page —
+is the [feature index](docs/features.md).
 
 ## Capabilities
 
-"Built and tested" means real library code with unit, property, integration, and
-conformance tests. A core slice is **served end to end today**; much of the broader
-surface is **library-complete but not yet wired into the served binary** —
-[Current limitations](docs/limitations.md) is the authority on which is which. The
-served denominators below are checked against the fresh repo-native
-[DoD manifest and gate](tools/dodcensus/manifest.json); `make dod-gate` emits the
-local `wiring-census.json` receipt. Every inventory number is grounded in the repository.
+"Built and tested" means real library code with unit, property, integration,
+and conformance tests; [Current limitations](docs/limitations.md) is the
+single authority on what is served end to end versus library-complete. The
+served denominators below are checked against the repo-native
+[census gate](tools/dodcensus/manifest.json) (`make dod-gate` emits the local
+`wiring-census.json` receipt).
 
 | Area | What's there |
 |---|---|
@@ -204,11 +194,10 @@ local `wiring-census.json` receipt. Every inventory number is grounded in the re
 
 ## How it's built
 
-trstctl is opinionated about architecture from the very first commit, because the
-properties below are impossible to bolt on later. Eight **non-negotiables** are
-enforced by a custom `go/analysis` linter that *fails the build* on violation — they
-aren't guidelines, they're load-bearing walls. Each is in plain terms; the deep
-mechanism lives in the linked docs.
+trstctl is opinionated about architecture from the first commit, because these
+properties cannot be bolted on later. Nine non-negotiables: eight are enforced
+by a custom `go/analysis` linter that fails the build on violation; the ninth
+by the `ee/` build fence. They aren't guidelines, they're load-bearing walls.
 
 | | Principle (in plain terms) |
 |---|---|
@@ -220,6 +209,7 @@ mechanism lives in the linked docs.
 | **AN-6** | **An outbox for every external call.** The intent to call out (a CA, a webhook) is written in the *same database transaction* as the state change, and a worker delivers it at least once — so calls are never lost on a crash. |
 | **AN-7** | **Bulkheads and backpressure.** Each subsystem has its own bounded worker pool; one slow connector or a discovery storm can never starve the API. |
 | **AN-8** | **Memory safety for keys.** Secret material lives in locked, zeroed `[]byte`, never a Go `string` (which the garbage collector can copy freely). A key lives in RAM for milliseconds, not indefinitely. |
+| **AN-9** | **The editions boundary.** Commercial code lives only under `ee/`; core never imports it, and a core-only build links zero `ee/` packages. Multi-tenancy, the crypto boundary, audit/export rights, and the offline license verifier stay in the MPL core. |
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'background':'transparent','primaryColor':'#161b22','primaryTextColor':'#e6edf3','primaryBorderColor':'#3b82f6','lineColor':'#768390','clusterBkg':'#161b22','clusterBorder':'#30363d','fontFamily':'ui-monospace, SFMono-Regular, Menlo, monospace'},'flowchart':{'curve':'basis','nodeSpacing':55,'rankSpacing':55,'padding':12}}}%%
@@ -246,9 +236,9 @@ flowchart TB
 Five binaries make this real: `trstctl` (the control plane, which supervises the
 signer as a child process), `trstctl-signer` (the isolated key-holder),
 `trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
-Under the hood: **~1608 Go files across the internal subsystem packages**, with
-property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
-architecture linter in CI.
+Under the hood: ~1632 Go files across the internal subsystem packages, with
+property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus
+the architecture linter in CI.
 
 ## Try it
 
@@ -265,44 +255,37 @@ make lint     # full lint: gofmt, vet, architecture, golangci-lint, actionlint
 make lint-partial # explicit local subset when optional lint tools are absent
 ```
 
-For a pre-populated click-through demo, use the demo stack. It starts local SSO,
-PostgreSQL, NATS JetStream, the isolated signer, and a seed job for the currently
-served demo APIs. The stack also includes a LocalStack KMS configuration for
-exploring the conditional managed-key surface. That convenience stack is not
-LocalStack conformance evidence; the six served census rows come from the gate's
-nonce-bound vendor-emulator, SoftHSM, and swtpm lifecycle receipts against the
-shipped control-plane and cgo signer artifacts.
+Two Compose stacks, side-by-side safe:
 
 ```bash
+# Pre-populated click-through demo: local SSO, seeded data, UI at https://localhost:9443
+# (sign in with SSO as demo-admin@trstctl.local).
 docker compose -f deploy/demo/docker-compose.yml up --build
-```
 
-Open <https://localhost:9443>, accept the local TLS certificate, and click **Sign
-in with SSO**. The demo signs you in as `demo-admin@trstctl.local`.
-
-For a blank evaluation/control-plane stack — PostgreSQL, NATS JetStream, and the
-control plane — use the operational eval Compose file. Compose runs explicit
-PostgreSQL and NATS service containers, which is the recommended eval path on
-laptops and CI because it uses the same external-datastore wiring as production.
-
-```bash
+# Blank eval stack: PostgreSQL, NATS, control plane at https://localhost:8443 —
+# the recommended path; same external-datastore wiring as production.
 docker compose -f deploy/docker/docker-compose.yml up --build
 ```
 
-If you run the `trstctl` binary directly instead, its bundled eval mode supervises
-single-node PostgreSQL and embedded NATS without requiring local Postgres/NATS
-services. That path still downloads the pinned PostgreSQL runtime once on first
-use, verifies it against `deploy/supply-chain/embedded-postgres.json`, and fails
-closed on an unsupported or unpinned host archive. The committed runtime pins
-currently cover `linux-amd64`, `linux-arm64v8`, and `darwin-arm64v8`.
+The demo stack includes a LocalStack KMS configuration for exploring the
+managed-key surface. That convenience stack is not LocalStack conformance
+evidence; the six served census rows come from the gate's nonce-bound
+vendor-emulator, SoftHSM, and swtpm lifecycle receipts against the shipped
+control-plane and cgo signer artifacts.
 
-The control plane is serving about two minutes later, and issuance itself is a
-sub-second operation — the end-to-end integration test mints a certificate into
-inventory in **tens of milliseconds** (`TestAssembledServerIssuesCertIntoInventory`,
-measured ~20 ms). The full first-certificate walkthrough — connect a CA, install an
-agent, issue a cert — is in **[Getting started](docs/getting-started.md)**. Script it
-through the REST API, which publishes its **OpenAPI 3.1** spec at
-`/api/v1/openapi.json`, or the [CLI](docs/cli.md) at full API parity.
+Running the bare `trstctl` binary instead uses bundled single-node PostgreSQL
+and embedded NATS: it downloads the pinned runtime once, verifies it against
+`deploy/supply-chain/embedded-postgres.json` (`linux-amd64`, `linux-arm64v8`,
+`darwin-arm64v8`), and fails closed on an unpinned host archive.
+
+The control plane is serving about two minutes later; issuance itself is
+sub-second — the end-to-end integration test mints a certificate into
+inventory in tens of milliseconds
+(`TestAssembledServerIssuesCertIntoInventory`, ~20 ms). The full walkthrough —
+connect a CA, issue a cert, install an agent — is
+**[Getting started](docs/getting-started.md)**. Script it through the REST
+API, which publishes its OpenAPI 3.1 spec at `/api/v1/openapi.json`, or the
+[CLI](docs/cli.md) at full API parity.
 
 ## What trstctl is not
 
@@ -342,7 +325,7 @@ scripts/    # developer & release scripts
 
 | Topic | Doc |
 |---|---|
-| **Journeys** — end-to-end walkthroughs by goal (**start here**) | [first certificate](docs/journeys/first-certificate.md) · [automate fleet TLS](docs/journeys/automate-fleet-tls.md) · [Kubernetes identity](docs/journeys/kubernetes-workload-identity.md) · [enroll devices](docs/journeys/enroll-devices.md) · [migrate a CA](docs/journeys/migrate-from-existing-ca.md) · [onboard a team](docs/journeys/onboard-a-team.md) · [manage secrets](docs/journeys/manage-secrets.md) · [SSH at scale](docs/journeys/ssh-at-scale.md) · [respond to compromise](docs/journeys/respond-to-compromise.md) · [run in production](docs/journeys/run-in-production.md) · [build on the API](docs/journeys/build-on-the-api.md) · [crypto-agility & PQC](docs/journeys/crypto-agility-pqc.md) |
+| **Journeys** — end-to-end walkthroughs by goal (**start here**) | [automate fleet TLS](docs/journeys/automate-fleet-tls.md) · [Kubernetes identity](docs/journeys/kubernetes-workload-identity.md) · [enroll devices](docs/journeys/enroll-devices.md) · [migrate a CA](docs/journeys/migrate-from-existing-ca.md) · [onboard a team](docs/journeys/onboard-a-team.md) · [manage secrets](docs/journeys/manage-secrets.md) · [SSH at scale](docs/journeys/ssh-at-scale.md) · [respond to compromise](docs/journeys/respond-to-compromise.md) · [run in production](docs/journeys/run-in-production.md) · [build on the API](docs/journeys/build-on-the-api.md) · [crypto-agility & PQC](docs/journeys/crypto-agility-pqc.md) |
 | **All 79 features** (each with a deep-dive page) | [`docs/features.md`](docs/features.md) |
 | **Glossary** (every term, zero-knowledge friendly) | [`docs/glossary.md`](docs/glossary.md) |
 | Getting started (first certificate, fast) | [`docs/getting-started.md`](docs/getting-started.md) |
@@ -381,13 +364,13 @@ security-critical signing service has its own
 
 ## Contributing
 
-trstctl is built sprint by sprint with a tests-first discipline and the architecture
-linter as a hard gate. `make lint test` must be green; `make lint-partial` is only
-for fast local feedback when optional lint tools are absent. The non-negotiables above
-are not optional. Start with the authoring guides for
+Tests-first, with the architecture linter as a hard gate: `make lint test`
+must be green (`make lint-partial` is only for fast local feedback when
+optional lint tools are absent), and the non-negotiables above are not
+optional. Start with the authoring guides for
 [connectors](docs/guides/connector-authoring.md) and
-[plugins](docs/guides/plugin-authoring.md). Fuller contribution guidelines are on the
-way.
+[plugins](docs/guides/plugin-authoring.md). Fuller contribution guidelines are
+on the way.
 
 ## License
 

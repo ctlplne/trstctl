@@ -37,7 +37,7 @@ download time, real network latency, or the physical agent installation step.
 ## USABILITY-SLO-002: operator satisfaction / NPS
 
 **Target before a numeric claim is allowed:** at least five external operators run
-the release-candidate first-certificate journey, and the study records completion,
+the release-candidate getting-started first-certificate path, and the study records completion,
 blockers, CSAT, NPS, and anonymized notes. A measured receipt must be fresh within
 180 days and carry `status: "measured"`.
 

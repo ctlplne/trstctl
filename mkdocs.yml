@@ -34,7 +34,6 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Journeys:
-      - Issue your first certificate: journeys/first-certificate.md
       - Automate TLS across your fleet: journeys/automate-fleet-tls.md
       - Kubernetes workload identity: journeys/kubernetes-workload-identity.md
       - Enroll devices & IoT fleets: journeys/enroll-devices.md

@@ -11,7 +11,7 @@
 
 ## Goal
 
-When you finish this journey you will have **contained a compromised credential**:
+When you finish this journey you will have contained a compromised credential:
 the leaked certificate revoked and visible as `revoked` on the served surface, a
 replacement issued and deployed, and the whole response captured as a sealed,
 tamper-evident evidence pack. It is for the on-call operator who has just learned a
@@ -40,7 +40,7 @@ action behind an approval.
 
 ## Steps
 
-1. **Declare the incident and preserve evidence first.** Before changing anything,
+1. Declare the incident and preserve evidence first. Before changing anything,
    take a full backup — the event log inside it is the immutable forensic record:
 
    ```sh
@@ -50,7 +50,7 @@ action behind an approval.
    You should see a confirmation that the full backup was written. Keep it; you can
    restore from it later (see the [disaster-recovery runbook](../disaster-recovery.md)).
 
-2. **Scope the blast radius.** Find the affected credential and everything that
+2. Scope the blast radius. Find the affected credential and everything that
    depends on it — read-only, so it changes nothing:
 
    ```sh
@@ -61,7 +61,7 @@ action behind an approval.
    [credential graph](../features/incident-and-jit.md) the served incident workflow
    reads before it acts.
 
-3. **Run the served containment workflow.** For a single leaked identity, the served
+3. Run the served containment workflow. For a single leaked identity, the served
    workflow replaces-then-revokes idempotently — it issues and deploys a replacement
    first, then revokes the compromised credential, so nothing goes dark mid-incident.
    Put the details in a JSON file:
@@ -78,14 +78,14 @@ action behind an approval.
    ```
 
    ```sh
-   trstctl incidents executions execute -f incident.json
+   trstctl-cli incidents executions execute -f incident.json
    ```
 
    You should get back an execution with a replacement id, a revocation-queue status,
    a connector delivery receipt, and a sealed audit bundle. The order is deliberate —
    do not shortcut it.
 
-4. **Confirm the revocation is live.** Transitioning to revoked marks the certificate
+4. Confirm the revocation is live. Transitioning to revoked marks the certificate
    `revoked` in inventory and updates the published revocation status. Read it back:
 
    ```sh
@@ -98,18 +98,18 @@ action behind an approval.
    window. The full revocation surface is in
    [Issuance & certificate authorities](../features/issuance-and-cas.md).
 
-5. **Retrieve the sealed evidence pack.** Pull the recorded execution for your
+5. Retrieve the sealed evidence pack. Pull the recorded execution for your
    post-incident review:
 
    ```sh
-   trstctl incidents executions get 22222222-2222-2222-2222-222222222222
+   trstctl-cli incidents executions get 22222222-2222-2222-2222-222222222222
    ```
 
    You should see the immutable evidence pack — replacement id, revocation status,
    delivery receipt, failed-target list, rollback references, and the sealed audit
    bundle.
 
-6. **If the action needs a second pair of eyes (break-glass / JIT).** When dual
+6. If the action needs a second pair of eyes (break-glass / JIT). When dual
    control is enabled, a privileged issue or revoke is denied until a **distinct**
    approver signs off — a self-approval is rejected. The requester opens the request;
    a second operator approves it:
@@ -126,7 +126,7 @@ action behind an approval.
    approver has signed off. The four-eyes and just-in-time model is described in
    [Incident response & just-in-time access](../features/incident-and-jit.md).
 
-7. **Use brokered access instead of standing credentials.** If the responder needs to
+7. Use brokered access instead of standing credentials. If the responder needs to
    inspect a database or host, open a short-lived privileged-access session instead of
    sharing a long-lived password or SSH key:
 
@@ -146,7 +146,7 @@ action behind an approval.
 ## Where next
 
 - [Run trstctl in production](run-in-production.md)
-- [Issue your first certificate](first-certificate.md)
+- [Getting started](../getting-started.md)
 
 **Journey:** J9
 **Steps through:** F31, F32, F33, F34, F47, F18, F19

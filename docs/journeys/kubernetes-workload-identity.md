@@ -22,12 +22,11 @@ needs access, and gets a pass (an SVID) that expires in minutes.
 ## Before you start
 
 - A running trstctl control plane with a provisioned issuing CA. Bring one up via
-  [Issue your first certificate](first-certificate.md) or
   [Getting started](../getting-started.md).
 - A Kubernetes cluster whose service-account token signing keys (its JWKS) trstctl
   can verify against — this is the trust source for pod attestation.
 - An API token exported as `TRSTCTL_TOKEN` to drive the CLI (from the
-  first-certificate journey).
+  getting-started CLI path).
 - A workload-side SVID consumer: `spiffe-helper`, a go-spiffe client, or an
   Envoy SDS integration.
 - If you want cert-manager to write Kubernetes TLS Secrets, cert-manager installed
@@ -37,15 +36,15 @@ needs access, and gets a pass (an SVID) that expires in minutes.
 
 ## Steps
 
-1. **Understand the building block: attestation before trust.** Before issuing
+1. Understand the building block: attestation before trust. Before issuing
    anything, trstctl demands proof of the workload's identity and verifies it. For
-   Kubernetes the relevant method is the **projected service-account token**
+   Kubernetes the relevant method is the projected service-account token
    (`k8s_sat`), verified against the cluster's JWKS — a forged token is rejected and
    nothing is signed (fail-closed). The full attestation chain (TPM, AWS, GCP, Azure,
    Kubernetes, GitHub OIDC) is covered in
    [Workload identity](../features/workload-identity.md).
 
-2. **Configure the Kubernetes attester trust source.** Create the tenant trust source
+2. Configure the Kubernetes attester trust source. Create the tenant trust source
    from the cluster's public JWKS before asking trstctl to issue an attested SVID:
 
    ```sh
@@ -69,7 +68,7 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    sources with `/revoke` and `DELETE /api/v1/workloads/attester-trust-sources/{id}`.
    The same lifecycle controls are available from the Workloads console.
 
-3. **Enable the SPIFFE Workload API.** trstctl serves a SPIRE-compatible Workload API
+3. Enable the SPIFFE Workload API. trstctl serves a SPIRE-compatible Workload API
    as a gRPC service on a Unix domain socket. Turn it on and bind it to your tenant:
 
    ```yaml
@@ -82,7 +81,7 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    You should see the control plane mount the Workload API on the socket at startup.
    It activates only when an issuing CA is provisioned.
 
-4. **Register the workloads as managed identities.** Model each service as a
+4. Register the workloads as managed identities. Model each service as a
    non-human identity through the served CLI (this is idempotent — a retry never
    creates a duplicate):
 
@@ -94,9 +93,13 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    identity lifecycle (created, scoped, rotated, disabled, retired) is described in
    [Workload identity](../features/workload-identity.md).
 
-5. **Use cert-manager when Kubernetes should own the TLS Secret.** Install the
-   trstctl cert-manager CRDs and agent DaemonSet, then create a `ClusterIssuer`
-   that points at a served trstctl CA issue endpoint:
+5. Pick your integration path — steps 5, 6, and 7 are alternatives, not a
+   sequence: cert-manager (this step) when Kubernetes should own the TLS
+   Secret, native CertificateSigningRequests (step 6) when you want the
+   built-in API, SPIRE (step 7) when it is already your identity plane.
+   For cert-manager, install the trstctl cert-manager CRDs and agent
+   DaemonSet, then create a `ClusterIssuer` that points at a served trstctl
+   CA issue endpoint:
 
    ```yaml
    apiVersion: trstctl.com/v1alpha1
@@ -131,8 +134,8 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    The token used by the agent lives in a mounted Kubernetes Secret file, not in
    command-line arguments.
 
-6. **Use native Kubernetes CertificateSigningRequests when you want the built-in
-   API.** A Kubernetes client can create a `certificates.k8s.io/v1`
+6. Use native Kubernetes CertificateSigningRequests when you want the built-in
+   API. A Kubernetes client can create a `certificates.k8s.io/v1`
    `CertificateSigningRequest` with `spec.signerName: trstctl.com/trstctl` (or
    `trstctl.com/<issuer-name>`). Kubernetes or a separate approver must mark the
    CSR `Approved`; the trstctl agent only signs approved requests and writes
@@ -157,7 +160,7 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    including the status-only RBAC rules. After approval, the CSR status contains
    the issued certificate chain; no workload private key crosses into trstctl.
 
-7. **Use SPIRE when it is already your workload identity plane.** Configure trstctl
+7. Use SPIRE when it is already your workload identity plane. Configure trstctl
    as SPIRE's upstream authority: build or package
    `trstctl-spire-upstream-authority` into the SPIRE server image, mount the trstctl
    API token as a file, and point SPIRE at the served CA authority:
@@ -182,7 +185,7 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    intermediate plus the trstctl root. You should see SPIRE continue minting normal
    X.509-SVIDs, but their chain now ends at the trstctl CA you govern and audit.
 
-8. **Fetch a short-lived SVID from inside a pod.** A workload that passes attestation
+8. Fetch a short-lived SVID from inside a pod. A workload that passes attestation
    presents its selectors (e.g. `k8s:ns:default`, `k8s:sa:web`) over the socket; the
    server matches them against registration entries and returns an SVID plus the
    trust bundle. With a stock client this is a `FetchX509SVID` call for mTLS or a
@@ -198,14 +201,14 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    key and trust bundle. The response is production-attached, and both key buffers are
    explicitly wiped after the client consumes them.
 
-9. **Confirm there is no static secret to steal.** Because the SVID is short-lived
+9. Confirm there is no static secret to steal. Because the SVID is short-lived
    and minted only after attestation, there is nothing long-lived in the pod to leak,
    and even a captured credential is useless within minutes. A `NeedsRotation` helper
    flags an SVID for renewal once it is half-expired, so the workload renews itself.
    You should see SVIDs rotating on their own with no secret material at rest in the
    pod spec.
 
-10. **See the workloads land in inventory and the graph.** Each attested identity and
+10. See the workloads land in inventory and the graph. Each attested identity and
    its credential are recorded, so you can find them like any other credential:
 
    ```sh

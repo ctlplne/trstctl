@@ -4,25 +4,25 @@
 
 Issuance is the act of **creating a [certificate](../glossary.md)**: a machine asks
 for one, an authority signs it, and the machine gets back a signed ID it can present.
-This page covers everything around that act — issuing through *any* authority,
-running your own [CA](../glossary.md) hierarchy, the rules that constrain what may be
-issued, telling clients when to renew, taking certificates back early, and where the
-all-important private key physically lives.
+This page covers issuing through *any* authority, running your own
+[CA](../glossary.md) hierarchy, the rules that constrain what may be issued, telling
+clients when to renew, taking certificates back early, and where the private key
+physically lives.
 
-The mental model: trstctl is a **passport office**. A CA is the office that prints
-and signs passports; a *profile* is the rulebook for what a valid passport may say; a
-*registration authority* is the clerk who checks your paperwork but isn't allowed to
-print the passport themselves; *revocation* is the bulletin of cancelled passports;
-and the *HSM* is the locked vault holding the official seal.
+The mental model: trstctl is a **passport office**. A CA prints and signs passports; a
+*profile* is the rulebook for what a valid passport may say; a *registration
+authority* checks your paperwork but can't print the passport itself; *revocation* is
+the bulletin of cancelled passports; and the *HSM* is the locked vault holding the
+official seal.
 
 ## Why it exists
 
 Certificates expire on purpose and must be re-minted constantly, so issuance has to be
-automatic, governed, and auditable. Three things go wrong without a real issuance
-layer: the wrong certificate gets minted (too-long validity, weak key, a name the
+automatic, governed, and auditable. Without a real issuance layer, three things go
+wrong: the wrong certificate gets minted (too-long validity, weak key, a name the
 requester shouldn't control); the signing key leaks and forges everything; or a
 compromised certificate keeps being trusted because nobody can pull it back. trstctl's
-issuance layer is built to make each of those hard.
+issuance layer exists to make each of those hard.
 
 ## How it works
 
@@ -31,134 +31,103 @@ issuance layer is built to make each of those hard.
 Every certificate trstctl issues goes through a single, uniform interface — a `CA`
 with one real method, `Issue(request)` — no matter who actually signs. The built-in
 signer-backed CA, a CA in your own [hierarchy](#running-your-own-ca-hierarchy-f48), and
-third-party authorities (Let's Encrypt/ACME, DigiCert, Sectigo, Microsoft AD CS,
-AWS Private CA, Google CAS, EJBCA, Smallstep, Venafi TPP/TLS Protect, Vault PKI,
-GlobalSign, Entrust, and the shell CA escape hatch) all implement that same interface.
-The running binary now exposes configured upstreams as a served registry at
+14 third-party authorities (Let's Encrypt/ACME, DigiCert, Sectigo, Microsoft AD CS,
+AWS Private CA, Azure Key Vault, Google CAS, EJBCA, Smallstep, Venafi TPP/TLS Protect,
+Vault PKI, GlobalSign, Entrust, and the shell CA escape hatch) all implement that same
+interface. The running binary exposes configured upstreams as a served registry at
 `GET /api/v1/external-cas`; callers issue through one selected CA with
 `POST /api/v1/external-cas/{id}/issue` using a PEM CSR, DNS names, and an
-`Idempotency-Key`.
-The CA Hierarchy page uses the same route for browser-driven outbound issuance:
-operators select a configured external CA, submit CSR/DNS/profile/TTL input, see an
-`outbox-pending` state while the durable CA issue intent is recorded, then see
-`external-ca-issued` evidence without rendering the issued certificate PEM.
+`Idempotency-Key`. The CA Hierarchy page drives the same route from the browser: pick
+a configured external CA, submit CSR/DNS/profile/TTL, watch `outbox-pending` while the
+issue intent is recorded, then see `external-ca-issued` evidence — never the
+certificate PEM.
 
-The same running binary also exposes direct CA discovery at
-`GET /api/v1/ca/discovery`. That read-only inventory normalizes configured public
-upstream CAs, configured private upstream CAs, and imported private CA hierarchy
-authorities into one response with public/private counts, source ids, status, and
-served path pointers. It does not return certificate PEM or private key material.
+The same binary exposes read-only CA discovery at `GET /api/v1/ca/discovery`: one
+response normalizing configured public/private upstream CAs and imported private
+hierarchy authorities, with counts, source ids, status, and served path pointers —
+never certificate PEM or private key material.
 
-That single path is where the intended guarantees are wired to receipts. Each issuance
-carries an [`Idempotency-Key`](../glossary.md). For an upstream CA, the request first
-commits one tenant-scoped `external-ca.issue` [outbox](../glossary.md) intent. Only the
-normal bounded dispatcher calls the provider; the request waits for its exact
-tenant/key result and never drains unrelated tenants or destinations. Immediately
-before a provider that lacks a native request token is called, the worker durably
-claims that exact operation once and releases its database transaction. Providers
-whose receiver enforces the supplied token (AWS PCA, Azure Key Vault, and Google CAS)
-use the reconciled retry lane; every unproven adapter remains at-most-once. A completed
-result is replayed byte-for-byte from the `certificate.recorded` projection even after
-the bounded HTTP-idempotency result and delivered outbox row are collected. That
-projection retains the public chain plus a non-secret digest of caller, route,
-authority, CSR, names, profile, EKUs, and TTL, so a changed command gets 409 before
-provider I/O. An interrupted, ambiguous tokenless submission is never sent a second
-time: it remains explicitly indeterminate instead of guessing that the CA did nothing.
-After a definite provider result, the worker emits `certificate.recorded`, rebuildably
-projects the certificate inventory, and records the separate `ca.issue` evidence row. The
-identity-transition issuance retry path (`POST /api/v1/identities/{id}/transitions`
-to `issued`) is a known AN-5 blocker until CORRECT closes the served-stack Compose E2E
-receipt, so this page does not claim that retrying that transition with the same
-key is proven to return the original certificate yet. The request's [CSR](../glossary.md)
-is inspected through the single isolated cryptography path — the issuance code never
-touches the low-level X.509 libraries directly — and the active
-[profile](#profiles-and-the-registration-authority-split-f53) is enforced *before*
-anything is signed, with an `issuance.profile_evaluated` event recorded either way in
-the tamper-evident log.
+That single path wires the intended guarantees to receipts. Each issuance carries an
+[`Idempotency-Key`](../glossary.md). For an upstream CA, the request first commits one
+tenant-scoped `external-ca.issue` [outbox](../glossary.md) intent; only the normal
+bounded dispatcher calls the provider, waiting for its exact tenant/key result rather
+than draining unrelated tenants. Before calling a provider without a native request
+token, the worker durably claims that operation once; providers whose receiver
+enforces the supplied token (AWS PCA, Azure Key Vault, Google CAS) use the reconciled
+retry lane, while every unproven adapter stays at-most-once. A completed result
+replays byte-for-byte from the `certificate.recorded` projection, so a changed command
+gets 409 before provider I/O, and an interrupted tokenless submission is never
+resent — it stays explicitly indeterminate rather than guessing the CA did nothing.
+After a definite result the worker emits `certificate.recorded`, rebuilds the
+certificate inventory, and records the separate `ca.issue` evidence row. The
+identity-transition issuance retry path (`POST /api/v1/identities/{id}/transitions` to
+`issued`) is a known AN-5 blocker until CORRECT closes the served-stack Compose E2E
+receipt, so this page does not claim that retrying that transition with the same key
+is proven to return the original certificate yet. The request's
+[CSR](../glossary.md) is inspected through the single isolated cryptography path, and
+the active [profile](#profiles-and-the-registration-authority-split-f53) is enforced
+*before* signing, with an `issuance.profile_evaluated` event recorded either way.
 
-Upstream CA credentials are configured by the control-plane operator, not written
-through tenant JSON. File references are loaded into locked byte buffers for one
-outbox attempt and wiped afterward; a shell-CA child receives credentials only through
-anonymous inherited descriptors. Azure CA private-key operations and Let's Encrypt
-account JWS signatures stay in the isolated signer. The API exposes only the
-non-secret registry row (`id`, `type`, `name`, `status`). If a retry reuses the same
-idempotency key after completion, the API returns the original projected certificate
-response and the upstream CA is not asked to sign again, including after response and
-outbox garbage collection. If the process crashes before submission,
-the outbox worker resumes it; if it crashes during an unqueryable submission, the
-at-most-once claim fails closed as indeterminate and never blind-repeats the mint.
-The production `external_cas` JSON shape, `file:/absolute/path` credential references,
+Upstream CA credentials are configured by the control-plane operator, not tenant
+JSON: file references load into locked byte buffers for one outbox attempt and are
+wiped afterward. Azure CA private-key operations and Let's Encrypt account JWS
+signatures stay in the isolated signer, and the API exposes only the non-secret
+registry row (`id`, `type`, `name`, `status`). A reused idempotency key after completion returns
+the original certificate without re-signing, even after garbage collection; a crash
+before submission is resumed by the outbox worker, and a crash mid-submission with no
+way to query the result fails closed as indeterminate rather than blind-repeating the
+mint. The production `external_cas` JSON shape, `file:/absolute/path` credentials,
 private-endpoint allowlist, custom trust-root, and mTLS fields are documented in
 [Configuration](../configuration.md#native-connector-and-external-ca-assembly).
 
 ### Kubernetes CRD-native issuance
 
-For Kubernetes-native issuance, trstctl ships `Issuer`, `ClusterIssuer`, and
-`Certificate` CRDs in the `trstctl.com` API group. The Kubernetes agent reconciles
-those resources, marks issuers Ready, signs cert-manager `CertificateRequest`s
-only when the request points at an existing trstctl issuer resource, signs approved
-native Kubernetes `CertificateSigningRequest`s from the `certificates.k8s.io/v1`
-API, and can also fulfil a trstctl-native `Certificate` directly into a Kubernetes
-TLS Secret. The read-only posture endpoint
-`GET /api/v1/kubernetes/certificate-signing-requests` and CLI command
-`trstctl-cli kubernetes csr` report the served CAP-K8S-04 surface, supported
-signer names, required RBAC, and residuals.
+trstctl ships `Issuer`, `ClusterIssuer`, and `Certificate` CRDs in the `trstctl.com`
+API group. The Kubernetes agent reconciles them, marks issuers Ready, signs
+cert-manager `CertificateRequest`s only when they target an existing trstctl issuer,
+signs approved native `CertificateSigningRequest`s from `certificates.k8s.io/v1`, and
+can fulfil a trstctl-native `Certificate` directly into a Kubernetes TLS Secret. The
+read-only `GET /api/v1/kubernetes/certificate-signing-requests` / CLI
+`trstctl-cli kubernetes csr` report the served CAP-K8S-04 surface, supported signer
+names, required RBAC, and residuals.
 
-A cert-manager `Certificate` can reference:
-
-```yaml
-issuerRef:
-  name: trstctl
-  kind: ClusterIssuer
-  group: trstctl.com
-```
-
-Or a workload can use trstctl's native API directly:
+A cert-manager `Certificate` references trstctl with
+`issuerRef: {name: trstctl, kind: ClusterIssuer, group: trstctl.com}`; a workload can
+also use trstctl's native API directly:
 
 ```yaml
 apiVersion: trstctl.com/v1alpha1
 kind: Certificate
 metadata:
   name: web
-  namespace: apps
 spec:
   secretName: web-tls
-  dnsNames:
-    - web.apps.svc.cluster.local
-  issuerRef:
-    name: trstctl
-    kind: ClusterIssuer
-    group: trstctl.com
+  dnsNames: [web.apps.svc.cluster.local]
+  issuerRef: {name: trstctl, kind: ClusterIssuer, group: trstctl.com}
 ```
 
-The agent forwards only a CSR to the configured served trstctl issue endpoint,
-adds a stable `Idempotency-Key`, and authenticates with an API token mounted from
-a Kubernetes Secret file. For cert-manager, cert-manager writes the normal
-`kubernetes.io/tls` Secret for the workload. For a trstctl-native `Certificate`,
-the agent generates the workload key locally, writes `Secret/<secretName>`, wipes
-transient key buffers after the Secret write, and marks the `Certificate` Ready.
-For a native Kubernetes `CertificateSigningRequest`, Kubernetes or a separate
-approver must set `Approved`; the trstctl agent never approves requests itself.
-The agent accepts `spec.signerName` values such as `trstctl.com/trstctl` or
-`trstctl.com/<issuer-name>`, optionally disambiguated with the annotations
-`trstctl.com/issuer-name`, `trstctl.com/issuer-kind`, and
-`trstctl.com/issuer-group`. It writes the PEM chain to `status.certificate` while
-preserving Kubernetes' `Approved` condition; native CSR completion is the
-presence of `status.certificate`, not a custom `Ready` condition. CI proves the
-cert-manager path against a real `kind` cluster with real cert-manager installed,
-and served controller
-acceptance proves both the trstctl-native path (`Certificate` -> local CSR ->
-trstctl signer -> TLS `Secret`) and CAP-K8S-04 native CSR support.
-The shipped ClusterRole grants `sign` only for `trstctl.com/trstctl`; if you use a
-named signer such as `trstctl.com/payments`, add that exact signer resource name
-to the ClusterRole rather than granting the agent every Kubernetes signer.
+The agent forwards only a CSR to the configured trstctl issue endpoint, adds a stable
+`Idempotency-Key`, and authenticates with a token mounted from a Kubernetes Secret:
+cert-manager gets the normal `kubernetes.io/tls` Secret; a trstctl-native `Certificate`
+gets a locally generated workload key written to `Secret/<secretName>` (transient
+buffers wiped) and marked Ready; a native `CertificateSigningRequest` needs Kubernetes
+or a separate approver to set `Approved` — the agent never approves its own requests.
+It accepts `spec.signerName` values such as
+`trstctl.com/trstctl` or `trstctl.com/<issuer-name>`, optionally disambiguated with
+the `trstctl.com/issuer-{name,kind,group}` annotations, and writes the PEM chain to
+`status.certificate` while preserving the
+`Approved` condition — completion is `status.certificate` being present, not a custom
+`Ready`. CI proves the cert-manager path against a real `kind` cluster; served
+controller acceptance proves both the trstctl-native path and CAP-K8S-04 native CSR
+support. The shipped ClusterRole grants `sign` only for `trstctl.com/trstctl`; a named
+signer such as `trstctl.com/payments` needs that resource name added rather than
+granting every Kubernetes signer.
 
-The same agent also serves CAP-K8S-07 trust-bundle distribution. Operators apply a
-cluster-scoped `TrustBundle.trstctl.com` resource with a public PEM CA bundle and a
-list of target namespaces. The controller rejects any non-certificate PEM block,
-then creates or updates the named ConfigMap in each namespace and records
-`status.targets`, `status.bundleSHA256`, and Ready=True on the TrustBundle status
-subresource. `GET /api/v1/kubernetes/trust-bundles`,
+The same agent serves CAP-K8S-07 trust-bundle distribution: operators apply a
+cluster-scoped `TrustBundle.trstctl.com` resource with a public PEM CA bundle and
+target namespaces; the controller rejects non-certificate PEM blocks, creates/updates
+the named ConfigMap per namespace, and records `status.targets`, `status.bundleSHA256`,
+and Ready=True. `GET /api/v1/kubernetes/trust-bundles`,
 `trstctl-cli kubernetes trust-bundles`, and the Workloads console disclose the CRD,
 RBAC, ConfigMap target, and residuals.
 
@@ -177,234 +146,202 @@ reviewed resource: `root:<sha256-of-ca-spec>`,
 `offline-root:<sha256-of-root-cert-der>:root:<sha256-of-ca-spec>`, or
 `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. Existing CA import uses
 `import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>`,
-binding the reviewed certificate chain to the exact signer-held key handle. CA
-renewal/re-key uses `rotation:<ca-id>` and creates fresh signer-held CA material for
-the selected authority. If approvals are short, the operation returns
-`ErrQuorumNotMet`; if the opener tries to approve their own
-ceremony, or the ceremony was already used or opened for a different resource/spec,
-it fails closed before committing the CA mutation. This is how you stop a single
-compromised admin account from minting a rogue root or intermediate, and how you stop
-one valid ceremony from being replayed against a different CA request.
+binding the reviewed chain to the exact signer-held key handle, and renewal/re-key
+uses `rotation:<ca-id>` to create fresh signer-held CA material for the selected
+authority. Short approvals return `ErrQuorumNotMet`; an opener approving their own
+ceremony, or a ceremony already used or opened for a different resource/spec, fails
+closed before the CA mutation commits — stopping one compromised admin account from
+minting a rogue root or intermediate, and stopping one valid ceremony from being
+replayed against a different CA request.
 
-The served hierarchy API lives at `/api/v1/ca/ceremonies`,
-`/api/v1/ca/authorities`, `/api/v1/ca/authorities/offline-roots`,
-`/api/v1/ca/authorities/imported`,
+The served hierarchy API lives at `/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`,
+`/api/v1/ca/authorities/offline-roots`, `/api/v1/ca/authorities/imported`,
 `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
 `/api/v1/ca/authorities/{id}/offline-intermediates`, and
 `/api/v1/ca/authorities/{id}/issue`, with zero-downtime successor activation at
-`/api/v1/ca/authorities/{id}/rotate` and signer-backed renewal/re-key at
-`/api/v1/ca/authorities/{id}/rekey`. Signer-backed target-CA cross-signing is served
-at `/api/v1/ca/authorities/{id}/cross-sign`; public offline-root successor and
-bidirectional cross-certificate import is served at
-`/api/v1/ca/authorities/{id}/offline-rekey`; and an offline-root-produced target
-cross-certificate is verified/imported at
-`/api/v1/ca/authorities/{id}/offline-cross-signs`. Online root and intermediate private keys are
-created in the isolated signing service and referenced by signer handles; the control
-plane stores certificates, chains, metadata, and ceremony state, but it never
-receives the CA private key. Existing CA import accepts a public root or
-intermediate chain plus a signer handle, verifies the first certificate's public key
-matches that signer-held key, verifies the chain/profile, and then serves normal leaf
-issuance from the imported authority. Offline-root import accepts exactly one public
-certificate PEM and rejects private-key PEM blocks. It then generates a signer-held
-intermediate CSR, the operator signs that CSR with the offline root outside trstctl,
-and trstctl imports the signed intermediate only if it chains to the offline root,
-matches the reviewed `CASpec`, and carries the signer-held public key. A rotation
-activation takes an already-created signer-backed successor with the same authority
-constraints, marks the predecessor `superseded`, records the successor's
-`replaces_id`, and keeps the predecessor issue URL answering while routing new
-certificates to the successor. A re-key activation consumes a `rotation:<ca-id>`
-ceremony, creates a fresh signer-backed root or intermediate certificate with the
-same authority policy, marks the predecessor `superseded`, records `replaces_id`,
-and keeps both predecessor and successor issue URLs working while new certificates
-chain to the fresh CA. Offline-root re-key remains an operator ceremony because the
-offline root key never enters trstctl, but the control plane now verifies and records
-the public successor plus both constrained cross-certificates atomically. Every served
-step (`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
+`/api/v1/ca/authorities/{id}/rotate`, signer-backed renewal/re-key at
+`/api/v1/ca/authorities/{id}/rekey`, cross-signing at
+`/api/v1/ca/authorities/{id}/cross-sign`, offline-root successor/cross-certificate
+import at `/api/v1/ca/authorities/{id}/offline-rekey`, and offline-root-produced
+cross-certificate verification at `/api/v1/ca/authorities/{id}/offline-cross-signs`.
+Online root/intermediate private keys live only in the isolated signing service,
+referenced by signer handles; the control plane stores certificates, chains,
+metadata, and ceremony state, never the CA private key. Existing-CA import verifies a
+public chain's first certificate against the supplied signer handle and the
+chain/profile before serving normal leaf issuance. Offline-root import accepts
+exactly one public certificate PEM (never a private key), generates a signer-held
+intermediate CSR for the operator to sign outside trstctl, and imports the result
+only if it chains to the offline root, matches the reviewed `CASpec`, and carries the
+signer-held public key. Rotation and re-key activations both promote a signer-backed
+successor (re-key from a fresh `rotation:<ca-id>` ceremony), mark the predecessor
+`superseded`, record `replaces_id`, and keep both issue URLs live while new
+certificates chain to the successor; offline-root re-key works the same way but stays
+an operator ceremony since the offline key never enters trstctl. Every served step
+(`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
 `ca.authority.imported`, `ca.intermediate_csr.issued`, `ca.intermediate.created`,
 `ca.authority.rotated`, `ca.authority.rekeyed`, `ca.cross_signed`,
-`ca.endentity.issued`) is a
-tenant-scoped event carrying the ceremony/authority context and is recorded
-immutably in the tamper-evident log.
-Cross-signing uses a purpose-bound
-`cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony. The served signer-backed
-route performs the private operation inside the signer. Offline-root routes accept
-only public certificates and verify validity, key usage, EKU, DNS, path length,
-subject/public key, SKI, AKI, and both chain directions before consuming the
-ceremony. The full operator procedure is the [CA key-ceremony
-runbook](../runbooks/key-ceremony.md).
+`ca.endentity.issued`) is a tenant-scoped event recorded immutably in the
+tamper-evident log. Cross-signing uses a purpose-bound
+`cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony: the signer-backed route
+signs inside the signer, while offline-root routes verify validity, key usage, EKU,
+DNS, path length, subject/public key, and both chain directions first. The full
+operator procedure is the
+[CA key-ceremony runbook](../runbooks/key-ceremony.md).
 
 ### Profiles and the registration-authority split (F53)
 
-A **certificate profile** is a versioned, tenant-scoped rulebook: which key algorithms
-and minimum sizes are allowed, which extended key usages, the maximum validity, which
-DNS suffixes, which protocols. When you edit a profile you create a *new version*; old
-versions stay queryable, so you always know which rules a past certificate was issued
-under. On every issuance, `enforceProfile` fetches the active version, validates the
-request, and emits an audit event for the allow-or-deny decision.
+A **certificate profile** is a versioned, tenant-scoped rulebook: allowed key
+algorithms and minimum sizes, extended key usages, maximum validity, DNS suffixes,
+and protocols. Editing a profile creates a *new version*; old versions stay
+queryable, so you always know which rules a past certificate was issued under. On
+every issuance, `enforceProfile` fetches the active version, validates the request,
+and emits an audit event for the allow-or-deny decision.
 
-The **registration-authority (RA) model** is a role split that prevents the most
-classic PKI abuse — the person who approves a request also fulfilling it. The built-in
-`ra-officer` role can read and write profiles and *request* certificates, but it does
-**not** hold the `certs:issue` permission. Only an operator/admin can issue. So an RA
-officer cannot self-issue; the separation is enforced by [RBAC](policy-and-governance.md),
-not by convention, and there's a test that asserts it. Authoring profiles is covered in
-the [certificate-profile guide](../guides/profile-authoring.md).
+The **registration-authority (RA) model** is a role split that prevents the classic
+PKI abuse of one person approving and fulfilling their own request. The built-in
+`ra-officer` role can read/write profiles and *request* certificates but doesn't hold
+`certs:issue` — only an operator/admin can issue. The split is enforced by
+[RBAC](policy-and-governance.md), not convention, and a test asserts it. Authoring
+profiles is covered in the
+[certificate-profile guide](../guides/profile-authoring.md).
 
-The self-service requester path is served end to end for X.509 certificate requests.
-`/request` lists active profiles, submits a tenant-scoped `x509_certificate` identity
-with requester, profile, version, and business-purpose metadata, and keeps the row in
-`requested` state. `/approvals` records distinct `issue`, `rotate`, and `revoke`
-approvals through `POST /api/v1/identities/{id}/approvals`; the requester cannot
-self-issue, and the RA cannot approve their own privileged action. After the distinct
-issue approval exists,
-`POST /api/v1/identities/{id}/transitions` moves the request to `issued`, the outbox
-mints through the isolated signer, and certificate inventory records the resulting
-`certificate.recorded` evidence. The served CAP-ISS-11 test drives that exact path.
+The self-service requester path is served end to end for X.509 requests. `/request`
+lists active profiles and submits a tenant-scoped `x509_certificate` identity with
+requester, profile, version, and business-purpose metadata, keeping the row
+`requested`. `/approvals` records distinct `issue`, `rotate`, and `revoke` approvals
+through `POST /api/v1/identities/{id}/approvals`; the requester cannot self-issue, and
+the RA cannot approve their own privileged action. Once the distinct issue approval
+exists, `POST /api/v1/identities/{id}/transitions` moves the request to `issued`, the
+outbox mints through the isolated signer, and certificate inventory records the
+resulting `certificate.recorded` evidence — the served CAP-ISS-11 test drives that
+exact path.
 
 ### Telling clients when to renew: ARI (F46)
 
-If thousands of clients all renew at the same fixed "30 days before expiry," they
-stampede — and if a certificate must be replaced *early* (say a mass revocation),
-there's no way to tell them. **ACME Renewal Information (ARI, RFC 9773)** fixes both:
-the CA publishes a *suggested renewal window* per certificate, and clients renew within
-it.
+If thousands of clients renew at the same fixed "30 days before expiry," they
+stampede — and if a certificate must be replaced *early* (a mass revocation), there's
+no way to tell them. **ACME Renewal Information (ARI, RFC 9773)** fixes both: the CA
+publishes a *suggested renewal window* per certificate, and clients renew within it.
 
 trstctl computes the window as the last third of the certificate's life and has each
-client pick a deterministic, spread-out point inside it (so they don't bunch up). If
-the CA flags a certificate for early renewal, the window jumps to "right now," and
-compliant clients renew immediately. The certificate identifier is built inside the
-single isolated cryptography path.
+client pick a deterministic, spread-out point inside it. If the CA flags a
+certificate for early renewal, the window jumps to "right now" and compliant clients
+renew immediately.
 
 Served by the ACME server at `GET /acme/renewal-info/{certid}` and consumed by the
-served lifecycle scheduler for trstctl-issued deployed X.509 identities. That means a
-certificate can renew when its ARI window opens, even if it is not yet inside the fixed
-`renew_before` fallback window.
+served lifecycle scheduler for trstctl-issued deployed X.509 identities — certificates
+can renew when their ARI window opens, even before the fixed `renew_before` fallback.
 
 ### Revocation: OCSP and CRLs (F47)
 
 When a certificate must stop being trusted before it expires, you **revoke** it and
 publish that fact two ways. A **[CRL](../glossary.md)** is a signed list of revoked
-serial numbers, regenerated and published periodically. **[OCSP](../glossary.md)**
-answers "is *this one* revoked?" live, one certificate at a time. trstctl does both
-for certificates from its own hierarchy: `Revoke(serial, reason)` marks it and emits
-`ca.certificate.revoked` to the tamper-evident log; `GenerateCRL` bumps the CRL number,
-signs a fresh list behind the single isolated cryptography path, and emits a v3
-`ca.crl.published` event with the CRL DER, artifact kind, shard metadata, delta base,
-and validity window so CRL serving state rebuilds from the log. For small estates the
-plain `/crl/{tenant}` full CRL is enough; at large scale the same publication also serves
-`/crl/{tenant}/manifest.json`, `/crl/{tenant}/shards/{index}`, and
-`/crl/{tenant}/delta/{base}` so relying parties can fetch bounded partitioned CRLs and
-RFC 5280 delta CRLs instead of pulling a 10-100M-row monolith. The OCSP responder uses
-a delegated responder certificate
-(OCSPSigning EKU + ocsp-nocheck) instead of signing live responses with the CA
-certificate; responder rotations emit `ca.ocsp_responder.rotated` so the active
-responder also rebuilds from the log. The OCSP responder runs in its own bounded
-[lane](../glossary.md) so an OCSP flood can't starve the API.
+serials, regenerated periodically; **[OCSP](../glossary.md)** answers "is *this one*
+revoked?" live, one certificate at a time. For its own hierarchy trstctl does both:
+`Revoke(serial, reason)` emits `ca.certificate.revoked` to the tamper-evident log, and
+`GenerateCRL` bumps the CRL number, signs a fresh list through the isolated
+cryptography path, and emits a v3 `ca.crl.published` event (CRL DER, artifact kind,
+shard metadata, delta base, validity window) so CRL state rebuilds from the log.
+Small estates use the plain `/crl/{tenant}` full CRL; at scale the same publication
+also serves `/crl/{tenant}/manifest.json`, `/crl/{tenant}/shards/{index}`, and
+`/crl/{tenant}/delta/{base}`, so relying parties fetch bounded or RFC 5280 delta CRLs
+instead of a 10-100M-row monolith. The OCSP responder signs with a delegated
+responder certificate (OCSPSigning EKU + ocsp-nocheck) rather than the CA
+certificate; rotations emit `ca.ocsp_responder.rotated`, and the responder runs in
+its own bounded [lane](../glossary.md) so a flood can't starve the API.
 
 RFCs 6960 (OCSP), 5280 (CRL).
 
-Revocation is now typed and batchable. Requests use an RFC 5280 named revocation reason
-such as `keyCompromise`, `cessationOfOperation`, or `privilegeWithdrawn`; unknown raw
-integers are rejected before state changes. Bulk revoke is served at
-`/api/v1/certificates/bulk-revoke` and `/api/v1/identities/bulk-revoke`, returning
-matched, revoked, skipped, and failed counts so a wide incident response is explicit
-about partial success. OCSP responses echo a valid OCSP nonce when the request carries
-one, cache nonce-free responses for freshness, and sign with the delegated responder.
+Revocation is typed and batchable: requests use an RFC 5280 named revocation reason
+such as `keyCompromise`, `cessationOfOperation`, or `privilegeWithdrawn` (unknown raw
+integers are rejected), and bulk revoke at `/api/v1/certificates/bulk-revoke` /
+`/api/v1/identities/bulk-revoke` returns matched, revoked, skipped, and failed counts
+so a wide incident response is explicit about partial success. OCSP responses echo a
+valid OCSP nonce when the request carries one and sign with the delegated responder;
 CRL serving returns weak ETag validators and honors `If-None-Match` with `304 Not
-Modified`, so relying parties do not refetch an unchanged CRL. Operators and automation
-can read the same distribution state through `GET /api/v1/revocation/crls` or
-`trstctl-cli revocation crls`; the Certificates console shows the current full CRL,
-shards, delta base, and freshness window. Certificate Transparency submission is also
-served: `POST /api/v1/revocation/ct-submissions`,
-`trstctl-cli revocation ct-submit`, and the Certificates console queue a
-precertificate and final certificate to configured RFC 6962 CT logs through the outbox.
-The API records `ct.submission.queued`, the worker performs `add-pre-chain` and
-`add-chain`, and successful delivery records `ct.submission.delivered`; CT inclusion
-proof remains the external log's responsibility.
+Modified` so relying parties don't refetch an unchanged CRL. `GET
+/api/v1/revocation/crls` / `trstctl-cli revocation crls` and the Certificates console
+expose the same distribution state (full CRL, shards, delta base, freshness window).
+CT submission is served at `POST /api/v1/revocation/ct-submissions` /
+`trstctl-cli revocation ct-submit`: the outbox queues a precertificate and final
+certificate to configured RFC 6962 CT logs, recording `ct.submission.queued` then
+`ct.submission.delivered` after `add-pre-chain`/`add-chain` — inclusion proof remains
+the external log's responsibility.
 
 Rogue and non-compliant certificate posture is served at
-`GET /api/v1/revocation/rogue-certificates` and
-`trstctl-cli revocation rogue-certificates`, with the Certificates console showing the
-same evidence. The response combines unexpected CT findings from monitored logs with
-active inventory policy violations such as weak keys, expired active certificates,
-over-long public-TLS lifetimes, missing owners, and missing issuer metadata. Findings
-return metadata and projection references only, so the response can drive triage
-without returning certificate PEM or private-key material.
+`GET /api/v1/revocation/rogue-certificates` / `trstctl-cli revocation
+rogue-certificates` and the Certificates console: unexpected CT findings from
+monitored logs combined with policy violations such as weak keys, expired active
+certificates, over-long public-TLS lifetimes, and missing owners/issuer metadata —
+metadata and projection references only, never certificate PEM or private-key
+material.
 
 ### Where the private key lives: HSM/KMS (F26)
 
-A CA's private key is the single most valuable secret in the system — anyone who has it
-can forge any certificate. So trstctl keeps it in hardware or a cloud key service that
-**signs without ever revealing the key**. An [HSM/KMS](../glossary.md) backend
-implements one interface (`Backend` → `GenerateKey` → a `Signer` that signs via the
-device), and trstctl supports PKCS#11 HSMs, TPM 2.0, YubiHSM 2, AWS KMS, Azure Key
-Vault, and GCP Cloud KMS. Adding one is a single change because *all* cryptography goes
-through one isolated path; the key material never leaves the device — private-key
-operations run in a separate, isolated signing service, and the key bytes live only in
-wipeable memory there — only signatures and public keys cross the wire. Every backend must
-pass a conformance harness (`ConformBackend`) before it's trusted: it signs a probe,
+A CA's private key is the system's single most valuable secret — anyone who has it can
+forge any certificate, so trstctl keeps it in hardware or a cloud key service that
+signs without revealing it. An [HSM/KMS](../glossary.md) backend implements one
+interface (`Backend` → `GenerateKey` → a `Signer` that signs via the device); trstctl
+supports PKCS#11 HSMs, TPM 2.0, YubiHSM 2, AWS KMS, Azure Key Vault, and GCP Cloud KMS.
+Adding one is a single change because *all* cryptography goes through one isolated
+path: key material never leaves the device — it lives in a separate isolated signing
+service, wipeable in memory, and only signatures/public keys cross the wire. Every
+backend must pass a conformance harness (`ConformBackend`) that signs a probe,
 verifies it, and confirms a wrong message and a tampered signature both fail.
 
-The release includes a dedicated cgo HSM signer artifact. Its PKCS#11 adapter opens
-the configured native module and uses stable token `CKA_ID` values across signer
-restarts; TPM 2.0 uses `google/go-tpm` persistent handles; YubiHSM 2 uses Yubico's
-`yubihsm_pkcs11` ABI. The launched-binary gate proves SoftHSM and swtpm lifecycle
-behavior with independent command-line readback. The default control-plane artifact
-remains static and never loads a native module; provider credentials and private-key
-operations stay inside the separate signer.
+The release includes a dedicated cgo HSM signer artifact: its PKCS#11 adapter opens
+the configured native module using stable token `CKA_ID` values across restarts, TPM
+2.0 uses `google/go-tpm` persistent handles, and YubiHSM 2 uses Yubico's
+`yubihsm_pkcs11` ABI. The launched-binary gate proves SoftHSM/swtpm lifecycle behavior
+with independent command-line readback; the default control-plane artifact stays
+static and never loads a native module, keeping provider credentials and private-key
+operations inside the separate signer.
 
-Buyer receipt for CAP-KEY-05 Multiple algorithms (RSA / ECDSA / Ed25519) + Enterprise/PQC:
-the served profile path is `POST /api/v1/profiles` and
+CAP-KEY-05 — Multiple algorithms (RSA / ECDSA / Ed25519) + Enterprise/PQC — is served:
+the profile path is `POST /api/v1/profiles` and
 `trstctl-cli profiles create -f profile.json`. The profile API validates
-`allowed_key_algorithms` through `internal/crypto`, then stores the accepted
-policy as `profile.created` evidence. It accepts classical `RSA`, `ECDSA`, and
-`Ed25519` labels in the MPL core. PACKAGING-007 makes the transition and PQC
-signature labels proprietary Enterprise/PQC capabilities under `ee/`:
-`Hybrid-ML-DSA-44-ECDSA-P256`, `ML-DSA-65`, and `SLH-DSA-SHA2-128s`; unknown
-labels fail closed, and ML-KEM is kept out of certificate-signing profiles
-because it is a key-encapsulation mechanism rather than a signing algorithm.
-`internal/server/crypto_agility_served_test.go`
-`TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms` proves the served
-profile create/list round trip. The proprietary Enterprise/PQC issuance proofs now
-live under `ee/pqc` and `ee/pqcmigration`, so they are not counted as MPL-core
-served evidence.
+`allowed_key_algorithms` through `internal/crypto`, then stores the accepted policy as
+`profile.created` evidence. It accepts classical `RSA`, `ECDSA`, and `Ed25519` labels
+in the MPL core; PACKAGING-007 makes the PQC signature labels proprietary Enterprise/PQC
+capabilities under `ee/`: `Hybrid-ML-DSA-44-ECDSA-P256`, `ML-DSA-65`,
+and `SLH-DSA-SHA2-128s`. Unknown labels fail closed, and ML-KEM stays out of
+certificate-signing profiles because it's a key-encapsulation mechanism, not a signing
+algorithm. `internal/server/crypto_agility_served_test.go`'s
+`TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms` proves the served profile
+create/list round trip; those Enterprise/PQC issuance proofs live under `ee/pqc` and
+`ee/pqcmigration`, so they don't count as MPL-core served evidence.
 
-The managed-key API spine is configuration- and license-gated for AWS KMS, Azure
-Key Vault / Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2 custody.
-When `managed_keys.enabled` is true and `managed_keys.provider` selects one of
-`aws`, `azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2`, the running
-control plane exposes:
+The managed-key API spine is configuration- and license-gated for AWS KMS, Azure Key
+Vault/Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2 custody: once
+`managed_keys.enabled` is true and `managed_keys.provider` selects `aws`,
+`azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2`, the control plane
+exposes:
 
-- `POST /api/v1/managed-keys` to create a KMS/HSM-resident, non-extractable signing
-  key (`extractable: false` in the response; no private material is returned);
-- `POST /api/v1/managed-keys/approvals` to record a distinct custodian's approval
-  for an exact opaque key handle and `rotate`, `revoke`, or `zeroize` action;
-- `POST /api/v1/managed-keys/rotate` to mint a successor key;
-- `POST /api/v1/managed-keys/revoke` to disable the current key at the provider;
-- `POST /api/v1/managed-keys/zeroize` to schedule provider-side destruction.
+- `POST /api/v1/managed-keys` — create a non-extractable KMS/HSM-resident signing key
+  (`extractable: false`; no private material returned);
+- `POST /api/v1/managed-keys/approvals` — record a distinct custodian's approval for
+  an opaque key handle and `rotate`/`revoke`/`zeroize`;
+- `POST /api/v1/managed-keys/rotate` — mint a successor key;
+- `POST /api/v1/managed-keys/revoke` — disable the current key at the provider;
+- `POST /api/v1/managed-keys/zeroize` — schedule provider-side destruction.
 
 The CLI mirrors those verbs under `trstctl managed-keys`, including `approve`.
-Approval requires `keys:approve`; lifecycle mutation requires `keys:write`, and the
-requester never counts as an approver. Every request is
-tenant-scoped and idempotent. Every lifecycle request is recorded as a
-key-material-free event before
-its PostgreSQL outbox command is delivered to the signer. Rotate, revoke, and
-zeroize retain their governance checks. The required DoD gate launches the shipped
-control-plane and cgo signer, exercises all six providers against faithful cloud
-emulators, SoftHSM, or swtpm, stops the signer with a committed rotation outstanding,
-and independently verifies the resulting provider state. Those receipts prove the
-supported protocol/device boundary; they are not a claim of live-cloud-account or
-customer-device certification.
+Approval requires `keys:approve`; lifecycle mutation requires `keys:write`; the
+requester never counts as an approver; and every request is tenant-scoped, idempotent,
+and recorded as a key-material-free event before its PostgreSQL outbox command reaches
+the signer. A required gate launches the shipped control plane and cgo signer,
+exercises all six providers end to end against faithful cloud emulators, SoftHSM, or
+swtpm, and stops the signer mid-rotation to independently verify the resulting state
+(see Pitfalls & limits for what that proves and doesn't).
 
-The same key-management posture includes the served CAP-KEY-03 FIPS path:
-`GET /api/v1/editions` and the Platform page expose the live FIPS POST booleans,
-`make fips-build` build target, `fips-capable build (GOFIPS140)` CI gate, and
-`internal/crypto` boundary while keeping the trstctl product NIST CMVP certificate
-as the external lab-certification residual.
+The same posture includes the served CAP-KEY-03 FIPS path: `GET /api/v1/editions` and
+the Platform page expose the live FIPS POST booleans, `make fips-build` build target,
+`fips-capable build (GOFIPS140)` CI gate, and `internal/crypto` boundary, keeping the
+NIST CMVP product certificate as the external lab-certification residual.
 
 ## Use it
 
-Issue and govern through the served API and CLI. Profiles are live today:
+Issue and govern through the served API and CLI:
 
 ```sh
 # create a versioned profile (RA officer or admin)
@@ -428,8 +365,8 @@ A profile spec looks like this — note the explicit, enforced constraints:
 }
 ```
 
-For a hybrid transition profile, allow the hybrid key label and bind it to the
-protocols that should be able to request it:
+A hybrid transition profile allows the hybrid key label and binds it to the protocols
+allowed to request it:
 
 ```json
 {
@@ -450,25 +387,24 @@ external CA registry API, each of which calls the one issuance path with an
 
 ## Pitfalls & limits
 
-- **Private-key custody is a deployment boundary.** All six managed-key backends
-  are census-served through the separate HSM signer artifact, but the operator must
-  still provision an Enterprise BYOK license, one provider, credential files, IAM,
-  network egress, and device/module trust. See [configuration](../configuration.md)
-  for the exact startup contract.
+- **Private-key custody is a deployment boundary.** All six managed-key backends are
+  census-served through the separate HSM signer artifact, but the operator must still
+  provision an Enterprise BYOK license, one provider, credential files, IAM, network
+  egress, and device/module trust — see [configuration](../configuration.md) for the
+  startup contract.
 - **Emulator proof is not deployment certification.** The cloud gate uses faithful
   vendor-protocol emulators, PKCS#11/YubiHSM use a SoftHSM-backed ABI target, and TPM
-  uses swtpm. This is stronger than an author-injected registry or package unit test,
-  but it is not LocalStack, a live cloud account, a physical customer HSM, or the
-  device's FIPS certificate. The native bindings ship in the cgo HSM signer artifact,
-  not the default static control-plane artifact.
-- **ARI-driven lifecycle scheduling is for trstctl-issued deployed X.509 identities.**
-  Certificates discovered from another CA can still be inventoried and risk-scored, but
-  renewing them requires a configured issuer path that can replace that outside
-  certificate.
+  uses swtpm — stronger than an author-injected registry or unit test, but not a live
+  cloud account, a physical customer HSM, or the device's FIPS certificate. The native
+  bindings ship in the cgo HSM signer artifact, not the default static control-plane
+  artifact.
+- **ARI scheduling covers trstctl-issued deployed X.509 identities.** Certificates
+  discovered from another CA can still be inventoried and risk-scored, but renewing
+  them needs a configured issuer path that can replace that outside certificate.
 - **External CA registration is operator configuration.** Tenants can list and use
-  configured upstream CAs, but provider credentials are not created through the tenant
+  configured upstream CAs, but provider credentials aren't created through the tenant
   REST API.
-- **Revocation covers trstctl's own hierarchy.** Certificates from third-party CAs are
+- **Revocation covers trstctl's own hierarchy.** Third-party CA certificates are
   revoked through those CAs.
 
 ## Reference

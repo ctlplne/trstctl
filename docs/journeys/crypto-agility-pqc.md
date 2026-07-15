@@ -42,31 +42,26 @@ post-quantum target.
 
 ## Steps
 
-1. **Understand the crypto-agility model.** All cryptography in trstctl routes through
+1. Understand the crypto-agility model. All cryptography in trstctl routes through
    a single isolated path; no other part of the system performs crypto directly, and a
    build check fails the build if anything tries. That is what makes adding or swapping
    an algorithm — including a post-quantum one — a one-place change rather than a
    redesign. The detail is in [Lifecycle & PQC](../features/lifecycle-and-pqc.md).
 
-2. **Know which post-quantum algorithms are available.** Behind that single path,
-   alongside classical RSA and ECDSA/Ed25519, these primitives are available:
+2. Know which post-quantum algorithms are available. Behind that single path,
+   alongside classical RSA and ECDSA/Ed25519, the licensed EE algorithms are
+   ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) signatures, ML-KEM (FIPS 203) key
+   encapsulation, and classical+ML-DSA hybrids — the full catalog, with
+   guidance on which suits roots versus high-volume leaves, is in
+   [Lifecycle & PQC](../features/lifecycle-and-pqc.md). What matters for this
+   journey: signing algorithms are pinned per certificate profile; ML-KEM is
+   key establishment, not a certificate signer; the served TLS listeners
+   already prefer `X25519MLKEM768` for TLS 1.3 peers that support it; and
+   hybrid transition leaves bind a standard ECDSA P-256 TLS certificate to an
+   ML-DSA-44 public key. ACME, EST, SCEP, and CMP can issue that transition
+   leaf when the CSR carries the hybrid proof.
 
-   - **ML-DSA** (FIPS 204) — the lattice signature, e.g. `ML-DSA-65`.
-   - **ML-KEM** (FIPS 203) — key encapsulation for hybrid key exchange.
-   - **SLH-DSA** (FIPS 205) — the hash-based signature, e.g. `SLH-DSA-SHA2-128f`,
-     the conservative choice for long-lived roots (its signatures are large).
-   - **A hybrid** `HybridEd25519Dilithium3` — classical Ed25519 paired with ML-DSA, so
-     breaking either component alone does not forge a signature.
-
-   You should pick signing algorithms per certificate profile — large hash-based
-   signatures suit roots, not high-volume leaves. ML-KEM is not a certificate signer; it
-   is the key-establishment primitive protocols use before they protect traffic. The
-   served TLS listeners already prefer `X25519MLKEM768` for TLS 1.3 peers that support
-   it, and hybrid transition leaves bind a standard ECDSA P-256 TLS certificate to an
-   ML-DSA-44 public key for PQ-aware verifiers. ACME, EST, SCEP, and CMP can issue that
-   transition leaf when the CSR carries the hybrid proof.
-
-3. **Inventory the algorithms you run.** A cryptographic bill of materials (CBOM)
+3. Inventory the algorithms you run. A cryptographic bill of materials (CBOM)
    classifies each observation by algorithm family and strength and flags the
    quantum-vulnerable ones. Its findings become crypto-asset nodes in the credential
    graph, so posture flows into blast-radius and compliance views. Start a scan against
@@ -107,7 +102,7 @@ post-quantum target.
    (RSA-2048, EC-256, TLS 1.2), and the scan/inventory API are in
    [Observability & risk](../features/observability-and-risk.md).
 
-4. **Pin the algorithm a profile may use.** A certificate profile is a versioned,
+4. Pin the algorithm a profile may use. A certificate profile is a versioned,
    tenant-scoped rulebook for what may be issued — including the allowed key
    algorithms. To prepare a profile that issues hybrid transition leaves through served
    enrollment protocols, allow the hybrid key label and create it:
@@ -121,7 +116,7 @@ post-quantum target.
    certificate was issued under. Profiles are covered in
    [Lifecycle & PQC](../features/lifecycle-and-pqc.md).
 
-5. **Start the licensed EE PQC migration for certificate-key assets.** Pick the
+5. Start the licensed EE PQC migration for certificate-key assets. Pick the
    `certificate-key` asset ids from `GET /api/v1/cbom/assets` whose licensed
    migration target is `ML-DSA-65`, then queue the migration through the EE API:
 
@@ -177,7 +172,7 @@ post-quantum target.
    projection is built from the immutable prepared/completed events and the connector
    receiver evidence, not an optimistic in-memory flag.
 
-6. **Exercise rollback before broad rollout.** Keep rollback boring and rehearsed:
+6. Exercise rollback before broad rollout. Keep rollback boring and rehearsed:
 
    ```json
    {
@@ -201,7 +196,7 @@ post-quantum target.
    `licensed_crypto.migration.rollback_completed`, restoring the original CBOM
    posture for those assets.
 
-7. **Set the renewal window the migration will ride on.** Migration re-issues
+7. Set the renewal window the migration will ride on. Migration re-issues
    credentials, and lifecycle thresholds govern when renewal happens. Configure them:
 
    ```json
@@ -218,7 +213,7 @@ post-quantum target.
    still uses the served issuance path directly; lifecycle scheduling controls ordinary
    renewal pressure around it.
 
-8. **Keep what protects your secrets quantum-aware too.** Secret material — including
+8. Keep what protects your secrets quantum-aware too. Secret material — including
    the key-encryption key that seals everything at rest — lives only in wipeable
    memory and is zeroed after use, and it routes through the same single crypto path,
    so the same agility applies. Protect the KEK in production:

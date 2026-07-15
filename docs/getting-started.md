@@ -1,164 +1,138 @@
 # Getting started
 
-This walkthrough takes a fresh machine to its **first issued certificate in a few
-minutes** — and most of those minutes are the single agent-install step, not
-waiting on trstctl. The control plane is serving about two minutes after
-`compose up`, and issuance itself is a sub-second operation (see the measured
-figure under [Issue your first cert](#issue-your-first-cert)). You will bring up
-the blank control plane with one command, then follow the in-product wizard to
-connect a CA, install an agent, and issue a certificate.
+This walkthrough takes a fresh machine to its first issued certificate. The
+control plane is serving about two minutes after `compose up`; issuance itself
+is sub-second (measured figure under [Issue your first cert](#issue-your-first-cert)).
+Most of the wall-clock is the single agent-install step. You bring up a blank
+control plane with one command, then the in-product wizard connects a CA,
+issues a certificate, and enrolls an agent.
 
-If you want a pre-populated sales/demo environment instead of a blank first-run
-workflow, use the dedicated demo stack:
-
-```bash
-docker compose -f deploy/demo/docker-compose.yml up --build
-```
-
-It serves the UI at <https://localhost:9443>, includes local SSO, and seeds demo
-owners, certificates, secrets, transit keys, and managed keys. The walkthrough
-below uses the blank operational/eval stack at <https://localhost:8443>.
+If you want a pre-populated sales/demo environment instead of a blank
+first-run, use the demo stack: `docker compose -f deploy/demo/docker-compose.yml up --build`
+serves a seeded UI (owners, certificates, secrets, transit keys, managed keys)
+with local SSO at <https://localhost:9443>. Everything below uses the blank
+stack at <https://localhost:8443>; the two can run side by side.
 
 ## Prerequisites
 
-- Docker with the Compose plugin (`docker compose version` works), **or** a Go
-  1.26.4+ toolchain if you prefer to run from source.
-- About 1 GB of free disk for the Postgres and NATS volumes.
+- Docker with the Compose plugin (`docker compose version` works), or a Go
+  1.26.4+ toolchain to run from source.
+- About 1 GB of free disk for the PostgreSQL and NATS volumes.
 
 ## 1. Bring up the control plane (about 2 minutes)
-
-trstctl ships a one-command blank evaluation stack — the control plane plus
-PostgreSQL and NATS JetStream:
 
 ```bash
 docker compose -f deploy/docker/docker-compose.yml up --build
 ```
 
-Compose starts Postgres and NATS, waits for both to report healthy, and then
-starts the control plane wired to them through its **external** datastore
-configuration. The control-plane process starts the event log, projections,
-orchestrator, and API in order and supervises the signing service as a child
-process, so it answers real API requests end to end. The control plane serves
-over **TLS by default** with a self-signed internal certificate, so confirm it is
-up with `-k` (the eval certificate is not from a public CA):
+Compose starts PostgreSQL and NATS JetStream, waits for both to report
+healthy, then starts the control plane wired to them through its external
+datastore configuration. The process brings up the event log, projections,
+orchestrator, and API in order, and supervises the signing service as a child
+process — it answers real API requests end to end. TLS is on by default with
+a self-signed internal certificate, so health-check with `-k`:
 
 ```bash
 curl -fksS https://localhost:8443/healthz   # {"status":"ok"}
 ```
 
-The web UI is served by the same binary at <https://localhost:8443>.
-The blank Compose stack also enables the served agent mTLS gRPC channel for the
-wizard and publishes it as `localhost:19443` (container `:9443`). The dedicated
-demo stack keeps `localhost:9443` for its UI, so the two Compose projects can
-still run side by side.
+The web UI is served by the same binary at <https://localhost:8443>. The
+blank stack also enables the agent mTLS gRPC channel for the wizard at
+`localhost:19443` (container `:9443`; the demo stack's UI keeps
+`localhost:9443`, so both projects coexist).
 
 !!! tip "Transport encryption"
-    TLS is on out of the box (`server.tls.mode=internal`). For production, set
-    `server.tls.mode=file` with your own certificate (`TRSTCTL_SERVER_TLS_CERT_FILE`
-    / `TRSTCTL_SERVER_TLS_KEY_FILE`). Plaintext mode is local-dev only and requires
-    both `server.tls.mode=disabled`, `TRSTCTL_DEV_ALLOW_PLAINTEXT=true`, and a
-    loopback `server.addr`; it serves plaintext and logs a loud warning. See
-    [Configuration](configuration.md#transport-encryption-tls).
+    Default is `server.tls.mode=internal` (self-signed). For production, set
+    `server.tls.mode=file` with your own certificate
+    (`TRSTCTL_SERVER_TLS_CERT_FILE` / `TRSTCTL_SERVER_TLS_KEY_FILE`).
+    Plaintext is local-dev only: it requires `server.tls.mode=disabled`,
+    `TRSTCTL_DEV_ALLOW_PLAINTEXT=true`, and a loopback `server.addr`, and it
+    logs a loud warning. See [Configuration](configuration.md#transport-encryption-tls).
 
-!!! tip
-    Want to point at your own managed Postgres/NATS instead of the
-    Compose-provided ones? See [Configuration](configuration.md#external-datastores).
-    The same env vars the Compose file sets are all you need.
-
-!!! note "Two ways to evaluate: the single binary, or Compose"
-    Compose is the recommended eval path because it runs explicit PostgreSQL and
-    NATS service containers while exercising the same external-datastore wiring as
-    production. The `trstctl` binary can also run a single-node eval stack —
-    bundled PostgreSQL (`TRSTCTL_POSTGRES_MODE=bundled`, the default) plus embedded
-    NATS (`TRSTCTL_NATS_MODE=embedded`, the default) — on host archives with
-    committed provenance pins in `deploy/supply-chain/embedded-postgres.json`
-    (summarized in [Supply chain](supply-chain.md)).
-    Those pins currently cover `linux-amd64`, `linux-arm64v8`, and
-    `darwin-arm64v8`. Bundled PostgreSQL downloads its pinned runtime once on first
-    use and fails closed if the host archive is unsupported, unpinned, or hash-
-    mismatched; in that case use Compose or set
-    `TRSTCTL_POSTGRES_MODE=external` / `TRSTCTL_POSTGRES_DSN`. For **production**,
-    use external PostgreSQL and NATS (`TRSTCTL_NATS_MODE=external` /
-    `TRSTCTL_NATS_URL`) exactly as the Compose stack and Helm chart wire up. See
-    [Configuration](configuration.md#datastores).
+!!! note "Compose, the single binary, or your own datastores"
+    Compose is the recommended eval path: explicit PostgreSQL and NATS
+    containers, the same external-datastore wiring as production. The bare
+    `trstctl` binary can run single-node with bundled PostgreSQL
+    (`TRSTCTL_POSTGRES_MODE=bundled`, default) and embedded NATS
+    (`TRSTCTL_NATS_MODE=embedded`, default); the bundled runtime downloads
+    once on first use against the provenance pins in
+    `deploy/supply-chain/embedded-postgres.json` (`linux-amd64`,
+    `linux-arm64v8`, `darwin-arm64v8`) and fails closed if the host archive
+    is unsupported, unpinned, or hash-mismatched. To use managed datastores,
+    set the same env vars the Compose file sets
+    (`TRSTCTL_POSTGRES_MODE=external` / `TRSTCTL_POSTGRES_DSN`,
+    `TRSTCTL_NATS_MODE=external` / `TRSTCTL_NATS_URL`) — for production,
+    always external, exactly as the Compose stack and Helm chart wire up.
+    See [Configuration](configuration.md#datastores) and
+    [Supply chain](supply-chain.md).
 
 ## 2. Open the UI and sign in
 
-Visit <https://localhost:8443> (accept the self-signed evaluation certificate) and
-sign in. On a fresh install you land on a
-**Get started** prompt that launches the setup wizard. The wizard has six
-screens: use the internal CA, activate the tenant-bound evaluation enrollment
-profile, issue the first certificate with an issuer credential, prove configured
-integrations through their served routes, enroll an agent, and complete setup.
+Visit <https://localhost:8443> (accept the self-signed evaluation
+certificate) and sign in. A fresh install lands on a **Get started** prompt
+that launches the setup wizard. The wizard has six screens: use the internal
+CA, activate the evaluation enrollment profile, issue the first certificate,
+prove configured integrations, enroll an agent, and complete setup.
 
 ## 3. Run the wizard (about 10 minutes)
 
 ### Use the internal CA
 
-In **Use the internal CA**, continue with the signer-backed X.509 CA that the
-server provisioned at boot. This first certificate flow does not create an
-external issuer. External X.509 issuers require a certificate chain and are added
-after setup from the issuers/API surface.
+Continue with the signer-backed X.509 CA the server provisioned at boot. The
+first-certificate flow does not create an external issuer.
+External X.509 issuers require a certificate chain and are added after setup
+from the issuers/API surface.
 
 ### Enable enrollment protocols
 
-The blank Compose stack assembles the explicit `eval` profile for its evaluation
-tenant. In **Enable enrollment protocols**, review the seven shipped responders and
-click **Activate eval protocol profile**. The UI calls the authenticated mutation at
-`POST /api/v1/setup/protocols/activate`; the server records the activation in the event
-log before opening ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE. This state survives a
-restart and cannot activate another tenant's profile. A production deployment that
-uses individual protocol toggles reports that the eval profile is unavailable and lets
-the wizard continue without changing operator configuration.
+The blank stack assembles the explicit `eval` profile for its evaluation
+tenant. Review the seven shipped responders and click **Activate eval
+protocol profile**. The UI calls the authenticated mutation
+`POST /api/v1/setup/protocols/activate`; the server records the activation in
+the event log before opening ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE. The
+state survives restart and cannot activate another tenant's profile. A
+production deployment using individual protocol toggles reports the eval
+profile unavailable, and the wizard continues without changing operator
+configuration.
 
 ### Issue your first cert
 
-In **Issue your first cert**, name the service the certificate belongs to and
-click **Issue**. The action uses your signed-in operator credential with
-certificate-issuance authority; setup bootstrap tokens and agent enrollment
-tokens cannot issue certificates. trstctl creates the owner and identity and
-issues the certificate through the internal signer-backed CA. You will see a
-confirmation and a link to the certificate inventory.
-
-That is your first certificate — discovered, owned, and tracked. trstctl will now
-track it and alert before expiry. Renewal is a manual, one-click action today.
+Name the service the certificate belongs to and click **Issue**. The action
+uses your signed-in operator credential, which carries certificate-issuance
+authority; setup bootstrap tokens and agent enrollment tokens cannot issue.
+trstctl creates the owner and identity and issues the certificate through the
+internal signer-backed CA, then links you to the certificate inventory. From
+here trstctl tracks the certificate and alerts before expiry; renewal is a
+manual, one-click action today.
 
 !!! note "Measured issuance time"
-    Issuance is fast. In trstctl's end-to-end integration test — the assembled
-    control plane with the out-of-process signer — a lifecycle transition to
-    *issued* drives the outbox handler to mint the certificate and record it in
-    inventory in **tens of milliseconds** (`TestAssembledServerIssuesCertIntoInventory`
-    measured ~20 ms). In the running server the outbox dispatcher polls about once
-    a second, so the certificate appears within roughly a second of clicking
-    **Issue**. The wall-clock for the whole walkthrough is dominated by installing
-    the agent, not by trstctl.
+    In the end-to-end integration test — assembled control plane,
+    out-of-process signer — the transition to *issued* drives the outbox
+    handler to mint and record the certificate in tens of milliseconds
+    (`TestAssembledServerIssuesCertIntoInventory`, ~20 ms). The running
+    server's outbox dispatcher polls about once a second, so the certificate
+    appears within roughly a second of clicking **Issue**.
 
 ### Prove served integrations
 
-The optional **Prove served integrations** screen demonstrates that integration
-packages are reachable from the shipped control plane, not merely present in the
-source tree. Against systems already configured by an operator, it:
-
-1. reads the served connector catalog, creates a connector target, and deploys the
-   identity issued in the previous screen through
-   `POST /api/v1/connectors/targets/{id}/deploy`;
-2. reads configured upstream authorities and submits an operator-supplied CSR to
-   `POST /api/v1/external-cas/{id}/issue`; and
-3. opens a 15-minute dynamic-secret lease through
-   `POST /api/v1/secrets/leases`.
-
-The wizard retains only lease metadata; it never renders or stores the returned
-one-time credential in browser state. A core-only install with no upstream systems
-can choose **Skip integration proof for now** and reopen the guide after those
-systems are configured. Skipping does not claim that an integration was proven.
+This optional screen demonstrates that integration packages are reachable
+from the shipped control plane, not merely present in the source tree.
+Against systems an operator has already configured, it: reads the served
+connector catalog, creates a target, and deploys the identity just issued via
+`POST /api/v1/connectors/targets/{id}/deploy`; submits an operator-supplied
+CSR to `POST /api/v1/external-cas/{id}/issue`; and opens a 15-minute
+dynamic-secret lease through `POST /api/v1/secrets/leases`. The wizard
+retains only lease metadata — it never renders or stores the returned
+one-time credential in browser state. A core-only install can choose
+**Skip integration proof for now**; skipping does not claim an integration
+was proven.
 
 ### Install an agent
 
-In **Install an agent**, trstctl mints a one-time bootstrap token. Save that
-token to a local file readable only by the installing user. Then build the local
-evaluation CA bundle the agent pins. It contains the HTTPS self-signed eval
-certificate used for `/enroll/bootstrap` and the signer-custodied agent-channel
-CA used for mTLS on `localhost:19443`:
+The wizard mints a one-time bootstrap token. Save it to a file readable only
+by the installing user, then build the local evaluation CA bundle the agent
+pins — the HTTPS self-signed eval certificate (used for `/enroll/bootstrap`)
+plus the signer-custodied agent-channel CA (mTLS on `localhost:19443`):
 
 ```bash
 umask 077
@@ -183,35 +157,34 @@ trstctl-agent --enroll-url https://localhost:8443 \
   --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 ```
 
-If you recreate or restart the Compose control-plane container before enrolling,
-capture the HTTPS eval certificate again and rebuild `./trstctl-ca.pem`; the
-internal eval HTTPS certificate is self-signed at boot. The agent CA file
-persists in the `trstctldata` volume.
+If you recreate the Compose control-plane container before enrolling, capture
+the HTTPS eval certificate again and rebuild `./trstctl-ca.pem` — it is
+self-signed at boot. The agent CA persists in the `trstctldata` volume.
 
-The agent generates its key locally and enrolls with the token — **private keys
-never leave the host**. With `--inventory-cert-roots`, it also reports public
-certificate metadata from those directories over the mTLS agent channel; with
-`--inventory-os-trust-roots`, it reports public CA trust anchors the host trusts; with
-`--inventory-private-key-roots`, it locates private-key files but sends only
-metadata and public-key-derived fingerprints. Findings then show up in discovery inventory and the credential graph. The wizard polls and
-advances automatically once the agent registers (typically well under five minutes). See [Install](install.md)
-for how to get the `trstctl-agent` binary on Linux, macOS, and Windows.
+The agent generates its key locally and enrolls with the token; **private
+keys never leave the host**. The three `--inventory-*` flags report,
+respectively: public certificate metadata from those directories, the CA
+trust anchors the host trusts, and private-key locations as metadata plus
+public-key-derived fingerprints only. Findings appear in discovery inventory
+and the credential graph. The wizard polls and advances once the agent
+registers (typically well under five minutes). See [Install](install.md) for
+getting the `trstctl-agent` binary on Linux, macOS, and Windows.
 
 ### Complete setup
 
-In **Complete setup**, confirm the internal CA, protocol profile, issued certificate,
-integration-proof status, and enrolled agent summary. The wizard latches closed in this
-browser and sends you to the certificate operations view.
+Confirm the internal CA, protocol profile, issued certificate,
+integration-proof status, and enrolled agent. The wizard latches closed in
+this browser and sends you to the certificate operations view.
 
 ## Get your first API token
 
-A freshly booted control plane **fails closed**: every API route returns `401`
-until you present a credential. Interactive OIDC, SAML, and LDAP / Active Directory
-login are served when their `auth.*.enabled` blocks are configured, and SCIM 2.0 can
-provision users after you configure a tenant-bound SCIM token, but the
-zero-dependency first credential is still the host-local bootstrap token. Run the network-trust-free bootstrap verb on the
-host (it talks straight to the datastore — no existing token required) and it
-prints a tenant-scoped token **once**:
+A freshly booted control plane fails closed: every API route returns `401`
+until you present a credential. OIDC, SAML, and LDAP / Active Directory login
+are served once their `auth.*.enabled` blocks are configured, and SCIM 2.0
+can provision users after you configure a tenant-bound SCIM token — but the
+zero-dependency first credential is the host-local bootstrap verb. It talks
+straight to the datastore (no existing token required) and prints a
+tenant-scoped token once:
 
 ```bash
 # Pick any UUID as your tenant id (a single-tenant deployment uses one well-known id):
@@ -219,18 +192,19 @@ trstctl token create --tenant 11111111-1111-1111-1111-111111111111 --subject ci-
 # -> prints a trst_... token on stdout. Store it now; it is shown only once.
 ```
 
-The token carries its tenant and a full set of operator scopes — deliberately
-**excluding** certificate issuance (`certs:issue`), so a bootstrap credential can
-administer the platform but cannot self-issue a certificate. Use it as
-`Authorization: Bearer <token>` for initial administration. In shell examples
-below, keep it as `TRSTCTL_BOOTSTRAP_TOKEN`.
+The token carries a full set of operator scopes deliberately excluding
+certificate issuance (`certs:issue`): a bootstrap credential can administer
+the platform but cannot self-issue a certificate. Use it as
+`Authorization: Bearer <token>`; shell examples keep it in
+`TRSTCTL_BOOTSTRAP_TOKEN`.
 
 ## Prefer the command line?
 
-Everything the wizard does is also scriptable with `trstctl-cli`. The bootstrap
-token can create the owner and identity, but the served issue transition requires
-a distinct issuer/approver credential with `certs:issue` — not the bootstrap
-token. With the API token you minted above (see the [CLI reference](cli.md)):
+Everything the wizard does is scriptable with `trstctl-cli` (see the
+[CLI reference](cli.md)). The bootstrap token creates the owner and identity;
+the served issue transition requires a distinct issuer/approver credential
+with `certs:issue` — not the bootstrap token. This registration-authority
+split is described in [Policy & governance](features/policy-and-governance.md).
 
 ```bash
 export TRSTCTL_SERVER=https://localhost:8443
@@ -243,7 +217,8 @@ curl -fksS -X POST "$TRSTCTL_SERVER/api/v1/setup/protocols/activate" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: first-run-eval-protocols"
 
-# Create an owner and an identity; the id of each is in its JSON.
+# Create an owner and an identity; each command returns JSON with an id.
+# This creates the request-side records; nothing is issued yet.
 owner=$(echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f - | jq -r .id)
 ident=$(echo "{\"kind\":\"x509_certificate\",\"name\":\"payments.svc\",\"owner_id\":\"$owner\"}" \
           | trstctl-cli identities create -f - | jq -r .id)
@@ -256,18 +231,24 @@ JSON
 trstctl-cli --idempotency-key first-cert-issuer-token access tokens create -f issuer-token.json > issuer-token-response.json
 export TRSTCTL_ISSUER_TOKEN="$(jq -r .token issuer-token-response.json)"
 
-# Transition it to "issued" with the issuer token: the running outbox dispatcher
+# Transition to "issued" with the issuer token: the running outbox dispatcher
 # mints the certificate through the internal signer-backed CA.
 echo '{"to":"issued"}' | TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli identities transition "$ident" -f -
 sleep 2
 
-# The newly minted certificate is now in inventory.
+# The newly minted certificate is now in inventory: your first certificate,
+# discovered, owned, and tracked.
 TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli certificates list
 ```
 
+How the API, CLI, and UI fit together is described in
+[Platform & API](features/platform-and-api.md); the single issuance path and
+its guarantees in [Issuance & CAs](features/issuance-and-cas.md).
+
 ## Next steps
 
+- [Automate TLS across your fleet](journeys/automate-fleet-tls.md) or
+  [give Kubernetes workloads an identity](journeys/kubernetes-workload-identity.md).
 - Harden the deployment: [Configuration](configuration.md).
-- Learn the lifecycle and inventory views in the UI.
-- When you are done evaluating, [Uninstall](uninstall.md) cleanly.
-- Hit a snag? [Troubleshooting](troubleshooting.md).
+- Done evaluating? [Uninstall](uninstall.md) cleanly. Hit a snag?
+  [Troubleshooting](troubleshooting.md).

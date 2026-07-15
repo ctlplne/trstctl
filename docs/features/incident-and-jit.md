@@ -208,19 +208,19 @@ back into the event log (`/api/v1/breakglass/reconcile`). The self-service appro
 Credential compromise is served through REST, CLI, and the console:
 
 ```bash
-trstctl incidents executions execute -f incident.json
-trstctl incidents fleet-reissuance start -f compromised-issuer.json
-trstctl incidents fleet-reissuance pause 33333333-3333-4333-8333-333333333333 -f pause.json
-trstctl incidents fleet-reissuance evidence 33333333-3333-4333-8333-333333333333
-trstctl incidents response-integrations dispatch -f response-dispatch.json
-trstctl itsm servicenow tickets create -f servicenow-ticket.json
-trstctl remediation playbooks
-trstctl remediation playbooks run nhi-right-size -f right-size.json
-trstctl remediation playbook-runs list --playbook_id nhi-right-size
-trstctl remediation owner-actions list
-trstctl remediation owner-actions accept right-size-aWRlbnRpdHkvMTEx -f accept-owner-action.json
-trstctl incidents executions list --identity_id 11111111-1111-1111-1111-111111111111
-trstctl incidents executions get 22222222-2222-2222-2222-222222222222
+trstctl-cli incidents executions execute -f incident.json
+trstctl-cli incidents fleet-reissuance start -f compromised-issuer.json
+trstctl-cli incidents fleet-reissuance pause 33333333-3333-4333-8333-333333333333 -f pause.json
+trstctl-cli incidents fleet-reissuance evidence 33333333-3333-4333-8333-333333333333
+trstctl-cli incidents response-integrations dispatch -f response-dispatch.json
+trstctl-cli itsm servicenow tickets create -f servicenow-ticket.json
+trstctl-cli remediation playbooks
+trstctl-cli remediation playbooks run nhi-right-size -f right-size.json
+trstctl-cli remediation playbook-runs list --playbook_id nhi-right-size
+trstctl-cli remediation owner-actions list
+trstctl-cli remediation owner-actions accept right-size-aWRlbnRpdHkvMTEx -f accept-owner-action.json
+trstctl-cli incidents executions list --identity_id 11111111-1111-1111-1111-111111111111
+trstctl-cli incidents executions get 22222222-2222-2222-2222-222222222222
 ```
 
 `right-size.json` names the identity whose usage-backed posture finding supplies the
@@ -253,7 +253,7 @@ provider:
 Dispatch the same incident response packet to Splunk, Jira, Slack, and ServiceNow:
 
 ```bash
-trstctl incidents response-integrations dispatch -f response-dispatch.json
+trstctl-cli incidents response-integrations dispatch -f response-dispatch.json
 ```
 
 `response-dispatch.json`:
@@ -297,7 +297,7 @@ Queue a ServiceNow incident ticket from the same response surface:
 ```bash
 export TRSTCTL_SERVICENOW_INSTANCE_URL=https://example.service-now.com
 export TRSTCTL_SERVICENOW_TOKEN_REF=env:TRSTCTL_SERVICENOW_TOKEN
-trstctl itsm servicenow tickets create -f servicenow-ticket.json
+trstctl-cli itsm servicenow tickets create -f servicenow-ticket.json
 ```
 
 `servicenow-ticket.json`:
@@ -414,29 +414,29 @@ notifications use the [notification integrations](policy-and-governance.md).
 ## Pitfalls & limits
 
 - **Serving status:** credential-compromise execution (F31) is served through
-  `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`;
+  `/api/v1/incidents/executions`, `trstctl-cli incidents executions *`, and `/incidents`;
   automated remediation playbooks (CAP-REM-01) are served through
   `/api/v1/remediation/playbooks`,
   `/api/v1/remediation/playbooks/{id}/runs`,
-  `/api/v1/remediation/playbook-runs{,/{id}}`, `trstctl remediation playbooks*`,
+  `/api/v1/remediation/playbook-runs{,/{id}}`, `trstctl-cli remediation playbooks*`,
   and `/incidents`; owner-driven self-remediation (CAP-REM-02) is served through
   `/api/v1/remediation/owner-actions`,
   `/api/v1/remediation/owner-actions/{id}/accept`,
-  `trstctl remediation owner-actions *`, and the `/incidents` console; NHI
+  `trstctl-cli remediation owner-actions *`, and the `/incidents` console; NHI
   right-size runs require usage-backed CAP-POST-01 posture evidence and queue
   `connector.right_size` through the outbox. A configured tenant/connector binding
   applies the least-privilege scope removal to the external entitlement API, reads
   the effective scopes back, and records a delivered/failed connector receipt;
   CA-compromise fleet re-issuance (F32) is served through
   `/api/v1/incidents/fleet-reissuance-runs`,
-  `trstctl incidents fleet-reissuance *`, and the `/incidents` console;
+  `trstctl-cli incidents fleet-reissuance *`, and the `/incidents` console;
   compromised-credential / stolen-token detection (CAP-ITDR-02) is served through
   `credential_compromise` Discovery sources, runs, and findings; malicious /
   abused OAuth-grant detection (CAP-ITDR-03) is served through `oauth_grant`
   Discovery sources, runs, and `oauth_grant_abuse` findings;
   SIEM/SOAR/chat/ITSM response dispatch (CAP-REM-03) is served through
   `/api/v1/incidents/response-integrations/dispatch`,
-  `trstctl incidents response-integrations dispatch`, and `/incidents`;
+  `trstctl-cli incidents response-integrations dispatch`, and `/incidents`;
   ServiceNow / ITSM ticket creation is served through
   `/api/v1/itsm/servicenow/tickets` and the `/incidents` console. JIT issuance is
   served. Online m-of-n break-glass issue/rotation/cross-signing is conditionally
@@ -470,7 +470,7 @@ notifications use the [notification integrations](policy-and-governance.md).
   `response.jira`, `notification.response`, and `itsm.servicenow`; token material by
   `token_ref` only.
 - **Fleet:** `/api/v1/incidents/fleet-reissuance-runs`,
-  `trstctl incidents fleet-reissuance *`,
+  `trstctl-cli incidents fleet-reissuance *`,
   `incident.fleet_reissuance.recorded` — staged, health-checked, resumable.
 - **JIT:** `RequestIssuance`, `Approve`, `Deny`; default `RequiredApprovals: 2`,
   self-approval blocked.

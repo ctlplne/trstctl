@@ -2,13 +2,12 @@
 
 ## What it is
 
-This page covers the "platform plumbing" — the surfaces you use to operate trstctl and
-the properties of how it runs: the **REST API**, the **CLI**, the **web UI**, **OIDC,
-SAML, and LDAP / Active Directory sign-on**, **SCIM 2.0 provisioning**,
-**RBAC plus ABAC authorization controls**,
-**single-binary distribution**, **encrypted transport**,
-**multi-tenant topology**, and **federation**. These aren't glamorous features, but they're what make
-trstctl usable, secure, and operable in a real organization.
+This page covers the platform plumbing — the surfaces you use to operate
+trstctl and the properties of how it runs: the REST API, the CLI, the web UI,
+OIDC/SAML/LDAP sign-on, SCIM 2.0 provisioning, RBAC plus ABAC authorization,
+single-binary distribution, encrypted transport, multi-tenant topology, and
+federation. Not glamorous, but this is what makes trstctl usable, secure, and
+operable in a real organization.
 
 The mental model: if the [feature pages](../features.md) are the appliances, this is the
 wiring, the breaker box, the front door lock, and the meter — the infrastructure that lets
@@ -41,7 +40,7 @@ route checks RBAC first; when `auth.abac.enabled` is configured, a deny-only ABA
 overlay can then block the request using route, actor, environment, and time attributes.
 **Served.**
 
-Buyer receipt for CAP-API-07: the served `POST /api/v1/identities/{id}/transitions`
+The CAP-API-07 receipt: the served `POST /api/v1/identities/{id}/transitions`
 route requires an `Idempotency-Key`, appends the lifecycle event once, and binds the
 matching `ca.issue` outbox row to that same key so a retry returns the first result
 instead of minting or dispatching twice. Webhook eventing uses the same spine:
@@ -54,10 +53,10 @@ notification outbox work before the dispatcher delivers the signed webhook.
 `trstctl-cli` is the API's twin: every command is a row in a table that maps
 `trstctl-cli <group> <verb>` straight to an API route, so the CLI is provably at parity
 with the API and carries no bespoke logic. It auto-supplies idempotency keys on mutations.
-Command groups: `owners`, `issuers`, `identities`, `certificates`, `workloads`,
-`broker`, `ephemeral`, `profiles`, `audit`, `privacy`, `graph`, `risk`, `cbom`,
-`pqc`, `agents`, `secrets`, `managed-keys`, `transit`, `ai`, and `mcp`. **Served
-(binary).**
+The command groups span the full route surface — from `owners`, `identities`,
+`certificates`, and `secrets` through `discovery`, `nhi`, `breakglass`,
+`graph`, `risk`, `managed-keys`, `transit`, `ai`, and `mcp` — see the
+[CLI reference](../cli.md) for the complete table. **Served (binary).**
 
 ### Terraform provider
 
@@ -148,7 +147,7 @@ isolation is enforced at the database layer even for eval, not relaxed. The
 process, never in-process — private-key operations stay in their own isolated service. For
 production, flip Postgres/NATS to external. **Served (binary).**
 
-Buyer receipt for CAP-MODEL-01 Self-hostable, run-anywhere: the served
+The CAP-MODEL-01 receipt (Self-hostable, run-anywhere): the served
 `GET /api/v1/platform/distribution` route and `trstctl-cli platform distribution`
 command return the self-hostable run-anywhere posture directly from the product. The
 receipt lists the host-archive eval path, Docker Compose eval path, Kubernetes/Helm
@@ -158,7 +157,7 @@ pin; release gates such as `make lint test`, embedded-Postgres scan receipts,
 OpenAPI/CLI route parity, and the architecture linter; and the open-core guard that
 offline license verification plus audit/export stay in core.
 
-Buyer receipt for CAP-MODEL-03 Air-gapped / on-prem + data residency: the same served
+The CAP-MODEL-03 receipt (Air-gapped / on-prem + data residency): the same served
 `GET /api/v1/platform/distribution` route and `trstctl-cli platform distribution`
 command return an `air_gap` receipt. It lists `TRSTCTL_AIRGAP_ENABLED`,
 `TRSTCTL_AIRGAP_ALLOW_PRIVATE`, `TRSTCTL_AIRGAP_ALLOW_HOSTS`,
@@ -237,15 +236,14 @@ boots the same binary composition used by production tests (PostgreSQL, NATS Jet
 and the separate signer process) and proves the Provider license gate, tenant projection,
 event metadata, and idempotent replay.
 
-The public packaging boundary has three tiers. **Free** is the self-hosted MPL core.
-**Enterprise** unlocks the commercial `ee/` set per control-plane deployment.
-**Provider / MSP** inherits every Enterprise feature, adds provider-plane operation,
-and grants managed-service and resale rights. An MSP normally runs one shared control
-plane with isolated customer tenants, but dedicated customer deployments are also
-supported. Provider wholesale terms use a negotiable managed-customer band; the MSP
-sets its own downstream hosting and support prices. Every path uses the same
-event-sourced, PostgreSQL-RLS-isolated binary lineage; none moves tenancy,
-audit/export, crypto, or license verification into `ee/`.
+The public packaging boundary has three tiers — Free (self-hosted MPL core),
+Enterprise (the commercial `ee/` set, per control-plane deployment), and
+Provider/MSP, which inherits Enterprise, adds provider-plane operation, and
+grants managed-service and resale rights with dedicated-deployment flexibility.
+The tier matrix and billing posture live in [Editions](../editions.md) and
+[Pricing](../pricing.md). Every path uses the same event-sourced,
+PostgreSQL-RLS-isolated binary lineage; none moves tenancy, audit/export,
+crypto, or license verification into `ee/`.
 
 ### High-volume orchestration (CAP-SCALE-01)
 
@@ -394,9 +392,10 @@ configured. See
 - **API:** OpenAPI 3.1 at `GET /api/v1/openapi.json`; RFC 7807 errors; `Idempotency-Key`
   on mutations; cursor pagination; `429` + `Retry-After`; authenticated REST JSON
   request bodies are capped at 1 MiB and reject trailing JSON tokens.
-- **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `workloads`,
-  `broker`, `ephemeral`, `profiles`, `audit`, `privacy`, `graph`, `risk`, `cbom`,
-  `pqc`, `agents`, `secrets`, `managed-keys`, `transit`, `ai`, and `mcp`.
+- **CLI groups:** one group per API route family (`owners`, `identities`,
+  `certificates`, `secrets`, `discovery`, `nhi`, `breakglass`, `graph`,
+  `risk`, `managed-keys`, `transit`, `ai`, `mcp`, and the rest) — complete
+  table in the [CLI reference](../cli.md).
 - **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC when
   `auth.oidc.enabled` is on); `/auth/saml/login`, `/auth/saml/acs`, and
   `/auth/saml/metadata` (SAML when `auth.saml.enabled` is on); `POST

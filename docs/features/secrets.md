@@ -4,7 +4,7 @@
 
 A [secret](../glossary.md) is any sensitive value software needs but shouldn't expose:
 a database password, an API token, an encryption key. trstctl is a full secrets
-platform alongside its certificate work — it stores secrets encrypted, hands out
+platform alongside its certificate work: it stores secrets encrypted, hands out
 short-lived ones on demand, rotates them safely, encrypts data on behalf of apps,
 syncs secrets to other platforms, and governs who can read or change them.
 
@@ -15,98 +15,81 @@ hour (dynamic secrets). The **armored-car service** moves valuables to other bra
 master key (encryption-as-a-service). And every action needs ID and is logged
 (auth + approvals + audit).
 
-> **One honest note up front.** Most of the _secrets_ domain is now **served**: the
-> **secret store** (CRUD + rotation), **dynamic secret leases**, **one-time secret
-> sharing**, the **dynamic PKI secret**, **machine login**, **secret-sync**, **secret
-> scanning**, **ephemeral API keys**, and the **Vault/OpenBao common compatibility
-> paths** are mounted on the running control plane.
-> The `/api/v1/secrets/*` surface is off by default (`secrets.enable_api`) and
-> fail-closed when off; ephemeral API keys live under `/api/v1/ephemeral/api-keys`
-> because they mint tenant API credentials, not stored secret values. **Transit**
-> encryption-as-a-service is now served separately at `/api/v1/transit/*` with the
-> `transit` CLI group and `keys:*` RBAC scopes. **KMIP** is served as an opt-in
-> mTLS listener (`protocols.kmip.*`) for AES-256 SymmetricKey
-> Create/Get/Locate/Revoke/Destroy interop. Remaining KMIP appliance gaps are still
-> called out in
-> [Current limitations](../limitations.md).
-> This page is honest about that throughout.
+> **One honest note up front.** Most of the _secrets_ domain is now **served** on the
+> running control plane: the secret store (CRUD + rotation), dynamic secret leases,
+> one-time secret sharing, the dynamic PKI secret, machine login, secret-sync, secret
+> scanning, workload injection, ephemeral API keys, and the Vault/OpenBao common
+> compatibility paths are all mounted. The `/api/v1/secrets/*` surface is off by default
+> (`secrets.enable_api`) and fail-closed when off; ephemeral API keys live under
+> `/api/v1/ephemeral/api-keys` since they mint tenant credentials, not stored secret
+> values. Transit encryption-as-a-service is served separately at `/api/v1/transit/*`
+> (`transit` CLI group, `keys:*` RBAC scopes). KMIP is served as an opt-in mTLS
+> listener (`protocols.kmip.*`) for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy
+> interop; remaining gaps are in [Current limitations](../limitations.md).
 
 ## Why it exists
 
-Leaked secrets are one of the most common breach causes, because the traditional
-approach — long-lived secrets copied into config files, environment variables, images,
-and CI — spreads them everywhere and never expires them. trstctl attacks the problem
-from every side: encrypt them properly at rest, prefer short-lived/dynamic secrets that
-can't be hoarded, rotate the long-lived ones automatically, never let a secret value
-touch a log or a disk it shouldn't, and put approvals and a tamper-evident audit trail
-around access. Secret material is always held in wipeable `[]byte` buffers that are
-zeroed after use, never a Go `string` (Go can copy strings freely, so a value placed in
-one can linger in memory beyond your control).
+Leaked secrets are one of the most common breach causes: the traditional approach —
+long-lived secrets copied into config files, environment variables, images, and CI —
+spreads them everywhere and never expires them. trstctl attacks the problem from every
+angle: encrypt at rest, prefer short-lived/dynamic secrets that can't be hoarded, rotate
+long-lived ones automatically, never let a secret value touch a log or disk it
+shouldn't, and wrap access in approvals and a tamper-evident audit trail. Secret
+material lives in wipeable `[]byte` buffers zeroed after use, never a Go `string` — Go
+copies strings freely, so a value placed in one can linger in memory beyond your
+control.
 
 ## How it works
 
 ### How every secret is encrypted at rest
 
-trstctl uses **[envelope encryption](../glossary.md)**, and all of it runs through the
-single isolated cryptography path. Each secret is encrypted with a fresh per-secret data
-key (DEK, AES-256-GCM), and that DEK is itself encrypted under a master key-encryption key
-(KEK). The encryption is bound to the secret's tenant and path, so a sealed blob can't be
-moved elsewhere. The KEK is loaded at startup from `TRSTCTL_SECRETS_KEK_FILE` (0600),
-held only transiently, and zeroized. To rotate protection you re-wrap small DEKs, not all
-your data.
+trstctl uses **[envelope encryption](../glossary.md)** through the single isolated
+cryptography path. Each secret gets a fresh per-secret data key (DEK, AES-256-GCM),
+itself encrypted under a master key-encryption key (KEK), bound to the secret's tenant
+and path so a sealed blob can't be moved elsewhere. The KEK loads at startup from
+`TRSTCTL_SECRETS_KEK_FILE` (0600), stays transient, and is zeroized. Rotating
+protection means re-wrapping small DEKs, not all your data.
 
 ### The native secret store (F63)
 
-A served, tenant-isolated key-value store for application secrets. `POST
+A served, tenant-isolated key-value store for application secrets: `POST
 /api/v1/secrets/store` creates version 1, `PUT /api/v1/secrets/store/{name}` writes the
-next version, and `GET /api/v1/secrets/store/{name}` explicitly reveals only the latest
-value to a caller with `secrets:read`. Metadata responses list names, versions, and
-timestamps only; they never carry values.
+next version, `GET /api/v1/secrets/store/{name}` reveals only the latest value to a
+`secrets:read` caller, and metadata responses list names, versions, and timestamps
+only, never values.
 
-SEC-01 adds durable sealed version history. Every create, rotation, and recovery stores a
-row in `secret_store_versions` under PostgreSQL row-level security, and emits
-`secret.version.written` without plaintext. Operators can read a prior version with
-`GET /api/v1/secrets/store/history/{name}?version=N`, then recover the version that was
-current at a timestamp with `POST /api/v1/secrets/store/recover/{name}` and body
-`{"at":"2026-06-25T12:00:00Z"}`. Recovery creates the next monotonic version, so
-rollbacks are auditable instead of overwriting history. `DELETE
-/api/v1/secrets/store/{name}` purges the current row and its sealed history for that
-tenant; another tenant still gets a 404 because both tables are RLS-scoped.
+Every create, rotation, and recovery stores a row in `secret_store_versions` under
+PostgreSQL RLS and emits `secret.version.written` without plaintext.
+`GET /api/v1/secrets/store/history/{name}?version=N` reads a prior version, and
+`POST /api/v1/secrets/store/recover/{name}` with body `{"at":"2026-06-25T12:00:00Z"}`
+recovers whichever version was current then as the next monotonic version, keeping
+rollbacks auditable. `DELETE /api/v1/secrets/store/{name}` purges the current row and
+sealed history for that tenant; another tenant gets a 404 — both tables are
+RLS-scoped.
 
-SEC-02 adds explicit reference resolution and imports to that same served path.
-Secret values may contain `${secret.path}` placeholders. A normal read returns the
-literal stored value, so callers do not accidentally expand more secret material than
-they asked for; `GET /api/v1/secrets/store/{name}?resolve=true` expands references
-for the same tenant and permission scope. Cycles such as `a -> b -> a` are rejected
-with a structured `409` problem response that includes the cycle path. Missing
-references return a normal `404`.
+Values may contain `${secret.path}` placeholders: a normal read returns the literal
+value, while `GET /api/v1/secrets/store/{name}?resolve=true` expands references within
+tenant/permission scope instead. Cycles like `a -> b -> a` return a structured `409`
+with the cycle path; missing references return a normal `404`.
 
-Bulk imports use `POST /api/v1/secrets/store/import` with a body like
+`POST /api/v1/secrets/store/import` bulk-imports a body like
 `{"prefix":"app","values":{"db/user":"svc","db/dsn":"postgres://${secret.app/db/user}@db"}}`.
-Each imported value is sealed independently as version 1, the response contains only
-metadata, and if any imported name already exists the whole import is rejected so a
-tree cannot half-land.
+Each value is sealed independently as version 1, the response is metadata-only, and if
+any imported name already exists the whole import is rejected so a tree cannot
+half-land.
 
-The credential store the running control plane mounts is the **served seal path**: it
-seals through a versioned binary container, and its key-encryption key is loaded into
-locked, zeroizable memory at startup — never held as a raw byte slice on the heap.
-
-An older store core is retained for **legacy event replay and compatibility**. It now also
-holds its KEK behind the same locked-memory boundary and seals with the binary container,
-and its reconstruction still replays both the current container and earlier
-JSON-envelope history; new production writes go through the served seal path above, not
-here.
+The served store seals through a versioned binary container, its KEK loaded into
+locked, zeroizable memory at startup, never a raw byte slice on the heap. An older
+store core, kept for legacy event replay and compatibility, holds its KEK the same way
+and still replays both the binary container and earlier JSON-envelope history; new
+writes go through the path above.
 
 ### Vault/OpenBao-compatible common API
 
-Teams migrating from Vault or OpenBao can point a stock `vault` CLI at trstctl for the
-common day-one paths while they move applications over deliberately. This is a
-compatibility shim over the served secret store and dynamic PKI secret, not a second
-secrets platform.
-
-Enable the same secrets surface (`secrets.enable_api`) and use a normal tenant API token
-with `secrets:read` and/or `secrets:write`. The shim accepts that token in
-`X-Vault-Token`, which is what the Vault CLI sends:
+Teams migrating from Vault or OpenBao can point a stock `vault` CLI at trstctl — a
+compatibility shim over the served secret store and dynamic PKI secret. Enable the same
+surface (`secrets.enable_api`) and use a tenant API token (`secrets:read`/`secrets:write`)
+as `X-Vault-Token`, which is what the Vault CLI sends:
 
 ```sh
 export VAULT_ADDR=https://trstctl.example.com
@@ -120,130 +103,108 @@ vault write -format=json pki/issue/default common_name=payments.internal ttl=1h
 
 Supported paths are intentionally small:
 
-| Vault path                                       | trstctl behavior                                                                                      |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `GET /v1/auth/token/lookup-self`                 | Validates the `trst_...` API token and returns Vault-shaped token metadata without echoing the token. |
-| Vault KV mount-discovery preflight for `secret/` | Lets `vault kv` discover that `secret/` is KV v2.                                                     |
-| `POST` / `PUT /v1/secret/data/{path}`            | Upserts a KV v2 object into `/api/v1/secrets/store/{path}` as the next sealed version.                |
-| `GET /v1/secret/data/{path}`                     | Reads the latest value and returns Vault KV v2 `data.data` plus version metadata.                     |
-| `POST` / `PUT /v1/pki/issue/{role}`              | Issues a short-lived certificate and private key through the signer-backed dynamic PKI secret.        |
+| Vault path                                 | trstctl behavior                                                                       |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `GET /v1/auth/token/lookup-self`           | Validates the `trst_...` token; returns Vault-shaped metadata, never the token.         |
+| KV mount-discovery preflight for `secret/` | Lets `vault kv` discover `secret/` is KV v2.                                            |
+| `POST`/`PUT /v1/secret/data/{path}`        | Upserts a KV v2 object into `/api/v1/secrets/store/{path}` as the next sealed version.  |
+| `GET /v1/secret/data/{path}`               | Reads the latest value as Vault KV v2 `data.data` plus version metadata.                |
+| `POST`/`PUT /v1/pki/issue/{role}`          | Issues a short-lived certificate and key via the signer-backed dynamic PKI secret.      |
 
-The machine-readable compatibility contract is pinned as
-[`docs/contracts/vault-openbao-compat.openapi.json`](../contracts/vault-openbao-compat.openapi.json).
-It is separate from the native `/api/v1` OpenAPI document because these `/v1`
-paths preserve Vault/OpenBao wire shapes for migration clients.
-
-This subset does **not** implement Vault mount management, Vault ACL policies,
-cubbyhole, response wrapping, Vault transit paths, or every dynamic secret engine. The
-native trstctl API remains the full product surface. Mutating Vault-compatible calls
-accept `Idempotency-Key`; because the stock CLI does not send one by default, trstctl
-synthesizes a deterministic key from method, path, and body so a retry cannot mint a
-duplicate certificate. When you intentionally need a fresh certificate with the same
-common name and TTL, pass a different `Idempotency-Key` header or use the native
-`/api/v1/secrets/pki` route.
+It skips Vault mount management, ACL policies, cubbyhole, response wrapping, transit
+paths, and every dynamic secret engine — the native trstctl API remains the full
+surface. The machine-readable contract is pinned separately as
+[`docs/contracts/vault-openbao-compat.openapi.json`](../contracts/vault-openbao-compat.openapi.json),
+since `/v1` paths preserve Vault/OpenBao wire shapes. Mutating calls accept
+`Idempotency-Key`; since the stock CLI sends none, trstctl derives one from method,
+path, and body so a retry can't mint a duplicate certificate — force a fresh one with a
+different `Idempotency-Key`, or use the native `/api/v1/secrets/pki` route.
 
 ### The developer secrets experience (F64)
 
 Two pieces make secrets pleasant _and_ safe for developers. `trstctl-cli run` fetches
-named secrets from the served store and runs your program with those values in the
-child environment without writing them to disk. The fetch goes through the normal
-`GET /api/v1/secrets/store/{name}` RBAC path; only variable names and secret paths are
-audited, never values. An **SDK** caches secrets and auto-refreshes them before expiry,
-and on a revocation it evicts the cache and fails safe rather than serving a stale,
-revoked secret.
+named secrets from the served store and runs your program with them in the child
+environment, never written to disk, via the normal `GET /api/v1/secrets/store/{name}`
+RBAC path — only names and paths are audited, never values. An SDK caches secrets,
+auto-refreshes before expiry, and on revocation evicts the cache and fails safe instead
+of serving a stale one.
 
 ```sh
 trstctl-cli run --secret DB_PASSWORD=db/password -- env
 trstctl-cli run --resolve --secret DATABASE_URL=app/db/dsn -- ./payments-api
 ```
 
-The `--resolve` flag deliberately maps to `?resolve=true`; without it, a stored value
-such as `${secret.app/db/password}` is passed through literally instead of expanding
-more material than the operator asked for. After the child exits, trstctl wipes the
-byte-backed secret copies it fetched. The operating-system environment itself is still
-an edge string API, so operators should use `run` for trusted child processes and avoid
-debug commands that print their full environment.
+The `--resolve` flag maps to `?resolve=true`; without it, a value like
+`${secret.app/db/password}` passes through literally instead of expanding further.
+After the child exits, trstctl wipes the byte-backed copies fetched — the OS
+environment remains an edge string API, so use `run` for trusted processes and skip
+debug commands printing the full environment.
 
-Developers can also load application configuration as a tree with `trstctl-cli secrets
-store import --body-file import.json` and can ask for an explicit resolved read with
-`trstctl-cli secrets store get NAME --resolve=true`. This is intentionally opt-in:
-plain reads show the stored value, while resolved reads expand `${secret.path}`
-references, detect cycles, and stay within the caller's tenant/RBAC scope.
+Developers can also load configuration as a tree with `trstctl-cli secrets store
+import --body-file import.json`, or read with `trstctl-cli secrets store get NAME
+--resolve=true` for the same opt-in resolve/cycle-detect behavior, scoped to the
+caller's tenant and RBAC.
 
 ### Dynamic secrets (F65) and PKI-as-a-secrets-engine (F67)
 
-Instead of a long-lived secret to steal, **dynamic secrets** are minted on demand,
-scoped, and time-limited by a [lease](../glossary.md); when the lease expires trstctl
-revokes the underlying credential automatically — even across a restart, because the
-revocation intent is journaled first to a durable [outbox](../glossary.md) and delivered
-at-least-once, so a crash can't silently drop it. Eight concrete backends ship behind
-one interface: PostgreSQL, MySQL, MongoDB, AWS IAM, GCP IAM, Azure Entra, Kubernetes
-ServiceAccount tokens, and Redis ACL users. The DoD gate reaches all four database
-providers through official digest-pinned server containers and reaches each cloud or
-Kubernetes provider through a separate protocol-faithful process with exact
-authentication and independent credential use/revocation checks.
+Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
+and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
+automatically, even across a restart, since the revocation intent is journaled first to
+a durable [outbox](../glossary.md) and delivered at-least-once. Eight backends ship
+behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
+MySQL, MongoDB, AWS IAM, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens, and
+Redis ACL users.
 
-The running control plane mounts the dynamic lease lifecycle when `secrets.enable_api`
-is on and `secret_integrations.dynamic_providers` supplies tenant-bound endpoints,
-allowed roles, maximum TTLs, egress policy, and `file:` or same-tenant `secret://`
-credential references. `buildRunDeps` constructs that production registry. Issuance
-first commits a deterministic pending lease and sealed outbox command; only the outbox
-worker calls the provider, and a crash retry reuses the same external identity:
+The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
+`secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
+maximum TTLs, egress policy, and `file:`/`secret://` credential references
+(`buildRunDeps` wires the registry). Issuance commits a pending lease and sealed
+outbox command first, so only the outbox worker calls the provider and a crash retry
+reuses the same identity. Cloud/Kubernetes endpoints require HTTPS; `allow_insecure_loopback` is a
+same-host-emulator exception limited to `localhost`, `127.0.0.0/8`, or `::1`.
 
-Cloud and Kubernetes provider endpoints require HTTPS. A private-endpoint CIDR grant
-does not permit HTTP. The separate `allow_insecure_loopback` switch exists only for a
-same-host emulator and is limited, both before startup and at socket dial time, to
-`localhost`, `127.0.0.0/8`, or `::1`.
-
-- `POST /api/v1/secrets/leases` issues exactly one credential copy for a provider,
-  role, and TTL, guarded by `secrets:write` plus `Idempotency-Key`.
-- `GET /api/v1/secrets/leases/{lease_id}` returns lease metadata only; it does not
-  replay the credential value after first issue.
-- `POST /api/v1/secrets/leases/{lease_id}/renew` extends an active lease without
-  returning the credential again.
+- `POST /api/v1/secrets/leases` issues one credential copy for a provider, role, and
+  TTL, guarded by `secrets:write` plus `Idempotency-Key`.
+- `GET /api/v1/secrets/leases/{lease_id}` returns lease metadata only, never replaying
+  the credential after first issue.
+- `POST /api/v1/secrets/leases/{lease_id}/renew` extends a lease without returning the
+  credential again.
 - `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend
-  revocation through the outbox-backed worker.
+  revocation through the outbox worker.
 
-**PKI-as-a-secrets-engine** plugs the
-same lease machinery into certificate issuance — a developer requests a short-lived
-certificate exactly like a database password, and the leaf key is generated in wipeable
-memory and zeroed immediately after use.
+**PKI-as-a-secrets-engine** plugs the same lease machinery into certificate issuance: a
+short-lived certificate is requested exactly like a database password, and the leaf key
+is generated in wipeable memory and zeroed immediately after use.
 
 ### Secret rotation (F37)
 
-The rotation engine replaces a long-lived secret in **four rollback-safe phases**: stage
-the new version, cut consumers over, verify they're healthy, retire the old one. If
-cutover or verification fails, it **automatically rolls back** so the application is never
-left broken. If backend rollback itself fails, the report sets `RollbackAttempted` and
-`RollbackFailed`, leaves `RolledBack` false, and audits `rotation.rollback_failed` so
-operators know the consumer may be on the new secret and needs intervention.
+The rotation engine replaces a long-lived secret in **four rollback-safe phases**:
+stage, cutover, verify, retire. A failed cutover or verification auto-rolls-back so the
+application is never left broken; if rollback itself fails, the report sets
+`RollbackAttempted` and `RollbackFailed`, leaves `RolledBack` false, and audits
+`rotation.rollback_failed` so operators know the consumer may need intervention.
 
-The running control plane serves that workflow at `POST /api/v1/secrets/rotations`.
-The request names a provider, the consumer key, and the current backend reference; the
-response returns only non-secret rotation evidence (`old_ref`, `new_ref`, completed /
-rolled-back flags, and failure phase). The scheduled path records tenant cadences at
-`POST /api/v1/secrets/rotation-schedules`, lists them with
-`GET /api/v1/secrets/rotation-schedules`, and executes due schedules with
-`POST /api/v1/secrets/rotation-schedules/run-due`. Due schedules run the same
-stage/cutover/verify/retire engine and advance `old_ref` only after a completed
-rotation, so the next run retires the version that just became old.
+trstctl serves this at `POST /api/v1/secrets/rotations` — the request names a provider,
+consumer key, and current backend reference; the response returns only non-secret
+evidence (`old_ref`, `new_ref`, completed/rolled-back flags, failure phase). The
+scheduled path records cadences at `POST /api/v1/secrets/rotation-schedules`, lists
+them with `GET /api/v1/secrets/rotation-schedules`, and runs due ones with
+`POST /api/v1/secrets/rotation-schedules/run-due`, advancing `old_ref` only after a
+completed rotation.
 
-The same served endpoint now accepts three backend classes:
+The same endpoint accepts three backend classes:
 
 - Static providers such as `postgresql`, `mysql`, and `aws-iam` rotate a long-lived
   backend credential and publish it to the configured consumer pointer.
 - `connector:<target>` rotates a native-store secret version, pushes the new value
-  through the configured secret-sync outbox target, and restores the prior
-  `old_ref` (`version:<n>`) if connector delivery fails.
+  through the configured secret-sync outbox target, and restores the prior `old_ref`
+  (`version:<n>`) if connector delivery fails.
 - `dynamic-lease:<provider>` issues a replacement dynamic lease for `key` (the role),
-  delivers the one-time credential to `target`/`remote_key`, then revokes the old
-  lease named in `old_ref`. The rotation response never returns the credential.
+  delivers the one-time credential to `target`/`remote_key`, then revokes the old lease
+  named in `old_ref` — the response never returns the credential.
 
-PostgreSQL, MySQL, and AWS IAM rotators ship as concrete backends. PostgreSQL is
-verified against a real database process: stage creates a new login, cutover publishes
-the new credential to the configured consumer pointer, verify logs in with it, retire
-drops the old login, and rollback restores the old credential while revoking the staged
-login.
+PostgreSQL, MySQL, and AWS IAM rotators ship as concrete, infrastructure-verified
+backends covering the full stage/cutover/verify/retire-and-rollback path.
 
 ### Ephemeral API keys (F38)
 
@@ -253,14 +214,12 @@ control plane:
 - `POST /api/v1/ephemeral/api-keys` mints a tenant API token with `subject`, `scopes`,
   and `ttl_seconds`.
 - `trstctl-cli ephemeral api-keys issue -f body.json` drives the same route.
-- The route is guarded by `access:write` and still requires `Idempotency-Key`, so a
-  retry returns the original response instead of minting twice.
-- The response returns the raw `trst_...` token once. The event log stores only the
-  token hash in `api_token.created`; the raw token is never persisted or emitted.
-- The served leaseworker sweeps expired keys and emits `api_token.revoked`, so the
-  read model shows `revoked_at` evidence and authentication rejects the key after TTL.
-
-Example body:
+- Guarded by `access:write` plus `Idempotency-Key`, so a retry returns the original
+  response instead of minting twice.
+- The response returns the raw `trst_...` token once; the event log stores only the
+  token hash in `api_token.created` — the raw token is never persisted or emitted.
+- The served leaseworker sweeps expired keys and emits `api_token.revoked`, so the read
+  model shows `revoked_at` evidence and authentication rejects the key after TTL.
 
 ```json
 {
@@ -270,35 +229,26 @@ Example body:
 }
 ```
 
-Use this for short CI jobs, deploy previews, partner imports, and other machine
-workflows that need a narrow bearer credential for minutes rather than a reusable
-long-lived API key.
+Use it for short CI jobs, deploy previews, partner imports, and similar workflows
+needing a narrow bearer credential for minutes, not a reusable key.
 
 ### Encryption-as-a-service & KMIP (F66)
 
-The **Transit** service encrypts, decrypts, HMACs, signs, verifies, and rewraps data
-using tenant-scoped named keys the application _never sees_. The running control plane
-mounts it at `/api/v1/transit/*`, and the CLI exposes the same operations:
+Transit encrypts, decrypts, HMACs, signs, verifies, and rewraps data using tenant-scoped
+named keys the application _never sees_, mounted at `/api/v1/transit/*` with a
+one-for-one CLI: `POST /api/v1/transit/keys` / `transit keys create` mints a key,
+`.../keys/rotate` / `transit keys rotate` rotates it, and the same
+`POST /api/v1/transit/<op>` / `trstctl-cli transit <op>` pairing covers `encrypt`,
+`decrypt`, `rewrap`, `hmac`, `sign`, and `verify`.
 
-- `POST /api/v1/transit/keys` / `trstctl-cli transit keys create`
-- `POST /api/v1/transit/keys/rotate` / `trstctl-cli transit keys rotate`
-- `POST /api/v1/transit/encrypt` / `trstctl-cli transit encrypt`
-- `POST /api/v1/transit/decrypt` / `trstctl-cli transit decrypt`
-- `POST /api/v1/transit/rewrap` / `trstctl-cli transit rewrap`
-- `POST /api/v1/transit/hmac` / `trstctl-cli transit hmac`
-- `POST /api/v1/transit/sign` / `trstctl-cli transit sign`
-- `POST /api/v1/transit/verify` / `trstctl-cli transit verify`
-
-Ciphertexts are versioned (`trv:<version>:...`) so a key rotation can rewrap old data
-to the newest key version. Requests are tenant-bound, auth-gated by `keys:write` for key
-creation, rotation, encrypt/decrypt/rewrap/HMAC/sign and `keys:read` for verify, and
-mutating calls are idempotent. Plaintext and associated data are decoded into wipeable
-`[]byte` buffers, responses are written before those buffers are zeroized, and in-memory
-keyrings are destroyed on server shutdown. Transit events such as `transit.key.created`,
-`transit.key.rotated`, `transit.encrypt`, `transit.rewrap`, `transit.hmac`, and
-`transit.sign` give operators audit evidence without logging key bytes or plaintext.
-
-Example:
+Ciphertexts are versioned (`trv:<version>:...`) so rotation can rewrap old data to the
+newest version. Requests are tenant-bound and idempotent, auth-gated by `keys:write`
+for creation/rotation/encrypt/decrypt/rewrap/HMAC/sign and `keys:read` for verify.
+Plaintext and associated data live in wipeable `[]byte` buffers zeroized after the
+response is written, and in-memory keyrings die on shutdown. Events —
+`transit.key.created`, `transit.key.rotated`, `transit.encrypt`, `transit.rewrap`,
+`transit.hmac`, `transit.sign` — give audit evidence without logging key bytes or
+plaintext.
 
 ```bash
 cat > transit-key.json <<'JSON'
@@ -312,114 +262,90 @@ JSON
 trstctl-cli --idempotency-key transit-payments-encrypt transit encrypt -f transit-encrypt.json
 ```
 
-For legacy enterprise gear (databases, storage arrays), the running binary can also mount
-an opt-in **KMIP** listener. Configure:
+For legacy gear, the binary can also mount an opt-in KMIP listener:
 
 - `TRSTCTL_PROTOCOLS_KMIP_ENABLED=true`
 - `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID=<tenant-uuid>`
-- `TRSTCTL_PROTOCOLS_KMIP_ADDR=:5696` (or another TCP address)
+- `TRSTCTL_PROTOCOLS_KMIP_ADDR=:5696`
 - `TRSTCTL_PROTOCOLS_KMIP_CERT_FILE=/path/server.crt`
 - `TRSTCTL_PROTOCOLS_KMIP_KEY_FILE=/path/server.key`
 - `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE=/path/client-ca.crt`
 
-The listener is raw KMIP over TLS 1.3 mutual TLS. The TLS layer verifies the client
-certificate chain before the KMIP handler sees a frame; the KMIP service stores objects
-under the configured tenant, emits immutable `kmip.object.created`,
-`kmip.object.revoke`, and `kmip.object.destroyed` audit events, and zeroizes in-memory
-key material on destroy, rekey, and server shutdown. The served OASIS 1.4 profile is
-stock-client-tested: clients can Query profiles, DiscoverVersions, Create or Register
-an AES-256 `SymmetricKey`, Get it directly or AES-GCM-wrapped by another KMIP key,
-register the wrapped value back, Locate active AES objects, Revoke an object so later
-Get fails, and Destroy it over TTLV. Unsupported operations receive a KMIP failure
-response instead of an unframed TCP close.
+The listener is raw KMIP over mutual TLS 1.3; the TLS layer verifies the client cert
+chain before the KMIP handler sees a frame. The service stores objects under the
+configured tenant, emits immutable `kmip.object.created`, `kmip.object.revoke`, and
+`kmip.object.destroyed` audit events, and zeroizes in-memory key material on destroy,
+rekey, and shutdown. The served OASIS 1.4 profile is stock-client-tested: Query,
+DiscoverVersions, Create/Register an AES-256 `SymmetricKey`, Get it plain or
+AES-GCM-wrapped (and register the wrapped value back), Locate, Revoke, and Destroy over
+TTLV. Unsupported operations get a KMIP failure response, not an unframed TCP close.
 
 ### Secret sync (F68)
 
-trstctl can push secrets _outward_ to the platforms that need them — Kubernetes, GitHub
-Actions, AWS Secrets Manager, GitLab CI, Terraform Cloud, Vercel, Azure Key Vault, GCP
-Secret Manager, or a generic webhook-style target — via the durable outbox (journaled
-first, delivered at-least-once, no half-writes). The running control plane serves this
-at `POST /api/v1/secrets/syncs`: it reads a stored secret, writes a sealed outbox row in
-the same tenant-scoped transaction path, delivers through the configured target pusher,
-and returns metadata only (`name`, `target`, `remote_key`, enqueued/delivered flags).
-`GET /api/v1/secrets/syncs/targets` exposes the served CAP-SECR-03 target catalog and
-marks which targets are configured on this control plane. The shipped concrete pushers
-cover AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab
-CI/CD variables, Vercel project environment variables, generic CI JSON endpoints, and
-Kubernetes Secrets. Terraform/OpenTofu and arbitrary webhook targets remain available
-through the generic JSON/webhook pusher shape until a deeper provider-specific API is
-configured.
+trstctl pushes secrets _outward_ via the durable outbox (journaled first, at-least-once,
+no half-writes). `POST /api/v1/secrets/syncs` reads a stored secret, writes a sealed
+outbox row in the same tenant-scoped transaction, delivers through the configured
+pusher, and returns metadata only (`name`, `target`, `remote_key`, enqueued/delivered
+flags). `GET /api/v1/secrets/syncs/targets` lists the catalog and marks which targets
+are configured. Shipped concrete pushers: AWS Secrets Manager, GCP Secret Manager,
+Azure Key Vault, GitHub Actions, GitLab CI, Vercel, Kubernetes, Terraform Cloud/OpenTofu,
+HashiCorp Vault/OpenBao KV v2, and a generic CI/JSON endpoint.
 
-Every redelivery carries the same durable sync-operation ID. AWS Secrets Manager uses
-it as both `ClientRequestToken` and `Idempotency-Key`. GCP Secret Manager and Azure Key
-Vault read and constant-time-compare the current version before creating another one,
-while also forwarding the operation ID. Thus a crash after the receiver commits but
-before the local outbox acknowledgement reconciles to the existing remote value instead
-of creating a second version. The DoD receiver rejects a changed replay tuple and proves
-the version count remains one.
+Every redelivery reuses the same sync-operation ID — AWS Secrets Manager sends it as
+both `ClientRequestToken` and `Idempotency-Key`; GCP Secret Manager and Azure Key Vault
+compare the current version before creating another, forwarding the ID too — so a
+crash between commit and acknowledgement reconciles to the existing value instead of
+duplicating, rejecting any changed replay outright.
 
-Targets are configured under `secret_integrations.sync_targets` with one tenant and
-credential reference each. The dispatcher resolves that reference only for one outbox
-attempt and destroys the locked buffer afterward. GitHub values use its real
-X25519/XSalsa20-Poly1305 sealed-box wire format: trstctl fetches the repository public
-key, seals locally, and never sends plaintext to GitHub. The DoD receiver owns the
-corresponding private key in a separate process and must independently decrypt the
-landed ciphertext back to the source value before the GitHub row is served.
+Targets are configured under `secret_integrations.sync_targets`, one tenant/credential
+reference each, resolved for a single outbox attempt before the locked buffer is
+destroyed. GitHub values use its X25519/XSalsa20-Poly1305 sealed-box format — sealed
+locally with the repo's public key, decryptable only by the matching private key's
+holder, never sent as plaintext. Sync endpoints follow the dynamic-provider transport
+rule: HTTPS by default, `allow_private_endpoint` is only an address grant, plaintext
+needs the explicit loopback-only switch.
 
-Sync endpoints follow the same transport rule as dynamic providers: HTTPS is the
-production default, `allow_private_endpoint` is only an address grant, and plaintext
-requires the explicit loopback-only emulator switch.
+`GET /api/v1/secrets/cloud-secret-managers` / `trstctl-cli secrets
+cloud-secret-managers`: read-only `cloud_secret` discovery for AWS Secrets Manager, GCP
+Secret Manager, Azure Key Vault, and HashiCorp Vault KV, plus sealed-outbox sync
+coverage for AWS/GCP/Azure — counts, operations, evidence, residuals only, never
+values, credentials, or tokens.
 
-`GET /api/v1/secrets/cloud-secret-managers` and `trstctl-cli secrets
-cloud-secret-managers` expose the served CAP-SEC-04 cloud secret-manager integration
-posture. It combines read-only `cloud_secret` discovery coverage for AWS Secrets
-Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox
-sync coverage for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault. The
-response reports configured provider counts, source counts, supported read/write
-operations, evidence refs, and residuals; it never returns secret values, credential
-references, or provider tokens.
-
-`GET /api/v1/secrets/kubernetes-operator` and `trstctl-cli secrets
-kubernetes-operator` expose the served CAP-SECR-04 operator posture. The
-`TrstctlSecretSync` CRD declares the target Kubernetes Secret, the trstctl secret
-references to resolve, and the `Deployment`, `StatefulSet`, or `DaemonSet` workloads
-that should reload through a pod-template hash annotation. The operator resolves
-values through the served secret store, writes Kubernetes `Secret.data`, records
-`status.phase`, `status.contentHash`, and `status.reloadedWorkloads`, and reports
+`GET /api/v1/secrets/kubernetes-operator` / `trstctl-cli secrets kubernetes-operator`:
+the `TrstctlSecretSync` CRD declares the target Kubernetes Secret, the trstctl
+references to resolve, and which `Deployment`/`StatefulSet`/`DaemonSet` workloads
+reload via a pod-template hash annotation; the operator writes `Secret.data` and
+records `status.phase`, `status.contentHash`, and `status.reloadedWorkloads` —
 metadata only.
 
-`GET /api/v1/secrets/workload-injection` and `trstctl-cli secrets
-workload-injection` expose the served CAP-SECR-05 no-code workload-injection
-posture. The `TrstctlSecretInjection` CRD consumes a namespace-local Kubernetes
-Secret, then patches `Deployment`, `StatefulSet`, or `DaemonSet` pod templates with a
-memory-backed shared volume, app-container mounts, optional
-`valueFrom.secretKeyRef` env entries, and the shipped `trstctl-agent
---secret-inject` sidecar. The operator reads only source Secret metadata/content
-hash; the sidecar copies Secret volume files as byte slices and wipes buffers.
+`GET /api/v1/secrets/workload-injection` / `trstctl-cli secrets workload-injection`:
+the `TrstctlSecretInjection` CRD consumes a namespace-local Kubernetes Secret and
+patches `Deployment`/`StatefulSet`/`DaemonSet` pod templates with a memory-backed
+shared volume, app-container mounts, optional `valueFrom.secretKeyRef` env entries,
+and the `trstctl-agent --secret-inject` sidecar; the operator reads only
+metadata/content hash, and the sidecar copies volume files as byte slices and wipes
+buffers.
 
-`GET /api/v1/secrets/unvaulted` and `trstctl-cli secrets unvaulted` expose the
-served CAP-SECR-07 unvaulted-secret and multi-vault posture. The route combines
-served repository and third-party artifact scanning sources, redacted
-`leaked_secret` finding counts, configured cloud-secret discovery across AWS
-Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV, and
-configured AWS/GCP/Azure sync targets. It is read-only and metadata-only: leaked
-values, vault tokens, and synced secret bytes are never returned.
+`GET /api/v1/secrets/unvaulted` / `trstctl-cli secrets unvaulted`: repository and
+third-party scanning sources, redacted `leaked_secret` finding counts, cloud-secret
+discovery across AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and
+HashiCorp Vault KV, and configured AWS/GCP/Azure sync targets — read-only and
+metadata-only.
 
 ### The auth-method framework (F58)
 
-Before a workload can read a secret, it has to authenticate _to_ trstctl. The auth-method
-framework is that login layer: a workload presents a credential (a token, an OIDC JWT, a
-Kubernetes SA token, cloud IAM, etc.), trstctl verifies it through the single isolated
-cryptography path (timing-safe), and issues a scoped, time-bounded **session**. Credential
-bytes are never logged (held in wipeable memory, never a copyable string); every attempt
-is recorded as an immutable event in the tamper-evident log.
+Before reading a secret, a workload must authenticate _to_ trstctl via the auth-method
+framework: it presents a credential (a token, an OIDC JWT, a Kubernetes SA token, cloud
+IAM, etc.), trstctl verifies it through the single isolated cryptography path
+(timing-safe), and issues a scoped, time-bounded **session**. Credential bytes are
+never logged (wipeable memory, never a copyable string); every attempt is an immutable
+event in the tamper-evident log.
 
-`POST /api/v1/secrets/login` now serves the six high-demand machine methods:
-`token`, `kubernetes`, `aws-iam`, `gcp`, `azure`, `oidc`, and `jwt`. JWT-family
-methods verify against an operator-supplied JWKS, check issuer/audience/expiry, and
-either bind a tenant claim or pin the method to one tenant. AWS IAM uses the
-Vault-style signed `sts:GetCallerIdentity` request, so trstctl verifies the caller
-with STS without ever receiving the AWS secret access key.
+`POST /api/v1/secrets/login` serves six machine methods — `token`, `kubernetes`,
+`aws-iam`, `gcp`, `azure`, `oidc`, `jwt`. JWT-family methods verify against an
+operator-supplied JWKS, check issuer/audience/expiry, and bind a tenant claim or pin the
+method to one tenant. AWS IAM uses the Vault-style signed `sts:GetCallerIdentity`
+request, verifying the caller via STS without ever receiving the AWS secret access key.
 
 ```yaml
 secrets:
@@ -441,101 +367,64 @@ secrets:
 
 ### Secret scanning bridge (F39) and sharing & approvals (F60)
 
-The **scanning bridge** runs the pinned Gitleaks scanner from the served control plane
-and records redacted findings into [discovery](discovery-and-inventory.md), the
-[credential graph](graph-query-ai.md), and the risk view. Operators point
-`TRSTCTL_SECRETS_GITLEAKS_BIN` at the Gitleaks `v8.27.2` binary installed by
-`tools/gitleaks/install.sh`; the installer fetches the pinned release tarball and
-verifies its checksum before installing it. `POST /api/v1/secrets/scans` then scans a
-repo or build workspace with the pinned default rule set (`213` rules, well above the
-140-rule acceptance floor). The API response and recorded discovery finding carry
-rule id, file, line, scanner version, and fingerprint metadata only. The secret value
-is redacted by Gitleaks and never written to the API response, event log, graph, or
+The scanning bridge runs the pinned Gitleaks scanner from the served control plane,
+recording redacted findings into [discovery](discovery-and-inventory.md), the
+[credential graph](graph-query-ai.md), and the risk view. `TRSTCTL_SECRETS_GITLEAKS_BIN`
+points at the Gitleaks `v8.27.2` binary from `tools/gitleaks/install.sh`, which
+checksums the release tarball before installing. `POST /api/v1/secrets/scans` scans a
+repo or workspace with the pinned `213`-rule default set (above the 140-rule floor);
+the response and stored finding carry only rule id, file, line, scanner version, and
+fingerprint — Gitleaks redacts the value, never reaching the API, event log, graph, or
 audit output.
-
-CI systems use the matching CLI bridge:
 
 ```bash
 cat > secret-scan.json <<'JSON'
-{"path":"."}
-JSON
-trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
-
-cat > deep-secret-scan.json <<'JSON'
 {"path":".","mode":"git_history","custom_rules_path":"./gitleaks-custom-rules.toml"}
 JSON
-trstctl-cli --idempotency-key ci-secret-scan-deep-1 secrets scans run -f deep-secret-scan.json
+trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
 ```
 
-The returned `run_id` can be inspected with `GET /api/v1/discovery/findings?run_id=...`
-or the graph view. TruffleHog JSON ingestion remains available for offline import and
-contract tests, but the served scanner path uses Gitleaks as the execution engine.
-CAP-SCAN-03 is the deep mode: `mode:"git_history"` invokes the Gitleaks Git-history
-scanner with `--log-opts --all`, keeps redaction on, and still enforces the
-140-rule floor from the pinned 213-rule default ruleset. `custom_rules_path` points
-to an additive `[[rules]]` TOML fragment. trstctl wraps that fragment with
-`[extend] useDefault = true`, rejects allowlists or disabled-rule overrides, and
-returns `mode`, `custom_rules`, and `capabilities` so CI can prove full-history,
-entropy, pattern, 100+ default-rule, and custom-rule coverage without storing a
-secret value.
+A bare `{"path":"."}` scans the working tree by default; `mode`/`custom_rules_path`
+above switch on full Git-history scanning (`--log-opts --all`) plus an additive
+`[[rules]]` TOML fragment wrapped with `[extend] useDefault = true` — never an
+allowlist or disabled-rule override. The response's `mode`, `custom_rules`, and
+`capabilities` fields prove full-history, entropy, pattern, 100+ default-rule, and
+custom-rule coverage without storing a secret value; `run_id` can be replayed against
+`GET /api/v1/discovery/findings?run_id=...` or the graph view. TruffleHog JSON
+ingestion still exists for offline import/contract tests, but Gitleaks is the served
+engine.
 
-For local developer guardrails, CAP-SCAN-02 runs without a control-plane server. The
-CLI materializes only staged Git blobs, or only the head-side files from an explicit
-base/head CI diff, into a temporary scan tree before invoking the same pinned
-Gitleaks runner. Raw secret values are dropped from stdout, stderr, and JSON output.
-Findings block commits and pipeline steps by default; `--advisory` keeps the JSON
-reporting path but exits zero for non-blocking rollout windows.
+Locally, the same runner works without a server: `secrets scans staged-diff` and
+`secrets scans pre-commit install` scan only staged Git blobs, or an explicit
+base/head CI diff, into a temporary tree, dropping raw values from stdout, stderr, and
+JSON output. Findings block commits and pipeline steps by default; `--advisory` keeps
+the report but exits zero for non-blocking rollout:
 
 ```bash
-trstctl-cli secrets scans staged-diff --repo .
-trstctl-cli secrets scans pre-commit install --repo .
 trstctl-cli secrets scans staged-diff --repo . --base origin/main --head HEAD --advisory
 ```
 
-For repository-level realtime ingress, `GET /api/v1/secrets/scans/repositories`
-reports the CAP-SCAN-01 provider posture for GitHub, GitLab, and Bitbucket, and
-`POST /api/v1/secrets/scans/repositories/{provider}/webhook` accepts a normalized,
-authenticated repository event:
+For realtime repo ingress, `GET /api/v1/secrets/scans/repositories` reports provider
+posture for GitHub, GitLab, and Bitbucket; `POST
+/api/v1/secrets/scans/repositories/{provider}/webhook` takes a normalized event —
+`repository`, `checkout_path`, `ref`, `commit_sha`, `event`, `credential_ref` — and
+upserts a tenant-scoped `secret_repo` discovery source plus a `discovery.run` outbox
+row. The outbox worker scans `checkout_path` directly, or clones a public/local
+`clone_url`; credential-bearing URLs are rejected, and private credentials must stay
+secret references, never payload values. Native GitHub/GitLab/Bitbucket signature
+verification and private `credential_ref` clone resolution remain shortfalls, not
+served.
 
-```json
-{
-  "repository": "acme/payments",
-  "checkout_path": "/var/lib/trstctl/checkouts/acme/payments",
-  "ref": "refs/heads/main",
-  "commit_sha": "abc123",
-  "event": "push",
-  "credential_ref": "secrets/repo/github-app"
-}
-```
-
-That mutation upserts a tenant-scoped `secret_repo` discovery source and queues a
-`discovery.run` outbox row in the same event-sourced spine (AN-2/AN-6). The outbox
-worker scans `checkout_path` directly, or clones a public/local `clone_url` into a
-temporary directory before invoking the same pinned Gitleaks runner. Clone URLs with
-embedded credentials are rejected; private provider credentials must remain secret
-references rather than request payload values. Native GitHub/GitLab/Bitbucket
-signature verification and private `credential_ref` clone resolution are tracked as
-architecture shortfalls rather than counted as served behavior.
+Third-party artifacts use the same shape: `GET /api/v1/secrets/scans/third-party` and
+`POST /api/v1/secrets/scans/third-party/{provider}/ingest` cover `cicd_log`,
+`container_registry`, `slack`, and `jira` — a source plus operator-owned
+`artifact_path` queues a `secret_third_party` discovery run against the same Gitleaks
+runner. Raw CI logs, registry exports, chat transcripts, and issue exports stay outside
+trstctl storage; events record only provider, artifact kind, rule id, file, line,
+scanner version, and credential-ref. Native Slack/Jira/container-registry API polling,
+signature validation, and provider-native annotations remain shortfalls, not served.
 
 ```bash
-trstctl-cli secrets scans repositories
-trstctl-cli --idempotency-key repo-scan-push-1 \
-  secrets scans repositories webhook github -f repo-webhook.json
-```
-
-For third-party artifacts, CAP-SCAN-04 is served through
-`GET /api/v1/secrets/scans/third-party` and
-`POST /api/v1/secrets/scans/third-party/{provider}/ingest`. The supported
-providers are `cicd_log`, `container_registry`, `slack`, and `jira`. The request
-names a source and an operator-owned `artifact_path`; trstctl queues a
-tenant-scoped `secret_third_party` discovery run and scans the artifact with the
-same pinned Gitleaks runner. Raw CI logs, registry exports, chat transcripts, and
-issue exports stay outside trstctl storage. Discovery events and findings record
-only provider, artifact kind, rule id, file, line, scanner version, and
-credential-ref metadata.
-
-```bash
-trstctl-cli secrets scans third-party
 cat > third-party-scan.json <<'JSON'
 {"source":"acme/slack","artifact_path":"/var/lib/trstctl/exports/slack.jsonl","event":"message_export"}
 JSON
@@ -543,50 +432,37 @@ trstctl-cli --idempotency-key third-party-scan-1 \
   secrets scans third-party ingest slack -f third-party-scan.json
 ```
 
-Native Slack/Jira/container-registry API polling, provider signature validation, and
-provider-native annotations are tracked as architecture shortfalls rather than
-counted as served behavior.
-
 **Secret sharing** creates one-time, self-destructing shares with durable server-side
-state. `POST /api/v1/secrets/shares` returns the bearer token once, but PostgreSQL
-stores only `SHA-256(token)` plus the envelope-encrypted value in `secret_shares`.
-That means a valid share survives an API restart, while a stolen database backup still
-does not contain the token or plaintext. `POST /api/v1/secrets/shares/redeem` deletes
-the row and returns the value exactly once; a second redeem, an expired token, or a
-wrong tenant is a normal `404`.
+state: `POST /api/v1/secrets/shares` returns the bearer token once, while PostgreSQL
+stores only `SHA-256(token)` plus the envelope-encrypted value in `secret_shares` — a
+valid share survives a restart, and a stolen backup holds neither token nor plaintext.
+`POST /api/v1/secrets/shares/redeem` deletes the row and returns the value exactly
+once; a second redeem, expired token, or wrong tenant gets a normal `404`.
 
-**Change approvals** reuse the same dual-control [approval](incident-and-jit.md)
-store as privileged issuance. When `ca.policy.require_approval` is enabled for the
-deployment, sensitive secret-store mutations — `rotate`, `recover`, and `delete` —
-open a tenant-scoped approval request and fail with `403` until the configured number
-of distinct approvers approve it. A requester cannot approve their own secret change.
-Approvers call `POST /api/v1/secrets/store/approvals/{name}` with
-`{"action":"rotate"}`, `{"action":"recover"}`, or `{"action":"delete"}`. The response
-contains only `resource`, `action`, `approver`, and the current distinct approval
-count.
+**Change approvals** reuse the same dual-control [approval](incident-and-jit.md) store
+as privileged issuance: with `ca.policy.require_approval` enabled, `rotate`/`recover`/
+`delete` mutations open a tenant-scoped approval request and fail with `403` until
+enough distinct approvers approve it, and a requester can't approve their own change.
+Approvers call `POST /api/v1/secrets/store/approvals/{name}` with `{"action":"rotate"}`,
+`{"action":"recover"}`, or `{"action":"delete"}`; the response holds only `resource`,
+`action`, `approver`, and the approval count.
 
 ### In the console
 
-The console renders the store as a **secrets workspace** at `/secrets`: a folder tree over
-the key-value hierarchy, a reference resolver that expands `${secret.path}` chains, an
-**environment diff** between two environments or two versions, a version-history selector,
-bulk **secret import**, and a **transit** sub-console for encrypt / decrypt / HMAC against a
-managed key. See [The web console](../web-console.md).
+The console renders the store as a **secrets workspace** at `/secrets`: a folder tree,
+a `${secret.path}` reference resolver, an **environment diff** between environments or
+versions, a version-history selector, bulk **secret import**, and a **transit**
+sub-console for encrypt/decrypt/HMAC. See [The web console](../web-console.md).
 
 ## Use it
 
-The served workflows run through the API/CLI. Embedders can use the same lower-level Go
-interfaces directly; these examples show their byte-oriented shapes:
+Served workflows run through the API/CLI; embedders can use the same lower-level Go
+interfaces directly, shown here in byte-oriented shape:
 
 ```go
-// Native store: versioned, envelope-encrypted put/get
-store.Put(ctx, "db/password", []byte("s3cr3t"), "idem-key")   // -> version 1
-val, _ := store.Get(ctx, "db/password")                        // latest live version
-
-// Dynamic secret: a 1-hour Postgres credential, auto-revoked at lease end
-lease, _ := dyn.Issue(ctx, "postgresql", "readonly", time.Hour, "req-1")
-
-// Transit: encrypt without the app ever holding the key
+store.Put(ctx, "db/password", []byte("s3cr3t"), "idem-key") // -> version 1
+val, _ := store.Get(ctx, "db/password")                     // latest live version
+lease, _ := dyn.Issue(ctx, "postgresql", "readonly", time.Hour, "req-1") // auto-revoked
 ct, _ := keyring.Encrypt(ctx, "app-key", []byte("hello"), nil) // -> "trv:1:..."
 ```
 
@@ -599,43 +475,26 @@ cat > secret-sync.json <<'JSON'
 JSON
 trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
 
-trstctl-cli secrets cloud-secret-managers
-trstctl-cli secrets workload-injection
-trstctl-cli secrets unvaulted
-
 curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   "$TRSTCTL_URL/api/v1/secrets/syncs/targets"
-
-cat > secret-scan.json <<'JSON'
-{"path":"."}
-JSON
-trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
 ```
 
 ## Pitfalls & limits
 
-- **Serving status:** the secret store, rollback-safe static secret rotations,
-  connector-backed rotations, dynamic-lease handoff rotations, scheduled dual-phase
-  secret rotations, dynamic secret leases, one-time sharing,
-  the dynamic PKI secret, machine login, outbound secret sync, workload injection,
-  and Gitleaks secret scanning are **served** on the running control plane
-  under `/api/v1/secrets/*` (enable with `secrets.enable_api`, off by default and
-  fail-closed). Secret sync needs named targets configured by the operator; an
-  unconfigured target fails closed with `503` instead of dropping the write. Secret
-  scanning needs the pinned Gitleaks binary; a missing binary fails closed with `503`.
+- **Serving status:** rotation ships four variants — rollback-safe static,
+  connector-backed, dynamic-lease handoff, scheduled dual-phase. An unconfigured
+  secret-sync target fails closed with `503` instead of dropping the write; a missing
+  Gitleaks binary fails scanning closed with `503` too.
 - **Machine login tenant binding:** token credentials MAC-bind the tenant, the
   `machine-login` audience, principal, and expiry. `X-Tenant-ID` is a lookup hint on
   the public login route; a token for tenant A is rejected if presented with tenant B.
 - **Protect the KEK.** Everything at rest is only as safe as `TRSTCTL_SECRETS_KEK_FILE`;
   in production back it with an [HSM/KMS](issuance-and-cas.md).
-- **Dynamic beats static.** Prefer dynamic/ephemeral secrets over long-lived ones; if you
-  must store a long-lived secret, put it on a rotation schedule.
-- **Transit/KMIP serving status:** Transit is served through `/api/v1/transit/*` and the
-  `trstctl-cli transit` command group. KMIP is served through the separate
-  `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey
-  Create/Register/Get/Locate/Revoke/Destroy, OASIS 1.4 profile/version negotiation,
-  and AES-GCM wrapped Get/Register. Appliance-specific templates and tenant
-  self-service listener management remain deliberate boundaries.
+- **Dynamic beats static.** Prefer dynamic/ephemeral secrets over long-lived ones; if
+  you must store one, put it on a rotation schedule.
+- **Transit/KMIP boundaries:** appliance-specific templates and tenant self-service
+  KMIP listener management remain deliberate boundaries — see
+  [Current limitations](../limitations.md).
 - **Sync is push + drift-detect**, not a two-way merge — trstctl is the source of truth.
 
 ## Reference
@@ -653,21 +512,18 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
 - **KMIP:** opt-in mTLS listener (`TRSTCTL_PROTOCOLS_KMIP_ENABLED=true`) for AES-256
   SymmetricKey Create/Get/Locate/Revoke/Destroy, default address `:5696`, tenant bound by
   `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID`.
-- **Sync targets:** Kubernetes, GitHub Actions, GitLab CI, Terraform, Vercel, AWS
-  Parameter Store, webhook.
+- **Sync targets:** AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub
+  Actions, GitLab CI, Vercel, Kubernetes, Terraform Cloud/OpenTofu, HashiCorp
+  Vault/OpenBao KV v2, generic CI/JSON.
 - **Scanning:** `GET /api/v1/secrets/scans/repositories`,
   `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
   `GET /api/v1/secrets/scans/third-party`,
-  `POST /api/v1/secrets/scans/third-party/{provider}/ingest`,
-  `POST /api/v1/secrets/scans`, `trstctl-cli secrets scans repositories`,
-  `trstctl-cli secrets scans repositories webhook`,
-  `trstctl-cli secrets scans third-party`,
-  `trstctl-cli secrets scans third-party ingest`, `trstctl-cli secrets scans run`,
-  `trstctl-cli secrets scans staged-diff`,
-  `trstctl-cli secrets scans pre-commit install`, Gitleaks `v8.27.2`, `213` default
-  rules active, workspace and full-Git-history modes, additive custom `[[rules]]`
-  fragments, CI-log/container-registry/Slack/Jira artifact ingress, redacted findings
-  only.
+  `POST /api/v1/secrets/scans/third-party/{provider}/ingest`, `POST /api/v1/secrets/scans`;
+  `trstctl-cli secrets scans` subcommands `repositories`, `repositories webhook`,
+  `third-party`, `third-party ingest`, `run`, `staged-diff`, `pre-commit install`;
+  Gitleaks `v8.27.2`, `213` default rules active, workspace and full-Git-history modes,
+  additive custom `[[rules]]` fragments, CI-log/container-registry/Slack/Jira artifact
+  ingress, redacted findings only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
   `secret.rotation.connector_cutover`, `secret.rotation.connector_rolled_back`,
   `secret.rotation.dynamic_cutover`, `secret.rotation_schedule.upserted`, `secret.rotation_schedule.ran`,
