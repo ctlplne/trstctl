@@ -1,55 +1,64 @@
-# Agent delegation - chain-bound identities for AI agents
+# Agent delegation — chain-bound identities for AI agents
 
 ## What it is
 
-Agent delegation lets an operator issue a short-lived agent credential only after an
-isolated signer verifies a delegation chain. The simple version: a root principal delegates
-a narrow slice of authority, each hop must be no broader than its parent, and the signer
-checks the whole chain before any agent key is generated.
+Agent delegation issues a short-lived credential to an AI agent only after the
+isolated signer verifies a delegation chain: a root principal delegates a
+narrow slice of authority, every hop must be no broader than its parent, and
+the signer checks the whole chain before any agent key is generated.
 
-This is an Enterprise feature gated by the `agent-delegation` license feature. The free
-single-hop attested workload credential path is separate and unchanged.
+This is a licensed Enterprise capability (the `agent-delegation` license
+feature) implemented under `ee/`. Its `/api/v1/agent-delegation/*` routes are
+attached only when the license is present and are not part of the MPL-core
+OpenAPI document. The free single-hop attested workload credential path
+([Workload identity](workload-identity.md), including the AI-agent broker at
+`POST /api/v1/broker/agent-identities`) is separate and unchanged.
 
-## Runtime pieces
+## Why it exists
 
-The control plane owns the API, tenant-scoped PostgreSQL rows, event log, and outbox. The
-signer owns private-key operations and reads only local public-trust files for AGID root
-anchors, reachability-verdict signer keys, and attestation verifier keys; it does not
-connect to SQL, NATS, or HTTP.
+Agents spawn agents. Without a chain rule, a leaf agent can end up holding
+broader authority than the principal that started the chain — and nobody can
+prove otherwise after the fact. Chain-bound issuance makes narrowing
+mechanical: authority can only shrink hop by hop, the signer refuses to mint
+when a hop widens, and relying parties can re-check the recorded chain
+offline.
 
-The root-anchor floor is:
+## How it works
+
+The control plane owns the API, tenant-scoped PostgreSQL rows (RLS-isolated),
+the event log, and the outbox. The signer owns private-key operations and
+reads only local public-trust files; it has no SQL, NATS, or HTTP access. An
+issuance request enqueues `agentid.issue-chain-bound` in the durable outbox;
+the worker computes the reachability verdict, calls the signer over
+`GatedIssue`, records the attestation binding, and stores the returned public
+credential material. The signer refuses before keygen if the root anchor is
+absent, a hop widens authority, attestation fails, reachability is outside
+the ceiling, or the requested TTL exceeds the sub-hour ceiling.
+
+The signer's public-trust floors live under the signer key store
+(`TRSTCTL_SIGNER_KEY_STORE_DIR`, default `data/signer/keys`; for an external
+signer, provision the same files where the signer can read them):
 
 ```text
-<signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.pem
-<signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.authref
-```
-
-The reachability-verdict trust floor is:
-
-```text
+<signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.pem      # root anchor, public key DER wrapped as PEM
+<signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.authref  # non-secret auth reference
 <signer key store dir>/agid-reach-verdict-keys/agentid-reach-verdict.der
-```
-
-The attestation verifier floor and spent-evidence replay floor are:
-
-```text
 <signer key store dir>/agid-attestors/<key_id>.der
 <signer key store dir>/agid-attestor-spent/<evidence_digest>.spent
 ```
 
-For the default child signer this is under `TRSTCTL_SIGNER_KEY_STORE_DIR`
-(`data/signer/keys` by default). For an external signer, point the control plane at the
-operator-managed directory that the signer can read, or provision the same files out of
-band. Root-anchor files contain public key DER wrapped as PEM plus a non-secret auth
-reference. The reachability-verdict and attestor files contain public key DER only. The
-control plane holds the reachability-verdict signing handle, and the signer verifies the
-verdict signature before issuing. The signer creates spent-evidence marker files before an
-attested key operation completes, so replayed attestation evidence stays refused after
+All floor files hold public material only. The control plane holds the
+reachability-verdict signing handle; the signer verifies the verdict signature
+before issuing. Spent-evidence markers are written before an attested key
+operation completes, so replayed attestation evidence stays refused across a
 signer restart.
 
-## Register a root anchor
+## Use it
 
-Register or update a tenant root anchor:
+Register (or update) a tenant root anchor. `public_der` as base64 JSON bytes
+is also accepted; replaying the same `Idempotency-Key` returns the original
+result, and when `TRSTCTL_SIGNER_KEY_STORE_DIR` is configured the anchor is
+mirrored into the signer floor:
 
 ```http
 POST /api/v1/agent-delegation/root-anchors
@@ -63,18 +72,7 @@ Content-Type: application/json
 }
 ```
 
-`public_der` is also accepted as base64 JSON bytes. The route writes the tenant-scoped
-`agent_root_anchors` row and, when `TRSTCTL_SIGNER_KEY_STORE_DIR` is configured, mirrors
-the anchor into the signer floor. Replaying the same `Idempotency-Key` returns the original
-result.
-
-List the anchors visible to the tenant:
-
-```http
-GET /api/v1/agent-delegation/root-anchors
-```
-
-## Issue a chain-bound credential
+Issue a chain-bound credential:
 
 ```http
 POST /api/v1/agent-delegation/issuances
@@ -95,46 +93,43 @@ Content-Type: application/json
 }
 ```
 
-The API enqueues `agentid.issue-chain-bound` in the durable outbox. The worker computes the
-reachability verdict, calls the signer over `GatedIssue`, records the attestation binding,
-and records the returned public credential material. The signer refuses before keygen if
-the root anchor is absent, a hop widens authority, attestation fails, reachability is not
-inside the ceiling, or the requested TTL exceeds the sub-hour ceiling.
-
-After the worker drains the outbox, fetch the public signer-minted credential bytes:
+After the worker drains the outbox, read the results; queue a cascaded
+revocation when a subject is compromised:
 
 ```http
-GET /api/v1/agent-delegation/credential?credential_id=...
+GET  /api/v1/agent-delegation/root-anchors
+GET  /api/v1/agent-delegation/credential?credential_id=...
+GET  /api/v1/agent-delegation/chain?credential_id=...
+POST /api/v1/agent-delegation/revocations        # {"subject":"agent:...","reason":"compromise","publish_downstream":true}
+GET  /api/v1/agent-delegation/revocations/incomplete-jobs?directive_id=...
+GET  /api/v1/agent-delegation/revocations/evidence?directive_id=...
 ```
 
-Fetch the ordered delegation chain that relying parties can re-check offline:
+## Pitfalls & limits
 
-```http
-GET /api/v1/agent-delegation/chain?credential_id=...
-```
+- Licensed and gated: without the `agent-delegation` license feature the
+  routes are not attached. This page describes the EE build, not MPL core.
+- The TTL ceiling is sub-hour by design; a request above it is refused, not
+  clamped.
+- Root-anchor and attestor floors are operator-provisioned files — an absent
+  anchor is a refusal, not a fallback.
+- The chain is verified by the signer, not the API: a compromised control
+  plane cannot mint a widened credential.
 
-## Revoke and inspect evidence
+## Reference
 
-Queue a cascaded revocation:
+- **Mutations** (all require `Idempotency-Key`):
+  `POST /api/v1/agent-delegation/root-anchors`, `.../issuances`,
+  `.../revocations`.
+- **Reads:** `.../root-anchors`, `.../credential?credential_id=`,
+  `.../chain?credential_id=`, `.../revocations/incomplete-jobs?directive_id=`,
+  `.../revocations/evidence?directive_id=`.
+- **Outbox job:** `agentid.issue-chain-bound`; signer call: `GatedIssue`.
+- **Trust floors:** the key-store layout above; all tenant-scoped storage is
+  RLS-isolated, and key material never leaves the signing boundary.
 
-```http
-POST /api/v1/agent-delegation/revocations
-Idempotency-Key: <stable revocation key>
-Content-Type: application/json
+## See also
 
-{
-  "subject": "agent:payments-reconciler",
-  "reason": "compromise",
-  "publish_downstream": true
-}
-```
-
-Operators can then read:
-
-- `GET /api/v1/agent-delegation/revocations/incomplete-jobs?directive_id=...`
-- `GET /api/v1/agent-delegation/revocations/evidence?directive_id=...`
-- `GET /api/v1/agent-delegation/credential?credential_id=...`
-- `GET /api/v1/agent-delegation/chain?credential_id=...`
-
-All mutation routes require `Idempotency-Key`; all storage is tenant-scoped with RLS; the
-signer process keeps key material behind the signing boundary.
+[Workload identity](workload-identity.md) (the free attestation chain and
+AI-agent broker) · [Signing service design](../design/signing-service.md) ·
+[Editions](../editions.md) · [Current limitations](../limitations.md)

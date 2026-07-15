@@ -2,39 +2,36 @@
 
 ## What it is
 
-trstctl doesn't just hold a flat list of credentials — it builds a **graph** of how they
-connect (which workload owns which key, which key was issued by which CA, what each can
-reach), exposes a **unified query layer** to ask questions across all its data safely,
-and layers **AI** on top: a pluggable model adapter, grounded root-cause analysis with
-natural-language questions, and an [MCP](../glossary.md) server so external AI agents can
-query trstctl through a safe, read-only interface.
+trstctl doesn't just hold a flat list of credentials — it builds a graph of how they
+connect (who owns which key, who issued it, what it can reach), exposes a unified query
+layer to ask questions across all its data safely, and layers AI on top: a pluggable
+model adapter, grounded root-cause analysis with natural-language questions, and an
+[MCP](../glossary.md) server so external AI agents can query trstctl through a safe,
+read-only interface.
 
-The mental model: the graph is a map of your credential city showing every road between
-buildings; the query layer is the one inspector's desk every question must pass through
-(so nobody peeks at another tenant's records); and the AI layer is an analyst who answers
-your questions **only** from evidence pulled across that desk, always citing sources.
+The mental model: the graph maps roads between credential "buildings"; the query layer
+is the one inspector's desk every question must pass through; and the AI layer is an
+analyst who answers only from evidence pulled there, always citing sources.
 
 ## Why it exists
 
 Security questions are rarely about one credential — they're about *relationships*: "if
 this key leaks, what's exposed?", "what does this AI agent actually have access to?", "why
-did this renewal fail?". Answering those needs a graph and a way to query it. And because
-those queries touch sensitive data across many subsystems, they need **one** rigorously
-scoped path rather than each feature reinventing access control. The AI layer then makes
-the whole thing approachable — ask in English, get a cited answer — without ever letting a
+did this renewal fail?" Answering those needs a graph and a safe way to query it, through
+one rigorously scoped path instead of each feature reinventing access control. The AI
+layer then makes it approachable — ask in English, get a cited answer — without letting a
 model invent facts or leak across tenants.
 
 ## How it works
 
 ### The credential graph (F21)
 
-The graph models your inventory as **nodes** (workloads, credentials, issuers, resources,
-crypto assets, attestations) and **impact-oriented edges** (`ISSUED`, `OWNS`,
-`DEPLOYED_TO`, `GRANTS_ACCESS`, `CONNECTS_TO`, `EXHIBITS`) where an edge `A→B` means
-"compromising A puts B at risk." It's built on demand from the datastore, and every read
-is isolated to the caller's tenant at the database layer, so a traversal can never escape
-the tenant boundary. On top of it: `Reachable` (breadth-first reach), `BlastRadius`
-(everything a compromise touches, grouped by kind), and a deliberately minimal
+The graph models your inventory as nodes (workloads, credentials, issuers, resources,
+crypto assets, attestations) and impact-oriented edges (`ISSUED`, `OWNS`, `DEPLOYED_TO`,
+`GRANTS_ACCESS`, `CONNECTS_TO`, `EXHIBITS`), where edge `A→B` means "compromising A puts B
+at risk." It's built on demand, and every read is isolated to the caller's tenant at the
+database layer, so a traversal can never escape the tenant boundary. On top: `Reachable`
+(breadth-first reach), `BlastRadius` (compromise impact by kind), and a minimal
 Cypher-style `Query`.
 
 **Served** — `GET /api/v1/graph`, `/graph/reachable/{id}`, `/graph/blast-radius/{id}`,
@@ -42,102 +39,82 @@ Cypher-style `Query`.
 
 ### The unified semantic query layer (F75)
 
-This is the **one security boundary** every advanced consumer (AI, MCP, compliance) routes
-through, so scoping is never reinvented. Callers submit a *typed* `Spec` — allow-listed
-surfaces (log, graph, inventory, owners, CBOM), allow-listed fields and operators, bound
-values — and **never raw SQL or Cypher**. The engine enforces, *by construction*:
-**tenant first** (the tenant is always the caller's, non-overridable, enforced at the
-database layer so one tenant can never read another's), then **RBAC** (you must hold the
-permission for *every* selected surface, or the whole query is denied before execution —
-not post-filtered). It runs in its own bounded lane with a wall-clock deadline and row
-caps — overload is rejected fast instead of starving other work — pins results to a
-position in the immutable event history for consistency, and returns deliberately coarse
-errors so a caller can't tell "out of scope" from "not found."
+This is the one security boundary every advanced consumer (AI, MCP, compliance) routes
+through, so scoping is never reinvented. Callers submit a typed `Spec` — allow-listed
+surfaces (log, graph, inventory, owners, CBOM), fields, and operators, bound values, never
+raw SQL or Cypher. The engine enforces tenant first (always the caller's, non-overridable,
+database-layer-enforced), then RBAC (holding the permission for every selected surface, or
+the query is denied before execution, not post-filtered). It runs in its own bounded lane
+with a wall-clock deadline and row caps, pins results to a position in the immutable event
+history, and returns deliberately coarse errors so a caller can't tell "out of scope" from
+"not found."
 
-**Served through the read-only AI/RCA routes when `ai.enable_api` is on**
-(`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and by `POST /api/v1/graph/query`,
-and used by MCP investigation tools. The standalone Go API remains available for
-embedded consumers. Saved prompts, query-history management, and richer
-model-assisted analysis workspaces are roadmap residuals, not hidden GA scope.
+**Served** through the read-only AI/RCA routes when `ai.enable_api` is on
+(`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and by `POST /api/v1/graph/query`, and
+used by MCP tools; the standalone Go API stays available for embedded consumers. Saved
+prompts and richer analysis workspaces remain roadmap residuals, not hidden GA scope.
 
 ### The pluggable AI model adapter (F76)
 
-trstctl's AI features are model-agnostic: a thin adapter routes reasoning to either a
-cloud LLM gateway or a **local** Ollama/vLLM endpoint by config, for air-gapped or
-data-sovereign deployments. The served binary validates `ai.model.mode` as `off`,
-`local`, or `cloud`; `off` is the default, `local` uses an operator-owned completion
-endpoint, and `cloud` requires an explicit `allow_egress=true`. `GET
-/api/v1/ai/status` reports the live mode, endpoint host, egress class, the
-secret-redaction/refusal posture, and the **`pii_egress`** posture (below).
-Critically, a **secret redactor** runs before any prompt leaves the
-process — stripping PEM blocks, secret/token assignments, and long base64 runs (secret
-material is held in wipeable memory and zeroed after use) — so key material cannot reach a
-model or its logs, and a residual-entropy gate refuses the send if any high-entropy run
-survives.
+trstctl's AI features are model-agnostic: a thin adapter routes reasoning to a cloud LLM
+gateway or a local Ollama/vLLM endpoint, for air-gapped deployments. `ai.model.mode` is
+`off` (default), `local` (an operator-owned completion endpoint), or `cloud` (requires
+explicit `allow_egress=true`); `GET /api/v1/ai/status` reports the live mode, endpoint,
+egress class, and `pii_egress` posture. A secret redactor strips PEM blocks, secret/token
+assignments, and long base64 runs before any prompt leaves the process, so key material
+cannot reach a model or its logs; a residual-entropy gate blocks the send if any
+high-entropy run survives.
 
-**Personal-data egress is default-private.** The secret redactor
-deliberately preserves personal/identifying data (owner emails, certificate subjects,
-graph node names, SPIFFE/OIDC subjects, IPs, hostnames) because it is useful in-house
-context. Because a configured **cloud** model is a third party, a second **PII-aware
-egress boundary** runs after secret redaction and before the model send:
+The redactor deliberately preserves personal/identifying data (emails, certificate
+subjects, graph node names, SPIFFE/OIDC subjects, IPs, hostnames) as useful in-house
+context — personal-data egress is default-private. Since a configured cloud model is a
+third party, a second PII-aware boundary runs after secret redaction:
 
-- **`pii_egress: redact`** (the default): emails, IPv4/IPv6 addresses, OIDC/SPIFFE
-  subjects, FQDN hostnames, and person names are stripped from the prompt before egress.
-- **`pii_egress: block`** (`ai.model.block_pii=true`): a prompt that still carries
-  personal data after secret redaction is refused entirely (strict fail-closed).
-- **`pii_egress: allow`** (`ai.model.allow_pii=true`): an operator has **explicitly
-  consented** to sending personal data to the configured model; PII is preserved.
+- **`pii_egress: redact`** (the default): emails, IP addresses, OIDC/SPIFFE subjects,
+  hostnames, and person names are stripped before egress.
+- **`pii_egress: block`** (`ai.model.block_pii=true`): a prompt still carrying personal
+  data after redaction is refused (strict fail-closed).
+- **`pii_egress: allow`** (`ai.model.allow_pii=true`): an operator has explicitly
+  consented to sending personal data to the model; PII is preserved.
 
-Cloud prompt egress therefore requires two deliberate, inspectable choices —
-`allow_egress=true` to reach a cloud model at all, and `allow_pii=true` to include
-personal data in the prompt. **Provider data retention:** when `cloud` mode is used,
-prompts are sent to a third-party model provider whose retention and training-use
-policies are outside trstctl's control; review them before enabling cloud egress, and
-keep `allow_pii=false` (the default) unless the provider's terms permit subject-data
-processing. The default posture sends nothing to a cloud (model `off`), and even with a
-model configured no personal data leaves the process unless `allow_pii=true`.
-
-If no model is configured, the served AI surface still returns grounded
-evidence/citations without model egress. **Served as an optional adapter behind
-`ai.enable_api`; no model is configured by default.**
+Cloud egress needs two deliberate choices — `allow_egress=true` to reach a cloud model at
+all, and `allow_pii=true` to include personal data. Provider data-retention/training-use
+policies are outside trstctl's control in `cloud` mode; review them first, and keep
+`allow_pii=false` (the default) unless permitted. **Served** as an optional adapter behind
+`ai.enable_api`; no model is configured by default.
 
 ### Grounded RCA & natural-language query (F77)
 
 You ask a question in plain language ("what's the blast radius of the payments cert?");
-trstctl **gathers real evidence** through the query layer (inheriting its tenant+RBAC
-scoping), then a synthesizer answers using **only** that evidence — every claim carries a
-**citation** (`source#id`), and with no evidence it says "insufficient evidence" rather
-than inventing an answer. The prompt explicitly treats retrieved data as untrusted (so a
-hostile string in a SAN can't become an instruction), the pipeline is strictly
-**read-only**, and every gather is recorded as an immutable audit event. **Served** at
-`POST /api/v1/ai/rca` when `ai.enable_api` is on.
+trstctl gathers evidence through the query layer (inheriting its tenant+RBAC scoping),
+then answers using only that evidence — every claim carries a citation (`source#id`), and
+with no evidence it says "insufficient evidence" rather than inventing one. Retrieved data
+is treated as untrusted (a hostile string in a SAN can't become an instruction), the
+pipeline is strictly read-only, and every gather is recorded as an immutable audit event.
+**Served** at `POST /api/v1/ai/rca` when `ai.enable_api` is on.
 
 ### The trstctl MCP server (F78)
 
 The [Model Context Protocol](../glossary.md) is how external AI agents call tools.
-trstctl's MCP server exposes four **read-only** tools — `query_credentials`,
-`get_blast_radius`, `explain_incident`, `compliance_status` — by default. Every read
-call is scoped to one tenant (a cross-tenant call is refused *before* any query),
-per-caller rate-limited to resist enumeration, and audited; answers flow through the
-grounded RCA pipeline so they're cited and redacted. Fittingly, the server holds a
-[workload identity](workload-identity.md) issued by trstctl's own broker — it dogfoods
-the platform. **Served** at `GET /api/v1/mcp/tools` and
-`POST /api/v1/mcp/tools/{tool}` when `ai.enable_api` is on.
+trstctl's MCP server exposes four read-only tools — `query_credentials`,
+`get_blast_radius`, `explain_incident`, `compliance_status` — by default. Every call is
+tenant-scoped (cross-tenant calls are refused before any query), per-caller
+rate-limited, and audited; answers flow through the RCA pipeline, cited and redacted. The
+server itself holds a [workload identity](workload-identity.md) from trstctl's own
+broker. **Served** at `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/tools/{tool}` when
+`ai.enable_api` is on.
 
-Write tools are a separate, explicit operator choice. With
-`TRSTCTL_AI_MCP_WRITE_TOOLS=true`, the tool list also includes `issue_certificate` and
-`rotate_certificate`. Those tools are not prompt magic: each call still hits the served
-CA hierarchy, requires `certs:issue`, requires an `Idempotency-Key`, records
-`mcp.tool.write`, and returns the same certificate fields as the REST issuance path.
-If the flag is absent, write tools are not listed and calls to them fail closed.
+Write tools are a separate, explicit choice: with `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, the
+tool list also includes `issue_certificate` and `rotate_certificate`, each still hitting
+the served CA hierarchy, requiring `certs:issue` and an `Idempotency-Key`, and recording
+`mcp.tool.write`. Without the flag, write tools are not listed and calls fail closed.
 
-C9 expands the surface with route-backed REST MCP tools named `rest_<operationId>`; for
-example `rest_list_notifications` maps to the served notifications list route. Read
-routes are exposed by default when their RBAC permission is held, while REST-backed
-mutations stay behind the same explicit write-tool flag and idempotency checks. The
-MCP-vs-REST parity CI guard fails when a served REST route has neither an MCP tool nor an
-explicit allowlist entry, so the AI automation surface cannot quietly drift away from the
-API.
+Beyond that, route-backed REST MCP tools expand the surface further, named
+`rest_<operationId>` (e.g. `rest_list_notifications` maps to the notifications list
+route): read routes are exposed by default when RBAC permits, while REST-backed
+mutations stay behind the same write-tool flag and idempotency checks. The MCP-vs-REST
+parity CI guard fails when a served REST route has neither an MCP tool nor an allowlist
+entry.
 
 ## Use it
 
@@ -150,16 +127,13 @@ trstctl-cli graph query 'MATCH (w:workload)-[:OWNS]->(c)-[:DEPLOYED_TO]->(r) WHE
 ```
 
 Those map to the served `/api/v1/graph*` routes. When `ai.enable_api` is on, grounded
-query/RCA and the MCP tool surface are served too:
+RCA (and `GET /api/v1/mcp/tools`) are served too:
 
 ```sh
 curl -sS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"question":"what is the blast radius of the payments cert?"}' \
   https://trstctl.example.com/api/v1/ai/rca
-
-curl -sS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-  https://trstctl.example.com/api/v1/mcp/tools
 ```
 
 Enable guarded MCP issuance only for agents that should be allowed to act:
@@ -172,7 +146,7 @@ curl -sS -X POST \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: mcp-issue-payments-2026-06-26" \
-  -d '{"authority_id":"ca_123","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","ttl_seconds":7200,"reason":"agent-requested short-lived certificate"}' \
+  -d '{"authority_id":"ca_123","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","ttl_seconds":7200}' \
   https://trstctl.example.com/api/v1/mcp/tools/issue_certificate
 ```
 
@@ -181,16 +155,15 @@ curl -sS -X POST \
 | Capability | Status today |
 |---|---|
 | Credential graph (F21) | **Served** — `/api/v1/graph*`, `graph` CLI |
-| Semantic query layer (F75) | **Served** through `/api/v1/ai/query`, `/api/v1/ai/rca`, and `/api/v1/graph/query`; saved prompts and richer model-assisted analysis workspaces remain roadmap residuals |
-| AI model adapter (F76) | **Served optional adapter**; no model configured by default, cloud/local model egress only when an operator opts in; the self-service model settings editor remains a roadmap residual |
+| Semantic query layer (F75) | **Served** through `/api/v1/ai/query`, `/api/v1/ai/rca`, `/api/v1/graph/query`; saved prompts remain roadmap residuals |
+| AI model adapter (F76) | **Served optional adapter**; no model configured by default, cloud/local egress opt-in; self-service model settings editor remains a roadmap residual |
 | Grounded RCA / NL query (F77) | **Served** — `POST /api/v1/ai/rca`, read-only and cited |
-| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation tools are read-only by default, guarded write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, and `Idempotency-Key` |
+| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation tools read-only by default, write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, `Idempotency-Key` |
 
-Other notes: the graph and query layer are built per request from the store, so very large
-tenants pay a build cost (bounded by caps). The AI features are **grounded and read-only by
-design** — they won't take actions and won't answer beyond the evidence. With no model
-configured, RCA returns the raw evidence listing rather than a prose answer. See
-[Current limitations](../limitations.md).
+The graph and query layer build per request, so very large tenants pay a bounded build
+cost. AI features are grounded and read-only by design: no actions, no answers beyond the
+evidence; with no model configured, RCA returns the raw evidence listing, not a prose
+answer. See [Current limitations](../limitations.md).
 
 ## Reference
 
@@ -200,15 +173,15 @@ configured, RCA returns the raw evidence listing rather than a prose answer. See
 - **Query surfaces:** log, graph, certificates, owners, CBOM (tenant-then-RBAC,
   allow-listed fields/operators, no raw SQL/Cypher).
 - **AI:** model adapter (cloud or local Ollama/vLLM) with boundary redaction; RCA returns
-  cited answers; MCP investigation tools are read-only and rate-limited; MCP write
-  tools are explicit opt-in and audited; route-backed REST MCP tools use stable
-  `rest_<operationId>` names and are covered by the MCP-vs-REST parity CI guard.
+  cited answers; MCP tools are read-only and rate-limited by default; write tools are
+  explicit opt-in and audited; REST MCP tools use stable `rest_<operationId>` names under
+  the MCP-vs-REST parity CI guard.
 
 ## See also
 
-[Discovery & inventory](discovery-and-inventory.md) (what populates the graph) ·
-[Observability & risk](observability-and-risk.md) (exposure scoring uses the graph) ·
-[Incident response & JIT](incident-and-jit.md) (blast-radius-driven remediation) ·
+[Discovery & inventory](discovery-and-inventory.md) (populates the graph) ·
+[Observability & risk](observability-and-risk.md) (exposure scoring) ·
+[Incident response & JIT](incident-and-jit.md) (blast-radius remediation) ·
 [Workload identity](workload-identity.md) (the MCP server's own identity) ·
 [Semantic query layer design](../design/semantic-query-layer.md) ·
 glossary: [event sourcing](../glossary.md), [RLS](../glossary.md)

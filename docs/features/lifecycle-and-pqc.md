@@ -2,129 +2,112 @@
 
 ## What it is
 
-A [certificate](../glossary.md) is not a "set it and forget it" object. It has a life:
-it's issued, it's used, it nears expiry and must be **renewed**, sometimes it must be
-**rotated** (replaced early) or **revoked** (cancelled), and eventually it's retired.
-Lifecycle automation is trstctl doing that work for you on a schedule. This page also
-covers two forward-looking concerns: **crypto-agility** (being able to change algorithms
-without rewriting the system) and **PQC migration** (moving your estate to
+A [certificate](../glossary.md) is not a "set it and forget it" object: it's issued,
+used, nears expiry and must be renewed, sometimes rotated (replaced early) or revoked
+(cancelled), and eventually retired. Lifecycle automation is trstctl doing that work on a
+schedule. This page also covers two forward-looking concerns: crypto-agility (changing
+algorithms without rewriting the system) and PQC migration (moving your estate to
 [post-quantum](../glossary.md) algorithms before quantum computers break today's keys).
 
-The mental model: lifecycle is the building superintendent who notices a key is about to
-wear out and cuts a new one *before* it fails; crypto-agility is having a master
-key-cutting machine that can switch blank types instantly; PQC migration is the planned
-project to re-cut every key in the building to a new, tamper-proof blank.
+The mental model: lifecycle is the superintendent who cuts a new key before the old one
+wears out; crypto-agility is a master key-cutting machine that can switch blank types
+instantly; PQC migration is the project to re-cut every key in the building to a new,
+tamper-proof blank.
 
 ## Why it exists
 
 Expiry is the number-one cause of certificate outages, and it's entirely preventable: a
-machine that renews on a schedule never lets a certificate lapse. Rotation limits the
-damage of a leak (a short-lived credential is only useful briefly). And the quantum
-transition is a multi-year migration that you cannot start until your cryptography is
-*agile* — able to add and swap algorithms in one place. trstctl was built crypto-agile
-from the first commit precisely so this migration is a contained change, not a rewrite.
+machine that renews on schedule never lets a certificate lapse. Rotation limits the
+damage of a leak, since a short-lived credential is only useful briefly. The quantum
+transition is a multi-year migration that can't start until your cryptography is *agile*
+— able to add and swap algorithms in one place. trstctl was built crypto-agile from the
+first commit, so this migration is a contained change, not a rewrite.
 
 ## How it works
 
 ### Lifecycle automation (F6)
 
 The lifecycle manager watches the [inventory](discovery-and-inventory.md) and acts on
-three signals, with each tenant's data isolated at the database layer:
+three signals, tenant-isolated at the database layer:
 
-- **Renew from ARI, with an expiry fallback.** For trstctl-issued X.509 identities,
-  the scheduler evaluates the ACME Renewal Information (ARI) window from the recorded
-  certificate validity. If the ARI window has started, it renews even when the
-  certificate is still outside the fixed `renew_before` threshold. The configured
-  threshold (`renew_before`, default `720h` = 30 days) remains a safety fallback for
-  certificates that have no usable ARI span. Each renewal re-issues through the one
-  [issuance path](issuance-and-cas.md) with an `Idempotency-Key`, so a retry never mints
-  a duplicate. In a single transaction it links the new certificate to the old one and
-  supersedes the old, then emits immutable lifecycle and rotation evidence. The fresh
-  subject key is generated in a locked, zeroized buffer and destroyed the instant the CSR
-  is built — secret material lives in wipeable memory and is zeroed after use.
-- **Revoke with propagation.** `Revoke(certID, reason)` is idempotent (a retry never
-  revokes twice), updates the inventory and — for reliable, journaled delivery — enqueues
-  a `revocation.publish` to the [outbox](../glossary.md) in the same transaction so a
-  crash can't drop it, and emits `certificate.revoked`.
+- **Renew from ARI, with an expiry fallback.** For trstctl-issued X.509 identities, the
+  scheduler evaluates the ACME Renewal Information (ARI) window and renews early once it
+  opens, even while the certificate is still outside the fixed `renew_before` threshold
+  (default `720h` = 30 days), a safety fallback for certificates with no usable ARI span.
+  Each renewal re-issues through the one [issuance path](issuance-and-cas.md) with an
+  `Idempotency-Key`, supersedes the old certificate in a single transaction, and emits
+  immutable lifecycle/rotation evidence. The fresh subject key is generated in a locked,
+  zeroized buffer and destroyed the instant the CSR is built.
+- **Revoke with propagation.** `Revoke(certID, reason)` is idempotent, updates the
+  inventory, enqueues a `revocation.publish` to the [outbox](../glossary.md) in the same
+  transaction so a crash can't drop it, and emits `certificate.revoked`.
 - **Alert before expiry.** It finds certificates inside the `alert_before` window,
-  enriches the alert with the certificate owner and active approver recipients,
-  enqueues a notification to the outbox, stamps `alerted_at` so it doesn't nag,
-  and emits `certificate.expiring`.
+  enriches the alert with the owner and approver recipients, enqueues a notification,
+  stamps `alerted_at` so it doesn't nag, and emits `certificate.expiring`.
 
-**Status:** the manager is served by the running binary. The leader-only background
-loop scans tenant-scoped deployed X.509 identities, consumes ARI renewal windows first,
-falls back to `lifecycle.renew_before`, and writes the normal `ca.renew` outbox intent
-instead of signing inline. The same served sweep honors `lifecycle.alert_before`: it
-enqueues `notification.expiry` work with `owner_id`, owner contact, approver
-recipients, severity, and threshold-day metadata; the outbox worker dispatches it
-through the operator-wired notification channels, and the notification inbox exposes
-the same escalation fields. It is integration-tested against real PostgreSQL, NATS,
-the signer process, tenant-member approvers, and a signed webhook sink;
-`lifecycle.renew_before` and `lifecycle.alert_before` are parsed and validated at
-startup.
+**Status:** served by the running binary. A leader-only background loop scans
+tenant-scoped deployed X.509 identities, honoring `lifecycle.renew_before` and
+`lifecycle.alert_before` (both parsed and validated at startup), and writes the normal
+`ca.renew` and `notification.expiry` outbox intents rather than acting inline. It's
+integration-tested against real PostgreSQL, NATS, the signer process, and a signed
+webhook sink.
 
-`POST /api/v1/lifecycle/endpoint-bindings` is the served end-to-end path for
-automated enrollment -> provision -> renewal -> endpoint-bind. It creates the
-X.509 identity for an existing owner, provisions or references the connector target,
-binds the route onto the identity, queues issue and deploy intents through the outbox,
-and leaves renewal on the same scheduler-driven `ca.renew` path. The issuer creates the
-credential-bearing deploy payload while the generated key is still in memory, so web
-servers, keystores, and load balancers receive the certificate/key bundle through the
-registered connector without returning PEM bytes from the API response. The response
-contains only the identity, target, and queued intent names.
+`POST /api/v1/lifecycle/endpoint-bindings` is the served end-to-end path for automated
+enrollment, provisioning, renewal, and endpoint binding: it creates the X.509 identity,
+binds the route, queues issue/deploy intents through the outbox, and leaves renewal on
+the same `ca.renew` path. The issuer builds the deploy payload while the key is still in
+memory, so the connector delivers the certificate/key bundle without PEM bytes ever
+returning from the API response.
 
 ### Crypto-agility (F16)
 
-Crypto-agility is an *architecture* property, and in trstctl it's non-negotiable: all
-cryptography goes through a single isolated path, and no other part of the system
-performs crypto directly (an automated build check fails the build if anything
-tries). An algorithm is a typed identifier; a signer is an opaque handle that signs
-without revealing its key; a backend (software, HSM, KMS) is one interface. Adding or
-swapping an algorithm is therefore a *one-place change*, and every backend must pass
-a conformance harness (`ConformBackend`) that signs a probe, verifies it, and
-confirms a wrong message and tampered signature both fail.
+Crypto-agility is an architecture property, and in trstctl it's non-negotiable: all
+cryptography goes through a single isolated path, or an automated build check fails.
+An algorithm is a typed identifier; a signer is an opaque handle that signs without
+revealing its key; a backend (software, HSM, KMS) is one interface. Adding or swapping an
+algorithm is therefore a one-place change, and every backend must pass a conformance
+harness (`ConformBackend`) that signs a probe, verifies it, and confirms a wrong message
+and a tampered signature both fail.
 
 In the MPL core, profile selection is served for classical RSA, ECDSA, and Ed25519.
-Operators can create profile versions with `POST /api/v1/profiles` or
-`trstctl-cli profiles create -f profile.json`; the API validates every
-`allowed_key_algorithms` value through `internal/crypto` before a `profile.created`
-event is emitted, and unknown labels fail closed.
+Operators create profile versions with `POST /api/v1/profiles` or `trstctl-cli profiles
+create -f profile.json`; the API validates every `allowed_key_algorithms` value through
+`internal/crypto` before emitting a `profile.created` event, and unknown labels fail
+closed.
 
-All post-quantum algorithms and post-quantum issuance/signing paths are proprietary
-EE features. That includes **ML-DSA** (FIPS 204), **ML-KEM** (FIPS 203),
-**SLH-DSA** (FIPS 205), hybrid certificate/key types, PQC signer-held keys, PQC
-APIs, PQC UI, and PQC tests. They plug into the same crypto and signer interfaces
-from `ee/`, so the MPL core stays buildable without them and never imports `ee/`.
+All post-quantum algorithms and post-quantum issuance/signing paths are proprietary EE
+features. That includes ML-DSA (FIPS 204), ML-KEM (FIPS 203), SLH-DSA (FIPS 205), hybrid
+certificate/key types, PQC signer-held keys, PQC APIs, PQC UI, and PQC tests. They plug
+into the same crypto and signer interfaces from `ee/`, so the MPL core stays buildable
+without them and never imports `ee/`.
 
 ### PQC migration orchestration (F57)
 
 Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is half the
-battle; the other half is *fixing* it without a giant manual project. PQC migration is
-served when the Enterprise/PQC license attaches the proprietary EE package. The EE
-orchestrator consumes the CBOM read model, finds quantum-vulnerable certificate-key
-assets, and queues re-issuance through the outbox toward the licensed PQC target.
+battle; the other half is *fixing* it without a manual project. PQC migration is served
+when the Enterprise/PQC license attaches the proprietary EE package: the orchestrator
+consumes the CBOM read model, finds quantum-vulnerable certificate-key assets, and queues
+re-issuance through the outbox toward the licensed target.
 
 The licensed EE API attaches `POST /api/v1/pqc/migrations` and
-`POST /api/v1/pqc/migrations/{run_id}/rollback`; those routes are not part of the MPL core OpenAPI
-golden, and there is no MPL-core CLI command for PQC migration. Completion
-and rollback are projected through the event log into `crypto_assets`, so posture
-dashboards and `migration_progress` stay derived from replayable state rather than
-hand-edited read tables.
+`POST /api/v1/pqc/migrations/{run_id}/rollback`. Those routes are not part of the MPL core OpenAPI
+golden, and there is no MPL-core CLI command for PQC migration. Completion and rollback
+project through the event log into `crypto_assets`, so posture dashboards and
+`migration_progress` stay derived from replayable state, not hand-edited tables.
 
-**Status:** served when the Enterprise/PQC license attaches `ee/pqcmigration`, for
-CBOM certificate-key assets through ACME hybrid transition re-issuance with rollback.
-The MPL core exposes CBOM posture and classical profile selection, but not PQC
-algorithms, PQC issuance, or the PQC migration trigger.
+**Status:** served when the Enterprise/PQC license attaches `ee/pqcmigration`, for CBOM
+certificate-key assets through ACME hybrid transition re-issuance with rollback. The MPL
+core exposes CBOM posture and classical profile selection, but not PQC algorithms,
+issuance, or the migration trigger.
 
 ### In the console
 
-In the web console the certificate inventory at `/certificates` is also a lifecycle
-**command center**: expiry bands, a **47-day renewal-readiness simulator** (does each
-certificate renew comfortably inside the shrinking CA/Browser-Forum maximum lifetime?),
-deployment receipts from the connectors, and a per-certificate renewal-history timeline in
-the detail drawer. The crypto-agility work surfaces at `/posture` as CBOM-backed
-algorithm posture and remediation handoff; proprietary PQC controls are supplied from
-the EE UI bundle when licensed. See [The web console](../web-console.md).
+In the web console, the certificate inventory at `/certificates` is also a lifecycle
+command center: expiry bands, a 47-day renewal-readiness simulator (does each certificate
+renew inside the shrinking CA/Browser Forum maximum lifetime?), deployment receipts, and
+a per-certificate renewal-history timeline. The crypto-agility work surfaces at
+`/posture` as CBOM-backed algorithm posture and remediation handoff; proprietary PQC
+controls come from the EE UI bundle when licensed. See [The web console](../web-console.md).
 
 ## Use it
 
@@ -134,41 +117,41 @@ Lifecycle thresholds are configuration today:
 {
   "lifecycle": {
     "renew_before": "720h",
-    "alert_before": "168h"
+    "alert_before": "336h"
   }
 }
 ```
 
-`renew_before` is the fallback window before expiry in which trstctl re-issues when no
-earlier ARI window is due; `alert_before` is when it warns. See
-[Configuration](../configuration.md) for the full set and
-[Operations](../operations.md) for running behavior. The PQC posture you'd migrate from
-is visible in the [CBOM](observability-and-risk.md) with `GET /api/v1/cbom/assets`;
-the PQC migration trigger attaches only from proprietary EE.
+Both are shipped defaults (30 / 14 days). `renew_before` is the fallback window before
+expiry when trstctl re-issues absent an earlier ARI window; `alert_before` is when it
+warns. See [Configuration](../configuration.md) and [Operations](../operations.md) for
+the full set and running behavior. PQC posture is visible in the
+[CBOM](observability-and-risk.md) via `GET /api/v1/cbom/assets`; the migration trigger
+attaches only from proprietary EE.
 
 ## Pitfalls & limits
 
-- **ARI-driven renewal covers trstctl-issued deployed X.509 identities.** Inventory rows
-  discovered from an outside CA are still visible for expiry/risk, but renewing them
-  requires an issuer or connector path that can actually replace that external
-  certificate.
-- **PQC migration is licensed EE scope.** The MPL core exposes CBOM posture but does
-  not expose PQC algorithms, the PQC migration API, or a PQC CLI command.
-- **The former PQC end-to-end residuals are served behind the Enterprise/PQC attach.**
+- **ARI-driven renewal** covers trstctl-issued deployed X.509 identities. Rows discovered
+  from an outside CA stay visible for expiry/risk, but renewing them needs an issuer or
+  connector path that can actually replace that external certificate.
+- **PQC migration** is licensed EE scope. The MPL core exposes CBOM posture but not PQC
+  algorithms, the PQC migration API, or a PQC CLI command.
+- **Former PQC end-to-end residuals** are served under the Enterprise/PQC attach.
   Stock OpenSSL 3.5 enrolls and verifies a pure ML-DSA-65 subject leaf over EST; the
-  stock SPIFFE Workload API receives a two-entry classical + ML-DSA-65 response; and
-  CBOM TLS findings roll out TLS 1.3 plus `X25519MLKEM768` through a posture-capable
-  connector with receiver readback and exact rollback (the shipped proof uses Envoy).
-  This is a tested client/connector boundary, not a claim about every legacy client.
-  Hybrid-to-pure replacement of an already deployed hybrid leaf remains gated by
-  succession and evidence-based retirement; direct pure enrollment is served.
-- **SLH-DSA signatures are large.** They're the conservative choice for long-lived roots,
-  not for high-volume leaf issuance — pick the algorithm per profile.
+  stock SPIFFE Workload API receives a two-entry classical + ML-DSA-65 response; and CBOM
+  TLS findings roll out TLS 1.3 plus `X25519MLKEM768` through a posture-capable connector
+  with receiver readback and exact rollback (the shipped proof uses Envoy) — a tested
+  client/connector boundary, not a claim about every legacy client. Hybrid-to-pure
+  replacement of an already deployed leaf stays gated by succession and evidence-based
+  retirement; direct pure enrollment is served.
+- **SLH-DSA** signatures are large — the conservative choice for long-lived roots, not
+  high-volume leaf issuance; pick the algorithm per profile.
 
 ## Reference
 
 - **Config:** `lifecycle.renew_before` (default `720h`), `lifecycle.alert_before`
-  (Go duration strings); `TRSTCTL_LIFECYCLE_RENEW_BEFORE`.
+  (default `336h`; Go duration strings); `TRSTCTL_LIFECYCLE_RENEW_BEFORE`,
+  `TRSTCTL_LIFECYCLE_ALERT_BEFORE`.
 - **Lifecycle ops:** `RenewExpiring`, `Rotate`, `Revoke`, `AlertExpiring`.
 - **Events:** `certificate.renewed`, `certificate.revoked`, `certificate.expiring`;
   `licensed_crypto.migration.started`, `licensed_crypto.migration.asset_completed`,
@@ -176,8 +159,8 @@ the PQC migration trigger attaches only from proprietary EE.
 - **CBOM migration feed:** `POST /api/v1/cbom/scans` records `cbom.asset.observed`; `GET
   /api/v1/cbom/assets` returns crypto posture, licensed migration targets, and
   `migration_progress`.
-- **PQC migration API:** proprietary EE attaches `POST /api/v1/pqc/migrations` for CBOM
-  certificate-key assets and `POST /api/v1/pqc/migrations/{run_id}/rollback` for rollback.
+- **PQC migration API:** proprietary EE attaches `POST /api/v1/pqc/migrations` (CBOM
+  certificate-key assets) and `POST /api/v1/pqc/migrations/{run_id}/rollback`.
 - **PQC algorithms:** proprietary EE scope: ML-DSA (FIPS 204), ML-KEM (FIPS 203),
   SLH-DSA (FIPS 205), and hybrid algorithms. See the post-quantum section of
   [Current limitations](../limitations.md).
@@ -185,7 +168,7 @@ the PQC migration trigger attaches only from proprietary EE.
 ## See also
 
 [Issuance & certificate authorities](issuance-and-cas.md) ·
-[Observability & risk](observability-and-risk.md) (the CBOM you migrate from) ·
+[Observability & risk](observability-and-risk.md) (the CBOM source) ·
 [Configuration](../configuration.md) · [Operations & resilience](../operations.md) ·
 glossary: [rotation](../glossary.md), [revocation](../glossary.md),
 [PQC](../glossary.md), [CBOM](../glossary.md)
