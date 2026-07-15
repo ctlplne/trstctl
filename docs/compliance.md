@@ -251,12 +251,12 @@ prune) when a window and an archive directory are configured.
 framework, that FIPS-validated cryptography is in the *default* build (it is a
 FIPS-*capable* opt-in via `make fips-build` / `--fips`; the trstctl product's own
 NIST CMVP certificate is a separate, external process — see
-[FIPS cryptography](#fips-cryptography--a-fips-capable-build-path)),
+[FIPS cryptography](#fips-cryptography-a-fips-capable-build-path)),
 that trstctl has a Common Criteria certificate or evaluated configuration by
 itself,
 or that your archive storage is WORM-hardened (that is yours to provide).
 
-## FIPS cryptography — a FIPS-capable build path
+## FIPS cryptography: a FIPS-capable build path
 
 trstctl ships a **FIPS-capable build path**. Building with the Go FIPS 140-3
 Cryptographic Module enabled routes all of trstctl's cryptography through that

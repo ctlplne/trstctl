@@ -21,7 +21,7 @@ unilaterally stand up or rotate a CA.
 > recovery.
 > The **assembled issuing CA's key is now persisted, sealed at rest** (R3.2): the
 > signer reloads it after a restart, so the CA is not silently rotated (see
-> [Configuration -> Signer](../configuration.md#signer-topology--ca-custody) and
+> [Configuration -> Signer](../configuration.md#signer-topology-and-ca-custody) and
 > [disaster recovery](../disaster-recovery.md)). Helm `externalKMS` is wired for
 > signer key-store envelope custody; non-extractable HSM/KMS-resident CA private
 > key custody remains future work outside the managed-key path (see

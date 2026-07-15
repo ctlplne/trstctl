@@ -314,5 +314,5 @@ Recovery reconciliation remains served at `POST /api/v1/breakglass/reconcile` af
 operators bring signed emergency bundles back to the control plane.
 
 See [Configuration → Datastores](configuration.md#datastores) and
-[Configuration → Signer](configuration.md#signer-topology--ca-custody) for the
+[Configuration → Signer](configuration.md#signer-topology-and-ca-custody) for the
 settings these procedures use.

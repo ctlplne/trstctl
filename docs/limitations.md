@@ -1357,7 +1357,7 @@ key-encryption file by default. See the
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md). The remaining external residual is the
 **product NIST CMVP certificate** (see
-[compliance → FIPS](compliance.md#fips-cryptography--a-fips-capable-build-path)),
+[compliance → FIPS](compliance.md#fips-cryptography-a-fips-capable-build-path)),
 a lab process software cannot perform. The validated-module path itself is served:
 `GET /api/v1/editions` and the Platform page expose the live FIPS POST booleans,
 `make fips-build` build target, `fips-capable build (GOFIPS140)` CI gate, and

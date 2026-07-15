@@ -194,7 +194,7 @@ departure, vendor termination, or inactivity signals is governance, not an
 identity-lifecycle primitive: `POST /api/v1/nhi/decommission`
 (`trstctl-cli nhi decommission`) resolves those signals against managed NHIs and
 revokes or retires them via these same transitions. Canonical home:
-[Policy & governance](policy-and-governance.md#automated-nhi-decommissioning-cap-gov-04).
+[Policy & governance](policy-and-governance.md#automated-nhi-decommissioning).
 
 Deploying against an existing SPIRE cluster is just installing the plugin binary (or
 mounting it read-only) and adding the `UpstreamAuthority "trstctl"` block above with a
