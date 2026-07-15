@@ -52,4 +52,4 @@ property test) to cover it. The suite runs against real Postgres + embedded NATS
 ## Out of scope here
 
 Write paths of any kind (this layer is read-only), the AI/MCP consumers (Epoch 19b),
-and mounting the engine onto a serving surface (that is the S15.0 integration sprint).
+and mounting the engine onto a serving surface (a separate integration change).

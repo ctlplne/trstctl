@@ -1,14 +1,14 @@
-# Design: SSH trust rewrite (S13.2, F44)
+# Design: SSH trust rewrite (F44)
 
 > **Historical design record.** This rewrite shipped; F44 is served. Current
 > behavior is documented in [SSH](../features/ssh.md) — this page records the
 > design decisions and is kept for the served-state matrix reference.
 
 
-**Status:** reviewed — design gate for S13.3 (build).
+**Status:** implemented — historical design record.
 **Catastrophic-risk area.** A mistake in how the agent rewrites `sshd` / host
 trust can lock operators out of production. This document is the contract the
-S13.3 implementation must follow; S13.3 adds no behavior not specified here.
+The implementation follows this design; it adds no behavior not specified here.
 
 ## 1. Goal and non-goals
 
@@ -42,7 +42,7 @@ bastion), and non-SSH trust.
   the agent restores the last-known-good state rather than leaving a half-applied
   config.
 
-## 3. Change procedure (what S13.3 implements)
+## 3. Change procedure
 
 1. **Snapshot / backup** the current `sshd_config` and `TrustedUserCAKeys` file
    (and record their absence if they do not exist).
@@ -65,16 +65,16 @@ bastion), and non-SSH trust.
 | L2 | Reload succeeds but `sshd` then refuses connections | Post-reload health check; automatic rollback to backup on failure |
 | L3 | Agent crashes mid-write, truncating `sshd_config` | Atomic write-temp-then-`rename`; the live file is replaced only when fully written |
 | L4 | Change removes the operator's existing access | Additive-first: existing `authorized_keys` and trust are preserved; removal requires explicit confirmation (§2) |
-| L5 | CA key compromise forces emergency host access | Break-glass recovery (§5) issues an emergency host credential out-of-band (S12.4) |
+| L5 | CA key compromise forces emergency host access | Break-glass recovery (§5) issues an emergency host credential out-of-band |
 | L6 | Backup itself is lost before rollback | Backups are written atomically and verified to exist before any mutation proceeds |
 | L7 | Repeated apply double-adds trust / drifts config | Additive step is idempotent (CA line added only if absent) |
 | L8 | Health check passes locally but control-plane connectivity is gone | Health check is local (does `sshd` accept a connection), independent of the control plane, so a control-plane outage cannot block rollback |
 
-## 5. Break-glass recovery path (ties to S12.4)
+## 5. Break-glass recovery path
 
 If a host is locked out despite the above (e.g. L5), recovery does **not** depend
 on the control plane. An operator quorum issues an emergency host credential via
-the offline break-glass ceremony (S12.4); the host's console/recovery path
+the offline break-glass ceremony; the host's console/recovery path
 installs it, restoring access. The break-glass bundle reconciles into the
 event-sourced audit log on recovery, so the emergency action is still recorded.
 

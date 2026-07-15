@@ -43,7 +43,7 @@
   "stdout_tail": [
     "> trstctl-web@0.1.0 test",
     "> vitest run first-run.test.tsx",
-    " RUN  v2.1.9 /Users/shankar/Desktop/ctlplne-trstctl/trstctl",
+    " RUN  v2.1.9 <repo>",
     " ✓ web/src/__tests__/first-run.test.tsx (1 test) 490ms",
     "   ✓ first-run served capability journey > issues, deploys, exercises an upstream CA and lease backend, then enrolls 489ms",
     " Test Files  1 passed (1)",

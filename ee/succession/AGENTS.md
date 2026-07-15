@@ -4,7 +4,7 @@ Proprietary Enterprise/Provider package implementing Proof-Carrying Algorithm
 Succession (PCAS). This is a **patented feature set**; the whole package is
 `ee/` and every source file carries `SPDX-License-Identifier: LicenseRef-trstctl-EE`.
 MPL core must never import this package outside the tagged attach seam
-(`AGENTS.md` AN-9; PCAS `HARNESS.md` §1.6). `make editions-gate` proves it.
+(`AGENTS.md` AN-9). `make editions-gate` proves it.
 
 Package-local rules:
 

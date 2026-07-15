@@ -39,7 +39,7 @@
 // with a typed error a caller matches with errors.Is. Verify never returns "allow"
 // on any doubt.
 //
-// BOUNDED GUARANTEE (HARNESS.md 1.5 note (a)). Binding the agent-stack
+// BOUNDED GUARANTEE (spec note 1.5(a)). Binding the agent-stack
 // representation proves WHAT CONSTITUTION HELD THE KEY AT ISSUANCE, not that the
 // running agent still matches that constitution at request time. Drift between
 // issuance and use is BOUNDED by the credential's short TTL (INV-A7), not
@@ -65,7 +65,7 @@
 // agent-stack representation (encoding/binary) is canonical framing, not a crypto
 // primitive, and matches the discipline the carriage and agentstack packages use.
 //
-// LICENSE (HARNESS.md 1.6, decision recorded 2026-07-07 on card AGID-09): this
+// LICENSE (decision recorded 2026-07-07): this
 // package is proprietary LicenseRef-trstctl-EE so NO MPL patent grant attaches to
 // independent claim 28 (or dependent 29). It is deliberately NOT in MPL core and
 // is NOT the internal/license offline license checker (a different thing AGENTS.md

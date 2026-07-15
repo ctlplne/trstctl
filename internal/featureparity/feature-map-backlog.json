@@ -2,7 +2,7 @@
   "schema_version": 2,
   "harness": "trstctl-feature-map-harness",
   "objective": "Map every documented trstctl backend capability to an explicit GUI surface, workflow, status panel, or deliberate non-GUI disclosure; bind each row to served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n facet evidence or an explicit N/A; and record explicit GA served-scope decisions for residual conditional/partial rows.",
-  "target_repo": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl",
+  "target_repo": ".",
   "frontend_routes_observed": [
     "/login",
     "/",

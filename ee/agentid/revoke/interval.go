@@ -21,7 +21,7 @@ import (
 //
 // The interval is measured from the directive's recorded start (created_at) to either the
 // terminal_at timestamp (if terminal) or the current clock (if still draining). It is NOT
-// a claim about credential usability (HARNESS.md §1.5 note (b)): it times the LEDGER fact
+// a claim about credential usability (spec note 1.5(b)): it times the LEDGER fact
 // of terminal completion, so an exceedance says "the kill has not been fully evidenced
 // within the SLA," not "a credential is still usable." Cascade covers future
 // issuance/renewal (refused in-signer); expiry covers the outstanding credential.

@@ -28,7 +28,7 @@ canonical architecture rules live in the root `AGENTS.md` contract.
   Two cheap signer-side bounds are enforced here and must not be weakened: **per-key
   purpose/algorithm constraints** (`constraints.go`, SIGNER-002/003 — a key minted for one
   purpose refuses a Sign for another, sealed with the key, restored across restart) and
-  **dual-control intent attestation for crown-jewel keys** (`attestation.go`, RED-003 — a
+  **dual-control intent attestation for crown-jewel keys** (`attestation.go` — a
   key marked `requireAuth` refuses every Sign that does not carry a valid authorization
   token over the *exact* signing tuple, including the digest, minted by an independent
   approval authority). The token is bound to the digest, so it cannot be replayed onto

@@ -15,7 +15,7 @@
 -- set exactly once (the terminal flip is idempotent). This is NOT a claim that an
 -- already-issued short-TTL credential became unusable at terminal_at — the cascade
 -- covers sessions/dependents and FUTURE issuance/renewal, expiry covers the
--- outstanding credential (HARNESS.md §1.5 note (b)); terminal_at times the LEDGER
+-- outstanding credential (spec note: revocation is a ledger fact, not a usability claim); terminal_at times the LEDGER
 -- fact only.
 --
 -- Forward-only by policy (docs/migrations.md, the succession/AGID-02/10 precedent):

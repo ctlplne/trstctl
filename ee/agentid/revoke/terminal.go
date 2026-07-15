@@ -31,7 +31,7 @@ import (
 // op on issued credentials and NEVER mints a credential; its only signing is the
 // aggregate artifact via internal/crypto (AN-3).
 //
-// IMPORTANT (HARNESS.md §1.5 note (b)): the terminal state is the LEDGER FACT that every
+// IMPORTANT (spec note 1.5(b)): the terminal state is the LEDGER FACT that every
 // enqueued and follow-on job completed, NOT a guarantee that an already-issued short-TTL
 // credential is unusable before it expires. The cascade (AGID-10) covers
 // sessions/dependents and FUTURE issuance/renewal (the latter refused in-signer while the
