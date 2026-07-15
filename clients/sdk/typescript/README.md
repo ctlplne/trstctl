@@ -134,76 +134,16 @@ console.log(page.items, page.next_cursor);
 
 ---
 
-## Copy-paste helpers (no SDK install)
+## Copy-paste (no SDK install)
 
-If you would rather call the API with raw `fetch` and the generated types only,
-this self-contained snippet reproduces the load-bearing behavior (auth,
-`Idempotency-Key`, problem+json, `Retry-After`-aware retry, cursor iteration):
+`src/index.ts` is self-contained and dependency-free (it imports only the
+generated `./types.gen.ts`), so you can copy both files into your project
+instead of installing the package:
 
 ```ts
-import type { components } from "./types.gen"; // from `npx openapi-typescript ../openapi.json`
+import { TrstctlClient, isProblem } from "./index"; // copied alongside types.gen.ts
 
-type Schemas = components["schemas"];
-
-class TrstctlProblem extends Error {
-  constructor(public httpStatus: number, public body: any, public retryAfterSeconds?: number) {
-    super(`trstctl: ${httpStatus} ${body?.title ?? ""}${body?.detail ? `: ${body.detail}` : ""}`.trim());
-    this.name = "TrstctlProblem";
-  }
-}
-
-function idemKey(): string {
-  return (globalThis as any).crypto?.randomUUID?.() ?? `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function retryAfter(h: string | null): number | undefined {
-  if (!h) return undefined;
-  const s = Number(h);
-  if (Number.isFinite(s)) return Math.max(0, Math.round(s));
-  const t = Date.parse(h);
-  return Number.isNaN(t) ? undefined : Math.max(0, Math.round((t - Date.now()) / 1000));
-}
-
-async function call<T>(baseUrl: string, token: string, method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {
-    Accept: "application/json, application/problem+json",
-    Authorization: `Bearer ${token}`,
-  };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (method !== "GET") headers["Idempotency-Key"] = idemKey(); // stable across the retries below
-  const retryable = new Set([429, 502, 503, 504]);
-  let lastErr: unknown;
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    const res = await fetch(baseUrl.replace(/\/+$/, "") + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (res.ok) return (res.status === 204 ? undefined : await res.json()) as T;
-    const ra = retryAfter(res.headers.get("Retry-After"));
-    const prob = new TrstctlProblem(res.status, await res.json().catch(() => ({})), ra);
-    lastErr = prob;
-    if (retryable.has(res.status) && attempt < 4) {
-      await new Promise((r) => setTimeout(r, Math.min((ra ?? 0.2 * 2 ** (attempt - 1)) * 1000, 5000)));
-      continue;
-    }
-    throw prob;
-  }
-  throw lastErr;
-}
-
-async function* paginate<T>(baseUrl: string, token: string, path: string, limit = 50): AsyncGenerator<T> {
-  let cursor: string | undefined;
-  for (;;) {
-    const qs = new URLSearchParams({ limit: String(limit) });
-    if (cursor) qs.set("cursor", cursor);
-    const page = await call<{ items: T[]; next_cursor?: string }>(baseUrl, token, "GET", `${path}?${qs}`);
-    for (const item of page.items ?? []) yield item;
-    if (!page.next_cursor) return;
-    cursor = page.next_cursor;
-  }
-}
-
-// Getting-started flow:
-async function issueFirst(baseUrl: string, token: string, name: string) {
-  const owner = await call<Schemas["Owner"]>(baseUrl, token, "POST", "/api/v1/owners", { kind: "workload", name });
-  const ident = await call<Schemas["Identity"]>(baseUrl, token, "POST", "/api/v1/identities", { kind: "x509_certificate", name, owner_id: owner.id });
-  return call<Schemas["Identity"]>(baseUrl, token, "POST", `/api/v1/identities/${ident.id}/transitions`, { to: "issued" });
-}
+const client = new TrstctlClient({ baseUrl: "https://localhost:8443", token: "trst_..." });
+const ident = await client.issueFirstCertificate("payments");
+console.log(`issued ${ident.id} (${ident.status})`);
 ```

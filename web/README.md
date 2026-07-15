@@ -34,4 +34,6 @@ repository root, `make web` runs the install + build.
 - `src/auth/AuthProvider.tsx` — resolves the session from `/auth/me`; `beginLogin`
   starts the OIDC flow via `/auth/login`. Routes are gated by `RequireAuth`.
 - `src/lib/api.ts` — typed client over the REST surface.
-- `src/pages/*` — Dashboard, Certificates, Owners, Risk.
+- `src/pages/*` — one route component per page (~30 pages). See
+  `src/lib/navigation.ts` for the full route/nav map and
+  [`DESIGN.md`](DESIGN.md) for the page inventory and visual system.

@@ -37,7 +37,7 @@ bundle: capture the eval HTTPS certificate from `localhost:8443` and copy the
 agent CA from `/data/ca/agent-ca.crt` in the `trstctl` service, as shown in
 [Getting started](../../docs/getting-started.md#install-an-agent).
 
-The control plane is wired to Postgres and NATS through the **external** datastore
+The control plane is wired to Postgres and NATS through the external datastore
 configuration (`TRSTCTL_POSTGRES_MODE=external`, `TRSTCTL_NATS_MODE=external`),
 so the eval stack exercises the same code path a production deployment uses. The
 bundled NATS service is still one server, so Compose explicitly sets
@@ -49,8 +49,8 @@ startup/readiness if JetStream cannot honor them.
 > password (`trstctl`/`trstctl`) and connects with `sslmode=disable` so it comes
 > up with zero setup — convenient for a throwaway eval, unacceptable for a real
 > deployment (public credentials, cleartext traffic). For production, deploy the
-> **Helm chart** (`deploy/helm/trstctl`), which sources the Postgres DSN and the
-> KEK from a **Kubernetes Secret** and requires `sslmode=require`; see
+> Helm chart (`deploy/helm/trstctl`), which sources the Postgres DSN and the
+> KEK from a Kubernetes Secret and requires `sslmode=require`; see
 > [Current limitations](../../docs/limitations.md) and the chart's `values.yaml`.
 > To harden this Compose stack, set a generated password
 > (`openssl rand -hex 24` into `deploy/docker/.env`) and switch the DSN to
@@ -74,7 +74,7 @@ docker run --rm -e TRSTCTL_POSTGRES_MODE -e TRSTCTL_POSTGRES_DSN \
   "$TRSTCTL_IMAGE_REF"
 ```
 
-The binary validates configuration on boot and **fails fast** on a bad
+The binary validates configuration on boot and fails fast on a bad
 combination (for example, external Postgres with no DSN). Verify a configuration
 without starting the server:
 
@@ -95,7 +95,7 @@ or outbox waves.
 
 - **Base:** `gcr.io/distroless/static-debian12:nonroot` — no shell, no package
   manager, runs as uid/gid 65532. The image is ~40 MB — two static Go binaries
-  plus the embedded web UI — and stays **under an 80 MB budget**, enforced in CI.
+  plus the embedded web UI — and stays under an 80 MB budget, enforced in CI.
 - **Contents:** both `trstctl` and `trstctl-signer`. In single-node mode the
   control plane supervises the signer as a child process (AN-4); shipping both in
   one image keeps that boundary intact.
@@ -110,9 +110,9 @@ or outbox waves.
 
 1. builds the multi-arch image reproducibly,
 2. enforces the image size budget (80 MB),
-3. pushes to **GHCR** (primary) and **Docker Hub** (mirror),
-4. generates a **CycloneDX** SBOM, and
-5. **cosign**-signs the image and attests the SBOM (keyless, via OIDC).
+3. pushes to GHCR (primary) and Docker Hub (mirror),
+4. generates a CycloneDX SBOM, and
+5. cosign-signs the image and attests the SBOM (keyless, via OIDC).
 
 Verify a published image:
 

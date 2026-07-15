@@ -1,8 +1,8 @@
 # trstctl control-plane Helm chart
 
 Deploys the trstctl **control plane** (API + web UI) to Kubernetes with the
-**signing service isolated behind AN-4** and wired to **external PostgreSQL and
-NATS**. The default topology runs the signer as a locked-down sidecar over an
+signing service isolated behind AN-4 and wired to external PostgreSQL and
+NATS. The default topology runs the signer as a locked-down sidecar over an
 in-memory Unix socket. For stricter process and pod isolation, set
 `signer.mode=isolated` and provide the `signer.mtls.*` trust material; the chart
 then renders a separate signer Deployment reached over mutually pinned mTLS.
@@ -14,10 +14,10 @@ By default, one control-plane pod contains two containers:
 - **`trstctl`** — the control plane: serves the API/UI on `:8443` (HTTPS by
   default), connects to external PostgreSQL and NATS, and reaches the signer in
   *external* mode over a shared in-memory Unix socket.
-- **`signer`** — the signing service (AN-4) as its own **locked-down** container
-  with **no network listener at all**. It talks to the control plane only over the
+- **`signer`** — the signing service (AN-4) as its own locked-down container
+  with no network listener at all. It talks to the control plane only over the
   shared `emptyDir{medium: Memory}` socket, so nothing on the cluster network can
-  reach it. Its CA key is **sealed at rest** in a persistent key store, so a
+  reach it. Its CA key is sealed at rest in a persistent key store, so a
   restart preserves the issuing CA (R3.2).
 
 With `signer.mode=isolated`, the chart removes the sidecar from the control-plane
@@ -82,24 +82,16 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 
 ## Operational notes
 
-- **Multi-replica HA is the default.** The chart runs `replicaCount: 2`,
-  `RollingUpdate maxUnavailable: 0`, a PodDisruptionBudget, and leader election so
-  only one replica runs continuous background workers. Use an RWX-capable
+- **Multi-replica HA is the default.** Every replica's sidecar loads the same
+  sealed signer key store, so all replicas are the same CA. Use an RWX-capable
   StorageClass for the default `ReadWriteMany` volumes.
-- **Sidecar signer is the default HA topology.** Every replica's sidecar loads the
-  same sealed signer key store, so all replicas are the same CA while the signer
-  remains outside the control-plane process.
-- **Isolated signer is opt-in.** `signer.mode=isolated` is implemented, but the
-  operator must provision both mTLS Secrets out of band. The chart fails fast if
-  isolated mode is selected without `signer.mtls.serverName`.
+- **Isolated signer is opt-in** (`signer.mode=isolated`); the chart fails fast
+  if selected without `signer.mtls.serverName`. Sidecar remains the default.
 - **Air-gapped install is an overlay.** `values-airgap.yaml` sets
-  `airGap.enabled=true`, leaves product telemetry off, and scopes datastore egress
-  to private CIDRs. Edit those CIDRs for your cluster before installing.
-- **Metrics are installable, not just served.** The API exposes `/metrics` on the
-  HTTPS Service. Plain Prometheus can use the default scrape annotations, and
-  Prometheus Operator clusters can enable `metrics.serviceMonitor.enabled=true`.
-  Production scrapes should set `metrics.serviceMonitor.tlsConfig` to trust the
-  control-plane serving CA.
+  `airGap.enabled=true` and scopes datastore egress to private CIDRs — edit
+  those CIDRs for your cluster before installing.
+- **Metrics are installable, not just served.** Production scrapes should set
+  `metrics.serviceMonitor.tlsConfig` to trust the control-plane serving CA.
 - **The Kubernetes Operator is intentionally smaller than Helm.** The operator
   reconciles Deployment image/replica basics; Helm remains the complete production
   install for Services, Secrets, NetworkPolicies, signer topology, PostgreSQL, and

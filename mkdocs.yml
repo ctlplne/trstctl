@@ -116,3 +116,4 @@ nav:
       - Connectors: guides/connector-authoring.md
       - Plugins: guides/plugin-authoring.md
       - Certificate profiles: guides/profile-authoring.md
+      - Kubernetes agent (kind e2e): guides/kubernetes-agent.md

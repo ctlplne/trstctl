@@ -13,13 +13,13 @@ three of them live outside `go.sum`, so they are easy to miss:
 ## `embedded-postgres.json`
 
 The `embedded-postgres` dependency downloads a real PostgreSQL binary from
-**Maven Central** at runtime for integration tests and for the served bundled
+Maven Central at runtime for integration tests and for the served bundled
 single-node eval path — that binary is **not** covered by `go.sum`. This manifest
 pins its exact version and per-arch sources, and records the checksum + scan
 policy. `scripts/supply-chain/verify-embedded-postgres.sh` enforces it:
 
 1. Downloads the pinned PostgreSQL binary from the recorded URL.
-2. Computes its SHA-256 and **fails the build** if the jar or inner `.txz` hash
+2. Computes its SHA-256 and fails the build if the jar or inner `.txz` hash
    changes for the pinned version. The trust-on-first-use bootstrap is complete;
    empty pins are a hard failure.
 3. Extracts and Trivy-scans the binaries (HIGH/CRITICAL, ignore-unfixed), writing
@@ -43,8 +43,8 @@ committed per-arch pin before trusting it. Run the whole pass locally with
 ## Release signing & SBOM
 
 The release pipeline (`.github/workflows/release.yml`) builds a reproducible
-distroless image, attaches a **CycloneDX SBOM**, generates **build provenance**,
-and **cosign-signs** it keylessly (OIDC). Verify a published image with
+distroless image, attaches a CycloneDX SBOM, generates build provenance,
+and cosign-signs it keylessly (OIDC). Verify a published image with
 `scripts/verify-image.sh` (or the `cosign verify` snippet in
 [`docs/install.md`](../../docs/install.md)). The full story is in
 [`docs/supply-chain.md`](../../docs/supply-chain.md).

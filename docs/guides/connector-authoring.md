@@ -45,6 +45,20 @@ effect exactly-once. Practically: check whether the target already holds the
 credential with that fingerprint before writing, and make the reload safe to
 repeat.
 
+## Delivery (AN-6)
+
+Deployment is outbox-driven. The orchestrator enqueues a `connector.deploy`
+message (`EncodeDeploy`) in the same transaction as the lifecycle state change,
+and a worker hands it to the connector via a `Registry`:
+
+```go
+reg := connector.NewRegistry(opsFor) // opsFor supplies each connector's real Ops
+reg.Register(myconnector.New(...))
+outbox.HandlerFunc(func(ctx, m) error { return reg.Handle(ctx, m.Payload) })
+```
+
+At-least-once delivery plus an idempotent `Deploy` make the effect exactly-once.
+
 ## A minimal connector
 
 The connector SDK ships a complete example file-plus-reload connector
@@ -55,13 +69,21 @@ with `Exec`. Start by copying it.
 ## Conformance
 
 The SDK ships a **conformance suite** (`connector.Conformance`) that exercises a
-connector against the host contract — capability enforcement, idempotent replay,
-and deployment shape. Wire your connector into it and keep it green; that is what
-lets forks and downstream users trust a third-party connector.
+connector — driven by the in-memory target harness (`connector.MemoryOps`) —
+against the host contract. A connector can only ever do what its grant permits,
+the same sandbox discipline the plugin host enforces for WASM plugins, so
+conformance is also the least-privilege check: it verifies the connector names
+itself, declares at least one capability, deploys a credential, stays idempotent
+over persistent target state, and has every operation outside its declared grant
+denied. Wire your connector into it and keep it green; that is what lets forks
+and downstream users trust a third-party connector.
 
 ```go
 func TestMyConnectorConformance(t *testing.T) {
-    connector.RunConformance(t, NewMyConnector())
+    report := connector.Conformance(context.Background(), myconnector.New(...))
+    if !report.OK() {
+        t.Fatal(report)
+    }
 }
 ```
 

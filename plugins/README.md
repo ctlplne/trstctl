@@ -1,10 +1,10 @@
 # Plugins (`plugins/ca`, `plugins/connectors`)
 
-These directories are the **drop-in location for third-party / community WASM
-plugins** — CA integrations (`ca/`) and deployment connectors (`connectors/`) that
+These directories are the drop-in location for third-party / community WASM
+plugins — CA integrations (`ca/`) and deployment connectors (`connectors/`) that
 are *not* part of the core build. A plugin here is a WASM module loaded by the
-plugin host (`internal/pluginhost`, wazero) under an explicit **capability grant**
-and admitted only after passing the **conformance suite**.
+plugin host (`internal/pluginhost`, wazero) under an explicit capability grant
+and admitted only after passing the conformance suite.
 
 They include source-level reference plugins in this repository:
 
@@ -19,9 +19,9 @@ is reviewable here, release artifacts are exact-byte signed by the operator.
 
 Do not confuse those reference plugins with the shipped first-party integrations:
 
-- **First-party CAs and connectors do not live here.** The ~9 CA integrations
-  (`internal/ca/…`) and ~10 deployment connectors (`internal/connector/…`) ship as
-  **trusted in-process Go code**, by design — see the
+- **First-party CAs and connectors do not live here.** The 14 CA integrations
+  (`internal/ca/…`) and 24 deployment connectors (`internal/connector/…`) ship as
+  trusted in-process Go code, by design — see the
   [plugin trust model & blast radius](../docs/security/threat-model.md) and
   [limitations](../docs/limitations.md). They are not WASM-sandboxed.
 - **This directory is for the isolated path.** A plugin dropped here runs in the

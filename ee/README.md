@@ -10,7 +10,7 @@ Boundary rules:
 
 Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and the license verifier stay in core.
 
-Enterprise remediation lives here:
+## Packages (`ls ee/`)
 
 - `ee/incident`: credential-compromise workflow library.
 - `ee/fleet`: staged, health-checked fleet re-issuance library.
@@ -43,8 +43,35 @@ Enterprise remediation lives here:
   router vocabulary and pooled RLS substrate; the tagged attach seam installs
   schema/subject/object-prefix routing only when `FeatureSiloedIsolation` is
   licensed.
+- `ee/pqc`: post-quantum and hybrid signatures plus ML-KEM key encapsulation
+  behind the AN-3 crypto boundary — the only package that imports the CIRCL PQC
+  library, so callers link it only when they use this package.
+- `ee/pqcruntime`: the complete PQC issuance object graph attached by the one
+  AN-9 seam — licensed leaf signer, hybrid CSR inspection/parsing, and
+  multi-key SPIFFE SVID issuance.
+- `ee/succession`: Proof-Carrying Algorithm Succession (PCAS), a patented
+  feature set — the append-only, per-identity cryptographic-succession
+  lifecycle and posture projection.
+- `ee/translog`: the PCAS transparency log — signed tree heads and Merkle
+  inclusion/consistency proofs.
+- `ee/rpverify`: the offline relying-party verifier for PCAS succession
+  chains; kept proprietary so no MPL patent grant attaches to it.
+- `ee/reconcile`: the proprietary drift-reconciliation runtime (internal
+  codename XREC) assembled behind the tagged attach seam — whole-estate
+  canonicalization, quarantine, and witness countersignatures.
+- `ee/decommission`: the proprietary attested-destroy control-plane runtime
+  (internal codename VDEC) — quorum destroy ceremonies, key re-protection, and
+  dependency-state tracking.
+- `ee/agentid`: agent (AGID) delegation-chain identity — authority-scoped
+  delegation records, task-envelope binding, reachability verification, and
+  cascade revocation.
 
-The served trstctl remediation surface is not probectl-style advisory remediation:
-it executes replacement issue/deploy/revoke work on a human trigger. The tagged
-attach seam mounts it only when `FeatureRemediation` is licensed, and the API
-still requires RBAC (`incidents:*` plus `certs:issue` for replacement issuance).
+`ee/docs/` holds the PCAS security docs (key custody, threat model, and HSM
+ceremony/break-glass runbooks) behind the same AN-9 fence — reference material,
+not Go code.
+
+The served trstctl remediation surface (`ee/incident`, `ee/fleet`,
+`ee/pqcmigration`) is not probectl-style advisory remediation: it executes
+replacement issue/deploy/revoke work on a human trigger. The tagged attach seam
+mounts it only when `FeatureRemediation` is licensed, and the API still
+requires RBAC (`incidents:*` plus `certs:issue` for replacement issuance).
