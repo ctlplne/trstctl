@@ -23,11 +23,12 @@ process, every mutation is idempotent, every external effect uses the outbox,
 worker pools are bounded, and key material is byte-backed, locked, and zeroed.
 
 AN-9 - Editions boundary. Commercial code lives only under `ee/`. Core may never
-import `ee/`; `ee/` may import core. The only exception is the tagged attach seam:
-`cmd/trstctl/ee_attach.go`, which must carry `//go:build !trstctl_core`, paired
-with `cmd/trstctl/ee_attach_core.go` under `//go:build trstctl_core`. The
-core-only build must link zero `ee/` packages. Activation is license-gated at the
-single attach seam, never through scattered tier checks.
+import `ee/`; `ee/` may import core. The only exceptions are the tagged attach
+seams: `cmd/trstctl/ee_attach.go` and `cmd/trstctl-signer/ee_attach.go`, each
+carrying `//go:build !trstctl_core` and paired with an `ee_attach_core.go` twin
+under `//go:build trstctl_core`. The core-only build must link zero `ee/`
+packages. Activation is license-gated at those attach seams, never through
+scattered tier checks.
 The only `lic.Has(feature)` construction checks belong in `attachEE`, one block
 per feature. Do not scatter tier checks through handlers, stores, engines, or UI
 glue. The one feature-to-tier table lives in `internal/license`, which stays core
@@ -72,3 +73,11 @@ do not put PQC, license-gated, or future patented logic in MPL core; do not move
 multi-tenancy, the crypto boundary, audit/export rights, or the license verifier
 into `ee/`; do not add Redis or another datastore; do not add a runtime
 `lic.Has(fips)` gate.
+
+Documentation style: every reader-facing page gives three layers in order —
+what/why in two or three plain sentences, then the mechanism, then the exact
+contract (flags, defaults, limits, failure modes). Roughly one bold per 150
+words (UI labels, identifiers, true warnings). Served-vs-library status stated
+once per page. No sprint/REPORT/DoD process IDs on reader pages unless a test
+requires them. Many docs/*_test.go guards grep exact phrases — grep before
+rewording, and never split a guarded phrase across a line wrap.

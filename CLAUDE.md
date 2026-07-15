@@ -8,7 +8,8 @@ trstctl is open-core. The core platform is MPL-2.0 open-source software;
 commercial Enterprise and Provider tiers are proprietary material under `ee/`
 and are gated by an offline, Ed25519-signed license. The boundary is a top-level
 `ee/` directory fence plus the license: one repo, one binary lineage, never a
-fork. Multi-tenancy (AN-1) is and remains MPL core and free.
+fork. Multi-tenancy (AN-1), the crypto boundary (AN-3), audit/export rights,
+and the offline license verifier are and remain MPL core, free, and auditable.
 
 AN-1 through AN-8 still apply exactly as written in `../AGENTS.md`: PostgreSQL
 RLS tenant isolation, event-sourced state, the `internal/crypto` boundary, the
@@ -16,10 +17,10 @@ isolated signer process, mutation idempotency, outbox external effects,
 bulkheads/backpressure, and byte-backed locked/zeroed key material.
 
 AN-9 - Editions boundary. Commercial code lives only under `ee/`. Core may
-never import `ee/`; `ee/` may import core. The only exception is
-`cmd/trstctl/ee_attach.go`, which must carry `//go:build !trstctl_core`. The
-core-only twin is `cmd/trstctl/ee_attach_core.go` under `//go:build
-trstctl_core`, and the core-only build must link zero `ee/` packages.
+never import `ee/`; `ee/` may import core. The only exceptions are the tagged
+attach seams `cmd/trstctl/ee_attach.go` and `cmd/trstctl-signer/ee_attach.go`
+(each `//go:build !trstctl_core`, with an `ee_attach_core.go` twin under
+`//go:build trstctl_core`); the core-only build must link zero `ee/` packages.
 
 License checks are centralized. The only `lic.Has(feature)` construction checks
 belong in `attachEE`, one block per feature. Do not scatter tier checks through
@@ -38,8 +39,12 @@ internal/license/    # core offline license verifier and feature table
 cmd/trstctl-license/ # vendor-side signing/inspection helper
 ```
 
-Hard do-nots: do not import `ee/` from core outside the tagged seam. Do not put
+Package-local rules live in leaf `AGENTS.md`/`CLAUDE.md` pairs under
+`internal/crypto`, `internal/signing`, `internal/protocols`, and
+`internal/query`. PCAS security docs live under `ee/docs/`.
+
+Hard do-nots: do not import `ee/` from core outside the tagged seams. Do not put
 PQC, license-gated, or future patented logic in MPL core. Do not move
 multi-tenancy, the crypto boundary, audit/export rights, or the license verifier
-into `ee/`. Do not add a runtime license gate for FIPS; FIPS remains
-artifact-gated by `make fips-build`.
+into `ee/`. Do not add Redis or another datastore. Do not add a runtime
+license gate for FIPS; FIPS remains artifact-gated by `make fips-build`.

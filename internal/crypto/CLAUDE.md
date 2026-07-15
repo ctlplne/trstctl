@@ -13,7 +13,11 @@ the root `AGENTS.md` contract is canonical.
 - **Nothing outside this package imports `crypto/*`.** `tools/trstctllint` fails CI on any
   stdlib `crypto/*` import elsewhere. The rule covers only stdlib today, so **also keep
   third-party crypto (`golang.org/x/crypto`, `cloudflare/circl`) inside this boundary** —
-  do not introduce them in other packages (CRYPTO-002).
+  do not introduce them in other MPL-core packages (CRYPTO-002). The deliberate
+  exception is the licensed PQC set: per the root PQC/AN-9 boundary, ML-KEM, ML-DSA,
+  and SLH-DSA implementations live under `ee/` (`ee/pqc` imports `cloudflare/circl`
+  directly) and reach the runtime only through the isolated signer attach seam —
+  MPL-core packages still may not.
 - **Add, don't fork.** A new algorithm/scheme is a new backend or registration *here*
   (a CIRCL scheme + known-answer tests for PQC; a backend implementing `Signer`), not a
   parallel crypto path. SSH and X.509 both sign through this boundary — the SSH CA is
