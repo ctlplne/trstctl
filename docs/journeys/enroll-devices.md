@@ -25,9 +25,8 @@ against its rules, and hands back a signed certificate.
   [Getting started](../getting-started.md).
 - A device (or a standard client such as a stock EST client) that speaks EST, SCEP,
   or CMP.
-- For depth on the protocols, certificate-profile control, and failure behavior, see
-  the [Device enrollment with EST guide](../guides/est-enrollment.md), whose concrete
-  flow this journey lifts.
+- For depth on the protocols, certificate-profile control, and failure
+  behavior, see [Enrollment protocols](../features/enrollment-protocols.md).
 
 ## Steps
 

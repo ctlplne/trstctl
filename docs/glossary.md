@@ -321,10 +321,10 @@ party code with the whole system. Plugins run as **WebAssembly (WASM)** in a san
 with only the narrow capabilities they are granted, so a malicious plugin cannot reach
 the database or keys. See [Extensibility & plugins](features/extensibility-plugins.md).
 
-### Non-negotiables (AN-1 … AN-8)
+### Non-negotiables (AN-1 … AN-9)
 
 trstctl's eight architectural rules, designed in from the first commit and enforced
-by a custom build linter: multi-tenant storage (AN-1), event sourcing (AN-2),
+by a custom build linter plus the editions build fence: multi-tenant storage (AN-1), event sourcing (AN-2),
 cryptography behind one boundary (AN-3), an isolated signing process (AN-4),
 idempotency on every mutation (AN-5), an outbox for every external call (AN-6),
 bulkheads and backpressure (AN-7), and memory safety for key material (AN-8). They
@@ -422,3 +422,19 @@ certificates.
 A time-boxed grant to a sensitive target such as a database or host. The session has a
 requester, reason, target, expiry, and audit trail; when it expires, the database role
 is revoked or the SSH certificate is no longer valid.
+
+### MCP (Model Context Protocol)
+
+An open protocol that lets AI assistants and agents call tools exposed by other
+systems. trstctl serves an MCP server whose tools are read-only projections of
+the same REST routes (write tools stay disabled unless explicitly enabled), so
+an AI agent sees exactly what the caller's token may see. Used by
+[Graph, query & AI](features/graph-query-ai.md).
+
+### OPA / Rego
+
+Open Policy Agent is a general-purpose policy engine; Rego is its rule
+language. trstctl's policy gate evaluates Rego modules (default-deny: an
+action is refused unless a rule explicitly allows it) for issuance, deploy,
+and revoke decisions, and the ABAC overlay uses a deny-only Rego module. Used
+by [Policy & governance](features/policy-and-governance.md).

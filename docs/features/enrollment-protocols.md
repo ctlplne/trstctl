@@ -31,8 +31,9 @@ request format through the isolated cryptography path, authenticates the caller,
 hands the [CSR](../glossary.md) to the same issuance path every other feature uses —
 with an `Idempotency-Key` so a retry never mints twice, the [outbox](../glossary.md)
 delivering calls at-least-once, and an immutable audit event for every allow/deny/shed
-decision. Each runs in its own bounded [lane](../glossary.md) and sheds load with HTTP
-503 when saturated, so an enrollment storm can't starve the rest of the system.
+decision. Each runs in its own bounded, bulkheaded [lane](../glossary.md) and sheds
+load with HTTP 503 when saturated, so an enrollment storm can't starve the rest of
+the system.
 
 ### EST (F22) — the modern enrollment protocol
 
@@ -198,13 +199,11 @@ enables.
 - **Events:** `protocol.est.est-enroll`, `protocol.scep.*`, `protocol.cmp.enroll`,
   `mdm.scep_policy.*`, `mdm.scep_challenge.rotated`, and
   `mdm.intune_scep_challenge*`.
-- **EST authoring guide:** [Device enrollment (EST)](../guides/est-enrollment.md).
 
 ## See also
 
 [Issuance & certificate authorities](issuance-and-cas.md) (the shared issuance path) ·
 [ACME & DNS](acme-and-dns.md) (the modern alternative) ·
-[Device enrollment (EST) guide](../guides/est-enrollment.md) ·
 [Current limitations](../limitations.md) ·
 glossary: [EST/SCEP/CMP](../glossary.md), [CSR](../glossary.md), [mTLS](../glossary.md)
 

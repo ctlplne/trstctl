@@ -116,4 +116,3 @@ nav:
       - Connectors: guides/connector-authoring.md
       - Plugins: guides/plugin-authoring.md
       - Certificate profiles: guides/profile-authoring.md
-      - Device enrollment (EST): guides/est-enrollment.md

@@ -1,6 +1,6 @@
 # Authoring certificate profiles
 
-Certificate **profiles** (S8.1) govern what a certificate may be: the allowed key
+Certificate **profiles** govern what a certificate may be: the allowed key
 types and sizes, extended key usages, validity ceiling, name constraints, and which
 enrollment protocols may use the profile. Every issuance path validates a request
 against its bound profile **before anything is signed**, so a non-compliant request is

@@ -1,9 +1,11 @@
 # CLI
 
 `trstctl-cli` is a command-line interface at parity with the REST API, built for
-scripts and CI: machine-readable JSON output and a CI-friendly API token. The
-command set is generated from the API route table, so it stays in lockstep with
-the server.
+scripts and CI: machine-readable JSON output and a CI-friendly API token. The CLI
+itself is table-driven — one row in `internal/cli/command.go` per API operation,
+proven complete by a parity test against the route table. This reference page,
+however, is maintained by hand, not generated; treat `internal/cli/command.go` as
+the ground truth if the two ever disagree.
 
 The running control plane also publishes its full **OpenAPI 3.1** specification at
 `/api/v1/openapi.json` — fetch it to generate clients or import the API into your
@@ -18,6 +20,13 @@ Prefer infrastructure-as-code? trstctl also ships
 [`terraform-provider-trstctl`](terraform-provider.md) for certificate profiles,
 short-lived PKI credentials, and application secrets, backed by the same served
 OpenAPI routes.
+
+Every command documented below is `trstctl-cli`. The `trstctl` server binary is a
+separate program with exactly three admin verbs of its own — `token create` (see
+"Bootstrapping the first API token" below), `connector target ...`, and `ssh ...`
+— for direct calls against a running control plane, using their own `--flag`
+arguments and `TRSTCTL_URL` rather than the `-f <file>` bodies and
+`TRSTCTL_SERVER` used everywhere else on this page.
 
 ## Global flags
 
@@ -42,55 +51,76 @@ usage error — scriptable end to end.
 
 ## Commands
 
-One command per core API operation, plus the local `run` wrapper for developer
-secret injection:
+One row per command group — covering every core API operation — plus the local
+`run` wrapper for developer secret injection (kept in sync by hand, per the note
+above). Each row gives a one-line purpose plus representative verbs, not an
+exhaustive subcommand list:
 
-| Group                             | Commands                                                                                                                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `owners`                          | `create` · `list` · `get` · `update` · `delete` · `attribution`                                                                                                          |
-| `issuers`                         | `create` · `list` · `get`                                                                                                                                                |
-| `ca ceremonies`                   | `start` · `get` · `approve`                                                                                                                                              |
-| `ca authorities`                  | `list` · `create-root` · `import-offline-root` · `create-intermediate` · `offline-intermediate-csr` · `import-offline-intermediate` · `issue-intermediate-csr` · `issue` |
-| `external-cas`                    | `list` · `issue`                                                                                                                                                         |
-| `identities`                      | `create` · `list` · `get` · `transition` · `approve` · `approve issue` · `approve rotate` · `approve revoke`                                                             |
-| `certificates`                    | `ingest` · `list` · `get`                                                                                                                                                |
-| `revocation`                      | `crls` · `rogue-certificates` · `ct-submit`                                                                                                                              |
-| `kubernetes`                      | `csr`                                                                                                                                                                    |
-| `workloads`                       | `attester-trust-sources create` · `attester-trust-sources list` · `attester-trust-sources get` · `attester-trust-sources update` · `attester-trust-sources rotate` · `attester-trust-sources revoke` · `attester-trust-sources delete` · `attested-issuance` |
-| `broker agent-identities`         | `issue`                                                                                                                                                                  |
-| `ephemeral`                       | `issue` · `api-keys issue` · `approve`                                                                                                                                   |
-| `incidents executions`            | `execute` · `list` · `get`                                                                                                                                               |
-| `incidents response-integrations` | `dispatch`                                                                                                                                                               |
-| `incidents fleet-reissuance`      | `start` · `list` · `get` · `pause` · `resume` · `rollback` · `evidence`                                                                                                  |
-| `remediation`                     | `playbooks` · `playbooks run` · `playbook-runs list` · `playbook-runs get`                                                                                               |
-| `itsm servicenow tickets`         | `create`                                                                                                                                                                 |
-| `profiles`                        | `create` · `list` · `get-version`                                                                                                                                        |
-| `access requests`                 | `create` · `list` · `get` · `decide`                                                                                                                                     |
-| `policy`                          | `versions create` · `versions list` · `versions activate` · `versions rollback` · `dry-run`                                                                              |
-| `audit`                           | `events` · `export`                                                                                                                                                      |
-| `compliance`                      | `inventory-report` · `nhi-report` · `report-schedules create` · `report-schedules list` · `evidence-pack`                                                                |
-| `privacy`                         | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog`                                                                           |
-| `graph`                           | `nodes` · `reachable` · `blast-radius` · `query`                                                                                                                         |
-| `risk`                            | `credentials`                                                                                                                                                            |
-| `cbom`                            | `scan` · `assets`                                                                                                                                                        |
-| `agents`                          | `list` · `enroll-token` · `offboard`                                                                                                                                     |
-| `secrets store`                   | `put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete`                                                                                          |
-| `secrets leases`                  | `issue` · `get` · `renew` · `revoke`                                                                                                                                     |
-| `secrets rotations`               | `run`                                                                                                                                                                    |
-| `secrets rotation-schedules`      | `create` · `list` · `run-due`                                                                                                                                            |
-| `secrets syncs`                   | `run` · `targets`                                                                                                                                                       |
-| `secrets scans`                   | `pre-commit install` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `run` · `staged-diff`                                             |
-| `secrets shares`                  | `create` · `redeem`                                                                                                                                                      |
-| `secrets approvals`               | `approve`                                                                                                                                                                |
-| `secrets`                         | `login` · `pki` · `cloud-secret-managers` · `kubernetes-operator` · `workload-injection` · `unvaulted`                                                                     |
-| `transit keys`                    | `create` · `rotate`                                                                                                                                                      |
-| `transit`                         | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`                                                                                                            |
-| `managed-keys`                    | `generate` · `approve` · `rotate` · `revoke` · `zeroize`                                                                                                                 |
-| `code-signing`                    | `sign` · `keyless`                                                                                                                                                       |
-| `scale`                           | `orchestration` · `ha-issuance`                                                                                                                                          |
-| `run`                             | child process with fetched secrets injected into its environment                                                                                                         |
+| Group                              | Purpose (representative verbs)                                                                                                                              |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access`                           | Tenant membership, API tokens, JIT privileged-access sessions, and NHI access-change requests/reviews (`roles` · `oidc-mapping` · `members` · `tokens` · `sessions` · `requests` · `reviews`) |
+| `acme`                             | ACME DNS-01 provider coverage, secret-referenced provider configs, and propagation/CAA/wildcard preflight (`dns-01 providers` · `dns-01 provider-configs` · `dns-01 preflight`) |
+| `agents`                           | In-network agent inventory, enrollment tokens, cert revocation, offboarding (`list` · `enroll-token` · `revoke-cert` · `offboard`)                          |
+| `ai`                               | AI assistant status, question answering, root-cause analysis (`status` · `query` · `rca`)                                                                   |
+| `audit`                            | Query and export the signed audit log (`events` · `export`)                                                                                                 |
+| `breakglass`                       | Ceremony-gated online break-glass issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`) |
+| `broker agent-identities`          | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                         |
+| `ca ceremonies`                    | Start, inspect, and approve m-of-n CA key ceremonies (`start` · `get` · `approve`)                                                                           |
+| `ca authorities`                   | Private CA authority lifecycle — create/import roots and intermediates, rotate, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate` · `rekey` · `cross-sign` · `issue`) |
+| `ca discovery`                     | List public and private CA discovery inventory (`list`)                                                                                                      |
+| `cbom`                             | Cryptographic bill of materials: scan TLS endpoints/configs, list assets (`scan` · `assets`)                                                                 |
+| `certificates`                     | Certificate inventory: ingest, list, get, health, bulk-revoke (`ingest` · `list` · `get` · `health` · `bulk-revoke`)                                         |
+| `code-signing`                     | Sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`sign` · `keyless`)                                                          |
+| `compliance`                       | Compliance/inventory reporting and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules` · `evidence-pack`)                   |
+| `connector target`                 | Deployment connector targets: create, bind, test, deploy, roll back (`create` · `list` · `get` · `update` · `delete` · `bind` · `test` · `deploy` · `rollback`) |
+| `connectors`                       | Connector catalog, outbox circuit-breaker state, delivery receipts (`catalog` · `outbox-circuits` · `deliveries`)                                            |
+| `discovery`                        | Discovery sources, schedules, runs, findings, CT monitoring, drift remediation, continuous monitoring (`sources` · `schedules` · `runs` · `findings` · `ct-monitoring` · `drift-remediation` · `monitoring`) |
+| `editions`                         | Show edition, license, and FIPS posture (`status`)                                                                                                           |
+| `ephemeral`                        | Approval-gated JIT credentials and short-TTL API keys (`issue` · `api-keys issue` · `approve`)                                                               |
+| `external-cas`                     | List and issue through configured upstream CA integrations (`list` · `issue`)                                                                                |
+| `graph`                            | Query the credential graph, reachability, and blast radius (`nodes` · `reachable` · `blast-radius` · `query`)                                                |
+| `identities`                       | Identity lifecycle: create, list, transition, dual-control approvals, bulk-revoke (`create` · `list` · `get` · `transition` · `approve` · `approve issue` · `approve rotate` · `approve revoke` · `bulk-revoke`) |
+| `incidents executions`             | Execute credential-compromise remediation and inspect evidence packs (`execute` · `list` · `get`)                                                            |
+| `incidents response-integrations`  | Dispatch an incident packet to SIEM/SOAR/chat/ITSM integrations (`dispatch`)                                                                                  |
+| `incidents fleet-reissuance`       | Compromised-issuer fleet reissuance: start, list, get, pause, resume, rollback, evidence (`start` · `list` · `get` · `pause` · `resume` · `rollback` · `evidence`) |
+| `issuers`                          | Create, list, get certificate issuers (`create` · `list` · `get`)                                                                                            |
+| `itsm servicenow tickets`          | Queue a ServiceNow ITSM ticket through the outbox (`create`)                                                                                                 |
+| `kubernetes`                       | Native Kubernetes CertificateSigningRequest and trust-bundle distribution support (`csr` · `trust-bundles`)                                                  |
+| `lifecycle`                        | Automated endpoint bindings and rotation-run history (`endpoint-bindings create` · `rotation-runs list` · `rotation-runs get`)                               |
+| `managed-keys`                     | BYOK/HSM-resident key lifecycle: generate, dual-control approve, rotate, revoke, zeroize (`generate` · `approve` · `rotate` · `revoke` · `zeroize`)          |
+| `managed-offering`                 | Managed-offering/provider-plane posture and hosted-tenant provisioning (`status` · `tenants provision`)                                                      |
+| `mcp`                              | List and invoke the MCP tools the server exposes (`tools` · `call`)                                                                                          |
+| `mdm`                              | MDM SCEP policy/challenge status and enrollment-policy management (`scep status` · `scep policies`)                                                          |
+| `nhi`                              | Unified NHI inventory, posture findings, policy compliance, decommissioning (`inventory` · `posture shadow/stale/overprivilege/static-credentials/exposure` · `policy compliance` · `decommission`) |
+| `notifications`                    | Notification channels, routing policies, inbox/dead-letter management (`channels` · `routing-policies` · `list` · `get` · `read` · `requeue`)               |
+| `owners`                           | Owner CRUD and NHI ownership attribution (`create` · `list` · `get` · `update` · `delete` · `attribution`)                                                   |
+| `platform`                         | Show self-hostable run-anywhere distribution posture (`distribution`)                                                                                        |
+| `policy`                           | Author, list, activate, and roll back lifecycle policy versions; dry-run a candidate module (`versions create/list/activate/rollback` · `dry-run`)           |
+| `privacy`                          | Subject erasure, retention runs, archive-erasure attestations, export, personal-data catalog (`erasures` · `retention` · `archives` · `export` · `catalog`)  |
+| `profiles`                         | Certificate profile versions (`create` · `list` · `get-version`)                                                                                             |
+| `remediation`                      | Automated remediation playbooks/runs and owner-driven self-remediation actions (`playbooks` · `playbooks run` · `playbook-runs list/get` · `owner-actions list/accept`) |
+| `revocation`                       | Published CRLs, rogue-certificate findings, CT-log submission (`crls` · `rogue-certificates` · `ct-submit`)                                                  |
+| `risk`                             | Rank credentials by risk score, with blast-radius-aware prioritization (`credentials` · `contextual-priorities`)                                             |
+| `run`                              | Local wrapper: run a child process with fetched secrets injected into its environment                                                                        |
+| `scale`                            | High-volume orchestration and multi-region HA issuance posture (`orchestration` · `ha-issuance`)                                                             |
+| `secrets store`                    | Stored secrets: put, list, import, get, history, recover, update, delete (`put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete`)   |
+| `secrets leases`                   | Dynamic secret leases: issue, get, renew, revoke (`issue` · `get` · `renew` · `revoke`)                                                                      |
+| `secrets rotations`                | Run a rollback-safe static/connector/dynamic-lease secret rotation (`run`)                                                                                   |
+| `secrets rotation-schedules`       | Scheduled dual-phase secret rotations (`create` · `list` · `run-due`)                                                                                        |
+| `secrets syncs`                    | Push a stored secret to an external sync target (`run` · `targets`)                                                                                          |
+| `secrets scans`                    | Gitleaks scanning: CI runs, repository/third-party webhooks, local pre-commit and staged-diff (`run` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `staged-diff` · `pre-commit install`) |
+| `secrets shares`                   | Create and redeem a secret share (`create` · `redeem`)                                                                                                       |
+| `secrets approvals`                | Approve a pending secret-store change (`approve`)                                                                                                            |
+| `secrets`                          | Machine-auth login methods, machine-login sessions, credential exchange, dynamic PKI secrets, cloud/Kubernetes/workload integration status (`auth-methods` · `sessions` · `login` · `pki` · `cloud-secret-managers` · `kubernetes-operator` · `workload-injection` · `unvaulted`) |
+| `setup`                            | Tenant-bound eval protocol profile status and activation (`protocols status` · `protocols activate`)                                                         |
+| `ssh`                              | SSH CA/KRL/attestation workflow status, trust rollout, attested user-cert issuance, revoke, host retirement (`status` · `trust-rollout` · `issue-attested-user` · `revoke` · `retire-host`) |
+| `support`                          | Show enterprise support, SLA, and services posture (`enterprise`)                                                                                            |
+| `transit keys`                     | Create and rotate a tenant-scoped transit key (`create` · `rotate`)                                                                                          |
+| `transit`                          | Encrypt, decrypt, rewrap, HMAC, sign, verify with a transit key (`encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`)                              |
+| `workloads`                        | Workload attester trust sources and attested X.509-SVID issuance (`attester-trust-sources create/list/get/update/rotate/revoke/delete` · `attested-issuance`) |
 
-Plus `version`.
+Plus `version`. `trstctl` (the server binary) additionally serves `token`,
+`connector`, and `ssh` under its own conventions — see the callout above.
 
 ## Run with secrets
 
@@ -425,7 +455,7 @@ trstctl-cli cbom assets
 trstctl-cli agents enroll-token
 printf '{"allowed_identity":"node-a"}\n' | trstctl-cli agents enroll-token -f -
 trstctl-cli agents list
-printf '{"reason":"host decommissioned"}\n' | trstctl-cli --idempotency-key agent-node-a-offboard-1 agents offboard <agent-id> -f -
+printf '{"reason":"host decommissioned"}\n' | trstctl-cli --idempotency-key agent-node-a-offboard-1 agents offboard <agent-id> -f - --force
 
 # Issue a policy-gated short-lived credential for an AI/MCP agent.
 cat > broker-agent.json <<'JSON'
@@ -448,7 +478,7 @@ JSON
 trstctl-cli --idempotency-key lease-issue-1 secrets leases issue -f dynamic-lease.json
 trstctl-cli secrets leases get <lease-id>
 printf '{"extend_seconds":900}' | trstctl-cli --idempotency-key lease-renew-1 secrets leases renew <lease-id> -f -
-trstctl-cli --idempotency-key lease-revoke-1 secrets leases revoke <lease-id>
+trstctl-cli --idempotency-key lease-revoke-1 secrets leases revoke <lease-id> --force
 
 # Generate and retire an HSM/KMS-backed managed key after managed_keys is enabled.
 cat > managed-key.json <<'JSON'
@@ -457,10 +487,10 @@ JSON
 trstctl-cli --idempotency-key kms-key-1 managed-keys generate -f managed-key.json
 printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-a managed-keys approve -f -
 printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-b managed-keys approve -f -
-printf '{"key_id":"<key-id>"}' | trstctl-cli --idempotency-key kms-key-1-rotate managed-keys rotate -f -
+printf '{"key_id":"<key-id>"}' | trstctl-cli --idempotency-key kms-key-1-rotate managed-keys rotate -f - --force
 printf '{"key_id":"<rotated-key-id>","action":"zeroize"}' | trstctl-cli --idempotency-key kms-key-1-zeroize-approve-a managed-keys approve -f -
 printf '{"key_id":"<rotated-key-id>","action":"zeroize"}' | trstctl-cli --idempotency-key kms-key-1-zeroize-approve-b managed-keys approve -f -
-printf '{"key_id":"<rotated-key-id>"}' | trstctl-cli --idempotency-key kms-key-1-zeroize managed-keys zeroize -f -
+printf '{"key_id":"<rotated-key-id>"}' | trstctl-cli --idempotency-key kms-key-1-zeroize managed-keys zeroize -f - --force
 
 # Run rollback-safe static, connector-backed, or dynamic-lease rotation.
 cat > static-rotation.json <<'JSON'

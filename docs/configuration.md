@@ -20,6 +20,7 @@ trstctl -check-config
 | `TRSTCTL_SERVER_TLS_CERT_FILE` | — | Server certificate chain (PEM); **required** when `mode=file`. |
 | `TRSTCTL_SERVER_TLS_KEY_FILE` | — | Server private key (PEM); **required** when `mode=file`. |
 | `TRSTCTL_DEV_ALLOW_PLAINTEXT` | `false` | Explicit local-dev override required when `TRSTCTL_SERVER_TLS_MODE=disabled`; `TRSTCTL_SERVER_ADDR` must also bind loopback only. |
+| `TRSTCTL_CORS_ALLOWED_ORIGINS` | empty (same-origin only) | Comma-separated exact browser Origins (scheme+host+port, e.g. `https://console.example.com`) allowed to make cross-origin, credentialed requests to the API (SEC-003). Empty means same-origin only: no `Access-Control-Allow-Origin` is emitted, so a cross-origin XHR is blocked by the browser. `*` is deliberately not honored for a credentialed API. |
 | `TRSTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
 | `TRSTCTL_LOG_FORMAT` | `json` | `json` or `text`. |
 
@@ -90,11 +91,15 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 | `TRSTCTL_POSTGRES_DSN` | — | Connection string; **required** when mode is `external`. |
 | `TRSTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory for the **bundled** datastore; eval data persists here across restarts. |
 | `TRSTCTL_POSTGRES_PORT` | `5432` | Loopback port for the **bundled** datastore (override if 5432 is taken). |
+| `TRSTCTL_POSTGRES_STATEMENT_TIMEOUT` | `60s` | Server-side deadline applied to every statement (OPS-TIMEOUTS-001), so a stuck query fails closed instead of holding a connection indefinitely. DR rebuild/restore transactions widen this explicitly. |
+| `TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT` | `10s` | How long a request may wait for a pooled PostgreSQL connection before failing closed with a structured `503`. |
 | `TRSTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream for single-node eval) or `external` (NATS cluster; recommended for production). |
 | `TRSTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
 | `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore. |
 | `TRSTCTL_NATS_REPLICAS` | `3` in external, `1` embedded | Required JetStream replicas for the source-of-truth event stream. External startup/readiness fail if NATS cannot honor the requested count. |
 | `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA` | `false` | Eval-only opt-in that permits `TRSTCTL_NATS_REPLICAS=1` in external mode. Do not enable it for production HA/RPO. |
+| `TRSTCTL_NATS_SYNC_INTERVAL` | `1s` | How often the **embedded** JetStream fsyncs the stream to stable storage (RESIL-001). nats-server's own default is ~2 minutes; trstctl tightens it so a single-node power loss loses at most ~1s of acked events. Only affects embedded mode; an external cluster manages its own durability. |
+| `TRSTCTL_NATS_SYNC_ALWAYS` | `false` | Fsyncs the **embedded** JetStream on every append (`O_SYNC`) instead of on the interval, for a near-zero single-node RPO at a throughput cost. Only affects embedded mode. |
 
 ### External datastores
 
@@ -116,6 +121,32 @@ server, and `/readyz` reports degraded if the observed stream later has fewer
 replicas than configured. The Docker Compose eval stack uses the same external code
 path but explicitly sets `TRSTCTL_NATS_REPLICAS=1` and
 `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true`; keep that opt-in out of production.
+
+### Schema migrations
+
+trstctl embeds its PostgreSQL schema as versioned SQL migrations and applies them
+itself; there is no separate migration binary.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_MIGRATE_AUTO` | `true` | Applies pending schema migrations automatically on startup, serialized across replicas by the same PostgreSQL advisory lock leader election uses. Set `false` for a production posture where migrations are an explicit, backed-up step: a control plane that finds pending migrations then fails fast with guidance instead of changing the schema. |
+
+`trstctl --migrate` applies pending migrations under the advisory lock and exits;
+`trstctl --migrate-status` lists the pending plan (dry run) and exits. See
+[Database migrations & upgrades](migrations.md) for the full upgrade/rollback runbook.
+
+### High availability (leader election and snapshots)
+
+trstctl is safe to run as more than one control-plane replica against one shared
+external PostgreSQL and NATS (RESIL-002 / RESIL-004). With the defaults, a single
+replica behaves exactly as before; adding replicas needs no extra configuration
+beyond pointing them at the same datastores.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_HA_LEADER_ELECTION` | `true` (unset defaults on) | Gates the continuous background workers — the projector tailer, outbox dispatcher, GC sweeps, CRL scheduler, audit-retention worker, and snapshot worker — behind a PostgreSQL session-scoped advisory lock so exactly one replica runs them; every replica still serves reads. Leave it on for any multi-replica deployment: turning it off with more than one replica reintroduces double-projection. The leader frees the lock automatically on crash, so a follower fails over with no lease tuning. |
+| `TRSTCTL_HA_LEADER_CAMPAIGN_INTERVAL` | `3s` | How often a follower retries to acquire leadership, and how often the leader re-checks it still holds the lock. Shorter gives faster failover at the cost of more try-lock probes. |
+| `TRSTCTL_HA_SNAPSHOT_INTERVAL` | `5m` | How often the leader persists a read-model snapshot at the current projection checkpoint (SPINE-007), so a later cold boot / DR restore replays only the tail instead of the full event log. Set `0` to disable periodic snapshots (boot then does a full checkpoint catch-up; the log stays the source of truth). |
 
 ### Cross-cluster federation
 
@@ -154,9 +185,23 @@ How far ahead of expiry trstctl renews and alerts. Values are Go durations.
 
 The 24 native deployment connectors and 14 external-CA drivers are compiled into
 `trstctl`, but start deny-by-default: the operator chooses the exact integrations to
-construct in the JSON config file. These structured bindings are not flattened
-into environment variables because they contain tenant/provider associations where a
-parallel-list typo could cross a security boundary.
+construct. The connector allowlist and its shared network policy — which native
+connectors may be constructed, the shared HTTP timeout, private-CIDR grants, and the
+loopback-only insecure-HTTP escape hatch — are flattened into the environment
+variables below.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_CONNECTORS_ENABLED` | unset (none) | Comma-separated allowlist of native connector names to construct, drawn from the closed set compiled into the binary (`nginx`, `apache`, `caddy`, `envoy`, `iis`, `haproxy`, `f5`, `netscaler`, `a10`, `kemp`, `cisco`, `fortigate`, `paloalto`, `postfix`, `traefik`, `aws-acm`, `azure-keyvault`, `gcp-certificate-manager`, `java-keystore`, `postgresql`, `mysql`, `rabbitmq`, `elasticsearch`, `tomcat`). Names left out of the list construct no target. |
+| `TRSTCTL_CONNECTORS_HTTP_TIMEOUT` | `15s` | HTTP timeout applied to connector calls, for example the `right_size` PATCH/GET cycle. Must be a positive Go duration. |
+| `TRSTCTL_CONNECTORS_ALLOW_PRIVATE_CIDRS` | unset | Comma-separated CIDRs explicitly granted to connector HTTP endpoints that resolve to a private address. |
+| `TRSTCTL_CONNECTORS_ALLOW_INSECURE_HTTP` | `false` | Loopback-only development escape hatch permitting an `http://` connector endpoint (for example a local `right_size` emulator); it cannot authorize plaintext to a non-loopback host. |
+
+The **tenant-bound structured bindings** — `connectors.local_profiles` (local
+execution profiles), `connectors.right_size` (tenant-to-endpoint bindings), and every
+`external_cas` entry — remain JSON/YAML config-file only, because they carry
+tenant/provider associations where a parallel-list typo could cross a security
+boundary.
 
 A local connector needs both an enabled driver and an operator-owned execution
 profile. Tenant target JSON can then select that profile, but cannot invent a command
@@ -553,7 +598,10 @@ dropping a user into the wrong tenant.
 | `TRSTCTL_AUTH_OIDC_ISSUER` | unset | Expected OIDC issuer. |
 | `TRSTCTL_AUTH_OIDC_AUTHORIZATION_RESPONSE_ISS_PARAMETER_SUPPORTED` | `false` | Requires the callback `iss` parameter to match the issuer when the IdP advertises RFC 9207 support. |
 | `TRSTCTL_AUTH_OIDC_CLIENT_ID` | unset | Expected OIDC audience / client id. |
+| `TRSTCTL_AUTH_OIDC_CLIENT_SECRET` | unset | Inline confidential-client secret for the code→token exchange. Required for a confidential client unless the tenant-scoped credential-store reference below is used instead; a public/PKCE client may leave it empty. |
 | `TRSTCTL_AUTH_OIDC_CLIENT_SECRET_TENANT` / `TRSTCTL_AUTH_OIDC_CLIENT_SECRET_REF` | unset | Reads a confidential-client secret from the encrypted tenant-scoped credential store at `(tenant, auth.oidc, ref, client_secret)`. |
+| `TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT` | unset | The IdP's authorization endpoint the browser is redirected to. Required. |
+| `TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT` | unset | The IdP's token endpoint the callback exchanges the authorization code at. Required. |
 | `TRSTCTL_AUTH_OIDC_REDIRECT_URI` | unset | External callback URL, usually `https://trstctl.example.com/auth/callback`. |
 | `TRSTCTL_AUTH_OIDC_JWKS_FILE` / `TRSTCTL_AUTH_OIDC_JWKS_JSON` | unset | IdP signing keys used for offline id_token verification. |
 | `TRSTCTL_AUTH_SAML_ENABLED` | `false` | Enables the served SAML 2.0 SP. |
@@ -842,13 +890,51 @@ up** (a lost KEK means sealed credentials cannot be opened) with the same care
 described in the [disaster-recovery runbook](disaster-recovery.md). This
 credential-store KEK is still a local key file. Do not confuse it with Helm
 `externalKMS`, which applies to the signer's CA key-store DEK wrapping described in
-[Signer topology & CA custody](#signer-topology--ca-custody).
+[Signer topology and CA custody](#signer-topology-and-ca-custody).
 On reload, local KEK, auth-secret, and session-secret files are accepted only if
 they are regular files, not symlinks, owned by the process user with
 `0600`-or-stricter permissions or mounted as root-owned Kubernetes Secret files
 readable by the pod's `fsGroup`, and all parent directories reject group/world
 writes. Unsafe restored files fail startup instead of silently weakening key
 custody.
+
+## Backup
+
+Event-log backups (`trstctl --backup`) are always integrity-protected (a SHA-256
+trailer, plus an HMAC derived from `TRSTCTL_AUDIT_SIGNING_KEY_FILE` when one is
+configured) and need no extra configuration. A **full** backup
+(`trstctl --full-backup-dir`) additionally captures operational secrets — the audit
+signing key, the signer authorization secret, and the sealed signer key store — so
+production full backups require an operator-held encryption key.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` | unset | Raw key-material file (normally 32 random bytes, never itself copied into the backup) used to AES-256-GCM-encrypt every sensitive full-backup artifact. Required for `--full-backup-dir` unless the override below is set. |
+| `TRSTCTL_BACKUP_ALLOW_UNENCRYPTED` | `false` | Break-glass override that permits an unencrypted full backup for a lab/export case. The choice is recorded in the backup manifest so an auditor can see the locked box was not used. |
+
+See the [disaster-recovery runbook](disaster-recovery.md) for the full backup/restore
+procedure, including what each artifact covers and how to restore a signer host.
+
+## License
+
+trstctl ships as a single open-core binary. Enterprise-tier features (managed keys,
+PCAS, HA support, FIPS artifact posture, remediation, PQC, governance, agent
+delegation, reconciliation, and verifiable decommission — the full Enterprise row in
+[Editions](editions.md)) unlock through an offline, no-phone-home license check: the
+file is verified locally against public keys baked into the binary at release time.
+No configured file means Community edition; a corrupt or untrusted file fails startup
+loudly; an expired file still loads and walks a grace ladder so licensed read paths
+stay observable.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_LICENSE_FILE` | unset (Community edition) | Path to the signed license file (Ed25519-verified offline, the AN-9 attach seam). |
+
+The related `TRSTCTL_PCAS_*` variable surface (about two dozen settings covering
+delegation, recovery, federation, KEM, checkpoints, monitors, and retirement for
+patent-covered credential algorithm succession) is off by default and gated by this
+same license check; it is documented together with the rest of the PCAS material in
+[PCAS operations](ops/pcas-operations.md) rather than duplicated here.
 
 ## Conditional managed-key adapters (six served providers)
 
@@ -1027,7 +1113,7 @@ For an externally deployed signer, mount the same file-backed provider descripto
 and pass it with `--managed-keys-config` plus the signed `--license`; never copy a
 credential into argv or an inline JSON field.
 
-## Signer topology & CA custody
+## Signer topology and CA custody
 
 The private-key operations run in a separate, sacred process, so the CA keys never
 live in the API process. Its issuing **CA key is persisted, sealed at rest** (R3.2)
@@ -1038,6 +1124,7 @@ two ways:
 | --- | --- | --- |
 | `TRSTCTL_SIGNER_MODE` | `child` | `child`: the control plane supervises `trstctl-signer` as a child process (single binary). `external`: it connects to a **separately deployed** signer service over a UDS (`TRSTCTL_SIGNER_SOCKET`) or, across nodes, mTLS (`TRSTCTL_SIGNER_MTLS_ADDRESS`). |
 | `TRSTCTL_SIGNER_SOCKET` | — | The signer's Unix-domain socket. In `external` mode set **either** this **or** `TRSTCTL_SIGNER_MTLS_ADDRESS`; in `child` mode a temp socket is used if unset. |
+| `TRSTCTL_SIGNER_CALL_TIMEOUT` | `10s` | Bounds every signer RPC that lacks a tighter caller deadline (OPS-TIMEOUTS-001), so a hung signer fails closed instead of stalling issuance. Accepts `1s`..`2m`. |
 | `TRSTCTL_SIGNER_KEY_STORE_DIR` | `data/signer/keys` | Directory where the signer **seals its keys at rest** (child mode passes it to the signer; in external mode set it on the signer service). |
 | `TRSTCTL_SIGNER_AUTH_SECRET_FILE` | `data/signer/sign-auth.bin` | Signer-side content-authorization verifier secret. The signer uses it to verify dual-control tokens before using privileged handles. Do not mount it into the control plane in production. |
 | `TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND` | — | Independent approval-token command used by the control plane in production. The command receives sign-intent JSON on stdin and returns the raw token as base64 on stdout. |
@@ -1045,7 +1132,7 @@ two ways:
 | `TRSTCTL_SIGNER_ALLOW_INSECURE_DEV_NONLINUX` | `false` | Local-development-only escape hatch for running child signer mode on non-Linux hosts. Without it, `trstctl-signer` refuses startup when process hardening, UDS peer UID checks, and locked memory are unavailable. Do not set it in production. |
 | `TRSTCTL_SIGNER_MTLS_ADDRESS` | — | `host:port` of a separately-hosted signer's **mTLS** listener. When set (in `external` mode), the control plane reaches the signer over TLS 1.3 mutual auth with **both-ways certificate pinning** instead of a UDS. Mutually exclusive with `TRSTCTL_SIGNER_SOCKET`. |
 | `TRSTCTL_SIGNER_MTLS_SERVER_NAME` | — | The signer certificate's expected SAN, verified by the control plane. **Required** when `TRSTCTL_SIGNER_MTLS_ADDRESS` is set. |
-| `TRSTCTL_SIGNER_MTLS_CERT_FILE` / `…_KEY_FILE` | — | The control plane's own **client** certificate and key (PEM) presented on the mTLS channel. Required with `…_MTLS_ADDRESS`. |
+| `TRSTCTL_SIGNER_MTLS_CERT_FILE` / `TRSTCTL_SIGNER_MTLS_KEY_FILE` | — | The control plane's own **client** certificate and key (PEM) presented on the mTLS channel. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_SIGNER_MTLS_PEER_CA_FILE` | — | PEM CA bundle anchoring the **signer's** certificate. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_SIGNER_MTLS_PEER_PIN` | — | Hex SHA-256 of the **signer** certificate's public key, pinned by the control plane. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_CA_CERT_FILE` | `data/ca/issuing-ca.crt` | Where the issuing CA's self-signed certificate is persisted, so the control plane **reuses the same CA cert** across restarts. |
@@ -1161,7 +1248,7 @@ the individual toggles below.
 | --- | --- | --- |
 | `TRSTCTL_PROTOCOLS_PROFILE` | — | Set to `eval` only for the guided evaluation profile. Empty keeps the exact individual, default-off production toggles. |
 | `TRSTCTL_PROTOCOLS_EVAL_TENANT_ID` | — | Required with `PROFILE=eval`; binds every eval responder and its activation event to one tenant. |
-| `TRSTCTL_PROTOCOLS_EVAL_SPIFFE_TRUST_DOMAIN` | `trstctl.local` | SPIFFE trust domain used by the eval profile. The explicit SPIFFE setting below remains the production control. |
+| `TRSTCTL_PROTOCOLS_EVAL_SPIFFE_TRUST_DOMAIN` | `eval.trstctl.local` | SPIFFE trust domain used by the eval profile. The explicit SPIFFE setting below remains the production control. |
 | `TRSTCTL_PROTOCOLS_ACME_ENABLED` / `…_TENANT_ID` | `false` / — | Serve ACME at `/directory` + `/acme/...` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED` | `false` | Require RFC 8555 External Account Binding on ACME `newAccount`; `/directory` advertises `externalAccountRequired`. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID` | — | Public EAB `kid` accepted by the ACME server. The single env shortcut configures one key; JSON config can carry multiple `protocols.acme_eab.keys`. |
@@ -1181,7 +1268,9 @@ the individual toggles below.
 | `TRSTCTL_PROTOCOLS_EST_ENABLED` / `…_TENANT_ID` | `false` / — | Serve EST at `/.well-known/est/...` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_SCEP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve SCEP at `/scep` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_CMP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve CMP at `/cmp` for the named tenant. |
+| `TRSTCTL_PROTOCOLS_TSA_ENABLED` / `…_TENANT_ID` | `false` / — | Serve RFC 3161 timestamp evidence for the named tenant through the signer-held timestamping key, instead of minting inventory certificates. |
 | `TRSTCTL_PROTOCOLS_RA_KEY_FILE` | `data/protocols/ra-transport.key` | Sealed SCEP/CMP RSA transport identity. Put this on shared persistent storage in HA so replicas use the same cached-client RA material. |
+| `TRSTCTL_PROTOCOLS_TSA_CERT_FILE` | `data/protocols/tsa.crt` | Where the TSA's timestamping certificate is persisted, so it stays stable across restarts and is shared across HA replicas. Required when TSA is enabled. |
 | `TRSTCTL_PROTOCOLS_KMIP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the KMIP mTLS listener for the named tenant. The current served profile supports AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy. |
 | `TRSTCTL_PROTOCOLS_KMIP_ADDR` | `:5696` | TCP listen address for KMIP. |
 | `TRSTCTL_PROTOCOLS_KMIP_CERT_FILE` | — | PEM server certificate chain for the KMIP listener. Required when KMIP is enabled. |
@@ -1192,17 +1281,39 @@ the individual toggles below.
 | `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN` | — | SPIFFE trust domain, for example `example.org`. Required when SPIFFE is enabled. |
 | `TRSTCTL_PROTOCOLS_SSH_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SSH CA JSON endpoints and KRL for the named tenant. |
 
+## Agent mTLS channel
+
+The served agent gRPC channel is a real listener the control plane exposes for
+steady-state agent heartbeat, renewal, and command fan-out (WIRE-004 / OPS-005) —
+separate from the one-shot bootstrap enrollment path, which always works. It is
+**off by default**; enabling it without a configured signer (the agent CA is
+custodied there) is a startup error.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_AGENT_CHANNEL_ENABLED` | `false` | Mounts the served agent mTLS gRPC channel on `TRSTCTL_AGENT_CHANNEL_ADDR`. Requires a configured signer. |
+| `TRSTCTL_AGENT_CHANNEL_ADDR` | `:9443` | The agent channel's mTLS gRPC listen address. |
+| `TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR` | `:9444` | Dedicated embedded-client HTTPS renewal listener. Served only when the channel is enabled, uses the same signer-custodied agent CA, and requires a verified agent client certificate. |
+| `TRSTCTL_AGENT_CHANNEL_SERVER_NAME` | empty (loopback SANs only) | DNS SAN the channel's server certificate carries — the name agents pin/verify as their `--server-name`. Loopback SANs are always added so a co-located agent can verify a `localhost` connection. |
+| `TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE` | `data/ca/agent-ca.crt` | Where the agent CA certificate is persisted, so the agent CA is stable across restarts (an agent's pinned CA does not change on restart). |
+| `TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL` | `30s` | Next-beat hint returned to agents. |
+
+See [Getting started](getting-started.md) for the blank Compose stack's published
+agent-channel port and the local CA-pinning steps to reach it from an agent CLI.
+
 ## WASM plugins
 
 The WASM plugin surface is off by default. When enabled, the binary admits only signed
 modules whose detached Ed25519 signature verifies against the configured trusted keys.
-CA plugins become external CA entries of type `wasm-ca`; connector plugins handle
-matching deployment work from the outbox.
+CA plugins become external CA entries of type `wasm-ca`; DNS-provider plugins become a
+served ACME DNS-01 provider that tenant provider configs can select; connector plugins
+handle matching deployment work from the outbox.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_PLUGINS_ENABLED` | `false` | Load signed WASM plugins at startup. |
 | `TRSTCTL_PLUGINS_CA_DIR` | — | Directory containing signed CA plugin pairs: `<name>.wasm` and `<name>.wasm.sig`. |
+| `TRSTCTL_PLUGINS_DNS_DIR` | — | Directory containing signed DNS-provider plugin pairs. Each module becomes a served ACME DNS-01 provider that tenant provider configs can select. |
 | `TRSTCTL_PLUGINS_CONNECTOR_DIR` | — | Directory containing signed connector plugin pairs. |
 | `TRSTCTL_PLUGINS_DIR` | — | Legacy connector-plugin directory alias. Ignored when `TRSTCTL_PLUGINS_CONNECTOR_DIR` is set. |
 | `TRSTCTL_PLUGINS_TRUSTED_KEY_FILES` | — | Comma-separated PEM Ed25519 public keys trusted to sign plugin artifacts. Required when plugins are enabled. |
