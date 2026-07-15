@@ -82,6 +82,7 @@ nav:
   - Operations & resilience: operations.md
   - CLI: cli.md
   - Telemetry: telemetry.md
+  - Privacy data catalog: privacy-data-catalog.md
   - Troubleshooting: troubleshooting.md
   - Uninstall: uninstall.md
   - Runbooks:
