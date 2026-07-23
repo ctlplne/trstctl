@@ -461,7 +461,7 @@
           <h4>Click and inspect</h4>
           <ol>
             <li>Click <strong>Dashboard</strong> in the left navigation.</li>
-            <li>Notice the left rail has three parts: a <strong>Module</strong> switcher (Certificates &amp; PKI, Secrets, SSH, Signing, Fleet) that scopes the middle band to one product; the always-present <strong>global</strong> bands (Inventory, Detect &amp; respond, Govern &amp; administer) for cross-product surfaces like Identities, Credential risk, Credential graph, and Audit; and the <strong>Needs action</strong> worklists. Switching modules changes only the scoped band—the global bands never move.</li>
+            <li>Notice the shell has two parts: an icon rail of <strong>spaces</strong> at the far edge (Home, Certificates &amp; PKI, Secrets, Workload &amp; SSH, Posture &amp; response, Platform), and a sidebar scoped to whichever space is active. <strong>Home</strong> carries the Dashboard, Journeys, and the <strong>Needs action</strong> worklists; each space owns its own grouped rows (for example Posture &amp; response holds the Detect &amp; respond group). Picking a space navigates to it — the URL always decides which space is lit.</li>
             <li>Read the four top counters: <strong>Certificates</strong>, <strong>Identities (NHI)</strong>, <strong>Secrets</strong>, and <strong>Agents online</strong>. The action tiles below (<strong>Expiring ≤7d</strong>, <strong>High-risk</strong>, <strong>Open incidents</strong>, <strong>Future-ready</strong>) are wired to live tenant data.</li>
             <li>In <strong>Non-human identity inventory</strong>, compare certificates, tokens, and API keys. One control plane models several credential types.</li>
             <li>Scroll through <strong>Alert center</strong>, <strong>Issuance rate</strong>, <strong>Renewal jobs</strong>, <strong>Expiration timeline</strong>, and <strong>Algorithm mix</strong>.</li>
@@ -499,7 +499,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Under <strong>Detect &amp; respond</strong>, click <strong>Discovery</strong>.</li>
+            <li>In the <strong>Posture &amp; response</strong> space, click <strong>Discovery</strong>.</li>
             <li>Read the <strong>Shadow inventory</strong> counters: findings, high risk, and finding types.</li>
             <li>On the <strong>Findings</strong> tab, inspect the demo findings. A finding is something trstctl observed but does not yet fully manage.</li>
             <li>Open <strong>Sources</strong>. Look for network, manual, CT-log, cloud certificate, cloud secret, and drift sources.</li>
@@ -518,7 +518,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Module</strong> switcher select <strong>Certificates &amp; PKI</strong>, then click <strong>Certificates</strong>.</li>
+            <li>In the space rail select <strong>Certificates &amp; PKI</strong> — it lands on <strong>Certificates</strong>.</li>
             <li>Stay on <strong>Inventory</strong>. Use the search box to search for <code>demo.trstctl.local</code>.</li>
             <li>Open one row to inspect subject, issuer, owner, fingerprint, algorithm, validity, source, and deployment location.</li>
             <li>Click <strong>Estate health</strong> to view expiry and inventory posture across the tenant.</li>
@@ -539,7 +539,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Click <strong>Identities</strong>.</li>
+            <li>In the <strong>Workload &amp; SSH</strong> space, click <strong>Identities</strong>.</li>
             <li>Read the <strong>Issuance pipeline</strong>: issued, deployed, and revoked are lifecycle states.</li>
             <li>Find a demo identity such as <code>payments-api.demo.trstctl.local</code> or <code>iot-est-gateway.demo.trstctl.local</code>.</li>
             <li>Click <strong>View details</strong>. Inspect owner, issuer, status, attributes, and credential relationships.</li>
@@ -558,7 +558,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Certificates &amp; PKI</strong> module, click <strong>Protocols</strong>.</li>
+            <li>In the <strong>Certificates &amp; PKI</strong> space, click <strong>Protocols</strong>.</li>
             <li>Read <strong>Protocol responder status</strong> and the fail-closed explanation.</li>
             <li>Scroll through the register. The evaluation profile activates <strong>ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE</strong>.</li>
             <li>For ACME, connect “account + challenge + profile” to automated web-service certificates.</li>
@@ -579,7 +579,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Module</strong> switcher select <strong>Secrets</strong>, then click <strong>Secrets</strong>.</li>
+            <li>In the space rail select <strong>Secrets</strong> — it lands on the secrets workspace.</li>
             <li>On <strong>Store</strong>, expand the demo folders. Notice familiar path-like organization such as <code>demo/github/actions</code>.</li>
             <li>Click <strong>Access</strong>: the machine-auth console. Grant a workload a scoped credential (reveal-once, then a list+revoke ledger), review the configured auth methods with their per-tenant disable overlay, and read the event-sourced issued-session ledger. Read-only during the tour.</li>
             <li>Click <strong>Sharing</strong>. One-time shares expose material once and then expire.</li>
@@ -600,7 +600,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Under <strong>Detect &amp; respond</strong>, click <strong>Crypto posture</strong>.</li>
+            <li>In the <strong>Posture &amp; response</strong> space, click <strong>Crypto posture</strong>.</li>
             <li>Read <strong>Certificate Transparency monitoring</strong>. CT logs reveal publicly issued certificates, including ones trstctl did not request.</li>
             <li>Read <strong>Drift detection</strong>. Drift means the deployed credential or file state no longer matches intent.</li>
             <li>Find <strong>CBOM and cryptographic observability</strong>. CBOM means “cryptographic bill of materials”: algorithms, key sizes, and TLS posture.</li>
@@ -619,7 +619,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Under <strong>Detect &amp; respond</strong>, click <strong>Credential risk</strong>.</li>
+            <li>In the <strong>Posture &amp; response</strong> space, click <strong>Credential risk</strong>.</li>
             <li>Read the summary: credentials scored, critical, high, orphaned, and average score.</li>
             <li>In <strong>Contextual priorities</strong>, compare the base score with contextual score. Blast radius can make a moderate credential urgent.</li>
             <li>Find the demo entries such as <code>old-vpn.demo.trstctl.local:443</code> and <code>ci/buildkite/release-token</code>.</li>
@@ -659,7 +659,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Under <strong>Detect &amp; respond</strong>, click <strong>Approvals</strong>.</li>
+            <li>In the <strong>Platform</strong> space under <strong>Govern &amp; administer</strong>, click <strong>Approvals</strong>.</li>
             <li>Inspect pending issue/rotate/revoke decisions. Do <strong>not</strong> click an approve button during the read-only tour.</li>
             <li>Click an <strong>Audit trail</strong> link for a request.</li>
             <li>Next click <strong>Policy</strong>. Read <strong>Enforcement path</strong>: the backend evaluates policy before it emits the state-change event.</li>
@@ -680,7 +680,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Click <strong>Incidents</strong>.</li>
+            <li>In the <strong>Posture &amp; response</strong> space, click <strong>Incidents</strong>.</li>
             <li>Read <strong>Credential compromise execution</strong>. The intended order is: scope, issue replacement, deploy replacement, then revoke the old credential.</li>
             <li>Select an affected identity if the field is populated, then click <strong>Preview blast radius</strong>. Do not click <strong>Execute incident</strong>.</li>
             <li>Review <strong>Automated remediation playbooks</strong>: revoke, rotate, and right-size.</li>
@@ -700,7 +700,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Under <strong>Govern &amp; administer</strong>, click <strong>Deployment connectors</strong>.</li>
+            <li>In the <strong>Platform</strong> space under <strong>Infrastructure</strong>, click <strong>Deployment connectors</strong>.</li>
             <li>Read the four concepts: target setup, identity binding, action, and receipt evidence.</li>
             <li>Scroll through <strong>Connector registry</strong>. The shipped registry covers infrastructure targets such as web servers, proxies, clouds, Kubernetes, and secret platforms.</li>
             <li>Inspect <strong>Recent delivery receipts</strong>. A failed demo receipt is still useful evidence: it proves an attempted external delivery and its error path.</li>
@@ -720,7 +720,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Under <strong>Govern &amp; administer</strong>, click <strong>Access administration</strong>. Inspect the role catalog, tenant members, OIDC mapping, API-token metadata, and privileged sessions. Do not mint or offboard during the tour. (The old <code>/platform</code> tabs are three rail routes now; historical links redirect.)</li>
+            <li>In the <strong>Platform</strong> space under <strong>Administration</strong>, click <strong>Access administration</strong>. Inspect the role catalog, tenant members, OIDC mapping, API-token metadata, and privileged sessions. Do not mint or offboard during the tour. (The old <code>/platform</code> tabs are three sidebar routes now; historical links redirect.)</li>
             <li>Click <strong>System posture</strong>, then <strong>Editions &amp; license</strong>. Licensing and commercial-edition rows live on their own route, separate from operational access and system posture.</li>
             <li>Read <strong>Packaging</strong>: credentials and rotations are not billing units.</li>
             <li>Read <strong>Tenant boundary</strong>, <strong>Transport</strong>, and <strong>Auth session</strong>.</li>

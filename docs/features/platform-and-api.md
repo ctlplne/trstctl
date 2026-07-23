@@ -78,10 +78,10 @@ owned by the API handler. No separate static server is required. **Served.** The
 `index.html` references the real Vite bundle, and tests fail if a clean build regresses to
 the placeholder.
 
-The console is organized as a **module switcher over shared global planes** — the
-*Certificates & PKI*, *Secrets*, *SSH*, *Signing*, and *Fleet* modules scope the middle
-rail band, while the global *Inventory*, *Detect & respond*, and *Govern & administer*
-bands stay visible under every module — and every served capability
+The console is organized as a **space rail over scoped sidebars** — the
+*Certificates & PKI*, *Secrets*, *Workload & SSH*, *Posture & response*, and
+*Platform* spaces each own their product surfaces, with Home carrying the
+cross-space dashboard, journeys, and worklists — and every served capability
 across these feature pages has a screen behind it: the certificate command center, the
 secrets workspace, non-human-identity governance, discovery, the PQC posture gauge, the
 compliance and audit surfaces, the **privacy** (`/privacy`) governance console, and the

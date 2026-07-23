@@ -12,18 +12,28 @@ related capability is API-only today.
 
 ## Navigation
 
-The sidebar is task-first: Dashboard and Journeys sit above everything else, and a
-few quick tasks (for example *Expiring ≤30 days*) deep-link into a pre-filtered
-worklist. A module switcher then scopes one band to a single product —
-*Certificates & PKI* (certificates, request, profiles, CA hierarchy, protocols),
-*Secrets*, *SSH*, *Signing*, and *Fleet* (agents, workloads) — while everything else
-stays visible regardless of the active module, because it is trstctl's cross-domain
-moat (one identity graph, one blast-radius view, one signed audit stream): Inventory
-(identities, owners), Detect & respond (discovery, risk, posture, graph, incidents,
-approvals, operations, notifications), and Govern & administer (policy, audit,
-privacy, connectors, integrate, API explorer, platform administration, the
-assistant). A module's band can still open Audit (this module) for a scoped lens on
-that stream. Every nav row is gated by the same RBAC the API enforces, and every
+The console is a unified shell: an icon rail of five spaces at the far edge, and a
+sidebar scoped to the active space. *Home* is the cross-space plane — Dashboard and
+Journeys sit above a few quick tasks (for example *Expiring ≤30 days*) that
+deep-link into a pre-filtered worklist. Each space owns every surface of one
+concern: *Certificates & PKI* (certificates, request, profiles, CA hierarchy,
+protocols, code signing), *Secrets* (the secrets workspace), *Workload & SSH*
+(workloads, identities, SSH trust), *Posture & response* (discovery, crypto
+posture, risk, credential graph, incidents, operations — the Detect & respond
+group), and *Platform* (policy, approvals, audit, owners, privacy under Govern &
+administer; agents, connectors, notifications under Infrastructure; integrations
+and the API explorer; access, system posture, editions, and the assistant under
+Administration).
+
+The mechanism: the URL decides the active space — deep-linking any route lights up
+its owning space, and choosing a space in the rail lands on the first route your
+session may read. trstctl's cross-domain moat still meets in one place (one
+identity graph, one blast-radius view, one signed audit stream): every non-Platform
+space keeps an Audit (this space) row, a scoped lens over the single stream, and
+the command palette jumps across spaces from anywhere. A space with no readable
+routes disappears from the rail entirely, and route URLs are unchanged from the
+pre-spaces console, so old links and bookmarks resolve.
+Every nav row is gated by the same RBAC the API enforces, and every
 label resolves through the typed i18n catalog (see
 the web i18n catalog); a blank preview backs evaluation until the
 binary serves real data.
