@@ -80,9 +80,9 @@
   },
   "size-limit": [
     {
-      "name": "entry chunk (shell + vendor + i18n, gzip)",
+      "name": "entry chunk (shell + vendor + en catalog, gzip)",
       "path": "../internal/webui/dist/assets/index-*.js",
-      "limit": "340 kB"
+      "limit": "185 kB"
     },
     {
       "name": "largest page chunk (gzip)",

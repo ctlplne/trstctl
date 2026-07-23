@@ -10,7 +10,16 @@ import { IntlProvider, directionForLocale, formatMessage, negotiateLocale, useTr
 import { formatDate, formatNumber, formatPlural } from "@/i18n/format";
 import extractedDebtBudget from "@/i18n/extractedMessages.budget.json";
 import { extractedMessages } from "@/i18n/extractedMessages.gen";
-import { catalogs, defaultLocale, defaultTimeZone, messages, productionLocales, pseudoLocalize, type MessageKey } from "@/i18n/messages";
+import { defaultLocale, defaultTimeZone, eagerCatalogs, messages, productionLocales, pseudoLocalize, type MessageKey } from "@/i18n/messages";
+
+// S-C10: es/de are lazy per-locale modules now. The guards below still audit
+// the FULL catalogs (parity, placeholders, digests), so load them explicitly —
+// the digest pins must not move on a split, only on reviewed string changes.
+const catalogs = {
+  ...eagerCatalogs,
+  "es-ES": (await import("@/i18n/catalog.es-ES")).default,
+  "de-DE": (await import("@/i18n/catalog.de-DE")).default,
+} as const;
 import { contextualRouteItems, navGroups, taskNavItems } from "@/lib/navigation";
 
 function DemoFormats() {
@@ -79,7 +88,7 @@ describe("i18n boundary", () => {
     expect(screen.getByRole("dialog", { name: pseudoLocalize("Keyboard shortcuts") })).toBeInTheDocument();
   });
 
-  it("renders real Spanish page chrome and lets the operator switch locale in memory", () => {
+  it("renders real Spanish page chrome and lets the operator switch locale in memory", async () => {
     render(
       <IntlProvider initialLocale="es-ES" initialTimeZone="UTC">
         <ThemeProvider>
@@ -94,14 +103,39 @@ describe("i18n boundary", () => {
       </IntlProvider>,
     );
 
-    const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(screen.getByText("Acción requerida")).toBeInTheDocument();
+    // S-C10: the es catalog is a lazy module — copy is English until it
+    // resolves (never raw keys), then swaps in place.
+    const nav = await screen.findByRole("navigation", { name: "Principal" });
+    expect(await screen.findByText("Acción requerida")).toBeInTheDocument();
     expect(within(nav).getByText("Panel")).toBeInTheDocument();
     const selector = screen.getByRole("combobox", { name: "Idioma" });
     expect(selector).toHaveValue("es-ES");
 
     fireEvent.change(selector, { target: { value: "en-US" } });
     expect(screen.getByText("Needs action")).toBeInTheDocument();
+  });
+
+  it("swaps English fallback for the lazy catalog after an in-session locale switch (S-C10)", async () => {
+    render(
+      <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+        <ThemeProvider>
+          <MemoryRouter>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route index element={<h1>main</h1>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </ThemeProvider>
+      </IntlProvider>,
+    );
+
+    expect(await screen.findByText("Needs action")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Language" }), { target: { value: "de-DE" } });
+    // English serves until the de catalog module resolves; then the tree
+    // re-renders translated.
+    expect(await screen.findByText("Aktion erforderlich")).toBeInTheDocument();
+    expect(screen.queryByText("Needs action")).not.toBeInTheDocument();
   });
 
   it("closes the localized mobile navigation after route selection", () => {

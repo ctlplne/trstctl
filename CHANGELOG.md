@@ -13,6 +13,18 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Per-locale catalog split (S-C10, 2026-07-24)
+- **The entry chunk drops a third: 239 → 163 kB brotli.** The es-ES and de-DE
+  production catalogs moved to per-locale modules loaded on demand by the
+  I18nProvider; English (the source catalog) and the pseudo transforms stay
+  eager. Until a lazy catalog resolves, lookups fall back to English — never
+  to raw keys — and the tree re-renders translated the moment the module
+  lands (covered by a new in-session locale-switch test). Strings are
+  byte-identical to their pre-split location, so the translation-review
+  digests did not move; the `satisfies` completeness contract survives in the
+  split modules, and the entry size-limit budget is lowered to 185 kB to lock
+  in the win.
+
 ### Console engineering train (S-C4 / S-C5 / S-C8 / S-C9, 2026-07-24)
 - **S-C5 — the data and form layers arrive.** TanStack Query is the console's
   query layer (`src/lib/query.tsx`; provider in `AppRoutes`), piloted on
