@@ -7,6 +7,7 @@ import { hasAnyPermission } from "@/lib/access";
 import { api, type Me } from "@/lib/api";
 import { appRoutePaths, contextualRouteItems, navGroups, navSpaces, permissionAnyForPath, primaryNavItems, spaceForRoute } from "@/lib/navigation";
 import { useGlobalSearch, type GlobalSearchResult } from "@/lib/search";
+import { Eyebrow } from "@/components/typography";
 import { cn } from "@/lib/utils";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -353,7 +354,9 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
 function PaletteSection({ children, title }: { children: ReactNode; title: string }) {
   return (
     <section className="py-1" aria-label={title}>
-      <h3 className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <Eyebrow as="h3" className="px-3 py-1">
+        {title}
+      </Eyebrow>
       <div className="space-y-1">{children}</div>
     </section>
   );

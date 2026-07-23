@@ -15,6 +15,7 @@ component there comes from the real implementation.
 | Tailwind mapping (every token becomes a utility)          | `tailwind.config.js`                                                                                                               |
 | Primitives                                                | `src/components/ui/` (Button, Card, Skeleton)                                                                                      |
 | Shared components                                         | `src/components/` (PageHeader, PageTabs, StatusBadge, CredentialChip, DataGrid, DetailDrawer, Dialog, EmptyState, StatePrimitives) |
+| Typography primitives (S-C9)                              | `src/components/typography.tsx` (Eyebrow — the one tracked micro-label; Num — inline mono tabular data values)                     |
 | Charts                                                    | `src/components/charts/` (StatTile, Meter, BucketBar, TimeBar, Stacked, Donut, Sparkline, AreaTrend + tone palette)                |
 | Contract tests                                            | `src/__tests__/design_system_foundation.test.tsx` (token presence, WCAG AA pairs, primitive reuse)                                 |
 
@@ -33,11 +34,19 @@ component there comes from the real implementation.
 4. **Credential material renders as a `CredentialChip`.** Fingerprints,
    serials, node IDs, tokens: DM Mono, middle-truncated, copyable. Never nest
    it inside another interactive element.
-5. **Digits align.** All tables inherit `tabular-nums`; standalone numerals
-   opt in with the utility class.
-6. **The page's object list renders first.** Every additional workflow lives
-   behind a `PageTabs` workspace tab (see Certificates, Secrets, Discovery,
-   Platform). Tab state syncs to `?tab=` so views deep-link.
+5. **Digits align, data is mono.** All tables inherit `tabular-nums`;
+   standalone numerals opt in with the utility class, and inline data values
+   in sans copy (counts, TTLs, serials, timestamps) render through `Num`.
+   Micro-labels use the single `Eyebrow` cluster — do not hand-roll new
+   uppercase/tracking combinations (PageHeader's accent eyebrow is the one
+   sanctioned brand-flavored variant).
+6. **The page's object list renders first; workspaces are routes, lenses are
+   tabs (S-C7).** A view that is a distinct served workspace — its own feature
+   evidence, workflows, and name — is a sidebar route in its space (Secrets'
+   six workspaces). An alternate view over the same object domain stays a
+   `PageTabs` lens with state synced to `?tab=` so it deep-links
+   (Certificates' four lenses, Discovery's four pipeline stages). The full
+   rule and rulings live beside the space registry in `src/lib/navigation.ts`.
 7. **Loading keeps the page's shape.** Tables and cards use `Skeleton` blocks,
    not spinner lines. The five list states come from `StatePrimitives` /
    `EmptyState` only.
@@ -55,9 +64,9 @@ component there comes from the real implementation.
     Request Credential, Add Certificate): one job per step, validation gates
     Next, and the last step is always a review of exactly what will happen.
 12. **Journeys beat menus.** Cross-page workflows live in the `/journeys` hub
-    (`src/lib/journeys.ts`): each step deep-links to the exact page and
-    `?tab=` workspace, and steps with a detector check themselves off from
-    served data. New multi-page flows get a journey definition, not a doc-only
+    (`src/lib/journeys.ts`): each step deep-links to the exact surface — a
+    space route or a `?tab=` lens — and steps with a detector check themselves
+    off from served data. New multi-page flows get a journey definition, not a doc-only
     walkthrough.
 13. **Never make the operator retype a value the console already knows.**
     Known entities render as selects or `datalist` autocomplete fed from

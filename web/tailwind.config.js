@@ -56,6 +56,9 @@ export default {
         elevation3: "var(--elevation-3)",
       },
       fontSize: {
+        // S-C9 token sweep (certctl UX-L1 pattern): one design-token rung
+        // below caption so the historical text-[10px] uses migrate losslessly.
+        "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
         caption: ["var(--font-size-caption)", { lineHeight: "var(--line-height-caption)" }],
         body: ["var(--font-size-body)", { lineHeight: "var(--line-height-body)" }],
         title: ["var(--font-size-title)", { lineHeight: "var(--line-height-title)" }],

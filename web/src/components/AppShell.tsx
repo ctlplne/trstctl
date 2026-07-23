@@ -53,6 +53,7 @@ import {
   type NavSpace,
 } from "@/lib/navigation";
 import { persistCollapsedGroups, readCollapsedGroups } from "@/lib/navPreferences";
+import { Eyebrow } from "@/components/typography";
 import { cn } from "@/lib/utils";
 import type { Me } from "@/lib/api";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
@@ -296,7 +297,9 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
         )}
         {!activeSpace && visibleTaskItems.length > 0 && (
           <li>
-            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.needsAction")}</p>
+            <Eyebrow as="p" className="px-3 pb-1 text-sidebar-foreground/60">
+              {t("nav.section.needsAction")}
+            </Eyebrow>
             <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
               {visibleTaskItems.map(({ to, labelKey, descriptionKey, icon }) => {
                 const Icon = iconMap[icon];
@@ -553,7 +556,7 @@ export function AppShell() {
           </span>
           <span className="min-w-0 leading-tight">
             <span className="block truncate font-display text-sm font-bold tracking-tight">{t("app.brand.name")}</span>
-            <span className="hidden truncate text-[10px] font-medium uppercase tracking-wider text-brand-accent sm:block">{t("app.brand.subtitle")}</span>
+            <span className="hidden truncate text-2xs font-medium uppercase tracking-wider text-brand-accent sm:block">{t("app.brand.subtitle")}</span>
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-2">
@@ -573,7 +576,7 @@ export function AppShell() {
           >
             <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-start">{t("shell.searchOrJump")}</span>
-            <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px]">{translateNow("source.cmd.k.abdd8e293f")}</kbd>
+            <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-2xs">{translateNow("source.cmd.k.abdd8e293f")}</kbd>
           </Button>
           {user && (
             <div aria-label={t("shell.tenantContext")} className="hidden min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs lg:flex">

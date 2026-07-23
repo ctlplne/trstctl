@@ -3,6 +3,7 @@ import { AreaTrend, BucketBar, Donut, Meter, Sparkline, StatTile, chartToneColor
 import { CredentialChip } from "@/components/CredentialChip";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { Eyebrow, Num } from "@/components/typography";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -129,6 +130,10 @@ export function Styleguide() {
               <p className="text-caption text-muted-foreground">Caption — metadata, table headers, eyebrows.</p>
               <p className="font-mono text-body">DM Mono — credential material, identifiers, commands.</p>
               <p className="text-body tabular-nums">Tabular numerals: 1,284 / 3,471 / 612 — digits align in columns.</p>
+              <p className="text-body">
+                <Eyebrow>Eyebrow primitive</Eyebrow> — the one tracked micro-label (S-C9); inline data uses <Num>Num</Num>: <Num>2026-07-24T00:00:00Z</Num> ·{" "}
+                <Num>1,284</Num> · <Num>90d</Num>.
+              </p>
             </div>
           </section>
 

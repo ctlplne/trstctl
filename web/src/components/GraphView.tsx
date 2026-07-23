@@ -203,7 +203,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
                 <g key={`${edge.from}-${edge.type}-${edge.to}`} data-testid="graph-edge" data-edge-type={edge.type} opacity={appearance.opacity}>
                   <path d={edgePath(from, to)} fill="none" stroke={appearance.stroke} strokeWidth={appearance.strokeWidth} markerEnd="url(#graph-arrow)" />
                   {labelled && (
-                    <text x={midX} y={midY - 6} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+                    <text x={midX} y={midY - 6} textAnchor="middle" className="fill-muted-foreground text-2xs">
                       {graphEdgeTypeLabel(edge.type)}
                     </text>
                   )}
@@ -243,10 +243,10 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
                     stroke={stroke}
                     strokeWidth={selected || affected || isFocus ? 3 : 2}
                   />
-                  <text x={node.x} y={node.y + 3.5} textAnchor="middle" className="pointer-events-none fill-foreground text-[10px] font-semibold">
+                  <text x={node.x} y={node.y + 3.5} textAnchor="middle" className="pointer-events-none fill-foreground text-2xs font-semibold">
                     {nodeInitial(node)}
                   </text>
-                  <text x={node.x} y={node.y + 32} textAnchor="middle" className="pointer-events-none fill-foreground text-[10px]">
+                  <text x={node.x} y={node.y + 32} textAnchor="middle" className="pointer-events-none fill-foreground text-2xs">
                     {truncateLabel(node.name || node.id)}
                   </text>
                   <title>{`${node.name || node.id} (${graphNodeKindLabel(node.kind)})`}</title>
