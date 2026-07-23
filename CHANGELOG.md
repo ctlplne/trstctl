@@ -13,6 +13,33 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Console engineering train (S-C4 / S-C5 / S-C8 / S-C9, 2026-07-24)
+- **S-C5 — the data and form layers arrive.** TanStack Query is the console's
+  query layer (`src/lib/query.tsx`; provider in `AppRoutes`), piloted on
+  Owners: the cache is the row truth, mutations write through and invalidate —
+  the refetch `useResource` never had. Mutation forms go schema-first with
+  zod + react-hook-form, piloted on Request Credential with per-field errors.
+  Adoption policy in `web/AGENTS.md`: new surfaces use the new layers;
+  existing pages migrate when touched.
+- **S-C9 — typography primitives and a real merge fix.** `Eyebrow` and `Num`
+  encode the micro-label and inline-data rules; `text-2xs` replaces the five
+  `text-[10px]` arbitraries. The Eyebrow test exposed a latent bug: cn()'s
+  tailwind-merge dropped the custom font-size tokens as color conflicts —
+  fixed by registering the token scale, for every cn() call site.
+- **S-C8 — Storybook workbench.** Storybook 10 (react-vite + a11y addon)
+  renders stories against the real tokens with a dark/light toolbar; six
+  starter story files cover the primitives and shared components.
+- **S-C4 — Playwright e2e + visual regression, authored.** Shell smoke (rail,
+  scoped sidebars, palette, the `?tab=` redirect) and masked dark-theme visual
+  baselines, targeting the seeded demo stack (`npm run e2e`). Browsers were
+  not installable in the authoring sandbox — first local run generates
+  baselines (`--update-snapshots`).
+- **Contracts.** `web/AGENTS.md` is the console's leaf contract; DESIGN.md
+  rules 5/6/12 updated to the primitives and the workspaces-vs-lenses ruling;
+  the root AGENTS.md now states the AN-4/6/7 enforcement asymmetry plainly;
+  the visual-asset audit (design-audit/10) confirms nothing reader-facing
+  depicts the retired chips shell.
+
 ### IA train closeout (S-C3 / S-C6 / S-C7, 2026-07-24)
 - **S-C3 — the console code-splits by page.** Every authenticated surface is a
   lazy route chunk (70 chunks; the entry is the shell + vendor + the typed

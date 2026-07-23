@@ -51,6 +51,10 @@ internal/license/    # core offline license verifier and feature table
 cmd/trstctl-license/ # vendor-side signing/inspection helper
 ```
 
+Note the enforcement asymmetry from `../AGENTS.md` §3: AN-4, AN-6, and AN-7
+have no linter analyzer and rely on dependency-closure and integration tests —
+changes there lean on test discipline, not static checks.
+
 Package-local rules live in leaf `AGENTS.md` files. The current high-risk leaves
 are:
 
@@ -58,6 +62,8 @@ are:
 - `internal/signing/AGENTS.md` - AN-4 isolated signer process rules.
 - `internal/protocols/AGENTS.md` - untrusted protocol parser and served-protocol rules.
 - `internal/query/AGENTS.md` - tenant/RBAC semantic-query scoping rules.
+- `web/AGENTS.md` - the console's engineering contract (spaces IA, query/form
+  layers, typography primitives, i18n review ratchet, test surfaces).
 
 PCAS (Proof-Carrying Algorithm Succession) security docs live under `ee/docs/` (EE-licensed material behind the AN-9 fence):
 
