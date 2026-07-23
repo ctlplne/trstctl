@@ -233,15 +233,6 @@ export const navModules: NavModule[] = navSpaces.map((space) => ({
   featureIds: Array.from(new Set(space.groups.flatMap((group) => group.items.flatMap((item) => item.featureIds)))),
 }));
 
-/** legacySpaceAliases: persisted module ids from the S-B2 era map onto the
- * space that absorbed them, so a returning operator's stored selection still
- * resolves. */
-export const legacySpaceAliases: Record<string, SpaceId> = {
-  ssh: "workload",
-  signing: "certificates",
-  fleet: "workload",
-};
-
 /** globalBand: routes that belong to no space. After S-C1 this is only the
  * Home plane (Dashboard + Journeys) plus the legacy /platform redirector —
  * everything else lives in exactly one space. */

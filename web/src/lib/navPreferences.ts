@@ -37,22 +37,7 @@ export function persistCollapsedGroups(collapsed: Set<string>): void {
   }
 }
 
-/** Active module selection for the S-B2 switcher. Pure UI metadata (a module
- * id string), same benign-persistence class as the collapse state above. */
-const NAV_MODULE_KEY = "trstctl-nav-module";
-
-export function readActiveModule(): string | null {
-  try {
-    return localStorage.getItem(NAV_MODULE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function persistActiveModule(moduleId: string): void {
-  try {
-    localStorage.setItem(NAV_MODULE_KEY, moduleId);
-  } catch {
-    // Storage unavailable: module selection is a convenience only.
-  }
-}
+/* The S-B2 era also persisted an active-module selection here
+ * ("trstctl-nav-module"). S-C1 derives the active space from the URL, so that
+ * key is no longer read or written; a stale entry in a returning operator's
+ * storage is inert. */

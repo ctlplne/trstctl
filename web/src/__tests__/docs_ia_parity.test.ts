@@ -44,7 +44,7 @@ describe("docs IA parity (S-R2)", () => {
     });
   }
 
-  it("the demo click-through names the new module switcher and groups", () => {
+  it("the demo click-through names the spaces shell and its groups", () => {
     const full = path.join(dir, "demo-click-through.html");
     if (!existsSync(full)) return;
     const src = readFileSync(full, "utf8");

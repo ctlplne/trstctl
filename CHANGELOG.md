@@ -13,7 +13,17 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
-### IA closeout train (design-audit follow-ups, 2026-07-14)
+### Unified shell (spaces IA, 2026-07-23)
+- **The console is now five spaces behind an icon rail.** The S-B2
+  chips-in-sidebar module switcher became a left rail of spaces that each own
+  every surface of one concern — *Certificates & PKI*, *Secrets*,
+  *Workload & SSH*, *Posture & response*, and *Platform* — with Home carrying
+  the Dashboard, Journeys, and the needs-action worklists. The URL decides the
+  active space (deep links light up their owning space; picking a space lands
+  on its first permitted route), the per-space audit lenses and 34-row rail
+  budget survive, and no route URL, nav label, or feature ID changed, so
+  bookmarks and API couplings are untouched. Operator docs (web-console, the
+  demo click-through, platform-and-api) describe the new shell.
 - **DA-02 closed — the secrets auth-method console.** Secrets → Access now grants
   workload credentials in-console (scoped standing tokens or TTL-bound ephemeral
   keys, reveal-once, list + revoke), projects the configured machine-auth methods

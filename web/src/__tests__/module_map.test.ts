@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { appRoutePaths, globalBandRoutes, moduleForRoute, navModules, realGuiSurfaces, surfaceModule, type ModuleId } from "@/lib/navigation";
 
-/** module_map (S-B1, extends nav_completeness for the Option-B era): the module
- * registry must partition every customer route into exactly one place — a
- * global plane OR a single module — with no gaps and no overlaps. This is the
- * guarantee the module switcher (S-B2) depends on and the permanent guard that
- * keeps a route from silently belonging to two modules or none. */
+/** module_map (S-B1, carried into the S-C1 spaces era): the space registry must
+ * partition every customer route into exactly one place — a global plane OR a
+ * single space — with no gaps and no overlaps. This is the guarantee the space
+ * rail depends on and the permanent guard that keeps a route from silently
+ * belonging to two spaces or none. */
 
 // Routes that are neither global planes nor module-scoped (pre-auth, onboarding
 // flow, dev-only styleguide).
