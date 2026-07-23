@@ -5,9 +5,9 @@ const basePath = (to: string) => to.split("?")[0] || "/";
 
 describe("U8-6 navigation & IA refresh", () => {
   it("renders task-based groups where every command resolves to one registered route and is RBAC-gated", () => {
-    // S-A1: four question-shaped bands (Inventory / Issue & automate /
-    // Detect & respond / Govern & administer).
-    expect(navGroups.length).toBe(4);
+    // S-C1: ten space-scoped groups across the five spaces (the S-A1 four-band
+    // era ended when the unified shell landed).
+    expect(navGroups.length).toBe(10);
 
     const registered = new Set<string>(appRoutePaths);
     const sidebarItems = navGroups.flatMap((group) => group.items);

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
   Bell,
@@ -12,6 +12,7 @@ import {
   Compass,
   FileClock,
   GitFork,
+  Home as HomeIcon,
   LayoutDashboard,
   Menu,
   Network,
@@ -42,19 +43,16 @@ import { Button } from "@/components/ui/button";
 import { hasAnyPermission } from "@/lib/access";
 import {
   contextualRouteItems,
-  globalBandRoutes,
-  lockedModuleIds,
-  moduleForRoute,
   navGroups,
-  navModules,
+  navSpaces,
   permissionAnyForPath,
   primaryNavItems,
+  spaceForRoute,
   taskNavItems,
-  type ModuleId,
   type NavIcon,
-  type NavItem,
+  type NavSpace,
 } from "@/lib/navigation";
-import { persistActiveModule, persistCollapsedGroups, readActiveModule, readCollapsedGroups } from "@/lib/navPreferences";
+import { persistCollapsedGroups, readCollapsedGroups } from "@/lib/navPreferences";
 import { cn } from "@/lib/utils";
 import type { Me } from "@/lib/api";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
@@ -139,6 +137,95 @@ function navItemClass(isActive: boolean): string {
   );
 }
 
+/** spaceLandingRoute: where a space's rail button lands — the first route in
+ * the space the session may read, or null when the whole space is off-limits
+ * (its button is then hidden). */
+function spaceLandingRoute(space: NavSpace, user: Me | null): string | null {
+  for (const group of space.groups) {
+    for (const item of group.items) {
+      if (hasAnyPermission(user, permissionAnyForPath(item.to))) return item.to;
+    }
+  }
+  return null;
+}
+
+type SpaceRailProps = {
+  user: Me | null;
+  onNavigate?: () => void;
+  orientation: "vertical" | "horizontal";
+};
+
+/** SpaceRail (S-C1): the space switcher. One button per permitted space plus
+ * Home; activating a button navigates to that space's landing route, and the
+ * active space is derived from the current location — the URL stays the single
+ * source of truth, unlike the chrome-only S-B2 chips this replaces. */
+function SpaceRail({ user, onNavigate, orientation }: SpaceRailProps) {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const active = spaceForRoute(location.pathname) ?? "home";
+  const permitted = navSpaces
+    .map((space) => ({ space, landing: spaceLandingRoute(space, user) }))
+    .filter((entry): entry is { space: NavSpace; landing: string } => entry.landing !== null);
+  const homePermitted = hasAnyPermission(user, permissionAnyForPath("/"));
+
+  function railButtonClass(selected: boolean): string {
+    return cn(
+      "relative flex h-10 w-10 items-center justify-center rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent",
+      selected ? "bg-sidebar-active text-primary" : "text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-white",
+    );
+  }
+
+  return (
+    <nav
+      aria-label={t("shell.spaces")}
+      className={cn(
+        "bg-sidebar",
+        orientation === "vertical"
+          ? "sticky top-14 flex h-[calc(100vh-3.5rem)] w-14 shrink-0 flex-col items-center gap-1 border-e border-sidebar-active/40 py-3"
+          : "flex flex-row items-center gap-1 border-b border-sidebar-active/40 px-3 py-2",
+      )}
+    >
+      {homePermitted && (
+        <button
+          type="button"
+          aria-label={t("nav.space.home")}
+          aria-current={active === "home" ? "true" : undefined}
+          title={t("nav.space.home")}
+          onClick={() => {
+            navigate("/");
+            onNavigate?.();
+          }}
+          className={railButtonClass(active === "home")}
+        >
+          <HomeIcon aria-hidden="true" className="h-[18px] w-[18px]" />
+        </button>
+      )}
+      {permitted.map(({ space, landing }) => {
+        const Icon = iconMap[space.icon];
+        const selected = active === space.id;
+        return (
+          <button
+            key={space.id}
+            type="button"
+            aria-label={t(space.labelKey)}
+            aria-current={selected ? "true" : undefined}
+            title={t(space.labelKey)}
+            onClick={() => {
+              navigate(landing);
+              onNavigate?.();
+            }}
+            className={railButtonClass(selected)}
+          >
+            <Icon aria-hidden="true" className="h-[18px] w-[18px]" />
+            {selected && <span aria-hidden="true" className="absolute inset-y-2 start-0 w-0.5 rounded-e bg-brand-accent" />}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -147,82 +234,16 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
   const visibleTaskItems = taskNavItems.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to)));
   const activeWorklist = visibleTaskItems.find((item) => worklistMatches(item.to, location.pathname, location.search));
 
-  // S-B2: the rail's middle band is scoped by a module switcher. A route is
-  // either global (always shown) or owned by exactly one module (shown only
-  // when that module is active). Build a lookup of every rail item so the
-  // module band can borrow each route's label and icon from the S-A1 groups.
-  const routeItemByPath = useMemo(() => {
-    const map = new Map<string, NavItem>();
-    for (const group of navGroups) for (const item of group.items) map.set(navBasePath(item.to), item);
-    return map;
-  }, []);
-  const globalRouteSet = useMemo(() => new Set(globalBandRoutes), []);
+  // S-C1: the sidebar is scoped by the active space (derived from the URL).
+  // On the Home plane it shows the primary items and needs-action worklists;
+  // inside a space it shows that space's groups and nothing else.
+  const activeSpaceId = spaceForRoute(location.pathname);
+  const activeSpace = (activeSpaceId && activeSpaceId !== "home" ? navSpaces.find((space) => space.id === activeSpaceId) : null) ?? null;
 
-  const permittedModules = useMemo(
-    () => navModules.filter((module) => module.routes.some((route) => hasAnyPermission(user, permissionAnyForPath(route)))),
-    [user],
-  );
-
-  // S-B5: modules whose required commercial feature is unlicensed render as a
-  // single graceful upsell row instead of being selectable. trstctl's modules
-  // are all MPL-core (moduleRequiredFeature is empty), so this is empty today;
-  // the seam avoids scattered locked panels if a commercial module is ever
-  // added. No editions fetch is made here while the map is empty.
-  const lockedModuleSet = useMemo(() => {
-    const noneLicensed: ReadonlySet<string> = new Set();
-    return new Set(lockedModuleIds(noneLicensed));
-  }, []);
-
-  const routeModule = moduleForRoute(location.pathname);
-  const [activeModule, setActiveModule] = useState<ModuleId | null>(() => {
-    if (routeModule) return routeModule;
-    const stored = readActiveModule();
-    if (stored && permittedModules.some((module) => module.id === stored)) return stored as ModuleId;
-    return permittedModules[0]?.id ?? null;
-  });
-
-  // Navigating to a module-owned route auto-selects that module, mirroring the
-  // collapsed-group re-open below. This keys on the pathname ONLY (not on
-  // activeModule) so a manual switch while staying on a module route is not
-  // immediately reverted. Global routes leave the selection alone.
-  useEffect(() => {
-    const owner = moduleForRoute(location.pathname);
-    if (owner) {
-      setActiveModule(owner);
-      persistActiveModule(owner);
-    }
-    // Intentionally pathname-only: a manual module switch must not be reverted.
-  }, [location.pathname]);
-
-  // Keep a valid selection if the permitted set changes (e.g., session load).
-  useEffect(() => {
-    if (permittedModules.length === 0) return;
-    if (!activeModule || !permittedModules.some((module) => module.id === activeModule)) {
-      setActiveModule(permittedModules[0].id);
-    }
-  }, [permittedModules, activeModule]);
-
-  function selectModule(moduleId: ModuleId) {
-    setActiveModule(moduleId);
-    persistActiveModule(moduleId);
-  }
-
-  const activeModuleDef = permittedModules.find((module) => module.id === activeModule) ?? null;
-  const moduleBandItems: NavItem[] = activeModuleDef
-    ? activeModuleDef.routes
-        .filter((route) => hasAnyPermission(user, permissionAnyForPath(route)))
-        .map((route) => routeItemByPath.get(navBasePath(route)))
-        .filter((item): item is NavItem => Boolean(item))
-    : [];
-
-  // Global groups are the S-A1 bands with module-owned routes removed, so each
-  // route appears exactly once: in the module band or a global group.
-  const visibleGroups = navGroups
+  const visibleGroups = (activeSpace?.groups ?? [])
     .map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => globalRouteSet.has(navBasePath(item.to)) && hasAnyPermission(user, permissionAnyForPath(item.to)),
-      ),
+      items: group.items.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to))),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -256,7 +277,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
   return (
     <nav aria-label={t("shell.primaryNavigation")} className={cn("p-3", className)} id={id}>
       <ul className="space-y-4">
-        {visiblePrimaryItems.length > 0 && (
+        {!activeSpace && visiblePrimaryItems.length > 0 && (
           <li>
             <ul className="space-y-1">
               {visiblePrimaryItems.map(({ to, labelKey, icon, end }) => {
@@ -273,7 +294,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
             </ul>
           </li>
         )}
-        {visibleTaskItems.length > 0 && (
+        {!activeSpace && visibleTaskItems.length > 0 && (
           <li>
             <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.needsAction")}</p>
             <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
@@ -305,77 +326,10 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
             </ul>
           </li>
         )}
-        {permittedModules.length !== 0 && (
+        {activeSpace && (
           <li>
-            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.module")}</p>
-            <div role="tablist" aria-label={t("nav.section.module")} className="mb-2 flex flex-wrap gap-1 px-1">
-              {permittedModules.map((module) => {
-                const Icon = iconMap[module.icon];
-                const selected = module.id === activeModule;
-                if (lockedModuleSet.has(module.id)) {
-                  // S-B5: one graceful upsell row, linking to Editions & license (C-A1: /admin/editions).
-                  return (
-                    <NavLink
-                      key={module.id}
-                      to="/admin/editions"
-                      onClick={onNavigate}
-                      className="inline-flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-semibold text-sidebar-foreground/50 transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
-                      title={t("nav.module.upsell")}
-                    >
-                      <LockKeyhole aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{t(module.labelKey)}</span>
-                      <span className="rounded bg-sidebar-foreground/10 px-1 text-[0.65rem] uppercase tracking-wide">{t("nav.module.upsellBadge")}</span>
-                    </NavLink>
-                  );
-                }
-                return (
-                  <button
-                    key={module.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => selectModule(module.id)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent",
-                      selected ? "bg-sidebar-active text-primary" : "text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-white",
-                    )}
-                  >
-                    <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{t(module.labelKey)}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {moduleBandItems.length !== 0 && activeModuleDef && (
-              <ul aria-label={t(activeModuleDef.labelKey)} className="space-y-1">
-                {moduleBandItems.map((item) => {
-                  const { to, labelKey, icon, end } = item;
-                  const Icon = iconMap[icon];
-                  const suppressed = activeWorklist != null && navBasePath(activeWorklist.to) === navBasePath(to);
-                  return (
-                    <li key={`module-${to}-${labelKey}`}>
-                      <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive && !suppressed)}>
-                        <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate">{t(labelKey)}</span>
-                      </NavLink>
-                    </li>
-                  );
-                })}
-                {hasAnyPermission(user, permissionAnyForPath("/audit")) &&
-                  (() => {
-                    const AuditLensIcon = iconMap.audit;
-                    return (
-                      <li key="module-audit-scope">
-                        {/* S-B4: a scoped lens into the ONE shared audit stream. */}
-                        <NavLink to={`/audit?module=${activeModuleDef.id}`} onClick={onNavigate} className={navItemClass(false)}>
-                          <AuditLensIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
-                          <span className="min-w-0 flex-1 truncate">{t("nav.module.auditLens")}</span>
-                        </NavLink>
-                      </li>
-                    );
-                  })()}
-              </ul>
-            )}
+            {/* S-C1: the sidebar names the active space; the rail switches it. */}
+            <p className="px-3 pb-1 pt-0.5 font-display text-sm font-bold tracking-tight text-white">{t(activeSpace.labelKey)}</p>
           </li>
         )}
         {visibleGroups.map((group) => {
@@ -412,10 +366,23 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
             </li>
           );
         })}
+        {activeSpace && activeSpace.id !== "platform" && hasAnyPermission(user, permissionAnyForPath("/audit")) && (
+          <li>
+            {/* S-B4 survives the spaces re-carve: every space keeps a scoped
+                lens into the ONE shared audit stream (Platform hosts the
+                unscoped Audit row itself, so it needs no extra lens). */}
+            <NavLink to={`/audit?module=${activeSpace.id}`} onClick={onNavigate} className={navItemClass(false)}>
+              <AuditLensIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{t("nav.module.auditLens")}</span>
+            </NavLink>
+          </li>
+        )}
       </ul>
     </nav>
   );
 }
+
+const AuditLensIcon = iconMap.audit;
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -696,12 +663,14 @@ export function AppShell() {
                 <X aria-hidden="true" className="h-4 w-4" />
               </button>
             </div>
+            <SpaceRail user={user} orientation="horizontal" onNavigate={() => setMobileNavOpen(false)} />
             <PrimaryNav id={mobileNavId} user={user} onNavigate={() => setMobileNavOpen(false)} />
           </div>
         </div>
       )}
 
       <div className="flex min-w-0">
+        {isDesktop && <SpaceRail user={user} orientation="vertical" />}
         {isDesktop && !sidebarCollapsed && (
           <PrimaryNav
             className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground"

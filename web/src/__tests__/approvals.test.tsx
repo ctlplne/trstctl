@@ -62,7 +62,9 @@ describe("dedicated approvals inbox", () => {
     renderAt("/approvals");
 
     expect(await screen.findByRole("heading", { name: "Approvals" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^Pending approvals/i })).toHaveAttribute("href", "/approvals?status=pending");
+    // S-C1: the Platform space's sidebar row points here; the "Pending
+    // approvals" urgency worklist lives on the Home plane's sidebar.
+    expect(screen.getByRole("link", { name: /^Approvals$/i })).toHaveAttribute("href", "/approvals");
     const row = (await screen.findByText("jit-db")).closest("tr")!;
     expect(within(row).getByText("dev@example.test")).toBeInTheDocument();
     expect(within(row).getByText("1/2")).toBeInTheDocument();

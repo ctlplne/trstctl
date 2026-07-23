@@ -58,93 +58,204 @@ export interface ContextualRouteItem {
   featureIds: string[];
 }
 
-/* S-B1 (Option B foundation): the module registry. This is config only — it
- * declares which product each issuance-style route belongs to and which routes
- * are global (cross-module) planes. Nothing renders differently from this card;
- * the module switcher (S-B2) reads `navModules`, and until then the flat
- * `navGroups` rail from S-A1 is unchanged. Module ids are stable identifiers,
- * not URLs. */
-export type ModuleId = "certificates" | "secrets" | "ssh" | "signing" | "fleet";
+/* S-C1 (spaces): the unified-shell space registry. The S-B1/S-B2 module era
+ * scoped a thin band of issuance routes and left ~20 rows always visible; the
+ * approved 2026-07 redesign inverts that — five focused spaces own every
+ * product surface, and only Home (Dashboard + Journeys + worklists) is global.
+ * A space is a NavModule that additionally carries its own grouped sidebar.
+ * Space ids are stable identifiers, not URLs; route URLs are unchanged. */
+export type SpaceId = "certificates" | "secrets" | "workload" | "posture" | "platform";
+/** Back-compat alias: audit deep links and preferences persist these ids. */
+export type ModuleId = SpaceId;
+
+export interface NavSpace {
+  id: SpaceId;
+  labelKey: MessageKey;
+  icon: NavIcon;
+  /** The space's scoped sidebar — grouped exactly like the old rail bands. */
+  groups: NavGroup[];
+}
 
 export interface NavModule {
   id: ModuleId;
   labelKey: MessageKey;
   icon: NavIcon;
-  /** Routes scoped to this module — its rail band when the module is active. */
+  /** Routes scoped to this module — its sidebar band when the space is active. */
   routes: string[];
   featureIds: string[];
 }
 
-/** navModules: the curated product set. Count is deliberately small and may
- * shrink — if SSH/Signing stay thin they fold into Certificates & PKI, exactly
- * as Infisical folded SSH into PAM (see 03-competitive-benchmark §1). */
-export const navModules: NavModule[] = [
+/** navSpaces: the five spaces of the unified shell. Every customer route lives
+ * in exactly one space group (the module_map partition guard); labels reuse the
+ * established vocabulary — "Certificates & PKI", "Detect & respond", and
+ * "Govern & administer" survive from the S-A1/S-B1 era on purpose (docs and
+ * operator muscle memory reference them). */
+export const navSpaces: NavSpace[] = [
   {
     id: "certificates",
     labelKey: "nav.module.certificates",
     icon: "certificate",
-    routes: ["/certificates", "/request", "/profiles", "/ca-hierarchy", "/protocols"],
-    featureIds: ["F1", "F4", "F5", "F26", "F48", "F53"],
+    groups: [
+      {
+        labelKey: "nav.group.inventory",
+        items: [{ to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] }],
+      },
+      {
+        labelKey: "nav.group.issueAutomate",
+        items: [
+          { to: "/request", labelKey: "nav.item.requestCredential", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
+          { to: "/profiles", labelKey: "nav.item.profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
+          { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
+          {
+            to: "/protocols",
+            labelKey: "nav.item.protocols",
+            icon: "protocol",
+            mode: "real",
+            featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"],
+          },
+          { to: "/codesign", labelKey: "nav.item.codeSigning", icon: "signature", mode: "real", featureIds: ["F50"] },
+        ],
+      },
+    ],
   },
   {
     id: "secrets",
     labelKey: "nav.module.secrets",
     icon: "vault",
-    routes: ["/secrets"],
-    featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
+    groups: [
+      {
+        labelKey: "nav.group.secretsEngines",
+        items: [
+          {
+            to: "/secrets",
+            labelKey: "nav.item.secrets",
+            icon: "vault",
+            mode: "real",
+            featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
+          },
+        ],
+      },
+    ],
   },
   {
-    id: "ssh",
-    labelKey: "nav.module.ssh",
-    icon: "ssh",
-    routes: ["/ssh"],
-    featureIds: ["F43", "F44", "F45"],
+    id: "workload",
+    labelKey: "nav.space.workload",
+    icon: "spiffe",
+    groups: [
+      {
+        labelKey: "nav.group.workloadIdentity",
+        items: [
+          { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
+          { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
+        ],
+      },
+      {
+        labelKey: "nav.group.sshTrust",
+        items: [{ to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] }],
+      },
+    ],
   },
   {
-    id: "signing",
-    labelKey: "nav.module.signing",
-    icon: "signature",
-    routes: ["/codesign"],
-    featureIds: ["F50"],
+    id: "posture",
+    labelKey: "nav.space.posture",
+    icon: "posture",
+    groups: [
+      {
+        labelKey: "nav.group.detectRespond",
+        items: [
+          { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
+          { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
+          { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
+          { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
+          { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
+          { to: "/operations", labelKey: "nav.item.operations", icon: "activity", mode: "real", featureIds: ["F7"] },
+        ],
+      },
+    ],
   },
   {
-    id: "fleet",
-    labelKey: "nav.module.fleet",
-    icon: "agent",
-    routes: ["/agents", "/workloads"],
-    featureIds: ["F3", "F25", "F30", "F54", "F61"],
+    id: "platform",
+    labelKey: "nav.space.platform",
+    icon: "platform",
+    groups: [
+      {
+        labelKey: "nav.group.governAdminister",
+        items: [
+          { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
+          { to: "/approvals", labelKey: "nav.item.approvals", icon: "approval", mode: "real", featureIds: ["F33"] },
+          { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
+          { to: "/owners", labelKey: "nav.item.owners", icon: "owner", mode: "real", featureIds: ["F59"] },
+          { to: "/privacy", labelKey: "nav.item.privacy", icon: "policy", mode: "real", featureIds: ["F79"] },
+        ],
+      },
+      {
+        labelKey: "nav.group.infrastructure",
+        items: [
+          { to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] },
+          { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
+          { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7"] },
+        ],
+      },
+      {
+        labelKey: "nav.group.integrations",
+        items: [
+          { to: "/integrate", labelKey: "nav.item.integrate", icon: "protocol", mode: "real", featureIds: ["F5", "F46"] },
+          { to: "/integrate/api", labelKey: "nav.item.apiExplorer", icon: "protocol", mode: "real", featureIds: ["F10", "F46"] },
+        ],
+      },
+      {
+        labelKey: "nav.group.adminConsole",
+        items: [
+          { to: "/admin/access", labelKey: "platform.tabs.access", icon: "platform", mode: "real", featureIds: ["F8", "F13"] },
+          {
+            to: "/admin/system",
+            labelKey: "platform.tabs.posture",
+            icon: "platform",
+            mode: "real",
+            featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40"],
+          },
+          { to: "/admin/editions", labelKey: "platform.tabs.editions", icon: "platform", mode: "real", featureIds: ["F41"] },
+          { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F76", "F77", "F78"] },
+        ],
+      },
+    ],
   },
 ];
 
-/** globalBand: routes that are never module-scoped. These are trstctl's
- * cross-domain moat (one identity graph, one blast-radius view, one signed
- * audit stream) plus the primary/administer surfaces. They stay visible in the
- * rail regardless of the active module (S-B2). */
-export const globalBandRoutes: string[] = [
-  "/",
-  "/journeys",
-  "/identities",
-  "/owners",
-  "/discovery",
-  "/risk",
-  "/posture",
-  "/graph",
-  "/incidents",
-  "/approvals",
-  "/operations",
-  "/notifications",
-  "/policy",
-  "/audit",
-  "/privacy",
-  "/connectors",
-  "/integrate",
-  "/integrate/api",
-  "/admin/access",
-  "/admin/system",
-  "/admin/editions",
-  "/platform",
-  "/assistant",
-];
+/** navModules: derived module view of the spaces (routes + feature union), kept
+ * so the S-B1 helpers (moduleForRoute, surfaceModule, audit lenses) and their
+ * guards keep one source of truth. */
+export const navModules: NavModule[] = navSpaces.map((space) => ({
+  id: space.id,
+  labelKey: space.labelKey,
+  icon: space.icon,
+  routes: space.groups.flatMap((group) => group.items.map((item) => item.to.split("?")[0] || "/")),
+  featureIds: Array.from(new Set(space.groups.flatMap((group) => group.items.flatMap((item) => item.featureIds)))),
+}));
+
+/** legacySpaceAliases: persisted module ids from the S-B2 era map onto the
+ * space that absorbed them, so a returning operator's stored selection still
+ * resolves. */
+export const legacySpaceAliases: Record<string, SpaceId> = {
+  ssh: "workload",
+  signing: "certificates",
+  fleet: "workload",
+};
+
+/** globalBand: routes that belong to no space. After S-C1 this is only the
+ * Home plane (Dashboard + Journeys) plus the legacy /platform redirector —
+ * everything else lives in exactly one space. */
+export const globalBandRoutes: string[] = ["/", "/journeys", "/platform"];
+
+/** spaceForRoute: the space owning a pathname, "home" for the global Home
+ * plane, or undefined for exempt routes (/login, /wizard, /styleguide). */
+export function spaceForRoute(to: string): SpaceId | "home" | undefined {
+  const path = to.split("?")[0] || "/";
+  const owner = moduleForRoute(path);
+  if (owner) return owner;
+  if (path === "/" || path === "/journeys") return "home";
+  return undefined;
+}
 
 /** moduleForRoute maps a route to its owning module, or undefined if the route
  * is a global plane (or exempt: /login, /wizard, /styleguide). */
@@ -162,9 +273,9 @@ export function moduleForRoute(to: string): ModuleId | undefined {
 const moduleScopeTerms: Record<ModuleId, string> = {
   certificates: "cert",
   secrets: "secret",
-  ssh: "ssh",
-  signing: "sign",
-  fleet: "agent",
+  workload: "ssh",
+  posture: "incident",
+  platform: "agent",
 };
 
 export function moduleScopeTerm(moduleId: string): string | undefined {
@@ -309,81 +420,12 @@ export const taskNavItems: TaskNavItem[] = [
   },
 ];
 
-/* S-A1 (DA-03/DA-04/DA-17): the rail is re-grouped into four question-shaped
- * bands and every product surface that used to hide in `contextualRouteItems`
- * is promoted into the rail. Groups answer, in order: what exists (Inventory),
- * how it gets issued (Issue & automate), what's wrong and who's handling it
- * (Detect & respond), and who governs it (Govern & administer). No route URL
- * changes — this is nav chrome only. Item labels are unchanged here; the
- * one-name-per-surface renames are S-A2. `/wizard` intentionally leaves the
- * rail (it is an onboarding flow, reached from the Dashboard empty-state CTA
- * and Journeys, not a permanent destination). */
-export const navGroups: NavGroup[] = [
-  {
-    labelKey: "nav.group.inventory",
-    items: [
-      { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
-      { to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
-      {
-        to: "/secrets",
-        labelKey: "nav.item.secrets",
-        icon: "vault",
-        mode: "real",
-        featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
-      },
-      { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
-      { to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] },
-      { to: "/owners", labelKey: "nav.item.owners", icon: "owner", mode: "real", featureIds: ["F59"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.issueAutomate",
-    items: [
-      { to: "/request", labelKey: "nav.item.requestCredential", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
-      { to: "/profiles", labelKey: "nav.item.profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
-      { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
-      {
-        to: "/protocols",
-        labelKey: "nav.item.protocols",
-        icon: "protocol",
-        mode: "real",
-        featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"],
-      },
-      { to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] },
-      { to: "/codesign", labelKey: "nav.item.codeSigning", icon: "signature", mode: "real", featureIds: ["F50"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.detectRespond",
-    items: [
-      { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
-      { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
-      { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
-      { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
-      { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
-      { to: "/approvals", labelKey: "nav.item.approvals", icon: "approval", mode: "real", featureIds: ["F33"] },
-      { to: "/operations", labelKey: "nav.item.operations", icon: "activity", mode: "real", featureIds: ["F7"] },
-      { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.governAdminister",
-    items: [
-      { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
-      { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
-      { to: "/privacy", labelKey: "nav.item.privacy", icon: "policy", mode: "real", featureIds: ["F79"] },
-      { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
-      { to: "/integrate", labelKey: "nav.item.integrate", icon: "protocol", mode: "real", featureIds: ["F5", "F46"] },
-      { to: "/integrate/api", labelKey: "nav.item.apiExplorer", icon: "protocol", mode: "real", featureIds: ["F10", "F46"] },
-      // C-A1: the /platform grab-bag row became three question-shaped rows —
-      // operate access, read system posture, see license state (DA-13).
-      { to: "/admin/access", labelKey: "platform.tabs.access", icon: "platform", mode: "real", featureIds: ["F8", "F13"] },
-      { to: "/admin/system", labelKey: "platform.tabs.posture", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40"] },
-      { to: "/admin/editions", labelKey: "platform.tabs.editions", icon: "platform", mode: "real", featureIds: ["F41"] },
-      { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F76", "F77", "F78"] },
-    ],
-  },
-];
+/* S-C1: the flat rail is gone — `navGroups` is now DERIVED from the space
+ * registry (every space's groups, in space order). Consumers that need "every
+ * grouped destination" (routeLabel, the command palette, the parity and
+ * completeness guards) keep their one stable source; consumers that scope by
+ * space read `navSpaces` directly. Route URLs are unchanged. */
+export const navGroups: NavGroup[] = navSpaces.flatMap((space) => space.groups);
 
 /* S-A1: every product surface now lives in the rail, so there are no
  * contextual-only routes. The export stays (as an empty list) so downstream

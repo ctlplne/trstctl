@@ -53,10 +53,12 @@ describe("audit module scope (S-B4)", () => {
     ]);
   });
 
-  it("maps each module to a stable scope term", () => {
+  it("maps each space to a stable scope term", () => {
     expect(moduleScopeTerm("secrets")).toBe("secret");
     expect(moduleScopeTerm("certificates")).toBe("cert");
-    expect(moduleScopeTerm("ssh")).toBe("ssh");
+    expect(moduleScopeTerm("workload")).toBe("ssh");
+    expect(moduleScopeTerm("posture")).toBe("incident");
+    expect(moduleScopeTerm("platform")).toBe("agent");
     expect(moduleScopeTerm("nope")).toBeUndefined();
   });
 

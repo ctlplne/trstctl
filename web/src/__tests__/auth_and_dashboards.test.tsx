@@ -249,7 +249,10 @@ describe("auth + dashboards", () => {
     expect(await screen.findByRole("heading", { name: "Certificates" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).getByRole("link", { name: /Certificates/i })).toHaveAttribute("href", "/certificates");
-    expect(within(nav).getByRole("link", { name: /Discovery/i })).toHaveAttribute("href", "/discovery");
+    // S-C1: Discovery lives in the Posture & response space — for a viewer the
+    // rail advertises that space, while privileged rows stay hidden.
+    const rail = screen.getByRole("navigation", { name: /Spaces/i });
+    expect(within(rail).getByRole("button", { name: "Posture & response" })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Request credential/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Approvals/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();

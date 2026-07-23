@@ -18,11 +18,19 @@ describe("UX-03 task-based navigation", () => {
     // rows (Access / System / Editions), consciously spending two more rows
     // of rail budget to kill the DA-13 grab-bag. New ceiling: 34.
     expect(allSidebarItems.length).toBeLessThanOrEqual(34);
+    // S-C1: the four flat bands became space-scoped groups; the row budget is
+    // unchanged because the carve moves rows, it does not add them.
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Inventory",
       "Issue & automate",
+      "Store & engines",
+      "Workload identity",
+      "SSH trust",
       "Detect & respond",
       "Govern & administer",
+      "Infrastructure",
+      "Integrate & extend",
+      "Administration",
     ]);
 
     const registered = new Set<string>(appRoutePaths);

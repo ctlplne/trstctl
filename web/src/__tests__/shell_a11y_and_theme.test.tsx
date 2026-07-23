@@ -524,42 +524,38 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
   });
 
-  it("exposes global groups plus the active module's scoped band", async () => {
-    renderShell();
+  it("scopes the sidebar to the active space and lists every space in the rail", async () => {
+    renderShell(["/certificates"]);
     await screen.findByText("u@example.test");
     const nav = screen.getByRole("navigation", { name: /Primary/i });
 
-    // S-B2: global groups always render; "Issue & automate" is now entirely
-    // module-scoped, so it no longer appears as a standalone global group.
-    for (const group of ["Inventory", "Detect & respond", "Govern & administer"]) {
+    // S-C1: inside the Certificates & PKI space its groups render — including
+    // the formerly module-banded CA hierarchy and Certificate profiles.
+    for (const group of ["Inventory", "Issue & automate"]) {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
-
-    // The module switcher lists the curated products as tabs.
-    const switcher = within(nav).getByRole("tablist", { name: /Module/i });
-    for (const module of ["Certificates & PKI", "Secrets", "SSH", "Signing", "Fleet"]) {
-      expect(within(switcher).getByRole("tab", { name: new RegExp(module) })).toBeInTheDocument();
-    }
-
-    // Default active module (Certificates & PKI) shows its band, including the
-    // formerly-hidden CA hierarchy and Certificate profiles.
-    for (const link of ["Request credential", "Protocols", "CA hierarchy", "Certificate profiles"]) {
+    for (const link of ["Request credential", "Protocols", "CA hierarchy", "Certificate profiles", "Code signing"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
 
-    // Global planes are always present regardless of module.
-    for (const link of ["Discovery", "Incidents", "Deployment connectors", "Access administration", "Credential graph"]) {
-      expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
-    }
+    // Other spaces' routes stay out of the sidebar until their space is active.
+    expect(within(nav).queryByRole("link", { name: /Discovery/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Deployment connectors/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Credential graph/i })).not.toBeInTheDocument();
 
-    // Other modules' routes are not in the rail until their module is active.
-    expect(within(nav).queryByRole("link", { name: /Code signing/i })).not.toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: /Coverage roadmap|RBAC/i })).not.toBeInTheDocument();
+    // The space rail lists Home plus every permitted space, and marks the
+    // active one from the URL.
+    const rail = screen.getByRole("navigation", { name: /Spaces/i });
+    for (const space of ["Home", "Certificates & PKI", "Secrets", "Workload & SSH", "Posture & response", "Platform"]) {
+      expect(within(rail).getByRole("button", { name: space })).toBeInTheDocument();
+    }
+    expect(within(rail).getByRole("button", { name: "Certificates & PKI" })).toHaveAttribute("aria-current", "true");
   });
 
   it("persists manual nav-group collapse and restore choices", async () => {
     const user = userEvent.setup();
-    renderShell();
+    // S-C1: groups live inside spaces now, so exercise one from a space route.
+    renderShell(["/certificates"]);
     await screen.findByText("u@example.test");
 
     const nav = screen.getByRole("navigation", { name: /Primary/i });
@@ -607,7 +603,9 @@ describe("app shell accessibility and theme", () => {
 
   it("routes to the split admin pages from grouped navigation (C-A1)", async () => {
     const user = userEvent.setup();
-    renderShell();
+    // S-C1: the admin rows live in the Platform space's sidebar, so start
+    // inside that space (on a route this harness mounts).
+    renderShell(["/admin/editions"]);
     await screen.findByText("u@example.test");
 
     await user.click(screen.getByRole("link", { name: /^Access administration$/i }));

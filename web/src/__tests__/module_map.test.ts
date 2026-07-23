@@ -1,13 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  appRoutePaths,
-  globalBandRoutes,
-  moduleForRoute,
-  navModules,
-  realGuiSurfaces,
-  surfaceModule,
-  type ModuleId,
-} from "@/lib/navigation";
+import { appRoutePaths, globalBandRoutes, moduleForRoute, navModules, realGuiSurfaces, surfaceModule, type ModuleId } from "@/lib/navigation";
 
 /** module_map (S-B1, extends nav_completeness for the Option-B era): the module
  * registry must partition every customer route into exactly one place — a
@@ -81,8 +73,10 @@ describe("module map (S-B1)", () => {
     }
   });
 
-  it("keeps the curated module set small (Infisical lesson: shrink, do not sprawl)", () => {
+  it("keeps the curated space set small (Infisical lesson: shrink, do not sprawl)", () => {
+    // S-C1: SSH/Signing folded into their parent spaces; Fleet split between
+    // Workload & SSH and Platform. Still five, still shrinking-not-sprawling.
     expect(navModules.length).toBeLessThanOrEqual(5);
-    expect(navModules.map((m) => m.id)).toEqual(["certificates", "secrets", "ssh", "signing", "fleet"]);
+    expect(navModules.map((m) => m.id)).toEqual(["certificates", "secrets", "workload", "posture", "platform"]);
   });
 });

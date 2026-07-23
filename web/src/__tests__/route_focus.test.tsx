@@ -55,7 +55,8 @@ describe("SPA route focus management (PRODUCT-006)", () => {
     // Initial mount must not steal focus from the browser/restore behavior.
     expect(document.activeElement).not.toBe(screen.getByRole("heading", { name: "Overview" }));
 
-    await user.click(screen.getByRole("link", { name: /Certificates/i }));
+    // S-C1: /certificates is reached from Home via the space rail.
+    await user.click(screen.getByRole("button", { name: "Certificates & PKI" }));
 
     const heading = await screen.findByRole("heading", { name: "Certificates" });
     const main = screen.getByRole("main");
@@ -69,7 +70,8 @@ describe("SPA route focus management (PRODUCT-006)", () => {
     renderShell();
     await screen.findByText("u@example.test");
 
-    await user.click(screen.getByRole("link", { name: /Certificates/i }));
+    // S-C1: /certificates is reached from Home via the space rail.
+    await user.click(screen.getByRole("button", { name: "Certificates & PKI" }));
     await screen.findByRole("heading", { name: "Certificates" });
 
     await waitFor(() => expect(document.title).toMatch(/Certificates/));
@@ -90,7 +92,9 @@ describe("SPA route focus management (PRODUCT-006)", () => {
               <Routes>
                 <Route element={<AppShell />}>
                   <Route index element={<h1>Overview</h1>} />
-                  <Route path="identities" element={<p>no heading here</p>} />
+                  {/* S-C1: /workloads is the Workload & SSH space's landing
+                      route, reachable from Home via the rail. */}
+                  <Route path="workloads" element={<p>no heading here</p>} />
                 </Route>
               </Routes>
             </MemoryRouter>
@@ -100,7 +104,7 @@ describe("SPA route focus management (PRODUCT-006)", () => {
     );
     await screen.findByText("u@example.test");
 
-    await user.click(screen.getByRole("link", { name: /Identities/i }));
+    await user.click(screen.getByRole("button", { name: "Workload & SSH" }));
     await screen.findByText("no heading here");
 
     const main = screen.getByRole("main");

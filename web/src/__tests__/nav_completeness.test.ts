@@ -43,12 +43,23 @@ describe("nav completeness (S-A1)", () => {
     expect(missing, `these product surfaces are not visible in the rail: ${missing.join(", ")}`).toEqual([]);
   });
 
-  it("keeps the four re-grouped rail bands as the canonical structure", () => {
+  it("keeps the space-scoped groups as the canonical structure (S-C1)", () => {
     expect(navGroups.map((group) => group.labelKey)).toEqual([
+      // Certificates & PKI
       "nav.group.inventory",
       "nav.group.issueAutomate",
+      // Secrets
+      "nav.group.secretsEngines",
+      // Workload & SSH
+      "nav.group.workloadIdentity",
+      "nav.group.sshTrust",
+      // Posture & response
       "nav.group.detectRespond",
+      // Platform
       "nav.group.governAdminister",
+      "nav.group.infrastructure",
+      "nav.group.integrations",
+      "nav.group.adminConsole",
     ]);
   });
 

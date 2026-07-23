@@ -8,10 +8,11 @@ import { ToastProvider } from "@/components/ToastProvider";
 import { AppRoutes } from "@/App";
 import type { Me } from "@/lib/api";
 
-/** S-B2 module switcher + scoped rail. The rail's middle band is scoped by a
- * product module; global planes (Identities, Graph, Risk, Audit, …) stay
- * visible regardless of the active module. Deep-linking a module route selects
- * that module; a permission-limited user only sees modules they can use. */
+/** S-C1 space switcher (supersedes the S-B2 chips). The icon rail owns space
+ * switching: activating a space navigates to its landing route, the URL is the
+ * single source of truth for the active space, and the sidebar shows only the
+ * active space's groups. A permission-limited user only sees spaces containing
+ * at least one route they may read. */
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: new Proxy({} as Record<string, ReturnType<typeof vi.fn>>, {
@@ -30,10 +31,29 @@ vi.mock("@/lib/api", async (orig) => {
 });
 
 const FULL_PERMISSIONS = [
-  "access:read", "agents:read", "agents:write", "audit:read", "certs:issue", "certs:read", "certs:request",
-  "connectors:read", "discovery:read", "graph:read", "identities:read", "incidents:read", "issuers:read",
-  "keys:write", "lifecycle:read", "notifications:read", "owners:read", "policy:read", "privacy:read",
-  "profiles:read", "risk:read", "secrets:read", "secrets:write",
+  "access:read",
+  "agents:read",
+  "agents:write",
+  "audit:read",
+  "certs:issue",
+  "certs:read",
+  "certs:request",
+  "connectors:read",
+  "discovery:read",
+  "graph:read",
+  "identities:read",
+  "incidents:read",
+  "issuers:read",
+  "keys:write",
+  "lifecycle:read",
+  "notifications:read",
+  "owners:read",
+  "policy:read",
+  "privacy:read",
+  "profiles:read",
+  "risk:read",
+  "secrets:read",
+  "secrets:write",
 ];
 
 function session(permissions: string[]): Me {
@@ -54,70 +74,81 @@ function renderAt(path: string) {
   );
 }
 
-describe("module switcher (S-B2)", () => {
+describe("space switcher (S-C1)", () => {
   beforeEach(() => {
     localStorage.clear();
     apiMock.me.mockResolvedValue(session(FULL_PERMISSIONS));
   });
 
-  it("renders the module switcher and scopes the rail band to the active module", async () => {
+  it("derives the active space from the URL and scopes the sidebar to it", async () => {
     renderAt("/certificates");
     const nav = await screen.findByRole("navigation", { name: /Primary/i });
+    const rail = screen.getByRole("navigation", { name: /Spaces/i });
 
-    // Switcher exposes the curated modules as tabs.
-    const switcher = within(nav).getByRole("tablist", { name: /Module/i });
-    expect(within(switcher).getByRole("tab", { name: /Certificates & PKI/i })).toBeInTheDocument();
-    expect(within(switcher).getByRole("tab", { name: /Secrets/i })).toBeInTheDocument();
-    expect(within(switcher).getByRole("tab", { name: /Fleet/i })).toBeInTheDocument();
+    // The rail exposes Home plus the five spaces.
+    for (const space of ["Home", "Certificates & PKI", "Secrets", "Workload & SSH", "Posture & response", "Platform"]) {
+      expect(within(rail).getByRole("button", { name: space })).toBeInTheDocument();
+    }
 
-    // On a certificates route, the Certificates & PKI module is active and its
-    // band shows CA hierarchy / Certificate profiles.
-    expect(within(switcher).getByRole("tab", { name: /Certificates & PKI/i })).toHaveAttribute("aria-selected", "true");
+    // On a certificates route, the Certificates & PKI space is active and its
+    // sidebar shows CA hierarchy / Certificate profiles.
+    expect(within(rail).getByRole("button", { name: "Certificates & PKI" })).toHaveAttribute("aria-current", "true");
     expect(within(nav).getByRole("link", { name: /CA hierarchy/i })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /Certificate profiles/i })).toBeInTheDocument();
 
-    // Global planes stay visible regardless of module.
-    expect(within(nav).getByRole("link", { name: /Credential graph/i })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: /^Audit$/i })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: /Identities/i })).toBeInTheDocument();
+    // Other spaces' surfaces stay out of the sidebar — the space owns it.
+    expect(within(nav).queryByRole("link", { name: /Credential graph/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Workloads/i })).not.toBeInTheDocument();
   });
 
-  it("switches the band without navigating when a different module is chosen", async () => {
+  it("navigates to the chosen space's landing route when switching", async () => {
     const user = userEvent.setup();
     renderAt("/certificates");
-    const nav = await screen.findByRole("navigation", { name: /Primary/i });
-    const switcher = within(nav).getByRole("tablist", { name: /Module/i });
+    await screen.findByRole("navigation", { name: /Primary/i });
+    const rail = screen.getByRole("navigation", { name: /Spaces/i });
 
-    await user.click(within(switcher).getByRole("tab", { name: /Fleet/i }));
+    await user.click(within(rail).getByRole("button", { name: "Workload & SSH" }));
 
-    // Fleet band appears (Workloads); certificates-only routes leave the band.
-    await waitFor(() => expect(within(nav).getByRole("link", { name: /Workloads/i })).toBeInTheDocument());
+    // The URL is the source of truth: switching lands on the space's first
+    // permitted route and the sidebar re-scopes.
+    await screen.findByRole("heading", { level: 1, name: "Workloads" });
+    const nav = screen.getByRole("navigation", { name: /Primary/i });
+    await waitFor(() => expect(within(nav).getByRole("link", { name: /SSH trust/i })).toBeInTheDocument());
     expect(within(nav).queryByRole("link", { name: /CA hierarchy/i })).not.toBeInTheDocument();
-    // Switching is chrome only — the route did not change.
-    expect(screen.getByRole("heading", { level: 1, name: "Certificates" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Workload & SSH" })).toHaveAttribute("aria-current", "true");
   });
 
-  it("auto-selects the owning module when deep-linking a module route", async () => {
+  it("marks the owning space active when deep-linking a space route", async () => {
     renderAt("/ssh");
-    const nav = await screen.findByRole("navigation", { name: /Primary/i });
-    const switcher = within(nav).getByRole("tablist", { name: /Module/i });
-    await waitFor(() => expect(within(switcher).getByRole("tab", { name: /^SSH$/i })).toHaveAttribute("aria-selected", "true"));
+    await screen.findByRole("navigation", { name: /Primary/i });
+    const rail = screen.getByRole("navigation", { name: /Spaces/i });
+    await waitFor(() => expect(within(rail).getByRole("button", { name: "Workload & SSH" })).toHaveAttribute("aria-current", "true"));
   });
 
-  it("shows a secrets-only operator just their permitted modules plus global planes", async () => {
-    // Rendered from the dashboard: the switcher is route-independent, and this
-    // avoids exercising a data-heavy product page under the smoke mock.
-    apiMock.me.mockResolvedValue(session(["secrets:read", "secrets:write", "identities:read", "risk:read", "graph:read", "audit:read"]));
+  it("shows Home (primary items + worklists) outside any space", async () => {
     renderAt("/");
     const nav = await screen.findByRole("navigation", { name: /Primary/i });
-    const switcher = within(nav).getByRole("tablist", { name: /Module/i });
+    const rail = screen.getByRole("navigation", { name: /Spaces/i });
 
-    expect(within(switcher).getByRole("tab", { name: /Secrets/i })).toBeInTheDocument();
-    // No certificate-issuance or signing module for a session lacking certs:*/keys:write.
-    expect(within(switcher).queryByRole("tab", { name: /Certificates & PKI/i })).not.toBeInTheDocument();
-    expect(within(switcher).queryByRole("tab", { name: /Signing/i })).not.toBeInTheDocument();
-    // Global planes the session can read remain.
-    expect(within(nav).getByRole("link", { name: /Credential graph/i })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: /^Audit$/i })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "true");
+    expect(within(nav).getByRole("link", { name: /Journeys/i })).toBeInTheDocument();
+    expect(within(nav).getByRole("list", { name: "Needs action worklists" })).toBeInTheDocument();
+    // Space-owned rows do not leak onto the Home sidebar.
+    expect(within(nav).queryByRole("link", { name: /CA hierarchy/i })).not.toBeInTheDocument();
+  });
+
+  it("hides spaces the session cannot use and keeps permitted ones", async () => {
+    // No secrets:write — that scope would light up Workload & SSH via /workloads.
+    apiMock.me.mockResolvedValue(session(["secrets:read", "risk:read", "graph:read", "audit:read"]));
+    renderAt("/");
+    await screen.findByRole("navigation", { name: /Primary/i });
+    const rail = screen.getByRole("navigation", { name: /Spaces/i });
+
+    expect(within(rail).getByRole("button", { name: "Secrets" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Posture & response" })).toBeInTheDocument();
+    // No certificate-issuance space for a session lacking certs:*/issuers:*.
+    expect(within(rail).queryByRole("button", { name: "Certificates & PKI" })).not.toBeInTheDocument();
+    // Workload & SSH needs certs/identities scopes this session lacks.
+    expect(within(rail).queryByRole("button", { name: "Workload & SSH" })).not.toBeInTheDocument();
   });
 });

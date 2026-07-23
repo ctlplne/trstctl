@@ -123,7 +123,9 @@ describe("i18n boundary", () => {
 
     fireEvent.click(screen.getByRole("button", { name: pseudoLocalize("Open primary navigation") }));
     const drawer = screen.getByRole("dialog", { name: pseudoLocalize("Primary navigation") });
-    fireEvent.click(within(drawer).getByRole("link", { name: new RegExp(pseudoLocalize("Dashboard").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }));
+    // S-C1: at /certificates the drawer shows the Certificates & PKI space's
+    // rows (Dashboard lives on the Home plane), so select the space's own row.
+    fireEvent.click(within(drawer).getByRole("link", { name: new RegExp(pseudoLocalize("Certificates").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }));
 
     expect(screen.queryByRole("dialog", { name: pseudoLocalize("Primary navigation") })).not.toBeInTheDocument();
     setViewportWidth(1024);
@@ -227,8 +229,10 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      "es-ES": "bf97a85cddbb88b31b3ec1e364a7ae6a04148dc10e829204ab81d2746f783d10",
-      "de-DE": "9171adb6765d3c01eacef880887074c27326b3e020023a43e928835e05f3f326",
+      // S-C1 re-pin: the spaces IA added 11 reviewed nav keys per catalog
+      // (space labels, space groups, and the rail's accessible name).
+      "es-ES": "8251f52d01c9c37b28ec8c93552f77fdeffb96be77246f8d469f797b48827ae4",
+      "de-DE": "47c933416ca225241a8e617b978f8d04c8ce3ee1cbeab20d1b18b90f54dd40b8",
     });
   });
 

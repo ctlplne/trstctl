@@ -15,17 +15,14 @@ describe("module lock / upsell mechanism (S-B5)", () => {
   });
 
   it("locks a module iff its required commercial feature is unlicensed", () => {
-    // Synthetic map proves the mechanism a future commercial module would use.
-    const synthetic: Record<string, string> = { signing: "software_trust" };
-    const locked = navModules
-      .filter((m) => synthetic[m.id] && !new Set(["fips"]).has(synthetic[m.id]))
-      .map((m) => m.id);
-    expect(locked).toContain("signing");
+    // Synthetic map proves the mechanism a future commercial space would use
+    // (S-C1: exercised against a real space id from the current carve).
+    const synthetic: Record<string, string> = { workload: "software_trust" };
+    const locked = navModules.filter((m) => synthetic[m.id] && !new Set(["fips"]).has(synthetic[m.id])).map((m) => m.id);
+    expect(locked).toContain("workload");
 
     // And with the feature licensed, it unlocks.
-    const licensedLocked = navModules
-      .filter((m) => synthetic[m.id] && !new Set(["software_trust"]).has(synthetic[m.id]))
-      .map((m) => m.id);
-    expect(licensedLocked).not.toContain("signing");
+    const licensedLocked = navModules.filter((m) => synthetic[m.id] && !new Set(["software_trust"]).has(synthetic[m.id])).map((m) => m.id);
+    expect(licensedLocked).not.toContain("workload");
   });
 });
