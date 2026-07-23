@@ -24,6 +24,9 @@ const excludedPathParts = [
   `${path.sep}i18n${path.sep}`,
   `${path.sep}lib${path.sep}api-types.gen.ts`,
   `${path.sep}vite-env.d.ts`,
+  // S-C8: Storybook stories are a dev-only workbench; their fixture copy is
+  // never shipped UI and must not enter the extraction budget.
+  `.stories.`,
   // The styleguide is the internal living spec: its sample labels and fixture
   // values are intentionally not customer copy, so they stay out of the
   // extraction ratchet the same way test fixtures do.

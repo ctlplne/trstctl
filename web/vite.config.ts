@@ -69,6 +69,7 @@ export default defineConfig({
       exclude: [
         "web/src/**/*.gen.ts",
         "web/src/**/*.test.{ts,tsx}",
+        "web/src/**/*.stories.tsx",
         "web/src/main.tsx",
         "web/src/vite-env.d.ts",
         "web/src/test/**",
