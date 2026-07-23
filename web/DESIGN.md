@@ -55,10 +55,12 @@ component there comes from the real implementation.
 9. **Charts pull from the tone palette.** Use `ChartTone` names, never
    hand-picked hues; several tokens alias in dark mode, so check `/styleguide`
    when composing multi-series charts.
-10. **New user-facing strings are typed message keys.** Add to
-    `src/i18n/messages.ts` with `es-ES` and `de-DE` entries or the extraction
-    ratchet in `extractedMessages.budget.json` will fail — never raise the
-    budget.
+10. **New user-facing strings are typed message keys.** English goes in
+    `src/i18n/messages.ts`; the `es-ES`/`de-DE` entries go in the per-locale
+    modules `src/i18n/catalog.es-ES.ts` / `catalog.de-DE.ts` (S-C10 — a
+    missing key is a type error there). Skip either and the extraction
+    ratchet in `extractedMessages.budget.json` or the type-checker will fail —
+    never raise the budget.
 11. **Multi-input operator tasks are wizards, not flat forms.** Anything with
     three or more decisions renders as a `StepShell` stepper (see Setup,
     Request Credential, Add Certificate): one job per step, validation gates

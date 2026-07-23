@@ -54,8 +54,12 @@ color utility silently conflict. If you add a token scale, register it there.
 
 ## i18n workflow
 
-User-facing strings are typed message keys in `src/i18n/messages.ts` with
-`es-ES` and `de-DE` entries; the extraction budget is sealed at zero. The
+User-facing strings are typed message keys: the English source lives in
+`src/i18n/messages.ts`, and the `es-ES`/`de-DE` translations live in the
+per-locale modules `src/i18n/catalog.es-ES.ts` / `catalog.de-DE.ts` (S-C10 —
+lazy-loaded; the `satisfies` clause makes a missing key a type error, so every
+new key still ships with both translations in the same commit). The extraction
+budget is sealed at zero. The
 production-catalog sha256 digests in `i18n.test.tsx` are a REVIEW RATCHET:
 adding or changing translations legitimately breaks them — re-pin in the same
 change with a comment saying what was reviewed. Machine-authored translations
