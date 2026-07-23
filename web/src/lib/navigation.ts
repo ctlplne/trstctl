@@ -89,7 +89,22 @@ export interface NavModule {
  * in exactly one space group (the module_map partition guard); labels reuse the
  * established vocabulary — "Certificates & PKI", "Detect & respond", and
  * "Govern & administer" survive from the S-A1/S-B1 era on purpose (docs and
- * operator muscle memory reference them). */
+ * operator muscle memory reference them).
+ *
+ * S-C7 — the workspaces-vs-lenses rule for in-page tabs. A tab becomes a
+ * sidebar ROUTE only when it is a distinct served workspace: its own feature
+ * evidence, its own workflows/mutations, its own name. A tab that is a LENS —
+ * an alternate view over the same object domain — stays an in-page tab and
+ * must be URL-addressable via ?tab=. Rulings under this rule:
+ *   - Secrets: six workspaces → six routes (S-C2).
+ *   - Certificates (inventory/health/crlct/renewal): four lenses over one
+ *     certificate inventory → tabs stay (?tab= deep links, e.g. the
+ *     Dashboard's /certificates?tab=renewal, remain first-class).
+ *   - Discovery (findings/sources/schedules/runs): four stages of ONE
+ *     discovery pipeline sharing feature evidence (F2/F35/F36/F42/F49) →
+ *     tabs stay.
+ * Splitting a lens into a route (or vice versa) is an IA change: update this
+ * comment, the guards, and the docs in the same PR. */
 export const navSpaces: NavSpace[] = [
   {
     id: "certificates",
