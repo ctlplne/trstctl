@@ -1571,3 +1571,89 @@ jobs:
         env:
           TRSTCTL_RUN_SPIRE_E2E: "1"
         run: go test -tags e2e -count=1 -v ./test/e2e/spire/...
+
+  # S-C8: the component workbench must keep building — stories render against
+  # the real tokens, so a broken story or token regression fails here. Marked
+  # advisory in branch protection (not a required check) while it beds in.
+  web-storybook:
+    name: web storybook (workbench build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the static workbench
+        run: npm run storybook:build
+
+  # S-C4: browser e2e against the seeded demo stack. Manual-only
+  # (workflow_dispatch) until the visual baselines are generated and committed
+  # from a first local run; the smoke spec runs regardless of baselines.
+  web-e2e:
+    name: web e2e (Playwright shell smoke, manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the seeded demo stack
+        working-directory: .
+        run: docker compose -f deploy/demo/docker-compose.yml up -d --build
+
+      - name: Wait for the control plane
+        working-directory: .
+        run: |
+          for i in $(seq 1 60); do
+            curl -skf https://localhost:9443/ >/dev/null && exit 0
+            sleep 5
+          done
+          echo "demo stack did not become ready" >&2
+          docker compose -f deploy/demo/docker-compose.yml logs --no-color --tail=200
+          exit 1
+
+      - name: Shell smoke
+        run: npm run e2e -- e2e/shell.spec.ts
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          if-no-files-found: ignore
+
+      - name: Demo stack logs on failure
+        if: failure()
+        working-directory: .
+        run: docker compose -f deploy/demo/docker-compose.yml logs --no-color --tail=300
