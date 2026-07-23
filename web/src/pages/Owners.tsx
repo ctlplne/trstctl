@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem } from "@/lib/api";
-import { useResource } from "@/lib/useResource";
+import { useApiQuery, useQueryClient } from "@/lib/query";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
@@ -27,12 +27,14 @@ export function Owners() {
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get("owner") ?? searchParams.get("q") ?? "");
   const [kind, setKind] = useState(() => searchParams.get("kind") ?? "all");
-  const { data, loading, error } = useResource(api.owners);
-  const attribution = useResource(readOwnershipAttribution);
+  // S-C5a pilot: the query layer replaces useResource — the cache is the one
+  // source of row truth, mutations write through setQueryData for instant UI
+  // and invalidate for server truth (the refetch useResource never had).
+  const queryClient = useQueryClient();
+  const { data, loading, error } = useApiQuery(["owners"], api.owners);
+  const attribution = useApiQuery(["ownership-attribution"], readOwnershipAttribution);
   const { toast } = useToast();
-  // useResource has no refetch, so the one-shot load is mirrored into local
-  // state and row edits/deletes update the grid optimistically.
-  const [rows, setRows] = useState<Owner[] | null>(null);
+  const rows = data;
   const [editTarget, setEditTarget] = useState<Owner | null>(null);
   const [editName, setEditName] = useState("");
   const [editKind, setEditKind] = useState<Owner["kind"]>("user");
@@ -43,9 +45,6 @@ export function Owners() {
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  useEffect(() => {
-    setRows(data);
-  }, [data]);
   const owners = useMemo(() => rows ?? [], [rows]);
   const attributionRows = useMemo(() => attribution.data?.items ?? [], [attribution.data]);
   const attributionColumns = useMemo<DataGridColumn<OwnershipAttributionItem>[]>(
@@ -86,7 +85,8 @@ export function Owners() {
     setEditError(null);
     try {
       const updated = await api.updateOwner(editTarget.id, { name, kind: editKind, email: editEmail.trim() || undefined });
-      setRows((current) => (current ? current.map((owner) => (owner.id === updated.id ? updated : owner)) : current));
+      queryClient.setQueryData<Owner[]>(["owners"], (current) => (current ? current.map((owner) => (owner.id === updated.id ? updated : owner)) : current));
+      void queryClient.invalidateQueries({ queryKey: ["owners"] });
       setEditTarget(null);
       toast({ kind: "success", title: t("parity.ownerUpdated_07b92f"), description: updated.name });
     } catch (err) {
@@ -103,7 +103,8 @@ export function Owners() {
     setDeleteError(null);
     try {
       await api.deleteOwner(target.id);
-      setRows((current) => (current ? current.filter((owner) => owner.id !== target.id) : current));
+      queryClient.setQueryData<Owner[]>(["owners"], (current) => (current ? current.filter((owner) => owner.id !== target.id) : current));
+      void queryClient.invalidateQueries({ queryKey: ["owners"] });
       setDeleteTarget(null);
       setDeleteConfirm("");
       toast({ kind: "success", title: t("parity.ownerDeleted_079d61"), description: target.name });
@@ -154,7 +155,8 @@ export function Owners() {
         <>
           <form className="flex flex-wrap items-end gap-3" role="search" onSubmit={(event) => event.preventDefault()}>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-search">
-              {translateNow("source.search.owners.55a040f1a5")}<input
+              {translateNow("source.search.owners.55a040f1a5")}
+              <input
                 id="owner-search"
                 type="search"
                 value={query}
@@ -164,7 +166,8 @@ export function Owners() {
               />
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-kind">
-              {translateNow("source.owner.kind.eb9923cec7")}<select
+              {translateNow("source.owner.kind.eb9923cec7")}
+              <select
                 id="owner-kind"
                 value={kind}
                 onChange={(event) => setKind(event.target.value)}
@@ -179,7 +182,7 @@ export function Owners() {
               </select>
             </label>
             <p className="pb-2 text-caption text-muted-foreground">
-              {translateNow("source.showing.d604310a78")}{" "}{filteredOwners.length} {" "}{translateNow("source.of.28391d3bc6")}{" "}{rows.length}
+              {translateNow("source.showing.d604310a78")} {filteredOwners.length} {translateNow("source.of.28391d3bc6")} {rows.length}
             </p>
           </form>
 
@@ -230,10 +233,11 @@ export function Owners() {
             }}
           >
             <h2 id="owner-edit-title" className="text-title font-semibold">
-              {translateNow("source.edit.464c4ffd01")}{" "}{editTarget.name}
+              {translateNow("source.edit.464c4ffd01")} {editTarget.name}
             </h2>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-name">
-              {translateNow("source.name.dcd1d5223f")}<input
+              {translateNow("source.name.dcd1d5223f")}
+              <input
                 id="owner-edit-name"
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                 value={editName}
@@ -242,7 +246,8 @@ export function Owners() {
               />
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-kind">
-              {translateNow("source.owner.kind.eb9923cec7")}<select
+              {translateNow("source.owner.kind.eb9923cec7")}
+              <select
                 id="owner-edit-kind"
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                 value={editKind}
@@ -268,7 +273,8 @@ export function Owners() {
             {editError && <p className="text-sm font-medium text-risk-critical">{editError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setEditTarget(null)} disabled={editBusy}>
-                {translateNow("source.cancel.19766ed6cc")}</Button>
+                {translateNow("source.cancel.19766ed6cc")}
+              </Button>
               <Button type="submit" disabled={editBusy}>
                 {t("parity.saveOwner_b67638")}
               </Button>
@@ -298,7 +304,7 @@ export function Owners() {
           >
             <div>
               <h2 id="owner-delete-title" className="text-title font-semibold">
-                {translateNow("source.delete.e2d0a54968")}{" "}{deleteTarget.name}
+                {translateNow("source.delete.e2d0a54968")} {deleteTarget.name}
               </h2>
               <p id="owner-delete-description" className="mt-1 text-sm text-muted-foreground">
                 {t("parity.deletingAnOwnerRemovesTheAccountability_cdfad5")}
@@ -320,7 +326,8 @@ export function Owners() {
             {deleteError && <p className="text-sm font-medium text-risk-critical">{deleteError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
-                {translateNow("source.cancel.19766ed6cc")}</Button>
+                {translateNow("source.cancel.19766ed6cc")}
+              </Button>
               <Button
                 type="submit"
                 variant="outline"

@@ -7,6 +7,7 @@ import { RbacProvider } from "@/components/rbac";
 import { ToastProvider } from "@/components/ToastProvider";
 import { IntlProvider, useTranslation } from "@/i18n/I18nProvider";
 import { isSupportedLocale } from "@/i18n/messages";
+import { AppQueryProvider } from "@/lib/query";
 // Login stays an eager import: it is the pre-auth fast path and must render
 // without waiting on a second chunk.
 import { Login } from "@/pages/Login";
@@ -76,65 +77,67 @@ function RequireAuth({ children }: { children: ReactElement }) {
  * inside a MemoryRouter. */
 export function AppRoutes() {
   return (
-    <ToastProvider>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          element={
-            <RequireAuth>
-              <AppShell />
-            </RequireAuth>
-          }
-        >
-          <Route index element={<Dashboard />} />
-          <Route path="certificates" element={<Certificates />} />
-          <Route path="identities" element={<Identities />} />
-          <Route path="owners" element={<Owners />} />
-          <Route path="agents" element={<Agents />} />
-          <Route path="discovery" element={<Discovery />} />
-          <Route path="profiles" element={<Profiles />} />
-          <Route path="request" element={<RequestCredential />} />
-          <Route path="ca-hierarchy" element={<CAHierarchy />} />
-          <Route path="workloads" element={<Workloads />} />
-          <Route path="protocols" element={<Protocols />} />
-          <Route path="ssh" element={<SSHTrust />} />
-          <Route path="codesign" element={<CodeSigning />} />
-          <Route path="secrets" element={<Secrets />} />
-          {/* S-C2: the Secrets workspaces are routes in the Secrets space
+    <AppQueryProvider>
+      <ToastProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            element={
+              <RequireAuth>
+                <AppShell />
+              </RequireAuth>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="certificates" element={<Certificates />} />
+            <Route path="identities" element={<Identities />} />
+            <Route path="owners" element={<Owners />} />
+            <Route path="agents" element={<Agents />} />
+            <Route path="discovery" element={<Discovery />} />
+            <Route path="profiles" element={<Profiles />} />
+            <Route path="request" element={<RequestCredential />} />
+            <Route path="ca-hierarchy" element={<CAHierarchy />} />
+            <Route path="workloads" element={<Workloads />} />
+            <Route path="protocols" element={<Protocols />} />
+            <Route path="ssh" element={<SSHTrust />} />
+            <Route path="codesign" element={<CodeSigning />} />
+            <Route path="secrets" element={<Secrets />} />
+            {/* S-C2: the Secrets workspaces are routes in the Secrets space
               sidebar; the page derives its workspace from the pathname, and
               historical /secrets?tab= deep links redirect permanently. */}
-          <Route path="secrets/access" element={<Secrets />} />
-          <Route path="secrets/sharing" element={<Secrets />} />
-          <Route path="secrets/engines" element={<Secrets />} />
-          <Route path="secrets/scanning" element={<Secrets />} />
-          <Route path="secrets/sync" element={<Secrets />} />
-          <Route path="connectors" element={<Connectors />} />
-          <Route path="policy" element={<Policy />} />
-          <Route path="risk" element={<Risk />} />
-          <Route path="incidents" element={<Incidents />} />
-          <Route path="approvals" element={<Approvals />} />
-          <Route path="operations" element={<Operations />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="posture" element={<Posture />} />
-          <Route path="graph" element={<Graph />} />
-          <Route path="audit" element={<Audit />} />
-          <Route path="privacy" element={<Privacy />} />
-          <Route path="integrate" element={<Integrate />} />
-          <Route path="integrate/api" element={<ApiExplorer />} />
-          <Route path="assistant" element={<Assistant />} />
-          <Route path="wizard" element={<Wizard />} />
-          <Route path="admin/access" element={<AdminAccess />} />
-          <Route path="admin/system" element={<AdminSystem />} />
-          <Route path="admin/editions" element={<AdminEditions />} />
-          {/* C-A1: /platform (and its historical ?tab= deep links) redirects
+            <Route path="secrets/access" element={<Secrets />} />
+            <Route path="secrets/sharing" element={<Secrets />} />
+            <Route path="secrets/engines" element={<Secrets />} />
+            <Route path="secrets/scanning" element={<Secrets />} />
+            <Route path="secrets/sync" element={<Secrets />} />
+            <Route path="connectors" element={<Connectors />} />
+            <Route path="policy" element={<Policy />} />
+            <Route path="risk" element={<Risk />} />
+            <Route path="incidents" element={<Incidents />} />
+            <Route path="approvals" element={<Approvals />} />
+            <Route path="operations" element={<Operations />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="posture" element={<Posture />} />
+            <Route path="graph" element={<Graph />} />
+            <Route path="audit" element={<Audit />} />
+            <Route path="privacy" element={<Privacy />} />
+            <Route path="integrate" element={<Integrate />} />
+            <Route path="integrate/api" element={<ApiExplorer />} />
+            <Route path="assistant" element={<Assistant />} />
+            <Route path="wizard" element={<Wizard />} />
+            <Route path="admin/access" element={<AdminAccess />} />
+            <Route path="admin/system" element={<AdminSystem />} />
+            <Route path="admin/editions" element={<AdminEditions />} />
+            {/* C-A1: /platform (and its historical ?tab= deep links) redirects
               permanently to the split /admin/* routes. */}
-          <Route path="platform" element={<PlatformRedirect />} />
-          <Route path="styleguide" element={<Styleguide />} />
-          <Route path="journeys" element={<Journeys />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </ToastProvider>
+            <Route path="platform" element={<PlatformRedirect />} />
+            <Route path="styleguide" element={<Styleguide />} />
+            <Route path="journeys" element={<Journeys />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ToastProvider>
+    </AppQueryProvider>
   );
 }
 
