@@ -81,3 +81,9 @@ cover.out.nogen
 # Internal working docs (audits, sprint plans, decision records) are local
 # working artifacts, not committable repo content.
 docs-internal/
+
+# S-C4/S-C8: browser-test and workbench artifacts (baselines under
+# web/e2e/**-snapshots ARE committed; reports and builds are not)
+/web/test-results/
+/web/playwright-report/
+/web/.storybook-static/
