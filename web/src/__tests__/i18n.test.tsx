@@ -229,10 +229,10 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      // S-C2 re-pin: the Secrets route split added 6 reviewed keys per catalog
-      // (four route names and two sidebar groups).
-      "es-ES": "7322f761004a26138c3989c1d37a228ce9493fbf265087a48b1c5c59705fc40c",
-      "de-DE": "94c3f8c125aec1d1589e19c7666e3d3a6f17c33f8e753bf716fce48a9457f7af",
+      // S-C6 re-pin: the palette verb actions added 8 reviewed keys per
+      // catalog (four verbs and their descriptions).
+      "es-ES": "0bf8dcc48a3057167cf883192dc1daf3afb559e2d8ca96f533770b7ec7544a8f",
+      "de-DE": "aa4d38f717c95fa3c5ea4de7e8b8b4a5d8fe9dff2bde6dc2915072687e629283",
     });
   });
 

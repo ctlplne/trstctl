@@ -5,7 +5,7 @@ import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
 import { hasAnyPermission } from "@/lib/access";
 import { api, type Me } from "@/lib/api";
-import { appRoutePaths, contextualRouteItems, navGroups, permissionAnyForPath, primaryNavItems } from "@/lib/navigation";
+import { appRoutePaths, contextualRouteItems, navGroups, navSpaces, permissionAnyForPath, primaryNavItems, spaceForRoute } from "@/lib/navigation";
 import { useGlobalSearch, type GlobalSearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -16,6 +16,11 @@ interface RouteCommand {
   label: string;
   description: string;
   to: string;
+  /** S-C6: the owning space's label (section heading) and rail order. Routes
+   * outside any space (wizard, styleguide, legacy redirects) sort last under
+   * the plain "Routes" heading. */
+  spaceLabel: string;
+  spaceOrder: number;
 }
 
 interface ActionCommand {
@@ -65,16 +70,28 @@ function routeCommands(t: (key: MessageKey, values?: Record<string, string | num
       labels.set(path, { labelKey: item.labelKey, groupKey: item.groupKey });
     }
   }
+  // S-C6: resolve each route's owning space for section grouping. Home is the
+  // first section; spaces follow rail order; spaceless routes land last.
+  const spaceOrderById = new Map<string, { label: string; order: number }>(
+    navSpaces.map((space, index) => [space.id, { label: t(space.labelKey), order: index + 1 }]),
+  );
+  const homeMeta = { label: t("nav.space.home"), order: 0 };
+  const fallbackMeta = { label: t("command.routes"), order: navSpaces.length + 1 };
+
   return appRoutePaths
     .filter((path) => hasAnyPermission(user, permissionAnyForPath(path)))
     .map((path) => {
       const nav = labels.get(path);
       const fallback = titleFromPath(path);
+      const owner = spaceForRoute(path);
+      const meta = owner === "home" ? homeMeta : owner ? (spaceOrderById.get(owner) ?? fallbackMeta) : fallbackMeta;
       return {
         id: `route:${path}`,
         label: nav ? t(nav.labelKey) : fallback === "nav.item.dashboard" ? t(fallback) : fallback,
         description: t("command.routeDescription", { group: nav ? t(nav.groupKey) : path }),
         to: path,
+        spaceLabel: meta.label,
+        spaceOrder: meta.order,
       };
     });
 }
@@ -161,13 +178,72 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
           }
         },
       },
+      // S-C6: verb entries covering the other spaces — each lands on the
+      // surface where the verb actually happens (never a fake mutation).
+      {
+        id: "action:rotate-secret",
+        label: t("command.action.rotateSecret"),
+        description: t("command.action.rotateSecretDescription"),
+        permissionAny: ["secrets:write"],
+        run: () => {
+          navigate("/secrets");
+          onClose();
+        },
+      },
+      {
+        id: "action:grant-workload-access",
+        label: t("command.action.grantAccess"),
+        description: t("command.action.grantAccessDescription"),
+        permissionAny: ["secrets:write"],
+        run: () => {
+          navigate("/secrets/access");
+          onClose();
+        },
+      },
+      {
+        id: "action:issue-ssh-cert",
+        label: t("command.action.sshUserCert"),
+        description: t("command.action.sshUserCertDescription"),
+        permissionAny: ["certs:issue"],
+        run: () => {
+          navigate("/ssh");
+          onClose();
+        },
+      },
+      {
+        id: "action:preview-blast-radius",
+        label: t("command.action.blastRadius"),
+        description: t("command.action.blastRadiusDescription"),
+        permissionAny: ["graph:read"],
+        run: () => {
+          navigate("/graph");
+          onClose();
+        },
+      },
     ],
-    [navigate, onClose],
+    [navigate, onClose, t],
   );
   const filteredRoutes = useMemo(
-    () => commands.filter((command) => matchesRoute(command, query)).sort((left, right) => routeScore(left, query) - routeScore(right, query)),
+    () =>
+      commands
+        .filter((command) => matchesRoute(command, query))
+        // S-C6: stable space order first, then match quality within a space —
+        // the rendered sections and the Enter-activates-first order agree.
+        .sort((left, right) => left.spaceOrder - right.spaceOrder || routeScore(left, query) - routeScore(right, query)),
     [commands, query],
   );
+  const routeSections = useMemo(() => {
+    const sections: Array<{ label: string; routes: RouteCommand[] }> = [];
+    for (const command of filteredRoutes) {
+      const current = sections[sections.length - 1];
+      if (current && current.label === command.spaceLabel) {
+        current.routes.push(command);
+      } else {
+        sections.push({ label: command.spaceLabel, routes: [command] });
+      }
+    }
+    return sections;
+  }, [filteredRoutes]);
   const filteredActions = useMemo(
     () => actions.filter((command) => hasAnyPermission(user, command.permissionAny) && matchesAction(command, query)),
     [actions, query, user],
@@ -249,13 +325,13 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
             ))}
           </PaletteSection>
         )}
-        {filteredRoutes.length > 0 && (
-          <PaletteSection title={t("command.routes")}>
-            {filteredRoutes.map((command) => (
+        {routeSections.map((section) => (
+          <PaletteSection key={section.label} title={section.label}>
+            {section.routes.map((command) => (
               <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => activate(command)} />
             ))}
           </PaletteSection>
-        )}
+        ))}
         {search.results.length > 0 && (
           <PaletteSection title={t("command.inventory")}>
             {search.results.map((result) => (
