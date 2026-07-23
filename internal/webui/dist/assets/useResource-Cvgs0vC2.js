@@ -1,0 +1,1 @@
+import{P as a}from"./index-THMVw8pe.js";function o(l){const[n,r]=a.useState({data:null,loading:!0,error:null});return a.useEffect(()=>{let e=!0;return l().then(t=>e&&r({data:t,loading:!1,error:null})).catch(t=>e&&r({data:null,loading:!1,error:String(t)})),()=>{e=!1}},[]),n}export{o as u};
