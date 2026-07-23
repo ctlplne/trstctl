@@ -13,6 +13,18 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Secrets workspaces as routes (S-C2, 2026-07-23)
+- **The Secrets mega-page's six workspaces are sidebar routes now.** The store
+  keeps `/secrets`; **Secret engines** (`/secrets/engines`), **Machine access**
+  (`/secrets/access`), **One-time shares** (`/secrets/sharing`), **CI scanning**
+  (`/secrets/scanning`), and **Sync targets** (`/secrets/sync`) each own a row
+  in the Secrets space sidebar, grouped Store & engines / Access & sharing /
+  Delivery & scanning. The in-page tab strip is gone; historical
+  `/secrets?tab=` deep links redirect permanently with their remaining query
+  intact (the C-A1 `/platform` precedent). Every route carries its own H1 and
+  title (naming parity), RBAC gate, and feature evidence; the rail-row budget
+  consciously grows by five (ceiling 38).
+
 ### Unified shell (spaces IA, 2026-07-23)
 - **The console is now five spaces behind an icon rail.** The S-B2
   chips-in-sidebar module switcher became a left rail of spaces that each own

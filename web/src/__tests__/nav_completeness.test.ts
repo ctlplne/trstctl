@@ -48,8 +48,10 @@ describe("nav completeness (S-A1)", () => {
       // Certificates & PKI
       "nav.group.inventory",
       "nav.group.issueAutomate",
-      // Secrets
+      // Secrets (S-C2: the workspaces are routes, grouped in the sidebar)
       "nav.group.secretsEngines",
+      "nav.group.secretsAccess",
+      "nav.group.secretsDelivery",
       // Workload & SSH
       "nav.group.workloadIdentity",
       "nav.group.sshTrust",

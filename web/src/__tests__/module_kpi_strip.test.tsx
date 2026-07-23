@@ -32,7 +32,17 @@ function session(): Me {
     subject: "op",
     tenant_id: "t1",
     email: "op@example.test",
-    permissions: ["certs:read", "certs:issue", "certs:request", "issuers:read", "profiles:read", "identities:read", "risk:read", "secrets:read", "secrets:write"],
+    permissions: [
+      "certs:read",
+      "certs:issue",
+      "certs:request",
+      "issuers:read",
+      "profiles:read",
+      "identities:read",
+      "risk:read",
+      "secrets:read",
+      "secrets:write",
+    ],
   } as Me;
 }
 
@@ -114,8 +124,8 @@ describe("module KPI strip (S-B3)", () => {
             ariaLabel="Secrets module metrics"
             kpis={[
               { id: "stored", label: "Stored secrets", value: 3, to: "/secrets" },
-              { id: "engines", label: "Engines", value: "View →", to: "/secrets?tab=engines" },
-              { id: "sync", label: "Sync targets", value: "View →", to: "/secrets?tab=sync" },
+              { id: "engines", label: "Engines", value: "View →", to: "/secrets/engines" },
+              { id: "sync", label: "Sync targets", value: "View →", to: "/secrets/sync" },
             ]}
           />
         </MemoryRouter>
@@ -126,7 +136,7 @@ describe("module KPI strip (S-B3)", () => {
     const stored = within(strip).getByRole("link", { name: /Stored secrets/i });
     expect(within(stored).getByText("3")).toBeInTheDocument();
     expect(stored).toHaveAttribute("href", "/secrets");
-    expect(within(strip).getByRole("link", { name: /Engines/i })).toHaveAttribute("href", "/secrets?tab=engines");
+    expect(within(strip).getByRole("link", { name: /Engines/i })).toHaveAttribute("href", "/secrets/engines");
     // Every KPI is a link (the dashboard-number-as-filter pattern).
     expect(within(strip).getAllByRole("link")).toHaveLength(3);
   });

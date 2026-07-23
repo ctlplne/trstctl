@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Secrets } from "@/pages/Secrets";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -44,10 +44,14 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderSecrets() {
+/** S-C2: the workspace under test is a route now, not an in-page tab. */
+function renderSecrets(path: string) {
   return render(
-    <MemoryRouter>
-      <Secrets />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/secrets" element={<Secrets />} />
+        <Route path="/secrets/:workspace" element={<Secrets />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -448,9 +452,8 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
   it("renders served scan findings and sync status without raw secret leakage", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
-    renderSecrets();
+    renderSecrets("/secrets/scanning");
 
-    await screen.findByText("app/db/password");
     await waitFor(() => expect(apiMock.secretRepositoryScanning).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.thirdPartySecretScanning).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.cloudSecretManagers).toHaveBeenCalled());
@@ -459,9 +462,8 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     await waitFor(() => expect(apiMock.secretWorkloadInjection).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.unvaultedSecrets).toHaveBeenCalled());
 
-    // Scanning surfaces live on the CI scanning workspace tab.
-    await user.click(screen.getByRole("tab", { name: "CI scanning" }));
-    expect(screen.getByText("CAP-SCAN-01")).toBeInTheDocument();
+    // Scanning surfaces live on the CI scanning workspace route (S-C2).
+    expect(await screen.findByText("CAP-SCAN-01")).toBeInTheDocument();
     expect(screen.getByText("CAP-SCAN-04")).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("GitLab")).toBeInTheDocument();
@@ -469,9 +471,10 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     expect(screen.getAllByText("Slack").length).toBeGreaterThan(0);
     expect(screen.getByText("/api/v1/secrets/scans/third-party/slack/ingest")).toBeInTheDocument();
 
-    // Sync and platform-integration posture live on the Sync workspace tab.
-    await user.click(screen.getByRole("tab", { name: "Sync" }));
-    expect(screen.getByText("CAP-SEC-04")).toBeInTheDocument();
+    // Sync and platform-integration posture live on the Sync targets route.
+    cleanup();
+    renderSecrets("/secrets/sync");
+    expect(await screen.findByText("CAP-SEC-04")).toBeInTheDocument();
     expect(screen.getByText("4 discovery providers, 3 sync targets configured")).toBeInTheDocument();
     expect(screen.getByText("CAP-SECR-03")).toBeInTheDocument();
     expect(screen.getByText("CAP-SECR-04")).toBeInTheDocument();
@@ -489,8 +492,9 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     expect(screen.getByText("Vercel")).toBeInTheDocument();
     expect(screen.getByText("Generic CI secret endpoint")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "CI scanning" }));
-    const thirdPartyForm = within(screen.getByRole("form", { name: "Queue third-party secret scan" }));
+    cleanup();
+    renderSecrets("/secrets/scanning");
+    const thirdPartyForm = within(await screen.findByRole("form", { name: "Queue third-party secret scan" }));
     await user.selectOptions(thirdPartyForm.getByLabelText("External source"), "slack");
     await user.type(thirdPartyForm.getByLabelText("Source ref"), "acme/slack");
     await user.type(thirdPartyForm.getByLabelText("Artifact path"), "/var/lib/trstctl/exports/slack.jsonl");
@@ -515,8 +519,9 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     expect(screen.getByText("config/ci.yml")).toBeInTheDocument();
     expect(screen.getByText("sha256:6e5a...91bb")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Sync" }));
-    const syncForm = within(screen.getByRole("form", { name: "Sync stored secret" }));
+    cleanup();
+    renderSecrets("/secrets/sync");
+    const syncForm = within(await screen.findByRole("form", { name: "Sync stored secret" }));
     await user.clear(syncForm.getByLabelText("Target"));
     await user.type(syncForm.getByLabelText("Target"), "kubernetes/prod");
     await user.type(syncForm.getByLabelText("Remote key"), "Secret/payments-db/password");

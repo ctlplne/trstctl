@@ -85,6 +85,14 @@ export function AppRoutes() {
           <Route path="ssh" element={<SSHTrust />} />
           <Route path="codesign" element={<CodeSigning />} />
           <Route path="secrets" element={<Secrets />} />
+          {/* S-C2: the Secrets workspaces are routes in the Secrets space
+              sidebar; the page derives its workspace from the pathname, and
+              historical /secrets?tab= deep links redirect permanently. */}
+          <Route path="secrets/access" element={<Secrets />} />
+          <Route path="secrets/sharing" element={<Secrets />} />
+          <Route path="secrets/engines" element={<Secrets />} />
+          <Route path="secrets/scanning" element={<Secrets />} />
+          <Route path="secrets/sync" element={<Secrets />} />
           <Route path="connectors" element={<Connectors />} />
           <Route path="policy" element={<Policy />} />
           <Route path="risk" element={<Risk />} />

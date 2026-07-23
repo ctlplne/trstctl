@@ -164,21 +164,29 @@ instead. Backed by `/api/v1/risk/credentials`, `/api/v1/risk/contextual-prioriti
 `/api/v1/nhi/posture/stale`, `/api/v1/nhi/posture/static-credentials`, and
 `/api/v1/nhi/posture/exposure`.
 
-### Secrets workspace (`/secrets`)
+### Secrets workspaces (`/secrets`, `/secrets/*`)
 
-An Infisical-style workspace: a folder tree over the served key-value store, a
-reference resolver that expands `${secret.path}` chains, an environment diff, a
-version-history selector, secret import, and a transit console for encrypt/decrypt/HMAC
-against a managed key. See [Secrets](features/secrets.md). Backed by
-`/api/v1/secrets/store`, `/api/v1/secrets/store/{name}`, and `/api/v1/transit/*`.
+The Secrets space gives each workspace its own route in the sidebar (S-C2);
+historical `/secrets?tab=` deep links redirect permanently. `/secrets` is the
+store — an Infisical-style workspace: a folder tree over the served key-value
+store, a reference resolver that expands `${secret.path}` chains, an environment
+diff, a version-history selector, and secret import. See
+[Secrets](features/secrets.md). Backed by `/api/v1/secrets/store` and
+`/api/v1/secrets/store/{name}`. **Secret engines** (`/secrets/engines`) holds
+dynamic leases, PKI-as-a-secrets-engine, and the transit console for
+encrypt/decrypt/HMAC against a managed key (`/api/v1/transit/*`).
+**One-time shares** (`/secrets/sharing`) covers reveal-once shares and ephemeral
+API keys, and **CI scanning** (`/secrets/scanning`) the pipeline secret-detection
+bridge; **Sync targets** (`/secrets/sync`) shows outbound synchronization posture.
 
-The **Access** tab is the machine-auth console: grant a workload a scoped credential
-(standing token or TTL-bound ephemeral key) with a reveal-once display and a
-list-and-revoke ledger; inspect the configured auth methods — issuer, audience,
-scopes, source — and disable or enable one per tenant (a disabled method is refused
-at the login exchange itself); and review the issued-session ledger
-(`GET /api/v1/secrets/sessions`), an idempotent, event-sourced revocation record. The
-login test exchange completes the create-grant-verify loop in-console.
+**Machine access** (`/secrets/access`) is the machine-auth console: grant a
+workload a scoped credential (standing token or TTL-bound ephemeral key) with a
+reveal-once display and a list-and-revoke ledger; inspect the configured auth
+methods — issuer, audience, scopes, source — and disable or enable one per tenant
+(a disabled method is refused at the login exchange itself); and review the
+issued-session ledger (`GET /api/v1/secrets/sessions`), an idempotent,
+event-sourced revocation record. The login test exchange completes the
+create-grant-verify loop in-console.
 
 ### Graph & blast radius (`/graph`)
 
@@ -352,7 +360,12 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/protocols` | Protocols |
 | `/ssh` | SSH trust |
 | `/codesign` | Code signing |
-| `/secrets` | Secrets workspace |
+| `/secrets` | Secrets (store) |
+| `/secrets/engines` | Secret engines |
+| `/secrets/access` | Machine access |
+| `/secrets/sharing` | One-time shares |
+| `/secrets/scanning` | CI scanning |
+| `/secrets/sync` | Sync targets |
 | `/agents` | Agents |
 | `/workloads` | Workloads |
 | `/discovery` | Discovery |

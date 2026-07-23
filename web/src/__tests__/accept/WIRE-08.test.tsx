@@ -3,7 +3,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Secrets } from "@/pages/Secrets";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -34,10 +34,14 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderSecrets() {
+/** S-C2: the workspace under test is a route now, not an in-page tab. */
+function renderSecrets(path: string) {
   return render(
-    <MemoryRouter>
-      <Secrets />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/secrets" element={<Secrets />} />
+        <Route path="/secrets/:workspace" element={<Secrets />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -65,10 +69,9 @@ describe("WIRE-08 transit operation wiring", () => {
   it("encrypts local plaintext, clears the input, then decrypts the served ciphertext", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
-    renderSecrets();
+    renderSecrets("/secrets/engines");
 
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Engines" }));
+    expect(await screen.findByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
     const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
     await user.type(transitForm.getByLabelText("Key name"), "payments-pii");
     await user.type(transitForm.getByLabelText("Plaintext"), "hello transit");

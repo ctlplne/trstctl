@@ -3,7 +3,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Secrets } from "@/pages/Secrets";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -26,10 +26,14 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderSecrets() {
+/** S-C2: the workspace under test is a route now, not an in-page tab. */
+function renderSecrets(path: string) {
   return render(
-    <MemoryRouter>
-      <Secrets />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/secrets" element={<Secrets />} />
+        <Route path="/secrets/:workspace" element={<Secrets />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -64,10 +68,9 @@ describe("WIRE-06 ephemeral API-key issuance wiring", () => {
   it("issues a served ephemeral API key, reveals the token once, then drops it on dismissal", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
-    renderSecrets();
+    renderSecrets("/secrets/sharing");
 
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Sharing" }));
+    expect(await screen.findByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
     const issueForm = within(screen.getByRole("form", { name: "Issue ephemeral API key" }));
     await user.type(issueForm.getByLabelText("Subject"), "ci/deploy-preview");
     await user.type(issueForm.getByLabelText("Scopes"), "repo:payments:read, deploy:staging:write");

@@ -229,10 +229,10 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      // S-C1 re-pin: the spaces IA added 11 reviewed nav keys per catalog
-      // (space labels, space groups, and the rail's accessible name).
-      "es-ES": "8251f52d01c9c37b28ec8c93552f77fdeffb96be77246f8d469f797b48827ae4",
-      "de-DE": "47c933416ca225241a8e617b978f8d04c8ce3ee1cbeab20d1b18b90f54dd40b8",
+      // S-C2 re-pin: the Secrets route split added 6 reviewed keys per catalog
+      // (four route names and two sidebar groups).
+      "es-ES": "7322f761004a26138c3989c1d37a228ce9493fbf265087a48b1c5c59705fc40c",
+      "de-DE": "94c3f8c125aec1d1589e19c7666e3d3a6f17c33f8e753bf716fce48a9457f7af",
     });
   });
 

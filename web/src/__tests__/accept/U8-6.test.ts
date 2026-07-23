@@ -5,9 +5,10 @@ const basePath = (to: string) => to.split("?")[0] || "/";
 
 describe("U8-6 navigation & IA refresh", () => {
   it("renders task-based groups where every command resolves to one registered route and is RBAC-gated", () => {
-    // S-C1: ten space-scoped groups across the five spaces (the S-A1 four-band
-    // era ended when the unified shell landed).
-    expect(navGroups.length).toBe(10);
+    // S-C1: space-scoped groups across the five spaces (the S-A1 four-band
+    // era ended when the unified shell landed); S-C2 added the two Secrets
+    // workspace groups.
+    expect(navGroups.length).toBe(12);
 
     const registered = new Set<string>(appRoutePaths);
     const sidebarItems = navGroups.flatMap((group) => group.items);
@@ -31,7 +32,8 @@ describe("U8-6 navigation & IA refresh", () => {
     // C-A1 split the /platform grab-bag into three question-shaped admin
     // rows (Access / System / Editions), consciously spending two more rows
     // of rail budget to kill the DA-13 grab-bag. New ceiling: 34.
-    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(34);
+    // S-C2 spent five rows to give each Secrets workspace a route. Ceiling: 38.
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(38);
 
     // S-A1 promoted the formerly-hidden surfaces into the rail; they are no
     // longer contextual-only.

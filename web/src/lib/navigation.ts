@@ -122,17 +122,28 @@ export const navSpaces: NavSpace[] = [
     id: "secrets",
     labelKey: "nav.module.secrets",
     icon: "vault",
+    /* S-C2: the Secrets workspaces are sidebar rows, not in-page tabs — the
+     * store keeps /secrets, and each other workspace owns a sub-route. */
     groups: [
       {
         labelKey: "nav.group.secretsEngines",
         items: [
-          {
-            to: "/secrets",
-            labelKey: "nav.item.secrets",
-            icon: "vault",
-            mode: "real",
-            featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
-          },
+          { to: "/secrets", labelKey: "nav.item.secrets", icon: "vault", mode: "real", featureIds: ["F37", "F63"] },
+          { to: "/secrets/engines", labelKey: "secrets.route.engines", icon: "key", mode: "real", featureIds: ["F65", "F66", "F67"] },
+        ],
+      },
+      {
+        labelKey: "nav.group.secretsAccess",
+        items: [
+          { to: "/secrets/access", labelKey: "secrets.route.access", icon: "identity", mode: "real", featureIds: ["F58", "F64"] },
+          { to: "/secrets/sharing", labelKey: "secrets.route.sharing", icon: "secret", mode: "real", featureIds: ["F38", "F60"] },
+        ],
+      },
+      {
+        labelKey: "nav.group.secretsDelivery",
+        items: [
+          { to: "/secrets/sync", labelKey: "secrets.route.sync", icon: "connector", mode: "real", featureIds: ["F68"] },
+          { to: "/secrets/scanning", labelKey: "secrets.tabs.scanning", icon: "activity", mode: "real", featureIds: ["F39"] },
         ],
       },
     ],
@@ -314,6 +325,11 @@ export const appRoutePaths = [
   "/ssh",
   "/codesign",
   "/secrets",
+  "/secrets/access",
+  "/secrets/sharing",
+  "/secrets/engines",
+  "/secrets/scanning",
+  "/secrets/sync",
   "/connectors",
   "/policy",
   "/risk",
@@ -369,6 +385,11 @@ const routePermissionAny: Record<string, string[]> = {
   "/request": ["certs:request"],
   "/risk": ["risk:read"],
   "/secrets": ["secrets:read"],
+  "/secrets/access": ["secrets:read"],
+  "/secrets/sharing": ["secrets:read"],
+  "/secrets/engines": ["secrets:read"],
+  "/secrets/scanning": ["secrets:read"],
+  "/secrets/sync": ["secrets:read"],
   "/ssh": ["certs:read"],
   "/wizard": ["agents:write"],
   "/workloads": ["certs:issue", "secrets:write"],
@@ -660,14 +681,14 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   },
   {
     featureId: "F38",
-    routes: ["/secrets"],
+    routes: ["/secrets/sharing"],
     component: "Secrets",
     kind: "observe",
     evidence: "ephemeral API-key issuance with reveal-once token handling",
   },
   {
     featureId: "F39",
-    routes: ["/secrets"],
+    routes: ["/secrets/scanning"],
     component: "Secrets",
     kind: "observe",
     evidence: "secret scanning source/detector/fingerprint/owner/rotation disclosure with redacted snippets only",
@@ -792,8 +813,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     evidence:
       "attestation policy administration with TPM, AWS, GCP, Azure, Kubernetes, and GitHub methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata",
   },
-  { featureId: "F58", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "machine login exchange through secrets login" },
-  { featureId: "F60", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "one-time share create/redeem" },
+  { featureId: "F58", routes: ["/secrets/access"], component: "Secrets", kind: "operate", evidence: "machine login exchange through secrets login" },
+  { featureId: "F60", routes: ["/secrets/sharing"], component: "Secrets", kind: "operate", evidence: "one-time share create/redeem" },
   {
     featureId: "F61",
     routes: ["/workloads"],
@@ -810,10 +831,10 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     evidence: "signed audit evidence export plus framework-mapped compliance posture disclosure",
   },
   { featureId: "F63", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "native secret store metadata/create/reveal/rotate/delete" },
-  { featureId: "F64", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "developer snippets plus store access test" },
+  { featureId: "F64", routes: ["/secrets/access"], component: "Secrets", kind: "observe", evidence: "developer snippets plus store access test" },
   {
     featureId: "F65",
-    routes: ["/secrets"],
+    routes: ["/secrets/engines"],
     component: "Secrets",
     kind: "operate",
     evidence:
@@ -821,15 +842,15 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   },
   {
     featureId: "F66",
-    routes: ["/secrets"],
+    routes: ["/secrets/engines"],
     component: "Secrets",
     kind: "observe",
     evidence: "transit/KMIP key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure",
   },
-  { featureId: "F67", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "PKI secret issue with reveal-once bundle" },
+  { featureId: "F67", routes: ["/secrets/engines"], component: "Secrets", kind: "operate", evidence: "PKI secret issue with reveal-once bundle" },
   {
     featureId: "F68",
-    routes: ["/secrets"],
+    routes: ["/secrets/sync"],
     component: "Secrets",
     kind: "operate",
     evidence:

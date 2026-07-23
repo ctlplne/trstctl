@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "@/lib/api";
 import { Secrets } from "@/pages/Secrets";
 
@@ -54,10 +54,15 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderSecrets() {
+/** S-C2: the workspaces are routes; tests mount the page at the route under
+ * test instead of clicking the retired in-page tab strip. */
+function renderSecrets(path = "/secrets") {
   return render(
-    <MemoryRouter>
-      <Secrets />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/secrets" element={<Secrets />} />
+        <Route path="/secrets/:workspace" element={<Secrets />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -248,7 +253,6 @@ function primeSecretsMocks() {
     delivered: false,
   });
 }
-
 
 function repoScanPostureFixture() {
   return {
@@ -625,13 +629,15 @@ describe("secrets surface", () => {
 
     // Machine-login administration is a served console surface now (C-S4):
     // methods + session ledger render, and no dead-end text remains.
-    await user.click(screen.getByRole("tab", { name: "Access" }));
+    cleanup();
+    renderSecrets("/secrets/access");
     expect(await screen.findByRole("heading", { name: "Auth methods" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Issued sessions" })).toBeInTheDocument();
     expect(screen.queryByText(/isn't in the console yet/)).not.toBeInTheDocument();
 
     // Sync and platform-integration posture live on the Sync workspace tab.
-    await user.click(screen.getByRole("tab", { name: "Sync" }));
+    cleanup();
+    renderSecrets("/secrets/sync");
     await waitFor(() => expect(apiMock.cloudSecretManagers).toHaveBeenCalled());
     expect(screen.getByText("CAP-SEC-04")).toBeInTheDocument();
     expect(screen.getByText("4 discovery providers, 3 sync targets configured")).toBeInTheDocument();
@@ -651,7 +657,9 @@ describe("secrets surface", () => {
     expect(screen.getByText("Git repository secret scanning: 1")).toBeInTheDocument();
     expect(screen.getAllByText("AWS Secrets Manager").length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("tab", { name: "Store" }));
+    cleanup();
+    renderSecrets();
+    await screen.findByText("app/db/password");
     await user.type(screen.getByRole("searchbox", { name: "Search native secret metadata" }), "cache");
     expect(screen.getByText("No secret metadata matches the current search.")).toBeInTheDocument();
     expect(screen.queryByText("app/db/password")).not.toBeInTheDocument();
@@ -776,11 +784,9 @@ describe("secrets surface", () => {
 
   it("shows developer snippets and runs an access test without rendering the value", async () => {
     const user = userEvent.setup();
-    renderSecrets();
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Access" }));
+    renderSecrets("/secrets/access");
 
-    expect(screen.getByText(/trstctl secrets get app\/db\/password/)).toBeInTheDocument();
+    expect(await screen.findByText(/trstctl secrets get app\/db\/password/)).toBeInTheDocument();
     expect(screen.getByText(/client\.secrets\.get/)).toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
 
@@ -795,11 +801,9 @@ describe("secrets surface", () => {
   it("issues ephemeral API keys, runs secret scans, and drives leases", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
-    renderSecrets();
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Sharing" }));
+    renderSecrets("/secrets/sharing");
 
-    expect(screen.getByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
     expect(screen.getByText("Reveal-once key issuance")).toBeInTheDocument();
     expect(screen.getByText(/short-lived token/i)).toBeInTheDocument();
     const issueForm = within(screen.getByRole("form", { name: "Issue ephemeral API key" }));
@@ -821,8 +825,9 @@ describe("secrets surface", () => {
     await user.click(screen.getByRole("button", { name: /dismiss/i }));
     expect(screen.queryByText("epk_live_reveal_once_123")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "CI scanning" }));
-    expect(screen.getByRole("heading", { name: "Code and CI secret scanning bridge" })).toBeInTheDocument();
+    cleanup();
+    renderSecrets("/secrets/scanning");
+    expect(await screen.findByRole("heading", { name: "Code and CI secret scanning bridge" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.secretRepositoryScanning).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.thirdPartySecretScanning).toHaveBeenCalled());
     expect(screen.getByText("CAP-SCAN-01")).toBeInTheDocument();
@@ -857,8 +862,9 @@ describe("secrets surface", () => {
     expect(screen.getByText("config/ci.yml")).toBeInTheDocument();
     expect(screen.getByText("sha256:6e5a...91bb")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Engines" }));
-    expect(screen.getByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
+    cleanup();
+    renderSecrets("/secrets/engines");
+    expect(await screen.findByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
     expect(screen.getByText("No dynamic lease issued yet.")).toBeInTheDocument();
     const leaseForm = within(screen.getByRole("form", { name: "Issue dynamic secret lease" }));
     await user.selectOptions(leaseForm.getByLabelText("Provider"), "postgresql");
@@ -886,11 +892,9 @@ describe("secrets surface", () => {
   it("runs transit encrypt/decrypt and keeps secret sync disclosure scoped", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
-    renderSecrets();
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Engines" }));
+    renderSecrets("/secrets/engines");
 
-    expect(screen.getByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
     const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
     await user.type(transitForm.getByLabelText("Key name"), "payments-pii");
     await user.type(transitForm.getByLabelText("Plaintext"), "hello transit");
@@ -920,8 +924,9 @@ describe("secrets surface", () => {
     expect(screen.getByRole("button", { name: /compute hmac/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign message/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Sync" }));
-    expect(screen.getByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
+    cleanup();
+    renderSecrets("/secrets/sync");
+    expect(await screen.findByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
     const syncForm = within(screen.getByRole("form", { name: "Sync stored secret" }));
     expect(syncForm.getByLabelText("Secret name")).toHaveValue("app/db/password");
     await user.type(syncForm.getByLabelText("Target"), "kubernetes/prod");
@@ -950,11 +955,9 @@ describe("secrets surface", () => {
       .mockResolvedValueOnce({ value: "redeemed-secret" })
       .mockRejectedValueOnce(new ApiError(410, JSON.stringify({ detail: "share already redeemed" })));
     const user = userEvent.setup();
-    renderSecrets();
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Engines" }));
+    renderSecrets("/secrets/engines");
 
-    const pkiForm = within(screen.getByRole("form", { name: "Issue PKI secret" }));
+    const pkiForm = within(await screen.findByRole("form", { name: "Issue PKI secret" }));
     await user.type(pkiForm.getByLabelText("Common name"), "svc.internal");
     await user.clear(pkiForm.getByLabelText("TTL seconds"));
     await user.type(pkiForm.getByLabelText("TTL seconds"), "600");
@@ -964,8 +967,9 @@ describe("secrets surface", () => {
     expect(await screen.findByText(/PKI bundle pki-01/i)).toBeInTheDocument();
     expect(screen.getByText(/BEGIN PRIVATE KEY/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Access" }));
-    const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));
+    cleanup();
+    renderSecrets("/secrets/access");
+    const loginForm = within(await screen.findByRole("form", { name: "Machine login test" }));
     await user.type(loginForm.getByLabelText("Credential"), "tenant-bound-machine-token");
     await user.click(loginForm.getByRole("button", { name: /test login/i }));
 
@@ -975,8 +979,9 @@ describe("secrets surface", () => {
     expect(loginForm.getByLabelText("Credential")).toHaveValue("");
     expect(screen.queryByText("tenant-bound-machine-token")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Sharing" }));
-    const shareForm = within(screen.getByRole("form", { name: "Create one-time share" }));
+    cleanup();
+    renderSecrets("/secrets/sharing");
+    const shareForm = within(await screen.findByRole("form", { name: "Create one-time share" }));
     await user.type(shareForm.getByLabelText("Value to share"), "share-this-once");
     await user.click(shareForm.getByRole("button", { name: /create share/i }));
     await waitFor(() => expect(apiMock.createShare).toHaveBeenCalledWith({ value: "share-this-once", ttl_seconds: 300 }));
@@ -1027,9 +1032,8 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
 
   async function openAccessTab() {
     const user = userEvent.setup();
-    renderSecrets();
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Access" }));
+    renderSecrets("/secrets/access");
+    await screen.findByText(/trstctl secrets get app\/db\/password/);
     return user;
   }
 
@@ -1086,9 +1090,7 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
     await user.type(grant.getByLabelText("TTL seconds"), "900");
     await user.click(grant.getByRole("button", { name: "Grant access" }));
 
-    await waitFor(() =>
-      expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith({ subject: "wl-1111", scopes: ["secrets:read"], ttl_seconds: 900 }),
-    );
+    await waitFor(() => expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith({ subject: "wl-1111", scopes: ["secrets:read"], ttl_seconds: 900 }));
     expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
     expect(apiMock.createAPIToken).not.toHaveBeenCalled();
   });
@@ -1131,9 +1133,8 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
 
   async function openAccessTab() {
     const user = userEvent.setup();
-    renderSecrets();
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Access" }));
+    renderSecrets("/secrets/access");
+    await screen.findByText(/trstctl secrets get app\/db\/password/);
     return user;
   }
 

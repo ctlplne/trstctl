@@ -17,13 +17,16 @@ describe("UX-03 task-based navigation", () => {
     // C-A1 split the /platform grab-bag into three question-shaped admin
     // rows (Access / System / Editions), consciously spending two more rows
     // of rail budget to kill the DA-13 grab-bag. New ceiling: 34.
-    expect(allSidebarItems.length).toBeLessThanOrEqual(34);
-    // S-C1: the four flat bands became space-scoped groups; the row budget is
-    // unchanged because the carve moves rows, it does not add them.
+    // S-C2 split the Secrets mega-page's six workspaces into six sidebar
+    // routes — consciously spending five rows of budget to kill the last
+    // in-page tab strip (each row is one served workspace). New ceiling: 38.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(38);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Inventory",
       "Issue & automate",
       "Store & engines",
+      "Access & sharing",
+      "Delivery & scanning",
       "Workload identity",
       "SSH trust",
       "Detect & respond",

@@ -3,7 +3,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Secrets } from "@/pages/Secrets";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -29,10 +29,14 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderSecrets() {
+/** S-C2: the workspace under test is a route now, not an in-page tab. */
+function renderSecrets(path: string) {
   return render(
-    <MemoryRouter>
-      <Secrets />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/secrets" element={<Secrets />} />
+        <Route path="/secrets/:workspace" element={<Secrets />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -83,10 +87,9 @@ describe("WIRE-07 dynamic secret lease wiring", () => {
   it("issues, renews, and revokes a served dynamic lease while revealing the credential once", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
-    renderSecrets();
+    renderSecrets("/secrets/engines");
 
-    await screen.findByText("app/db/password");
-    await user.click(screen.getByRole("tab", { name: "Engines" }));
+    expect(await screen.findByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
     const issueForm = within(screen.getByRole("form", { name: "Issue dynamic secret lease" }));
     await user.selectOptions(issueForm.getByLabelText("Provider"), "postgresql");
     await user.type(issueForm.getByLabelText("Role"), "readonly-reporting");
