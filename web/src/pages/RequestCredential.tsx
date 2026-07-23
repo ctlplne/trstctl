@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Send } from "lucide-react";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
@@ -27,6 +30,18 @@ function problemMessage(err: unknown, fallback: string): string {
 function profileKey(profile: Profile): string {
   return `${profile.name}:${profile.version}`;
 }
+
+/** S-C5b pilot: the request form is schema-first — zod owns the field
+ * contract (react-hook-form wires inputs and per-field errors), so validation
+ * copy lives in one place and the submit handler only ever sees valid,
+ * trimmed values. API failures stay separate in submitError. */
+const requestFormSchema = z.object({
+  profileKey: z.string().min(1, "Choose an issuance profile."),
+  name: z.string().trim().min(1, "Credential name is required."),
+  ownerId: z.string().trim().min(1, "Owner id is required."),
+  purpose: z.string().trim(),
+});
+type RequestFormValues = z.infer<typeof requestFormSchema>;
 
 function requesterFor(user: ReturnType<typeof useAuth>["user"]): string {
   return user?.email || user?.subject || "";
@@ -76,10 +91,24 @@ export function RequestCredential() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [requests, setRequests] = useState<Identity[] | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
-  const [selectedProfileKey, setSelectedProfileKey] = useState("");
-  const [name, setName] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [purpose, setPurpose] = useState("");
+  const {
+    control,
+    register,
+    handleSubmit,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<RequestFormValues>({
+    resolver: zodResolver(requestFormSchema),
+    mode: "onTouched",
+    defaultValues: { profileKey: "", name: "", ownerId: "", purpose: "" },
+  });
+  // useWatch (not useForm's watch) is the subscription-safe read the React
+  // Compiler lint accepts — each field re-renders on its own changes only.
+  const selectedProfileKey = useWatch({ control, name: "profileKey" });
+  const name = useWatch({ control, name: "name" });
+  const ownerId = useWatch({ control, name: "ownerId" });
+  const purpose = useWatch({ control, name: "purpose" });
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -112,14 +141,14 @@ export function RequestCredential() {
   }, [loadProfiles, loadRequests]);
 
   useEffect(() => {
-    if (!ownerId && user?.subject) setOwnerId(user.subject);
-  }, [ownerId, user?.subject]);
+    if (!ownerId && user?.subject) setValue("ownerId", user.subject);
+  }, [ownerId, setValue, user?.subject]);
 
   const activeProfiles = useMemo(() => (profiles ?? []).filter((profile) => profile.active !== false).sort((a, b) => a.name.localeCompare(b.name)), [profiles]);
 
   useEffect(() => {
-    if (!selectedProfileKey && activeProfiles.length > 0) setSelectedProfileKey(profileKey(activeProfiles[0]));
-  }, [activeProfiles, selectedProfileKey]);
+    if (!selectedProfileKey && activeProfiles.length > 0) setValue("profileKey", profileKey(activeProfiles[0]));
+  }, [activeProfiles, selectedProfileKey, setValue]);
 
   const selectedProfile = activeProfiles.find((profile) => profileKey(profile) === selectedProfileKey) ?? null;
   const myRequests = useMemo(
@@ -161,15 +190,11 @@ export function RequestCredential() {
     [],
   );
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  const submit = handleSubmit(async (values) => {
     setSubmitError(null);
     setNotice(null);
-
-    const trimmedName = name.trim();
-    const trimmedOwner = ownerId.trim();
-    if (!selectedProfile || !trimmedName || !trimmedOwner) {
-      setSubmitError("Profile, credential name, and owner id are required.");
+    if (!selectedProfile) {
+      setSubmitError("Choose an issuance profile.");
       return;
     }
 
@@ -177,13 +202,13 @@ export function RequestCredential() {
     try {
       const created = await api.createIdentity({
         kind: "x509_certificate",
-        name: trimmedName,
-        owner_id: trimmedOwner,
+        name: values.name,
+        owner_id: values.ownerId,
         attributes: {
           requester,
           profile_name: selectedProfile.name,
           profile_version: selectedProfile.version,
-          purpose: purpose.trim(),
+          purpose: values.purpose,
         },
       });
       setRequests((current) => {
@@ -191,15 +216,14 @@ export function RequestCredential() {
         return [created, ...rows.filter((identity) => identity.id !== created.id)];
       });
       setNotice(`Request accepted for ${created.name}. It is awaiting approval; no certificate has been minted yet.`);
-      setName("");
-      setPurpose("");
+      reset({ profileKey: values.profileKey, ownerId: values.ownerId, name: "", purpose: "" });
       setStep(0);
     } catch (err) {
       setSubmitError(problemMessage(err, "Could not submit request"));
     } finally {
       setBusy(false);
     }
-  }
+  });
 
   const wizardSteps: CarouselStep[] = [
     { id: "profile", label: t("request.wizard.profile.label"), description: t("request.wizard.profile.description") },
@@ -227,7 +251,8 @@ export function RequestCredential() {
 
       <section aria-labelledby="new-request-heading">
         <h2 id="new-request-heading" className="sr-only">
-          {translateNow("source.new.request.5977ded363")}</h2>
+          {translateNow("source.new.request.5977ded363")}
+        </h2>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
           <form aria-labelledby="new-request-heading" className="grid gap-4" onSubmit={submit}>
             <StepShell
@@ -243,13 +268,15 @@ export function RequestCredential() {
                   {profileError && <ErrorState title={translateNow("source.profile.list.unavailable.3759c2905e")}>{profileError}</ErrorState>}
                   {profiles == null && !profileError && <LoadingState>{translateNow("source.loading.profiles.12a7541833")}</LoadingState>}
                   {profiles && activeProfiles.length === 0 && (
-                    <EmptyState title={translateNow("source.no.active.profiles.d3f9395f41")}>{translateNow("source.create.or.activate.a.certificate.profile.b.246493dc15")}</EmptyState>
+                    <EmptyState title={translateNow("source.no.active.profiles.d3f9395f41")}>
+                      {translateNow("source.create.or.activate.a.certificate.profile.b.246493dc15")}
+                    </EmptyState>
                   )}
                   <label className="grid max-w-xl gap-1 text-body font-medium" htmlFor="request-profile">
-                    {translateNow("source.profile.d696a35bdd")}<select
+                    {translateNow("source.profile.d696a35bdd")}
+                    <select
                       id="request-profile"
-                      value={selectedProfileKey}
-                      onChange={(event) => setSelectedProfileKey(event.target.value)}
+                      {...register("profileKey")}
                       className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       disabled={activeProfiles.length === 0}
                       required
@@ -285,32 +312,36 @@ export function RequestCredential() {
               {step === 1 && (
                 <div className="grid max-w-xl gap-4">
                   <label className="grid gap-1 text-body font-medium" htmlFor="request-name">
-                    {translateNow("source.credential.name.911c43d9f0")}<input
+                    {translateNow("source.credential.name.911c43d9f0")}
+                    <input
                       id="request-name"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
+                      {...register("name")}
+                      aria-invalid={errors.name ? true : undefined}
                       className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       placeholder={translateNow("source.payments.api.682a1c47a1")}
                       required
                     />
+                    {errors.name && <p className="text-caption font-medium text-risk-critical">{errors.name.message}</p>}
                   </label>
                   <div className="grid gap-1">
                     <label className="grid gap-1 text-body font-medium" htmlFor="request-owner">
-                      {translateNow("source.owner.id.da58f15949")}<input
+                      {translateNow("source.owner.id.da58f15949")}
+                      <input
                         id="request-owner"
-                        value={ownerId}
-                        onChange={(event) => setOwnerId(event.target.value)}
+                        {...register("ownerId")}
+                        aria-invalid={errors.ownerId ? true : undefined}
                         className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                         required
                       />
+                      {errors.ownerId && <p className="text-caption font-medium text-risk-critical">{errors.ownerId.message}</p>}
                     </label>
                     <p className="text-caption text-muted-foreground">{t("request.wizard.ownerHint")}</p>
                   </div>
                   <label className="grid gap-1 text-body font-medium" htmlFor="request-purpose">
-                    {translateNow("source.business.purpose.286d11d720")}<textarea
+                    {translateNow("source.business.purpose.286d11d720")}
+                    <textarea
                       id="request-purpose"
-                      value={purpose}
-                      onChange={(event) => setPurpose(event.target.value)}
+                      {...register("purpose")}
                       className="min-h-20 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       placeholder={translateNow("source.service.tls.for.staging.7d9f743b3b")}
                     />
@@ -346,7 +377,8 @@ export function RequestCredential() {
                   <div>
                     <Button type="submit" loading={busy} disabled={activeProfiles.length === 0}>
                       <Send className="h-4 w-4" aria-hidden="true" />
-                      {translateNow("source.submit.request.917e144e4b")}</Button>
+                      {translateNow("source.submit.request.917e144e4b")}
+                    </Button>
                   </div>
                 </div>
               )}
