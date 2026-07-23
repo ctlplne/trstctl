@@ -4,9 +4,12 @@ Commercial trstctl code lives under `ee/`.
 
 Boundary rules:
 
-- Core must not import `trstctl.com/trstctl/ee`, except from `cmd/trstctl/ee_attach.go`.
-- `cmd/trstctl/ee_attach.go` must carry `//go:build !trstctl_core`.
-- The `trstctl_core` build uses `cmd/trstctl/ee_attach_core.go` and links zero `ee/` packages.
+- Core must not import `trstctl.com/trstctl/ee`, except from the three tagged attach seams:
+  `cmd/trstctl/ee_attach.go`, `cmd/trstctl-signer/ee_attach.go`, and
+  `cmd/trstctl-agent/cosign_attach.go`.
+- Each seam must carry `//go:build !trstctl_core` and pair with a `*_core.go` twin under
+  `//go:build trstctl_core`; the `licenseboundary` linter allowlists exactly these three.
+- The `trstctl_core` build uses the `*_core.go` twins and links zero `ee/` packages.
 
 Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and the license verifier stay in core.
 

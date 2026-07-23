@@ -24,11 +24,13 @@ worker pools are bounded, and key material is byte-backed, locked, and zeroed.
 
 AN-9 - Editions boundary. Commercial code lives only under `ee/`. Core may never
 import `ee/`; `ee/` may import core. The only exceptions are the tagged attach
-seams: `cmd/trstctl/ee_attach.go` and `cmd/trstctl-signer/ee_attach.go`, each
-carrying `//go:build !trstctl_core` and paired with an `ee_attach_core.go` twin
-under `//go:build trstctl_core`. The core-only build must link zero `ee/`
-packages. Activation is license-gated at those attach seams, never through
-scattered tier checks.
+seams: `cmd/trstctl/ee_attach.go`, `cmd/trstctl-signer/ee_attach.go`, and
+`cmd/trstctl-agent/cosign_attach.go` (the agent's workload co-sign seam,
+INT-16), each carrying `//go:build !trstctl_core` and paired with a `*_core.go`
+twin under `//go:build trstctl_core`. The `licenseboundary` linter allowlists
+exactly these three. The core-only build must link zero `ee/` packages.
+Activation is license-gated at those attach seams, never through scattered tier
+checks.
 The only `lic.Has(feature)` construction checks belong in `attachEE`, one block
 per feature. Do not scatter tier checks through handlers, stores, engines, or UI
 glue. The one feature-to-tier table lives in `internal/license`, which stays core

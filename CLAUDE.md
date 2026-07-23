@@ -18,9 +18,10 @@ bulkheads/backpressure, and byte-backed locked/zeroed key material.
 
 AN-9 - Editions boundary. Commercial code lives only under `ee/`. Core may
 never import `ee/`; `ee/` may import core. The only exceptions are the tagged
-attach seams `cmd/trstctl/ee_attach.go` and `cmd/trstctl-signer/ee_attach.go`
-(each `//go:build !trstctl_core`, with an `ee_attach_core.go` twin under
-`//go:build trstctl_core`); the core-only build must link zero `ee/` packages.
+attach seams `cmd/trstctl/ee_attach.go`, `cmd/trstctl-signer/ee_attach.go`, and
+`cmd/trstctl-agent/cosign_attach.go` (each `//go:build !trstctl_core`, with a
+`*_core.go` twin under `//go:build trstctl_core`); the core-only build must
+link zero `ee/` packages.
 
 License checks are centralized. The only `lic.Has(feature)` construction checks
 belong in `attachEE`, one block per feature. Do not scatter tier checks through

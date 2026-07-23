@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package ee is the commercial-code fence for trstctl Enterprise and Provider
-// capabilities. Core may not import this tree except through the tagged
-// cmd/trstctl/ee_attach.go seam; ee packages may import core seams. Enterprise
+// capabilities. Core may not import this tree except through the tagged attach
+// seams (cmd/trstctl/ee_attach.go, cmd/trstctl-signer/ee_attach.go, and
+// cmd/trstctl-agent/cosign_attach.go); ee packages may import core. Enterprise
 // remediation code lives under ee/incident, ee/fleet, and ee/pqcmigration; the
 // cross-cluster DR/federation worker lives under ee/federation; BYOK/HSM managed
 // keys and KMIP live under ee/managedkeys and ee/kmip; compliance evidence packs
