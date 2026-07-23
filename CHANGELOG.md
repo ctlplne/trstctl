@@ -13,6 +13,28 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### IA train closeout (S-C3 / S-C6 / S-C7, 2026-07-24)
+- **S-C3 — the console code-splits by page.** Every authenticated surface is a
+  lazy route chunk (70 chunks; the entry is the shell + vendor + the typed
+  i18n catalogs), with a Suspense boundary at the shell outlet that announces
+  loading. The compressed budget is enforced by `npm run size` (size-limit:
+  entry, largest page chunk, and total shipped JS); Vite's raw-size warning
+  threshold sits just above the entry so a new oversized chunk still trips it.
+  Follow-up noted: per-locale catalog splitting would shrink the entry further.
+- **S-C6 — the command palette groups by space and speaks verbs.** Route
+  results render under space headings in rail order (Home first; spaceless
+  routes last under Routes), Enter-activates-first agrees with the visible
+  order, and four permission-gated verb entries land where the verb happens:
+  Rotate a secret, Grant workload access, Issue SSH user certificate, and
+  Preview blast radius.
+- **S-C7 — the workspaces-vs-lenses rule is now written down.** A tab becomes
+  a sidebar route only when it is a distinct served workspace (own evidence,
+  own workflows, own name); an alternate view over the same object domain
+  stays a URL-addressable in-page tab. Rulings: Secrets' six workspaces are
+  routes (S-C2); Certificates' four tabs and Discovery's four tabs are lenses
+  and stay. Home's five inventory counters now deep-link into their spaces,
+  completing the every-number-is-a-link pass.
+
 ### Secrets workspaces as routes (S-C2, 2026-07-23)
 - **The Secrets mega-page's six workspaces are sidebar routes now.** The store
   keeps `/secrets`; **Secret engines** (`/secrets/engines`), **Machine access**

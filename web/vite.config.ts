@@ -33,6 +33,13 @@ export default defineConfig({
   build: {
     outDir: path.resolve(webRoot, "../internal/webui/dist"),
     emptyOutDir: true,
+    // S-C3: pages are route-level lazy chunks; the one deliberately large
+    // chunk is the entry (React + router + shell + the typed i18n catalogs).
+    // The enforced budget lives in package.json "size-limit" (`npm run size`),
+    // measured compressed — this raw-size warning threshold sits just above
+    // the entry so a NEW oversized chunk still trips it. Follow-up tracked in
+    // CHANGELOG: per-locale catalog splitting would shrink the entry further.
+    chunkSizeWarningLimit: 1300,
   },
   server: {
     proxy: {

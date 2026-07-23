@@ -700,6 +700,9 @@ describe("COVER-005 feature-specific a11y receipts", () => {
       const main = await screen.findByRole("main");
       await waitForRouteEffectsToSettle();
 
+      // S-C3: pages are lazy chunks — wait for the surface (its first heading)
+      // to replace the Suspense fallback before running the receipts.
+      await within(main).findAllByRole("heading");
       expect(within(main).getAllByRole("heading").length, `${route} should expose feature headings for ${[...featureIds].join(",")}`).toBeGreaterThan(0);
       expect(await axe(container), `${route} axe receipt for ${[...featureIds].join(",")}`).toHaveNoViolations();
       await waitForRouteEffectsToSettle();

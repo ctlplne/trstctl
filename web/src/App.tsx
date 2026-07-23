@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import type { ReactElement } from "react";
+import { lazy, type ComponentType, type ReactElement } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
@@ -7,39 +7,54 @@ import { RbacProvider } from "@/components/rbac";
 import { ToastProvider } from "@/components/ToastProvider";
 import { IntlProvider, useTranslation } from "@/i18n/I18nProvider";
 import { isSupportedLocale } from "@/i18n/messages";
+// Login stays an eager import: it is the pre-auth fast path and must render
+// without waiting on a second chunk.
 import { Login } from "@/pages/Login";
-import { Dashboard } from "@/pages/Dashboard";
-import { Certificates } from "@/pages/Certificates";
-import { Identities } from "@/pages/Identities";
-import { Owners } from "@/pages/Owners";
-import { Risk } from "@/pages/Risk";
-import { Agents } from "@/pages/Agents";
-import { Wizard } from "@/pages/Wizard";
-import { Assistant } from "@/pages/Assistant";
-import { Profiles } from "@/pages/Profiles";
-import { Audit } from "@/pages/Audit";
-import { Graph } from "@/pages/Graph";
-import { AdminAccess, AdminEditions, AdminSystem, PlatformRedirect } from "@/pages/Platform";
-import { Protocols } from "@/pages/Protocols";
-import { Secrets } from "@/pages/Secrets";
-import { Policy } from "@/pages/Policy";
-import { Privacy } from "@/pages/Privacy";
-import { Integrate } from "@/pages/Integrate";
-import { ApiExplorer } from "@/pages/ApiExplorer";
-import { Discovery } from "@/pages/Discovery";
-import { Posture } from "@/pages/Posture";
-import { CAHierarchy } from "@/pages/CAHierarchy";
-import { Workloads } from "@/pages/Workloads";
-import { SSHTrust } from "@/pages/SSHTrust";
-import { Connectors } from "@/pages/Connectors";
-import { CodeSigning } from "@/pages/CodeSigning";
-import { Incidents } from "@/pages/Incidents";
-import { Approvals } from "@/pages/Approvals";
-import { Operations } from "@/pages/Operations";
-import { Notifications } from "@/pages/Notifications";
-import { RequestCredential } from "@/pages/RequestCredential";
-import { Styleguide } from "@/pages/Styleguide";
-import { Journeys } from "@/pages/Journeys";
+
+/** S-C3: every authenticated page is lazy-loaded, so the entry chunk is the
+ * shell (providers, AppShell, Login) and each surface loads on first visit —
+ * Vite emits one chunk per page module, which composes naturally with the
+ * spaces IA. Pages use named exports; lazyPage adapts them to React.lazy's
+ * default-export contract. The Suspense boundary wraps the shell's Outlet. */
+function lazyPage<M extends Record<K, ComponentType>, K extends string>(loader: () => Promise<M>, name: K) {
+  return lazy(() => loader().then((module) => ({ default: module[name] })));
+}
+
+const Dashboard = lazyPage(() => import("@/pages/Dashboard"), "Dashboard");
+const Certificates = lazyPage(() => import("@/pages/Certificates"), "Certificates");
+const Identities = lazyPage(() => import("@/pages/Identities"), "Identities");
+const Owners = lazyPage(() => import("@/pages/Owners"), "Owners");
+const Risk = lazyPage(() => import("@/pages/Risk"), "Risk");
+const Agents = lazyPage(() => import("@/pages/Agents"), "Agents");
+const Wizard = lazyPage(() => import("@/pages/Wizard"), "Wizard");
+const Assistant = lazyPage(() => import("@/pages/Assistant"), "Assistant");
+const Profiles = lazyPage(() => import("@/pages/Profiles"), "Profiles");
+const Audit = lazyPage(() => import("@/pages/Audit"), "Audit");
+const Graph = lazyPage(() => import("@/pages/Graph"), "Graph");
+const AdminAccess = lazyPage(() => import("@/pages/Platform"), "AdminAccess");
+const AdminEditions = lazyPage(() => import("@/pages/Platform"), "AdminEditions");
+const AdminSystem = lazyPage(() => import("@/pages/Platform"), "AdminSystem");
+const PlatformRedirect = lazyPage(() => import("@/pages/Platform"), "PlatformRedirect");
+const Protocols = lazyPage(() => import("@/pages/Protocols"), "Protocols");
+const Secrets = lazyPage(() => import("@/pages/Secrets"), "Secrets");
+const Policy = lazyPage(() => import("@/pages/Policy"), "Policy");
+const Privacy = lazyPage(() => import("@/pages/Privacy"), "Privacy");
+const Integrate = lazyPage(() => import("@/pages/Integrate"), "Integrate");
+const ApiExplorer = lazyPage(() => import("@/pages/ApiExplorer"), "ApiExplorer");
+const Discovery = lazyPage(() => import("@/pages/Discovery"), "Discovery");
+const Posture = lazyPage(() => import("@/pages/Posture"), "Posture");
+const CAHierarchy = lazyPage(() => import("@/pages/CAHierarchy"), "CAHierarchy");
+const Workloads = lazyPage(() => import("@/pages/Workloads"), "Workloads");
+const SSHTrust = lazyPage(() => import("@/pages/SSHTrust"), "SSHTrust");
+const Connectors = lazyPage(() => import("@/pages/Connectors"), "Connectors");
+const CodeSigning = lazyPage(() => import("@/pages/CodeSigning"), "CodeSigning");
+const Incidents = lazyPage(() => import("@/pages/Incidents"), "Incidents");
+const Approvals = lazyPage(() => import("@/pages/Approvals"), "Approvals");
+const Operations = lazyPage(() => import("@/pages/Operations"), "Operations");
+const Notifications = lazyPage(() => import("@/pages/Notifications"), "Notifications");
+const RequestCredential = lazyPage(() => import("@/pages/RequestCredential"), "RequestCredential");
+const Styleguide = lazyPage(() => import("@/pages/Styleguide"), "Styleguide");
+const Journeys = lazyPage(() => import("@/pages/Journeys"), "Journeys");
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */

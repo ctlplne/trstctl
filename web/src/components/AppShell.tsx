@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
@@ -680,7 +680,16 @@ export function AppShell() {
         )}
 
         <main id="main" ref={mainRef} className="min-w-0 flex-1 p-4 md:p-6" tabIndex={-1}>
-          <Outlet />
+          {/* S-C3: pages are lazy chunks; the boundary announces while loading. */}
+          <Suspense
+            fallback={
+              <p role="status" className="p-6">
+                {t("app.loading")}
+              </p>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       {/* Politely announce SPA route transitions so screen-reader users learn the
