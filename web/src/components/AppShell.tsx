@@ -522,28 +522,32 @@ export function AppShell() {
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur">
         <div className="flex min-w-0 items-center gap-2">
           {!isDesktop && (
-            <button
+            <Button
               type="button"
+              size="icon"
+              variant="outline"
               aria-controls={mobileNavId}
               aria-expanded={mobileNavOpen}
               aria-label={t(mobileNavOpen ? "shell.closePrimaryNavigation" : "shell.openPrimaryNavigation")}
               onClick={() => setMobileNavOpen((open) => !open)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              className="shrink-0"
             >
               {mobileNavOpen ? <X aria-hidden="true" className="h-4 w-4" /> : <Menu aria-hidden="true" className="h-4 w-4" />}
-            </button>
+            </Button>
           )}
           {isDesktop && (
-            <button
+            <Button
               type="button"
+              size="icon"
+              variant="outline"
               aria-controls="desktop-primary-nav"
               aria-expanded={!sidebarCollapsed}
               aria-label={t(sidebarCollapsed ? "shell.showPrimaryNavigation" : "shell.hidePrimaryNavigation")}
               onClick={toggleSidebar}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              className="shrink-0"
             >
               <Menu aria-hidden="true" className="h-4 w-4" />
-            </button>
+            </Button>
           )}
           <span
             aria-hidden="true"
@@ -579,7 +583,10 @@ export function AppShell() {
             <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-2xs">{translateNow("source.cmd.k.abdd8e293f")}</kbd>
           </Button>
           {user && (
-            <div aria-label={t("shell.tenantContext")} className="hidden min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs lg:flex">
+            <div
+              aria-label={t("shell.tenantContext")}
+              className="hidden min-w-0 items-center gap-2 rounded-control border border-border px-2 py-1 text-xs lg:flex"
+            >
               <span className="text-muted-foreground">{t("shell.tenant")}</span>
               <strong className="max-w-32 truncate font-semibold">{user.tenant_id}</strong>
             </div>
@@ -589,7 +596,7 @@ export function AppShell() {
             <Languages aria-hidden="true" className="pointer-events-none absolute start-2 h-4 w-4 text-muted-foreground" />
             <select
               aria-label={t("shell.locale")}
-              className="h-9 rounded-md border border-border bg-background ps-8 pe-7 text-xs text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 rounded-control border border-border bg-background ps-8 pe-7 text-xs text-foreground hover:bg-muted"
               value={locale}
               onChange={(event) => setLocale(event.target.value as Locale)}
             >
@@ -657,14 +664,9 @@ export function AppShell() {
           >
             <div className="flex h-14 items-center justify-between border-b border-border px-4">
               <span className="text-sm font-semibold">{t("shell.navigation")}</span>
-              <button
-                type="button"
-                aria-label={t("shell.closePrimaryNavigation")}
-                onClick={() => setMobileNavOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-              >
+              <Button type="button" size="icon" variant="outline" aria-label={t("shell.closePrimaryNavigation")} onClick={() => setMobileNavOpen(false)}>
                 <X aria-hidden="true" className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
             <SpaceRail user={user} orientation="horizontal" onNavigate={() => setMobileNavOpen(false)} />
             <PrimaryNav id={mobileNavId} user={user} onNavigate={() => setMobileNavOpen(false)} />
