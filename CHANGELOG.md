@@ -13,7 +13,15 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
-### Per-locale catalog split (S-C10, 2026-07-24)
+### Live dashboard tiles (S-N1, 2026-07-24)
+- **Home's numbers stay current without an operator reflex.** The Dashboard's
+  eight resources moved off `useResource` onto the query layer with a live-tile
+  contract (certctl's PERF-H1 pattern): KPIs poll every 30s and the audit rail
+  every 60s while the tab is visible, hidden tabs poll nothing, and returning
+  to the tab refreshes exactly the live queries immediately. The optional-probe
+  readers (NHI inventory, secrets count, open incidents, recent audit) now fail
+  soft to their empty fallbacks, so a missing or erroring optional endpoint can
+  never stall the first-run gate or error the whole dashboard.
 - **The entry chunk drops a third: 239 → 163 kB brotli.** The es-ES and de-DE
   production catalogs moved to per-locale modules loaded on demand by the
   I18nProvider; English (the source catalog) and the pseudo transforms stay

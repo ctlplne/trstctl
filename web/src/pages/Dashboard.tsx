@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Activity, AlertTriangle, Boxes, KeyRound, RotateCw, Rocket, ScrollText, Search, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
 import { api, type AuditEvent, type Certificate, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
-import { useResource } from "@/lib/useResource";
+import { useApiQuery } from "@/lib/query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AreaTrend,
@@ -34,7 +34,10 @@ function emptyNhiInventory(): NHIInventoryResponse {
 
 function readNhiInventory(): Promise<NHIInventoryResponse> {
   const client = api as typeof api & { nhiInventory?: () => Promise<NHIInventoryResponse> };
-  return client.nhiInventory ? client.nhiInventory() : Promise.resolve(emptyNhiInventory());
+  if (!client.nhiInventory) return Promise.resolve(emptyNhiInventory());
+  return Promise.resolve(client.nhiInventory())
+    .then((response) => response ?? emptyNhiInventory())
+    .catch(() => emptyNhiInventory());
 }
 
 function inventoryCount(inventory: NHIInventoryResponse | null | undefined, kind: string): number {
@@ -57,7 +60,10 @@ function readOnboardingDone(): boolean {
 
 function readSecretsCount(): Promise<number | null> {
   const client = api as typeof api & { secretPage?: (o?: { limit?: number }) => Promise<{ items?: unknown[] }> };
-  return client.secretPage ? client.secretPage({ limit: 200 }).then((r) => (r.items ?? []).length) : Promise.resolve(null);
+  if (!client.secretPage) return Promise.resolve(null);
+  return Promise.resolve(client.secretPage({ limit: 200 }))
+    .then((r) => (r?.items ?? []).length)
+    .catch(() => null);
 }
 
 function readOpenIncidents(): Promise<number | null> {
@@ -65,12 +71,17 @@ function readOpenIncidents(): Promise<number | null> {
     incidentExecutions?: (o?: { limit?: number }) => Promise<{ items?: Array<{ status?: string }> }>;
   };
   if (!client.incidentExecutions) return Promise.resolve(null);
-  return client.incidentExecutions({ limit: 100 }).then((r) => (r.items ?? []).filter((x) => x.status !== "completed" && x.status !== "rolled_back").length);
+  return Promise.resolve(client.incidentExecutions({ limit: 100 }))
+    .then((r) => (r?.items ?? []).filter((x) => x.status !== "completed" && x.status !== "rolled_back").length)
+    .catch(() => null);
 }
 
 function readRecentAudit(): Promise<AuditEvent[]> {
   const client = api as typeof api & { auditEvents?: (o?: { limit?: number }) => Promise<AuditEvent[]> };
-  return client.auditEvents ? client.auditEvents({ limit: 6 }).catch(() => []) : Promise.resolve([]);
+  if (!client.auditEvents) return Promise.resolve([]);
+  return Promise.resolve(client.auditEvents({ limit: 6 }))
+    .then((events) => events ?? [])
+    .catch(() => []);
 }
 
 const pqcAlgorithmPattern = /^(ml-kem|ml-dsa|slh-dsa|hybrid)/i;
@@ -132,14 +143,17 @@ function servedExpiryBands(certificates: Certificate[]): Array<{ label: string; 
 export function Dashboard() {
   const { preview } = useAuth();
   const { formatNumber, t } = useTranslation();
-  const certs = useResource(api.certificates);
-  const risk = useResource(() => api.risk({ sort: "score" }));
-  const identities = useResource(api.identities);
-  const nhiInventory = useResource(readNhiInventory);
-  const rotationRuns = useResource(() => api.rotationRuns({ limit: 100 }));
-  const secretsCount = useResource(readSecretsCount);
-  const openIncidents = useResource(readOpenIncidents);
-  const recentAudit = useResource(readRecentAudit);
+  // S-C5 live tiles: Home's answers poll while the tab is visible (30s for
+  // KPI feeds, 60s for the audit stream), pause entirely while hidden, and
+  // catch up the moment the operator returns (certctl PERF-H1 pattern).
+  const certs = useApiQuery(["certificates"], api.certificates, { live: { intervalMs: 30_000 } });
+  const risk = useApiQuery(["risk", { sort: "score" }], () => api.risk({ sort: "score" }), { live: { intervalMs: 30_000 } });
+  const identities = useApiQuery(["identities"], api.identities, { live: { intervalMs: 30_000 } });
+  const nhiInventory = useApiQuery(["nhi-inventory"], readNhiInventory, { live: { intervalMs: 30_000 } });
+  const rotationRuns = useApiQuery(["rotation-runs", { limit: 100 }], () => api.rotationRuns({ limit: 100 }), { live: { intervalMs: 30_000 } });
+  const secretsCount = useApiQuery(["secrets-count"], readSecretsCount, { live: { intervalMs: 30_000 } });
+  const openIncidents = useApiQuery(["open-incidents"], readOpenIncidents, { live: { intervalMs: 30_000 } });
+  const recentAudit = useApiQuery(["recent-audit"], readRecentAudit, { live: { intervalMs: 60_000 } });
   const [dismissed, setDismissed] = useState(false);
 
   const riskRows = risk.data ?? [];

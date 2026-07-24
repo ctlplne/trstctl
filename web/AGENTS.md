@@ -33,7 +33,11 @@ derive from it.
   `useApiQuery` mirrors the old `useResource` shape). Existing pages migrate
   off `lib/useResource` when next touched; do not add new `useResource`
   callers. Mutations write through `setQueryData` for instant UI and then
-  `invalidateQueries` for server truth (see `pages/Owners.tsx`).
+  `invalidateQueries` for server truth (see `pages/Owners.tsx`). Live tiles
+  pass `{ live: { intervalMs } }` — visible-tab polling plus an immediate
+  refresh on return to visibility; never hand-roll a `setInterval`. Because
+  query results land on a macrotask, a test's FIRST read of query-fed DOM must
+  be a `findBy…` (the S-C3 rule below applies to data, not just chunks).
 - **Forms (S-C5b):** mutation forms are schema-first — zod owns the field
   contract, react-hook-form wires inputs and per-field errors, and the submit
   handler only sees valid, trimmed values (see `pages/RequestCredential.tsx`).

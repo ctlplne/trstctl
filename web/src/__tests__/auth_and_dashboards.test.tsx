@@ -217,7 +217,10 @@ describe("auth + dashboards", () => {
     renderAt("/");
 
     const dash = await screen.findByRole("region", { name: "Dashboard" });
-    expect(within(dash).getByText(/Welcome to trstctl/)).toBeInTheDocument();
+    // First data-dependent read is a findBy (web/AGENTS.md S-C3): react-query
+    // delivers results on a macrotask, so the header region appears before the
+    // gate settles — awaiting the CTA is the settle point.
+    expect(await within(dash).findByText(/Welcome to trstctl/)).toBeInTheDocument();
     expect(within(dash).getByRole("link", { name: /Set up trstctl/ })).toBeInTheDocument();
     // No demo numbers for a real, empty tenant.
     expect(within(dash).queryByText(/Issuance trend/)).not.toBeInTheDocument();
