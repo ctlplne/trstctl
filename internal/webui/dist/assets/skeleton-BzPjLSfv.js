@@ -1,0 +1,1 @@
+import{P as o,w as n}from"./index-DgdjWet8.js";function t({className:e}){return o.jsx("div",{"aria-hidden":"true",className:n("rounded-control bg-foreground/[0.07] motion-safe:animate-pulse",e)})}export{t as S};

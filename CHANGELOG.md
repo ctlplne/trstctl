@@ -13,6 +13,36 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Design-review remediation (R-01…R-09, 2026-07-25)
+- **Every form control in the console now actually has a style.** An external
+  design review found — and we verified — that `.ui-input`, the class worn by
+  ~145 inputs/selects/textareas across 11 pages, was defined in no stylesheet,
+  ever: every form field rendered as raw native browser chrome (white fields
+  in the flagship dark theme). The family now exists (token-correct field,
+  36px to pair with buttons, themed select/textarea/file variants,
+  aria-invalid state), native checkboxes/radios ride a gold `accent-color`,
+  and a new foundation guard fails the build if any referenced `ui-*` class
+  has no rule — it immediately caught a second stillborn class (`ui-button`,
+  10 raw buttons now on the Button primitive).
+- **Forms became primitives (DESIGN.md rule 14).** `Input`/`Select`/
+  `Textarea` plus a `Field` unit that owns label/description/error and their
+  aria wiring; piloted on Request Credential's zod+RHF form; raw-control
+  counts in pages are budget-ratcheted downward (migrate-when-touched).
+- **Focus is its own token (rule 2, both themes).** Focus rings rode
+  `--brand-accent`, which is gold-family in light mode — collapsing the
+  gold-acts/mint-focuses semantics. A dedicated `--focus` token keeps mint in
+  both themes, swept through every focus ring, with a 3:1 non-text contrast
+  guard and a mint-hue-family pin.
+- **Discipline sweeps.** Eyebrow: nine hand-rolled tracked-uppercase clusters
+  (Secrets ×8, Login) plus shell/pqc/styleguide stragglers migrated to the
+  primitive, with a tracking ratchet. Shell toggles moved to the Button
+  primitive, killing a focus ring class that resolved to no configured color.
+  Dead tokens deleted (`--console-accent`, unused density rungs) — the suite
+  was certifying them as alive. Rule 15 codifies Card-vs-`ui-panel` and
+  DataGrid-vs-`ui-table` criteria; monolith pages split as touched
+  (web/AGENTS.md). Repo-wide prettier normalization un-reds CI's
+  format:check after the dependency refresh.
+
 ### Live dashboard tiles (S-N1, 2026-07-24)
 - **Home's numbers stay current without an operator reflex.** The Dashboard's
   eight resources moved off `useResource` onto the query layer with a live-tile
