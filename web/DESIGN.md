@@ -74,6 +74,16 @@ component there comes from the real implementation.
     Known entities render as selects or `datalist` autocomplete fed from
     loaded data (owners, members, secret names), and created identifiers carry
     forward into the next step.
+14. **Form controls are primitives.** New fields are `Input` / `Select` /
+    `Textarea` inside a `Field` (`src/components/ui/`): Field owns the
+    label/description/error unit and its aria wiring, the controls wear the
+    `.ui-input` family from `index.css`, and errors flip `aria-invalid`
+    (rendered as a destructive border). Never hand-assemble control styling
+    or label/error markup. Existing raw `<input>`s migrate when their page is
+    next touched — the raw-control budget in
+    `design_system_foundation.test.tsx` only goes down. Native checkboxes and
+    radios ride the gold `accent-color` base rule until a Checkbox primitive
+    exists.
 
 ## Verifying changes
 

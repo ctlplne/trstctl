@@ -6,6 +6,10 @@ import { z } from "zod";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -272,22 +276,17 @@ export function RequestCredential() {
                       {translateNow("source.create.or.activate.a.certificate.profile.b.246493dc15")}
                     </EmptyState>
                   )}
-                  <label className="grid max-w-xl gap-1 text-body font-medium" htmlFor="request-profile">
-                    {translateNow("source.profile.d696a35bdd")}
-                    <select
-                      id="request-profile"
-                      {...register("profileKey")}
-                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                      disabled={activeProfiles.length === 0}
-                      required
-                    >
-                      {activeProfiles.map((profile) => (
-                        <option key={profileKey(profile)} value={profileKey(profile)}>
-                          {`${profile.name} v${profile.version}${profile.active ? " active" : ""}`}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <Field className="max-w-xl" label={translateNow("source.profile.d696a35bdd")} required>
+                    {(control) => (
+                      <Select {...control} {...register("profileKey")} disabled={activeProfiles.length === 0} required>
+                        {activeProfiles.map((profile) => (
+                          <option key={profileKey(profile)} value={profileKey(profile)}>
+                            {`${profile.name} v${profile.version}${profile.active ? " active" : ""}`}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
                   {selectedProfile && (
                     <dl className="grid max-w-xl gap-2 rounded-panel border border-border bg-muted/40 p-3 text-body">
                       <div className="flex items-center justify-between gap-3">
@@ -311,41 +310,27 @@ export function RequestCredential() {
 
               {step === 1 && (
                 <div className="grid max-w-xl gap-4">
-                  <label className="grid gap-1 text-body font-medium" htmlFor="request-name">
-                    {translateNow("source.credential.name.911c43d9f0")}
-                    <input
-                      id="request-name"
-                      {...register("name")}
-                      aria-invalid={errors.name ? true : undefined}
-                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                      placeholder={translateNow("source.payments.api.682a1c47a1")}
-                      required
-                    />
-                    {errors.name && <p className="text-caption font-medium text-risk-critical">{errors.name.message}</p>}
-                  </label>
-                  <div className="grid gap-1">
-                    <label className="grid gap-1 text-body font-medium" htmlFor="request-owner">
-                      {translateNow("source.owner.id.da58f15949")}
-                      <input
-                        id="request-owner"
-                        {...register("ownerId")}
-                        aria-invalid={errors.ownerId ? true : undefined}
-                        className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                        required
+                  <Field label={translateNow("source.credential.name.911c43d9f0")} error={errors.name?.message} required>
+                    {(control) => <Input {...control} {...register("name")} placeholder={translateNow("source.payments.api.682a1c47a1")} required />}
+                  </Field>
+                  <Field
+                    label={translateNow("source.owner.id.da58f15949")}
+                    description={t("request.wizard.ownerHint")}
+                    error={errors.ownerId?.message}
+                    required
+                  >
+                    {(control) => <Input {...control} {...register("ownerId")} required />}
+                  </Field>
+                  <Field label={translateNow("source.business.purpose.286d11d720")}>
+                    {(control) => (
+                      <Textarea
+                        {...control}
+                        {...register("purpose")}
+                        className="min-h-20"
+                        placeholder={translateNow("source.service.tls.for.staging.7d9f743b3b")}
                       />
-                      {errors.ownerId && <p className="text-caption font-medium text-risk-critical">{errors.ownerId.message}</p>}
-                    </label>
-                    <p className="text-caption text-muted-foreground">{t("request.wizard.ownerHint")}</p>
-                  </div>
-                  <label className="grid gap-1 text-body font-medium" htmlFor="request-purpose">
-                    {translateNow("source.business.purpose.286d11d720")}
-                    <textarea
-                      id="request-purpose"
-                      {...register("purpose")}
-                      className="min-h-20 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
-                      placeholder={translateNow("source.service.tls.for.staging.7d9f743b3b")}
-                    />
-                  </label>
+                    )}
+                  </Field>
                 </div>
               )}
 

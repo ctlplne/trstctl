@@ -155,6 +155,34 @@ describe("Clarity/Console design-system foundation", () => {
     expect(missing).toEqual([]);
   });
 
+  it("ratchets raw form controls in pages toward the rule-14 primitives (R-02)", () => {
+    // Form controls are primitives (DESIGN.md rule 14): new fields use
+    // Input/Select/Textarea inside <Field>, and existing raw tags migrate when
+    // their page is next touched — the same migrate-when-touched policy as
+    // useResource. This budget only goes DOWN. If this fails with a HIGHER
+    // count, a new raw control was added: use the primitives. If it fails
+    // with a LOWER count, you migrated some — lower the budget in this change.
+    const budget = { input: 259, select: 64, textarea: 70 };
+    const counts = { input: 0, select: 0, textarea: 0 };
+    const walkPages = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          walkPages(path.join(dir, entry.name));
+          continue;
+        }
+        if (!entry.name.endsWith(".tsx") || entry.name.includes(".test.") || entry.name.includes(".stories.")) continue;
+        const source = readFileSync(path.join(dir, entry.name), "utf8");
+        counts.input += (source.match(/<input\b/g) ?? []).length;
+        counts.select += (source.match(/<select\b/g) ?? []).length;
+        counts.textarea += (source.match(/<textarea\b/g) ?? []).length;
+      }
+    };
+    walkPages(path.join(webRoot, "src/pages"));
+    for (const kind of ["input", "select", "textarea"] as const) {
+      expect(counts[kind], `raw <${kind}> count in src/pages`).toBeLessThanOrEqual(budget[kind]);
+    }
+  });
+
   it("keeps text-bearing control token pairs at WCAG AA contrast", () => {
     const tokenPairs = [
       { background: "primary", foreground: "primary-foreground", label: "primary button" },
