@@ -89,6 +89,16 @@ component there comes from the real implementation.
     `design_system_foundation.test.tsx` only goes down. Native checkboxes and
     radios ride the gold `accent-color` base rule until a Checkbox primitive
     exists.
+15. **One panel, one table — the criteria (R-05).** `Card` is the panel:
+    new sectioned surfaces use `Card`/`CardHeader`/`CardTitle` (headings get
+    `text-title` for free instead of a hand-set size). `.ui-panel` is a
+    legacy alias with the identical visual spec — do not add new call sites;
+    migrate to `Card` when the surface is next touched (exemplar:
+    Request Credential's boundary panel). `DataGrid` renders any list that
+    LOADS (it owns the five list states, sorting, selection, virtualization);
+    `.ui-table` is only for static definition-style data that can never be
+    loading/empty/error. A `.ui-table` fed by a fetch is a bug: it has no
+    state story.
 
 ## Verifying changes
 

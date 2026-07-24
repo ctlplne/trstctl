@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { api, ApiError, identityState, type Identity, type Profile } from "@/lib/api";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -370,8 +371,8 @@ export function RequestCredential() {
             </StepShell>
           </form>
 
-          <div className="ui-panel grid content-start gap-3 p-comfortable text-body">
-            <h2 className="text-title font-semibold">{translateNow("source.request.boundary.4ba2298c84")}</h2>
+          <Card className="grid content-start gap-3 p-comfortable text-body">
+            <CardTitle>{translateNow("source.request.boundary.4ba2298c84")}</CardTitle>
             <dl className="grid gap-2">
               <div>
                 <dt className="text-caption text-muted-foreground">{translateNow("source.requester.b5687cf04a")}</dt>
@@ -386,7 +387,7 @@ export function RequestCredential() {
                 <dd>accepted request; approval and issuance remain separate states</dd>
               </div>
             </dl>
-          </div>
+          </Card>
         </div>
       </section>
 
