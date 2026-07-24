@@ -48,7 +48,12 @@ This file is the human-readable companion to the git tags; the
   fixed by registering the token scale, for every cn() call site.
 - **S-C8 — Storybook workbench.** Storybook 10 (react-vite + a11y addon)
   renders stories against the real tokens with a dark/light toolbar; six
-  starter story files cover the primitives and shared components.
+  starter story files cover the primitives and shared components. Coverage
+  extended 2026-07-24 to the data-heavy set — DataGrid (sorting, selection +
+  bulk slot, and all five list states), the full chart palette (tones,
+  StatTile, Meter, BucketBar, time bars, Donut, Sparkline/AreaTrend),
+  CredentialChip, the DetailDrawer/Dialog overlays, and StatePrimitives —
+  10 titles / 38 stories in the static build.
 - **S-C4 — Playwright e2e + visual regression, authored.** Shell smoke (rail,
   scoped sidebars, palette, the `?tab=` redirect) and masked dark-theme visual
   baselines, targeting the seeded demo stack (`npm run e2e`). Browsers were
