@@ -240,14 +240,21 @@ export function Connectors() {
         <section aria-labelledby="target-setup-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="target-setup-heading" className="text-title font-semibold">
-              {translateNow("source.connector.targets.fb63eee9b5")}</h2>
+              {translateNow("source.connector.targets.fb63eee9b5")}
+            </h2>
           </div>
-          <form aria-label={translateNow("source.create.connector.target.bb8ec59505")} className="ui-panel grid gap-3 md:grid-cols-[1fr_12rem] md:items-end" onSubmit={createTarget}>
+          <form
+            aria-label={translateNow("source.create.connector.target.bb8ec59505")}
+            className="ui-panel grid gap-3 md:grid-cols-[1fr_12rem] md:items-end"
+            onSubmit={createTarget}
+          >
             <label className="grid gap-1 text-sm">
-              {translateNow("source.target.978354db0c")}<input className="ui-input" value={targetName} onChange={(event) => setTargetName(event.target.value)} required />
+              {translateNow("source.target.978354db0c")}
+              <input className="ui-input" value={targetName} onChange={(event) => setTargetName(event.target.value)} required />
             </label>
             <label className="grid gap-1 text-sm">
-              {translateNow("source.connector.8f0d706fff")}<select className="ui-input" value={connectorName} onChange={(event) => setConnectorName(event.target.value)}>
+              {translateNow("source.connector.8f0d706fff")}
+              <select className="ui-input" value={connectorName} onChange={(event) => setConnectorName(event.target.value)}>
                 {connectorOptions.map((name) => (
                   <option key={name} value={name}>
                     {name}
@@ -256,25 +263,34 @@ export function Connectors() {
               </select>
             </label>
             <label className="grid gap-1 text-sm md:col-span-2">
-              {translateNow("source.config.json.eaa2c019f1")}<textarea className="ui-input min-h-24 font-mono text-xs" value={targetConfig} onChange={(event) => setTargetConfig(event.target.value)} />
+              {translateNow("source.config.json.eaa2c019f1")}
+              <textarea className="ui-input min-h-24 font-mono text-xs" value={targetConfig} onChange={(event) => setTargetConfig(event.target.value)} />
             </label>
-            <button className="ui-button md:col-span-2" type="submit">
-              {translateNow("source.create.target.00cf884cbc")}</button>
+            <Button className="md:col-span-2" type="submit">
+              {translateNow("source.create.target.00cf884cbc")}
+            </Button>
           </form>
 
-          <form aria-label={translateNow("source.create.endpoint.binding.dd5b21a786")} className="ui-panel grid gap-3 md:grid-cols-3 md:items-end" onSubmit={createEndpointBinding}>
+          <form
+            aria-label={translateNow("source.create.endpoint.binding.dd5b21a786")}
+            className="ui-panel grid gap-3 md:grid-cols-3 md:items-end"
+            onSubmit={createEndpointBinding}
+          >
             <label className="grid gap-1 text-sm">
-              {translateNow("source.owner.id.1611f5e055")}<input className="ui-input font-mono text-xs" value={bindingOwnerID} onChange={(event) => setBindingOwnerID(event.target.value)} required />
+              {translateNow("source.owner.id.1611f5e055")}
+              <input className="ui-input font-mono text-xs" value={bindingOwnerID} onChange={(event) => setBindingOwnerID(event.target.value)} required />
             </label>
             <label className="grid gap-1 text-sm">
-              {translateNow("source.identity.dns.name.c79a6b3b97")}<input className="ui-input" value={bindingIdentityName} onChange={(event) => setBindingIdentityName(event.target.value)} required />
+              {translateNow("source.identity.dns.name.c79a6b3b97")}
+              <input className="ui-input" value={bindingIdentityName} onChange={(event) => setBindingIdentityName(event.target.value)} required />
             </label>
-            <button className="ui-button" type="submit">
-              {translateNow("source.bind.and.enroll.5cb885780a")}</button>
+            <Button type="submit">{translateNow("source.bind.and.enroll.5cb885780a")}</Button>
           </form>
 
           {targets && targets.length === 0 ? (
-            <EmptyState title={translateNow("source.no.connector.targets.5a8adcf783")}>{translateNow("source.no.tenant.connector.targets.were.returned.6c7baa9a8d")}</EmptyState>
+            <EmptyState title={translateNow("source.no.connector.targets.5a8adcf783")}>
+              {translateNow("source.no.tenant.connector.targets.were.returned.6c7baa9a8d")}
+            </EmptyState>
           ) : (
             targets && (
               <div className="ui-panel overflow-x-auto">
@@ -320,11 +336,13 @@ export function Connectors() {
         <section aria-labelledby="target-actions-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="target-actions-heading" className="text-title font-semibold">
-              {translateNow("source.target.actions.4d6d059ed8")}</h2>
+              {translateNow("source.target.actions.4d6d059ed8")}
+            </h2>
           </div>
           <div className="ui-panel grid gap-3 md:grid-cols-3">
             <label className="grid gap-1 text-sm">
-              {translateNow("source.target.978354db0c")}<select className="ui-input" value={selectedTarget} onChange={(event) => setSelectedTarget(event.target.value)}>
+              {translateNow("source.target.978354db0c")}
+              <select className="ui-input" value={selectedTarget} onChange={(event) => setSelectedTarget(event.target.value)}>
                 <option value="">{translateNow("source.select.target.adfbe7a33d")}</option>
                 {targets.map((target) => (
                   <option key={target.id} value={target.id}>
@@ -334,7 +352,8 @@ export function Connectors() {
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              {translateNow("source.identity.999f23fcd7")}<select className="ui-input" value={selectedIdentity} onChange={(event) => setSelectedIdentity(event.target.value)}>
+              {translateNow("source.identity.999f23fcd7")}
+              <select className="ui-input" value={selectedIdentity} onChange={(event) => setSelectedIdentity(event.target.value)}>
                 <option value="">{translateNow("source.select.identity.1b8c8195aa")}</option>
                 {identities.map((identity) => (
                   <option key={identity.id} value={identity.id}>
@@ -344,17 +363,22 @@ export function Connectors() {
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              {translateNow("source.reason.f81ab834de")}<input className="ui-input" value={reason} onChange={(event) => setReason(event.target.value)} />
+              {translateNow("source.reason.f81ab834de")}
+              <input className="ui-input" value={reason} onChange={(event) => setReason(event.target.value)} />
             </label>
             <div className="flex flex-wrap gap-2 md:col-span-3">
-              <button className="ui-button" type="button" onClick={() => runTargetAction("bind")} disabled={!selectedTarget || !selectedIdentity}>
-                {translateNow("source.bind.56b9b63d28")}</button>
-              <button className="ui-button" type="button" onClick={() => runTargetAction("test")} disabled={!selectedTarget}>
-                {translateNow("source.test.532eaabd95")}</button>
-              <button className="ui-button" type="button" onClick={() => runTargetAction("deploy")} disabled={!selectedTarget || !selectedIdentity}>
-                {translateNow("source.deploy.4c236daafb")}</button>
-              <button className="ui-button" type="button" onClick={() => runTargetAction("rollback")} disabled={!selectedTarget}>
-                {translateNow("source.rollback.c591f55749")}</button>
+              <Button type="button" onClick={() => runTargetAction("bind")} disabled={!selectedTarget || !selectedIdentity}>
+                {translateNow("source.bind.56b9b63d28")}
+              </Button>
+              <Button type="button" onClick={() => runTargetAction("test")} disabled={!selectedTarget}>
+                {translateNow("source.test.532eaabd95")}
+              </Button>
+              <Button type="button" onClick={() => runTargetAction("deploy")} disabled={!selectedTarget || !selectedIdentity}>
+                {translateNow("source.deploy.4c236daafb")}
+              </Button>
+              <Button type="button" onClick={() => runTargetAction("rollback")} disabled={!selectedTarget}>
+                {translateNow("source.rollback.c591f55749")}
+              </Button>
             </div>
             {actionResult && <output className="font-mono text-xs text-muted-foreground md:col-span-3">{actionResult}</output>}
           </div>
@@ -365,10 +389,13 @@ export function Connectors() {
         <section aria-labelledby="connectors-registry-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="connectors-registry-heading" className="text-title font-semibold">
-              {translateNow("source.connector.registry.714802c316")}</h2>
+              {translateNow("source.connector.registry.714802c316")}
+            </h2>
           </div>
           {catalog.length === 0 ? (
-            <EmptyState title={translateNow("source.no.connectors.registered.3752f19e55")}>{translateNow("source.no.connector.catalog.rows.were.returned.3a8d5bf05f")}</EmptyState>
+            <EmptyState title={translateNow("source.no.connectors.registered.3752f19e55")}>
+              {translateNow("source.no.connector.catalog.rows.were.returned.3a8d5bf05f")}
+            </EmptyState>
           ) : (
             <div className="ui-panel overflow-x-auto">
               <table className="ui-table min-w-[54rem]">
@@ -401,10 +428,13 @@ export function Connectors() {
         <section aria-labelledby="delivery-receipts-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="delivery-receipts-heading" className="text-title font-semibold">
-              {translateNow("source.recent.delivery.receipts.a9cb8f42a9")}</h2>
+              {translateNow("source.recent.delivery.receipts.a9cb8f42a9")}
+            </h2>
           </div>
           {deliveries.length === 0 ? (
-            <EmptyState title={translateNow("source.no.connector.delivery.receipts.b8aaf68b4d")}>{translateNow("source.no.deploy.outbox.attempt.has.produced.a.re.6e3133a027")}</EmptyState>
+            <EmptyState title={translateNow("source.no.connector.delivery.receipts.b8aaf68b4d")}>
+              {translateNow("source.no.deploy.outbox.attempt.has.produced.a.re.6e3133a027")}
+            </EmptyState>
           ) : (
             <>
               <div className="ui-panel overflow-x-auto">
@@ -563,7 +593,8 @@ export function Connectors() {
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeEdit}>
-                {translateNow("source.cancel.19766ed6cc")}</Button>
+                {translateNow("source.cancel.19766ed6cc")}
+              </Button>
               <Button type="submit" disabled={editBusy}>
                 {t("parity.saveTarget_fa5df1")}
               </Button>
@@ -617,7 +648,8 @@ export function Connectors() {
               {t("parity.yesDeleteTarget_729269")}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={closeDelete}>
-              {translateNow("source.cancel.19766ed6cc")}</Button>
+              {translateNow("source.cancel.19766ed6cc")}
+            </Button>
           </div>
         </Dialog>
       )}
@@ -676,7 +708,8 @@ export function Connectors() {
           </dl>
           <div className="flex justify-end border-t border-border px-5 py-4">
             <Button type="button" variant="outline" onClick={() => setDeliveryDetail(null)}>
-              {translateNow("source.close.7d9eb7acb1")}</Button>
+              {translateNow("source.close.7d9eb7acb1")}
+            </Button>
           </div>
         </Dialog>
       )}

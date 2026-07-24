@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -127,6 +127,32 @@ describe("Clarity/Console design-system foundation", () => {
     for (const themeKey of ["brand", "console", "operate", "observe", "disclose", "risk", "fontSize", "elevation2"]) {
       expect(tailwind).toContain(themeKey);
     }
+  });
+
+  it("defines every ui-* component class that source references (R-01 guard)", () => {
+    // .ui-input was referenced by ~145 call sites for months while defined
+    // nowhere — every form control rendered as raw native chrome, and no test
+    // could see it because this suite guarded tokens, not classes. Any ui-*
+    // class a component wears must have a rule in index.css.
+    const referenced = new Set<string>();
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          walk(path.join(dir, entry.name));
+          continue;
+        }
+        if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+        const source = readFileSync(path.join(dir, entry.name), "utf8");
+        for (const match of source.matchAll(/\bui-[a-z][a-z0-9-]*/g)) {
+          referenced.add(match[0]);
+        }
+      }
+    };
+    walk(path.join(webRoot, "src"));
+    const defined = new Set([...css.matchAll(/\.(ui-[a-z][a-z0-9-]*)/g)].map((m) => m[1]));
+    const missing = [...referenced].filter((name) => !defined.has(name)).sort();
+    expect(referenced.size).toBeGreaterThanOrEqual(3); // ui-input, ui-panel, ui-table
+    expect(missing).toEqual([]);
   });
 
   it("keeps text-bearing control token pairs at WCAG AA contrast", () => {
