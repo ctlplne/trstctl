@@ -46,6 +46,12 @@ derive from it.
   `App.tsx`; the Suspense boundary lives at the shell outlet. Tests must
   `await findBy…` after mounting a route — never read the DOM synchronously.
   The compressed bundle budget is `npm run size`; spend it consciously.
+- **Monolith pages split as touched (R-09):** Secrets, CAHierarchy,
+  Discovery, and Incidents are past the size where per-file conventions stay
+  reviewable — design drift concentrates there. When a card materially edits
+  one, first extract the section being edited into `pages/<page>/…Parts`
+  files (the `pages/secrets/SecretsPageParts.tsx` pattern), then do the
+  card. No standalone big-bang refactor.
 
 ## Typography and tokens (S-C9)
 
