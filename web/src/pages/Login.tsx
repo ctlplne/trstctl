@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { beginLogin, useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +25,9 @@ export function Login() {
             </svg>
           </span>
           <div>
-            <p className="text-caption font-semibold uppercase tracking-wider text-brand-accent">{translateNow("source.machine.credential.access.bb586fcf38")}</p>
+            <Eyebrow as="p" className="font-mono font-medium tracking-wider text-brand-accent">
+              {translateNow("source.machine.credential.access.bb586fcf38")}
+            </Eyebrow>
             <h1 className="text-heading font-semibold tracking-tight">{translateNow("source.trstctl.74de2c6ee4")}</h1>
           </div>
         </div>
@@ -36,13 +39,14 @@ export function Login() {
           <CardContent>
             <p className="mb-4 text-body text-muted-foreground">{translateNow("source.authenticate.with.your.organization.s.iden.c19821f6a0")}</p>
             <Button className="w-full" onClick={beginLogin}>
-              {translateNow("source.sign.in.with.sso.73e984e9b4")}</Button>
+              {translateNow("source.sign.in.with.sso.73e984e9b4")}
+            </Button>
             {previewAvailable && (
               <div className="mt-4 border-t border-border pt-4">
-                <p className="mb-3 text-caption text-muted-foreground">
-                  {translateNow("source.preview.uses.sample.data.in.this.browser.a.7b39b478d2")}</p>
+                <p className="mb-3 text-caption text-muted-foreground">{translateNow("source.preview.uses.sample.data.in.this.browser.a.7b39b478d2")}</p>
                 <Button className="w-full" variant="outline" onClick={enterPreview}>
-                  {translateNow("source.preview.ui.without.backend.ad12297cd6")}</Button>
+                  {translateNow("source.preview.ui.without.backend.ad12297cd6")}
+                </Button>
               </div>
             )}
           </CardContent>

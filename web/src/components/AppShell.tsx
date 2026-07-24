@@ -345,9 +345,9 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 aria-expanded={!collapsed}
                 aria-controls={contentId}
                 onClick={() => toggleGroup(group.labelKey)}
-                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
+                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-sidebar-foreground/60 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
               >
-                <span>{t(group.labelKey)}</span>
+                <Eyebrow className="text-inherit">{t(group.labelKey)}</Eyebrow>
                 <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform duration-fast", collapsed && "-rotate-90")} />
               </button>
               <ul id={contentId} hidden={collapsed} className="space-y-1">
@@ -560,7 +560,7 @@ export function AppShell() {
           </span>
           <span className="min-w-0 leading-tight">
             <span className="block truncate font-display text-sm font-bold tracking-tight">{t("app.brand.name")}</span>
-            <span className="hidden truncate text-2xs font-medium uppercase tracking-wider text-brand-accent sm:block">{t("app.brand.subtitle")}</span>
+            <Eyebrow className="hidden truncate font-mono text-2xs font-medium tracking-wider text-brand-accent sm:block">{t("app.brand.subtitle")}</Eyebrow>
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-2">

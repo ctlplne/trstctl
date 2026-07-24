@@ -106,7 +106,9 @@ export function Styleguide() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {colorTokens.map((group) => (
                 <div key={group.group} className="ui-panel grid content-start gap-2 p-4">
-                  <h3 className="text-caption font-mono font-medium uppercase tracking-wider text-muted-foreground">{group.group}</h3>
+                  <Eyebrow as="h3" className="font-mono font-medium tracking-wider">
+                    {group.group}
+                  </Eyebrow>
                   {group.tokens.map((token) => (
                     <div key={token.name} className="flex items-center gap-3">
                       <span aria-hidden="true" className={`h-8 w-14 shrink-0 rounded-control ${token.className}`} />

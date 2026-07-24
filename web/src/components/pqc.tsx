@@ -1,4 +1,5 @@
 import type { CBOMMigrationProgress } from "@/lib/api";
+import { Eyebrow } from "@/components/typography";
 import { useTranslation } from "@/i18n/I18nProvider";
 
 export function PQCReadinessSummary({ progress }: { progress: CBOMMigrationProgress }) {
@@ -16,15 +17,15 @@ export function PQCReadinessSummary({ progress }: { progress: CBOMMigrationProgr
       </div>
       <dl className="grid gap-3 sm:grid-cols-3">
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("pqc.readiness.totalAssets")}</dt>
+          <Eyebrow as="dt">{t("pqc.readiness.totalAssets")}</Eyebrow>
           <dd className="text-title font-semibold">{progress.total_assets}</dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("pqc.readiness.quantumVulnerable")}</dt>
+          <Eyebrow as="dt">{t("pqc.readiness.quantumVulnerable")}</Eyebrow>
           <dd className="text-title font-semibold">{progress.quantum_vulnerable_assets}</dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("pqc.readiness.readyAssets")}</dt>
+          <Eyebrow as="dt">{t("pqc.readiness.readyAssets")}</Eyebrow>
           <dd className="text-title font-semibold">{progress.post_quantum_ready_assets}</dd>
         </div>
       </dl>

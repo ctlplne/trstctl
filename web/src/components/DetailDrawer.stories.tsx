@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { Dialog } from "@/components/Dialog";
 import { CredentialChip } from "@/components/CredentialChip";
+import { Eyebrow } from "@/components/typography";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 
@@ -49,19 +50,19 @@ function DrawerDemo() {
       >
         <dl className="space-y-3 text-body">
           <div>
-            <dt className="text-caption uppercase tracking-wide text-muted-foreground">Status</dt>
+            <Eyebrow as="dt">Status</Eyebrow>
             <dd className="mt-1">
               <StatusBadge vocabulary="lifecycle" value="issued" />
             </dd>
           </div>
           <div>
-            <dt className="text-caption uppercase tracking-wide text-muted-foreground">Fingerprint</dt>
+            <Eyebrow as="dt">Fingerprint</Eyebrow>
             <dd className="mt-1">
               <CredentialChip value="SHA256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b" label="fingerprint" />
             </dd>
           </div>
           <div>
-            <dt className="text-caption uppercase tracking-wide text-muted-foreground">Owner</dt>
+            <Eyebrow as="dt">Owner</Eyebrow>
             <dd className="mt-1">payments-platform (team)</dd>
           </div>
         </dl>

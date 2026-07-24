@@ -183,6 +183,34 @@ describe("Clarity/Console design-system foundation", () => {
     }
   });
 
+  it("keeps tracked-uppercase micro-labels inside the Eyebrow primitive (R-04 ratchet)", () => {
+    // Eyebrow is THE tracked-uppercase micro-label (S-C9); PageHeader's accent
+    // eyebrow is the one sanctioned brand-flavored variant. Hand-rolled
+    // uppercase+tracking clusters drift into "four slightly different
+    // versions" — Secrets had eight with a different tracking value. Any
+    // className combining uppercase with a tracking- utility outside the two
+    // primitive files fails here: use <Eyebrow> (overrides via className).
+    const sanctioned = new Set(["typography.tsx", "PageHeader.tsx"]);
+    const offenders: string[] = [];
+    const walkAll = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          walkAll(path.join(dir, entry.name));
+          continue;
+        }
+        if (!entry.name.endsWith(".tsx") || entry.name.includes(".test.") || sanctioned.has(entry.name)) continue;
+        const source = readFileSync(path.join(dir, entry.name), "utf8");
+        for (const match of source.matchAll(/className="[^"]*"/g)) {
+          if (match[0].includes("uppercase") && match[0].includes("tracking-")) {
+            offenders.push(`${path.join(dir, entry.name).slice(webRoot.length + 1)}: ${match[0]}`);
+          }
+        }
+      }
+    };
+    walkAll(path.join(webRoot, "src"));
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps text-bearing control token pairs at WCAG AA contrast", () => {
     const tokenPairs = [
       { background: "primary", foreground: "primary-foreground", label: "primary button" },

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Eyebrow } from "@/components/typography";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -2866,7 +2867,7 @@ export function Secrets() {
                 </div>
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                   <div className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.operatorCRDs")}</span>
+                    <Eyebrow>{t("secrets.sync.operatorCRDs")}</Eyebrow>
                     <div className="flex flex-wrap gap-2">
                       {operatorPosture.crds.map((crd) => (
                         <span key={crd.kind} className="rounded-control border border-border px-2 py-1 font-mono text-xs">
@@ -2876,7 +2877,7 @@ export function Secrets() {
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.operatorReloadWorkloads")}</span>
+                    <Eyebrow>{t("secrets.sync.operatorReloadWorkloads")}</Eyebrow>
                     <div className="flex flex-wrap gap-2">
                       {operatorPosture.reload_workloads.map((kind) => (
                         <span key={kind} className="rounded-control border border-border px-2 py-1 text-xs">
@@ -2904,13 +2905,13 @@ export function Secrets() {
                 </div>
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                   <div className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.injectionCRD")}</span>
+                    <Eyebrow>{t("secrets.sync.injectionCRD")}</Eyebrow>
                     <span className="rounded-control border border-border px-2 py-1 font-mono text-xs">
                       {workloadInjection.crd.kind} - {workloadInjection.crd.status}
                     </span>
                   </div>
                   <div className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.injectionModes")}</span>
+                    <Eyebrow>{t("secrets.sync.injectionModes")}</Eyebrow>
                     <div className="flex flex-wrap gap-2">
                       {workloadInjection.modes.map((mode) => (
                         <span key={mode.id} className="rounded-control border border-border px-2 py-1 text-xs">
@@ -2920,7 +2921,7 @@ export function Secrets() {
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.injectionWorkloads")}</span>
+                    <Eyebrow>{t("secrets.sync.injectionWorkloads")}</Eyebrow>
                     <div className="flex flex-wrap gap-2">
                       {workloadInjection.workload_kinds.map((kind) => (
                         <span key={kind} className="rounded-control border border-border px-2 py-1 text-xs">
@@ -2954,7 +2955,7 @@ export function Secrets() {
                 </div>
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                   <div className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.unvaultedDetection")}</span>
+                    <Eyebrow>{t("secrets.sync.unvaultedDetection")}</Eyebrow>
                     <div className="flex flex-wrap gap-2">
                       {unvaultedPosture.detection_sources.map((source) => (
                         <span key={source.id} className="rounded-control border border-border px-2 py-1 text-xs">
@@ -2964,7 +2965,7 @@ export function Secrets() {
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.unvaultedVaults")}</span>
+                    <Eyebrow>{t("secrets.sync.unvaultedVaults")}</Eyebrow>
                     <div className="flex flex-wrap gap-2">
                       {unvaultedPosture.vault_providers
                         .filter((provider) => provider.discovery_configured)
@@ -2976,7 +2977,7 @@ export function Secrets() {
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.unvaultedSyncTargets")}</span>
+                    <Eyebrow>{t("secrets.sync.unvaultedSyncTargets")}</Eyebrow>
                     <div className="flex flex-wrap gap-2">
                       {unvaultedPosture.configured_sync_targets.map((target) => (
                         <span key={target} className="rounded-control border border-border px-2 py-1 font-mono text-xs">
