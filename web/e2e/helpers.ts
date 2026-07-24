@@ -6,10 +6,16 @@ import { expect, type Page } from "@playwright/test";
 export async function signIn(page: Page): Promise<void> {
   await page.goto("/");
   const sso = page.getByRole("button", { name: /sign in with sso/i });
-  if (await sso.isVisible({ timeout: 5_000 }).catch(() => false)) {
+  const shell = page.getByRole("navigation", { name: /spaces/i });
+  // Wait for whichever face this deployment shows first — the local-SSO login
+  // button or (pre-authenticated) the shell itself. A fixed-length peek for
+  // the button is a race under parallel workers: a slow first paint made the
+  // helper skip the click and then wait for a shell that never came.
+  await expect(sso.or(shell).first()).toBeVisible({ timeout: 20_000 });
+  if (await sso.isVisible().catch(() => false)) {
     await sso.click();
   }
-  await expect(page.getByRole("navigation", { name: /spaces/i })).toBeVisible({ timeout: 20_000 });
+  await expect(shell).toBeVisible({ timeout: 20_000 });
 }
 
 /** The five spaces and, for each, the sidebar row that proves the scoped
