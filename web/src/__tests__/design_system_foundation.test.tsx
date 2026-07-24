@@ -109,7 +109,6 @@ describe("Clarity/Console design-system foundation", () => {
   it("exposes brand, honesty, risk, density, type, and elevation tokens", () => {
     for (const token of [
       "--brand-accent",
-      "--console-accent",
       "--operate",
       "--observe",
       "--disclose",
@@ -117,14 +116,14 @@ describe("Clarity/Console design-system foundation", () => {
       "--risk-high",
       "--risk-medium",
       "--risk-low",
-      "--density-compact",
+      "--density-comfortable",
       "--font-size-heading",
       "--elevation-2",
     ]) {
       expect(css).toContain(token);
     }
 
-    for (const themeKey of ["brand", "console", "operate", "observe", "disclose", "risk", "fontSize", "elevation2"]) {
+    for (const themeKey of ["brand", "operate", "observe", "disclose", "risk", "fontSize", "elevation2"]) {
       expect(tailwind).toContain(themeKey);
     }
   });

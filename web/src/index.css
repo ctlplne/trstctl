@@ -21,7 +21,6 @@
     --border: 214 25% 88%;
     --brand-accent: 40 75% 36%;
     --brand-accent-foreground: 0 0% 100%;
-    --console-accent: 40 75% 36%;
     /* Sidebar rail — a constant ink-black blue in both themes (the website's
        --bg-2 #0d1118 family), replacing the legacy certctl teal rail. */
     --sidebar: 216 28% 7%;
@@ -43,8 +42,6 @@
     --status-warning: 32 95% 40%;
     --status-neutral: 215 16% 44%;
     --status-info: 218 80% 48%;
-    --density-compact: 0.75rem;
-    --density-default: 1rem;
     --density-comfortable: 1.25rem;
     --radius-control: 0.375rem;
     --radius-panel: 0.5rem;
@@ -79,7 +76,6 @@
     --border: 211 28% 20%;
     --brand-accent: 171 77% 64%;
     --brand-accent-foreground: 223 30% 5%;
-    --console-accent: 42 100% 70%;
     --sidebar: 216 28% 7%;
     --sidebar-hover: 214 32% 10%;
     --sidebar-active: 210 31% 13%;
@@ -245,12 +241,6 @@
   .ui-table tbody tr:hover td {
     background: hsl(var(--foreground) / 0.03);
   }
-  /* Compact density for DataTable's row-density toggle (F4). */
-  .ui-table[data-density="compact"] tbody td {
-    padding-top: 0.375rem;
-    padding-bottom: 0.375rem;
-  }
-
   /* A plain elevated panel surface matching the Card primitive (Clarity). */
   .ui-panel {
     border: 1px solid hsl(var(--border));
