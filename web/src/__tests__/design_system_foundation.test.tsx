@@ -226,6 +226,15 @@ describe("Clarity/Console design-system foundation", () => {
         const ratio = contrastRatio(requireToken(tokens, pair.foreground), requireToken(tokens, pair.background));
         expect(ratio, `${themeName} ${pair.label}: --${pair.foreground} on --${pair.background}`).toBeGreaterThanOrEqual(4.5);
       }
+      // R-08: the focus indicator is its own token (mint family in BOTH
+      // themes — rule 2's "mint means focus" no longer depends on theme) and
+      // must clear the 3:1 non-text contrast floor against the page it draws
+      // on (WCAG 1.4.11).
+      const focusRatio = contrastRatio(requireToken(tokens, "focus"), requireToken(tokens, "background"));
+      expect(focusRatio, `${themeName} focus ring on background`).toBeGreaterThanOrEqual(3);
+      const focusHue = requireToken(tokens, "focus").h;
+      expect(focusHue, `${themeName} --focus stays in the mint family`).toBeGreaterThanOrEqual(160);
+      expect(focusHue, `${themeName} --focus stays in the mint family`).toBeLessThanOrEqual(185);
     }
   });
 

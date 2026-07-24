@@ -75,7 +75,7 @@ export function PageTabs({
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              "-mb-px inline-flex min-h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent",
+              "-mb-px inline-flex min-h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
               selected ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
             )}
           >

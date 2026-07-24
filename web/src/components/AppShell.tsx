@@ -172,7 +172,7 @@ function SpaceRail({ user, onNavigate, orientation }: SpaceRailProps) {
 
   function railButtonClass(selected: boolean): string {
     return cn(
-      "relative flex h-10 w-10 items-center justify-center rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent",
+      "relative flex h-10 w-10 items-center justify-center rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
       selected ? "bg-sidebar-active text-primary" : "text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-white",
     );
   }
@@ -345,7 +345,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 aria-expanded={!collapsed}
                 aria-controls={contentId}
                 onClick={() => toggleGroup(group.labelKey)}
-                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-sidebar-foreground/60 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
+                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-sidebar-foreground/60 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               >
                 <Eyebrow className="text-inherit">{t(group.labelKey)}</Eyebrow>
                 <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform duration-fast", collapsed && "-rotate-90")} />
@@ -612,7 +612,7 @@ export function AppShell() {
               to="/notifications"
               aria-label={t("nav.item.notifications")}
               title={t("nav.item.notifications")}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors duration-fast hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors duration-fast hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <Bell className="h-4 w-4" aria-hidden="true" />
             </Link>

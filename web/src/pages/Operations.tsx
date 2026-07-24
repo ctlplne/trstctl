@@ -175,7 +175,7 @@ export function Operations() {
             aria-label={translateNow("source.status.filter.9bfe8b184f")}
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
           >
             {statusOptions(t("operations.status.queued")).map((option) => (
               <option key={option.value || "all"} value={option.value}>
@@ -189,7 +189,7 @@ export function Operations() {
             aria-label={translateNow("source.type.filter.5607113309")}
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value as "" | OperationType)}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
           >
             {typeOptions.map((option) => (
               <option key={option.value || "all"} value={option.value}>
@@ -349,7 +349,7 @@ function RejectDialog({
             rows={4}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+            className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
           />
         </label>
         <div className="flex justify-end gap-2">

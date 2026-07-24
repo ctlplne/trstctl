@@ -164,7 +164,7 @@ export function Audit() {
             <button
               type="button"
               onClick={clearModuleScope}
-              className="rounded-control px-1 text-brand-accent/80 hover:text-brand-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
+              className="rounded-control px-1 text-brand-accent/80 hover:text-brand-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               aria-label={t("audit.moduleScope.clear")}
             >
               ✕

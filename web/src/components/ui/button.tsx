@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * accent on hover, and a real destructive variant so revoke/delete flows stop
  * hand-rolling red styles. The subtle hover lift mirrors the website CTA. */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-[color,background-color,border-color,box-shadow,filter,transform] duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+  "inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-[color,background-color,border-color,box-shadow,filter,transform] duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   {
     variants: {
       variant: {

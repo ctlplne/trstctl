@@ -169,7 +169,7 @@ export function Journeys() {
                 <>
                   <Link
                     to={current.to}
-                    className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-elevation1 transition-[filter,transform] duration-fast hover:brightness-105 motion-safe:hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-elevation1 transition-[filter,transform] duration-fast hover:brightness-105 motion-safe:hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
                     {t("journeys.open")}
                     <ArrowUpRight className="h-4 w-4" aria-hidden="true" />

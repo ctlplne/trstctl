@@ -15,6 +15,7 @@ export default {
         destructive: { DEFAULT: "hsl(var(--destructive) / <alpha-value>)", foreground: "hsl(var(--destructive-foreground) / <alpha-value>)" },
         card: { DEFAULT: "hsl(var(--card) / <alpha-value>)", foreground: "hsl(var(--card-foreground) / <alpha-value>)" },
         brand: { accent: "hsl(var(--brand-accent) / <alpha-value>)", foreground: "hsl(var(--brand-accent-foreground) / <alpha-value>)" },
+        focus: "hsl(var(--focus) / <alpha-value>)",
         operate: { DEFAULT: "hsl(var(--operate) / <alpha-value>)", foreground: "hsl(var(--operate-foreground) / <alpha-value>)" },
         observe: { DEFAULT: "hsl(var(--observe) / <alpha-value>)", foreground: "hsl(var(--observe-foreground) / <alpha-value>)" },
         disclose: { DEFAULT: "hsl(var(--disclose) / <alpha-value>)", foreground: "hsl(var(--disclose-foreground) / <alpha-value>)" },

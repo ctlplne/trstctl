@@ -59,8 +59,8 @@ export function EmptyState({
 function EmptyStateActionControl({ action, variant }: { action: EmptyStateAction; variant: "primary" | "secondary" }) {
   const className =
     variant === "primary"
-      ? "inline-flex min-h-10 items-center justify-center gap-2 rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      : "inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:border-brand-accent/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+      ? "inline-flex min-h-10 items-center justify-center gap-2 rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      : "inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:border-brand-accent/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background";
   if (action.to) {
     return (
       <Link to={action.to} className={className}>

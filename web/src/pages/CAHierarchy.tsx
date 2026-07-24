@@ -1151,7 +1151,7 @@ function LabeledSelect({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-control border border-border bg-background px-3 py-2 outline-none transition-colors focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+        className="rounded-control border border-border bg-background px-3 py-2 outline-none transition-colors focus:border-focus focus:ring-2 focus:ring-focus/20"
       >
         {children}
       </select>
@@ -1259,7 +1259,7 @@ function ExistingCAImportWorkflow({
               rows={6}
               value={form.certificatePEM}
               onChange={(event) => onFormChange({ certificatePEM: event.target.value })}
-              className="min-h-36 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+              className="min-h-36 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
               placeholder={t("caHierarchy.offline.placeholderCertificate")}
             />
           </div>
@@ -1379,7 +1379,7 @@ function OfflineRootWorkflow({
                 rows={5}
                 value={rootForm.certificatePEM}
                 onChange={(event) => onRootFormChange({ certificatePEM: event.target.value })}
-                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
                 placeholder={t("caHierarchy.offline.placeholderCertificate")}
               />
             </div>
@@ -1465,7 +1465,7 @@ function OfflineRootWorkflow({
                 rows={5}
                 value={intermediateForm.certificatePEM}
                 onChange={(event) => onIntermediateFormChange({ certificatePEM: event.target.value })}
-                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
                 placeholder={t("caHierarchy.offline.placeholderCertificate")}
               />
             </div>
@@ -2246,7 +2246,7 @@ function CreateIssuerDialog({
               rows={5}
               value={chainPEM}
               onChange={(event) => setChainPEM(event.target.value)}
-              className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+              className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
               placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
             />
           </div>
@@ -2292,7 +2292,7 @@ function IssuerConfigFieldControl({ field, onChange, value }: { field: IssuerCon
           required={field.required}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+          className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-focus focus:ring-2 focus:ring-focus/20"
         >
           <option value="">{translateNow("source.select.2a78025de6")}</option>
           {field.options?.map((option) => (
@@ -2315,7 +2315,7 @@ function IssuerConfigFieldControl({ field, onChange, value }: { field: IssuerCon
           rows={4}
           onChange={(event) => onChange(event.target.value)}
           placeholder={field.placeholder}
-          className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+          className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
         />
       </div>
     );
@@ -2365,7 +2365,7 @@ function LabeledInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
       />
     </div>
   );
@@ -2400,7 +2400,7 @@ function LabeledTextarea({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+        className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
       />
     </div>
   );

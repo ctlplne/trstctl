@@ -230,7 +230,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
                   opacity={dimmed ? 0.25 : 1}
                   onClick={() => onSelect(node.id)}
                   onKeyDown={(event) => selectWithKeyboard(event, node.id)}
-                  className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
+                  className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   {isFocus && (
                     <circle cx={node.x} cy={node.y} r={24} fill="none" stroke="hsl(var(--risk-critical) / 0.6)" strokeWidth={1.5} strokeDasharray="4 3" />

@@ -331,7 +331,7 @@ export function Notifications() {
             aria-label={t("notifications.filter.type")}
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value)}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
           >
             <option value="">{t("notifications.filter.typeAll")}</option>
             {typeOptions.map((type) => (
@@ -347,7 +347,7 @@ export function Notifications() {
             aria-label={t("notifications.filter.status")}
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as "" | NotificationStatus)}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
           >
             {statusOptions.map((option) => (
               <option key={option.value || "all"} value={option.value}>
@@ -548,7 +548,7 @@ function ChannelAuthoring({
           <select
             value={form.channelType}
             onChange={(event) => onFormChange({ ...form, channelType: event.target.value })}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
           >
             {channelTypeOptions.map((channelType) => (
               <option key={channelType} value={channelType}>
@@ -577,7 +577,7 @@ function ChannelAuthoring({
             type="checkbox"
             checked={form.enabled}
             onChange={(event) => onFormChange({ ...form, enabled: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-brand-accent focus:ring-brand-accent"
+            className="h-4 w-4 rounded border-border text-brand-accent focus:ring-focus"
           />
           {t("notifications.channels.enabled")}
         </label>
@@ -652,7 +652,7 @@ function RoutingPolicyAuthoring({
               <select
                 value={policyForm.digestInterval}
                 onChange={(event) => onPolicyFormChange({ ...policyForm, digestInterval: event.target.value })}
-                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
               >
                 {digestOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -702,7 +702,7 @@ function RoutingPolicyAuthoring({
             <select
               value={selectedChannel}
               onChange={(event) => onTestFormChange({ ...testForm, channelId: event.target.value })}
-              className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+              className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
             >
               {configured.map((channel) => (
                 <option key={channel.id} value={channel.id}>
@@ -716,7 +716,7 @@ function RoutingPolicyAuthoring({
             <select
               value={testForm.severity}
               onChange={(event) => onTestFormChange({ ...testForm, severity: event.target.value as TestSeverity })}
-              className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+              className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
             >
               {testSeverityOptions.map((severity) => (
                 <option key={severity} value={severity}>
@@ -800,7 +800,7 @@ function TextInput({
         value={value}
         required={required}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
       />
     </label>
   );

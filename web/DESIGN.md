@@ -24,9 +24,14 @@ component there comes from the real implementation.
 1. **No raw colors.** Every color is a semantic token consumed as
    `hsl(var(--token))` or a Tailwind utility (`bg-primary`, `text-risk-high`).
    The foundation test fails the build on drift; keep it that way.
-2. **Gold means "act", mint means "focus".** The primary button is gold with
-   near-black ink in both themes (≈13:1). Focus rings and selection use the
-   accent. Never introduce a second call-to-action color.
+2. **Gold means "act", mint means "focus" — in both themes.** The primary
+   button is gold with near-black ink in both themes (≈13:1). Focus
+   indicators ride the dedicated `--focus` token (`ring-focus` /
+   `border-focus`, and the global `:focus-visible` outline), which stays in
+   the mint family in light mode too — `--brand-accent` is brand chrome, not
+   the focus channel (its light value is gold-family, which used to collapse
+   the two semantics). Selection uses the primary. Never introduce a second
+   call-to-action color.
 3. **Destructive is a variant, not a className.** Revoke/delete/offboard
    actions use `variant="destructive"` (confirmations) or
    `variant="destructive-outline"` (row-level openers). Async buttons take
