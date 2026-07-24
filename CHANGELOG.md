@@ -22,6 +22,8 @@ This file is the human-readable companion to the git tags; the
   readers (NHI inventory, secrets count, open incidents, recent audit) now fail
   soft to their empty fallbacks, so a missing or erroring optional endpoint can
   never stall the first-run gate or error the whole dashboard.
+
+### Per-locale catalog split (S-C10, 2026-07-24)
 - **The entry chunk drops a third: 239 → 163 kB brotli.** The es-ES and de-DE
   production catalogs moved to per-locale modules loaded on demand by the
   I18nProvider; English (the source catalog) and the pseudo transforms stay
@@ -155,6 +157,13 @@ This file is the human-readable companion to the git tags; the
 - `CHANGELOG.md` (this file), linked from the README and SECURITY.md (DOCS-005).
 
 ### Changed — web console information architecture (IA train)
+
+*Superseded within this release: the module-switcher chrome below evolved into
+the five-space unified shell (see "Unified shell (spaces IA)" above). The
+defect-class guards it introduced — `naming_parity`, `nav_completeness`,
+`module_map`, demo-data isolation, docs IA parity — carry forward unchanged
+and still gate the spaces IA.*
+
 - **Option A — refined rail.** The sidebar is re-grouped into four question-shaped
   bands (Inventory / Issue & automate / Detect & respond / Govern & administer) and
   every previously hidden product surface (CA hierarchy, certificate profiles, SSH
