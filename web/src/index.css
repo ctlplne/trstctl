@@ -166,6 +166,14 @@
     background: hsl(var(--primary) / 0.35);
   }
 
+  /* Native checkboxes and radios ride the OS accent — browser blue, the one
+     hue the palette reserves for status-info. Tint them gold ("act") until a
+     real Checkbox primitive lands with the R-02 form set (design review R-03). */
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: hsl(var(--primary));
+  }
+
   /* Respect the OS "reduce motion" setting (WCAG 2.3.3). Vestibular triggers
      come from looping/large motion, so short-circuit every animation and
      transition to a single, effectively instant frame. Tailwind's
