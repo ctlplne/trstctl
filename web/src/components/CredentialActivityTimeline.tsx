@@ -38,9 +38,11 @@ export function CredentialActivityTimeline({
   return (
     <section aria-labelledby="credential-activity-timeline-heading" className="mt-5 border-t border-border pt-4">
       <h3 id="credential-activity-timeline-heading" className="font-semibold">
-        {translateNow("source.credential.activity.timeline.e03f707dcc")}</h3>
+        {translateNow("source.credential.activity.timeline.e03f707dcc")}
+      </h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        {credentialLabel ? `${credentialLabel} has` : "This credential has"} {" "}{translateNow("source.lifecycle.state.plus.projected.connector.a.efb351b308")}</p>
+        {credentialLabel ? `${credentialLabel} has` : "This credential has"} {translateNow("source.lifecycle.state.plus.projected.connector.a.efb351b308")}
+      </p>
       <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
         {rows.map((row) => (
           <li key={row.label} className="rounded-md border border-border p-2">

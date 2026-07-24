@@ -90,9 +90,15 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
   return (
     <section aria-label={translateNow("source.assistant.answer.ba33c88efb")} className="mt-5 ui-panel p-comfortable">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-caption font-medium">
-        {tool && <span className="rounded-control border border-border px-2 py-1">{translateNow("source.tool.ef19e27e34")}{" "}{tool}</span>}
+        {tool && (
+          <span className="rounded-control border border-border px-2 py-1">
+            {translateNow("source.tool.ef19e27e34")} {tool}
+          </span>
+        )}
         <span className="rounded-control border border-border px-2 py-1">
-          <HelpTerm title={translateNow("source.grounded.means.the.answer.cites.tenant.evi.0c488b912f")}>{answer.grounded ? "Grounded" : "No cited evidence"}</HelpTerm>
+          <HelpTerm title={translateNow("source.grounded.means.the.answer.cites.tenant.evi.0c488b912f")}>
+            {answer.grounded ? "Grounded" : "No cited evidence"}
+          </HelpTerm>
         </span>
         <span className="rounded-control border border-border px-2 py-1">
           <HelpTerm title={translateNow("source.sufficient.means.the.cited.evidence.is.eno.07cb72f36c")}>
@@ -132,14 +138,15 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
   return (
     <details className="group mb-6 border-b border-border pb-6" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary className="inline-flex cursor-pointer items-center rounded-control border border-border px-3 py-2 text-body font-medium hover:border-brand-accent/40 hover:bg-muted/60">
-        {translateNow("source.advanced.runtime.diagnostics.c1b601f9f3")}</summary>
+        {translateNow("source.advanced.runtime.diagnostics.c1b601f9f3")}
+      </summary>
       {open && (
         <div className="mt-4 grid gap-3">
           <div>
             <h2 id="assistant-runtime-heading" className="text-title font-semibold">
-              {translateNow("source.ai.runtime.boundary.0126aa890a")}</h2>
-            <p className="mt-1 max-w-3xl text-body text-muted-foreground">
-              {translateNow("source.query.rca.and.mcp.fail.closed.when.disable.255478de84")}</p>
+              {translateNow("source.ai.runtime.boundary.0126aa890a")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-body text-muted-foreground">{translateNow("source.query.rca.and.mcp.fail.closed.when.disable.255478de84")}</p>
           </div>
           <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="ui-panel p-comfortable">
@@ -165,12 +172,13 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
             </div>
           </dl>
           <p className="text-body text-muted-foreground">
-            {translateNow("source.redaction.boundary.134ed7be9f")}{" "}{status?.redaction ?? "default-redactor"}; residual refusal gate:{" "}
+            {translateNow("source.redaction.boundary.134ed7be9f")} {status?.redaction ?? "default-redactor"}; residual refusal gate:{" "}
             {status?.residual_refusal_gate === false ? "inactive" : "active"}.
           </p>
           {error && (
             <UnavailableState title={translateNow("source.ai.runtime.status.unavailable.b36957005d")}>
-              {translateNow("source.the.console.could.not.read.runtime.status.a01258a71d")}</UnavailableState>
+              {translateNow("source.the.console.could.not.read.runtime.status.a01258a71d")}
+            </UnavailableState>
           )}
         </div>
       )}
@@ -182,7 +190,8 @@ function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: stri
   return (
     <section aria-labelledby="query-preview-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="query-preview-heading" className="font-semibold">
-        {translateNow("source.structured.query.preview.706d53d9be")}</h3>
+        {translateNow("source.structured.query.preview.706d53d9be")}
+      </h3>
       <dl className="mt-2 grid gap-2 md:grid-cols-3">
         <div>
           <dt className="text-caption text-muted-foreground">{translateNow("source.surfaces.fbb4dbb2d8")}</dt>
@@ -206,9 +215,9 @@ function RCAWorkspaceDisclosure() {
   return (
     <section aria-labelledby="rca-workspace-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="rca-workspace-heading" className="font-semibold">
-        {translateNow("source.rca.evidence.workspace.418f458f5f")}</h3>
-      <p className="mt-2 text-muted-foreground">
-        {translateNow("source.rca.answers.are.sufficient.or.insufficient.5a9397d141")}</p>
+        {translateNow("source.rca.evidence.workspace.418f458f5f")}
+      </h3>
+      <p className="mt-2 text-muted-foreground">{translateNow("source.rca.answers.are.sufficient.or.insufficient.5a9397d141")}</p>
     </section>
   );
 }
@@ -217,9 +226,13 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
   return (
     <section aria-labelledby="mcp-boundary-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="mcp-boundary-heading" className="font-semibold">
-        <HelpTerm title={translateNow("source.model.context.protocol.read.only.assistant.6c1913a3c9")}>{translateNow("source.mcp.53f13ae99e")}</HelpTerm> {" "}{translateNow("source.permission.boundary.c0d351ef86")}</h3>
+        <HelpTerm title={translateNow("source.model.context.protocol.read.only.assistant.6c1913a3c9")}>{translateNow("source.mcp.53f13ae99e")}</HelpTerm>{" "}
+        {translateNow("source.permission.boundary.c0d351ef86")}
+      </h3>
       <p className="mt-2 text-muted-foreground">
-        {translateNow("source.tools.are.7c933884d0")}{" "}{readOnly ? "read-only" : "treated as unavailable until policy allows them"} {" "}{translateNow("source.and.cannot.remediate.or.mutate.credentials.564b159ab9")}</p>
+        {translateNow("source.tools.are.7c933884d0")} {readOnly ? "read-only" : "treated as unavailable until policy allows them"}{" "}
+        {translateNow("source.and.cannot.remediate.or.mutate.credentials.564b159ab9")}
+      </p>
     </section>
   );
 }
@@ -338,11 +351,15 @@ export function Assistant() {
 
       <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label={translateNow("source.assistant.workflow.8962351a8a")}>
         <ToggleTab active={tab === "query"} onClick={() => setTab("query")} icon={<Search aria-hidden="true" className="h-4 w-4" />}>
-          {translateNow("source.query.b80a37564f")}</ToggleTab>
+          {translateNow("source.query.b80a37564f")}
+        </ToggleTab>
         <ToggleTab active={tab === "rca"} onClick={() => setTab("rca")} icon={<ShieldAlert aria-hidden="true" className="h-4 w-4" />}>
-          {translateNow("source.rca.d93580ed3a")}</ToggleTab>
+          {translateNow("source.rca.d93580ed3a")}
+        </ToggleTab>
         <ToggleTab active={tab === "mcp"} onClick={() => setTab("mcp")} icon={<Wrench aria-hidden="true" className="h-4 w-4" />}>
-          <HelpTerm title={translateNow("source.model.context.protocol.read.only.assistant.6c1913a3c9")}>{translateNow("source.mcp.53f13ae99e")}</HelpTerm> {" "}{translateNow("source.tools.f9d35d4377")}</ToggleTab>
+          <HelpTerm title={translateNow("source.model.context.protocol.read.only.assistant.6c1913a3c9")}>{translateNow("source.mcp.53f13ae99e")}</HelpTerm>{" "}
+          {translateNow("source.tools.f9d35d4377")}
+        </ToggleTab>
       </div>
 
       {error && (
@@ -361,7 +378,8 @@ export function Assistant() {
             <form onSubmit={runQuery} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
                 <label className="space-y-2 text-body font-medium">
-                  {translateNow("source.question.289aff12b0")}<textarea
+                  {translateNow("source.question.289aff12b0")}
+                  <textarea
                     className="min-h-24 w-full rounded-control border border-border bg-background p-3 text-body font-normal"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
@@ -370,7 +388,8 @@ export function Assistant() {
                   />
                 </label>
                 <label className="space-y-2 text-body font-medium">
-                  {translateNow("source.subject.6897128384")}<input
+                  {translateNow("source.subject.6897128384")}
+                  <input
                     className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
@@ -385,7 +404,9 @@ export function Assistant() {
                     <label key={surface.value} className="inline-flex items-center gap-2 text-body">
                       <input type="checkbox" checked={surfaces.includes(surface.value)} onChange={() => toggleSurface(surface.value)} />
                       {surface.value === "cbom" ? (
-                        <HelpTerm title={translateNow("source.cryptographic.bill.of.materials.an.invento.b2a4a4fd81")}>{translateNow("source.cbom.b79109c7e7")}</HelpTerm>
+                        <HelpTerm title={translateNow("source.cryptographic.bill.of.materials.an.invento.b2a4a4fd81")}>
+                          {translateNow("source.cbom.b79109c7e7")}
+                        </HelpTerm>
                       ) : (
                         surface.label
                       )}
@@ -413,7 +434,8 @@ export function Assistant() {
             <form onSubmit={runRCA} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
                 <label className="space-y-2 text-body font-medium">
-                  {translateNow("source.question.289aff12b0")}<textarea
+                  {translateNow("source.question.289aff12b0")}
+                  <textarea
                     className="min-h-24 w-full rounded-control border border-border bg-background p-3 text-body font-normal"
                     value={rcaQuestion}
                     onChange={(e) => setRCAQuestion(e.target.value)}
@@ -422,7 +444,8 @@ export function Assistant() {
                   />
                 </label>
                 <label className="space-y-2 text-body font-medium">
-                  {translateNow("source.subject.6897128384")}<input
+                  {translateNow("source.subject.6897128384")}
+                  <input
                     className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                     value={rcaSubject}
                     onChange={(e) => setRCASubject(e.target.value)}
@@ -449,14 +472,17 @@ export function Assistant() {
             <MCPBoundary readOnly={tools.data?.read_only} />
             {tools.loading && (
               <p role="status" className="text-body text-muted-foreground">
-                {translateNow("source.loading.tools.efc190cd4c")}</p>
+                {translateNow("source.loading.tools.efc190cd4c")}
+              </p>
             )}
             {tools.error && (
               <p role="alert" className="text-body text-destructive">
-                {translateNow("source.could.not.load.tools.2e7b9eae6f")}{" "}{tools.error}
+                {translateNow("source.could.not.load.tools.2e7b9eae6f")} {tools.error}
               </p>
             )}
-            {tools.data && mcpToolCount === 0 && <p className="text-body text-muted-foreground">{translateNow("source.no.mcp.tools.are.available.for.this.tenant.66ea7cda3e")}</p>}
+            {tools.data && mcpToolCount === 0 && (
+              <p className="text-body text-muted-foreground">{translateNow("source.no.mcp.tools.are.available.for.this.tenant.66ea7cda3e")}</p>
+            )}
             {tools.data && !mcpToolsAreReadOnly && mcpToolCount > 0 && (
               <UnavailableState title={t("assistant.mcp.writeToolsNeedControls")}>{t("assistant.mcp.writeToolsSubjectFormDisabled")}</UnavailableState>
             )}
@@ -464,7 +490,8 @@ export function Assistant() {
               <form onSubmit={runTool} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
                   <label className="space-y-2 text-body font-medium">
-                    {translateNow("source.tool.2e53bdcd07")}<select
+                    {translateNow("source.tool.2e53bdcd07")}
+                    <select
                       className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       value={selectedTool}
                       onChange={(e) => setSelectedTool(e.target.value)}
@@ -477,7 +504,8 @@ export function Assistant() {
                     </select>
                   </label>
                   <label className="space-y-2 text-body font-medium">
-                    {translateNow("source.subject.6897128384")}<input
+                    {translateNow("source.subject.6897128384")}
+                    <input
                       className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       value={toolSubject}
                       onChange={(e) => setToolSubject(e.target.value)}

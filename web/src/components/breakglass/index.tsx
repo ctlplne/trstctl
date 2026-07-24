@@ -104,7 +104,8 @@ export function BreakGlassReconcile() {
       ) : null}
       <form onSubmit={reconcile} className="grid gap-3">
         <label className="grid gap-1 text-sm font-medium" htmlFor="breakglass-bundles">
-          {translateNow("source.offline.issued.bundles.json.58401e65e9")}<textarea
+          {translateNow("source.offline.issued.bundles.json.58401e65e9")}
+          <textarea
             id="breakglass-bundles"
             value={bundles}
             onChange={(event) => setBundles(event.target.value)}
@@ -122,7 +123,9 @@ export function BreakGlassReconcile() {
       {error ? <ErrorState title={translateNow("source.reconcile.failed.45e781836d")}>{error}</ErrorState> : null}
       {result ? (
         <p role="status" className="mt-3 rounded-panel border border-border p-comfortable text-sm">
-          {translateNow("source.reconciled.2d5676cba2")}{" "}{result.reconciled} {" "}{translateNow("source.break.glass.bundle.37f85fd7cf")}{result.reconciled === 1 ? "" : "s"} {" "}{translateNow("source.into.the.event.log.5f4b11117b")}</p>
+          {translateNow("source.reconciled.2d5676cba2")} {result.reconciled} {translateNow("source.break.glass.bundle.37f85fd7cf")}
+          {result.reconciled === 1 ? "" : "s"} {translateNow("source.into.the.event.log.5f4b11117b")}
+        </p>
       ) : null}
     </SectionCard>
   );

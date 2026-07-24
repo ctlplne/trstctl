@@ -83,7 +83,7 @@ excluded from extraction; keep fixture copy out of the catalog.
   `ia_ratchets`, budgets, i18n digests) are updated IN the change that moves
   the IA, with the rationale in the diff — never loosened to "make it pass".
 - **Playwright (S-C4)** owns real-browser smoke and pixels: `npm run
-  e2e:install` once, then `npm run e2e` against the seeded demo stack (or
+e2e:install` once, then `npm run e2e` against the seeded demo stack (or
   `TRSTCTL_E2E_URL`). Visual baselines are committed; a diff is a design
   decision. Type-check the suite with `npx tsc -p e2e/tsconfig.json --noEmit`.
   Keep specs shallow — depth belongs in Vitest.

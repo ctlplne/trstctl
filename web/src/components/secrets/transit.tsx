@@ -59,7 +59,10 @@ export function TransitConsole() {
     );
 
   return (
-    <SectionCard title={translateNow("source.transit.encryption.d713808b2e")} description="encryption-as-a-service: encrypt, decrypt, HMAC — plaintext stays in your browser">
+    <SectionCard
+      title={translateNow("source.transit.encryption.d713808b2e")}
+      description="encryption-as-a-service: encrypt, decrypt, HMAC — plaintext stays in your browser"
+    >
       <div className="grid gap-3">
         <label className="grid gap-1 text-body">
           <span className="font-medium">{translateNow("source.key.name.6f245e973f")}</span>
@@ -86,25 +89,40 @@ export function TransitConsole() {
             disabled={busy !== null}
             className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
           >
-            {translateNow("source.encrypt.4f03bf1cdf")}</button>
+            {translateNow("source.encrypt.4f03bf1cdf")}
+          </button>
           <button
             type="button"
             onClick={() => void decrypt()}
             disabled={busy !== null || !ciphertext}
             className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
           >
-            {translateNow("source.decrypt.2e4629449b")}</button>
+            {translateNow("source.decrypt.2e4629449b")}
+          </button>
           <button
             type="button"
             onClick={() => void computeHmac()}
             disabled={busy !== null}
             className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
           >
-            {translateNow("source.hmac.32fd6f051c")}</button>
+            {translateNow("source.hmac.32fd6f051c")}
+          </button>
         </div>
-        {ciphertext ? <p className="break-all font-mono text-caption text-muted-foreground">{translateNow("source.ciphertext.df49acea3b")}{" "}{ciphertext}</p> : null}
-        {revealed !== null ? <p className="break-all font-mono text-caption">{translateNow("source.decrypted.a55004b5ff")}{" "}{revealed}</p> : null}
-        {hmac ? <p className="break-all font-mono text-caption text-muted-foreground">{translateNow("source.hmac.d74fa882a4")}{" "}{hmac}</p> : null}
+        {ciphertext ? (
+          <p className="break-all font-mono text-caption text-muted-foreground">
+            {translateNow("source.ciphertext.df49acea3b")} {ciphertext}
+          </p>
+        ) : null}
+        {revealed !== null ? (
+          <p className="break-all font-mono text-caption">
+            {translateNow("source.decrypted.a55004b5ff")} {revealed}
+          </p>
+        ) : null}
+        {hmac ? (
+          <p className="break-all font-mono text-caption text-muted-foreground">
+            {translateNow("source.hmac.d74fa882a4")} {hmac}
+          </p>
+        ) : null}
         {error ? (
           <p role="alert" className="text-caption text-risk-critical">
             {error}

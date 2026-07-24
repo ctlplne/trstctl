@@ -46,13 +46,15 @@ export function RevealPanel({ title, value, children, onDismiss }: { title: stri
         </div>
         <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
           <X className="h-4 w-4" aria-hidden="true" />
-          {translateNow("source.dismiss.48845bff33")}</Button>
+          {translateNow("source.dismiss.48845bff33")}
+        </Button>
       </div>
       <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded bg-muted px-3 py-2 font-mono text-xs">{value}</pre>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" size="sm" variant="outline" onClick={() => void copyValue()}>
           <Copy className="h-4 w-4" aria-hidden="true" />
-          {translateNow("source.copy.once.acfaa3d4d6")}</Button>
+          {translateNow("source.copy.once.acfaa3d4d6")}
+        </Button>
         {copied && <span className="text-xs text-muted-foreground">{translateNow("source.copied.from.this.reveal.panel.0707425cf6")}</span>}
       </div>
     </div>

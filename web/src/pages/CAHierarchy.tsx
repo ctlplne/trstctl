@@ -551,7 +551,8 @@ export function CAHierarchy() {
             </Button>
             <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              {translateNow("source.refresh.0e91610117")}</Button>
+              {translateNow("source.refresh.0e91610117")}
+            </Button>
           </>
         }
       />
@@ -619,9 +620,9 @@ export function CAHierarchy() {
           <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="issuer-heading" className="text-title font-semibold">
-              {translateNow("source.issuer.visibility.859e72db07")}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {translateNow("source.this.view.shows.issuer.name.kind.public.ke.5166a2828e")}</p>
+              {translateNow("source.issuer.visibility.859e72db07")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.this.view.shows.issuer.name.kind.public.ke.5166a2828e")}</p>
           </div>
         </div>
         {loading && <LoadingState>{translateNow("source.loading.issuers.98644f83a7")}</LoadingState>}
@@ -640,7 +641,8 @@ export function CAHierarchy() {
             }}
             secondaryAction={{ label: translateNow("source.create.a.profile.6d7beeefb5"), to: "/profiles", icon: <ShieldCheck className="h-4 w-4" /> }}
           >
-            {translateNow("source.add.a.local.authority.or.upstream.ca.befor.ef39bb7995")}</EmptyState>
+            {translateNow("source.add.a.local.authority.or.upstream.ca.befor.ef39bb7995")}
+          </EmptyState>
         )}
         {!loading && !notice && sortedIssuers.length > 0 && (
           <IssuerTable issuers={sortedIssuers} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />
@@ -652,21 +654,24 @@ export function CAHierarchy() {
           <FileKey2 className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="ceremony-heading" className="text-title font-semibold">
-              {translateNow("source.ca.key.ceremony.244faa4ab3")}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {translateNow("source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848")}</p>
+              {translateNow("source.ca.key.ceremony.244faa4ab3")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848")}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" onClick={() => void startRootCeremony()} disabled={ceremonyBusy}>
-            {translateNow("source.start.root.ceremony.01836ae713")}</Button>
+            {translateNow("source.start.root.ceremony.01836ae713")}
+          </Button>
           <span className="text-sm text-muted-foreground">{translateNow("source.default.request.trust.root.ca.2.approvals.246b100b12")}</span>
         </div>
         {ceremonyError && <ErrorState title={translateNow("source.ceremony.action.failed.974d5f2180")}>{ceremonyError}</ErrorState>}
         {ceremony ? (
           <CeremonyPanel ceremony={ceremony} busy={ceremonyBusy} onApprove={(id) => void approveCeremony(id)} onView={(id) => void viewCeremony(id)} />
         ) : (
-          <EmptyState title={translateNow("source.no.ceremony.loaded.3e9d28986c")}>{translateNow("source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd")}</EmptyState>
+          <EmptyState title={translateNow("source.no.ceremony.loaded.3e9d28986c")}>
+            {translateNow("source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd")}
+          </EmptyState>
         )}
       </section>
 
@@ -708,21 +713,24 @@ export function CAHierarchy() {
           <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="custody-heading" className="text-title font-semibold">
-              {translateNow("source.managed.key.custody.ba98c44d9c")}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {translateNow("source.aws.kms.azure.key.vault.hsm.gcp.cloud.kms.957ee3c57b")}</p>
+              {translateNow("source.managed.key.custody.ba98c44d9c")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.aws.kms.azure.key.vault.hsm.gcp.cloud.kms.957ee3c57b")}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" onClick={() => void generateManagedKey()} disabled={keyBusy}>
-            {translateNow("source.generate.managed.key.9ff7b150a0")}</Button>
+            {translateNow("source.generate.managed.key.9ff7b150a0")}
+          </Button>
           <span className="text-sm text-muted-foreground">{translateNow("source.default.algorithm.ecdsa.p256.e268f7deba")}</span>
         </div>
         {keyError && <ErrorState title={translateNow("source.managed.key.action.failed.934f359a98")}>{keyError}</ErrorState>}
         {managedKey ? (
           <ManagedKeyPanel managedKey={managedKey} busy={keyBusy} onAction={(action, keyId) => void runManagedKeyAction(action, keyId)} />
         ) : (
-          <EmptyState title={translateNow("source.no.managed.key.loaded.c921eb07f2")}>{translateNow("source.generate.a.managed.key.to.inspect.its.publ.0756dcae94")}</EmptyState>
+          <EmptyState title={translateNow("source.no.managed.key.loaded.c921eb07f2")}>
+            {translateNow("source.generate.a.managed.key.to.inspect.its.publ.0756dcae94")}
+          </EmptyState>
         )}
       </section>
 
@@ -986,9 +994,9 @@ function CARotationPanel({
         <RefreshCw className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div>
           <h2 id="ca-rotation-heading" className="text-title font-semibold">
-            {translateNow("source.ca.rotation.27b00eaa0b")}</h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {translateNow("source.activate.an.existing.signer.backed.success.ba9399274b")}</p>
+            {translateNow("source.ca.rotation.27b00eaa0b")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.activate.an.existing.signer.backed.success.ba9399274b")}</p>
         </div>
       </div>
       {error && <ErrorState title={translateNow("source.ca.rotation.failed.e781fb6f5f")}>{error}</ErrorState>}
@@ -996,12 +1004,14 @@ function CARotationPanel({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 id="ca-rotation-form-heading" className="text-title font-semibold">
-              {translateNow("source.successor.activation.2c89a6285d")}</h3>
+              {translateNow("source.successor.activation.2c89a6285d")}
+            </h3>
             {result && <p className="mt-1 font-mono text-xs">{result.issue_path}</p>}
           </div>
           <Button type="button" size="sm" onClick={onActivate} disabled={busy || !ready}>
             <RefreshCw className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            {translateNow("source.activate.ca.rotation.a7d096d68f")}</Button>
+            {translateNow("source.activate.ca.rotation.a7d096d68f")}
+          </Button>
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
           <LabeledSelect id="ca-rotation-predecessor" label="Predecessor CA" value={predecessorID} onChange={onPredecessorChange}>
@@ -1022,7 +1032,9 @@ function CARotationPanel({
           </LabeledSelect>
           <LabeledInput id="ca-rotation-reason" label="Rotation reason" value={reason} onChange={onReasonChange} />
         </div>
-        {authorities.length < 2 && <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.create.a.signer.backed.successor.before.ac.c0163adb05")}</p>}
+        {authorities.length < 2 && (
+          <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.create.a.signer.backed.successor.before.ac.c0163adb05")}</p>
+        )}
         {result && (
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <KeyValue label="Predecessor" value={`${result.predecessor.common_name} (${result.predecessor.status})`} />
@@ -1080,9 +1092,9 @@ function CARekeyPanel({
         <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div>
           <h2 id="ca-rekey-heading" className="text-title font-semibold">
-            {translateNow("source.ca.renewal.and.re.key.fb27d9e180")}</h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {translateNow("source.mint.a.fresh.signer.backed.ca.key.and.cert.4f35946ce6")}</p>
+            {translateNow("source.ca.renewal.and.re.key.fb27d9e180")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.mint.a.fresh.signer.backed.ca.key.and.cert.4f35946ce6")}</p>
         </div>
       </div>
       {error && <ErrorState title={translateNow("source.ca.re.key.failed.c94515c43b")}>{error}</ErrorState>}
@@ -1090,16 +1102,19 @@ function CARekeyPanel({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 id="ca-rekey-form-heading" className="text-title font-semibold">
-              {translateNow("source.fresh.ca.material.d1a53a627a")}</h3>
+              {translateNow("source.fresh.ca.material.d1a53a627a")}
+            </h3>
             {result && <p className="mt-1 font-mono text-xs">{result.active_issue_path}</p>}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" onClick={onStartCeremony} disabled={busy || !readyToStart}>
               <FileKey2 className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              {translateNow("source.start.re.key.ceremony.c2e02a1a0c")}</Button>
+              {translateNow("source.start.re.key.ceremony.c2e02a1a0c")}
+            </Button>
             <Button type="button" size="sm" onClick={onActivate} disabled={busy || !readyToRekey}>
               <KeyRound className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              {translateNow("source.re.key.ca.4aadf37c7a")}</Button>
+              {translateNow("source.re.key.ca.4aadf37c7a")}
+            </Button>
           </div>
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-4">
@@ -1115,7 +1130,9 @@ function CARekeyPanel({
           <LabeledInput id="ca-rekey-ttl" label="Validity days" value={ttlDays} type="number" onChange={onTTLChange} />
           <LabeledInput id="ca-rekey-reason" label="Re-key reason" value={reason} onChange={onReasonChange} />
         </div>
-        {authorities.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.create.or.import.a.signer.backed.authority.938d8e0658")}</p>}
+        {authorities.length === 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.create.or.import.a.signer.backed.authority.938d8e0658")}</p>
+        )}
         {result && (
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <KeyValue label="Predecessor" value={`${result.predecessor.common_name} (${result.predecessor.status})`} />
@@ -1552,7 +1569,8 @@ function CeremonyPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="active-ceremony-heading" className="text-title font-semibold">
-            {translateNow("source.active.ceremony.282727eb03")}</h3>
+            {translateNow("source.active.ceremony.282727eb03")}
+          </h3>
           <p className="mt-1 font-mono text-xs">{ceremony.id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1563,7 +1581,8 @@ function CeremonyPanel({
             onClick={() => onApprove(ceremony.id)}
             aria-label={`Approve ceremony ${ceremony.id}`}
           >
-            {translateNow("source.approve.6007acbe30")}</Button>
+            {translateNow("source.approve.6007acbe30")}
+          </Button>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => onView(ceremony.id)} aria-label={`View ceremony ${ceremony.id}`}>
             {t("parity.view_69bd4e")}
           </Button>
@@ -1615,7 +1634,8 @@ function CeremonyDetailDialog({ ceremony, onClose }: { ceremony: CAKeyCeremony; 
         </dl>
         <footer className="flex justify-end border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.close.7d9eb7acb1")}</Button>
+            {translateNow("source.close.7d9eb7acb1")}
+          </Button>
         </footer>
       </div>
     </Dialog>
@@ -1819,7 +1839,8 @@ function CreateAuthorityDialog({
         </label>
         <footer className="flex justify-end gap-2 border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.cancel.19766ed6cc")}</Button>
+            {translateNow("source.cancel.19766ed6cc")}
+          </Button>
           <Button type="submit" disabled={busy || ceremonyID.trim() === "" || (!isRoot && parentID === "")}>
             {isRoot ? t("parity.createRootCa_94fb33") : t("parity.createIntermediateCa_829ab7")}
           </Button>
@@ -1876,7 +1897,7 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.issue.leaf.from.47e7b2541d")}{" "}{authority.common_name}
+            {translateNow("source.issue.leaf.from.47e7b2541d")} {authority.common_name}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">The CA key never leaves the signer; the CSR public key is certified as a leaf.</p>
         </div>
@@ -1889,7 +1910,8 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
           <IssuedCertificateResult certificatePEM={result.certificate_pem} notAfter={result.not_after} serial={result.serial} />
           <footer className="flex justify-end border-t border-border pt-4">
             <Button type="button" onClick={onClose}>
-              {translateNow("source.close.7d9eb7acb1")}</Button>
+              {translateNow("source.close.7d9eb7acb1")}
+            </Button>
           </footer>
         </div>
       ) : (
@@ -1920,7 +1942,8 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
           </label>
           <footer className="flex justify-end gap-2 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
-              {translateNow("source.cancel.19766ed6cc")}</Button>
+              {translateNow("source.cancel.19766ed6cc")}
+            </Button>
             <Button type="submit" disabled={busy || csrPEM.trim() === ""}>
               {t("parity.issueLeafCertificate_bddf5d")}
             </Button>
@@ -1978,7 +2001,7 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.sign.intermediate.csr.with.64b849b64d")}{" "}{authority.common_name}
+            {translateNow("source.sign.intermediate.csr.with.64b849b64d")} {authority.common_name}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{t("parity.certifiesAnExternallyHeldIntermediateKey_d95cc4")}</p>
         </div>
@@ -1991,7 +2014,8 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
           <IssuedCertificateResult certificatePEM={result.certificate_pem} notAfter={result.not_after} serial={result.serial} />
           <footer className="flex justify-end border-t border-border pt-4">
             <Button type="button" onClick={onClose}>
-              {translateNow("source.close.7d9eb7acb1")}</Button>
+              {translateNow("source.close.7d9eb7acb1")}
+            </Button>
           </footer>
         </div>
       ) : (
@@ -2032,7 +2056,8 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
           </label>
           <footer className="flex justify-end gap-2 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
-              {translateNow("source.cancel.19766ed6cc")}</Button>
+              {translateNow("source.cancel.19766ed6cc")}
+            </Button>
             <Button type="submit" disabled={busy || ceremonyID.trim() === "" || csrPEM.trim() === ""}>
               {t("parity.signIntermediateCsr_e1f90b")}
             </Button>
@@ -2078,7 +2103,8 @@ function AuthorityDetailDialog({ authority, onClose }: { authority: CAAuthority;
         <CertificatePEMBlock label="Certificate PEM" pem={authority.certificate_pem} />
         <footer className="flex justify-end border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.close.7d9eb7acb1")}</Button>
+            {translateNow("source.close.7d9eb7acb1")}
+          </Button>
         </footer>
       </div>
     </Dialog>
@@ -2130,7 +2156,8 @@ function IssuerCatalog({ onConfigure }: { onConfigure: (type: IssuerTypeConfig) 
           <Server className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="issuer-catalog-heading" className="text-title font-semibold">
-              {translateNow("source.issuer.catalog.add106b6a5")}</h2>
+              {translateNow("source.issuer.catalog.add106b6a5")}
+            </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.available.ca.integrations.and.local.signin.a7967de86e")}</p>
           </div>
         </div>
@@ -2159,7 +2186,8 @@ function IssuerCatalogCard({ onConfigure, type }: { type: IssuerTypeConfig; onCo
         </div>
         <Button type="button" size="sm" variant="outline" onClick={() => onConfigure(type)} aria-label={`Configure ${type.name}`}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          {translateNow("source.configure.6defafa2ca")}</Button>
+          {translateNow("source.configure.6defafa2ca")}
+        </Button>
       </div>
       <p className="text-sm text-muted-foreground">{type.description}</p>
       <div className="flex flex-wrap gap-1.5">
@@ -2212,7 +2240,8 @@ function CreateIssuerDialog({
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.configure.6defafa2ca")}{" "}{type.name} {" "}{translateNow("source.issuer.535c6f8eb5")}</h2>
+            {translateNow("source.configure.6defafa2ca")} {type.name} {translateNow("source.issuer.535c6f8eb5")}
+          </h2>
           <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
             {type.internal ? "Local signing authority" : "External CA integration"}
           </p>
@@ -2225,10 +2254,19 @@ function CreateIssuerDialog({
         <div className="grid gap-5 p-5">
           {error && <ErrorState title={translateNow("source.issuer.create.failed.1550974caf")}>{error}</ErrorState>}
           <div className="grid gap-4 md:grid-cols-2">
-            <LabeledInput inputRef={nameInputRef} id="issuer-name" label="Issuer name" value={name} required onChange={setName} placeholder={translateNow("source.production.acme.c76ba14398")} />
+            <LabeledInput
+              inputRef={nameInputRef}
+              id="issuer-name"
+              label="Issuer name"
+              value={name}
+              required
+              onChange={setName}
+              placeholder={translateNow("source.production.acme.c76ba14398")}
+            />
             <div className="grid gap-2">
               <label className="text-sm font-medium" htmlFor="issuer-kind">
-                {translateNow("source.issuer.kind.9f06073f8d")}</label>
+                {translateNow("source.issuer.kind.9f06073f8d")}
+              </label>
               <input
                 id="issuer-kind"
                 value="x509_ca"
@@ -2239,7 +2277,8 @@ function CreateIssuerDialog({
           </div>
           <div className="grid gap-2">
             <label className="text-sm font-medium" htmlFor="issuer-chain">
-              {translateNow("source.ca.chain.pem.add189510a")}</label>
+              {translateNow("source.ca.chain.pem.add189510a")}
+            </label>
             <textarea
               id="issuer-chain"
               required
@@ -2254,9 +2293,11 @@ function CreateIssuerDialog({
         </div>
         <footer className="flex flex-wrap justify-end gap-2 border-t border-border px-5 py-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.cancel.19766ed6cc")}</Button>
+            {translateNow("source.cancel.19766ed6cc")}
+          </Button>
           <Button type="submit" disabled={busy || name.trim() === "" || chainPEM.trim() === ""}>
-            {translateNow("source.create.issuer.83b848cf15")}</Button>
+            {translateNow("source.create.issuer.83b848cf15")}
+          </Button>
         </footer>
       </form>
     </Dialog>
@@ -2434,7 +2475,8 @@ function ProbeBanner({ onDismiss, probe }: { probe: ProbeState; onDismiss: () =>
         <p className="min-w-0 break-words font-medium">{`${probe.issuerName}: ${probe.message}`}</p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
-        {translateNow("source.dismiss.48845bff33")}</Button>
+        {translateNow("source.dismiss.48845bff33")}
+      </Button>
     </div>
   );
 }
@@ -2453,7 +2495,8 @@ function ManagedKeyPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="managed-key-heading" className="text-title font-semibold">
-            {translateNow("source.managed.key.f08acca719")}</h3>
+            {translateNow("source.managed.key.f08acca719")}
+          </h3>
           <p className="mt-1 font-mono text-xs">{managedKey.key_id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2465,7 +2508,8 @@ function ManagedKeyPanel({
             onClick={() => onAction("rotate", managedKey.key_id)}
             aria-label={`Rotate key ${managedKey.key_id}`}
           >
-            {translateNow("source.rotate.c3613b1704")}</Button>
+            {translateNow("source.rotate.c3613b1704")}
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -2474,7 +2518,8 @@ function ManagedKeyPanel({
             onClick={() => onAction("revoke", managedKey.key_id)}
             aria-label={`Revoke key ${managedKey.key_id}`}
           >
-            {translateNow("source.revoke.87e6d00bbf")}</Button>
+            {translateNow("source.revoke.87e6d00bbf")}
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -2483,7 +2528,8 @@ function ManagedKeyPanel({
             onClick={() => onAction("zeroize", managedKey.key_id)}
             aria-label={`Zeroize key ${managedKey.key_id}`}
           >
-            {translateNow("source.zeroize.9fb44dd187")}</Button>
+            {translateNow("source.zeroize.9fb44dd187")}
+          </Button>
         </div>
       </div>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -2532,7 +2578,7 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
               <td className="max-w-sm break-all font-mono text-xs">{issuer.public_key || "-"}</td>
               <td>
                 <a className="text-brand-accent underline" href={`/certificates?issuer=${encodeURIComponent(issuer.id)}`}>
-                  {translateNow("source.certificates.for.143f183f89")}{" "}{issuer.name}
+                  {translateNow("source.certificates.for.143f183f89")} {issuer.name}
                 </a>
               </td>
               <td>
@@ -2544,7 +2590,8 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
                   onClick={() => onTestConnection(issuer)}
                   aria-label={`Test connection ${issuer.name}`}
                 >
-                  {translateNow("source.test.532eaabd95")}</Button>
+                  {translateNow("source.test.532eaabd95")}
+                </Button>
               </td>
             </tr>
           ))}

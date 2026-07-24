@@ -1045,7 +1045,8 @@ export function Certificates() {
       {showIngest && (
         <form onSubmit={submitIngest} aria-labelledby="ingest-heading" className="mb-6 grid gap-4">
           <h2 id="ingest-heading" className="sr-only">
-            {translateNow("source.add.certificate.6fa2cfd67c")}</h2>
+            {translateNow("source.add.certificate.6fa2cfd67c")}
+          </h2>
           <StepShell
             steps={ingestSteps(t)}
             currentIndex={ingestStep}
@@ -1056,7 +1057,8 @@ export function Certificates() {
           >
             {ingestStep === 0 && (
               <label className="grid gap-1 text-sm font-medium" htmlFor="cert-pem">
-                {translateNow("source.certificate.pem.85627425ca")}<textarea
+                {translateNow("source.certificate.pem.85627425ca")}
+                <textarea
                   id="cert-pem"
                   value={pem}
                   onChange={(e) => setPem(e.target.value)}
@@ -1069,7 +1071,8 @@ export function Certificates() {
             {ingestStep === 1 && (
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="grid gap-1 text-sm font-medium" htmlFor="cert-owner">
-                  {translateNow("source.owner.id.1611f5e055")}{/* Autocomplete from the loaded owner roster — no pasting owner
+                  {translateNow("source.owner.id.1611f5e055")}
+                  {/* Autocomplete from the loaded owner roster — no pasting owner
                       UUIDs from another page. */}
                   <input
                     id="cert-owner"
@@ -1088,7 +1091,8 @@ export function Certificates() {
                   </datalist>
                 </label>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="cert-source">
-                  {translateNow("source.source.0e570ca6fa")}<input
+                  {translateNow("source.source.0e570ca6fa")}
+                  <input
                     id="cert-source"
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
@@ -1096,7 +1100,8 @@ export function Certificates() {
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="cert-location">
-                  {translateNow("source.deployment.location.5a9f62f9fc")}<input
+                  {translateNow("source.deployment.location.5a9f62f9fc")}
+                  <input
                     id="cert-location"
                     value={deploymentLocation}
                     onChange={(e) => setDeploymentLocation(e.target.value)}
@@ -1127,7 +1132,9 @@ export function Certificates() {
                   </div>
                 </dl>
                 {ingestError?.kind === "permission" && <PermissionDeniedState>{ingestError.message}</PermissionDeniedState>}
-                {ingestError?.kind === "error" && <ErrorState title={translateNow("source.could.not.ingest.certificate.f876a7f9c6")}>{ingestError.message}</ErrorState>}
+                {ingestError?.kind === "error" && (
+                  <ErrorState title={translateNow("source.could.not.ingest.certificate.f876a7f9c6")}>{ingestError.message}</ErrorState>
+                )}
                 {ingestSuccess && (
                   <p role="status" className="text-sm text-status-success">
                     {ingestSuccess}
@@ -1135,7 +1142,8 @@ export function Certificates() {
                 )}
                 <div>
                   <Button type="submit" loading={ingestLoading}>
-                    {translateNow("source.ingest.certificate.6c25a63cd4")}</Button>
+                    {translateNow("source.ingest.certificate.6c25a63cd4")}
+                  </Button>
                 </div>
               </div>
             )}
@@ -1154,7 +1162,8 @@ export function Certificates() {
           primaryAction={{ label: translateNow("source.issue.first.certificate.4d8af98e7d"), to: "/request", icon: <FilePlus2 className="h-4 w-4" /> }}
           secondaryAction={{ label: translateNow("source.connect.an.issuer.c155ecb073"), to: "/ca-hierarchy", icon: <PlugZap className="h-4 w-4" /> }}
         >
-          {translateNow("source.start.with.a.profile.bound.request.or.conn.19cdbff548")}</EmptyState>
+          {translateNow("source.start.with.a.profile.bound.request.or.conn.19cdbff548")}
+        </EmptyState>
       )}
 
       {certificates.length > 0 && (
@@ -1250,7 +1259,8 @@ export function Certificates() {
                     setBulkRevokeOpen(true);
                   }}
                 >
-                  {translateNow("source.revoke.selected.38b0352f6d")}{selectedIds.size})…
+                  {translateNow("source.revoke.selected.38b0352f6d")}
+                  {selectedIds.size})…
                 </Button>
               </BulkActionBar>
               <DataGrid
@@ -1287,7 +1297,8 @@ export function Certificates() {
                     filters={
                       <>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-issuer-filter">
-                          {translateNow("source.issuer.filter.32db997051")}<select
+                          {translateNow("source.issuer.filter.32db997051")}
+                          <select
                             id="cert-issuer-filter"
                             value={issuerFilter}
                             onChange={(e) => selectFacet("issuer", e.target.value)}
@@ -1302,7 +1313,8 @@ export function Certificates() {
                           </select>
                         </label>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-profile-filter">
-                          {translateNow("source.profile.filter.d447429270")}<select
+                          {translateNow("source.profile.filter.d447429270")}
+                          <select
                             id="cert-profile-filter"
                             value={profileFilter}
                             onChange={(e) => selectFacet("profile", e.target.value)}
@@ -1317,7 +1329,8 @@ export function Certificates() {
                           </select>
                         </label>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-team-filter">
-                          {translateNow("source.team.filter.f485fa9dcf")}<select
+                          {translateNow("source.team.filter.f485fa9dcf")}
+                          <select
                             id="cert-team-filter"
                             value={teamFilter}
                             onChange={(e) => selectFacet("team", e.target.value)}
@@ -1332,7 +1345,8 @@ export function Certificates() {
                           </select>
                         </label>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-environment-filter">
-                          {translateNow("source.environment.filter.3495eee74d")}<select
+                          {translateNow("source.environment.filter.3495eee74d")}
+                          <select
                             id="cert-environment-filter"
                             value={environmentFilter}
                             onChange={(e) => selectFacet("environment", e.target.value)}
@@ -1365,7 +1379,8 @@ export function Certificates() {
                           </div>
                         </fieldset>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-limit">
-                          {translateNow("source.page.size.bd69e66e00")}<select
+                          {translateNow("source.page.size.bd69e66e00")}
+                          <select
                             id="cert-limit"
                             value={limit}
                             onChange={(e) => setLimit(Number(e.target.value))}
@@ -1418,14 +1433,16 @@ export function Certificates() {
         panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
       >
         <h2 id="bulk-revoke-certs-title" className="text-title font-semibold text-destructive">
-          {translateNow("source.revoke.87e6d00bbf")}{" "}{selectedIds.size} {" "}{translateNow("source.selected.certificate.4d9927e917")}{selectedIds.size === 1 ? "" : "s"}?
+          {translateNow("source.revoke.87e6d00bbf")} {selectedIds.size} {translateNow("source.selected.certificate.4d9927e917")}
+          {selectedIds.size === 1 ? "" : "s"}?
         </h2>
         <p id="bulk-revoke-certs-desc" className="mt-1 text-destructive">
-          {translateNow("source.this.submits.one.bulk.revocation.request.f.f1809ceaf2")}{" "}{selectedIds.size} selected certificates. Revocation cannot be undone; CRL and OCSP distribution
-          completes asynchronously.
+          {translateNow("source.this.submits.one.bulk.revocation.request.f.f1809ceaf2")} {selectedIds.size} selected certificates. Revocation cannot be undone;
+          CRL and OCSP distribution completes asynchronously.
         </p>
         <label className="mt-3 grid gap-1 text-sm font-medium text-destructive" htmlFor="bulk-revoke-reason">
-          {translateNow("source.revocation.reason.b11670420f")}<select
+          {translateNow("source.revocation.reason.b11670420f")}
+          <select
             id="bulk-revoke-reason"
             value={bulkReason}
             onChange={(event) => setBulkReason(event.target.value as BulkRevokeRequest["reason"])}
@@ -1441,9 +1458,11 @@ export function Certificates() {
         {bulkError && <p className="mt-3 text-sm font-medium text-risk-critical">{bulkError}</p>}
         <div className="mt-3 flex gap-2">
           <Button type="button" size="sm" variant="destructive" loading={bulkBusy} disabled={selectedIds.size === 0} onClick={() => void submitBulkRevoke()}>
-            {translateNow("source.confirm.bulk.revoke.d613327838")}</Button>
+            {translateNow("source.confirm.bulk.revoke.d613327838")}
+          </Button>
           <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setBulkRevokeOpen(false)}>
-            {translateNow("source.cancel.19766ed6cc")}</Button>
+            {translateNow("source.cancel.19766ed6cc")}
+          </Button>
         </div>
       </Dialog>
 
@@ -1476,7 +1495,8 @@ export function Certificates() {
         />
         <div className="mt-3 flex justify-end">
           <Button type="button" size="sm" variant="ghost" disabled={ctLoading} onClick={() => setCTDialogOpen(false)}>
-            {translateNow("source.close.7d9eb7acb1")}</Button>
+            {translateNow("source.close.7d9eb7acb1")}
+          </Button>
         </div>
       </Dialog>
 
@@ -1488,7 +1508,9 @@ export function Certificates() {
       >
         {detailLoading && <LoadingState>{translateNow("source.loading.certificate.details.a52129b338")}</LoadingState>}
         {detailError?.kind === "permission" && <PermissionDeniedState>{detailError.message}</PermissionDeniedState>}
-        {detailError?.kind === "error" && <ErrorState title={translateNow("source.could.not.load.certificate.details.7999752b96")}>{detailError.message}</ErrorState>}
+        {detailError?.kind === "error" && (
+          <ErrorState title={translateNow("source.could.not.load.certificate.details.7999752b96")}>{detailError.message}</ErrorState>
+        )}
         {detail && (
           <dl className="grid gap-3 text-sm md:grid-cols-2">
             <div>
@@ -1518,7 +1540,7 @@ export function Certificates() {
             <div>
               <dt className="font-medium text-muted-foreground">{translateNow("source.validity.9c3050e867")}</dt>
               <dd>
-                {formatDate(detail.not_before)} {" "}{translateNow("source.to.663ea1bfff")}{" "}{formatDate(detail.not_after)}
+                {formatDate(detail.not_before)} {translateNow("source.to.663ea1bfff")} {formatDate(detail.not_after)}
               </dd>
             </div>
             <div>
@@ -1559,7 +1581,8 @@ export function Certificates() {
             </div>
             <div className="md:col-span-2">
               <dt className="flex items-center justify-between gap-2 font-medium text-muted-foreground">
-                {translateNow("source.renewal.history.771f739290")}{(() => {
+                {translateNow("source.renewal.history.771f739290")}
+                {(() => {
                   const identity = renewableIdentityFor(detail, identityByCN);
                   if (identity) {
                     const busy = renewingIds.has(detail.id);

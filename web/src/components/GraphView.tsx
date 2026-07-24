@@ -92,7 +92,11 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
   }, []);
 
   if (nodes.length === 0) {
-    return <div className={cn("rounded-panel border border-border p-4 text-sm text-muted-foreground", className)}>{translateNow("source.no.graph.nodes.to.draw.92bde898ba")}</div>;
+    return (
+      <div className={cn("rounded-panel border border-border p-4 text-sm text-muted-foreground", className)}>
+        {translateNow("source.no.graph.nodes.to.draw.92bde898ba")}
+      </div>
+    );
   }
 
   const impactActive = Boolean(impactIds && impactIds.size > 0);
@@ -157,10 +161,12 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
     <section className={cn("grid gap-3", className)} aria-labelledby="graph-visual-heading">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="graph-visual-heading" className="text-sm font-semibold">
-          {translateNow("source.node.link.graph.161edc4754")}</h2>
+          {translateNow("source.node.link.graph.161edc4754")}
+        </h2>
         <div className="flex items-center gap-2">
           <p className="text-sm text-muted-foreground">
-            {nodes.length} {" "}{translateNow("source.nodes.ceafc3fdcc")}{" "}{visibleEdges.length} {" "}{translateNow("source.edges.shown.ae11d98ea9")}</p>
+            {nodes.length} {translateNow("source.nodes.ceafc3fdcc")} {visibleEdges.length} {translateNow("source.edges.shown.ae11d98ea9")}
+          </p>
           <span className="text-caption tabular-nums text-muted-foreground">{Math.round(view.scale * 100)}%</span>
           <Button type="button" size="icon" variant="outline" className="h-7 w-7" aria-label={t("graph.view.zoomIn")} onClick={() => zoomBy(1.25)}>
             <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />

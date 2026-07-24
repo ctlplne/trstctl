@@ -214,7 +214,8 @@ export function Graph() {
               variant={activeTab === "map" ? "default" : "outline"}
               onClick={() => setActiveTab("map")}
             >
-              {translateNow("source.map.and.analysis.12782f32f8")}</Button>
+              {translateNow("source.map.and.analysis.12782f32f8")}
+            </Button>
             <Button
               id="graph-query-tab"
               type="button"
@@ -224,14 +225,16 @@ export function Graph() {
               variant={activeTab === "query" ? "default" : "outline"}
               onClick={() => setActiveTab("query")}
             >
-              {translateNow("source.advanced.query.fd7300e32b")}</Button>
+              {translateNow("source.advanced.query.fd7300e32b")}
+            </Button>
           </div>
 
           {activeTab === "map" && (
             <div id="graph-map-panel" role="tabpanel" aria-labelledby="graph-map-tab">
               {emptyGraph && (
                 <EmptyState title={translateNow("source.no.graph.nodes.yet.a1d126571e")} ctaTo="/certificates" ctaLabel="Open certificate inventory">
-                  {translateNow("source.no.nodes.or.edges.exist.for.this.tenant.ye.1643ac2e72")}</EmptyState>
+                  {translateNow("source.no.nodes.or.edges.exist.for.this.tenant.ye.1643ac2e72")}
+                </EmptyState>
               )}
 
               {!emptyGraph && (
@@ -258,10 +261,12 @@ export function Graph() {
 
               <section aria-labelledby="graph-controls" className="ui-panel my-5 p-comfortable">
                 <h2 id="graph-controls" className="mb-3 text-title font-semibold">
-                  {translateNow("source.explore.nodes.4171237dea")}</h2>
+                  {translateNow("source.explore.nodes.4171237dea")}
+                </h2>
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="grid gap-1 text-sm font-medium" htmlFor="graph-search">
-                    {translateNow("source.search.49c266baaa")}<input
+                    {translateNow("source.search.49c266baaa")}
+                    <input
                       id="graph-search"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -270,7 +275,8 @@ export function Graph() {
                     />
                   </label>
                   <label className="grid gap-1 text-sm font-medium" htmlFor="graph-kind">
-                    {translateNow("source.kind.f5387f9bb6")}<select
+                    {translateNow("source.kind.f5387f9bb6")}
+                    <select
                       id="graph-kind"
                       value={kindFilter}
                       onChange={(e) => setKindFilter(e.target.value)}
@@ -285,7 +291,8 @@ export function Graph() {
                     </select>
                   </label>
                   <div className="grid gap-1 text-sm">
-                    {translateNow("source.selected.node.f8716e2fce")}<p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">{selectedNode?.name || "No node selected"}</p>
+                    {translateNow("source.selected.node.f8716e2fce")}
+                    <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">{selectedNode?.name || "No node selected"}</p>
                   </div>
                 </div>
                 <div className="mt-3">
@@ -319,7 +326,8 @@ export function Graph() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button type="button" loading={busy === "analysis"} disabled={!selected} onClick={() => void runNodeAnalysisFor(selected)}>
-                    {translateNow("source.analyze.selected.node.9d2c6d8829")}</Button>
+                    {translateNow("source.analyze.selected.node.9d2c6d8829")}
+                  </Button>
                 </div>
               </section>
 
@@ -342,7 +350,8 @@ export function Graph() {
                       {filteredNodes.length === 0 && (
                         <tr>
                           <td colSpan={4} className="text-muted-foreground">
-                            {translateNow("source.no.graph.nodes.match.the.current.filters.d6f91b2251")}</td>
+                            {translateNow("source.no.graph.nodes.match.the.current.filters.d6f91b2251")}
+                          </td>
                         </tr>
                       )}
                       {filteredNodes.map((node) => (
@@ -354,7 +363,7 @@ export function Graph() {
                           </td>
                           <td>
                             <Button type="button" size="sm" variant="outline" onClick={() => setSelected(node.id)}>
-                              {translateNow("source.select.2a78025de6")}{" "}{node.name || node.id}
+                              {translateNow("source.select.2a78025de6")} {node.name || node.id}
                             </Button>
                           </td>
                         </tr>
@@ -364,7 +373,8 @@ export function Graph() {
 
                   <section aria-labelledby="graph-edges-heading">
                     <h2 id="graph-edges-heading" className="mb-2 text-title font-semibold">
-                      {translateNow("source.edges.658b158af9")}</h2>
+                      {translateNow("source.edges.658b158af9")}
+                    </h2>
                     <table className="ui-table">
                       <caption className="sr-only">{translateNow("source.credential.graph.edges.3f0fea5e6d")}</caption>
                       <thead>
@@ -379,7 +389,8 @@ export function Graph() {
                         {visibleEdges.length === 0 && (
                           <tr>
                             <td colSpan={4} className="text-muted-foreground">
-                              {translateNow("source.no.graph.edges.match.the.current.filters.421adc32b8")}</td>
+                              {translateNow("source.no.graph.edges.match.the.current.filters.421adc32b8")}
+                            </td>
                           </tr>
                         )}
                         {visibleEdges.map((edge) => (
@@ -409,7 +420,8 @@ export function Graph() {
           {activeTab === "query" && (
             <section id="graph-query-panel" role="tabpanel" aria-labelledby="graph-query-tab" className="ui-panel mt-6 p-comfortable">
               <h2 id="graph-query-heading" className="text-title font-semibold">
-                {translateNow("source.graph.query.e11ba75b6e")}</h2>
+                {translateNow("source.graph.query.e11ba75b6e")}
+              </h2>
               <form
                 className="mt-3 grid gap-3"
                 onSubmit={(e) => {
@@ -418,7 +430,8 @@ export function Graph() {
                 }}
               >
                 <label className="grid gap-1 text-sm font-medium" htmlFor="graph-query">
-                  {translateNow("source.cypher.style.query.9e70f5d770")}<textarea
+                  {translateNow("source.cypher.style.query.9e70f5d770")}
+                  <textarea
                     id="graph-query"
                     value={queryText}
                     onChange={(e) => setQueryText(e.target.value)}
@@ -427,14 +440,16 @@ export function Graph() {
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" disabled={busy === "query" || !queryText.trim()}>
-                    {translateNow("source.run.graph.query.3e99f2000a")}</Button>
+                    {translateNow("source.run.graph.query.3e99f2000a")}
+                  </Button>
                   {queryResult && (
                     <a
                       className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm underline"
                       download="graph-query-results.json"
                       href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(queryResult.rows, null, 2))}`}
                     >
-                      {translateNow("source.export.query.rows.b38bb9ef0b")}</a>
+                      {translateNow("source.export.query.rows.b38bb9ef0b")}
+                    </a>
                   )}
                 </div>
               </form>
@@ -456,14 +471,16 @@ function NodeDetail({ node }: { node: GraphNode | null }) {
   if (!node) {
     return (
       <div role="note" className="ui-panel p-comfortable text-sm text-muted-foreground">
-        {translateNow("source.select.a.graph.node.to.inspect.its.attribu.fcb3894777")}</div>
+        {translateNow("source.select.a.graph.node.to.inspect.its.attribu.fcb3894777")}
+      </div>
     );
   }
   const attrRows = Object.entries(node.attrs ?? {});
   return (
     <section aria-labelledby="graph-node-detail-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="graph-node-detail-heading" className="text-title font-semibold">
-        {translateNow("source.node.detail.79e07cc412")}</h2>
+        {translateNow("source.node.detail.79e07cc412")}
+      </h2>
       <dl className="mt-3 grid gap-2">
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.name.dcd1d5223f")}</dt>
@@ -498,20 +515,24 @@ function NodeDetail({ node }: { node: GraphNode | null }) {
         {node.id.startsWith("cert:") && (
           <li>
             <Link className="text-brand-accent underline" to={`/certificates?credential=${encodeURIComponent(node.id.slice(5))}`}>
-              {translateNow("source.certificate.detail.8537d4ad03")}</Link>
+              {translateNow("source.certificate.detail.8537d4ad03")}
+            </Link>
           </li>
         )}
         <li>
           <Link className="text-brand-accent underline" to={`/risk?node=${encodeURIComponent(node.id)}`}>
-            {translateNow("source.risk.row.992824cf5e")}</Link>
+            {translateNow("source.risk.row.992824cf5e")}
+          </Link>
         </li>
         <li>
           <Link className="text-brand-accent underline" to={`/identities?node=${encodeURIComponent(node.id)}`}>
-            {translateNow("source.lifecycle.identity.b788cc9a64")}</Link>
+            {translateNow("source.lifecycle.identity.b788cc9a64")}
+          </Link>
         </li>
         <li>
           <Link className="text-brand-accent underline" to={`/audit?node=${encodeURIComponent(node.id)}`}>
-            {translateNow("source.audit.evidence.74dbcfd2a3")}</Link>
+            {translateNow("source.audit.evidence.74dbcfd2a3")}
+          </Link>
         </li>
       </ul>
     </section>
@@ -522,9 +543,12 @@ function ImpactPanel({ impact }: { impact: GraphImpact }) {
   return (
     <section aria-labelledby="blast-radius-heading" className="ui-panel p-comfortable">
       <h2 id="blast-radius-heading" className="text-title font-semibold">
-        {translateNow("source.blast.radius.paths.and.by.kind.summary.d6a5526110")}</h2>
+        {translateNow("source.blast.radius.paths.and.by.kind.summary.d6a5526110")}
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        {translateNow("source.compromising.6baa2b0ea9")}{" "}{impact.node.name || impact.node.id} {" "}{translateNow("source.affects.e3e4b7e9f8")}{" "}{impact.affected.length} {" "}{translateNow("source.node.545ea53846")}{impact.affected.length === 1 ? "" : "s"}.
+        {translateNow("source.compromising.6baa2b0ea9")} {impact.node.name || impact.node.id} {translateNow("source.affects.e3e4b7e9f8")}{" "}
+        {impact.affected.length} {translateNow("source.node.545ea53846")}
+        {impact.affected.length === 1 ? "" : "s"}.
       </p>
       <dl className="mt-3 grid gap-2 sm:grid-cols-3">
         {Object.entries(impact.by_kind ?? {}).map(([kind, value]) => (
@@ -543,9 +567,11 @@ function ReachablePanel({ reachable }: { reachable: GraphReachable }) {
   return (
     <section aria-labelledby="reachable-heading" className="ui-panel p-comfortable">
       <h2 id="reachable-heading" className="text-title font-semibold">
-        {translateNow("source.reachable.nodes.ebf8d10fa5")}</h2>
+        {translateNow("source.reachable.nodes.ebf8d10fa5")}
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        {reachable.nodes.length} {" "}{translateNow("source.node.545ea53846")}{reachable.nodes.length === 1 ? "" : "s"} {" "}{translateNow("source.reachable.from.ea74f7acc4")}{" "}{reachable.from}.
+        {reachable.nodes.length} {translateNow("source.node.545ea53846")}
+        {reachable.nodes.length === 1 ? "" : "s"} {translateNow("source.reachable.from.ea74f7acc4")} {reachable.from}.
       </p>
       <AffectedNodes nodes={reachable.nodes} />
     </section>
@@ -564,12 +590,15 @@ function AffectedNodes({ nodes }: { nodes: GraphNode[] }) {
           </p>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
             <Link className="text-brand-accent underline" to={`/risk?node=${encodeURIComponent(node.id)}`}>
-              {translateNow("source.risk.0711a8d636")}</Link>
+              {translateNow("source.risk.0711a8d636")}
+            </Link>
             <Link className="text-brand-accent underline" to={`/audit?node=${encodeURIComponent(node.id)}`}>
-              {translateNow("source.audit.bb6aea2873")}</Link>
+              {translateNow("source.audit.bb6aea2873")}
+            </Link>
             {node.id.startsWith("cert:") && (
               <Link className="text-brand-accent underline" to={`/certificates?credential=${encodeURIComponent(node.id.slice(5))}`}>
-                {translateNow("source.certificate.2a93a8a442")}</Link>
+                {translateNow("source.certificate.2a93a8a442")}
+              </Link>
             )}
           </div>
         </li>
@@ -599,9 +628,11 @@ function GraphLegend({
     <section aria-labelledby="graph-legend-heading" className="rounded-panel border border-border bg-card p-4 text-sm shadow-elevation1">
       <div className="flex items-center justify-between gap-3">
         <h2 id="graph-legend-heading" className="font-semibold">
-          {translateNow("source.graph.legend.f23f97006d")}</h2>
+          {translateNow("source.graph.legend.f23f97006d")}
+        </h2>
         <Button type="button" size="sm" variant="outline" onClick={onClear}>
-          {translateNow("source.clear.filters.7179ea0035")}</Button>
+          {translateNow("source.clear.filters.7179ea0035")}
+        </Button>
       </div>
       <fieldset className="mt-4 grid gap-2">
         <legend className="text-xs font-semibold uppercase text-muted-foreground">{translateNow("source.node.kinds.ee50ba00ef")}</legend>

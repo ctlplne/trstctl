@@ -12,16 +12,32 @@ type WizardStepID = "issuer" | "protocols" | "certificate" | "integrations" | "a
 
 function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselStep[] {
   return [
-    { id: "issuer", label: translateNow("source.connect.issuer.abc8382bc1"), description: translateNow("source.confirm.the.signer.backed.internal.ca.or.c.b20abca15c") },
+    {
+      id: "issuer",
+      label: translateNow("source.connect.issuer.abc8382bc1"),
+      description: translateNow("source.confirm.the.signer.backed.internal.ca.or.c.b20abca15c"),
+    },
     { id: "protocols", label: t("wizard.protocols.stepLabel"), description: t("wizard.protocols.stepDescription") },
-    { id: "certificate", label: translateNow("source.issue.certificate.ff84c7ec37"), description: translateNow("source.create.the.first.workload.identity.and.iss.e199fc813f") },
+    {
+      id: "certificate",
+      label: translateNow("source.issue.certificate.ff84c7ec37"),
+      description: translateNow("source.create.the.first.workload.identity.and.iss.e199fc813f"),
+    },
     {
       id: "integrations",
       label: t("wizard.integrations.stepLabel"),
       description: t("wizard.integrations.stepDescription"),
     },
-    { id: "agent", label: translateNow("source.enroll.agent.8592144d44"), description: translateNow("source.mint.a.one.time.enrollment.token.and.wait.41e91b176b") },
-    { id: "complete", label: translateNow("source.complete.143b270a32"), description: translateNow("source.latch.this.first.run.guide.and.jump.into.d.708bd1e5a1") },
+    {
+      id: "agent",
+      label: translateNow("source.enroll.agent.8592144d44"),
+      description: translateNow("source.mint.a.one.time.enrollment.token.and.wait.41e91b176b"),
+    },
+    {
+      id: "complete",
+      label: translateNow("source.complete.143b270a32"),
+      description: translateNow("source.latch.this.first.run.guide.and.jump.into.d.708bd1e5a1"),
+    },
   ];
 }
 
@@ -81,7 +97,8 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
             <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
             <div>
               <h2 id="setup-complete-heading" className="text-title font-semibold">
-                {translateNow("source.setup.complete.aadaf35950")}</h2>
+                {translateNow("source.setup.complete.aadaf35950")}
+              </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {certificate?.name ?? "Your first certificate"} is tracked. trstctl will alert before expiry; renewal is a manual, one-click action today.
               </p>
@@ -92,10 +109,12 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
               to="/certificates"
               className="inline-flex min-h-10 items-center justify-center rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              {translateNow("source.track.and.renew.certificates.f0f36882b6")}</Link>
+              {translateNow("source.track.and.renew.certificates.f0f36882b6")}
+            </Link>
             <Button type="button" variant="outline" onClick={resetWizard}>
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              {translateNow("source.reopen.setup.guide.0f10355fd2")}</Button>
+              {translateNow("source.reopen.setup.guide.0f10355fd2")}
+            </Button>
           </div>
         </section>
       </section>
@@ -266,19 +285,21 @@ function IssuerStep({ issuerName, onReady, ready }: { issuerName: string | null;
         <Server className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
         <div>
           <h3 id="step-issuer-heading" className="text-title font-semibold">
-            {translateNow("source.connect.an.issuer.c155ecb073")}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {translateNow("source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50")}</p>
+            {translateNow("source.connect.an.issuer.c155ecb073")}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50")}</p>
         </div>
       </div>
       {ready ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {issuerName} {" "}{translateNow("source.is.ready.17f5581890")}</p>
+          {issuerName} {translateNow("source.is.ready.17f5581890")}
+        </p>
       ) : (
         <Button type="button" className="justify-self-start" onClick={() => void confirmIssuer()} disabled={busy}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {translateNow("source.use.internal.ca.2181607010")}</Button>
+          {translateNow("source.use.internal.ca.2181607010")}
+        </Button>
       )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -320,7 +341,8 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
         <FileKey2 className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
         <div>
           <h3 id="step-cert-heading" className="text-title font-semibold">
-            {translateNow("source.issue.your.first.certificate.8fbb374ce0")}</h3>
+            {translateNow("source.issue.your.first.certificate.8fbb374ce0")}
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Name the service this certificate belongs to. This action uses an operator credential with certificate issuance authority; setup and agent tokens
             cannot issue certificates.
@@ -328,7 +350,8 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
         </div>
       </div>
       <label htmlFor="svc-name" className="grid gap-1 text-sm font-medium">
-        {translateNow("source.service.name.1bb8870cc0")}<input
+        {translateNow("source.service.name.1bb8870cc0")}
+        <input
           id="svc-name"
           value={name}
           onChange={(event) => {
@@ -349,18 +372,21 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
             className="mt-1 h-4 w-4 rounded border-border"
           />
           <span>
-            {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}<span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
+            {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}
+            <span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
           </span>
         </label>
       )}
       {certificate ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {certificate.name} {" "}{translateNow("source.was.issued.fe1574675b")}</p>
+          {certificate.name} {translateNow("source.was.issued.fe1574675b")}
+        </p>
       ) : (
         <Button type="submit" className="justify-self-start" disabled={busy || (isWildcard && !wildcardAck)}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {translateNow("source.issue.certificate.ff84c7ec37")}</Button>
+          {translateNow("source.issue.certificate.ff84c7ec37")}
+        </Button>
       )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -502,7 +528,8 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
         </h4>
         <div className="grid gap-3 sm:grid-cols-2">
           <label htmlFor="wizard-connector-kind" className="grid gap-1 text-sm font-medium">
-            {translateNow("source.connector.8f0d706fff")}<select
+            {translateNow("source.connector.8f0d706fff")}
+            <select
               id="wizard-connector-kind"
               value={connectorKind}
               onChange={(event) => {
@@ -544,7 +571,9 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
           <ProofStatus text={connectorStatus} />
         ) : (
           <Button type="submit" className="justify-self-start" disabled={busy !== null || !targetName.trim()}>
-            {busy === "connector" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {" "}{translateNow("source.deploy.through.connector.47966b95ca")}</Button>
+            {busy === "connector" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{" "}
+            {translateNow("source.deploy.through.connector.47966b95ca")}
+          </Button>
         )}
       </form>
 
@@ -594,7 +623,9 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
           <ProofStatus text={externalCAStatus} />
         ) : (
           <Button type="submit" className="justify-self-start" disabled={busy !== null || !externalCAID || !csrPEM.trim()}>
-            {busy === "external-ca" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {" "}{translateNow("source.issue.through.external.ca.671d1a629f")}</Button>
+            {busy === "external-ca" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{" "}
+            {translateNow("source.issue.through.external.ca.671d1a629f")}
+          </Button>
         )}
       </form>
 
@@ -629,7 +660,8 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
           <ProofStatus text={leaseStatus} />
         ) : (
           <Button type="submit" className="justify-self-start" disabled={busy !== null || !leaseProvider.trim() || !leaseRole.trim()}>
-            {busy === "lease" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {" "}{translateNow("source.issue.dynamic.lease.7f0d0fe084")}</Button>
+            {busy === "lease" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {translateNow("source.issue.dynamic.lease.7f0d0fe084")}
+          </Button>
         )}
       </form>
 
@@ -723,14 +755,15 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
         <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
         <div>
           <h3 id="step-agent-heading" className="text-title font-semibold">
-            {translateNow("source.enroll.an.agent.43dbb20757")}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {translateNow("source.save.the.one.time.token.with.0600.permissi.b35e2c6935")}</p>
+            {translateNow("source.enroll.an.agent.43dbb20757")}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.save.the.one.time.token.with.0600.permissi.b35e2c6935")}</p>
         </div>
       </div>
       <div className="grid gap-2 sm:grid-cols-[minmax(12rem,18rem)_auto] sm:items-end">
         <label className="grid gap-1 text-sm font-medium">
-          {translateNow("source.agent.identity.698c87920a")}<input
+          {translateNow("source.agent.identity.698c87920a")}
+          <input
             className="rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
             placeholder={translateNow("source.node.a.66570ff05a")}
             value={agentIdentity}
@@ -742,7 +775,8 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
         </label>
         <Button type="button" className="justify-self-start" onClick={() => void mintToken()} disabled={minting}>
           {minting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {translateNow("source.mint.enrollment.token.b50d28fa1d")}</Button>
+          {translateNow("source.mint.enrollment.token.b50d28fa1d")}
+        </Button>
       </div>
       {token && (
         <div>
@@ -756,14 +790,17 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
       {agent ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {translateNow("source.agent.11b39c9377")}{" "}{agent.name} {" "}{translateNow("source.registered.dfd1beafbf")}</p>
+          {translateNow("source.agent.11b39c9377")} {agent.name} {translateNow("source.registered.dfd1beafbf")}
+        </p>
       ) : (
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           {checking && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {translateNow("source.waiting.for.the.agent.to.register.3e78d9c8a6")}</p>
+          {translateNow("source.waiting.for.the.agent.to.register.3e78d9c8a6")}
+        </p>
       )}
       <Button type="button" variant="outline" className="justify-self-start" onClick={() => void check()}>
-        {translateNow("source.check.for.agent.1649b814df")}</Button>
+        {translateNow("source.check.for.agent.1649b814df")}
+      </Button>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -797,7 +834,8 @@ function CompleteStep({
     <section aria-labelledby="step-complete-heading" className="grid gap-4">
       <h3 id="step-complete-heading" className="flex items-center gap-2 text-title font-semibold">
         <CheckCircle2 className="h-5 w-5 text-status-success" aria-hidden="true" />
-        {translateNow("source.ready.for.certificate.operations.e99f6e538f")}</h3>
+        {translateNow("source.ready.for.certificate.operations.e99f6e538f")}
+      </h3>
       <dl className="grid gap-3 sm:grid-cols-2">
         <SummaryItem label="Issuer" value={issuerName ?? "Internal CA"} />
         <SummaryItem label="Protocols" value={protocolSummary ?? "Not configured"} />
@@ -807,7 +845,8 @@ function CompleteStep({
       </dl>
       <p className="text-sm text-muted-foreground">{translateNow("source.trstctl.will.track.this.credential.and.ale.258f3fc1df")}</p>
       <Button type="button" className="justify-self-start" onClick={onComplete}>
-        {translateNow("source.complete.setup.fe3da4e70b")}</Button>
+        {translateNow("source.complete.setup.fe3da4e70b")}
+      </Button>
     </section>
   );
 }

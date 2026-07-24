@@ -162,7 +162,8 @@ export function Operations() {
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            {translateNow("source.refresh.0e91610117")}</Button>
+            {translateNow("source.refresh.0e91610117")}
+          </Button>
         }
       />
 
@@ -171,7 +172,8 @@ export function Operations() {
 
       <div className="ui-panel grid gap-3 p-comfortable sm:grid-cols-2 lg:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
         <label className="grid gap-2 text-sm font-medium">
-          {translateNow("source.status.filter.9bfe8b184f")}<select
+          {translateNow("source.status.filter.9bfe8b184f")}
+          <select
             aria-label={translateNow("source.status.filter.9bfe8b184f")}
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
@@ -185,7 +187,8 @@ export function Operations() {
           </select>
         </label>
         <label className="grid gap-2 text-sm font-medium">
-          {translateNow("source.type.filter.5607113309")}<select
+          {translateNow("source.type.filter.5607113309")}
+          <select
             aria-label={translateNow("source.type.filter.5607113309")}
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value as "" | OperationType)}
@@ -198,7 +201,9 @@ export function Operations() {
             ))}
           </select>
         </label>
-        <div className="flex items-end text-sm text-muted-foreground">{filteredRows.length} {" "}{translateNow("source.rows.bc51e9e65d")}</div>
+        <div className="flex items-end text-sm text-muted-foreground">
+          {filteredRows.length} {translateNow("source.rows.bc51e9e65d")}
+        </div>
       </div>
 
       {loading ? (
@@ -208,9 +213,14 @@ export function Operations() {
           icon={<RefreshCw className="h-5 w-5" aria-hidden="true" />}
           title={translateNow("source.no.operations.found.7472e6ceb1")}
           primaryAction={{ label: translateNow("source.review.approvals.51320f88b0"), to: "/approvals", icon: <CheckCircle2 className="h-4 w-4" /> }}
-          secondaryAction={{ label: translateNow("source.open.expiring.certificates.45cc9bb64d"), to: "/certificates?expiry=30d", icon: <RefreshCw className="h-4 w-4" /> }}
+          secondaryAction={{
+            label: translateNow("source.open.expiring.certificates.45cc9bb64d"),
+            to: "/certificates?expiry=30d",
+            icon: <RefreshCw className="h-4 w-4" />,
+          }}
         >
-          {translateNow("source.adjust.filters.refresh.the.queue.or.move.t.4a4fa7f45b")}</EmptyState>
+          {translateNow("source.adjust.filters.refresh.the.queue.or.move.t.4a4fa7f45b")}
+        </EmptyState>
       ) : (
         <OperationsTable
           rows={filteredRows}
@@ -343,7 +353,8 @@ function RejectDialog({
       </header>
       <form className="grid gap-4 p-5" onSubmit={submit}>
         <label className="grid gap-2 text-sm font-medium">
-          {translateNow("source.reason.f81ab834de")}<textarea
+          {translateNow("source.reason.f81ab834de")}
+          <textarea
             ref={reasonRef}
             required
             rows={4}
@@ -354,9 +365,11 @@ function RejectDialog({
         </label>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.cancel.19766ed6cc")}</Button>
+            {translateNow("source.cancel.19766ed6cc")}
+          </Button>
           <Button type="submit" disabled={busy || reason.trim() === ""}>
-            {translateNow("source.reject.request.33b1a3b501")}</Button>
+            {translateNow("source.reject.request.33b1a3b501")}
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -381,7 +394,8 @@ function OperationNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () 
         <p className="min-w-0 break-words font-medium">{notice.message}</p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
-        {translateNow("source.dismiss.48845bff33")}</Button>
+        {translateNow("source.dismiss.48845bff33")}
+      </Button>
     </div>
   );
 }
@@ -637,7 +651,8 @@ function RotationRunDetailDialog({ onClose, run }: { run: RotationRun; onClose: 
       </dl>
       <div className="flex justify-end border-t border-border px-5 py-4">
         <Button type="button" variant="outline" onClick={onClose}>
-          {translateNow("source.close.7d9eb7acb1")}</Button>
+          {translateNow("source.close.7d9eb7acb1")}
+        </Button>
       </div>
     </Dialog>
   );

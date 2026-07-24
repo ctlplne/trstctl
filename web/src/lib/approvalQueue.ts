@@ -15,18 +15,33 @@ export type ApprovalQueueRow = {
 export function approvalActionsForState(state: string): Array<{ label: string; action: ApprovalActionKind }> {
   switch (state) {
     case "requested":
-      return [{ get label() {
-      return translateNow("source.approve.issue.a4353290b7");
-    }, action: "issue" }];
+      return [
+        {
+          get label() {
+            return translateNow("source.approve.issue.a4353290b7");
+          },
+          action: "issue",
+        },
+      ];
     case "renewing":
-      return [{ get label() {
-      return translateNow("source.approve.rotate.cdbd42f3c6");
-    }, action: "rotate" }];
+      return [
+        {
+          get label() {
+            return translateNow("source.approve.rotate.cdbd42f3c6");
+          },
+          action: "rotate",
+        },
+      ];
     case "issued":
     case "deployed":
-      return [{ get label() {
-      return translateNow("source.approve.revoke.80c949285d");
-    }, action: "revoke" }];
+      return [
+        {
+          get label() {
+            return translateNow("source.approve.revoke.80c949285d");
+          },
+          action: "revoke",
+        },
+      ];
     default:
       return [];
   }

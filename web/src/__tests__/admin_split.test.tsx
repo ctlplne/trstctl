@@ -65,7 +65,14 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     apiMock.enterpriseSupportStatus.mockResolvedValue({ served: true, support_mode: "off", support_tiers: [], sla_targets: [], professional_services: [] });
     apiMock.managedOfferingStatus.mockResolvedValue({ served: true, provider_plane_mode: "off" });
     apiMock.scaleOrchestration.mockResolvedValue({ served: false, execution_lanes: [], release_gates: [], target_credential_bands: [], residuals: [] });
-    apiMock.activeActiveIssuance.mockResolvedValue({ served: false, regions: [], tenant_write_fences: [], failover_runbook: [], release_gates: [], residuals: [] });
+    apiMock.activeActiveIssuance.mockResolvedValue({
+      served: false,
+      regions: [],
+      tenant_write_fences: [],
+      failover_runbook: [],
+      release_gates: [],
+      residuals: [],
+    });
   });
 
   it("serves each /admin route under its own H1", async () => {

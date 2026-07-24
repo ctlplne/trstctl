@@ -613,7 +613,11 @@ export function Workloads() {
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {t("workloads.attestation.rootCerts")}
-              <textarea className="ui-input min-h-24 font-mono text-xs" name="root_certs_pem" placeholder={translateNow("source.begin.certificate.ddddb6cbd3")} />
+              <textarea
+                className="ui-input min-h-24 font-mono text-xs"
+                name="root_certs_pem"
+                placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
+              />
             </label>
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <label className="grid gap-1 text-sm font-medium">
@@ -663,7 +667,11 @@ export function Workloads() {
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {t("workloads.attestation.rotationRootCerts")}
-              <textarea className="ui-input min-h-20 font-mono text-xs" name="root_certs_pem" placeholder={translateNow("source.begin.certificate.ddddb6cbd3")} />
+              <textarea
+                className="ui-input min-h-20 font-mono text-xs"
+                name="root_certs_pem"
+                placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
+              />
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {t("workloads.attestation.rotationNonce")}
@@ -811,7 +819,8 @@ export function Workloads() {
               {attestedSVIDs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-muted-foreground">
-                    {translateNow("source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a")}</td>
+                    {translateNow("source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a")}
+                  </td>
                 </tr>
               ) : (
                 attestedSVIDs.map((row) => (
@@ -829,46 +838,55 @@ export function Workloads() {
           </table>
         </div>
         <UnavailableState title={translateNow("source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc")}>
-          {translateNow("source.submitted.proof.fields.are.cleared.after.i.b9215d2471")}</UnavailableState>
+          {translateNow("source.submitted.proof.fields.are.cleared.after.i.b9215d2471")}
+        </UnavailableState>
       </section>
 
       <section aria-labelledby="broker-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="broker-heading" className="text-title font-semibold">
-            {translateNow("source.ai.agent.nhi.broker.3c610aca90")}</h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {translateNow("source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad")}</p>
+            {translateNow("source.ai.agent.nhi.broker.3c610aca90")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad")}</p>
         </div>
         <form aria-labelledby="broker-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueBrokerIdentity}>
           <div>
             <h3 id="broker-issue-heading" className="text-title font-semibold">
-              {translateNow("source.issue.broker.identity.a95ac0066b")}</h3>
+              {translateNow("source.issue.broker.identity.a95ac0066b")}
+            </h3>
             <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.proof.payloads.are.submitted.directly.and.893894a52b")}</p>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_12rem_1fr_8rem]">
             <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.agent.id.510bce732d")}<input className="ui-input" name="agent_id" defaultValue="agent-build-1" required />
+              {translateNow("source.agent.id.510bce732d")}
+              <input className="ui-input" name="agent_id" defaultValue="agent-build-1" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.method.86e0708911")}<input className="ui-input" name="method" defaultValue="github_oidc" required />
+              {translateNow("source.broker.method.86e0708911")}
+              <input className="ui-input" name="method" defaultValue="github_oidc" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.scopes.60ad7540e2")}<input className="ui-input" name="scopes" defaultValue="mcp:read-only, secrets:read:ci" required />
+              {translateNow("source.broker.scopes.60ad7540e2")}
+              <input className="ui-input" name="scopes" defaultValue="mcp:read-only, secrets:read:ci" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.ttl.seconds.7112a719ce")}<input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={900} />
+              {translateNow("source.broker.ttl.seconds.7112a719ce")}
+              <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={900} />
             </label>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.proof.payload.base64.caf8633720")}<textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
+              {translateNow("source.broker.proof.payload.base64.caf8633720")}
+              <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.public.key.a2341b0f4e")}<textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
+              {translateNow("source.broker.public.key.a2341b0f4e")}
+              <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
             </label>
             <Button type="submit" className="self-end" disabled={busy === "broker"}>
               {busy === "broker" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-              {translateNow("source.issue.broker.identity.a95ac0066b")}</Button>
+              {translateNow("source.issue.broker.identity.a95ac0066b")}
+            </Button>
           </div>
         </form>
         {brokerError && <ErrorState title={translateNow("source.broker.identity.failed.90cf96d503")}>{brokerError}</ErrorState>}
@@ -890,7 +908,8 @@ export function Workloads() {
               {brokerIdentities.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-muted-foreground">
-                    {translateNow("source.no.broker.identity.has.been.issued.in.this.7bb702b9db")}</td>
+                    {translateNow("source.no.broker.identity.has.been.issued.in.this.7bb702b9db")}
+                  </td>
                 </tr>
               ) : (
                 brokerIdentities.map((identity) => (
@@ -911,7 +930,8 @@ export function Workloads() {
           </table>
         </div>
         <UnavailableState title={translateNow("source.broker.history.isn.t.in.the.console.yet.7fc4ef9d7d")}>
-          {translateNow("source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b")}</UnavailableState>
+          {translateNow("source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b")}
+        </UnavailableState>
       </section>
     </section>
   );

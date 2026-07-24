@@ -60,7 +60,10 @@ export function NotificationCenter({ risks = [], certs = [] }: { risks?: Credent
     warning: alerts.filter((a) => a.severity === "warning").length,
   };
   return (
-    <SectionCard title={translateNow("source.alert.center.9bbd88c00f")} description="Severity-ranked alerts projected from served risk and certificate-expiry events.">
+    <SectionCard
+      title={translateNow("source.alert.center.9bbd88c00f")}
+      description="Severity-ranked alerts projected from served risk and certificate-expiry events."
+    >
       <DashboardGrid>
         <StatTile label="Critical" value={counts.critical} tone={counts.critical ? "critical" : undefined} />
         <StatTile label="High" value={counts.high} tone={counts.high ? "high" : undefined} />

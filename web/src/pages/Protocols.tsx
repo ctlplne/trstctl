@@ -285,25 +285,29 @@ export function Protocols() {
 
       <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
         <h2 id="protocol-status-heading" className="text-title font-semibold">
-          {translateNow("source.protocol.responder.status.e57eff8ebc")}</h2>
+          {translateNow("source.protocol.responder.status.e57eff8ebc")}
+        </h2>
         <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="ui-panel p-3 text-sm">
             <p className="font-medium">{translateNow("source.read.only.responder.probe.23655af063")}</p>
-            <p className="mt-1 text-muted-foreground">
-              {translateNow("source.the.register.checks.the.same.origin.protoc.851c152de8")}</p>
-            {statusCheckedAt && <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.checked.0efd92a335")}{" "}{formatDate(statusCheckedAt)}</p>}
+            <p className="mt-1 text-muted-foreground">{translateNow("source.the.register.checks.the.same.origin.protoc.851c152de8")}</p>
+            {statusCheckedAt && (
+              <p className="mt-2 text-caption text-muted-foreground">
+                {translateNow("source.checked.0efd92a335")} {formatDate(statusCheckedAt)}
+              </p>
+            )}
           </div>
           <div className="ui-panel p-3 text-sm">
             <p className="font-medium">{translateNow("source.fail.closed.startup.and.issuance.posture.661fcb680a")}</p>
-            <p className="mt-1 text-muted-foreground">
-              {translateNow("source.each.protocol.requires.an.enabled.flag.plu.a66867a87e")}</p>
+            <p className="mt-1 text-muted-foreground">{translateNow("source.each.protocol.requires.an.enabled.flag.plu.a66867a87e")}</p>
           </div>
         </div>
       </section>
 
       <section aria-labelledby="protocol-table-heading">
         <h2 id="protocol-table-heading" className="mb-3 text-title font-semibold">
-          {translateNow("source.protocol.register.6109f4cf46")}</h2>
+          {translateNow("source.protocol.register.6109f4cf46")}
+        </h2>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[56rem]">
             <caption className="sr-only">{translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}</caption>
@@ -339,7 +343,11 @@ export function Protocols() {
                     <td>
                       <ProtocolStatusBadge status={status} />
                       <p className="mt-2 font-mono text-xs text-muted-foreground">{status?.endpoint ?? protocolEndpointFallback(protocol.id)}</p>
-                      {status?.status_code != null && <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.http.56d6f32151")}{" "}{status.status_code}</p>}
+                      {status?.status_code != null && (
+                        <p className="mt-1 text-caption text-muted-foreground">
+                          {translateNow("source.http.56d6f32151")} {status.status_code}
+                        </p>
+                      )}
                       {status?.detail && <p className="mt-1 text-caption text-muted-foreground">{status.detail}</p>}
                     </td>
                   </tr>
@@ -463,7 +471,11 @@ export function Protocols() {
                       <ul className="grid gap-1">
                         <li>{(config.allowed_methods ?? []).join(", ") || t("protocols.dns01.noMethodPolicy")}</li>
                         <li>{config.allow_wildcards ? t("protocols.dns01.wildcardsAllowed") : t("protocols.dns01.wildcardsDenied")}</li>
-                        {config.caa_issuer_domain && <li>{translateNow("source.caa.084696b5b2")}{" "}{config.caa_issuer_domain}</li>}
+                        {config.caa_issuer_domain && (
+                          <li>
+                            {translateNow("source.caa.084696b5b2")} {config.caa_issuer_domain}
+                          </li>
+                        )}
                       </ul>
                     </td>
                     <td>
@@ -639,7 +651,8 @@ export function Protocols() {
 
       <section aria-labelledby="client-setup-heading" className="grid gap-4">
         <h2 id="client-setup-heading" className="text-title font-semibold">
-          {translateNow("source.client.setup.4ba2b51d20")}</h2>
+          {translateNow("source.client.setup.4ba2b51d20")}
+        </h2>
         {protocolSurfaces.map((protocol) => (
           <section key={protocol.id} aria-labelledby={`${protocol.id}-heading`} className="border-y border-border py-4">
             <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
@@ -664,10 +677,13 @@ export function Protocols() {
                           onClick={() => void copySnippet(protocol, snippet)}
                         >
                           <Copy className="h-4 w-4" aria-hidden="true" />
-                          {translateNow("source.copy.e21f935f11")}</Button>
+                          {translateNow("source.copy.e21f935f11")}
+                        </Button>
                       </div>
                       <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{snippet.command}</code>
-                      {copied === copiedKey && <p className="mt-2 text-xs text-muted-foreground">{translateNow("source.copied.command.without.token.material.6c656e4f88")}</p>}
+                      {copied === copiedKey && (
+                        <p className="mt-2 text-xs text-muted-foreground">{translateNow("source.copied.command.without.token.material.6c656e4f88")}</p>
+                      )}
                     </div>
                   );
                 })}
@@ -712,7 +728,8 @@ function ProtocolStatusBadge({ status }: { status: ProtocolRuntimeStatus | undef
   if (!status) {
     return (
       <span className="inline-flex rounded-control border border-border bg-muted px-2 py-1 text-caption font-medium text-muted-foreground">
-        {translateNow("source.not.browser.readable.cc2ff0b76e")}</span>
+        {translateNow("source.not.browser.readable.cc2ff0b76e")}
+      </span>
     );
   }
   const routeServedOnly = status.served && status.status_code === 405;
@@ -830,7 +847,7 @@ function MDMSCEPPolicyEditDialog({ onClose, onSaved, policy }: { policy: MDMSCEP
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.edit.scep.policy.5719a7d8ab")}{" "}{policy.name}
+            {translateNow("source.edit.scep.policy.5719a7d8ab")} {policy.name}
           </h2>
           <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{policy.id}</p>
         </div>
@@ -852,7 +869,8 @@ function MDMSCEPPolicyEditDialog({ onClose, onSaved, policy }: { policy: MDMSCEP
             />
           </label>
           <label className="grid gap-1 text-body font-medium">
-            {translateNow("source.provider.472590ae97")}<select
+            {translateNow("source.provider.472590ae97")}
+            <select
               value={provider}
               onChange={(event) => setProvider(event.target.value === "jamf" ? "jamf" : "intune")}
               className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
@@ -905,7 +923,8 @@ function MDMSCEPPolicyEditDialog({ onClose, onSaved, policy }: { policy: MDMSCEP
         </div>
         <label className="flex items-center gap-2 text-body font-medium">
           <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
-          {translateNow("source.enabled.92c1cdfdf4")}</label>
+          {translateNow("source.enabled.92c1cdfdf4")}
+        </label>
         <label className="grid gap-1 text-body font-medium">
           {t("parity.trustAnchorReferencesJsonOptional_f5ea80")}
           <textarea
@@ -926,7 +945,8 @@ function MDMSCEPPolicyEditDialog({ onClose, onSaved, policy }: { policy: MDMSCEP
         </label>
         <footer className="flex justify-end gap-2 border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.cancel.19766ed6cc")}</Button>
+            {translateNow("source.cancel.19766ed6cc")}
+          </Button>
           <Button type="submit" disabled={busy || name.trim() === "" || scepEndpoint.trim() === "" || scepProfile.trim() === ""}>
             {t("parity.savePolicy_77d67c")}
           </Button>
@@ -975,19 +995,22 @@ function MDMSCEPRotateChallengeDialog({
       panelClassName="relative w-full max-w-xl rounded-panel border border-border bg-card p-4 text-sm shadow-elevation2"
     >
       <h2 id="scep-rotate-title" className="text-title font-semibold">
-        {translateNow("source.rotate.scep.challenge.for.3553645d3e")}{" "}{policy.name}?
+        {translateNow("source.rotate.scep.challenge.for.3553645d3e")} {policy.name}?
       </h2>
       <p id="scep-rotate-desc" className="mt-1 text-muted-foreground">
         {t("parity.rotationMintsFreshChallengeMaterialAnd_0aec47")}
       </p>
-      <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.current.rotation.version.ede128c23f")}{" "}{policy.rotation_version}</p>
+      <p className="mt-2 text-caption text-muted-foreground">
+        {translateNow("source.current.rotation.version.ede128c23f")} {policy.rotation_version}
+      </p>
       {error && <ErrorState title={t("parity.challengeRotationFailed_c4b11e")}>{error}</ErrorState>}
       <div className="mt-3 flex gap-2">
         <Button ref={confirmRef} type="button" size="sm" disabled={busy} onClick={() => void confirmRotate()}>
           {t("parity.rotateChallenge_99fc02")}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
-          {translateNow("source.cancel.19766ed6cc")}</Button>
+          {translateNow("source.cancel.19766ed6cc")}
+        </Button>
       </div>
     </Dialog>
   );
@@ -1026,7 +1049,8 @@ function MDMSCEPPolicyDeleteDialog({ onClose, onDeleted, policy }: { policy: MDM
       panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
     >
       <h2 id="scep-policy-delete-title" className="text-title font-semibold text-destructive">
-        {translateNow("source.delete.scep.policy.1a5e5ddeb3")}{policy.name}”?
+        {translateNow("source.delete.scep.policy.1a5e5ddeb3")}
+        {policy.name}”?
       </h2>
       <p id="scep-policy-delete-desc" className="mt-1 text-destructive">
         Deleting this policy stops MDM SCEP challenge validation for its endpoint; devices enrolling through it will be denied. This cannot be undone.
@@ -1052,7 +1076,8 @@ function MDMSCEPPolicyDeleteDialog({ onClose, onDeleted, policy }: { policy: MDM
           {t("parity.yesDeletePolicy_30ce34")}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
-          {translateNow("source.cancel.19766ed6cc")}</Button>
+          {translateNow("source.cancel.19766ed6cc")}
+        </Button>
       </div>
     </Dialog>
   );
@@ -1145,7 +1170,7 @@ function DNS01ConfigEditDialog({
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.edit.dns.01.provider.config.1daa884c33")}{" "}{config.name}
+            {translateNow("source.edit.dns.01.provider.config.1daa884c33")} {config.name}
           </h2>
           <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{config.id}</p>
         </div>
@@ -1167,7 +1192,8 @@ function DNS01ConfigEditDialog({
             />
           </label>
           <label className="grid gap-1 text-body font-medium">
-            {translateNow("source.provider.472590ae97")}<select
+            {translateNow("source.provider.472590ae97")}
+            <select
               required
               value={provider}
               onChange={(event) => setProvider(event.target.value)}
@@ -1249,7 +1275,8 @@ function DNS01ConfigEditDialog({
         </label>
         <footer className="flex justify-end gap-2 border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.cancel.19766ed6cc")}</Button>
+            {translateNow("source.cancel.19766ed6cc")}
+          </Button>
           <Button type="submit" disabled={busy || name.trim() === "" || provider.trim() === ""}>
             {t("parity.saveConfig_64e1de")}
           </Button>
@@ -1300,7 +1327,8 @@ function DNS01ConfigDeleteDialog({
       panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
     >
       <h2 id="dns01-config-delete-title" className="text-title font-semibold text-destructive">
-        {translateNow("source.delete.dns.01.provider.config.d870732e81")}{config.name}”?
+        {translateNow("source.delete.dns.01.provider.config.d870732e81")}
+        {config.name}”?
       </h2>
       <p id="dns01-config-delete-desc" className="mt-1 text-destructive">
         Deleting this config removes its challenge policy and credential references; ACME DNS-01 orders that rely on it will fail preflight. This cannot be
@@ -1327,7 +1355,8 @@ function DNS01ConfigDeleteDialog({
           {t("parity.yesDeleteConfig_bd6fac")}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
-          {translateNow("source.cancel.19766ed6cc")}</Button>
+          {translateNow("source.cancel.19766ed6cc")}
+        </Button>
       </div>
     </Dialog>
   );
@@ -1381,7 +1410,7 @@ function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01ProviderCo
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.dns.01.preflight.0cb459fa6f")}{" "}{config.name}
+            {translateNow("source.dns.01.preflight.0cb459fa6f")} {config.name}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{t("parity.validatesDelegationTxtPropagationCaaPolicy_1ceb4c")}</p>
         </div>
@@ -1441,7 +1470,8 @@ function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01ProviderCo
         </label>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.close.7d9eb7acb1")}</Button>
+            {translateNow("source.close.7d9eb7acb1")}
+          </Button>
           <Button type="submit" disabled={busy || domain.trim() === ""}>
             {result ? "Re-run preflight" : "Run preflight"}
           </Button>
@@ -1495,7 +1525,11 @@ function DNS01PreflightResultPanel({ result }: { result: ACMEDNS01Preflight }) {
           </li>
         ))}
       </ul>
-      {result.failed_checks.length > 0 && <p className="text-sm font-medium text-destructive">{translateNow("source.failed.checks.890e88faab")}{" "}{result.failed_checks.join(", ")}</p>}
+      {result.failed_checks.length > 0 && (
+        <p className="text-sm font-medium text-destructive">
+          {translateNow("source.failed.checks.890e88faab")} {result.failed_checks.join(", ")}
+        </p>
+      )}
     </section>
   );
 }

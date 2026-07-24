@@ -368,7 +368,7 @@ export function Risk() {
       {expandedRisk && (
         <section aria-labelledby="risk-detail-heading" className="mt-4 rounded-panel border border-border bg-card p-4 shadow-elevation1">
           <h2 id="risk-detail-heading" className="mb-2 text-title font-semibold">
-            {translateNow("source.six.factor.breakdown.for.e30661db39")}{" "}{expandedRisk.subject}
+            {translateNow("source.six.factor.breakdown.for.e30661db39")} {expandedRisk.subject}
           </h2>
           <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
         </section>
@@ -876,7 +876,8 @@ function RiskFilterForm({
   return (
     <form className="flex flex-wrap items-end gap-2" onSubmit={onSubmit}>
       <label className="grid gap-1 text-sm font-medium">
-        {translateNow("source.minimum.score.e7461df96a")}<input
+        {translateNow("source.minimum.score.e7461df96a")}
+        <input
           className="min-h-9 w-28 rounded-control border border-input bg-background px-2 text-sm"
           type="number"
           min={0}
@@ -886,7 +887,8 @@ function RiskFilterForm({
         />
       </label>
       <label className="grid gap-1 text-sm font-medium">
-        {translateNow("source.privilege.d4d7c3497b")}<select
+        {translateNow("source.privilege.d4d7c3497b")}
+        <select
           className="min-h-9 rounded-control border border-input bg-background px-2 text-sm"
           value={privilege}
           onChange={(event) => onPrivilege(event.target.value)}
@@ -900,7 +902,8 @@ function RiskFilterForm({
         </select>
       </label>
       <label className="grid gap-1 text-sm font-medium">
-        {translateNow("source.owner.4b1b8aa360")}<input
+        {translateNow("source.owner.4b1b8aa360")}
+        <input
           className="min-h-9 w-36 rounded-control border border-input bg-background px-2 text-sm"
           value={owner}
           onChange={(event) => onOwner(event.target.value)}
@@ -908,7 +911,8 @@ function RiskFilterForm({
         />
       </label>
       <Button type="submit" size="sm" variant="outline">
-        {translateNow("source.apply.risk.filters.8d00abcce9")}</Button>
+        {translateNow("source.apply.risk.filters.8d00abcce9")}
+      </Button>
     </form>
   );
 }
@@ -929,13 +933,19 @@ function RiskDetail({ risk, activeFactor }: { risk: CredentialRisk; activeFactor
           <div className="rounded-md border border-border p-2">
             <dt className="font-medium text-muted-foreground">{translateNow("source.privilege.label.128cc84317")}</dt>
             <dd>
-              {scaleLabel(privilegeLabel, risk.privilege)} <span className="text-muted-foreground">{translateNow("source.raw.668ba48102")}{" "}{risk.privilege})</span>
+              {scaleLabel(privilegeLabel, risk.privilege)}{" "}
+              <span className="text-muted-foreground">
+                {translateNow("source.raw.668ba48102")} {risk.privilege})
+              </span>
             </dd>
           </div>
           <div className="rounded-md border border-border p-2">
             <dt className="font-medium text-muted-foreground">{translateNow("source.sensitivity.label.8a52af2e9c")}</dt>
             <dd>
-              {scaleLabel(sensitivityLabel, risk.sensitivity)} <span className="text-muted-foreground">{translateNow("source.raw.668ba48102")}{" "}{risk.sensitivity})</span>
+              {scaleLabel(sensitivityLabel, risk.sensitivity)}{" "}
+              <span className="text-muted-foreground">
+                {translateNow("source.raw.668ba48102")} {risk.sensitivity})
+              </span>
             </dd>
           </div>
         </dl>
@@ -945,20 +955,23 @@ function RiskDetail({ risk, activeFactor }: { risk: CredentialRisk; activeFactor
         <ul className="space-y-1">
           <li>
             <a className="text-primary underline" href={`/certificates?credential=${encodedCredential}`}>
-              {translateNow("source.credential.detail.7c1b378919")}</a>
+              {translateNow("source.credential.detail.7c1b378919")}
+            </a>
           </li>
           <li>
             <a className="text-primary underline" href={`/owners?status=${risk.owner_active ? "active" : "orphaned"}`}>
-              {translateNow("source.owner.status.74d91b61ae")}{" "}{risk.owner_active ? "active" : "orphaned"}
+              {translateNow("source.owner.status.74d91b61ae")} {risk.owner_active ? "active" : "orphaned"}
             </a>
           </li>
           <li>
             <a className="text-primary underline" href={`/graph?node=${graphNode}`}>
-              {translateNow("source.graph.blast.radius.c70f3638eb")}</a>
+              {translateNow("source.graph.blast.radius.c70f3638eb")}
+            </a>
           </li>
           <li>
             <a className="text-primary underline" href={`/audit?credential=${encodedCredential}`}>
-              {translateNow("source.audit.evidence.74dbcfd2a3")}</a>
+              {translateNow("source.audit.evidence.74dbcfd2a3")}
+            </a>
           </li>
         </ul>
       </div>
@@ -973,7 +986,8 @@ function RiskLegend() {
     <div className="group relative mb-4 inline-flex">
       <Button type="button" size="sm" variant="outline" aria-describedby="risk-band-tooltip" title={description}>
         <Info className="h-4 w-4" aria-hidden="true" />
-        {translateNow("source.risk.bands.1584b73418")}</Button>
+        {translateNow("source.risk.bands.1584b73418")}
+      </Button>
       <div
         id="risk-band-tooltip"
         role="tooltip"
@@ -1001,7 +1015,9 @@ function RiskScaleLabel({ label, raw, name }: { label: string; raw: number; name
   return (
     <span title={`Raw ${name} value ${raw}`}>
       {label}
-      <span className="sr-only">{translateNow("source.raw.fec6060499")}{" "}{raw}</span>
+      <span className="sr-only">
+        {translateNow("source.raw.fec6060499")} {raw}
+      </span>
     </span>
   );
 }

@@ -54,7 +54,7 @@ export function StepShell({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-caption font-medium uppercase text-muted-foreground">
-              {translateNow("source.step.8e6a6cca7a")}{" "}{currentIndex + 1} {" "}{translateNow("source.of.28391d3bc6")}{" "}{steps.length}
+              {translateNow("source.step.8e6a6cca7a")} {currentIndex + 1} {translateNow("source.of.28391d3bc6")} {steps.length}
             </p>
             <h2 className="mt-1 text-title font-semibold">{currentStep?.label}</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{currentStep?.description}</p>
@@ -90,7 +90,8 @@ export function StepShell({
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-comfortable">
         <Button type="button" variant="outline" onClick={onPrevious} disabled={currentIndex === 0 || !onPrevious}>
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {translateNow("source.previous.a57b08a480")}</Button>
+          {translateNow("source.previous.a57b08a480")}
+        </Button>
         {onNext ? (
           <Button type="button" onClick={onNext} disabled={nextDisabled}>
             {nextLabel ?? "Next"}

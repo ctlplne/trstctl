@@ -288,7 +288,8 @@ export function Notifications() {
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            {translateNow("source.refresh.0e91610117")}</Button>
+            {translateNow("source.refresh.0e91610117")}
+          </Button>
         }
       />
 
@@ -391,7 +392,9 @@ export function Notifications() {
               {`Notification ${detail.id}`}
             </h2>
             <p id="notification-detail-description" className="mt-1 text-sm text-muted-foreground">
-              {translateNow("source.created.d70b9e24bc")}{" "}{formatDateTime(detail.created_at)} {" "}{translateNow("source.full.delivery.subject.ownership.and.routin.32d5733727")}</p>
+              {translateNow("source.created.d70b9e24bc")} {formatDateTime(detail.created_at)}{" "}
+              {translateNow("source.full.delivery.subject.ownership.and.routin.32d5733727")}
+            </p>
           </header>
           <div className="grid gap-4 p-5">
             <section aria-label={translateNow("source.delivery.52bfe584a5")}>
@@ -474,7 +477,8 @@ export function Notifications() {
           </div>
           <div className="flex justify-end border-t border-border px-5 py-4">
             <Button type="button" variant="outline" onClick={() => setDetail(null)}>
-              {translateNow("source.close.7d9eb7acb1")}</Button>
+              {translateNow("source.close.7d9eb7acb1")}
+            </Button>
           </div>
         </Dialog>
       )}
@@ -933,12 +937,12 @@ function EscalationSummary({ notification }: { notification: Notification }) {
     <div className="grid max-w-[18rem] gap-1 text-sm">
       {owner && (
         <span className="truncate" title={owner}>
-          {translateNow("source.owner.9a638cfefd")}{" "}{owner}
+          {translateNow("source.owner.9a638cfefd")} {owner}
         </span>
       )}
       {approvers.length > 0 && (
         <span className="truncate text-muted-foreground" title={approvers.join(", ")}>
-          {translateNow("source.approvers.99f86511e2")}{" "}{approvers.join(", ")}
+          {translateNow("source.approvers.99f86511e2")} {approvers.join(", ")}
         </span>
       )}
     </div>

@@ -556,7 +556,8 @@ export function Identities() {
           return (
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => openDetail(identity)}>
-                {translateNow("source.view.details.d1bf045bb5")}</Button>
+                {translateNow("source.view.details.d1bf045bb5")}
+              </Button>
               {actions.map((a) => (
                 <div key={a.to} className="space-y-1">
                   <Button
@@ -592,7 +593,8 @@ export function Identities() {
         description="The non-human identities trstctl manages — services, agents, and workloads — and their lifecycle: issue, deploy, renew, revoke, retire. Each can hold certificates (see Certificates) and secrets (see Secrets)."
         actions={
           <Button type="button" onClick={() => setShowForm((s) => !s)}>
-            {translateNow("source.new.identity.51c2e7c139")}</Button>
+            {translateNow("source.new.identity.51c2e7c139")}
+          </Button>
         }
       />
 
@@ -636,7 +638,8 @@ export function Identities() {
           <BlastRadiusImpactPanel state={pendingImpact} />
           <div className="mt-3 grid gap-3">
             <label className="block text-sm font-medium text-destructive" htmlFor="destructive-confirm-name">
-              {translateNow("source.type.credential.name.to.confirm.cc8d26a179")}</label>
+              {translateNow("source.type.credential.name.to.confirm.cc8d26a179")}
+            </label>
             <input
               ref={pendingConfirmRef}
               id="destructive-confirm-name"
@@ -671,14 +674,17 @@ export function Identities() {
               {`Yes, ${pending.label.toLowerCase()}`}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={clearPending}>
-              {translateNow("source.cancel.19766ed6cc")}</Button>
+              {translateNow("source.cancel.19766ed6cc")}
+            </Button>
           </div>
         </Dialog>
       )}
 
       {selectedRows.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted px-3 py-2 text-sm">
-          <span className="font-medium">{selectedRows.length} {" "}{translateNow("source.selected.d7cbbb688b")}</span>
+          <span className="font-medium">
+            {selectedRows.length} {translateNow("source.selected.d7cbbb688b")}
+          </span>
           <Button
             type="button"
             size="sm"
@@ -688,9 +694,11 @@ export function Identities() {
               setBulkConfirmOpen(true);
             }}
           >
-            {translateNow("source.bulk.revoke.selected.53f4891ce3")}</Button>
+            {translateNow("source.bulk.revoke.selected.53f4891ce3")}
+          </Button>
           <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-            {translateNow("source.clear.selection.cea4d2e010")}</Button>
+            {translateNow("source.clear.selection.cea4d2e010")}
+          </Button>
         </div>
       )}
 
@@ -707,13 +715,15 @@ export function Identities() {
           panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
         >
           <h2 id="bulk-revoke-title" className="text-title font-semibold text-destructive">
-            {translateNow("source.revoke.87e6d00bbf")}{" "}{selectedRows.length} {" "}{translateNow("source.selected.identities.a829228e71")}</h2>
+            {translateNow("source.revoke.87e6d00bbf")} {selectedRows.length} {translateNow("source.selected.identities.a829228e71")}
+          </h2>
           <p id="bulk-revoke-desc" className="mt-1 text-destructive">
-            {translateNow("source.this.submits.a.single.bulk.revocation.requ.ab3df219e2")}{" "}{selectedRows.length} selected identities; the server reports revoked, skipped, and failed per
-            item. Connector and downstream delivery still complete asynchronously through the outbox.
+            {translateNow("source.this.submits.a.single.bulk.revocation.requ.ab3df219e2")} {selectedRows.length} selected identities; the server reports
+            revoked, skipped, and failed per item. Connector and downstream delivery still complete asynchronously through the outbox.
           </p>
           <label className="mt-3 grid gap-1 text-sm font-medium text-destructive" htmlFor="identity-bulk-revoke-reason">
-            {translateNow("source.revocation.reason.b11670420f")}<select
+            {translateNow("source.revocation.reason.b11670420f")}
+            <select
               id="identity-bulk-revoke-reason"
               value={bulkReason}
               onChange={(event) => setBulkReason(event.target.value as BulkRevokeRequest["reason"])}
@@ -729,9 +739,11 @@ export function Identities() {
           {bulkError && <p className="mt-3 text-sm font-medium text-risk-critical">{bulkError}</p>}
           <div className="mt-3 flex gap-2">
             <Button ref={bulkConfirmRef} type="button" size="sm" variant="destructive" loading={bulkBusy} onClick={() => void runBulkRevoke()}>
-              {translateNow("source.confirm.bulk.revoke.d613327838")}</Button>
+              {translateNow("source.confirm.bulk.revoke.d613327838")}
+            </Button>
             <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setBulkConfirmOpen(false)}>
-              {translateNow("source.cancel.19766ed6cc")}</Button>
+              {translateNow("source.cancel.19766ed6cc")}
+            </Button>
           </div>
         </Dialog>
       )}
@@ -739,7 +751,9 @@ export function Identities() {
       {bulkResult && (
         <div role="status" className="mb-3 rounded-md border border-border p-3 text-sm">
           <p className="font-medium">
-            {translateNow("source.revoked.f6f738d043")}{" "}{bulkResult.total_revoked} {" "}{translateNow("source.of.28391d3bc6")}{" "}{bulkResult.total_matched} {" "}{translateNow("source.skipped.22a5b0caf3")}{" "}{bulkResult.total_skipped}{translateNow("source.failed.ff18811f27")}{" "}{bulkResult.total_failed})
+            {translateNow("source.revoked.f6f738d043")} {bulkResult.total_revoked} {translateNow("source.of.28391d3bc6")} {bulkResult.total_matched}{" "}
+            {translateNow("source.skipped.22a5b0caf3")} {bulkResult.total_skipped}
+            {translateNow("source.failed.ff18811f27")} {bulkResult.total_failed})
           </p>
           {bulkResult.items.some((item) => item.status !== "revoked") && (
             <ul className="mt-2 space-y-1">
@@ -761,13 +775,15 @@ export function Identities() {
 
       {items && items.length === 0 && !showForm && (
         <EmptyState title={translateNow("source.no.identities.yet.c8697bd1bc")} ctaTo="/wizard" ctaLabel="Set up your first certificate">
-          {translateNow("source.issue.your.first.certificate.to.start.trac.355cebb739")}</EmptyState>
+          {translateNow("source.issue.your.first.certificate.to.start.trac.355cebb739")}
+        </EmptyState>
       )}
 
       {items && items.length > 0 && (
         <div id="manual-lifecycle-transitions" className="space-y-3">
           <label className="grid max-w-xs gap-1 text-sm font-medium" htmlFor="identity-kind-filter">
-            {translateNow("source.kind.f5387f9bb6")}<select
+            {translateNow("source.kind.f5387f9bb6")}
+            <select
               id="identity-kind-filter"
               value={kindFilter}
               onChange={(event) => setKindFilter(event.target.value as KindFilter)}
@@ -842,7 +858,8 @@ export function Identities() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-reason">
-            {translateNow("source.reason.f81ab834de")}<input
+            {translateNow("source.reason.f81ab834de")}
+            <input
               id="nhi-decommission-reason"
               className="ui-input"
               value={decommissionReason}
@@ -860,13 +877,13 @@ export function Identities() {
         {decommissionResult && (
           <div role="status" className="rounded-md border border-border p-3 text-sm">
             <p className="font-medium">
-              {translateNow("source.cap.gov.04.matched.d376577cb5")}{" "}{decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked}; retired{" "}
-              {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
+              {translateNow("source.cap.gov.04.matched.d376577cb5")} {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked};
+              retired {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
             </p>
             <ul className="mt-2 space-y-1">
               {decommissionResult.items.slice(0, 5).map((item) => (
                 <li key={item.identity_id}>
-                  {item.name} {item.action} {" "}{translateNow("source.via.4d327af41f")}{" "}{item.signal_type}
+                  {item.name} {item.action} {translateNow("source.via.4d327af41f")} {item.signal_type}
                 </li>
               ))}
             </ul>
@@ -920,14 +937,16 @@ function DeliveryEvidencePanel({
     <section aria-labelledby="delivery-evidence-heading" className="mb-4 border-y border-border py-4">
       <div className="mb-3">
         <h2 id="delivery-evidence-heading" className="text-title font-semibold">
-          {translateNow("source.delivery.and.rotation.evidence.1fc4ef65bb")}</h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          {translateNow("source.the.console.reads.projected.connector.deli.091ecd8115")}</p>
+          {translateNow("source.delivery.and.rotation.evidence.1fc4ef65bb")}
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.the.console.reads.projected.connector.deli.091ecd8115")}</p>
       </div>
       {loading && <LoadingState>{translateNow("source.loading.delivery.evidence.7f2cdadedd")}</LoadingState>}
       {error && <ErrorState title={translateNow("source.delivery.evidence.failed.to.load.2625e33346")}>{error}</ErrorState>}
       {!loading && !error && recentDeliveries.length === 0 && recentRotations.length === 0 && (
-        <EmptyState title={translateNow("source.no.delivery.or.rotation.receipts.yet.21fb574bf8")}>{translateNow("source.issue.deploy.or.renew.an.identity.to.produ.722d26ac6c")}</EmptyState>
+        <EmptyState title={translateNow("source.no.delivery.or.rotation.receipts.yet.21fb574bf8")}>
+          {translateNow("source.issue.deploy.or.renew.an.identity.to.produ.722d26ac6c")}
+        </EmptyState>
       )}
       {(recentDeliveries.length > 0 || recentRotations.length > 0) && (
         <div className="grid gap-4 xl:grid-cols-2">
@@ -947,7 +966,8 @@ function DeliveryEvidencePanel({
                 {recentDeliveries.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-muted-foreground">
-                      {translateNow("source.no.connector.receipts.86d1a1527d")}</td>
+                      {translateNow("source.no.connector.receipts.86d1a1527d")}
+                    </td>
                   </tr>
                 ) : (
                   recentDeliveries.map((receipt) => (
@@ -979,7 +999,8 @@ function DeliveryEvidencePanel({
                 {recentRotations.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-muted-foreground">
-                      {translateNow("source.no.rotation.runs.cf68af2637")}</td>
+                      {translateNow("source.no.rotation.runs.cf68af2637")}
+                    </td>
                   </tr>
                 ) : (
                   recentRotations.map((run) => (
@@ -1005,7 +1026,8 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
   if (state.loading) {
     return (
       <div className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive">
-        {translateNow("source.loading.blast.radius.impact.from.graph.771409e0df")}</div>
+        {translateNow("source.loading.blast.radius.impact.from.graph.771409e0df")}
+      </div>
     );
   }
 
@@ -1023,9 +1045,13 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
       className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive"
     >
       <h3 id="destructive-blast-radius-heading" className="font-semibold">
-        {translateNow("source.blast.radius.impact.42dfddadef")}</h3>
+        {translateNow("source.blast.radius.impact.42dfddadef")}
+      </h3>
       <p className="mt-1">
-        {translateNow("source.graph.node.8779202b33")}{" "}<span className="font-mono text-xs">{state.nodeId}</span> {" "}{translateNow("source.reports.7f26104f77")}{" "}{affected} {" "}{translateNow("source.downstream.affected.node.0dfbe99d70")}{affected === 1 ? "" : "s"} {" "}{translateNow("source.before.this.destructive.action.b4c45f22e1")}</p>
+        {translateNow("source.graph.node.8779202b33")} <span className="font-mono text-xs">{state.nodeId}</span> {translateNow("source.reports.7f26104f77")}{" "}
+        {affected} {translateNow("source.downstream.affected.node.0dfbe99d70")}
+        {affected === 1 ? "" : "s"} {translateNow("source.before.this.destructive.action.b4c45f22e1")}
+      </p>
       {byKind.length > 0 && (
         <dl className="mt-2 grid gap-2 sm:grid-cols-2">
           {byKind.map(([kind, value]) => (
@@ -1074,7 +1100,8 @@ function IdentityDetailPanel({
         <div>
           <p className="text-xs font-medium uppercase text-muted-foreground">{translateNow("source.identity.detail.f34a3c7053")}</p>
           <h2 id="identity-detail-content-heading" className="text-title font-semibold">
-            {translateNow("source.detail.fields.6c69673d46")}</h2>
+            {translateNow("source.detail.fields.6c69673d46")}
+          </h2>
         </div>
         {loading && <p role="status">{translateNow("source.loading.identity.detail.0d1feafcee")}</p>}
       </div>
@@ -1120,7 +1147,7 @@ function IdentityDetailPanel({
               <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
               <dd>
                 <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(identity.owner_id)}`}>
-                  {translateNow("source.owner.4b1b8aa360")}{" "}{identity.owner_id}
+                  {translateNow("source.owner.4b1b8aa360")} {identity.owner_id}
                 </a>
               </dd>
             </div>
@@ -1129,7 +1156,7 @@ function IdentityDetailPanel({
               <dd>
                 {identity.issuer_id ? (
                   <a className="text-primary underline" href={`/protocols?issuer=${encodeURIComponent(identity.issuer_id)}`}>
-                    {translateNow("source.issuer.39e02c46a0")}{" "}{identity.issuer_id}
+                    {translateNow("source.issuer.39e02c46a0")} {identity.issuer_id}
                   </a>
                 ) : (
                   "No issuer bound"
@@ -1144,7 +1171,8 @@ function IdentityDetailPanel({
 
           <section aria-labelledby="identity-attributes-heading" className="mt-4">
             <h3 id="identity-attributes-heading" className="font-semibold">
-              {translateNow("source.kind.attributes.9505322c06")}</h3>
+              {translateNow("source.kind.attributes.9505322c06")}
+            </h3>
             {rows.length > 0 ? (
               <dl className="mt-2 grid gap-2 md:grid-cols-2">
                 {rows.map(([key, value]) => (
@@ -1163,10 +1191,12 @@ function IdentityDetailPanel({
 
           <section aria-labelledby="identity-lifecycle-heading" className="mt-5 border-t border-border pt-4">
             <h3 id="identity-lifecycle-heading" className="font-semibold">
-              {translateNow("source.lifecycle.state.machine.4fd45925e4")}</h3>
+              {translateNow("source.lifecycle.state.machine.4fd45925e4")}
+            </h3>
             <p className="mt-1 text-muted-foreground">{translateNow("source.only.valid.next.states.are.enabled.disable.643c38f3f4")}</p>
             <label htmlFor="transition-reason" className="mt-3 block text-sm font-medium">
-              {translateNow("source.transition.reason.2b9e603491")}</label>
+              {translateNow("source.transition.reason.2b9e603491")}
+            </label>
             <textarea
               id="transition-reason"
               value={reason}
@@ -1190,7 +1220,7 @@ function IdentityDetailPanel({
                       aria-describedby={reasonId}
                       onClick={() => action && onTransition(target, action.label)}
                     >
-                      {translateNow("source.move.to.beb8194bc4")}{" "}{target}
+                      {translateNow("source.move.to.beb8194bc4")} {target}
                     </Button>
                     <p id={reasonId} className="text-xs text-muted-foreground">
                       {denied || (action ? `Valid from ${state}.` : target === state ? "Already in this state." : `Invalid from ${state || "unknown"}.`)}
@@ -1235,7 +1265,8 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
     <form onSubmit={submit} className="mb-4 flex items-end gap-3 rounded-md border border-border p-4">
       <div className="flex-1 space-y-1">
         <label htmlFor="new-identity-name" className="block text-sm font-medium">
-          {translateNow("source.service.name.1bb8870cc0")}</label>
+          {translateNow("source.service.name.1bb8870cc0")}
+        </label>
         <input
           id="new-identity-name"
           value={name}
@@ -1256,13 +1287,15 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
               className="mt-1 h-4 w-4 rounded border-border"
             />
             <span>
-              {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}<span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
+              {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}
+              <span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
             </span>
           </label>
         )}
       </div>
       <Button type="submit" disabled={busy || (isWildcard && !wildcardAck)}>
-        {translateNow("source.issue.48dc76dfa2")}</Button>
+        {translateNow("source.issue.48dc76dfa2")}
+      </Button>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

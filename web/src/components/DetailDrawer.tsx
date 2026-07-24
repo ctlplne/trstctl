@@ -47,7 +47,8 @@ export function DetailDrawer({ open, title, description, children, actions, onCl
           </div>
           <Button ref={closeRef} type="button" size="sm" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" aria-hidden="true" />
-            {translateNow("source.close.7d9eb7acb1")}</Button>
+            {translateNow("source.close.7d9eb7acb1")}
+          </Button>
         </div>
         {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
       </header>

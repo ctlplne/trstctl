@@ -296,12 +296,10 @@ describe("incident response served execution surface", () => {
     apiMock.executeIncident.mockReset().mockResolvedValue(execution);
     // DA-10 rosters (C-P1): pickers are fed from the same inventory the rest
     // of the console loads; defaults keep pre-picker tests behaviorally identical.
-    apiMock.identities
-      .mockReset()
-      .mockResolvedValue([
-        { id: "11111111-1111-1111-1111-111111111111", name: "payments-api", kind: "x509_certificate", status: "issued" },
-        { id: "55555555-5555-5555-5555-555555555555", name: "billing-bot", kind: "workload_identity", status: "issued" },
-      ]);
+    apiMock.identities.mockReset().mockResolvedValue([
+      { id: "11111111-1111-1111-1111-111111111111", name: "payments-api", kind: "x509_certificate", status: "issued" },
+      { id: "55555555-5555-5555-5555-555555555555", name: "billing-bot", kind: "workload_identity", status: "issued" },
+    ]);
     apiMock.connectorCatalog.mockReset().mockResolvedValue({
       items: [
         { name: "nginx", kind: "webserver", delivery_mode: "push", rollback: "restore previous bundle" },
@@ -654,9 +652,7 @@ describe("incident intake pickers (C-P1 / DA-10)", () => {
     renderIncidents();
     await user.type(await screen.findByLabelText("Affected identity"), "deaddead-dead-dead-dead-deaddeaddead");
     await user.click(screen.getByRole("button", { name: "Execute incident" }));
-    await waitFor(() =>
-      expect(apiMock.executeIncident).toHaveBeenCalledWith(expect.objectContaining({ identity_id: "deaddead-dead-dead-dead-deaddeaddead" })),
-    );
+    await waitFor(() => expect(apiMock.executeIncident).toHaveBeenCalledWith(expect.objectContaining({ identity_id: "deaddead-dead-dead-dead-deaddeaddead" })));
   });
 
   it("degrades to plain inputs when the rosters are unavailable", async () => {

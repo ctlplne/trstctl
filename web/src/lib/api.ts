@@ -911,8 +911,8 @@ async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeSt
       enabled: false,
       served: false,
       get detail() {
-      return translateNow("source.responder.probe.failed.before.an.http.stat.e6657440c5");
-    },
+        return translateNow("source.responder.probe.failed.before.an.http.stat.e6657440c5");
+      },
     };
   }
 }

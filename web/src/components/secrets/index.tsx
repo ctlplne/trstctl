@@ -78,7 +78,10 @@ export function ReferenceResolver() {
     }
   }
   return (
-    <SectionCard title={translateNow("source.secret.references.4afbc504fa")} description="resolve ${...} references — a base secret propagates to everything that points at it">
+    <SectionCard
+      title={translateNow("source.secret.references.4afbc504fa")}
+      description="resolve ${...} references — a base secret propagates to everything that points at it"
+    >
       <div className="flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-body">
           <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
@@ -95,9 +98,14 @@ export function ReferenceResolver() {
           disabled={busy || !name.trim()}
           className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
         >
-          {translateNow("source.resolve.references.df9921d3ac")}</button>
+          {translateNow("source.resolve.references.df9921d3ac")}
+        </button>
       </div>
-      {resolved !== null ? <p className="mt-2 break-all font-mono text-caption">{translateNow("source.resolved.8db3c92ddc")}{" "}{resolved}</p> : null}
+      {resolved !== null ? (
+        <p className="mt-2 break-all font-mono text-caption">
+          {translateNow("source.resolved.8db3c92ddc")} {resolved}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="mt-2 text-caption text-risk-critical">
           {error}
@@ -222,13 +230,19 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
   }
 
   return (
-    <SectionCard title={translateNow("source.version.history.a6df11e706")} description="every version is retained; reveal a version or recover to a point in time">
+    <SectionCard
+      title={translateNow("source.version.history.a6df11e706")}
+      description="every version is retained; reveal a version or recover to a point in time"
+    >
       <AttentionList ariaLabel="Secret versions">
         {versions.map((version) => (
           <AttentionRow key={version}>
-            <span className="flex-1 tabular-nums">{translateNow("source.version.5ca4f3850c")}{" "}{version}</span>
+            <span className="flex-1 tabular-nums">
+              {translateNow("source.version.5ca4f3850c")} {version}
+            </span>
             <button type="button" onClick={() => void reveal(version)} className="rounded-control border border-border px-2 py-1 text-caption">
-              {translateNow("source.reveal.36b830bdb4")}</button>
+              {translateNow("source.reveal.36b830bdb4")}
+            </button>
           </AttentionRow>
         ))}
       </AttentionList>
@@ -253,7 +267,8 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
           disabled={!at.trim()}
           className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
         >
-          {translateNow("source.recover.0c5327fd45")}</button>
+          {translateNow("source.recover.0c5327fd45")}
+        </button>
       </div>
       {note ? <p className="mt-2 text-caption text-status-success">{note}</p> : null}
       {error ? (
@@ -331,7 +346,7 @@ export function SecretImport({ onImported }: { onImported?: (names: string[]) =>
       </div>
       {imported ? (
         <p className="mt-2 text-caption text-status-success">
-          {translateNow("source.imported.321f179c80")}{" "}{imported.length} {" "}{translateNow("source.secrets.cdefff020a")}{" "}{imported.join(", ")}
+          {translateNow("source.imported.321f179c80")} {imported.length} {translateNow("source.secrets.cdefff020a")} {imported.join(", ")}
         </p>
       ) : null}
       {error ? (

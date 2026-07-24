@@ -979,7 +979,8 @@ export function Policy() {
             {exporting ? "Exporting..." : "Export audit evidence"}
           </Button>
           <Link className="text-sm underline" to="/audit">
-            {translateNow("source.open.audit.explorer.e155d6131a")}</Link>
+            {translateNow("source.open.audit.explorer.e155d6131a")}
+          </Link>
         </div>
         {evidenceBundle && (
           <p className="rounded-md border border-border bg-muted p-3 font-mono text-xs" role="status">
@@ -996,9 +997,9 @@ export function Policy() {
       <section aria-labelledby="nhi-access-review-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="nhi-access-review-heading" className="text-title font-semibold">
-            {translateNow("source.nhi.access.certification.3fd94ffdff")}</h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {translateNow("source.campaigns.certify.non.human.identity.acces.5d99189fbe")}</p>
+            {translateNow("source.nhi.access.certification.3fd94ffdff")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.campaigns.certify.non.human.identity.acces.5d99189fbe")}</p>
         </div>
 
         <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void startNHIReviewCampaign(event)}>
@@ -1100,7 +1101,9 @@ export function Policy() {
                   >
                     <span className="font-medium">{campaign.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {campaign.status} · {campaign.pending_count} {" "}{translateNow("source.pending.64e6bbf0cf")}{" "}{campaign.certified_count} {" "}{translateNow("source.certified.3d4b25dc0b")}{" "}{campaign.revoked_count} {" "}{translateNow("source.revoked.4bb47f186d")}</span>
+                      {campaign.status} · {campaign.pending_count} {translateNow("source.pending.64e6bbf0cf")} {campaign.certified_count}{" "}
+                      {translateNow("source.certified.3d4b25dc0b")} {campaign.revoked_count} {translateNow("source.revoked.4bb47f186d")}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1439,7 +1442,8 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="compliance-pack-heading" className="text-title font-semibold">
-            {label} {" "}{translateNow("source.evidence.pack.dbd6e1203e")}</h3>
+            {label} {translateNow("source.evidence.pack.dbd6e1203e")}
+          </h3>
           <p className="mt-1 text-muted-foreground">{translateNow("source.signed.export.plus.offline.verification.ke.f03caf9838")}</p>
         </div>
         <a
@@ -1447,7 +1451,8 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
           download={`${pack.framework}-evidence-pack.json`}
           href={`data:application/json;charset=utf-8,${encodeURIComponent(payload)}`}
         >
-          {translateNow("source.download.signed.bundle.c6373a92cb")}</a>
+          {translateNow("source.download.signed.bundle.c6373a92cb")}
+        </a>
       </div>
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1464,7 +1469,9 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
       {controls.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[48rem]">
-            <caption className="sr-only">{label} {" "}{translateNow("source.controls.1e2135d1b5")}</caption>
+            <caption className="sr-only">
+              {label} {translateNow("source.controls.1e2135d1b5")}
+            </caption>
             <thead>
               <tr>
                 <th scope="col">{translateNow("source.control.32d7e82082")}</th>
@@ -1667,7 +1674,8 @@ function NHIReviewCampaignPanel({
             {campaign.name}
           </h3>
           <p className="mt-1 text-muted-foreground">
-            {campaign.status} {" "}{translateNow("source.requested.by.42aea0b1dd")}{" "}{campaign.requested_by} {" "}{translateNow("source.reviewer.63c2827d64")}{" "}{campaign.reviewer_subject}
+            {campaign.status} {translateNow("source.requested.by.42aea0b1dd")} {campaign.requested_by} {translateNow("source.reviewer.63c2827d64")}{" "}
+            {campaign.reviewer_subject}
           </p>
         </div>
         <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{campaign.id}</span>
@@ -1721,11 +1729,14 @@ function NHIReviewCampaignPanel({
                           />
                           <div className="flex flex-wrap gap-2">
                             <Button type="button" variant="outline" disabled={busy} onClick={() => void onDecision(item, "certified")}>
-                              {translateNow("source.certify.c1567c2908")}</Button>
+                              {translateNow("source.certify.c1567c2908")}
+                            </Button>
                             <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void onDecision(item, "revoked")}>
-                              {translateNow("source.revoke.87e6d00bbf")}</Button>
+                              {translateNow("source.revoke.87e6d00bbf")}
+                            </Button>
                             <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void onDecision(item, "exception")}>
-                              {translateNow("source.exception.b4fe3d529d")}</Button>
+                              {translateNow("source.exception.b4fe3d529d")}
+                            </Button>
                           </div>
                         </div>
                       ) : (
@@ -1781,7 +1792,7 @@ function AccessChangeRequestPanel({
             {request.display_name}
           </h3>
           <p className="mt-1 text-muted-foreground">
-            {request.requested_action} · {request.status} {" "}{translateNow("source.requested.by.42aea0b1dd")}{" "}{request.requester_subject}
+            {request.requested_action} · {request.status} {translateNow("source.requested.by.42aea0b1dd")} {request.requester_subject}
           </p>
         </div>
         <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{request.id}</span>

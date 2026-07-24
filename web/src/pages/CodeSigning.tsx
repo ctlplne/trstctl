@@ -88,21 +88,27 @@ export function CodeSigning() {
         description="Bind an artifact digest to a signature through the dedicated signer (key-backed) or a keyless provider (Fulcio). Only the digest is submitted — artifact bytes and private keys never enter the browser."
       />
 
-      <SectionCard title={translateNow("source.sign.an.artifact.fb729a3d5b")} description="Submit a digest for key-backed or keyless signing against the served endpoints.">
+      <SectionCard
+        title={translateNow("source.sign.an.artifact.fb729a3d5b")}
+        description="Submit a digest for key-backed or keyless signing against the served endpoints."
+      >
         <form onSubmit={submit} className="grid gap-4">
           <fieldset className="grid gap-2">
             <legend className="text-sm font-medium">{translateNow("source.signing.mode.0ba52a4363")}</legend>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant={mode === "key" ? "default" : "outline"} aria-pressed={mode === "key"} onClick={() => setMode("key")}>
-                {translateNow("source.key.backed.4eae20ec94")}</Button>
+                {translateNow("source.key.backed.4eae20ec94")}
+              </Button>
               <Button type="button" variant={mode === "keyless" ? "default" : "outline"} aria-pressed={mode === "keyless"} onClick={() => setMode("keyless")}>
-                {translateNow("source.keyless.fulcio.42a397ffc7")}</Button>
+                {translateNow("source.keyless.fulcio.42a397ffc7")}
+              </Button>
             </div>
           </fieldset>
 
           <div className="grid gap-3 md:grid-cols-2">
             <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-type">
-              {translateNow("source.artifact.type.c4984fa09a")}<input
+              {translateNow("source.artifact.type.c4984fa09a")}
+              <input
                 id="codesign-type"
                 value={artifactType}
                 onChange={(e) => setArtifactType(e.target.value)}
@@ -110,7 +116,8 @@ export function CodeSigning() {
               />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-digest">
-              {translateNow("source.artifact.digest.f7f37af3fe")}<input
+              {translateNow("source.artifact.digest.f7f37af3fe")}
+              <input
                 id="codesign-digest"
                 value={digest}
                 onChange={(e) => setDigest(e.target.value)}
@@ -120,7 +127,8 @@ export function CodeSigning() {
             </label>
             {mode === "key" ? (
               <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-keyid">
-                {translateNow("source.managed.key.id.8d05580702")}<input
+                {translateNow("source.managed.key.id.8d05580702")}
+                <input
                   id="codesign-keyid"
                   value={keyId}
                   onChange={(e) => setKeyId(e.target.value)}
@@ -130,7 +138,8 @@ export function CodeSigning() {
             ) : (
               <>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-id-method">
-                  {translateNow("source.identity.method.324ef3acce")}<input
+                  {translateNow("source.identity.method.324ef3acce")}
+                  <input
                     id="codesign-id-method"
                     value={identityMethod}
                     onChange={(e) => setIdentityMethod(e.target.value)}
@@ -138,7 +147,8 @@ export function CodeSigning() {
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-id-payload">
-                  {translateNow("source.identity.payload.7cafae50c5")}<input
+                  {translateNow("source.identity.payload.7cafae50c5")}
+                  <input
                     id="codesign-id-payload"
                     value={identityPayload}
                     onChange={(e) => setIdentityPayload(e.target.value)}
@@ -161,7 +171,8 @@ export function CodeSigning() {
         {signature ? (
           <section aria-labelledby="signature-heading" className="mt-4 rounded-panel border border-border p-comfortable text-sm">
             <h3 id="signature-heading" className="text-title font-semibold">
-              {translateNow("source.signature.receipt.8d8dcf3028")}</h3>
+              {translateNow("source.signature.receipt.8d8dcf3028")}
+            </h3>
             <dl className="mt-3 grid gap-2 sm:grid-cols-2">
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.algorithm.d704d8af25")}</dt>

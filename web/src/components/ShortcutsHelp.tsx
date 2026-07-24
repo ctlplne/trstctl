@@ -74,10 +74,12 @@ export function ShortcutsHelp({ open, onClose, returnFocusRef }: ShortcutsHelpPr
       >
         <div className="flex items-center justify-between gap-3 border-b border-border p-comfortable">
           <h2 id={titleId} className="text-heading font-semibold">
-            {translateNow("source.keyboard.shortcuts.e9bef0b0f3")}</h2>
+            {translateNow("source.keyboard.shortcuts.e9bef0b0f3")}
+          </h2>
           <Button ref={closeRef} type="button" size="sm" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" aria-hidden="true" />
-            {translateNow("source.close.7d9eb7acb1")}</Button>
+            {translateNow("source.close.7d9eb7acb1")}
+          </Button>
         </div>
         <div className="p-comfortable">
           <dl className="space-y-3">

@@ -20,9 +20,13 @@ beforeEach(() => {
     signature: "BASE64SIG",
     transparency_destination: "transparency.rekor",
   });
-  apiMock.signCodeKeyless
-    .mockReset()
-    .mockResolvedValue({ algorithm: "ECDSA-P256", artifact_type: "container", fulcio_issuer: "https://oauth2.example", public_key_der: "BASE64DER", signature: "BASE64SIG" });
+  apiMock.signCodeKeyless.mockReset().mockResolvedValue({
+    algorithm: "ECDSA-P256",
+    artifact_type: "container",
+    fulcio_issuer: "https://oauth2.example",
+    public_key_der: "BASE64DER",
+    signature: "BASE64SIG",
+  });
 });
 
 describe("code signing console", () => {

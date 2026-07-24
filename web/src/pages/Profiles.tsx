@@ -127,7 +127,8 @@ export function Profiles() {
         actions={
           <Button type="button" onClick={() => setShowForm((s) => !s)}>
             <Plus className="h-4 w-4" aria-hidden="true" />
-            {translateNow("source.new.profile.fcf4f3f4d5")}</Button>
+            {translateNow("source.new.profile.fcf4f3f4d5")}
+          </Button>
         }
       />
 
@@ -145,7 +146,9 @@ export function Profiles() {
       {!items && <LoadingState>{translateNow("source.loading.profiles.12a7541833")}</LoadingState>}
 
       {items && items.length === 0 && !showForm && (
-        <EmptyState title={translateNow("source.no.profiles.yet.bd4729eb8f")}>{translateNow("source.create.a.certificate.profile.before.issuin.cdb32f2c2e")}</EmptyState>
+        <EmptyState title={translateNow("source.no.profiles.yet.bd4729eb8f")}>
+          {translateNow("source.create.a.certificate.profile.before.issuin.cdb32f2c2e")}
+        </EmptyState>
       )}
 
       {items && items.length > 0 && (
@@ -212,7 +215,8 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
         <div className="space-y-4">
           <div className="space-y-1">
             <label htmlFor="profile-name" className="block text-sm font-medium">
-              {translateNow("source.profile.name.d3663280e1")}</label>
+              {translateNow("source.profile.name.d3663280e1")}
+            </label>
             <input
               id="profile-name"
               value={name}
@@ -225,9 +229,11 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
 
           <div className="flex flex-wrap gap-2" role="group" aria-label={translateNow("source.profile.authoring.mode.4bba88d160")}>
             <Button type="button" variant={mode === "guided" ? "default" : "outline"} size="sm" onClick={() => switchMode("guided")}>
-              {translateNow("source.guided.builder.16111a6ae3")}</Button>
+              {translateNow("source.guided.builder.16111a6ae3")}
+            </Button>
             <Button type="button" variant={mode === "json" ? "default" : "outline"} size="sm" onClick={() => switchMode("json")}>
-              {translateNow("source.json.editor.b58c887f78")}</Button>
+              {translateNow("source.json.editor.b58c887f78")}
+            </Button>
           </div>
 
           {mode === "guided" ? (
@@ -235,7 +241,8 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
           ) : (
             <div className="space-y-1">
               <label htmlFor="profile-spec" className="block text-sm font-medium">
-                {translateNow("source.json.spec.d53195334c")}</label>
+                {translateNow("source.json.spec.d53195334c")}
+              </label>
               <textarea
                 id="profile-spec"
                 value={specText}
@@ -249,7 +256,8 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
 
         <section aria-labelledby="profile-preview-heading" className="border-y border-border py-3">
           <h2 id="profile-preview-heading" className="text-sm font-semibold">
-            {translateNow("source.spec.preview.73cee36c4b")}</h2>
+            {translateNow("source.spec.preview.73cee36c4b")}
+          </h2>
           <p className="mt-1 text-xs text-muted-foreground">{translateNow("source.this.json.is.sent.to.the.profile.workflow.37a80f1c5b")}</p>
           <pre data-testid="profile-spec-preview" className="mt-3 max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
             {mode === "guided" ? formatSpec(builderSpec) : specText}
@@ -259,7 +267,8 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
 
       {error && <ErrorState title={translateNow("source.profile.rejected.e9c8593d8e")}>{error}</ErrorState>}
       <Button type="submit" disabled={busy}>
-        {translateNow("source.create.profile.61d30d997d")}</Button>
+        {translateNow("source.create.profile.61d30d997d")}
+      </Button>
     </form>
   );
 }
@@ -392,7 +401,7 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
     <section aria-labelledby="profile-detail-heading" className="grid gap-4 border-y border-border py-4">
       <div>
         <h2 id="profile-detail-heading" className="text-title font-semibold">
-          {profile.name} {" "}{translateNow("source.version.5ca4f3850c")}{" "}{profile.version}
+          {profile.name} {translateNow("source.version.5ca4f3850c")} {profile.version}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {profile.active ? "Active version." : "Historical version."} Certificates already bound to a profile keep audit evidence for the version that
@@ -403,12 +412,14 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
       <div className="grid gap-4 lg:grid-cols-2">
         <section aria-labelledby="selected-profile-spec-heading">
           <h3 id="selected-profile-spec-heading" className="mb-2 text-sm font-semibold">
-            {translateNow("source.selected.spec.757c23e3eb")}</h3>
+            {translateNow("source.selected.spec.757c23e3eb")}
+          </h3>
           <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">{formatSpec(profile.spec ?? {})}</pre>
         </section>
         <section aria-labelledby="profile-diff-heading">
           <h3 id="profile-diff-heading" className="mb-2 text-sm font-semibold">
-            {translateNow("source.profile.diff.e8bc2bbc32")}</h3>
+            {translateNow("source.profile.diff.e8bc2bbc32")}
+          </h3>
           <form onSubmit={loadComparison} className="mb-3 flex flex-wrap items-end gap-2">
             <label className="space-y-1 text-sm font-medium">
               <span>{translateNow("source.compare.with.version.96965654cd")}</span>
@@ -421,14 +432,17 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
             </label>
             <Button type="submit" variant="outline" disabled={loading}>
               <GitCompare className="h-4 w-4" aria-hidden="true" />
-              {translateNow("source.diff.version.b5aedae8c4")}</Button>
+              {translateNow("source.diff.version.b5aedae8c4")}
+            </Button>
           </form>
           {loading && <LoadingState>{translateNow("source.loading.comparison.58742d9f20")}</LoadingState>}
           {error && <ErrorState title={translateNow("source.profile.comparison.unavailable.70eb2b404e")}>{error}</ErrorState>}
           {compare && (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                {translateNow("source.comparing.selected.v.4b46e29d45")}{profile.version} {" "}{translateNow("source.to.v.0969544edf")}{compare.version}.
+                {translateNow("source.comparing.selected.v.4b46e29d45")}
+                {profile.version} {translateNow("source.to.v.0969544edf")}
+                {compare.version}.
               </p>
               {diffRows.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{translateNow("source.no.spec.differences.de9813046a")}</p>

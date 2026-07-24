@@ -98,7 +98,8 @@ export function Approvals() {
         id: "quorum",
         header: (
           <span className="inline-flex items-center gap-1" title={translateNow("source.recorded.approvals.and.required.approvals.4d359a312b")}>
-            {translateNow("source.approvals.2bfc347157")}<Info className="h-3.5 w-3.5" aria-hidden="true" />
+            {translateNow("source.approvals.2bfc347157")}
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
         ),
         cell: (row) => row.approvals,
@@ -113,7 +114,8 @@ export function Approvals() {
         header: "Evidence",
         cell: (row) => (
           <Link className="text-brand-accent underline" to={approvalAuditHref(row)}>
-            {translateNow("source.audit.trail.c1ada08ce1")}</Link>
+            {translateNow("source.audit.trail.c1ada08ce1")}
+          </Link>
         ),
       },
       {
@@ -164,7 +166,9 @@ export function Approvals() {
       {error?.kind === "error" && <ErrorState title={translateNow("source.approvals.unavailable.8071a7e2c8")}>{error.message}</ErrorState>}
       {!identities && !error && <LoadingState>{translateNow("source.loading.approvals.192880172b")}</LoadingState>}
       {identities && rows.length === 0 && (
-        <EmptyState title={translateNow("source.no.pending.approvals.261de9be5f")}>{translateNow("source.no.identities.currently.require.an.issue.r.3200466dfb")}</EmptyState>
+        <EmptyState title={translateNow("source.no.pending.approvals.261de9be5f")}>
+          {translateNow("source.no.identities.currently.require.an.issue.r.3200466dfb")}
+        </EmptyState>
       )}
       {identities && rows.length > 0 && <DataGrid ariaLabel="Pending approvals" rows={rows} columns={columns} getRowId={rowKey} />}
 
@@ -190,7 +194,8 @@ export function Approvals() {
           </label>
           <div>
             <Button type="submit" disabled={ephemeralBusy || !ephemeralRequestID.trim()}>
-              {translateNow("source.approve.issue.a4353290b7")}</Button>
+              {translateNow("source.approve.issue.a4353290b7")}
+            </Button>
           </div>
         </form>
         {ephemeralError && (

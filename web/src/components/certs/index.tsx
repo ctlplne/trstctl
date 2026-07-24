@@ -137,7 +137,9 @@ export function ReadinessPanel({
         <span className="text-[2.25rem] font-semibold leading-none tabular-nums">{pct}%</span>
         <span className="text-body text-muted-foreground">{translateNow("source.of.certificates.auto.renew.02d35aa265")}</span>
       </div>
-      <p className="mt-1 text-caption text-risk-high">{manualAtRisk} {" "}{translateNow("source.manual.certs.expiring.within.47.days.e57062b5bf")}</p>
+      <p className="mt-1 text-caption text-risk-high">
+        {manualAtRisk} {translateNow("source.manual.certs.expiring.within.47.days.e57062b5bf")}
+      </p>
       <Meter
         className="mt-3"
         ariaLabel="Auto-renew vs manual"
@@ -176,7 +178,9 @@ export function ReadinessSimulator({ certificates, autoRenewing }: { certificate
               cap === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background",
             )}
           >
-            {value}{translateNow("source.day.b396878953")}</button>
+            {value}
+            {translateNow("source.day.b396878953")}
+          </button>
         ))}
       </div>
       <DashboardGrid className="mt-3">
@@ -214,7 +218,11 @@ export function DeploymentReceipts({ deliveries }: { deliveries: ConnectorDelive
                 {receipt.connector} <span className="text-muted-foreground">→ {receipt.target || receipt.destination}</span>
               </span>
               <StatusBadge value={receipt.status} label={receipt.status} tone={deliveryTone(receipt.status)} />
-              {receipt.rollback_ref ? <span className="w-44 truncate text-caption text-muted-foreground">{translateNow("source.rollback.c48b9dea6f")}{" "}{receipt.rollback_ref}</span> : null}
+              {receipt.rollback_ref ? (
+                <span className="w-44 truncate text-caption text-muted-foreground">
+                  {translateNow("source.rollback.c48b9dea6f")} {receipt.rollback_ref}
+                </span>
+              ) : null}
             </AttentionRow>
           ))}
         </AttentionList>

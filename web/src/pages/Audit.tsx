@@ -153,7 +153,8 @@ export function Audit() {
         description="Tenant-scoped immutable event evidence."
         actions={
           <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
-            {translateNow("source.export.evidence.caab91492e")}</Button>
+            {translateNow("source.export.evidence.caab91492e")}
+          </Button>
         }
       />
 
@@ -261,11 +262,14 @@ export function Audit() {
                 actions={
                   <>
                     <Button type="button" variant="outline" onClick={() => applyTypePreset("policy.decision")}>
-                      {translateNow("source.policy.decisions.988b13232e")}</Button>
+                      {translateNow("source.policy.decisions.988b13232e")}
+                    </Button>
                     <Button type="button" variant="outline" onClick={() => applyTypePreset("issuance.profile_evaluated")}>
-                      {translateNow("source.profile.evaluations.fc73272085")}</Button>
+                      {translateNow("source.profile.evaluations.fc73272085")}
+                    </Button>
                     <Button type="submit" disabled={loading}>
-                      {translateNow("source.apply.filters.d80ab19b7e")}</Button>
+                      {translateNow("source.apply.filters.d80ab19b7e")}
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -274,7 +278,8 @@ export function Audit() {
                         void loadEvents(toAuditQuery(defaultFilters));
                       }}
                     >
-                      {translateNow("source.reset.daee7606b3")}</Button>
+                      {translateNow("source.reset.daee7606b3")}
+                    </Button>
                   </>
                 }
               />
@@ -330,7 +335,8 @@ function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
   return (
     <section aria-labelledby="evidence-bundle-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="evidence-bundle-heading" className="text-title font-semibold">
-        {translateNow("source.signed.evidence.bundle.ready.9ce177ede7")}</h2>
+        {translateNow("source.signed.evidence.bundle.ready.9ce177ede7")}
+      </h2>
       <dl className="mt-3 grid gap-2 sm:grid-cols-3">
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.format.2f343666aa")}</dt>
@@ -351,7 +357,8 @@ function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
         download={`audit-evidence.${bundle.format}.txt`}
         href={`data:application/octet-stream;charset=utf-8,${encodeURIComponent(payload)}`}
       >
-        {translateNow("source.download.signed.bundle.c6373a92cb")}</a>
+        {translateNow("source.download.signed.bundle.c6373a92cb")}
+      </a>
     </section>
   );
 }
@@ -383,7 +390,8 @@ function HashChainPanel({ events }: { events: AuditEvent[] }) {
   return (
     <section aria-labelledby="hash-chain-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="hash-chain-heading" className="text-title font-semibold">
-        {translateNow("source.hash.chain.status.f5491b14e9")}</h2>
+        {translateNow("source.hash.chain.status.f5491b14e9")}
+      </h2>
       <p className="mt-1 text-muted-foreground">{message}</p>
     </section>
   );
@@ -393,13 +401,15 @@ function EventDetail({ event }: { event: AuditEvent | null }) {
   if (!event) {
     return (
       <div role="note" className="ui-panel p-comfortable text-sm text-muted-foreground">
-        {translateNow("source.select.an.audit.event.to.inspect.its.immut.b522affee1")}</div>
+        {translateNow("source.select.an.audit.event.to.inspect.its.immut.b522affee1")}
+      </div>
     );
   }
   return (
     <section aria-labelledby="audit-event-detail-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="audit-event-detail-heading" className="text-title font-semibold">
-        {translateNow("source.event.detail.097e77abc2")}</h2>
+        {translateNow("source.event.detail.097e77abc2")}
+      </h2>
       <dl className="mt-3 grid gap-2">
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.sequence.0740f4bade")}</dt>

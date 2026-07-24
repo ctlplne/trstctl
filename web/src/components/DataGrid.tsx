@@ -243,7 +243,8 @@ export function DataGrid<Row>({
     <div className="relative">
       <Button type="button" variant="outline" size="sm" aria-expanded={chooserOpen} onClick={() => setChooserOpen((open) => !open)}>
         <Columns3 className="h-4 w-4" aria-hidden="true" />
-        {translateNow("source.columns.53aade77cd")}</Button>
+        {translateNow("source.columns.53aade77cd")}
+      </Button>
       {chooserOpen && (
         <div className="absolute end-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
           <fieldset>
@@ -296,7 +297,8 @@ export function DataGrid<Row>({
         />
       </label>
       <Button type="button" variant="outline" size="sm" disabled={!viewName.trim()} onClick={saveCurrentView}>
-        {translateNow("source.save.view.2115387503")}</Button>
+        {translateNow("source.save.view.2115387503")}
+      </Button>
       {savedViews.map((view) => (
         <Button key={view.id} type="button" variant="ghost" size="sm" onClick={() => restoreView(view)}>
           {`Restore view ${view.name}`}
@@ -370,7 +372,8 @@ export function DataGrid<Row>({
                 ))}
                 {onRowOpen && (
                   <th scope="col" className="px-3 py-2 font-medium">
-                    {translateNow("source.action.64cff1319d")}</th>
+                    {translateNow("source.action.64cff1319d")}
+                  </th>
                 )}
               </tr>
             </thead>

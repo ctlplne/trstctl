@@ -259,9 +259,9 @@ export function Posture() {
           <Radar className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="ct-heading" className="text-title font-semibold">
-              {translateNow("source.certificate.transparency.monitoring.a0ad3241c4")}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {translateNow("source.ct.monitoring.watches.public.logs.for.cert.3163770746")}</p>
+              {translateNow("source.certificate.transparency.monitoring.a0ad3241c4")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.ct.monitoring.watches.public.logs.for.cert.3163770746")}</p>
           </div>
         </div>
         <DiscoveryFindingTable
@@ -276,7 +276,8 @@ export function Posture() {
         <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCTMonitoringSubmit}>
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem]">
             <label className="grid gap-1 text-sm font-medium" htmlFor="ct-watched-domains">
-              {translateNow("source.watched.domains.0a60ff7e19")}<textarea
+              {translateNow("source.watched.domains.0a60ff7e19")}
+              <textarea
                 id="ct-watched-domains"
                 className="ui-input min-h-20 font-mono text-xs"
                 value={ctForm.watchedDomains}
@@ -285,7 +286,8 @@ export function Posture() {
               />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="ct-log-urls">
-              {translateNow("source.ct.log.urls.20c5c9807c")}<textarea
+              {translateNow("source.ct.log.urls.20c5c9807c")}
+              <textarea
                 id="ct-log-urls"
                 className="ui-input min-h-20 font-mono text-xs"
                 value={ctForm.logs}
@@ -294,7 +296,8 @@ export function Posture() {
               />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="ct-max-batch">
-              {translateNow("source.max.entries.per.poll.a77eca9293")}<input
+              {translateNow("source.max.entries.per.poll.a77eca9293")}
+              <input
                 id="ct-max-batch"
                 className="ui-input"
                 type="number"
@@ -339,9 +342,9 @@ export function Posture() {
           <FileWarning className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="drift-heading" className="text-title font-semibold">
-              {translateNow("source.drift.detection.93e554780a")}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {translateNow("source.drift.detection.compares.what.trstctl.inte.95457304d6")}</p>
+              {translateNow("source.drift.detection.93e554780a")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.drift.detection.compares.what.trstctl.inte.95457304d6")}</p>
           </div>
         </div>
         <DiscoveryFindingTable
@@ -368,15 +371,16 @@ export function Posture() {
           <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="cbom-heading" className="text-title font-semibold">
-              {translateNow("source.cbom.and.cryptographic.observability.11b90cf944")}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {translateNow("source.the.cbom.scanner.inventories.algorithms.ke.94de5272b7")}</p>
+              {translateNow("source.cbom.and.cryptographic.observability.11b90cf944")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.the.cbom.scanner.inventories.algorithms.ke.94de5272b7")}</p>
           </div>
         </div>
         <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCBOMScan}>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-tls-endpoints">
-              {translateNow("source.tls.endpoints.c928457ec8")}<textarea
+              {translateNow("source.tls.endpoints.c928457ec8")}
+              <textarea
                 id="cbom-tls-endpoints"
                 className="ui-input min-h-20 font-mono text-xs"
                 name="tls_endpoints"
@@ -384,15 +388,20 @@ export function Posture() {
               />
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-host-configs">
-              {translateNow("source.host.config.paths.8b2c6c7bdd")}<textarea id="cbom-host-configs" className="ui-input min-h-20 font-mono text-xs" name="host_configs" placeholder={translateNow("source.etc.ssh.sshd.config.83ca950c7a")} />
+              {translateNow("source.host.config.paths.8b2c6c7bdd")}
+              <textarea
+                id="cbom-host-configs"
+                className="ui-input min-h-20 font-mono text-xs"
+                name="host_configs"
+                placeholder={translateNow("source.etc.ssh.sshd.config.83ca950c7a")}
+              />
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" disabled={cbomScanning}>
               {cbomScanning ? "Running scan" : "Run CBOM scan"}
             </Button>
-            <p className="text-sm text-muted-foreground">
-              {translateNow("source.the.request.sends.endpoint.and.host.config.057e53f9e9")}</p>
+            <p className="text-sm text-muted-foreground">{translateNow("source.the.request.sends.endpoint.and.host.config.057e53f9e9")}</p>
           </div>
           {cbomError ? <p className="text-sm font-medium text-destructive">{cbomError}</p> : null}
         </form>
@@ -414,7 +423,10 @@ export function Posture() {
           </dl>
         ) : null}
 
-        <PreviewTable title={translateNow("source.cbom.asset.inventory.2ba70c3036")} headers={["Asset", "Crypto", "Transport", "Policy", "Recommended action", "Evidence"]}>
+        <PreviewTable
+          title={translateNow("source.cbom.asset.inventory.2ba70c3036")}
+          headers={["Asset", "Crypto", "Transport", "Policy", "Recommended action", "Evidence"]}
+        >
           {cbomInventory.items.map((asset) => (
             <tr key={asset.id} className="align-top">
               <td className="font-medium">
@@ -443,7 +455,8 @@ export function Posture() {
         </PreviewTable>
         {!cbomLoading && cbomInventory.items.length === 0 ? (
           <EmptyState title={translateNow("source.no.cbom.assets.returned.yet.6164e1adf5")}>
-            {translateNow("source.run.a.scan.against.tls.endpoints.or.host.c.e657e656ce")}</EmptyState>
+            {translateNow("source.run.a.scan.against.tls.endpoints.or.host.c.e657e656ce")}
+          </EmptyState>
         ) : null}
       </section>
 
@@ -452,9 +465,9 @@ export function Posture() {
           <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="crypto-agility-heading" className="text-title font-semibold">
-              {translateNow("source.crypto.agility.readiness.7bc9bc7019")}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {translateNow("source.crypto.agility.means.the.system.can.see.we.6ff0a0d217")}</p>
+              {translateNow("source.crypto.agility.readiness.7bc9bc7019")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.crypto.agility.means.the.system.can.see.we.6ff0a0d217")}</p>
           </div>
         </div>
         <CBOMReadinessTable assets={cbomInventory.items} loading={cbomLoading} />
@@ -464,9 +477,9 @@ export function Posture() {
         <Bell className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div>
           <h2 id="alert-heading" className="text-title font-semibold">
-            {translateNow("source.alert.routing.is.managed.from.notification.f26eb33c8e")}</h2>
-          <p className="mt-1 text-muted-foreground">
-            {translateNow("source.ct.anomalies.and.drift.findings.can.be.rou.360679ac1d")}</p>
+            {translateNow("source.alert.routing.is.managed.from.notification.f26eb33c8e")}
+          </h2>
+          <p className="mt-1 text-muted-foreground">{translateNow("source.ct.anomalies.and.drift.findings.can.be.rou.360679ac1d")}</p>
         </div>
       </section>
     </section>
@@ -529,7 +542,10 @@ function DriftRemediationWorkflow({
       {findings.length === 0 ? (
         <EmptyState title={translateNow("source.no.drift.remediation.findings.returned.yet.5034b41d52")} />
       ) : (
-        <PreviewTable title={translateNow("source.drift.remediation.workflow.9456b591c4")} headers={["Credential", "Drift", "Risk", "Triage", "Recommended action", "Decision"]}>
+        <PreviewTable
+          title={translateNow("source.drift.remediation.workflow.9456b591c4")}
+          headers={["Credential", "Drift", "Risk", "Triage", "Recommended action", "Decision"]}
+        >
           {findings.map((finding) => (
             <tr key={finding.finding_id} className="align-top">
               <td className="font-medium">
@@ -556,7 +572,8 @@ function DriftRemediationWorkflow({
                     onClick={() => onDecision(finding, "investigate")}
                   >
                     <SearchCheck className="h-4 w-4" aria-hidden="true" />
-                    {translateNow("source.investigate.e264109347")}</Button>
+                    {translateNow("source.investigate.e264109347")}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -566,7 +583,8 @@ function DriftRemediationWorkflow({
                     onClick={() => onDecision(finding, "mark_managed")}
                   >
                     <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                    {translateNow("source.managed.8f2de600bf")}</Button>
+                    {translateNow("source.managed.8f2de600bf")}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -576,7 +594,8 @@ function DriftRemediationWorkflow({
                     onClick={() => onDecision(finding, "dismiss")}
                   >
                     <XCircle className="h-4 w-4" aria-hidden="true" />
-                    {translateNow("source.dismiss.48845bff33")}</Button>
+                    {translateNow("source.dismiss.48845bff33")}
+                  </Button>
                 </div>
               </td>
             </tr>
@@ -722,7 +741,10 @@ function CBOMReadinessTable({ assets, loading }: { assets: CBOMAsset[]; loading:
   if (assets.length === 0) return <EmptyState title={translateNow("source.no.cbom.readiness.assets.returned.yet.e6abce03d0")} />;
 
   return (
-    <PreviewTable title={translateNow("source.crypto.agility.readiness.7bc9bc7019")} headers={["Asset", "Inventory", "Readiness", "Migration target", "Evidence"]}>
+    <PreviewTable
+      title={translateNow("source.crypto.agility.readiness.7bc9bc7019")}
+      headers={["Asset", "Inventory", "Readiness", "Migration target", "Evidence"]}
+    >
       {assets.map((asset) => (
         <tr key={asset.id} className="align-top">
           <td className="font-medium">

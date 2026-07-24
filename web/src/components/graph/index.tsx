@@ -34,7 +34,10 @@ export function BlastRadiusExplorer({ nodes, selectedId, onAnalyze }: { nodes: G
   }
 
   return (
-    <SectionCard title={translateNow("source.blast.radius.explorer.447e6bd3bc")} description="pick a credential and see everything that breaks if it is compromised">
+    <SectionCard
+      title={translateNow("source.blast.radius.explorer.447e6bd3bc")}
+      description="pick a credential and see everything that breaks if it is compromised"
+    >
       <label className="grid gap-1 text-body">
         <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
         <select
@@ -53,7 +56,9 @@ export function BlastRadiusExplorer({ nodes, selectedId, onAnalyze }: { nodes: G
       {delegated && <p className="mt-2 text-caption text-muted-foreground">{t("graph.explorer.delegatedHint")}</p>}
       {impact ? (
         <div className="mt-3">
-          <p className="text-caption text-muted-foreground">{impact.affected.length} {" "}{translateNow("source.affected.credentials.db1bc1b0d4")}</p>
+          <p className="text-caption text-muted-foreground">
+            {impact.affected.length} {translateNow("source.affected.credentials.db1bc1b0d4")}
+          </p>
           <AttentionList ariaLabel="Affected credentials">
             {impact.affected.map((node) => (
               <AttentionRow key={node.id}>
