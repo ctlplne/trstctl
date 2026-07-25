@@ -13,6 +13,18 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Static console demo enablement (demo.trstctl.com, 2026-07-25)
+- **The console can now ship as a zero-backend static demo.** A build-time
+  flag (`VITE_TRSTCTL_DEMO=1`, set only by the demo-site build in
+  trstctl-website) makes preview mode available in a production bundle,
+  lands the visitor signed-in on the showcase, and — new for preview
+  everywhere — activates transport isolation: the API client refuses every
+  server call before fetch, with translated error copy (2 new keys per
+  catalog; digests re-pinned, machine translations flagged for review).
+  The product embed never sets the flag, and a new embed-purity gate
+  (`internal/webui/demo_purity_test.go`) fails the build if the committed
+  console ever carries the preview identity.
+
 ### Design-review remediation (R-01…R-09, 2026-07-25)
 - **Every form control in the console now actually has a style.** An external
   design review found — and we verified — that `.ui-input`, the class worn by

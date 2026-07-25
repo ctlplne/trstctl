@@ -10867,6 +10867,14 @@ export const messages = {
     defaultMessage: "Preview uses sample data in this browser and stores no sign-in token. Production builds still require SSO.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Login.tsx.",
   },
+  "preview.transportIsolated": {
+    defaultMessage: "Preview uses sample data in this browser demo — live tenant APIs are disabled.",
+    description: "Error-state copy when the preview transport isolation refuses an API call (demo.trstctl.com).",
+  },
+  "preview.probesDisabled": {
+    defaultMessage: "Preview uses sample data in this browser demo — protocol probes are disabled.",
+    description: "Protocols page probe detail while preview transport isolation is active.",
+  },
   "source.principal.afc19f1734": {
     defaultMessage: "Principal",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/secrets/SecretsPageParts.tsx.",

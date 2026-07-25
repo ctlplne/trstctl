@@ -2890,6 +2890,8 @@ const deDECatalog = {
   "source.preview.ui.without.backend.ad12297cd6": "UI-Vorschau ohne Backend",
   "source.preview.uses.sample.data.in.this.browser.a.7b39b478d2":
     "Die Vorschau verwendet Beispieldaten in diesem Browser und speichert keine Anmelde-Token. Produktionsbuilds erfordern weiterhin SSO.",
+  "preview.transportIsolated": "Die Vorschau verwendet Beispieldaten in dieser Browser-Demo – Live-Mandanten-APIs sind deaktiviert.",
+  "preview.probesDisabled": "Die Vorschau verwendet Beispieldaten in dieser Browser-Demo – Protokoll-Sonden sind deaktiviert.",
   "source.principal.afc19f1734": "Principal",
   "source.privilege.d4d7c3497b": "Privilege",
   "source.privilege.label.128cc84317": "Bezeichnung der Berechtigung",

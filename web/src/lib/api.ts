@@ -877,7 +877,7 @@ export function setPreviewTransportIsolation(isolated: boolean): void {
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   if (previewTransportIsolated) {
-    const refusal = new ApiError(0, "preview: live tenant APIs are disabled in this browser demo");
+    const refusal = new ApiError(0, translateNow("preview.transportIsolated"));
     refusal.message = refusal.body; // error states render .message or .body; say the same thing in both
     throw refusal;
   }
@@ -905,7 +905,9 @@ async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeSt
       endpoint: spec.endpoint,
       enabled: false,
       served: false,
-      detail: "preview: protocol probes are disabled in this browser demo",
+      get detail() {
+        return translateNow("preview.probesDisabled");
+      },
     };
   }
   try {

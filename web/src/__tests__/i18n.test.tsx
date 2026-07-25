@@ -263,10 +263,12 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      // S-C6 re-pin: the palette verb actions added 8 reviewed keys per
-      // catalog (four verbs and their descriptions).
-      "es-ES": "0bf8dcc48a3057167cf883192dc1daf3afb559e2d8ca96f533770b7ec7544a8f",
-      "de-DE": "aa4d38f717c95fa3c5ea4de7e8b8b4a5d8fe9dff2bde6dc2915072687e629283",
+      // Demo-site re-pin: 2 new keys per catalog (preview.transportIsolated,
+      // preview.probesDisabled — the transport-isolation copy shown by the
+      // static demo). Machine-authored es/de translations — FLAG FOR HUMAN
+      // REVIEW alongside the outstanding translation review sheet.
+      "es-ES": "749604923e0f8bc5ba17926986e44f50d17d3802d5c71115380a23ee72780295",
+      "de-DE": "fe59c5d14c72bd082b274bf3f730fd97c981b77ac153380cea5ab9ed6f0b5c9a",
     });
   });
 

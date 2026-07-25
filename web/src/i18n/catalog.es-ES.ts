@@ -2878,6 +2878,8 @@ const esESCatalog = {
   "source.preview.ui.without.backend.ad12297cd6": "Vista previa de la IU sin backend",
   "source.preview.uses.sample.data.in.this.browser.a.7b39b478d2":
     "La vista previa utiliza datos de ejemplo en este navegador y no almacena ningún token de inicio de sesión. Las compilaciones de producción siguen requiriendo SSO.",
+  "preview.transportIsolated": "La vista previa usa datos de ejemplo en esta demo del navegador: las API de inquilino en vivo están desactivadas.",
+  "preview.probesDisabled": "La vista previa usa datos de ejemplo en esta demo del navegador: las sondas de protocolo están desactivadas.",
   "source.principal.afc19f1734": "Principal",
   "source.privilege.d4d7c3497b": "Privilege",
   "source.privilege.label.128cc84317": "Etiqueta de privilegio",
