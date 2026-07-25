@@ -865,7 +865,22 @@ const protocolStatusProbes: ProtocolProbeSpec[] = [
   },
 ];
 
+/** Preview transport isolation (mirrors probectl's demo model): while preview
+ * mode is active, the client refuses EVERY server call before fetch — the
+ * showcase runs entirely in the browser, so a hosted demo bundle can never
+ * leak a request. The demo host's Worker 404s /api/* as belt-and-suspenders;
+ * this is the wall. Set by AuthProvider on preview start/stop. */
+let previewTransportIsolated = false;
+export function setPreviewTransportIsolation(isolated: boolean): void {
+  previewTransportIsolated = isolated;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  if (previewTransportIsolated) {
+    const refusal = new ApiError(0, "preview: live tenant APIs are disabled in this browser demo");
+    refusal.message = refusal.body; // error states render .message or .body; say the same thing in both
+    throw refusal;
+  }
   const method = init?.method;
   const res = await fetch(path, {
     credentials: "include",
@@ -884,6 +899,15 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeStatus> {
+  if (previewTransportIsolated) {
+    return {
+      protocol: spec.protocol,
+      endpoint: spec.endpoint,
+      enabled: false,
+      served: false,
+      detail: "preview: protocol probes are disabled in this browser demo",
+    };
+  }
   try {
     const res = await fetch(spec.endpoint, {
       method: spec.method ?? "GET",

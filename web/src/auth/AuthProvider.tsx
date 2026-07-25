@@ -1,5 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { api, loginURL, UnauthorizedError, type Me } from "@/lib/api";
+import { api, loginURL, setPreviewTransportIsolation, UnauthorizedError, type Me } from "@/lib/api";
+
+/** The static demo build (demo.trstctl.com) sets VITE_TRSTCTL_DEMO=1 at
+ * build time: preview becomes available in a production bundle AND starts
+ * automatically, so the visitor lands signed-in on the showcase with the
+ * transport isolated. The product embed never sets the flag — the
+ * embed-purity gate (internal/webui) proves the shipped dist carries no
+ * preview identity. */
+const demoBuild = import.meta.env.VITE_TRSTCTL_DEMO === "1";
+const previewAllowed = import.meta.env.DEV || demoBuild;
 
 interface AuthState {
   user: Me | null;
@@ -33,18 +42,20 @@ const AuthContext = createContext<AuthState>({
 
 /** AuthProvider resolves the current session from /auth/me on mount. */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const previewRef = useRef(false);
-  const [state, setState] = useState<AuthCoreState>({
-    user: null,
-    loading: true,
-    error: null,
-    preview: false,
-    previewAvailable: import.meta.env.DEV,
-  });
+  const previewRef = useRef(demoBuild);
+  if (demoBuild) setPreviewTransportIsolation(true);
+  const [state, setState] = useState<AuthCoreState>(
+    demoBuild
+      ? // Demo build: land signed-in on the showcase — no /auth/me round-trip,
+        // no login click, transport already isolated above.
+        { user: previewUser, loading: false, error: null, preview: true, previewAvailable: true }
+      : { user: null, loading: true, error: null, preview: false, previewAvailable: previewAllowed },
+  );
 
   const startPreview = useCallback(() => {
-    if (!import.meta.env.DEV) return;
+    if (!previewAllowed) return;
     previewRef.current = true;
+    setPreviewTransportIsolation(true);
     setState({
       user: previewUser,
       loading: false,
@@ -57,14 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     if (previewRef.current) {
       previewRef.current = false;
-      setState({ user: null, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV });
+      setPreviewTransportIsolation(false);
+      setState({ user: null, loading: false, error: null, preview: false, previewAvailable: previewAllowed });
       return;
     }
 
     setState((current) => ({ ...current, error: null }));
     try {
       await api.logout();
-      setState({ user: null, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV });
+      setState({ user: null, loading: false, error: null, preview: false, previewAvailable: previewAllowed });
     } catch (err) {
       setState((current) => ({ ...current, loading: false, error: String(err) }));
       throw err;
@@ -72,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (demoBuild) return; // no session to resolve — preview is the session
     let active = true;
     api
       .me()
