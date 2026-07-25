@@ -40,7 +40,7 @@ export function DataGridToolbar({
               placeholder={searchPlaceholder}
               value={searchValue ?? ""}
               onChange={(event) => onSearchChange(event.target.value)}
-              className="min-h-9 w-full rounded-control border border-input bg-background py-2 pl-8 pr-3 text-sm"
+              className="min-h-9 w-full rounded-control border border-border bg-background py-2 pl-8 pr-3 text-sm"
             />
           </span>
         </label>

@@ -152,6 +152,26 @@ describe("Clarity/Console design-system foundation", () => {
     const missing = [...referenced].filter((name) => !defined.has(name)).sort();
     expect(referenced.size).toBeGreaterThanOrEqual(3); // ui-input, ui-panel, ui-table
     expect(missing).toEqual([]);
+
+    // Same failure class, Tailwind flavor: shadcn-derived markup carries an
+    // `input` COLOR (border-input etc.) that this config never defined — the
+    // class silently emitted nothing and the global border-color rule hid it
+    // at 78 call sites. The token is `border`; keep the synonym out.
+    const phantomColor = /\b(?:border|bg|ring|text)-input\b/;
+    const phantoms: string[] = [];
+    const walkPhantom = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          walkPhantom(path.join(dir, entry.name));
+          continue;
+        }
+        if (!entry.name.endsWith(".tsx") || entry.name.includes(".test.")) continue;
+        const source = readFileSync(path.join(dir, entry.name), "utf8");
+        if (phantomColor.test(source)) phantoms.push(path.join(dir, entry.name).slice(webRoot.length + 1));
+      }
+    };
+    walkPhantom(path.join(webRoot, "src"));
+    expect(phantoms).toEqual([]);
   });
 
   it("ratchets raw form controls in pages toward the rule-14 primitives (R-02)", () => {

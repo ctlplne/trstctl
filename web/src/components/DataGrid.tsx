@@ -293,7 +293,7 @@ export function DataGrid<Row>({
           value={viewName}
           onChange={(event) => setViewName(event.target.value)}
           placeholder={translateNow("source.view.name.572ffd1862")}
-          className="min-h-9 w-36 rounded-control border border-input bg-background px-3 py-2 text-sm"
+          className="min-h-9 w-36 rounded-control border border-border bg-background px-3 py-2 text-sm"
         />
       </label>
       <Button type="button" variant="outline" size="sm" disabled={!viewName.trim()} onClick={saveCurrentView}>

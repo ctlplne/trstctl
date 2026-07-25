@@ -1243,7 +1243,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={createName}
                   onChange={(event) => setCreateName(event.target.value)}
                   placeholder={translateNow("source.app.db.password.917cb98f9d")}
@@ -1253,7 +1253,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.value.6ef47d9880")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   type="password"
                   value={createValue}
                   onChange={(event) => setCreateValue(event.target.value)}
@@ -1541,7 +1541,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.to.rotate.4e6aab975e")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={rotateName}
                   onChange={(event) => setRotateName(event.target.value)}
                   placeholder={selectedMeta?.name ?? "app/db/password"}
@@ -1552,7 +1552,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.replacement.value.81858184c6")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   type="password"
                   value={rotateValue}
                   onChange={(event) => setRotateValue(event.target.value)}
@@ -1573,7 +1573,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.to.delete.6abd642165")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={deleteName}
                   onChange={(event) => setDeleteName(event.target.value)}
                   placeholder={selectedMeta?.name ?? "app/db/password"}
@@ -1584,7 +1584,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.type.the.exact.secret.name.8106c6efde")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={deleteConfirm}
                   onChange={(event) => setDeleteConfirm(event.target.value)}
                   required
@@ -1639,7 +1639,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={accessName}
                   onChange={(event) => setAccessName(event.target.value)}
                   placeholder={translateNow("source.app.db.password.917cb98f9d")}
@@ -1679,7 +1679,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.common.name.2d129020eb")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={pkiName}
                   onChange={(event) => setPkiName(event.target.value)}
                   placeholder={translateNow("source.svc.internal.e50a91019d")}
@@ -1689,7 +1689,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   type="number"
                   min="60"
                   value={pkiTTL}
@@ -1738,13 +1738,13 @@ export function Secrets() {
                     onChange={setGrantSubject}
                     identities={grantIdentities}
                     placeholder={t("incidents.picker.identityHint")}
-                    className="rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
+                    className="rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{t("secrets.grant.scopes")}</span>
                   <input
-                    className="rounded-md border border-input bg-background px-3 py-2 font-mono"
+                    className="rounded-md border border-border bg-background px-3 py-2 font-mono"
                     value={grantScopes}
                     onChange={(event) => setGrantScopes(event.target.value)}
                     required
@@ -1758,7 +1758,7 @@ export function Secrets() {
                   <label className="grid gap-1 text-sm">
                     <span className="font-medium">{t("secrets.grant.ttl")}</span>
                     <input
-                      className="rounded-md border border-input bg-background px-3 py-2"
+                      className="rounded-md border border-border bg-background px-3 py-2"
                       type="number"
                       min={1}
                       value={grantTTL}
@@ -1862,7 +1862,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.method.52a0f9b65b")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={loginMethod}
                   onChange={(event) => setLoginMethod(event.target.value)}
                   required
@@ -1871,7 +1871,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   type="password"
                   value={loginCredential}
                   onChange={(event) => setLoginCredential(event.target.value)}
@@ -2050,7 +2050,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.value.to.share.fa56b0a913")}</span>
                   <input
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-border bg-background px-3 py-2"
                     type="password"
                     value={shareValueInput}
                     onChange={(event) => setShareValueInput(event.target.value)}
@@ -2060,7 +2060,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                   <input
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-border bg-background px-3 py-2"
                     type="number"
                     min="60"
                     value={shareTTL}
@@ -2081,7 +2081,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.share.token.f3310a3b89")}</span>
                   <input
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-border bg-background px-3 py-2"
                     value={redeemToken}
                     onChange={(event) => setRedeemToken(event.target.value)}
                     required
@@ -2125,7 +2125,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.subject.6897128384")}</span>
                   <input
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-border bg-background px-3 py-2"
                     value={ephemeralSubject}
                     onChange={(event) => setEphemeralSubject(event.target.value)}
                     placeholder={translateNow("source.ci.deploy.preview.d2c6100222")}
@@ -2135,7 +2135,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.scopes.0d5644ff52")}</span>
                   <textarea
-                    className="min-h-24 rounded-md border border-input bg-background px-3 py-2"
+                    className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
                     value={ephemeralScopes}
                     onChange={(event) => setEphemeralScopes(event.target.value)}
                     placeholder={translateNow("source.repo.payments.read.deploy.staging.write.169aa8250e")}
@@ -2145,7 +2145,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                   <input
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-border bg-background px-3 py-2"
                     type="number"
                     min="60"
                     value={ephemeralTTL}
@@ -2314,7 +2314,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{t("secrets.thirdPartyScan.provider")}</span>
                 <select
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={thirdPartyProvider}
                   onChange={(event) => setThirdPartyProvider(event.target.value)}
                 >
@@ -2328,7 +2328,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{t("secrets.thirdPartyScan.source")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={thirdPartySource}
                   onChange={(event) => setThirdPartySource(event.target.value)}
                   placeholder={t("secrets.thirdPartyScan.sourcePlaceholder")}
@@ -2338,7 +2338,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{t("secrets.thirdPartyScan.artifactPath")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={thirdPartyArtifactPath}
                   onChange={(event) => setThirdPartyArtifactPath(event.target.value)}
                   placeholder={t("secrets.thirdPartyScan.artifactPlaceholder")}
@@ -2348,7 +2348,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{t("secrets.thirdPartyScan.event")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={thirdPartyEvent}
                   onChange={(event) => setThirdPartyEvent(event.target.value)}
                   placeholder={t("secrets.thirdPartyScan.eventPlaceholder")}
@@ -2375,7 +2375,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.path.62fa5a5b0d")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={scanPath}
                   onChange={(event) => setScanPath(event.target.value)}
                   placeholder={translateNow("source.github.com.example.payments.8d7be8211f")}
@@ -2385,7 +2385,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{t("secrets.scan.mode")}</span>
                 <select
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={scanMode}
                   onChange={(event) => setScanMode(event.target.value as "workspace" | "git_history")}
                 >
@@ -2396,7 +2396,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{t("secrets.scan.customRules")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={scanCustomRulesPath}
                   onChange={(event) => setScanCustomRulesPath(event.target.value)}
                   placeholder={t("secrets.scan.customRulesPlaceholder")}
@@ -2493,7 +2493,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.provider.472590ae97")}</span>
                   <select
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-border bg-background px-3 py-2"
                     value={leaseProvider}
                     onChange={(event) => setLeaseProvider(event.target.value)}
                   >
@@ -2506,7 +2506,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.role.14736a2eb9")}</span>
                   <input
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-border bg-background px-3 py-2"
                     value={leaseRole}
                     onChange={(event) => setLeaseRole(event.target.value)}
                     placeholder={translateNow("source.readonly.reporting.ddf5aecb22")}
@@ -2516,7 +2516,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                   <input
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-border bg-background px-3 py-2"
                     type="number"
                     min="60"
                     value={leaseTTL}
@@ -2541,7 +2541,7 @@ export function Secrets() {
                     <label className="grid gap-1">
                       <span className="font-medium">{translateNow("source.extend.seconds.ff4a8186f0")}</span>
                       <input
-                        className="rounded-md border border-input bg-background px-3 py-2"
+                        className="rounded-md border border-border bg-background px-3 py-2"
                         type="number"
                         min="60"
                         value={leaseExtendSeconds}
@@ -2609,7 +2609,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.key.name.6f245e973f")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={transitKey}
                   onChange={(event) => setTransitKey(event.target.value)}
                   placeholder={translateNow("source.payments.pii.643f35ba95")}
@@ -2619,7 +2619,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.aad.9adbaf62d8")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={transitAAD}
                   onChange={(event) => setTransitAAD(event.target.value)}
                   placeholder={translateNow("source.optional.associated.data.52eba643ce")}
@@ -2628,7 +2628,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm xl:col-span-2">
                 <span className="font-medium">{translateNow("source.plaintext.0707c5d972")}</span>
                 <textarea
-                  className="min-h-24 rounded-md border border-input bg-background px-3 py-2"
+                  className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
                   value={transitPlaintext}
                   onChange={(event) => setTransitPlaintext(event.target.value)}
                   placeholder={translateNow("source.local.plaintext.to.encrypt.a67b9e7b54")}
@@ -2637,7 +2637,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm xl:col-span-2">
                 <span className="font-medium">{translateNow("source.ciphertext.47955e6673")}</span>
                 <textarea
-                  className="min-h-24 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                  className="min-h-24 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                   value={transitCiphertextInput}
                   onChange={(event) => setTransitCiphertextInput(event.target.value)}
                   placeholder={translateNow("source.encrypted.result.or.ciphertext.to.decrypt.88441adfe9")}
@@ -2699,7 +2699,7 @@ export function Secrets() {
                 <label className="grid gap-1">
                   <span className="font-medium">{translateNow("source.message.2f77668a9d")}</span>
                   <textarea
-                    className="min-h-20 rounded-md border border-input bg-background px-3 py-2"
+                    className="min-h-20 rounded-md border border-border bg-background px-3 py-2"
                     value={transitMessage}
                     onChange={(event) => setTransitMessage(event.target.value)}
                     placeholder={translateNow("source.message.bytes.to.mac.or.sign.1400a97072")}
@@ -3005,7 +3005,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={syncName}
                   onChange={(event) => setSyncName(event.target.value)}
                   placeholder={selectedMeta?.name ?? "app/db/password"}
@@ -3015,7 +3015,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.target.978354db0c")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   list="secret-sync-target-options"
                   value={syncTarget}
                   onChange={(event) => setSyncTarget(event.target.value)}
@@ -3031,7 +3031,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.remote.key.b698762058")}</span>
                 <input
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                  className="rounded-md border border-border bg-background px-3 py-2"
                   value={syncRemoteKey}
                   onChange={(event) => setSyncRemoteKey(event.target.value)}
                   placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}

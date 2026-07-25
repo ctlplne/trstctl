@@ -281,7 +281,7 @@ export function Integrate() {
             <label className="grid gap-1 text-sm">
               <span className="font-medium">{t("integrate.gitops.declarativeManifest")}</span>
               <textarea
-                className="min-h-80 resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                 spellCheck={false}
                 value={manifestText}
                 onChange={(event) => {

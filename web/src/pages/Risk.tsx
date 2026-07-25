@@ -878,7 +878,7 @@ function RiskFilterForm({
       <label className="grid gap-1 text-sm font-medium">
         {translateNow("source.minimum.score.e7461df96a")}
         <input
-          className="min-h-9 w-28 rounded-control border border-input bg-background px-2 text-sm"
+          className="min-h-9 w-28 rounded-control border border-border bg-background px-2 text-sm"
           type="number"
           min={0}
           max={100}
@@ -889,7 +889,7 @@ function RiskFilterForm({
       <label className="grid gap-1 text-sm font-medium">
         {translateNow("source.privilege.d4d7c3497b")}
         <select
-          className="min-h-9 rounded-control border border-input bg-background px-2 text-sm"
+          className="min-h-9 rounded-control border border-border bg-background px-2 text-sm"
           value={privilege}
           onChange={(event) => onPrivilege(event.target.value)}
         >
@@ -904,7 +904,7 @@ function RiskFilterForm({
       <label className="grid gap-1 text-sm font-medium">
         {translateNow("source.owner.4b1b8aa360")}
         <input
-          className="min-h-9 w-36 rounded-control border border-input bg-background px-2 text-sm"
+          className="min-h-9 w-36 rounded-control border border-border bg-background px-2 text-sm"
           value={owner}
           onChange={(event) => onOwner(event.target.value)}
           placeholder={translateNow("source.owner.id.768c061c71")}

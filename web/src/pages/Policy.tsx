@@ -754,7 +754,7 @@ export function Policy() {
               <label className="grid gap-1">
                 <span className="font-medium">{t("policy.versions.descriptionLabel")}</span>
                 <input
-                  className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
                   value={policyVersionForm.description}
                   onChange={(event) => setPolicyVersionForm((current) => ({ ...current, description: event.target.value }))}
                 />
@@ -762,7 +762,7 @@ export function Policy() {
               <label className="grid gap-1">
                 <span className="font-medium">{t("policy.versions.changeRef")}</span>
                 <input
-                  className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
                   value={policyVersionForm.changeRef}
                   onChange={(event) => setPolicyVersionForm((current) => ({ ...current, changeRef: event.target.value }))}
                 />
@@ -771,7 +771,7 @@ export function Policy() {
             <label className="grid gap-1">
               <span className="font-medium">{t("policy.versions.evidenceRefs")}</span>
               <input
-                className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+                className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
                 value={policyVersionForm.evidenceRefs}
                 onChange={(event) => setPolicyVersionForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
               />
@@ -779,7 +779,7 @@ export function Policy() {
             <label className="grid gap-1">
               <span className="font-medium">{t("policy.versions.lifecycleModule")}</span>
               <textarea
-                className="min-h-64 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                className="min-h-64 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                 spellCheck={false}
                 value={policyVersionForm.module}
                 onChange={(event) => setPolicyVersionForm((current) => ({ ...current, module: event.target.value }))}
@@ -911,7 +911,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{t("policy.reporting.schedule")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={scheduleForm.name}
               onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))}
             />
@@ -919,7 +919,7 @@ export function Policy() {
           <label className="grid gap-1">
             <span className="font-medium">{t("policy.reporting.framework")}</span>
             <select
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={scheduleForm.framework}
               onChange={(event) => setScheduleForm((current) => ({ ...current, framework: event.target.value as ComplianceFramework }))}
             >
@@ -933,7 +933,7 @@ export function Policy() {
           <label className="grid gap-1">
             <span className="font-medium">{t("policy.reporting.reportType")}</span>
             <select
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={scheduleForm.reportType}
               onChange={(event) => setScheduleForm((current) => ({ ...current, reportType: event.target.value as ComplianceReportType }))}
             >
@@ -947,7 +947,7 @@ export function Policy() {
           <label className="grid gap-1">
             <span className="font-medium">{t("policy.reporting.cadenceDays")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               inputMode="numeric"
               pattern="[0-9]*"
               value={scheduleForm.intervalDays}
@@ -957,7 +957,7 @@ export function Policy() {
           <label className="grid gap-1">
             <span className="font-medium">{t("policy.reporting.recipientRef")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={scheduleForm.recipientRef}
               onChange={(event) => setScheduleForm((current) => ({ ...current, recipientRef: event.target.value }))}
             />
@@ -1006,7 +1006,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{translateNow("source.campaign.268286d2ef")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={reviewForm.name}
               onChange={(event) => setReviewForm((current) => ({ ...current, name: event.target.value }))}
             />
@@ -1014,7 +1014,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{translateNow("source.reviewer.d29f46772c")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               placeholder={translateNow("source.current.session.subject.1f6510ea4d")}
               value={reviewForm.reviewer}
               onChange={(event) => setReviewForm((current) => ({ ...current, reviewer: event.target.value }))}
@@ -1023,7 +1023,7 @@ export function Policy() {
           <label className="grid gap-1">
             <span className="font-medium">{translateNow("source.risk.0711a8d636")}</span>
             <select
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={reviewForm.risk}
               onChange={(event) => setReviewForm((current) => ({ ...current, risk: event.target.value }))}
             >
@@ -1041,7 +1041,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{translateNow("source.nhi.id.52919bf0d5")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={reviewForm.nhiId}
               onChange={(event) => setReviewForm((current) => ({ ...current, nhiId: event.target.value }))}
             />
@@ -1049,7 +1049,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{translateNow("source.display.name.2b7f6a84de")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={reviewForm.displayName}
               onChange={(event) => setReviewForm((current) => ({ ...current, displayName: event.target.value }))}
             />
@@ -1057,7 +1057,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{translateNow("source.evidence.refs.edfa905c2f")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={reviewForm.evidenceRefs}
               onChange={(event) => setReviewForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
             />
@@ -1065,7 +1065,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-3">
             <span className="font-medium">{translateNow("source.resource.eb7a842ff9")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={reviewForm.resource}
               onChange={(event) => setReviewForm((current) => ({ ...current, resource: event.target.value }))}
             />
@@ -1073,7 +1073,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-3">
             <span className="font-medium">{translateNow("source.entitlement.0d8f0b2d3a")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={reviewForm.entitlement}
               onChange={(event) => setReviewForm((current) => ({ ...current, entitlement: event.target.value }))}
             />
@@ -1136,7 +1136,7 @@ export function Policy() {
           <label className="grid gap-1">
             <span className="font-medium">{t("policy.accessChange.action")}</span>
             <select
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.requestedAction}
               onChange={(event) => setAccessForm((current) => ({ ...current, requestedAction: event.target.value as AccessChangeRequest["requested_action"] }))}
             >
@@ -1150,7 +1150,7 @@ export function Policy() {
           <label className="grid gap-1">
             <span className="font-medium">{t("policy.accessChange.risk")}</span>
             <select
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.risk}
               onChange={(event) => setAccessForm((current) => ({ ...current, risk: event.target.value }))}
             >
@@ -1163,7 +1163,7 @@ export function Policy() {
           <label className="grid gap-1">
             <span className="font-medium">{t("policy.accessChange.approvals")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               inputMode="numeric"
               pattern="[0-9]*"
               value={accessForm.requiredApprovals}
@@ -1173,7 +1173,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-3">
             <span className="font-medium">{t("policy.accessChange.changeRef")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.changeRef}
               onChange={(event) => setAccessForm((current) => ({ ...current, changeRef: event.target.value }))}
             />
@@ -1181,7 +1181,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{t("policy.accessChange.nhiId")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.nhiId}
               onChange={(event) => setAccessForm((current) => ({ ...current, nhiId: event.target.value }))}
             />
@@ -1189,7 +1189,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{t("policy.accessChange.nhiKind")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.nhiKind}
               onChange={(event) => setAccessForm((current) => ({ ...current, nhiKind: event.target.value }))}
             />
@@ -1197,7 +1197,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{t("policy.accessChange.displayName")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.displayName}
               onChange={(event) => setAccessForm((current) => ({ ...current, displayName: event.target.value }))}
             />
@@ -1205,7 +1205,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-3">
             <span className="font-medium">{t("policy.accessChange.resource")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.resource}
               onChange={(event) => setAccessForm((current) => ({ ...current, resource: event.target.value }))}
             />
@@ -1213,7 +1213,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-3">
             <span className="font-medium">{t("policy.accessChange.entitlement")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.entitlement}
               onChange={(event) => setAccessForm((current) => ({ ...current, entitlement: event.target.value }))}
             />
@@ -1221,7 +1221,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-3">
             <span className="font-medium">{t("policy.accessChange.changeUrl")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.changeUrl}
               onChange={(event) => setAccessForm((current) => ({ ...current, changeUrl: event.target.value }))}
             />
@@ -1229,7 +1229,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-3">
             <span className="font-medium">{t("policy.accessChange.evidenceRefs")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.evidenceRefs}
               onChange={(event) => setAccessForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
             />
@@ -1237,7 +1237,7 @@ export function Policy() {
           <label className="grid gap-1 lg:col-span-5">
             <span className="font-medium">{t("policy.accessChange.reason")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               value={accessForm.reason}
               onChange={(event) => setAccessForm((current) => ({ ...current, reason: event.target.value }))}
             />
@@ -1330,7 +1330,7 @@ export function Policy() {
             <label className="grid gap-1 text-sm">
               <span className="font-medium">{t("policy.dryRun.moduleLabel")}</span>
               <textarea
-                className="min-h-80 resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                 spellCheck={false}
                 value={dryRunModule}
                 onChange={(event) => setDryRunModule(event.target.value)}
@@ -1339,7 +1339,7 @@ export function Policy() {
             <label className="grid gap-1 text-sm">
               <span className="font-medium">{t("policy.dryRun.inputLabel")}</span>
               <textarea
-                className="min-h-80 resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                 spellCheck={false}
                 value={dryRunInput}
                 onChange={(event) => setDryRunInput(event.target.value)}
@@ -1722,7 +1722,7 @@ function NHIReviewCampaignPanel({
                       {item.status === "pending" ? (
                         <div className="grid min-w-60 gap-2">
                           <input
-                            className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+                            className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
                             placeholder={translateNow("source.reason.for.revoke.or.exception.5df8423828")}
                             value={reason}
                             onChange={(event) => onReasonChange((current) => ({ ...current, [item.item_id]: event.target.value }))}
@@ -1832,7 +1832,7 @@ function AccessChangeRequestPanel({
           <label className="grid gap-1">
             <span className="font-medium">{t("policy.accessChange.decisionReason")}</span>
             <input
-              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
               placeholder={t("policy.accessChange.requiredForDenial")}
               value={reason}
               onChange={(event) => onReasonChange((current) => ({ ...current, [request.id]: event.target.value }))}
