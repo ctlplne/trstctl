@@ -10943,6 +10943,22 @@ export const messages = {
     defaultMessage: "Quorum met",
     description: "S-C18: badge when a request has collected all required approvals.",
   },
+  "discovery.sourceActivity.noMonitoring": {
+    defaultMessage: "Not monitored",
+    description: "S-C15: shown when a discovery source has no served monitoring row.",
+  },
+  "discovery.sourceActivity.neverRan": {
+    defaultMessage: "Never ran",
+    description: "S-C15: badge for a configured discovery source that has produced no run.",
+  },
+  "discovery.sourceActivity.drift": {
+    defaultMessage: "Drifting",
+    description: "S-C15: badge when a scheduled source's most recent run failed.",
+  },
+  "discovery.sourceActivity.findings": {
+    defaultMessage: "{open} open / {total} total",
+    description: "S-C15: findings cell showing open versus total findings for a source.",
+  },
   "risk.scoreMeter.ariaLabel": {
     defaultMessage: "Risk score {score} of 100 for {subject}",
     description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",

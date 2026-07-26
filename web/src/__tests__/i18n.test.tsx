@@ -263,7 +263,7 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      // S-C13/S-C14/S-C18/S-C19/S-C20 re-pin: 29 new keys per catalog — posture.algorithmRollup.*
+      // S-C13/S-C14/S-C15/S-C18/S-C19/S-C20 re-pin: 33 new keys per catalog — posture.algorithmRollup.*
       // (the CBOM per-algorithm exposure rollup: caption, four column headers,
       // three exposure badges, the already-post-quantum cell) and risk.* (the
       // per-row score meter's accessible name, its unfilled-portion title, and
@@ -271,12 +271,13 @@ describe("i18n boundary", () => {
       // overdue/stale/never-run/failed flags on rotation schedules) and
       // workloads.attesterBreakdown.* (the per-attester issued/refused table
       // and its client-observed-refusals scope note) and approvals.quorum.*
-      // (the have/need quorum badges).
+      // (the have/need quorum badges) and discovery.sourceActivity.* (the
+      // last-run/findings/drift join on the discovery sources table).
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet. Previous pin covered the
       // demo-site transport-isolation copy.
-      "es-ES": "56bdf7bb7407898b00f779d87d596304de7dec3dab0dd24297989803dcd27521",
-      "de-DE": "68232d6f89902c16bbc190342ae601a6b4e1b5c4d94bd12b61852466f4f84c74",
+      "es-ES": "b79387e1c75835e6450ed837472bbd085cc746d35e2b76efac4b3cab291e77bd",
+      "de-DE": "045cdfe5d185c351ccac95e065467f045b059ede496420c8b827121b8c0f8e42",
     });
   });
 

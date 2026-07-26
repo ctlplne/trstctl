@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
+import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type SourceActivity } from "./discovery/DiscoveryPageParts";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn, type DataGridToolbarControls } from "@/components/DataGrid";
@@ -613,6 +614,9 @@ export function Discovery() {
   }, [scheduleSourceID, sources]);
 
   const sourceByID = useMemo(() => new Map(sources.map((source) => [source.id, source])), [sources]);
+  // S-C15: join each source to its served monitoring row (last run,
+  // findings, drift) so the table answers "did this actually run".
+  const sourceActivity = useMemo(() => sourceActivityByID(monitoring?.sources ?? []), [monitoring]);
   const findingFilters = useMemo<FindingFilters>(
     () => ({
       triage: triageFilterFromSearchParam(searchParams.get("triage")),
@@ -932,7 +936,7 @@ export function Discovery() {
               {translateNow("source.add.a.network.cloud.ct.log.nhi.oauth.servi.1798feb274")}
             </EmptyState>
           ) : (
-            <SourceTable sources={sources} busy={busy} onStart={startRun} />
+            <SourceTable sources={sources} busy={busy} onStart={startRun} activity={sourceActivity} />
           )}
         </section>
       )}
@@ -1450,7 +1454,17 @@ function MonitoringMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function SourceTable({ sources, busy, onStart }: { sources: DiscoverySource[]; busy: string | null; onStart: (sourceID: string, dryRun?: boolean) => void }) {
+function SourceTable({
+  sources,
+  busy,
+  onStart,
+  activity,
+}: {
+  sources: DiscoverySource[];
+  busy: string | null;
+  onStart: (sourceID: string, dryRun?: boolean) => void;
+  activity: Map<string, SourceActivity>;
+}) {
   const columns: Array<DataGridColumn<DiscoverySource>> = [
     {
       id: "name",
@@ -1472,6 +1486,16 @@ function SourceTable({ sources, busy, onStart }: { sources: DiscoverySource[]; b
       header: "Targets",
       className: "font-mono text-xs",
       cell: (source) => targetCount(source),
+    },
+    {
+      id: "last-run",
+      header: "Last run",
+      cell: (source) => <SourceActivityCell activity={activity.get(source.id)} formatDateTime={formatDateTime} />,
+    },
+    {
+      id: "findings",
+      header: "Findings",
+      cell: (source) => <SourceFindingsCell activity={activity.get(source.id)} />,
     },
     {
       id: "updated",
