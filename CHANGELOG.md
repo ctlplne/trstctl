@@ -13,6 +13,16 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Contribution terms: DCO for core, CLA only for `ee/` (D2, 2026-07-26)
+- **The IP terms are written down before the first outside contribution.**
+  `CONTRIBUTING.md` states the split plainly: core is MPL-2.0 and accepts
+  patches under the **Developer Certificate of Origin** (`git commit -s`, no
+  copyright assignment), while the proprietary `ee/` tree requires a signed
+  CLA — with the honest note that most `ee/` requests can be met by a core
+  change plus a seam, which stays DCO-only. A blanket CLA would tax every
+  drive-by fix in core; DCO-only everywhere would leave the commercial tree
+  undistributable. README links it and a PR template carries the checklist.
+
 ### Migration runs get a CLI (A0.4a, 2026-07-26)
 - **`/api/v1/pqc/migrations` is no longer curl-only.** `trstctl-cli migration
   start | status | rollback` drives the licensed crypto-migration surface

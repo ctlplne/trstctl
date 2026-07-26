@@ -369,8 +369,13 @@ must be green (`make lint-partial` is only for fast local feedback when
 optional lint tools are absent), and the non-negotiables above are not
 optional. Start with the authoring guides for
 [connectors](docs/guides/connector-authoring.md) and
-[plugins](docs/guides/plugin-authoring.md). Fuller contribution guidelines are
-on the way.
+[plugins](docs/guides/plugin-authoring.md).
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the full contract. The short version:
+core is MPL-2.0 and takes contributions under the **Developer Certificate of
+Origin** — sign off with `git commit -s`, no copyright assignment — while the
+proprietary `ee/` tree requires a signed CLA, so open an issue before writing
+code there.
 
 ## License
 
