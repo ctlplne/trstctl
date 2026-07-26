@@ -4,6 +4,7 @@ import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Num } from "@/components/typography";
 import {
   api,
   ApiError,
@@ -28,6 +29,40 @@ type BrokerIdentityRow = Pick<BrokerAgentIdentity, "agent_id" | "certificate_id"
 type AttestedSVIDRow = Pick<AttestedSVID, "credential_id" | "not_after" | "subject"> & { attestation: SafeAttestation };
 type TrustSourceMethod = WorkloadAttesterTrustSourceRequest["method"];
 type TrustSourceStatusLabels = { revoked: string; disabled: string; enabled: string };
+
+/** S-C20: an attestation refusal observed in this browser session. The served
+ * API answers per request, so this is client-observed history, labelled as
+ * such — never presented as a server-side failure feed. */
+export type AttestationFailure = { method: string; message: string; at: string };
+
+export type AttesterBreakdownRow = { method: string; issued: number; lastVerifiedAt: string; failures: number };
+
+/** Roll the served attested-SVID rows up by attester method and fold in the
+ * refusals seen this session, so "which attester is actually working" is one
+ * read instead of a scan down the outcomes table. */
+export function attesterBreakdown(
+  rows: Array<{ attestation: { method: string; verified_at: string } }>,
+  failures: AttestationFailure[] = [],
+): AttesterBreakdownRow[] {
+  const byMethod = new Map<string, AttesterBreakdownRow>();
+  for (const row of rows) {
+    const method = row.attestation.method || "unknown";
+    const entry = byMethod.get(method) ?? { method, issued: 0, lastVerifiedAt: "", failures: 0 };
+    entry.issued += 1;
+    if (!entry.lastVerifiedAt || row.attestation.verified_at > entry.lastVerifiedAt) {
+      entry.lastVerifiedAt = row.attestation.verified_at;
+    }
+    byMethod.set(method, entry);
+  }
+  for (const failure of failures) {
+    const method = failure.method || "unknown";
+    const entry = byMethod.get(method) ?? { method, issued: 0, lastVerifiedAt: "", failures: 0 };
+    entry.failures += 1;
+    byMethod.set(method, entry);
+  }
+  // Failing attesters first — they are the ones that need attention — then by volume.
+  return [...byMethod.values()].sort((a, b) => b.failures - a.failures || b.issued - a.issued || a.method.localeCompare(b.method));
+}
 
 const attesterMethods: Array<{ value: TrustSourceMethod; labelKey: MessageKey }> = [
   { value: "k8s_sat", labelKey: "workloads.attestation.methodKubernetesServiceAccount" },
@@ -55,6 +90,7 @@ export function Workloads() {
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [brokerError, setBrokerError] = useState<string | null>(null);
   const [attestationError, setAttestationError] = useState<string | null>(null);
+  const [attestationFailures, setAttestationFailures] = useState<AttestationFailure[]>([]);
   const [trustSourceError, setTrustSourceError] = useState<string | null>(null);
   const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
   const [trustBundleError, setTrustBundleError] = useState<string | null>(null);
@@ -208,7 +244,13 @@ export function Workloads() {
       );
       form.reset();
     } catch (err) {
-      setAttestationError(apiProblemMessage(err, t("workloads.attestation.issueErrorFallback")));
+      const message = apiProblemMessage(err, t("workloads.attestation.issueErrorFallback"));
+      setAttestationError(message);
+      // S-C20: a refused attestation used to leave only a transient error line
+      // that the next attempt erased, so "which attester keeps failing, and
+      // why" was unanswerable. Keep the refusals of this session, newest
+      // first, with the method that produced them.
+      setAttestationFailures((current) => [{ method: formString(data, "method"), message, at: new Date().toISOString() }, ...current].slice(0, 5));
     } finally {
       setBusy(null);
     }
@@ -802,6 +844,7 @@ export function Workloads() {
           </div>
         </form>
         {attestationError && <ErrorState title={t("workloads.attestation.issueErrorTitle")}>{attestationError}</ErrorState>}
+        <AttesterBreakdown rows={attestedSVIDs} failures={attestationFailures} />
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">{t("workloads.attestation.outcomesCaption")}</caption>
@@ -1053,6 +1096,66 @@ function parsePEMList(value: string): string[] {
 function formString(data: FormData, name: string): string {
   const value = data.get(name);
   return typeof value === "string" ? value.trim() : "";
+}
+
+function AttesterBreakdown({ rows, failures }: { rows: AttestedSVIDRow[]; failures: AttestationFailure[] }) {
+  const breakdown = attesterBreakdown(rows, failures);
+  if (breakdown.length === 0) return null;
+  return (
+    <div className="grid gap-3">
+      <div className="ui-panel overflow-x-auto">
+        <table className="ui-table min-w-[40rem]">
+          <caption className="sr-only">{translateNow("workloads.attesterBreakdown.caption")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{translateNow("workloads.attesterBreakdown.method")}</th>
+              <th scope="col">{translateNow("workloads.attesterBreakdown.issued")}</th>
+              <th scope="col">{translateNow("workloads.attesterBreakdown.refused")}</th>
+              <th scope="col">{translateNow("workloads.attesterBreakdown.lastVerified")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {breakdown.map((row) => (
+              <tr key={row.method}>
+                <td className="font-medium">{row.method}</td>
+                <td>
+                  <Num>{String(row.issued)}</Num>
+                </td>
+                <td>
+                  {row.failures > 0 ? (
+                    <StatusBadge
+                      vocabulary="lifecycle"
+                      value="failed"
+                      label={translateNow("workloads.attesterBreakdown.refusedCount", { count: String(row.failures) })}
+                      tone="critical"
+                    />
+                  ) : (
+                    <Num>0</Num>
+                  )}
+                </td>
+                <td>{row.lastVerifiedAt ? formatDate(row.lastVerifiedAt) : translateNow("workloads.attesterBreakdown.never")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {failures.length > 0 ? (
+        <div className="ui-panel grid gap-2 p-3 text-sm">
+          <p className="font-medium">{translateNow("workloads.attesterBreakdown.refusalsTitle")}</p>
+          <p className="text-caption text-muted-foreground">{translateNow("workloads.attesterBreakdown.refusalsScope")}</p>
+          <ul className="grid gap-1">
+            {failures.map((failure) => (
+              <li key={`${failure.at}-${failure.method}`} className="flex flex-wrap gap-2">
+                <span className="font-mono text-xs">{failure.method}</span>
+                <span className="text-muted-foreground">{formatDate(failure.at)}</span>
+                <span>{failure.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function formNumber(data: FormData, name: string): number | undefined {

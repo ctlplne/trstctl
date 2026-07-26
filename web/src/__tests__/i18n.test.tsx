@@ -263,17 +263,19 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      // S-C13/S-C14/S-C19 re-pin: 18 new keys per catalog — posture.algorithmRollup.*
+      // S-C13/S-C14/S-C19/S-C20 re-pin: 27 new keys per catalog — posture.algorithmRollup.*
       // (the CBOM per-algorithm exposure rollup: caption, four column headers,
       // three exposure badges, the already-post-quantum cell) and risk.* (the
       // per-row score meter's accessible name, its unfilled-portion title, and
       // the no-factors chip label), plus secrets.rotationHealth.* (the
-      // overdue/stale/never-run/failed flags on rotation schedules).
+      // overdue/stale/never-run/failed flags on rotation schedules) and
+      // workloads.attesterBreakdown.* (the per-attester issued/refused table
+      // and its client-observed-refusals scope note).
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet. Previous pin covered the
       // demo-site transport-isolation copy.
-      "es-ES": "17aa6da5d23f816ee1f6d72e90375400ab171813b22d302ba81a5cb8f7cb3dbc",
-      "de-DE": "26d4828051b6f89ce95c3d17d295a653e0fb34da50a59fe87e0617964df48077",
+      "es-ES": "73a75a2e66688af8fc6dc864b43af34dc501694b5ba1d1109c4c313932f5077c",
+      "de-DE": "af4ebb064114525bb90031857e6d84adc349954481b5899524972be7cbf7a4a8",
     });
   });
 

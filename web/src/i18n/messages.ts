@@ -10899,6 +10899,42 @@ export const messages = {
     defaultMessage: "Last run failed",
     description: "S-C19: badge when the most recent rotation run failed.",
   },
+  "workloads.attesterBreakdown.caption": {
+    defaultMessage: "Attestation outcomes by attester",
+    description: "S-C20: screen-reader caption of the attester breakdown table on Workloads.",
+  },
+  "workloads.attesterBreakdown.method": {
+    defaultMessage: "Attester",
+    description: "S-C20: column header naming the attestation method.",
+  },
+  "workloads.attesterBreakdown.issued": {
+    defaultMessage: "Issued",
+    description: "S-C20: column header counting SVIDs issued through an attester.",
+  },
+  "workloads.attesterBreakdown.refused": {
+    defaultMessage: "Refused",
+    description: "S-C20: column header counting attestation refusals seen in this session.",
+  },
+  "workloads.attesterBreakdown.refusedCount": {
+    defaultMessage: "{count} refused",
+    description: "S-C20: badge counting attestation refusals for one attester.",
+  },
+  "workloads.attesterBreakdown.lastVerified": {
+    defaultMessage: "Last verified",
+    description: "S-C20: column header for the most recent successful attestation.",
+  },
+  "workloads.attesterBreakdown.never": {
+    defaultMessage: "Never",
+    description: "S-C20: shown when an attester has never produced a verified attestation.",
+  },
+  "workloads.attesterBreakdown.refusalsTitle": {
+    defaultMessage: "Recent refusals",
+    description: "S-C20: heading of the list of attestation refusals.",
+  },
+  "workloads.attesterBreakdown.refusalsScope": {
+    defaultMessage: "Observed in this browser session — the served API answers per request and keeps no refusal history.",
+    description: "S-C20: scope disclaimer under the refusals list, so client-observed history is not read as a server feed.",
+  },
   "risk.scoreMeter.ariaLabel": {
     defaultMessage: "Risk score {score} of 100 for {subject}",
     description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",
