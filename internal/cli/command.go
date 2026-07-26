@@ -294,6 +294,13 @@ var commandTable = []Command{
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
 	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and crypto migration posture"},
 
+	// Licensed crypto-migration runs (Enterprise PQC). The routes exist only
+	// in a licensed binary; against an unlicensed server these return 404,
+	// which is the honest answer for a feature the edition does not serve.
+	{Name: []string{"migration", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Start a licensed crypto-migration run over CBOM findings"},
+	{Name: []string{"migration", "status"}, Method: "GET", Path: "/api/v1/pqc/migrations/{run_id}", Summary: "Show migration run progress"},
+	{Name: []string{"migration", "rollback"}, Method: "POST", Path: "/api/v1/pqc/migrations/{run_id}/rollback", Body: bodyOptionalFile, Summary: "Roll back a migration run"},
+
 	{Name: []string{"agents", "list"}, Method: "GET", Path: "/api/v1/agents", Summary: "List in-network agents"},
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyOptionalFile, Summary: "Mint a one-time agent bootstrap token"},
 	{Name: []string{"agents", "revoke-cert"}, Method: "POST", Path: "/api/v1/agents/{id}/cert-revocations", Body: bodyFile, Summary: "Revoke an agent mTLS certificate"},

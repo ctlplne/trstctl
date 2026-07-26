@@ -91,6 +91,7 @@ exhaustive subcommand list:
 | `managed-offering`                 | Managed-offering/provider-plane posture and hosted-tenant provisioning (`status` · `tenants provision`)                                                      |
 | `mcp`                              | List and invoke the MCP tools the server exposes (`tools` · `call`)                                                                                          |
 | `mdm`                              | MDM SCEP policy/challenge status and enrollment-policy management (`scep status` · `scep policies`)                                                          |
+| `migration`                        | Licensed crypto-migration runs over CBOM findings — Enterprise PQC only (`start` · `status` · `rollback`)                                                    |
 | `nhi`                              | Unified NHI inventory, posture findings, policy compliance, decommissioning (`inventory` · `posture shadow/stale/overprivilege/static-credentials/exposure` · `policy compliance` · `decommission`) |
 | `notifications`                    | Notification channels, routing policies, inbox/dead-letter management (`channels` · `routing-policies` · `list` · `get` · `read` · `requeue`)               |
 | `owners`                           | Owner CRUD and NHI ownership attribution (`create` · `list` · `get` · `update` · `delete` · `attribution`)                                                   |
@@ -449,6 +450,17 @@ cat > cbom-scan.json <<'JSON'
 JSON
 trstctl-cli cbom scan -f cbom-scan.json
 trstctl-cli cbom assets
+
+# Migrate what the CBOM found (Enterprise PQC license required; an unlicensed
+# server answers 404 because it does not serve these routes). Start returns a
+# run id, status reports per-finding progress, and rollback reverses an applied
+# run.
+cat > migration-start.json <<'JSON'
+{"finding_ids":["<cbom-finding-id>"],"rollback_on_failure":true}
+JSON
+trstctl-cli --idempotency-key migrate-payments-1 migration start -f migration-start.json
+trstctl-cli migration status <run-id>
+trstctl-cli --idempotency-key migrate-payments-1-rollback migration rollback <run-id>
 
 # Mint a one-time agent bootstrap token. Pass allowed_identity when the token
 # should redeem only for one node or host identity.

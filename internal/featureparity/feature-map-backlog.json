@@ -6980,7 +6980,10 @@
         "profiles list",
         "profiles get-version",
         "cbom scan",
-        "cbom assets"
+        "cbom assets",
+        "migration start",
+        "migration status",
+        "migration rollback"
       ],
       "facet_evidence": {
         "served": {

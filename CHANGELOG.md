@@ -13,6 +13,16 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Migration runs get a CLI (A0.4a, 2026-07-26)
+- **`/api/v1/pqc/migrations` is no longer curl-only.** `trstctl-cli migration
+  start | status | rollback` drives the licensed crypto-migration surface
+  through the same route table every other command uses, with the
+  `Idempotency-Key` discipline the mutating routes require. Against an
+  unlicensed server the routes are absent, so the CLI reports 404 — the
+  honest answer for a feature that edition does not serve. Documented in
+  docs/cli.md with a worked example and mapped into the feature catalog
+  (F16), so the CLI-vs-feature parity gate covers it.
+
 ### Break-glass succession is wireable; the dead migration twin is gone (A0.4b, 2026-07-26)
 - **PCAS class-downgrade break-glass can now actually be configured.** The
   production minter passed a nil verifier, so a downgrade was refused
