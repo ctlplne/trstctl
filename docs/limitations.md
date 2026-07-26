@@ -485,7 +485,14 @@ edges and follow-up integration work.
   provider outside that set fails with the connector's specific
   "unsupported provider" error. One accepted kind carries no worker
   executor: `agent` sources report through the agent mTLS channel instead
-  of the worker.
+  of the worker. On the agent side, the shipped binary collects filesystem
+  certificates, OS/Java/NSS/browser trust stores, and private-key material
+  (each behind its own default-off `--inventory-*` flag). PKCS#11 token,
+  Windows certificate/trust store, and in-cluster Kubernetes Secret
+  collection are **not offered**: the collector boundary exists in
+  `internal/agent/discovery` but the agent constructs no enumerator for
+  those platforms, so adding one is an enumerator plus a flag rather than a
+  new discovery path.
   Discovery schedules tick server-side: a leader-only scheduler sweeps every
   minute and queues a run for each enabled schedule whose source has no
   in-flight run and no run newer than the schedule's `interval_seconds`,

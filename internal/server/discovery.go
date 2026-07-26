@@ -252,8 +252,24 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 	if src.Kind == nhibehavior.SourceKind {
 		return d.executeNHIBehaviorDiscoveryRun(ctx, tenantID, src, run)
 	}
-	if src.Kind == apikey.SourceKind && apikey.UsesObservationConfig(src.Config) {
-		return d.executeAPIKeyTokenDiscoveryRun(ctx, tenantID, src, run)
+	if src.Kind == apikey.SourceKind {
+		// An observation-shaped config runs the served observer; an older
+		// manual-findings api_key source still records its supplied findings.
+		// A config that is neither gets a kind-specific refusal rather than
+		// the generic no-connector message, which read as "api_key is not
+		// served" when the real cause is a config that carries no
+		// observations and no findings (A0.2c).
+		if apikey.UsesObservationConfig(src.Config) {
+			return d.executeAPIKeyTokenDiscoveryRun(ctx, tenantID, src, run)
+		}
+		rep, err := d.recordManualDiscoveryFindings(ctx, tenantID, src, run.ID)
+		if err != nil {
+			return rep, "", "", err
+		}
+		if rep.Targets > 0 {
+			return rep, "succeeded", "", nil
+		}
+		return netscan.Report{}, "failed", "api_key discovery requires either an observations config or inline findings", nil
 	}
 	if src.Kind == compromise.SourceKind {
 		return d.executeCompromisedCredentialDiscoveryRun(ctx, tenantID, src, run)

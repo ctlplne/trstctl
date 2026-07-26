@@ -99,6 +99,15 @@ type enumSource struct {
 	metadata map[string]string
 }
 
+// Platform-enumerator sources. The three constructors below take an injected
+// CertEnumerator and are NOT wired into the shipped `trstctl-agent`: the
+// binary constructs no PKCS#11, Windows-store, or Kubernetes enumerator, so
+// these collector types are deliberately not offered as agent inventory
+// today (disclosed in docs/limitations.md). They exist as the boundary the
+// platform enumerator plugs into when a design partner needs one — adding a
+// collector is then one enumerator plus one flag, not a new discovery path.
+// Do not describe them as served.
+
 // NewPKCS11Source discovers certificates on a PKCS#11 token.
 func NewPKCS11Source(token string, enum CertEnumerator) Source {
 	return &enumSource{kind: SourcePKCS11, scope: token, enum: enum}

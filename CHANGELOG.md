@@ -13,6 +13,19 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Agent collector scope stated; api_key failures name their cause (A0.2c, 2026-07-26)
+- **The unwired agent collectors are disclosed, not implied.** PKCS#11 token,
+  Windows certificate/trust store, and in-cluster Kubernetes Secret
+  collection exist as the injected-enumerator boundary in
+  `internal/agent/discovery` but the shipped agent constructs no enumerator
+  for them — limitations.md now says **not offered** and the package says so
+  at the constructors, so nobody reads them as served. Adding one is an
+  enumerator plus a flag, which is the point of the seam.
+- **An `api_key` source with neither observations nor findings now says so.**
+  It used to fall through to the generic "no server-side connector is
+  configured for discovery source kind api_key", which read as "api_key is
+  not served" when the real cause was an empty config.
+
 ### secret_store sources gain a real executor (A0.2b, 2026-07-26)
 - **The creatable-but-never-runnable kind is gone.** `secret_store` sources
   now dispatch through the same served secret-manager connectors as
