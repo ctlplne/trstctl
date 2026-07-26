@@ -10999,6 +10999,22 @@ export const messages = {
     defaultMessage: "Start incident response for this node",
     description: "S-C11: link from the selected graph node into the incident response form.",
   },
+  "ca.lineage.heading": {
+    defaultMessage: "Lineage",
+    description: "S-C12: heading of the CA lineage tree under the served authorities table.",
+  },
+  "ca.lineage.label": {
+    defaultMessage: "Certificate authority lineage",
+    description: "S-C12: accessible name of the CA lineage tree.",
+  },
+  "ca.lineage.root": {
+    defaultMessage: "root",
+    description: "S-C12: marks a top-level authority in the lineage tree.",
+  },
+  "ca.lineage.offlineRoot": {
+    defaultMessage: "Offline root",
+    description: "S-C12: badge for an authority whose key is held offline.",
+  },
   "risk.scoreMeter.ariaLabel": {
     defaultMessage: "Risk score {score} of 100 for {subject}",
     description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",

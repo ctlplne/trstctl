@@ -26,6 +26,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
 import {
   api,
   ApiError,
@@ -1716,6 +1717,15 @@ function ServedAuthoritiesPanel({
         onRowOpen={onShowDetail}
         rowActionLabel={() => "Details"}
       />
+      {/* S-C12: parent_id was an opaque uuid in a detail field, so "what signs
+          what" had to be reconstructed by eye. The served list already
+          carries the whole tree — render it as one. */}
+      {!loading && !error && authorities.length > 0 ? (
+        <div className="grid gap-2">
+          <h3 className="text-sm font-medium text-muted-foreground">{translateNow("ca.lineage.heading")}</h3>
+          <CALineageTree authorities={authorities} />
+        </div>
+      ) : null}
     </section>
   );
 }
