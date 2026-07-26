@@ -195,7 +195,7 @@ describe("POL-03 polish fixes", () => {
     expect(screen.getByRole("columnheader", { name: "Approvals" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Quorum" })).not.toBeInTheDocument();
     expect(screen.getByTitle(/Recorded approvals and required approvals/i)).toBeInTheDocument();
-    expect(within(row).getByText("1/2")).toBeInTheDocument();
+    expect(within(row).getByLabelText("1/2")).toBeInTheDocument();
   });
 
   it("renders missing request profile data as an em dash, not a not-served cell value", async () => {

@@ -7,7 +7,7 @@ import "../src/index.css";
 /** Every story renders inside the app's providers against the real tokens.
  * The theme toolbar flips the `dark` class on <html> — dark first, it is the
  * flagship theme. */
-const withProviders: Decorator = (Story, context) => {
+const WithProviders: Decorator = (Story, context) => {
   const theme = (context.globals.theme as string) ?? "dark";
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -24,7 +24,7 @@ const withProviders: Decorator = (Story, context) => {
 };
 
 const preview: Preview = {
-  decorators: [withProviders],
+  decorators: [WithProviders],
   globalTypes: {
     theme: {
       description: "Color theme",

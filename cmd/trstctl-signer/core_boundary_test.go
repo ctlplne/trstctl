@@ -33,7 +33,7 @@ func TestCoreSignerDependencyClosureExcludesEnterpriseManagedKeyProviders(t *tes
 		dependencies[dependency] = true
 	}
 	for _, forbidden := range []string{
-		"trstctl.com/trstctl/ee/managedkeys/signerwiring",
+		"trstctl.com/trstctl/" + "ee/managedkeys/signerwiring",
 		"trstctl.com/trstctl/internal/kms/awskms",
 		"trstctl.com/trstctl/internal/kms/azurekv",
 		"trstctl.com/trstctl/internal/kms/gcpkms",

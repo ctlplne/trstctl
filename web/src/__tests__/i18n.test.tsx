@@ -278,10 +278,11 @@ describe("i18n boundary", () => {
       // cross-links (certificates.detail.*, graph.respondToNode) and
       // ca.lineage.* (the CA lineage tree).
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
-      // the outstanding translation review sheet. Previous pin covered the
-      // demo-site transport-isolation copy.
-      "es-ES": "ee9ba82df3eb265ec78ab12a2f390c269f6d141b6a20c734a95a5a7d7e425af8",
-      "de-DE": "e6ac1ea2648808eb734f6b68fdc9f3e15a5dda236333b18e2dc5a218d728a5d9",
+      // the outstanding translation review sheet. This re-pin also replaces
+      // the internal "served API" phrase in the refusal-history disclaimer
+      // with customer language.
+      "es-ES": "8c584cd3b7662ce58c4f6d96440d7d70a6345e192618b25af0e63575196951db",
+      "de-DE": "dd562cfab721a6ddae2fb7a79d248fb69cec649e67a9d3b1f019382939b2ffb1",
     });
   });
 

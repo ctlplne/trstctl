@@ -35,9 +35,10 @@ is_fixture_excluded() {
 }
 
 find_imports() {
-  grep -rEn \
+  git ls-files -z --cached --others --exclude-standard -- '*.go' |
+  xargs -0 grep -En \
     "^[[:space:]]*(import[[:space:]]+)?([A-Za-z_.][A-Za-z0-9_.]*[[:space:]]+)?\"${module}/ee(/[^\"]*)?\"" \
-    --include='*.go' . | grep -v '^\./ee/' || true
+    | grep -v '^ee/' || true
 }
 
 check() {

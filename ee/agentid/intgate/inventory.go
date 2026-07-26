@@ -209,6 +209,8 @@ var Inventory = []Constructor{
 	{Pkg: "ee/agentid/delegation", Name: "NewDurableAnchorStore", File: "ee/agentid/delegation/anchorstore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach + api.NewAPIOptionsFactory (durable signer root-anchor floor)"},
 	{Pkg: "ee/agentid/delegation", Name: "NewDurableReachabilityTrustStore", File: "ee/agentid/delegation/reachtruststore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach + orchestrator.NewLicensedOutboxFactory (durable signer reachability-verdict trust floor)"},
 	{Pkg: "ee/agentid/delegation", Name: "NewDurableAttestationTrustStore", File: "ee/agentid/delegation/attestorstore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach (durable signer attestor trust + spent-evidence floor)"},
+	{Pkg: "ee/agentid/delegation", Name: "NewBrokerTaskEnvelopeGate", File: "ee/agentid/delegation/brokertaskgate.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (broker task-envelope verification seam)"},
+	{Pkg: "ee/agentid/delegation", Name: "NewDurableTaskEnvelopeTrustStore", File: "ee/agentid/delegation/brokertaskgate.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (operator-provisioned requester trust floor)"},
 
 	// ---- delegation/store (AGID-02 projection-backed repo) -----------------------
 	{Pkg: "ee/agentid/delegation/store", Name: "New", File: "ee/agentid/delegation/store/store.go", Tier: TierRequired, SeededVia: "api.NewService + orchestrator handler (AGID-02 repo)"},

@@ -2907,7 +2907,7 @@ const deDECatalog = {
   "workloads.attesterBreakdown.never": "Nie",
   "workloads.attesterBreakdown.refusalsTitle": "Aktuelle Ablehnungen",
   "workloads.attesterBreakdown.refusalsScope":
-    "In dieser Browsersitzung beobachtet – die bereitgestellte API antwortet pro Anfrage und führt keine Ablehnungshistorie.",
+    "In dieser Browsersitzung beobachtet – jeder Versuch wird live geprüft, frühere Ablehnungen werden nicht gespeichert.",
   "approvals.quorum.remaining": "Noch {count} erforderlich",
   "approvals.quorum.met": "Quorum erreicht",
   "discovery.sourceActivity.noMonitoring": "Nicht überwacht",

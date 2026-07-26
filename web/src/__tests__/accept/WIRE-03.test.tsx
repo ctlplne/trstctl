@@ -97,7 +97,8 @@ describe("WIRE-03 Posture CBOM wiring", () => {
       host_configs: ["/etc/ssh/sshd_config"],
     });
 
-    expect(await screen.findByText("1 out of policy")).toBeInTheDocument();
+    const outOfPolicyValues = await screen.findAllByText("1 out of policy");
+    expect(outOfPolicyValues.some((value) => value.tagName === "DD")).toBe(true);
     expect(screen.getByText("25% migrated")).toBeInTheDocument();
 
     const row = await screen.findByRole("row", { name: /https:\/\/legacy\.example\.com:443 tls_endpoint rsa-1024 tls 1\.0 \/ rc4 out of policy/i });

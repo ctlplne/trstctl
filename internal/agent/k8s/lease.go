@@ -40,11 +40,10 @@ type leaseSpec struct {
 }
 
 type leaseObject struct {
-	APIVersion string            `json:"apiVersion,omitempty"`
-	Kind       string            `json:"kind,omitempty"`
-	Metadata   map[string]any    `json:"metadata,omitempty"`
-	Spec       leaseSpec         `json:"spec"`
-	unusedTags map[string]string `json:"-"`
+	APIVersion string         `json:"apiVersion,omitempty"`
+	Kind       string         `json:"kind,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
+	Spec       leaseSpec      `json:"spec"`
 }
 
 // Lease is a single named coordination.k8s.io/v1 Lease used to elect one

@@ -2895,7 +2895,7 @@ const esESCatalog = {
   "workloads.attesterBreakdown.never": "Nunca",
   "workloads.attesterBreakdown.refusalsTitle": "Rechazos recientes",
   "workloads.attesterBreakdown.refusalsScope":
-    "Observado en esta sesión del navegador: la API servida responde por solicitud y no guarda historial de rechazos.",
+    "Observado en esta sesión del navegador: cada intento se comprueba en directo y no se conservan los rechazos anteriores.",
   "approvals.quorum.remaining": "Faltan {count}",
   "approvals.quorum.met": "Cuórum alcanzado",
   "discovery.sourceActivity.noMonitoring": "Sin monitorización",

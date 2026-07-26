@@ -23,6 +23,7 @@ import (
 	eekmip "trstctl.com/trstctl/ee/kmip"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
 	eepqc "trstctl.com/trstctl/ee/pqc"
+	eepqccbom "trstctl.com/trstctl/ee/pqc/cbomposture"
 	eepqcmigration "trstctl.com/trstctl/ee/pqcmigration"
 	eepqcruntime "trstctl.com/trstctl/ee/pqcruntime"
 	eeprovider "trstctl.com/trstctl/ee/provider"
@@ -304,7 +305,7 @@ func attachPQC(log *slog.Logger, deps *server.Deps) {
 	// CBOM licensed posture: name the FIPS-203/204/205 migration targets and
 	// recognize post-quantum families the MPL core deliberately does not know,
 	// so migration progress can count future-ready assets (A0.1).
-	cbom.InstallLicensedPosture(eepqc.CBOMTargetFor, eepqc.CBOMClassifyKey)
+	cbom.InstallLicensedPosture(eepqccbom.CBOMTargetFor, eepqccbom.CBOMClassifyKey)
 	// Licensed algorithm classifier: post-quantum and hybrid labels become
 	// valid certificate-profile `allowed_key_algorithms` entries and inventory
 	// classifications (A0.3b). Unlicensed builds keep failing closed on them.

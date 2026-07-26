@@ -364,7 +364,8 @@ This file is the human-readable companion to the git tags; the
   still emits edition-neutral `licensed-*` placeholders and recognizes no
   licensed algorithm family — that fence is deliberate and unchanged. A new
   seam, `cbom.InstallLicensedPosture`, is filled from the tagged PQC attach
-  block with `ee/pqc.CBOMTargetFor` + `ee/pqc.CBOMClassifyKey`, so with
+  block with `ee/pqc/cbomposture.CBOMTargetFor` +
+  `ee/pqc/cbomposture.CBOMClassifyKey`, so with
   FeaturePQC licensed the inventory maps classical signatures →
   **ML-DSA-65 (FIPS 204)**, key establishment → **ML-KEM-768 (FIPS 203)**, and
   deprecated DSA → **SLH-DSA-SHA2-128s (FIPS 205)**; ML-DSA / ML-KEM / SLH-DSA

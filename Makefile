@@ -293,7 +293,7 @@ lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; wa
 
 lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, and action-pin checks
 	@echo ">> gofmt"
-	@unformatted=$$(gofmt -l -s $$(find . -name '*.go' -not -path '*/testdata/*' -not -path './.git/*')); \
+	@unformatted=$$(git ls-files -z --cached --others --exclude-standard -- '*.go' ':!:**/testdata/**' | xargs -0 sh -c 'for file do [ ! -f "$$file" ] || gofmt -l -s "$$file"; done' sh); \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files are not gofmt-clean (run: gofmt -w -s .):"; \
 		echo "$$unformatted"; \

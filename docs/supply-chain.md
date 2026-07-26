@@ -149,8 +149,8 @@ merely scanned in CI:
 - `scripts/supply-chain/verify-embedded-postgres.sh` verifies the downloaded
   jar and its inner `.txz` against the committed pins and Trivy-scans the
   extracted binaries for HIGH/CRITICAL issues. CI runs it per architecture
-  and stores a Trivy receipt artifact (raw JSON report, Trivy version/DB
-  metadata, severity counts, pass/fail). Any fixable CRITICAL finding fails
+  and stores a Trivy receipt artifact (raw JSON report, Trivy version/DB metadata,
+  severity counts, pass/fail). Any fixable CRITICAL finding fails
   the gate, because a patched upstream binary is available and the pin
   must move.
 

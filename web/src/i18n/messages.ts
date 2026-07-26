@@ -10932,7 +10932,7 @@ export const messages = {
     description: "S-C20: heading of the list of attestation refusals.",
   },
   "workloads.attesterBreakdown.refusalsScope": {
-    defaultMessage: "Observed in this browser session — the served API answers per request and keeps no refusal history.",
+    defaultMessage: "Observed in this browser session — each attempt is checked live, and earlier refusals are not retained.",
     description: "S-C20: scope disclaimer under the refusals list, so client-observed history is not read as a server feed.",
   },
   "approvals.quorum.remaining": {

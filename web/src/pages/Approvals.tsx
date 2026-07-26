@@ -227,7 +227,7 @@ function ApprovalQuorum({ approvals }: { approvals: string }) {
   if (!progress) return <span className="text-caption text-muted-foreground">{approvals}</span>;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="inline-flex items-baseline gap-1">
+      <span className="inline-flex items-baseline gap-1" aria-label={`${progress.have}/${progress.need}`}>
         <Num className="font-medium">{String(progress.have)}</Num>
         <span className="text-caption text-muted-foreground">/</span>
         <Num>{String(progress.need)}</Num>
