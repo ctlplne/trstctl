@@ -3,28 +3,28 @@
 package signerwiring
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
+// The key is generated through internal/crypto rather than crypto/ed25519
+// directly: AN-3 admits no exception for tests, and a test that reaches around
+// the boundary is exactly how a second crypto path gets established.
 func writeAuthorityPEM(t *testing.T, dir string) []byte {
 	t.Helper()
-	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	_, pubPEM, err := crypto.GenerateEd25519KeyPEM()
 	if err != nil {
 		t.Fatal(err)
 	}
-	der, err := x509.MarshalPKIXPublicKey(pub)
-	if err != nil {
+	if err := os.WriteFile(filepath.Join(dir, BreakGlassAuthorityFile), pubPEM, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, BreakGlassAuthorityFile),
-		pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}), 0o600); err != nil {
+	der, err := crypto.ParseEd25519PublicKeyPEM(pubPEM)
+	if err != nil {
 		t.Fatal(err)
 	}
 	return der

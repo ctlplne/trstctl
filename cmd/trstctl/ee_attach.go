@@ -156,6 +156,34 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureAgentDelegation) {
+		attachAgentDelegation(cfg, log, deps)
+	}
+	if lic != nil && lic.Has(license.FeatureReconcile) {
+		if err := attachReconcile(log, deps); err != nil {
+			return err
+		}
+	}
+	if lic != nil && lic.Has(license.FeatureVerifiableDecommission) {
+		if err := attachVerifiableDecommission(log, deps); err != nil {
+			return err
+		}
+	}
+	if lic != nil && lic.Has(license.FeaturePQC) {
+		attachPQC(log, deps)
+	}
+	if lic != nil && lic.Has(license.FeatureHASupport) {
+		if err := attachFederation(ctx, cfg, log, deps); err != nil {
+			return err
+		}
+	}
+	return attachEEProviderPlane(ctx, cfg, log, lic, deps)
+}
+
+// attachAgentDelegation is the AGID stage of the attach seam, lifted out of
+// attachEE as a named stage so the seam stays readable as the feature list
+// grows (the startup-hotspot ratchet).
+func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
+	{
 		// AN-9 activation point for Agent Identity Lifecycle Enforcement (AGID, HARNESS
 		// §1.6). This one block gates AGID; it attaches the feature-neutral chain-bound
 		// broker issuance precondition (the ee/agentid delegation gate) via the core
@@ -206,24 +234,12 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 			log.Info("Enterprise agent delegation attached", slog.String("feature", string(license.FeatureAgentDelegation)))
 		}
 	}
-	if lic != nil && lic.Has(license.FeatureReconcile) {
-		if err := attachReconcile(log, deps); err != nil {
-			return err
-		}
-	}
-	if lic != nil && lic.Has(license.FeatureVerifiableDecommission) {
-		if err := attachVerifiableDecommission(log, deps); err != nil {
-			return err
-		}
-	}
-	if lic != nil && lic.Has(license.FeaturePQC) {
-		attachPQC(log, deps)
-	}
-	if lic != nil && lic.Has(license.FeatureHASupport) {
-		if err := attachFederation(ctx, cfg, log, deps); err != nil {
-			return err
-		}
-	}
+}
+
+// attachEEProviderPlane is the second stage of the attach seam: the BYOK,
+// governance, and multi-tenant provider features. Same one-block-per-feature
+// shape as attachEE; split only to keep either function readable.
+func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
 	if lic != nil && lic.Has(license.FeatureBYOK) {
 		managedKeysConfig := attachConfig(cfg).ManagedKeys
 		if managedKeysConfig.Enabled {

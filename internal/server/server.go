@@ -899,23 +899,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		s.registry = observ.NewRegistry()
 	}
 	s.featureMetrics = observ.NewFeatureMetrics(s.registry)
-	defaults := []api.Option{
-		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
-		api.WithAttestedIssuer(s),
-		api.WithSSHWorkflow(s),
-		api.WithBroker(s),
-		api.WithEphemeralIssuer(s),
-		api.WithPAM(s),
-		api.WithEventLog(d.Log),
-		api.WithLicense(d.License),
-		api.WithFeatureObserver(s.featureMetrics.Hook()),
-		api.WithCBOM(s.buildCBOMService(d)),
-		api.WithNotificationChannels(notificationChannelNames(d.NotificationChannels)...),
-		api.WithNotificationOutbox(s.outbox),
-		api.WithServiceNowBindings(d.ServiceNowBindings...),
-		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
-		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
-	}
+	defaults := s.baseAPIOptions(d, ea)
 	if d.EnableRemediation {
 		defaults = append(defaults,
 			api.WithRemediation(),
@@ -940,35 +924,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.RateLimiter != nil {
 		defaults = append(defaults, api.WithRateLimiter(d.RateLimiter))
 	}
-	if s.outbox != nil {
-		defaults = append(defaults, api.WithOutboxCircuitStatus(s.outbox.CircuitStates))
-	}
-	// B-1: expose AN-7 pool pressure through the served API. The snapshot is
-	// counters and subsystem names only — no tenant or credential data.
-	if s.bulk != nil {
-		defaults = append(defaults, api.WithBulkheadStats(s.bulk.Stats))
-	}
-	// B-4: signing operations joined to their transparency-log state.
-	if d.Store != nil {
-		defaults = append(defaults, api.WithCodeSigningIdentities(s.CodeSigningIdentities))
-	}
-	// B-2: the SSH fleet view over discovered standing keys.
-	if d.Store != nil {
-		defaults = append(defaults, api.WithSSHFleet(s.SSHFleetInventory))
-	}
-	// B-6: the connector catalog reports each connector's live sandbox grant
-	// and replay contract from the registry, not from a description beside it.
-	if s.connectorRegistry != nil {
-		defaults = append(defaults, api.WithConnectorRegistry(s.connectorRegistry))
-	}
-	// B-5: the console's system readout reuses the same probes as /readyz, so
-	// the two can never disagree about whether the spine is up.
-	defaults = append(defaults, api.WithSystemReadout(func() api.SystemReadout {
-		return s.systemReadout(context.Background())
-	}))
-	if s.plugins != nil {
-		defaults = append(defaults, api.WithACMEDNS01Providers(s.acmeDNS01PluginCatalog()...))
-	}
+	s.appendOperationalReadModels(d, &defaults)
 	if err := configureBreakglassAPIOptions(d, &defaults); err != nil {
 		return nil, nil, err
 	}
@@ -1046,6 +1002,65 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil
+}
+
+// baseAPIOptions is the always-on half of the served API surface: the options
+// that do not depend on a licence, a flag, or a constructor that can fail.
+// Named stage of configureAPI (startup-hotspot ratchet).
+func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
+	return []api.Option{
+		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
+		api.WithAttestedIssuer(s),
+		api.WithSSHWorkflow(s),
+		api.WithBroker(s),
+		api.WithEphemeralIssuer(s),
+		api.WithPAM(s),
+		api.WithEventLog(d.Log),
+		api.WithLicense(d.License),
+		api.WithFeatureObserver(s.featureMetrics.Hook()),
+		api.WithCBOM(s.buildCBOMService(d)),
+		api.WithNotificationChannels(notificationChannelNames(d.NotificationChannels)...),
+		api.WithNotificationOutbox(s.outbox),
+		api.WithServiceNowBindings(d.ServiceNowBindings...),
+		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
+		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
+	}
+}
+
+// appendOperationalReadModels attaches the read-only operator views (the B-1…B-6
+// endpoints). Each is wired only when its provider exists, so an unwired
+// subsystem answers "not served" rather than 404 — and none of them can mutate
+// state. Named stage of configureAPI (startup-hotspot ratchet).
+func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
+	if s.outbox != nil {
+		*defaults = append(*defaults, api.WithOutboxCircuitStatus(s.outbox.CircuitStates))
+	}
+	// B-1: expose AN-7 pool pressure through the served API. The snapshot is
+	// counters and subsystem names only — no tenant or credential data.
+	if s.bulk != nil {
+		*defaults = append(*defaults, api.WithBulkheadStats(s.bulk.Stats))
+	}
+	// B-4: signing operations joined to their transparency-log state.
+	if d.Store != nil {
+		*defaults = append(*defaults, api.WithCodeSigningIdentities(s.CodeSigningIdentities))
+	}
+	// B-2: the SSH fleet view over discovered standing keys.
+	if d.Store != nil {
+		*defaults = append(*defaults, api.WithSSHFleet(s.SSHFleetInventory))
+	}
+	// B-6: the connector catalog reports each connector's live sandbox grant
+	// and replay contract from the registry, not from a description beside it.
+	if s.connectorRegistry != nil {
+		*defaults = append(*defaults, api.WithConnectorRegistry(s.connectorRegistry))
+	}
+	// B-5: the console's system readout reuses the same probes as /readyz, so
+	// the two can never disagree about whether the spine is up.
+	*defaults = append(*defaults, api.WithSystemReadout(func() api.SystemReadout {
+		return s.systemReadout(context.Background())
+	}))
+	if s.plugins != nil {
+		*defaults = append(*defaults, api.WithACMEDNS01Providers(s.acmeDNS01PluginCatalog()...))
+	}
 }
 
 func configureBreakglassAPIOptions(d Deps, defaults *[]api.Option) error {

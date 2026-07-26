@@ -469,10 +469,17 @@ func TestCover011Trace012RestCliOpenAPIParitySpineStaysRequired(t *testing.T) {
 		"mux             *http.ServeMux",
 	)
 
+	// The anchor moved deliberately: PACKAGING-007 flagged the licensed
+	// crypto-migration route strings sitting in command.go, so the table literal
+	// was renamed coreCommandTable and the licensed entries moved to
+	// command_licensed.go, with commandTable now composed from both. The guard
+	// still binds what it always bound — a central, data-driven CLI registry that
+	// is one command per API operation — via the composition point.
 	cmd := read(t, "../internal/cli/command.go")
 	requireAllContained(t, "COVER-011/TRACE-012", "internal/cli/command.go", cmd,
-		"var commandTable = []Command{",
-		"is one command per core API operation",
+		"var commandTable = buildCommandTable()",
+		"var coreCommandTable = []Command{",
+		"one command per core API operation",
 		`Path: "/api/v1/owners"`,
 		`Path: "/api/v1/identities/{id}/transitions"`,
 	)
@@ -716,12 +723,12 @@ func TestTrace013ProtocolMountsStayTraceable(t *testing.T) {
 func TestProduct008AppShellA11yFoundationsStayPresent(t *testing.T) {
 	shell := read(t, "../web/src/components/AppShell.tsx")
 	requireAllContained(t, "PRODUCT-008", "web/src/components/AppShell.tsx", shell,
-		"<nav aria-label=",             // labeled navigation landmark
-		`href="#main"`,                 // skip link target
-		"sr-only focus:not-sr-only",    // visually-hidden-until-focused skip link
-		`{t("app.skipToMain")}`,        // skip-link label
-		`<main id="main"`,              // main landmark with matching id
-		"tabIndex={-1}",                // main is programmatically focusable
+		"<nav aria-label=",          // labeled navigation landmark
+		`href="#main"`,              // skip link target
+		"sr-only focus:not-sr-only", // visually-hidden-until-focused skip link
+		`{t("app.skipToMain")}`,     // skip-link label
+		`<main id="main"`,           // main landmark with matching id
+		"tabIndex={-1}",             // main is programmatically focusable
 		"focus-visible:ring-2 focus-visible:ring-focus", // visible focus styling (rule 2: the dedicated --focus token)
 	)
 }

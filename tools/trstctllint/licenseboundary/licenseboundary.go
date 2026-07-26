@@ -153,6 +153,11 @@ func isPQCAllowedCorePath(filename string) bool {
 		"internal/license/license_test.go",
 		"internal/api/editions.go",
 		"internal/api/editions_test.go",
+		// The CLI is a thin HTTP client: this file holds route strings and help
+		// text for operations only a licensed server serves, and no PQC code.
+		// It exists apart from command.go precisely so this exemption covers a
+		// route list instead of the whole command table.
+		"internal/cli/command_licensed.go",
 		"internal/featureparity/feature-map-backlog.go":
 		return true
 	}

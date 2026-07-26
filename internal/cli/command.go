@@ -58,8 +58,22 @@ func (c Command) Destructive() bool {
 	return false
 }
 
-// commandTable is one command per core API operation (S3.3 surface).
-var commandTable = []Command{
+// commandTable is the dispatchable command set. It is
+// one command per core API operation (S3.3 surface), plus the thin-client
+// entries for routes only a licensed server serves.
+// The licensed entries live in their own file so that
+// PACKAGING-007's proprietary-algorithm placement rule keeps covering every
+// line of this one.
+var commandTable = buildCommandTable()
+
+func buildCommandTable() []Command {
+	out := make([]Command, 0, len(coreCommandTable)+len(licensedRouteCommands))
+	out = append(out, coreCommandTable...)
+	out = append(out, licensedRouteCommands...)
+	return out
+}
+
+var coreCommandTable = []Command{
 	{Name: []string{"owners", "create"}, Method: "POST", Path: "/api/v1/owners", Body: bodyFile, Summary: "Create an owner"},
 	{Name: []string{"owners", "list"}, Method: "GET", Path: "/api/v1/owners", Query: []string{"limit", "cursor"}, Summary: "List owners"},
 	{Name: []string{"owners", "get"}, Method: "GET", Path: "/api/v1/owners/{id}", Summary: "Get an owner"},
@@ -307,13 +321,8 @@ var commandTable = []Command{
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
 	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and crypto migration posture"},
 
-	// Licensed crypto-migration runs (Enterprise PQC). The routes exist only
-	// in a licensed binary; against an unlicensed server these return 404,
-	// which is the honest answer for a feature the edition does not serve.
-	{Name: []string{"migration", "plan"}, Method: "POST", Path: "/api/v1/pqc/migrations/plan", Body: bodyFile, Summary: "Preview a crypto-migration plan without queueing it"},
-	{Name: []string{"migration", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Start a licensed crypto-migration run over CBOM findings"},
-	{Name: []string{"migration", "status"}, Method: "GET", Path: "/api/v1/pqc/migrations/{run_id}", Summary: "Show migration run progress"},
-	{Name: []string{"migration", "rollback"}, Method: "POST", Path: "/api/v1/pqc/migrations/{run_id}/rollback", Body: bodyOptionalFile, Summary: "Roll back a migration run"},
+	// The licensed crypto-migration commands that used to sit here now live in
+	// command_licensed.go; they are appended to this table by buildCommandTable.
 
 	{Name: []string{"agents", "list"}, Method: "GET", Path: "/api/v1/agents", Summary: "List in-network agents"},
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyOptionalFile, Summary: "Mint a one-time agent bootstrap token"},
