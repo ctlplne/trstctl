@@ -75,6 +75,7 @@ exemption, and this page must document every required context.
 | `windows / test + MSI` | `ci.yml` | Windows agent surface (real cert store) + MSI |
 | `kubernetes / kind e2e` | `ci.yml` | In-cluster e2e + cert-manager Certificate through trstctl ClusterIssuer |
 | `spire container e2e` | `ci.yml` | Real SPIRE server container loads the trstctl upstream-authority plugin, mints an X.509-SVID, and verifies the chain to the root |
+| `pqc e2e (dodproof)` | `ci.yml` | PQC census proofs against the shipped artifact: stock-OpenSSL pure ML-DSA-65 EST enrollment, two-entry hybrid SVID Workload API response, CBOM→migration TLS rollout + rollback |
 | `secret scan (gitleaks)` | `security.yml` | No committed secrets |
 | `container image scan (Trivy)` | `security.yml` | Image vulnerability scan |
 

@@ -34,6 +34,7 @@
       "windows / test + MSI",
       "kubernetes / kind e2e",
       "spire container e2e",
+      "pqc e2e (dodproof)",
       "secret scan (gitleaks)",
       "container image scan (Trivy)"
     ]

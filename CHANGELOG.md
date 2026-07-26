@@ -13,6 +13,16 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### The PQC census proofs run in CI on every push (A0.3f, 2026-07-26)
+- **"PQC issuance is proven" stops depending on someone remembering a build
+  tag.** A new required check, `pqc e2e (dodproof)`, runs
+  `TestDODPQCProductionAssembly` — stock-OpenSSL pure ML-DSA-65 EST
+  enrollment, the two-entry hybrid SVID Workload API response, and the
+  CBOM→migration TLS rollout with rollback — against the exact shipped
+  artifact on every push. The job gates loudly on an ML-DSA-capable stock
+  OpenSSL (>= 3.5) so runner drift cannot silently skip the proof; the check
+  is pinned into branch-protection.json, docs, and a guard test.
+
 ### The additional Workload-API SVID is audited like the classical one (A0.3e, 2026-07-26)
 - **The licensed second SVID stops being invisible to the event log.** The
   Workload API's additional-issuer mint now emits the same

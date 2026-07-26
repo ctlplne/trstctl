@@ -1571,6 +1571,42 @@ jobs:
         if: failure()
         run: kubectl get certificaterequests,secrets -A || true
 
+  # A0.3f: the PQC census proofs run on every push instead of hiding behind a
+  # locally-invoked build tag. The rows drive the EXACT shipped artifact: a
+  # stock OpenSSL client enrolls a pure ML-DSA-65 CSR through EST, the
+  # Workload API returns the two-entry hybrid SVID response, and the
+  # CBOM→migration rollout applies and rolls back a TLS finding. The proofs
+  # REQUIRE an ML-DSA-capable stock OpenSSL (>= 3.5); the gate fails loud on
+  # runner drift instead of letting the proof silently vanish (CODE-005).
+  pqc-dodproof:
+    name: pqc e2e (dodproof)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Require ML-DSA-capable stock OpenSSL
+        run: |
+          set -euo pipefail
+          openssl version
+          if ! openssl list -signature-algorithms | grep -q "ML-DSA-65"; then
+            echo "::error::runner OpenSSL lacks ML-DSA-65; the PQC census proofs need OpenSSL >= 3.5. Pin a capable runner image or build OpenSSL 3.5 in this job."
+            exit 1
+          fi
+
+      - name: PQC census proofs against the shipped artifact
+        run: go test -tags trstctl_dodproof -count=1 -v -run 'TestDODPQCProductionAssembly' ./cmd/trstctl/
+
   spire-e2e:
     name: spire container e2e
     runs-on: ubuntu-latest

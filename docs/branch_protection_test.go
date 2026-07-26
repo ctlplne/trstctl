@@ -275,6 +275,33 @@ func TestSPIREContainerE2EGateIsRequired(t *testing.T) {
 	}
 }
 
+// TestPQCDodproofGateIsRequired locks A0.3f: the PQC census proofs (pure
+// ML-DSA-65 EST enrollment with stock OpenSSL, the two-entry hybrid SVID
+// response, and the CBOM→migration TLS rollout) run in CI on every push and
+// stay in the required-check set, so "PQC issuance is proven" can never
+// regress to a locally-invoked build tag nobody runs.
+func TestPQCDodproofGateIsRequired(t *testing.T) {
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"name: pqc e2e (dodproof)",
+		"-tags trstctl_dodproof",
+		"TestDODPQCProductionAssembly",
+		"ML-DSA-65",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Fatalf("ci.yml must contain %q so the PQC census proofs cannot regress to a documented-but-unrun claim (A0.3f)", want)
+		}
+	}
+
+	requiredPolicy := read(t, "../.github/branch-protection.json")
+	if !strings.Contains(requiredPolicy, `"pqc e2e (dodproof)"`) {
+		t.Fatal("branch-protection.json must require the pqc e2e (dodproof) check (A0.3f)")
+	}
+	if !strings.Contains(read(t, "branch-protection.md"), "`pqc e2e (dodproof)`") {
+		t.Fatal("branch-protection.md must document the pqc e2e (dodproof) required check (A0.3f)")
+	}
+}
+
 // TestBranchProtectionDocExistsAndLinked keeps the human-readable policy present and
 // discoverable: docs/branch-protection.md exists, documents the codified gate, and
 // is linked from the supply-chain page so a reviewer finds it.
