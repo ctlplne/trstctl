@@ -111,6 +111,7 @@ type API struct {
 	systemReadout             SystemReadoutProvider
 	connectorRegistry         *connector.Registry
 	sshFleet                  SSHFleetProvider
+	codeSigningIdentities     CodeSigningIdentityProvider
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -185,6 +186,7 @@ type config struct {
 	systemReadout             SystemReadoutProvider
 	connectorRegistry         *connector.Registry
 	sshFleet                  SSHFleetProvider
+	codeSigningIdentities     CodeSigningIdentityProvider
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -435,6 +437,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		systemReadout:             cfg.systemReadout,
 		connectorRegistry:         cfg.connectorRegistry,
 		sshFleet:                  cfg.sshFleet,
+		codeSigningIdentities:     cfg.codeSigningIdentities,
 		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
@@ -1192,6 +1195,8 @@ func (a *API) routes() []route {
 		// references; the authenticated principal is the signer identity. The service
 		// queues transparency-log publication through outbox (AN-6), rather than
 		// calling Rekor/Fulcio inline.
+		// B-4: which identities signed, and did the transparency entry land.
+		{method: "GET", path: "/api/v1/code-signing/identities", opID: "listCodeSigningIdentities", summary: "List signing operations with their transparency-log verification state", handler: a.listCodeSigningIdentities, resSchema: "CodeSigningIdentityList", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/code-signing/sign", opID: "signCodeArtifact", summary: "Sign an artifact digest with a managed code-signing key", handler: a.signCodeArtifact, reqSchema: "CodeSigningRequest", resSchema: "CodeSigningSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/code-signing/keyless", opID: "signCodeArtifactKeyless", summary: "Sign an artifact digest with a verified Sigstore/Fulcio identity", handler: a.signCodeArtifactKeyless, reqSchema: "CodeSigningKeylessRequest", resSchema: "CodeSigningSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},
 

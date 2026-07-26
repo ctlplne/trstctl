@@ -291,6 +291,9 @@ var commandTable = []Command{
 
 	{Name: []string{"risk", "credentials"}, Method: "GET", Path: "/api/v1/risk/credentials", Query: []string{"sort", "min_score", "privilege", "owner"}, Summary: "Rank credentials by risk score"},
 	{Name: []string{"risk", "contextual-priorities"}, Method: "GET", Path: "/api/v1/risk/contextual-priorities", Summary: "Prioritize credential risk with blast-radius context"},
+	// B-4: which identities signed, and did the transparency entry land.
+	{Name: []string{"code-signing", "identities"}, Method: "GET", Path: "/api/v1/code-signing/identities", Summary: "List signing operations with transparency-log verification state"},
+
 	// B-2: hosts whose SSH access does not run through the CA.
 	{Name: []string{"ssh", "fleet"}, Method: "GET", Path: "/api/v1/ssh/fleet", Summary: "List hosts with standing SSH key access not under the CA"},
 

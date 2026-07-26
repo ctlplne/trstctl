@@ -1962,6 +1962,19 @@ func componentSchemas() map[string]*Schema {
 		"failures":   {Type: "integer"},
 		"open_until": timestamp(), "updated_at": timestamp(), "last_error": str(),
 	}, "tenant_id", "destination", "state", "failures", "updated_at")
+	// B-4: signing operations with transparency-log verification state.
+	codeSigningIdentity := object(map[string]*Schema{
+		"operation_id": str(), "mode": {Type: "string", Enum: []string{"managed", "keyless"}},
+		"status": str(), "request_hash": str(),
+		"transparency":       {Type: "string", Enum: []string{"verified", "pending", "failed", "not-published"}},
+		"transparency_error": str(), "last_error": str(),
+		"created_at": timestamp(), "updated_at": timestamp(),
+	}, "operation_id", "mode", "status", "request_hash", "transparency", "created_at", "updated_at")
+	codeSigningIdentityList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("CodeSigningIdentity")},
+		"total": {Type: "integer"}, "verified_count": {Type: "integer"},
+		"not_published_count": {Type: "integer"},
+	}, "items", "total", "verified_count", "not_published_count")
 	// B-2: hosts with standing SSH key access that is not under the CA.
 	sshFleetHost := object(map[string]*Schema{
 		"location": str(), "keys": {Type: "integer"},
@@ -3517,6 +3530,8 @@ func componentSchemas() map[string]*Schema {
 		"PolicyVersionListSummary":                 policyVersionListSummary,
 		"PolicyVersionList":                        policyVersionList,
 		"OutboxCircuit":                            outboxCircuit,
+		"CodeSigningIdentity":                      codeSigningIdentity,
+		"CodeSigningIdentityList":                  codeSigningIdentityList,
 		"SSHFleetHost":                             sshFleetHost,
 		"SSHFleetInventory":                        sshFleetInventory,
 		"SystemDependency":                         systemDependency,

@@ -3755,6 +3755,85 @@
         ],
         "type": "object"
       },
+      "CodeSigningIdentity": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "managed",
+              "keyless"
+            ],
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "request_hash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "transparency": {
+            "enum": [
+              "verified",
+              "pending",
+              "failed",
+              "not-published"
+            ],
+            "type": "string"
+          },
+          "transparency_error": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "mode",
+          "status",
+          "request_hash",
+          "transparency",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "CodeSigningIdentityList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CodeSigningIdentity"
+            },
+            "type": "array"
+          },
+          "not_published_count": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "verified_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "verified_count",
+          "not_published_count"
+        ],
+        "type": "object"
+      },
       "CodeSigningKeylessRequest": {
         "properties": {
           "artifact_type": {
@@ -21599,6 +21678,53 @@
           }
         ],
         "summary": "Get an inventoried certificate",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/code-signing/identities": {
+      "get": {
+        "operationId": "listCodeSigningIdentities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSigningIdentityList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List signing operations with their transparency-log verification state",
         "x-trstctl-permission": "certs:read"
       }
     },

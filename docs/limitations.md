@@ -502,6 +502,17 @@ edges and follow-up integration work.
   hot-looping; one sweep queues at most 100 runs per tenant). The CBOM
   scanner is also served, through its own `/api/v1/cbom/*` API rather than
   the discovery-run worker.
+- Signing history is verifiable after the fact: `GET
+  /api/v1/code-signing/identities` (and `trstctl-cli code-signing identities`)
+  lists recent signing operations with their identity kind (`managed` for a
+  signer-held key, `keyless` for an ephemeral Sigstore/Fulcio identity) and
+  the transparency-log state of each — `verified`, `pending`, `failed` with
+  its reason, or `not-published`. Verification is not a separate flag that
+  could drift: Rekor publication rides the outbox and the handler refuses to
+  acknowledge an entry whose signed receipt does not verify, so a delivered
+  row *is* a verified entry. The view reads no sealed command bytes, so the
+  plaintext identity assertion and the artifact digest never leave the signer
+  boundary through it.
 - The SSH estate outside the CA is readable: `GET /api/v1/ssh/fleet` (and
   `trstctl-cli ssh fleet`) rolls the tenant's discovered SSH keys up per host
   with standing-access and orphaned counts, key types, and the observation

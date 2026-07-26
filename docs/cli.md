@@ -70,7 +70,7 @@ exhaustive subcommand list:
 | `ca discovery`                     | List public and private CA discovery inventory (`list`)                                                                                                      |
 | `cbom`                             | Cryptographic bill of materials: scan TLS endpoints/configs, list assets (`scan` · `assets`)                                                                 |
 | `certificates`                     | Certificate inventory: ingest, list, get, health, bulk-revoke (`ingest` · `list` · `get` · `health` · `bulk-revoke`)                                         |
-| `code-signing`                     | Sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`sign` · `keyless`)                                                          |
+| `code-signing`                     | Sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `sign` · `keyless`)                                                          |
 | `compliance`                       | Compliance/inventory reporting and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules` · `evidence-pack`)                   |
 | `connector target`                 | Deployment connector targets: create, bind, test, deploy, roll back (`create` · `list` · `get` · `update` · `delete` · `bind` · `test` · `deploy` · `rollback`) |
 | `connectors`                       | Connector catalog, outbox circuit-breaker state, delivery receipts (`catalog` · `outbox-circuits` · `deliveries`)                                            |

@@ -13,6 +13,21 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Signing history is verifiable after the fact (B-4, 2026-07-26)
+- **Code signing served the two mutations and nothing that answered
+  afterwards.** You could sign with a managed key or keylessly, but nothing
+  told you which identities had signed or whether the transparency-log entry
+  actually landed. `GET /api/v1/code-signing/identities` (and `trstctl-cli
+  code-signing identities`) lists recent operations with their identity kind
+  and each one's transparency state — `verified`, `pending`, `failed` with its
+  reason, or `not-published` — plus the two counts a reviewer asks for first.
+- **Verification is not a second source of truth.** Rekor publication rides
+  the outbox, and the handler refuses to acknowledge an entry whose signed
+  receipt does not verify — so a delivered outbox row *is* a verified entry,
+  and the view reads that state rather than a parallel flag that could drift
+  from it. The query reads no sealed command bytes, so the plaintext identity
+  assertion and artifact digest never leave the signer boundary through it.
+
 ### The SSH estate outside the CA is readable (B-2, 2026-07-26)
 - **The SSH surface covered the credentials trstctl issues and nothing about
   the ones it does not.** CA status, trust rollouts, attested user certs and

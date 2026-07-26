@@ -81,6 +81,12 @@ func WithSSHFleet(fn SSHFleetProvider) Option {
 	return func(c *config) { c.sshFleet = fn }
 }
 
+// WithCodeSigningIdentities wires the signing-operation + transparency-state
+// view (B-4).
+func WithCodeSigningIdentities(fn CodeSigningIdentityProvider) Option {
+	return func(c *config) { c.codeSigningIdentities = fn }
+}
+
 // WithFeatureObserver wires per-feature telemetry (COVER-009). The hook is called
 // once per served high-risk feature operation (issuance, revocation, deployment,
 // discovery, certificate ingest) with closed-set, non-sensitive labels — the feature

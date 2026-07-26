@@ -942,6 +942,10 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if s.bulk != nil {
 		defaults = append(defaults, api.WithBulkheadStats(s.bulk.Stats))
 	}
+	// B-4: signing operations joined to their transparency-log state.
+	if d.Store != nil {
+		defaults = append(defaults, api.WithCodeSigningIdentities(s.CodeSigningIdentities))
+	}
 	// B-2: the SSH fleet view over discovered standing keys.
 	if d.Store != nil {
 		defaults = append(defaults, api.WithSSHFleet(s.SSHFleetInventory))

@@ -1010,6 +1010,25 @@ export interface CloudSecretManagerSummary {
   total_providers: number;
 }
 
+export interface CodeSigningIdentity {
+  created_at: string;
+  last_error?: string;
+  mode: "managed" | "keyless";
+  operation_id: string;
+  request_hash: string;
+  status: string;
+  transparency: "verified" | "pending" | "failed" | "not-published";
+  transparency_error?: string;
+  updated_at: string;
+}
+
+export interface CodeSigningIdentityList {
+  items: CodeSigningIdentity[];
+  not_published_count: number;
+  total: number;
+  verified_count: number;
+}
+
 export interface CodeSigningKeylessRequest {
   artifact_type: string;
   digest: string;

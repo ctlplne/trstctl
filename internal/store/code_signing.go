@@ -38,6 +38,77 @@ type CodeSigningOperation struct {
 	UpdatedAt       time.Time
 }
 
+// CodeSigningIdentityRow is one signing operation joined to the state of its
+// transparency-log publication (B-4). Rekor publication rides the outbox, so
+// "was this entry actually published and its receipt verified" is the outbox
+// row's terminal state — not a separate flag that could disagree with it.
+type CodeSigningIdentityRow struct {
+	OperationID string
+	Mode        string // "managed" (signer-held key) or "keyless" (Sigstore/Fulcio)
+	Status      string
+	RequestHash string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	LastError   string
+	// Transparency is the publication state: "verified" once the outbox row
+	// delivered (the handler refuses to ack an unverified Rekor receipt),
+	// "pending"/"failed" while in flight, and "not-published" when the
+	// operation queued no transparency row at all.
+	Transparency      string
+	TransparencyError string
+}
+
+// ListCodeSigningIdentities returns recent signing operations with their
+// transparency state, newest first. Tenant-scoped (RLS-enforced); it reads no
+// sealed command bytes, so no plaintext identity assertion or digest can leave
+// through this path.
+func (s *Store) ListCodeSigningIdentities(ctx context.Context, tenantID, destination string, limit int) ([]CodeSigningIdentityRow, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var out []CodeSigningIdentityRow
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT op.operation_id, op.mode, op.status, op.request_hash,
+			        op.created_at, op.updated_at, COALESCE(op.last_error, ''),
+			        COALESCE(ob.status, 'not-published') AS transparency,
+			        COALESCE(ob.last_error, '')          AS transparency_error
+			   FROM code_signing_operations op
+			   LEFT JOIN LATERAL (
+			     SELECT status, last_error
+			       FROM outbox
+			      WHERE tenant_id = op.tenant_id
+			        AND destination = $2
+			        AND payload::text LIKE '%' || op.operation_id || '%'
+			      ORDER BY id DESC
+			      LIMIT 1
+			   ) ob ON true
+			  WHERE op.tenant_id = $1
+			  ORDER BY op.created_at DESC, op.operation_id
+			  LIMIT $3`, tenantID, destination, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var row CodeSigningIdentityRow
+			if err := rows.Scan(&row.OperationID, &row.Mode, &row.Status, &row.RequestHash,
+				&row.CreatedAt, &row.UpdatedAt, &row.LastError,
+				&row.Transparency, &row.TransparencyError); err != nil {
+				return err
+			}
+			// The Rekor handler refuses to acknowledge an entry whose signed
+			// receipt does not verify, so a delivered row IS a verified entry.
+			if row.Transparency == "delivered" {
+				row.Transparency = "verified"
+			}
+			out = append(out, row)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 func (s *Store) CodeSigningOperationByIdempotency(ctx context.Context, tenantID, key string) (CodeSigningOperation, bool, error) {
 	var op CodeSigningOperation
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {

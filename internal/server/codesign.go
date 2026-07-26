@@ -648,3 +648,32 @@ type emptyCodeSigningKeys struct{}
 func (emptyCodeSigningKeys) Signer(_ string, keyID string) (crypto.DigestSigner, error) {
 	return nil, fmt.Errorf("codesign: no key %s", keyID)
 }
+
+// CodeSigningIdentities answers B-4: the tenant's recent signing operations
+// with the transparency-log state of each. The Rekor handler refuses to
+// acknowledge an entry whose signed receipt does not verify, so a delivered
+// transparency outbox row IS a verified entry — the store join reads that
+// state rather than a parallel flag that could drift from it.
+func (s *Server) CodeSigningIdentities(ctx context.Context, tenantID string) ([]api.CodeSigningIdentity, error) {
+	if s.store == nil {
+		return nil, nil
+	}
+	destination := defaultRekorDestination
+	if s.codeSign != nil && s.codeSign.cfg.RekorDestination != "" {
+		destination = s.codeSign.cfg.RekorDestination
+	}
+	rows, err := s.store.ListCodeSigningIdentities(ctx, tenantID, destination, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]api.CodeSigningIdentity, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, api.CodeSigningIdentity{
+			OperationID: row.OperationID, Mode: row.Mode, Status: row.Status,
+			RequestHash: row.RequestHash, Transparency: row.Transparency,
+			TransparencyError: row.TransparencyError, LastError: row.LastError,
+			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		})
+	}
+	return out, nil
+}
