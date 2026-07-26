@@ -10875,6 +10875,42 @@ export const messages = {
     defaultMessage: "Preview uses sample data in this browser demo — protocol probes are disabled.",
     description: "Protocols page probe detail while preview transport isolation is active.",
   },
+  "posture.algorithmRollup.title": {
+    defaultMessage: "Exposure by algorithm",
+    description: "S-C14: caption of the CBOM per-algorithm rollup table on Posture.",
+  },
+  "posture.algorithmRollup.algorithm": {
+    defaultMessage: "Algorithm",
+    description: "S-C14: column header naming the observed algorithm in the CBOM rollup.",
+  },
+  "posture.algorithmRollup.assets": {
+    defaultMessage: "Assets",
+    description: "S-C14: column header counting assets using an algorithm in the CBOM rollup.",
+  },
+  "posture.algorithmRollup.exposure": {
+    defaultMessage: "Exposure",
+    description: "S-C14: column header for the policy/quantum exposure of an algorithm group.",
+  },
+  "posture.algorithmRollup.target": {
+    defaultMessage: "Migration target",
+    description: "S-C14: column header for the replacement algorithm of a CBOM rollup group.",
+  },
+  "posture.algorithmRollup.outOfPolicyCount": {
+    defaultMessage: "{count} out of policy",
+    description: "S-C14: rollup badge when assets using an algorithm violate crypto policy.",
+  },
+  "posture.algorithmRollup.quantumVulnerableCount": {
+    defaultMessage: "{count} quantum-vulnerable",
+    description: "S-C14: rollup badge when assets using an algorithm are quantum-vulnerable.",
+  },
+  "posture.algorithmRollup.noExposure": {
+    defaultMessage: "No exposure",
+    description: "S-C14: rollup badge when an algorithm group is neither out of policy nor quantum-vulnerable.",
+  },
+  "posture.algorithmRollup.futureReady": {
+    defaultMessage: "Already post-quantum",
+    description: "S-C14: rollup migration-target cell for an algorithm that needs no migration.",
+  },
   "source.principal.afc19f1734": {
     defaultMessage: "Principal",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/secrets/SecretsPageParts.tsx.",

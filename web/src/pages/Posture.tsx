@@ -8,6 +8,7 @@ import { PQCReadinessSummary } from "@/components/pqc";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { Num } from "@/components/typography";
 import {
   api,
   type CBOMAsset,
@@ -411,6 +412,7 @@ export function Posture() {
           <Metric label="Out of policy" value={`${cbomProgress.out_of_policy_assets} out of policy`} />
         </dl>
         <PQCReadinessSummary progress={cbomProgress} />
+        <AlgorithmRollup assets={cbomInventory.items} loading={cbomLoading} />
 
         {lastCBOMScan ? (
           <dl className="grid gap-3 rounded-panel border border-border p-comfortable text-sm md:grid-cols-6">
@@ -760,6 +762,100 @@ function CBOMReadinessTable({ assets, loading }: { assets: CBOMAsset[]; loading:
           </td>
           <td>{asset.migration_target}</td>
           <td>{asset.reasons?.length ? asset.reasons.join("; ") : asset.strength}</td>
+        </tr>
+      ))}
+    </PreviewTable>
+  );
+}
+
+// S-C14: the flat CBOM list answers "which asset", never "which algorithm is
+// my problem". This rolls the same served inventory up by algorithm so the
+// operator sees where the estate's exposure concentrates — the row that says
+// "RSA-2048 x 412, all quantum-vulnerable, target ML-DSA-65" is the one that
+// turns a scan into a migration plan.
+type AlgorithmRollupRow = {
+  algorithm: string;
+  total: number;
+  quantumVulnerable: number;
+  outOfPolicy: number;
+  migrationTarget: string;
+  migrationStandard: string;
+  futureReady: boolean;
+};
+
+export function rollupByAlgorithm(assets: CBOMAsset[]): AlgorithmRollupRow[] {
+  const rows = new Map<string, AlgorithmRollupRow>();
+  for (const asset of assets) {
+    const algorithm = algorithmLabel(asset);
+    const row = rows.get(algorithm) ?? {
+      algorithm,
+      total: 0,
+      quantumVulnerable: 0,
+      outOfPolicy: 0,
+      // The served inventory carries the target per asset; assets sharing an
+      // algorithm share it, so the first non-empty value describes the group.
+      migrationTarget: asset.migration_target ?? "",
+      migrationStandard: asset.migration_standard ?? "",
+      futureReady: asset.migration_generation === "future-ready",
+    };
+    row.total += 1;
+    if (asset.quantum_vulnerable) row.quantumVulnerable += 1;
+    if (asset.out_of_policy) row.outOfPolicy += 1;
+    if (!row.migrationTarget && asset.migration_target) {
+      row.migrationTarget = asset.migration_target;
+      row.migrationStandard = asset.migration_standard ?? "";
+    }
+    rows.set(algorithm, row);
+  }
+  // Biggest exposure first: most assets, then most quantum-vulnerable.
+  return [...rows.values()].sort((a, b) => b.total - a.total || b.quantumVulnerable - a.quantumVulnerable);
+}
+
+function AlgorithmRollup({ assets, loading }: { assets: CBOMAsset[]; loading: boolean }) {
+  if (loading) return <LoadingState>{translateNow("source.loading.cbom.readiness.0b111b06ca")}</LoadingState>;
+  if (assets.length === 0) return null;
+  const rows = rollupByAlgorithm(assets);
+
+  return (
+    <PreviewTable
+      title={translateNow("posture.algorithmRollup.title")}
+      headers={[
+        translateNow("posture.algorithmRollup.algorithm"),
+        translateNow("posture.algorithmRollup.assets"),
+        translateNow("posture.algorithmRollup.exposure"),
+        translateNow("posture.algorithmRollup.target"),
+      ]}
+    >
+      {rows.map((row) => (
+        <tr key={row.algorithm} className="align-top">
+          <td className="font-medium">{row.algorithm}</td>
+          <td>
+            <Num>{String(row.total)}</Num>
+          </td>
+          <td>
+            <StatusBadge
+              value={row.outOfPolicy > 0 ? "out_of_policy" : row.quantumVulnerable > 0 ? "quantum_vulnerable" : "ready"}
+              label={
+                row.outOfPolicy > 0
+                  ? translateNow("posture.algorithmRollup.outOfPolicyCount", { count: String(row.outOfPolicy) })
+                  : row.quantumVulnerable > 0
+                    ? translateNow("posture.algorithmRollup.quantumVulnerableCount", { count: String(row.quantumVulnerable) })
+                    : translateNow("posture.algorithmRollup.noExposure")
+              }
+              tone={row.outOfPolicy > 0 ? "critical" : row.quantumVulnerable > 0 ? "warning" : "success"}
+              vocabulary="risk"
+            />
+          </td>
+          <td>
+            {row.futureReady ? (
+              <span className="text-sm">{translateNow("posture.algorithmRollup.futureReady")}</span>
+            ) : (
+              <>
+                <span className="block">{row.migrationTarget}</span>
+                {row.migrationStandard ? <span className="text-xs text-muted-foreground">{row.migrationStandard}</span> : null}
+              </>
+            )}
+          </td>
         </tr>
       ))}
     </PreviewTable>

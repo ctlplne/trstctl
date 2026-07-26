@@ -263,12 +263,14 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      // Demo-site re-pin: 2 new keys per catalog (preview.transportIsolated,
-      // preview.probesDisabled — the transport-isolation copy shown by the
-      // static demo). Machine-authored es/de translations — FLAG FOR HUMAN
-      // REVIEW alongside the outstanding translation review sheet.
-      "es-ES": "749604923e0f8bc5ba17926986e44f50d17d3802d5c71115380a23ee72780295",
-      "de-DE": "fe59c5d14c72bd082b274bf3f730fd97c981b77ac153380cea5ab9ed6f0b5c9a",
+      // S-C14 re-pin: 9 new keys per catalog (posture.algorithmRollup.* — the
+      // CBOM per-algorithm exposure rollup on Posture: table caption, four
+      // column headers, three exposure badges, and the already-post-quantum
+      // cell). Machine-authored es/de translations — FLAG FOR HUMAN REVIEW
+      // alongside the outstanding translation review sheet. Previous pin
+      // covered the demo-site transport-isolation copy.
+      "es-ES": "8a29c2a7827c5e9ce3d86b01434d3b8fdc7ffa1be3a3b1825721cb8400e9abdf",
+      "de-DE": "eabd6844afcc1fa83ce8fb5a9eb466f03a58dba17bc0659284040a42d11d9e60",
     });
   });
 
