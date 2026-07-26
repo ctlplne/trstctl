@@ -502,6 +502,14 @@ edges and follow-up integration work.
   hot-looping; one sweep queues at most 100 runs per tenant). The CBOM
   scanner is also served, through its own `/api/v1/cbom/*` API rather than
   the discovery-run worker.
+- A migration can be reviewed before it runs: `POST
+  /api/v1/pqc/migrations/plan` (and `trstctl-cli migration plan`, Enterprise
+  PQC only) previews the plan — which assets would be re-issued and to what,
+  which TLS findings would be rolled out, and the **residuals it will not
+  touch** — without queueing a run, minting a run id, or writing an outbox
+  row. It calls the same plan builder the start path calls over the same CBOM
+  assets, so the preview cannot describe a different migration from the one
+  that would execute.
 - Signing history is verifiable after the fact: `GET
   /api/v1/code-signing/identities` (and `trstctl-cli code-signing identities`)
   lists recent signing operations with their identity kind (`managed` for a

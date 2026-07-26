@@ -127,11 +127,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 		}
 		out[name] = true
 	}
-	// B-1 (`operations bulkheads`), B-5 (`platform system`), B-2 (`ssh fleet`), and
-	// B-4 (`code-signing identities`) raised this to 288. Like the OpenAPI count, it is a ratchet: a new command must be
+	// B-1 (`operations bulkheads`), B-5 (`platform system`), B-2 (`ssh fleet`), B-4
+	// (`code-signing identities`), and B-3 (`migration plan`) raised this to 289. Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 288 {
-		t.Fatalf("CLI commands = %d, want 288", len(out))
+	if len(out) != 289 {
+		t.Fatalf("CLI commands = %d, want 289", len(out))
 	}
 	return out
 }

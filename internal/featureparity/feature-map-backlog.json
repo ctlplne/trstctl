@@ -6969,7 +6969,7 @@
         "web/src/pages/Posture.tsx"
       ],
       "status": "closed",
-      "notes": "PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. Test evidence: internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; ee/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback.",
+      "notes": "PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. Test evidence: internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; ee/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback. B-3 adds the licensed planner: POST /api/v1/pqc/migrations/plan previews the SAME BuildPlan the start path executes — reissues, TLS rollouts, and the residuals it will NOT touch — without queueing a run, so a fleet-wide re-issuance can be reviewed for blast radius before it is authorized.",
       "api_surface": [
         "createProfile",
         "listProfiles",
@@ -6978,14 +6978,15 @@
         "listCBOMAssets"
       ],
       "cli_surface": [
-        "profiles create",
-        "profiles list",
-        "profiles get-version",
-        "cbom scan",
         "cbom assets",
+        "cbom scan",
+        "migration plan",
+        "migration rollback",
         "migration start",
         "migration status",
-        "migration rollback"
+        "profiles create",
+        "profiles get-version",
+        "profiles list"
       ],
       "facet_evidence": {
         "served": {

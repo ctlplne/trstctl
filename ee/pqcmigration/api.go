@@ -23,6 +23,9 @@ const (
 
 type Service interface {
 	Start(ctx context.Context, tenantID string, req APIRequest) (Response, error)
+	// PlanPreview runs the same plan the start path would execute, without
+	// queueing anything (B-3).
+	PlanPreview(ctx context.Context, tenantID string, req APIRequest) (PlanPreviewResponse, error)
 	Rollback(ctx context.Context, tenantID, runID string, req RollbackRequest) (RollbackResponse, error)
 	Progress(ctx context.Context, tenantID, runID string) (RunProgressResponse, error)
 }
@@ -104,6 +107,15 @@ func routes(svc Service) []api.LicensedRoute {
 			ResponseSchema: "PQCMigrationProgress", SuccessCode: "200", Permission: authz.CertsRead,
 		},
 		{
+			// B-3: see the blast radius before authorizing it. Read-only: no
+			// run id, no outbox row, no event.
+			Method: "POST", Path: "/api/v1/pqc/migrations/plan", OperationID: "planPQCMigration",
+			Summary:       "Preview the PQC migration plan without queueing it",
+			Handler:       func(a *api.API) http.HandlerFunc { return planHandler(a, svc) },
+			RequestSchema: "PQCMigrationRequest", ResponseSchema: "PQCMigrationPlan",
+			SuccessCode: "200", Permission: authz.CertsRead,
+		},
+		{
 			Method: "POST", Path: "/api/v1/pqc/migrations", OperationID: "startPQCMigration",
 			Summary:       "Queue PQC re-issuance for CBOM assets through the served protocol path",
 			Handler:       func(a *api.API) http.HandlerFunc { return startHandler(a, svc) },
@@ -152,6 +164,37 @@ func writeProgressProblem(w http.ResponseWriter, status int, detail string) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"type": "about:blank", "title": http.StatusText(status), "status": status, "detail": detail,
 	})
+}
+
+func planHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			a.WriteProblemUnauthorized(w)
+			return
+		}
+		var req APIRequest
+		if err := api.DecodeJSON(r, &req); err != nil {
+			a.WriteError(w, api.ErrWithStatus(http.StatusBadRequest, err))
+			return
+		}
+		if len(req.AssetIDs) == 0 {
+			a.WriteError(w, api.ErrStatus(http.StatusBadRequest, "asset_ids must contain at least one CBOM asset"))
+			return
+		}
+		if req.TargetAlgorithm == "" {
+			req.TargetAlgorithm = pqcMigrationTargetMLDSA65
+		}
+		if req.Protocol == "" {
+			req.Protocol = pqcMigrationProtocolACME
+		}
+		plan, err := svc.PlanPreview(r.Context(), tenantID, req)
+		if err != nil {
+			a.WriteError(w, err)
+			return
+		}
+		a.WriteJSON(w, http.StatusOK, plan)
+	}
 }
 
 func startHandler(a *api.API, svc Service) http.HandlerFunc {
@@ -230,6 +273,27 @@ func schemas() map[string]*api.Schema {
 			"rollback_on_failure": api.BooleanSchema(),
 			"tls_bindings":        api.ArraySchema(api.SchemaRef("PQCMigrationTLSBinding")),
 		}, "asset_ids", "target_algorithm"),
+		"PQCMigrationPlanReissue": api.ObjectSchema(map[string]*api.Schema{
+			"asset_id": api.StringSchema(), "location": api.StringSchema(),
+			"current_algorithm": api.StringSchema(), "target_algorithm": api.StringSchema(),
+			"effective_algorithm": api.StringSchema(), "protocol": api.StringSchema(),
+			"rollback_on_failure": api.BooleanSchema(),
+		}, "asset_id", "target_algorithm", "protocol"),
+		"PQCMigrationPlanTLSRollout": api.ObjectSchema(map[string]*api.Schema{
+			"asset_id": api.StringSchema(), "location": api.StringSchema(),
+			"finding_kind": api.StringSchema(), "target_id": api.StringSchema(),
+			"rollback_on_failure": api.BooleanSchema(),
+		}, "asset_id", "finding_kind", "target_id"),
+		"PQCMigrationPlanResidual": api.ObjectSchema(map[string]*api.Schema{
+			"id": api.StringSchema(), "status": api.StringSchema(), "reason": api.StringSchema(),
+		}, "id", "status"),
+		"PQCMigrationPlan": api.ObjectSchema(map[string]*api.Schema{
+			"reissues":          api.ArraySchema(api.SchemaRef("PQCMigrationPlanReissue")),
+			"tls_rollouts":      api.ArraySchema(api.SchemaRef("PQCMigrationPlanTLSRollout")),
+			"residuals":         api.ArraySchema(api.SchemaRef("PQCMigrationPlanResidual")),
+			"reissue_count":     api.IntegerSchema(),
+			"tls_rollout_count": api.IntegerSchema(),
+		}, "reissues", "tls_rollouts", "residuals", "reissue_count", "tls_rollout_count"),
 		"PQCMigrationTLSPosture": api.ObjectSchema(map[string]*api.Schema{
 			"minimum_version":     api.StringSchema(),
 			"cipher_suites":       api.ArraySchema(api.StringSchema()),
@@ -275,4 +339,41 @@ func schemas() map[string]*api.Schema {
 			"queued_at":          api.TimestampSchema(),
 		}, "run_id", "queued", "reason", "migration_progress", "queued_at"),
 	}
+}
+
+// B-3: the planner's served shape. It mirrors the plan the start path would
+// execute — same BuildPlan, same assets — so a preview can never describe a
+// different migration from the one that runs.
+type PlanPreviewReissue struct {
+	AssetID            string `json:"asset_id"`
+	Location           string `json:"location"`
+	CurrentAlgorithm   string `json:"current_algorithm"`
+	TargetAlgorithm    string `json:"target_algorithm"`
+	EffectiveAlgorithm string `json:"effective_algorithm"`
+	Protocol           string `json:"protocol"`
+	RollbackOnFailure  bool   `json:"rollback_on_failure"`
+}
+
+type PlanPreviewTLSRollout struct {
+	AssetID           string `json:"asset_id"`
+	Location          string `json:"location"`
+	FindingKind       string `json:"finding_kind"`
+	TargetID          string `json:"target_id"`
+	RollbackOnFailure bool   `json:"rollback_on_failure"`
+}
+
+// PlanPreviewResidual names an asset the plan will NOT migrate, and why —
+// the half of the answer a blast-radius review actually needs.
+type PlanPreviewResidual struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Reason string `json:"reason"`
+}
+
+type PlanPreviewResponse struct {
+	Reissues        []PlanPreviewReissue    `json:"reissues"`
+	TLSRollouts     []PlanPreviewTLSRollout `json:"tls_rollouts"`
+	Residuals       []PlanPreviewResidual   `json:"residuals"`
+	ReissueCount    int                     `json:"reissue_count"`
+	TLSRolloutCount int                     `json:"tls_rollout_count"`
 }

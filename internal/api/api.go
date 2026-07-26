@@ -1828,6 +1828,19 @@ func (a *API) ObserveFeature(feature, action string, start time.Time, err error)
 // returns false when no valid tenant is present (the handler should then refuse).
 func (a *API) Tenant(r *http.Request) (string, bool) { return a.tenant(r) }
 
+// WriteJSON, WriteError, and WriteProblemUnauthorized complete the licensed
+// READ seam that Tenant opened: a licensed GET handler does not go through
+// Mutate, so without these it could not render a response without the MPL
+// core exporting its problem+json machinery. They are thin pass-throughs, so
+// a licensed route's error shape is identical to a core route's.
+func (a *API) WriteJSON(w http.ResponseWriter, status int, v any) { a.writeJSON(w, status, v) }
+
+func (a *API) WriteError(w http.ResponseWriter, err error) { a.writeError(w, err) }
+
+func (a *API) WriteProblemUnauthorized(w http.ResponseWriter) {
+	a.writeProblem(w, problemUnauthorized())
+}
+
 func decodeJSONWithLimit(r *http.Request, v any, limit int64) error {
 	if r.Body == nil {
 		return errStatus(http.StatusBadRequest, "request body is required")

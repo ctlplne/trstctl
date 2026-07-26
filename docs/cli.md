@@ -91,7 +91,7 @@ exhaustive subcommand list:
 | `managed-offering`                 | Managed-offering/provider-plane posture and hosted-tenant provisioning (`status` · `tenants provision`)                                                      |
 | `mcp`                              | List and invoke the MCP tools the server exposes (`tools` · `call`)                                                                                          |
 | `mdm`                              | MDM SCEP policy/challenge status and enrollment-policy management (`scep status` · `scep policies`)                                                          |
-| `migration`                        | Licensed crypto-migration runs over CBOM findings — Enterprise PQC only (`start` · `status` · `rollback`)                                                    |
+| `migration`                        | Licensed crypto-migration runs over CBOM findings — Enterprise PQC only (`plan` · `start` · `status` · `rollback`)                                                    |
 | `nhi`                              | Unified NHI inventory, posture findings, policy compliance, decommissioning (`inventory` · `posture shadow/stale/overprivilege/static-credentials/exposure` · `policy compliance` · `decommission`) |
 | `notifications`                    | Notification channels, routing policies, inbox/dead-letter management (`channels` · `routing-policies` · `list` · `get` · `read` · `requeue`)               |
 | `operations`                       | Operational telemetry for the bounded worker pools that carry backpressure (`bulkheads`)                                                                    |

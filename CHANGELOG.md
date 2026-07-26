@@ -13,6 +13,23 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### A migration can be reviewed before it runs (B-3, 2026-07-26)
+- **You could start a fleet-wide re-issuance; you could not look at it first.**
+  `POST /api/v1/pqc/migrations/plan` (and `trstctl-cli migration plan`,
+  Enterprise PQC) previews the plan — which assets would be re-issued and to
+  what, which TLS findings would be rolled out, and **the residuals it will
+  not touch** — with no run id, no outbox row, and no event. The residual list
+  is the half that makes the preview honest: a plan that only showed what it
+  *will* do would overstate coverage.
+- **The preview cannot lie about the migration.** It calls the same
+  `BuildPlan` the start path calls, over the same CBOM assets, so a divergence
+  between preview and execution would have to be a divergence inside the plan
+  builder itself — not two implementations drifting apart.
+- The licensed READ seam grew the response writers it was missing
+  (`WriteJSON`/`WriteError`/`WriteProblemUnauthorized` beside the existing
+  `Tenant`), so a licensed GET renders errors in exactly the core's
+  problem+json shape instead of inventing its own.
+
 ### Signing history is verifiable after the fact (B-4, 2026-07-26)
 - **Code signing served the two mutations and nothing that answered
   afterwards.** You could sign with a managed key or keylessly, but nothing

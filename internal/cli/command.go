@@ -310,6 +310,7 @@ var commandTable = []Command{
 	// Licensed crypto-migration runs (Enterprise PQC). The routes exist only
 	// in a licensed binary; against an unlicensed server these return 404,
 	// which is the honest answer for a feature the edition does not serve.
+	{Name: []string{"migration", "plan"}, Method: "POST", Path: "/api/v1/pqc/migrations/plan", Body: bodyFile, Summary: "Preview a crypto-migration plan without queueing it"},
 	{Name: []string{"migration", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Start a licensed crypto-migration run over CBOM findings"},
 	{Name: []string{"migration", "status"}, Method: "GET", Path: "/api/v1/pqc/migrations/{run_id}", Summary: "Show migration run progress"},
 	{Name: []string{"migration", "rollback"}, Method: "POST", Path: "/api/v1/pqc/migrations/{run_id}/rollback", Body: bodyOptionalFile, Summary: "Roll back a migration run"},

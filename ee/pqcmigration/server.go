@@ -174,6 +174,67 @@ type tlsRollbackRequested struct {
 	Intents []sealedTLSRollbackIntent `json:"intents"`
 }
 
+// PlanPreview answers B-3: what WOULD this migration change. It runs the same
+// BuildPlan the start path runs, over the same CBOM assets, and returns the
+// result without queueing anything — no run id, no outbox row, no event. An
+// operator authorizing a fleet-wide re-issuance should be able to see the
+// blast radius first, and the preview must be the same plan that would
+// execute, not a second implementation that could disagree with it.
+func (s *pqcMigrationService) PlanPreview(ctx context.Context, tenantID string, req APIRequest) (PlanPreviewResponse, error) {
+	if s.store == nil {
+		return PlanPreviewResponse{}, errors.New("server: PQC migration planning requires the store")
+	}
+	bindings := make([]TLSBinding, 0, len(req.TLSBindings))
+	for _, binding := range req.TLSBindings {
+		bindings = append(bindings, TLSBinding{
+			AssetID: binding.AssetID, TargetID: binding.TargetID, Desired: clonePosture(binding.Desired),
+		})
+	}
+	assets, err := s.store.ListCryptoAssets(ctx, tenantID)
+	if err != nil {
+		return PlanPreviewResponse{}, err
+	}
+	plan, err := BuildPlan(pqcMigrationAssets(assets), Request{
+		AssetIDs: req.AssetIDs, TargetAlgorithm: req.TargetAlgorithm, Protocol: req.Protocol,
+		RollbackOnFailure: req.RollbackOnFailure, TLSBindings: bindings,
+	})
+	if err != nil {
+		var missing AssetNotFoundError
+		if errors.As(err, &missing) {
+			return PlanPreviewResponse{}, pgx.ErrNoRows
+		}
+		return PlanPreviewResponse{}, err
+	}
+	out := PlanPreviewResponse{
+		Reissues:    make([]PlanPreviewReissue, 0, len(plan.Reissues)),
+		TLSRollouts: make([]PlanPreviewTLSRollout, 0, len(plan.TLSRollouts)),
+		Residuals:   make([]PlanPreviewResidual, 0, len(plan.Residuals)),
+	}
+	for _, reissue := range plan.Reissues {
+		out.Reissues = append(out.Reissues, PlanPreviewReissue{
+			AssetID: reissue.Asset.ID, Location: reissue.Asset.Location,
+			CurrentAlgorithm: reissue.Asset.Algorithm, TargetAlgorithm: reissue.TargetAlgorithm,
+			EffectiveAlgorithm: reissue.EffectiveAlgorithm, Protocol: reissue.Protocol,
+			RollbackOnFailure: reissue.RollbackOnFailure,
+		})
+	}
+	for _, rollout := range plan.TLSRollouts {
+		out.TLSRollouts = append(out.TLSRollouts, PlanPreviewTLSRollout{
+			AssetID: rollout.Asset.ID, Location: rollout.Asset.Location,
+			FindingKind: rollout.FindingKind, TargetID: rollout.TargetID,
+			RollbackOnFailure: rollout.RollbackOnFailure,
+		})
+	}
+	for _, residual := range plan.Residuals {
+		out.Residuals = append(out.Residuals, PlanPreviewResidual{
+			ID: residual.ID, Status: residual.Status, Reason: residual.Reason,
+		})
+	}
+	out.ReissueCount = len(out.Reissues)
+	out.TLSRolloutCount = len(out.TLSRollouts)
+	return out, nil
+}
+
 func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req APIRequest) (Response, error) {
 	if s.store == nil || s.log == nil || s.outbox == nil {
 		return Response{}, errors.New("server: PQC migration requires store, event log, and outbox")
