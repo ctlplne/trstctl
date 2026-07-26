@@ -33,6 +33,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
+import { IncidentSeverityBadge, IncidentStepper } from "./incidents/IncidentsPageParts";
 import { formatDateTime } from "@/i18n/format";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -644,6 +645,9 @@ export function Incidents() {
                 <dd className="break-all font-mono text-xs">{latestExecution.phase}</dd>
               </div>
             </dl>
+            {/* S-C17: the phase string is precise for a log and unreadable as
+                progress; the stepper reads the same record's concrete fields. */}
+            <IncidentStepper execution={latestExecution} />
           </section>
         )}
         {impact && <BlastRadiusPreview impact={impact} />}
@@ -824,7 +828,9 @@ export function Incidents() {
                       <div className="font-medium">{action.display_name}</div>
                       <div className="font-mono text-xs text-muted-foreground">{action.inventory_id}</div>
                     </td>
-                    <td className="py-2 pr-4">{action.severity}</td>
+                    <td className="py-2 pr-4">
+                      <IncidentSeverityBadge severity={action.severity} />
+                    </td>
                     <td className="max-w-xl py-2 pr-4 text-muted-foreground">{action.recommendation}</td>
                     <td className="py-2 pr-4">{action.status}</td>
                     <td className="py-2">

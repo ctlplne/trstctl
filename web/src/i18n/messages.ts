@@ -10963,6 +10963,26 @@ export const messages = {
     defaultMessage: "Trust rollout progress",
     description: "S-C16: accessible name of the SSH trust rollout stepper.",
   },
+  "incidents.step.stepperLabel": {
+    defaultMessage: "Remediation progress",
+    description: "S-C17: accessible name of the incident remediation stepper.",
+  },
+  "incidents.step.issued": {
+    defaultMessage: "Replacement issued",
+    description: "S-C17: stepper step for the successor credential being minted.",
+  },
+  "incidents.step.deployed": {
+    defaultMessage: "Deployed",
+    description: "S-C17: stepper step for the replacement credential being delivered.",
+  },
+  "incidents.step.revoked": {
+    defaultMessage: "Compromised revoked",
+    description: "S-C17: stepper step for revoking the compromised credential.",
+  },
+  "incidents.step.evidence": {
+    defaultMessage: "Evidence sealed",
+    description: "S-C17: stepper step for the sealed evidence bundle.",
+  },
   "risk.scoreMeter.ariaLabel": {
     defaultMessage: "Risk score {score} of 100 for {subject}",
     description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",
