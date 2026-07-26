@@ -224,7 +224,14 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 	if src.Kind == "cloud_certificate" {
 		return d.executeCloudCertificateDiscoveryRun(ctx, tenantID, src, run)
 	}
-	if src.Kind == cloudsecret.SourceKind {
+	if src.Kind == cloudsecret.SourceKind || src.Kind == "secret_store" {
+		// secret_store routes through the same served secret-manager
+		// connectors as cloud_secret (aws-secrets-manager, gcp-secret-manager,
+		// azure-key-vault, hashicorp-vault): the kinds share the providers
+		// config shape, so the previously executor-less kind now runs for the
+		// served backends, and a provider outside that set fails with the
+		// connector's clear "unsupported provider" error instead of the
+		// generic no-connector fallback (A0.2b).
 		return d.executeCloudSecretDiscoveryRun(ctx, tenantID, src, run)
 	}
 	if src.Kind == "ct_log" {
@@ -423,7 +430,7 @@ func (d *issuanceDispatcher) executeCloudSecretDiscoveryRun(ctx context.Context,
 		return netscan.Report{}, "failed", err.Error(), nil
 	}
 	if len(providers) == 0 {
-		return netscan.Report{}, "failed", "cloud_secret discovery requires at least one provider", nil
+		return netscan.Report{}, "failed", src.Kind + " discovery requires at least one provider", nil
 	}
 	if run.DryRun {
 		return netscan.Report{Targets: len(providers)}, "succeeded", "", nil

@@ -478,10 +478,14 @@ edges and follow-up integration work.
   kinds (nhi_cross_surface, oauth_grant, service_account, nhi_behavior,
   credential_compromise) and observation-shaped api_key sources; secret-repo
   and third-party artifact scans dispatch through the same worker from their
-  `/api/v1/secrets/scans/*` routes. Two accepted kinds carry no worker
-  executor today: `agent` sources report through the agent mTLS channel
-  instead of the worker, and a `secret_store` source's runs fail with a clear
-  "no server-side connector" error unless inline findings are supplied.
+  `/api/v1/secrets/scans/*` routes. A `secret_store` source runs through the
+  same served secret-manager connectors as `cloud_secret`
+  (aws-secrets-manager, gcp-secret-manager, azure-key-vault,
+  hashicorp-vault; the kinds share the providers config shape), and a
+  provider outside that set fails with the connector's specific
+  "unsupported provider" error. One accepted kind carries no worker
+  executor: `agent` sources report through the agent mTLS channel instead
+  of the worker.
   Discovery schedules tick server-side: a leader-only scheduler sweeps every
   minute and queues a run for each enabled schedule whose source has no
   in-flight run and no run newer than the schedule's `interval_seconds`,

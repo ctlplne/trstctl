@@ -13,6 +13,17 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### secret_store sources gain a real executor (A0.2b, 2026-07-26)
+- **The creatable-but-never-runnable kind is gone.** `secret_store` sources
+  now dispatch through the same served secret-manager connectors as
+  `cloud_secret` (aws-secrets-manager, gcp-secret-manager, azure-key-vault,
+  hashicorp-vault — the kinds share the providers config shape), instead of
+  dead-ending in the generic "no server-side connector" fallback. Providers
+  outside the served set (infisical, kubernetes-secrets, cicd-store) fail
+  with the connector's specific "unsupported provider" refusal; building
+  those listers stays demand-driven P-track work. Empty-provider errors are
+  now kind-aware.
+
 ### Discovery schedules tick server-side (A0.2a, 2026-07-26)
 - **"Continuous monitoring" stops needing an external cron.** A leader-only
   scheduler (`RunDiscoveryScheduler`, started with the CRL and lifecycle
