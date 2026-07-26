@@ -142,6 +142,12 @@ type Deps struct {
 	// chain-bound precondition (INV-A10 zero removal). AGID-07b consumes this when it
 	// wires the broker.
 	BrokerIssuancePrecondition broker.IssuancePrecondition
+	// BrokerTaskEnvelopeGate is supplied only by the tagged EE attach seam
+	// (B-7). It verifies an AGID-05 task envelope as a precondition of broker
+	// issuance and returns the digest the credential binds. Nil in Community /
+	// core-only builds, where a request carrying an envelope is REFUSED rather
+	// than silently issued unscoped.
+	BrokerTaskEnvelopeGate BrokerTaskEnvelopeGate
 	// IssuanceAdmission is a feature-neutral pre-mint policy seam for served issuance
 	// and renewal side effects. Nil leaves core behavior unchanged; tagged edition
 	// attach code may supply a hook that admits or refuses only operations whose
@@ -1347,6 +1353,7 @@ func (s *Server) configureAgentBrokerSurface(d Deps) error {
 		// seam may have set. Nil in Community / core-only, leaving the broker's
 		// chain-bound seam inert and the free single-hop badge unaffected (INV-A10).
 		IssuancePrecondition: d.BrokerIssuancePrecondition,
+		TaskEnvelopeGate:     d.BrokerTaskEnvelopeGate,
 	})
 	if err != nil {
 		return err

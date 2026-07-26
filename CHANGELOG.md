@@ -13,6 +13,28 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Broker-issued agent credentials can be task-scoped (B-7, 2026-07-26)
+- **Only the chain-bound delegation path could bind a credential to one
+  authorized task.** The broker's single-hop path — the one an AI/MCP agent
+  actually uses — could not carry an AGID-05 task envelope at all, so a broker
+  badge had standing scope and nothing narrower. `POST
+  /api/v1/broker/agent-identities` now accepts `task_envelope_base64` and
+  returns the `task_envelope_digest` the credential binds, which the caller
+  can recompute to confirm the scope it authorized.
+- **An envelope the build cannot verify is refused, not ignored.** This is the
+  rule that makes the binding worth anything: silently issuing an *unscoped*
+  credential in place of the scoped one a caller asked for is precisely the
+  outcome an attacker would engineer, so a Community / core-only build (which
+  attaches no gate) rejects the request. Requests carrying no envelope are the
+  ordinary single-hop badge, untouched — INV-A10 zero removal holds.
+- **The gate reuses the delegation gate's own verification**
+  (`taskenv.VerifySignatureAndExpiry`): requester signature over the canonical
+  bytes, resolved through an operator-provisioned trust store on the signer
+  floor that the caller cannot inject into, plus the expiry window. The bound
+  digest is computed from the envelope that just passed, so a substituted
+  envelope cannot be bound in place of the signed one, and the binding is
+  emitted into the audit chain (AN-2) rather than living only in a response.
+
 ### A migration can be reviewed before it runs (B-3, 2026-07-26)
 - **You could start a fleet-wide re-issuance; you could not look at it first.**
   `POST /api/v1/pqc/migrations/plan` (and `trstctl-cli migration plan`,

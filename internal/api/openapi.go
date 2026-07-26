@@ -2537,6 +2537,9 @@ func componentSchemas() map[string]*Schema {
 		"public_key_pem": str(),
 		"scopes":         {Type: "array", Items: str()},
 		"ttl_seconds":    {Type: "integer"},
+		// B-7: optional AGID-05 task envelope binding the credential to one
+		// authorized task. Present-but-unverifiable is refused, never ignored.
+		"task_envelope_base64": str(),
 	}, "agent_id", "method", "payload_base64", "public_key_pem", "scopes")
 	brokerAgentIdentity := object(map[string]*Schema{
 		"agent_id":        str(),
@@ -2548,6 +2551,9 @@ func componentSchemas() map[string]*Schema {
 		"scopes":          {Type: "array", Items: str()},
 		"not_after":       timestamp(),
 		"attestation":     ref("Attestation"),
+		// B-7: the digest of the verified task envelope this credential binds;
+		// absent when the caller supplied none.
+		"task_envelope_digest": str(),
 	}, "agent_id", "node_id", "subject", "credential_id", "certificate_id", "certificate_pem", "scopes", "not_after", "attestation")
 	ephemeralCredentialReq := object(map[string]*Schema{
 		"request_id":     str(),

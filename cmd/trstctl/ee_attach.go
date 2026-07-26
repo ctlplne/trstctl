@@ -11,6 +11,7 @@ import (
 
 	_ "trstctl.com/trstctl/ee"
 	eeagentapi "trstctl.com/trstctl/ee/agentid/api"
+	eeagentdelegation "trstctl.com/trstctl/ee/agentid/delegation"
 	eeagentbrokerstore "trstctl.com/trstctl/ee/agentid/delegation/brokerstore"
 	eeagentstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 	eeagentorch "trstctl.com/trstctl/ee/agentid/orchestrator"
@@ -172,6 +173,19 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		// Unlicensed or core-only deployments skip this block, attach no precondition, and
 		// run zero chain-bound issuance while the free badge is unaffected.
 		deps.BrokerIssuancePrecondition = eeagentbrokerstore.NewFailClosedBrokerPrecondition()
+		// B-7: the AGID-05 task-envelope gate for the broker's single-hop path.
+		// Until now only the chain-bound path could bind a credential to one
+		// authorized task; the broker could not carry an envelope at all. The
+		// gate reuses the same in-signer verification the delegation gate runs
+		// (requester signature over canonical bytes, resolved through an
+		// operator-provisioned trust store the caller cannot inject into, plus
+		// the expiry window) and returns the digest the credential binds.
+		// Unlicensed builds attach no gate, and the core REFUSES an
+		// envelope-bearing request rather than issuing an unscoped credential
+		// in its place.
+		deps.BrokerTaskEnvelopeGate = eeagentdelegation.NewBrokerTaskEnvelopeGate(
+			eeagentdelegation.NewDurableTaskEnvelopeTrustStore(cfg.Signer.KeyStoreDir).TrustLookup,
+		)
 		// AGID-INT-CALL: attach the AGID external API + the licensed-outbox worker so the two
 		// AGID user journeys are reachable from this control-plane binary and every ee/agentid
 		// mechanism gains a PRODUCTION CALLER (the reachability bar), mirroring the FeaturePCAS

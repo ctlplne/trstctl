@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -69,6 +70,11 @@ type agentBrokerService struct {
 	// (broker.Issue) unaffected (INV-A10 zero removal). The core names only the generic
 	// seam type; what the precondition verifies lives entirely in the edition.
 	issuancePrecondition broker.IssuancePrecondition
+	// taskEnvelopeGate is the feature-neutral AGID-05 task-envelope gate (B-7),
+	// supplied only by the tagged EE attach seam. Core never interprets envelope
+	// bytes; it only enforces the rule that makes the binding meaningful — see
+	// bindTaskEnvelope.
+	taskEnvelopeGate BrokerTaskEnvelopeGate
 }
 
 type agentBrokerDeps struct {
@@ -82,6 +88,10 @@ type agentBrokerDeps struct {
 	Audit                auditsink.Auditor
 	Policy               *policy.Engine
 	IssuancePrecondition broker.IssuancePrecondition
+	// TaskEnvelopeGate is the AGID-05 task-envelope gate (B-7); nil in
+	// Community / core-only builds, where an envelope-bearing request is
+	// refused rather than downgraded.
+	TaskEnvelopeGate BrokerTaskEnvelopeGate
 }
 
 func newAgentBrokerService(d agentBrokerDeps) (*agentBrokerService, error) {
@@ -149,6 +159,7 @@ func newAgentBrokerService(d agentBrokerDeps) (*agentBrokerService, error) {
 		// consulted only on the chain-bound path, so a nil value leaves the free badge
 		// unchanged (INV-A10).
 		issuancePrecondition: d.IssuancePrecondition,
+		taskEnvelopeGate:     d.TaskEnvelopeGate,
 	}, nil
 }
 
@@ -159,8 +170,42 @@ func (s *Server) IssueBrokerAgentIdentity(ctx context.Context, tenantID, idempot
 	return s.agentBroker.IssueBrokerAgentIdentity(ctx, tenantID, idempotencyKey, req)
 }
 
+// BrokerTaskEnvelopeGate verifies an AGID-05 task envelope as a precondition of
+// broker issuance and returns the digest the credential should bind. It is the
+// feature-neutral seam: the MPL core names it and enforces when it must be
+// consulted, while what a valid envelope IS lives entirely in the edition
+// (ee/agentid/taskenv + the delegation gate's requester trust store).
+type BrokerTaskEnvelopeGate func(ctx context.Context, tenantID string, envelope []byte, now time.Time) (digest []byte, err error)
+
+// bindTaskEnvelope enforces the rule that makes a task binding worth anything:
+// a caller who asks for a task-scoped credential must never receive an
+// unscoped one. So an envelope present with no gate installed is REFUSED —
+// silently ignoring it would hand back a broader credential than was asked
+// for, which is the failure an attacker would engineer. No envelope means the
+// ordinary single-hop badge, unchanged (INV-A10 zero removal).
+func (s *agentBrokerService) bindTaskEnvelope(ctx context.Context, tenantID string, req api.BrokerAgentIdentityRequest) ([]byte, error) {
+	if len(req.TaskEnvelope) == 0 {
+		return nil, nil
+	}
+	if s.taskEnvelopeGate == nil {
+		return nil, fmt.Errorf("%w: task_envelope requires the licensed agent-identity gate; refusing to issue an unscoped credential in its place", api.ErrBrokerRejected)
+	}
+	digest, err := s.taskEnvelopeGate(ctx, tenantID, req.TaskEnvelope, time.Now().UTC())
+	if err != nil {
+		return nil, fmt.Errorf("%w: task envelope refused: %v", api.ErrBrokerRejected, err)
+	}
+	if len(digest) == 0 {
+		return nil, fmt.Errorf("%w: task envelope gate returned no digest", api.ErrBrokerRejected)
+	}
+	return digest, nil
+}
+
 func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenantID, idempotencyKey string, req api.BrokerAgentIdentityRequest) (api.BrokerAgentIdentity, error) {
 	if err := s.validate(tenantID, idempotencyKey, req); err != nil {
+		return api.BrokerAgentIdentity{}, err
+	}
+	taskDigest, err := s.bindTaskEnvelope(ctx, tenantID, req)
+	if err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
 	idemKey := "broker-issue:" + idempotencyKey
@@ -180,7 +225,15 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 		if _, err := s.orch.EnsureOwner(ctx, tenantID, ownerID, store.OwnerWorkload, req.AgentID, ""); err != nil {
 			return api.BrokerAgentIdentity{}, err
 		}
-		return brokerResponseFromCertificate(req.AgentID, ownerID, req.Scopes, recovered[0], att)
+		resp, err := brokerResponseFromCertificate(req.AgentID, ownerID, req.Scopes, recovered[0], att)
+		if err != nil {
+			return api.BrokerAgentIdentity{}, err
+		}
+		// A replay of a task-scoped issuance re-reports the same binding: the
+		// envelope was re-verified above, so an expired one now refuses rather
+		// than silently returning the old credential.
+		resp.TaskEnvelopeDigest = hex.EncodeToString(taskDigest)
+		return resp, nil
 	}
 
 	ownerID := brokerOwnerID(tenantID, req.AgentID)
@@ -256,7 +309,16 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 	if err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
-	return brokerResponseFromIdentity(owner.ID, identity, recorded.ID), nil
+	resp := brokerResponseFromIdentity(owner.ID, identity, recorded.ID)
+	if len(taskDigest) > 0 {
+		resp.TaskEnvelopeDigest = hex.EncodeToString(taskDigest)
+		// AN-2: the binding is durable in the audit chain, which is the record
+		// of what was authorized — not a field a later read could lose.
+		_ = auditsink.Emit(ctx, s.audit, nil, "broker.agent_identity.task_bound", tenantID,
+			[]byte(fmt.Sprintf(`{"agent_id":%q,"credential_id":%q,"task_envelope_digest":%q}`,
+				req.AgentID, identity.CredentialID, resp.TaskEnvelopeDigest)))
+	}
+	return resp, nil
 }
 
 func (s *agentBrokerService) validate(tenantID, idempotencyKey string, req api.BrokerAgentIdentityRequest) error {

@@ -1699,6 +1699,9 @@
           },
           "subject": {
             "type": "string"
+          },
+          "task_envelope_digest": {
+            "type": "string"
           }
         },
         "required": [
@@ -1733,6 +1736,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "task_envelope_base64": {
+            "type": "string"
           },
           "ttl_seconds": {
             "type": "integer"

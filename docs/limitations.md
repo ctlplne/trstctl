@@ -502,6 +502,20 @@ edges and follow-up integration work.
   hot-looping; one sweep queues at most 100 runs per tenant). The CBOM
   scanner is also served, through its own `/api/v1/cbom/*` API rather than
   the discovery-run worker.
+- Broker-issued agent credentials can be task-scoped: `POST
+  /api/v1/broker/agent-identities` accepts an optional
+  `task_envelope_base64` (the AGID-05 task envelope) and returns the
+  `task_envelope_digest` the credential binds, so an AI/MCP agent badge can be
+  scoped to one authorized task instead of standing scope alone. Verification
+  is the licensed AGID gate's: the requester signature is checked over the
+  envelope's canonical bytes against an **operator-provisioned** requester key
+  (the caller cannot supply its own), plus the expiry window, and the bound
+  digest is the verified envelope's own — a substituted envelope cannot be
+  bound in place of the signed one. **An envelope supplied to a build with no
+  licensed gate is refused, not ignored**: silently returning an unscoped
+  credential in place of the scoped one the caller asked for would be the
+  dangerous outcome. Requests carrying no envelope are the ordinary
+  single-hop badge, unchanged.
 - A migration can be reviewed before it runs: `POST
   /api/v1/pqc/migrations/plan` (and `trstctl-cli migration plan`, Enterprise
   PQC only) previews the plan — which assets would be re-issued and to what,

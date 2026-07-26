@@ -466,6 +466,7 @@ export interface BrokerAgentIdentity {
   not_after: string;
   scopes: string[];
   subject: string;
+  task_envelope_digest?: string;
 }
 
 export interface BrokerAgentIdentityRequest {
@@ -474,6 +475,7 @@ export interface BrokerAgentIdentityRequest {
   payload_base64: string;
   public_key_pem: string;
   scopes: string[];
+  task_envelope_base64?: string;
   ttl_seconds?: number;
 }
 

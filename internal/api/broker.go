@@ -41,27 +41,41 @@ type BrokerAgentIdentityRequest struct {
 	PublicKeyDER []byte
 	Scopes       []string
 	TTLSeconds   int64
+	// TaskEnvelope is the optional opaque AGID-05 task envelope binding this
+	// credential to one authorized task (B-7). The chain-bound delegation path
+	// has carried one since AGID-05; the broker's single-hop path could not,
+	// so a broker-issued agent credential could not be task-scoped at all.
+	// Core never interprets these bytes: verification is the licensed AGID
+	// gate's job, reached through BrokerTaskEnvelopeGate.
+	TaskEnvelope []byte
 }
 
 type brokerAgentIdentityJSON struct {
-	AgentID       string   `json:"agent_id"`
-	Method        string   `json:"method"`
-	PayloadBase64 string   `json:"payload_base64"`
-	PublicKeyPEM  string   `json:"public_key_pem"`
-	Scopes        []string `json:"scopes"`
-	TTLSeconds    int64    `json:"ttl_seconds"`
+	AgentID            string   `json:"agent_id"`
+	Method             string   `json:"method"`
+	PayloadBase64      string   `json:"payload_base64"`
+	PublicKeyPEM       string   `json:"public_key_pem"`
+	Scopes             []string `json:"scopes"`
+	TTLSeconds         int64    `json:"ttl_seconds"`
+	TaskEnvelopeBase64 string   `json:"task_envelope_base64,omitempty"`
 }
 
 type BrokerAgentIdentity struct {
-	AgentID        string             `json:"agent_id"`
-	NodeID         string             `json:"node_id"`
-	Subject        string             `json:"subject"`
-	CredentialID   string             `json:"credential_id"`
-	CertificateID  string             `json:"certificate_id"`
-	CertificatePEM string             `json:"certificate_pem"`
-	Scopes         []string           `json:"scopes"`
-	NotAfter       time.Time          `json:"not_after"`
-	Attestation    attest.Attestation `json:"attestation"`
+	// TaskEnvelopeDigest is the digest of the verified AGID-05 task envelope
+	// this credential is bound to (B-7). Empty when the caller supplied none:
+	// the credential is then the ordinary single-hop agent badge. A caller
+	// that DID supply an envelope can compare this to its own digest and
+	// confirm the credential is scoped to the task it authorized.
+	TaskEnvelopeDigest string             `json:"task_envelope_digest,omitempty"`
+	AgentID            string             `json:"agent_id"`
+	NodeID             string             `json:"node_id"`
+	Subject            string             `json:"subject"`
+	CredentialID       string             `json:"credential_id"`
+	CertificateID      string             `json:"certificate_id"`
+	CertificatePEM     string             `json:"certificate_pem"`
+	Scopes             []string           `json:"scopes"`
+	NotAfter           time.Time          `json:"not_after"`
+	Attestation        attest.Attestation `json:"attestation"`
 }
 
 //trstctl:mutation
@@ -104,6 +118,14 @@ func (a *API) issueBrokerAgentIdentity(w http.ResponseWriter, r *http.Request) {
 			opErr = errors.New("public_key_pem must contain one PUBLIC KEY PEM block")
 			return 0, nil, errStatus(http.StatusBadRequest, "public_key_pem must contain one PUBLIC KEY PEM block")
 		}
+		var envelope []byte
+		if raw := strings.TrimSpace(req.TaskEnvelopeBase64); raw != "" {
+			envelope, err = base64.StdEncoding.DecodeString(raw)
+			if err != nil || len(envelope) == 0 {
+				opErr = errors.New("task_envelope_base64 must be non-empty standard base64")
+				return 0, nil, errStatus(http.StatusBadRequest, "task_envelope_base64 must be non-empty standard base64")
+			}
+		}
 		issued, err := a.broker.IssueBrokerAgentIdentity(ctx, tenantID, idempotencyKey, BrokerAgentIdentityRequest{
 			AgentID:      agentID,
 			Method:       method,
@@ -111,6 +133,7 @@ func (a *API) issueBrokerAgentIdentity(w http.ResponseWriter, r *http.Request) {
 			PublicKeyDER: block.Bytes,
 			Scopes:       append([]string(nil), req.Scopes...),
 			TTLSeconds:   req.TTLSeconds,
+			TaskEnvelope: envelope,
 		})
 		if err != nil {
 			opErr = err

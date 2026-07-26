@@ -6079,7 +6079,7 @@
         "web/src/pages/Workloads.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. B-7 lets the broker's single-hop path carry an AGID-05 task envelope: the request accepts task_envelope_base64 and the response returns the bound task_envelope_digest. Verification is the licensed gate (requester signature over canonical bytes against an operator-provisioned trust store the caller cannot inject into, plus expiry); an envelope supplied to a build with no gate is REFUSED rather than downgraded to an unscoped credential. Covered by TestBrokerTaskEnvelopeGate* (ee) and TestBrokerRefusesTaskEnvelopeWithoutLicensedGate (core).",
       "api_surface": [
         "issueBrokerAgentIdentity"
       ],
