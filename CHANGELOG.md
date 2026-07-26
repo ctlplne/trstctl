@@ -13,6 +13,15 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### ACME's algorithm transparency is pinned by test (A0.3c, 2026-07-26)
+- **"ACME never parses the CSR" is now a contract, not an accident.** A new
+  test drives a full RFC 8555 order with a real client and finalizes with a
+  CSR whose proof-of-possession the core parser rejects; the order completes
+  and the CA seam receives byte-identical CSR data. If anyone "hardens"
+  finalize with a core-parser check — breaking the licensed issuer's
+  ownership of subject-algorithm verification — this test fails and names
+  the seam contract.
+
 ### Profiles can name post-quantum algorithms when licensed (A0.3b, 2026-07-26)
 - **`allowed_key_algorithms` stops failing closed on licensed labels.**
   `crypto.Classify` gains a licensed-classifier seam
