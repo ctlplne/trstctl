@@ -13,6 +13,17 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Profiles can name post-quantum algorithms when licensed (A0.3b, 2026-07-26)
+- **`allowed_key_algorithms` stops failing closed on licensed labels.**
+  `crypto.Classify` gains a licensed-classifier seam
+  (`InstallLicensedAlgorithmClassifier`, filled by attachPQC with
+  `ee/pqc.ClassifyAlgorithm`), so profile authoring accepts ML-DSA / SLH-DSA
+  / hybrid signature labels — and still rejects ML-KEM labels, which cannot
+  sign certificates. Enforcement stays exact-match: a profile listing
+  `ML-DSA-65` admits pure ML-DSA-65 CSRs; a hybrid enrollment carries a
+  classical subject key and remains governed by its classical family label.
+  Unlicensed binaries keep failing closed on all of it.
+
 ### CMP gains the licensed-CSR seam (A0.3a, 2026-07-26)
 - **CMP can now carry subject algorithms the core toolchain cannot check.**
   `ParseCMPRequest` previously verified the carried PKCS#10 with the strict

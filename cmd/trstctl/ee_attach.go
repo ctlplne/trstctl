@@ -36,6 +36,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -274,6 +275,10 @@ func attachPQC(log *slog.Logger, deps *server.Deps) {
 	// recognize post-quantum families the MPL core deliberately does not know,
 	// so migration progress can count future-ready assets (A0.1).
 	cbom.InstallLicensedPosture(eepqc.CBOMTargetFor, eepqc.CBOMClassifyKey)
+	// Licensed algorithm classifier: post-quantum and hybrid labels become
+	// valid certificate-profile `allowed_key_algorithms` entries and inventory
+	// classifications (A0.3b). Unlicensed builds keep failing closed on them.
+	crypto.InstallLicensedAlgorithmClassifier(eepqc.ClassifyAlgorithm)
 	if log != nil {
 		log.Info("Enterprise PQC attached", slog.String("feature", string(license.FeaturePQC)))
 	}

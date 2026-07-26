@@ -18,8 +18,21 @@ type Classification struct {
 	PostQuantum       bool   // designed to resist quantum attacks
 }
 
+// licensedClassifier recognizes algorithm labels the core deliberately does
+// not know. It is installed exactly once, from the tagged attach seam
+// (cmd/trstctl/ee_attach.go, AN-9), before serving begins; nil keeps the
+// strict core behavior, so an unlicensed binary fails closed on those labels.
+var licensedClassifier func(Algorithm) (Classification, bool)
+
+// InstallLicensedAlgorithmClassifier registers the licensed algorithm
+// classifier. Call it once at process attach time, never per request.
+func InstallLicensedAlgorithmClassifier(fn func(Algorithm) (Classification, bool)) {
+	licensedClassifier = fn
+}
+
 // Classify returns the classification of an algorithm, or an error if it is
-// unknown.
+// unknown. An installed licensed classifier is consulted for algorithms the
+// core does not recognize before failing closed.
 func Classify(a Algorithm) (Classification, error) {
 	switch a {
 	case RSA2048, RSA3072, RSA4096:
@@ -29,6 +42,11 @@ func Classify(a Algorithm) (Classification, error) {
 	case Ed25519:
 		return Classification{Algorithm: a, Family: "Ed25519", Kind: "signature", QuantumVulnerable: true}, nil
 	default:
+		if licensedClassifier != nil {
+			if c, ok := licensedClassifier(a); ok {
+				return c, nil
+			}
+		}
 		return Classification{}, fmt.Errorf("crypto: unknown algorithm %q", a)
 	}
 }

@@ -1473,12 +1473,14 @@ client), and ACME hands the CSR bytes to the same licensed issuer without
 parsing them first; SCEP and CMP still verify CSRs with the core parser
 before the licensed parser is consulted and therefore reject pure ML-DSA —
 SCEP additionally cannot deliver its CMS-enveloped reply to a
-signature-only subject key, a protocol limit rather than a code gap. Two
-ceilings apply everywhere: the issuing CA key itself remains classical
+signature-only subject key, a protocol limit rather than a code gap. One
+ceiling applies everywhere: the issuing CA key itself remains classical
 ECDSA-P256 (post-quantum keys are subject keys, not issuer keys, in the
-served path), and certificate-profile `allowed_key_algorithms` labels do
-not yet accept post-quantum or hybrid names — profile-gating PQ enrollment
-is a named residual, not a served claim.
+served path). Certificate-profile `allowed_key_algorithms` labels accept
+the post-quantum and hybrid names when PQC is licensed — a pure label
+matches its exact inspected CSR algorithm, while a hybrid enrollment
+carries a classical subject key and stays governed by its classical family
+label; unlicensed builds keep failing closed on those labels.
 
 The discovery side knows these algorithms when licensed: the licensed CBOM
 posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+ (and hybrid
