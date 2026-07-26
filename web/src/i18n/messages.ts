@@ -10959,6 +10959,10 @@ export const messages = {
     defaultMessage: "{open} open / {total} total",
     description: "S-C15: findings cell showing open versus total findings for a source.",
   },
+  "ssh.rollout.stepperLabel": {
+    defaultMessage: "Trust rollout progress",
+    description: "S-C16: accessible name of the SSH trust rollout stepper.",
+  },
   "risk.scoreMeter.ariaLabel": {
     defaultMessage: "Risk score {score} of 100 for {subject}",
     description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",

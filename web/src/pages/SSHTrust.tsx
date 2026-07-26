@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
   api,
@@ -15,6 +16,54 @@ import {
 
 const fallbackAttestors = ["k8s_sat", "github_oidc", "aws_iid", "azure_imds", "gcp_iit", "tpm"];
 const rolloutStatuses: SSHTrustRolloutRequest["status"][] = ["planned", "validating", "health_passed", "rolled_back", "failed"];
+
+// S-C16: the rollout's status was a bare enum in a dropdown and an id in the
+// output line, so "where is this rollout, and is that good" needed knowledge
+// of the state machine. The stepper draws the machine: plan → validate →
+// health-passed is the intended path, and rolled-back / failed are terminal
+// branches that replace the remaining steps rather than sitting beside them.
+const rolloutHappyPath = ["planned", "validating", "health_passed"] as const;
+
+export type RolloutStep = { status: string; state: "done" | "current" | "upcoming" | "terminal" };
+
+export function rolloutSteps(status: string): RolloutStep[] {
+  const terminalIndex = rolloutHappyPath.indexOf(status as (typeof rolloutHappyPath)[number]);
+  if (terminalIndex >= 0) {
+    return rolloutHappyPath.map((step, index) => ({
+      status: step,
+      state: index < terminalIndex ? "done" : index === terminalIndex ? "current" : "upcoming",
+    }));
+  }
+  // rolled_back / failed: the run left the happy path after validation began.
+  return [
+    { status: "planned", state: "done" },
+    { status: "validating", state: "done" },
+    { status, state: "terminal" },
+  ];
+}
+
+function RolloutStepper({ status }: { status: string }) {
+  const steps = rolloutSteps(status);
+  return (
+    <ol className="flex flex-wrap items-center gap-2" aria-label={translateNow("ssh.rollout.stepperLabel")}>
+      {steps.map((step, index) => (
+        <li key={step.status} className="flex items-center gap-2">
+          {index > 0 ? (
+            <span aria-hidden="true" className="text-muted-foreground">
+              →
+            </span>
+          ) : null}
+          <StatusBadge
+            vocabulary="lifecycle"
+            value={step.status}
+            label={step.status.replace(/_/g, " ")}
+            tone={step.state === "terminal" ? "critical" : step.state === "current" ? "warning" : step.state === "done" ? "success" : "neutral"}
+          />
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 function splitHosts(input: string): string[] {
   return input
@@ -266,7 +315,12 @@ export function SSHTrust() {
           <Button className="md:col-span-3" type="submit" disabled={!confirmed || splitHosts(hosts).length === 0}>
             Record trust rollout
           </Button>
-          {rollout && <output className="font-mono text-xs text-muted-foreground md:col-span-3">{rollout.id}</output>}
+          {rollout && (
+            <div className="grid gap-2 md:col-span-3">
+              <RolloutStepper status={rollout.status} />
+              <output className="font-mono text-xs text-muted-foreground">{rollout.id}</output>
+            </div>
+          )}
         </form>
       </section>
 

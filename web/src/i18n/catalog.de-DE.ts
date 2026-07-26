@@ -2914,6 +2914,7 @@ const deDECatalog = {
   "discovery.sourceActivity.neverRan": "Nie ausgeführt",
   "discovery.sourceActivity.drift": "Abweichend",
   "discovery.sourceActivity.findings": "{open} offen / {total} gesamt",
+  "ssh.rollout.stepperLabel": "Fortschritt der Vertrauensverteilung",
   "risk.scoreMeter.ariaLabel": "Risikobewertung {score} von 100 für {subject}",
   "risk.factorChips.none": "Keine beitragenden Faktoren",
   "risk.scoreMeter.remaining": "verbleibend",

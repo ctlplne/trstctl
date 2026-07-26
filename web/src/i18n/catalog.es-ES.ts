@@ -2902,6 +2902,7 @@ const esESCatalog = {
   "discovery.sourceActivity.neverRan": "Nunca ejecutada",
   "discovery.sourceActivity.drift": "Con desviación",
   "discovery.sourceActivity.findings": "{open} abiertos / {total} en total",
+  "ssh.rollout.stepperLabel": "Progreso del despliegue de confianza",
   "risk.scoreMeter.ariaLabel": "Puntuación de riesgo {score} de 100 para {subject}",
   "risk.factorChips.none": "Sin factores contribuyentes",
   "risk.scoreMeter.remaining": "restante",
