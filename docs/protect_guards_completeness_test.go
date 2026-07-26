@@ -722,7 +722,7 @@ func TestProduct008AppShellA11yFoundationsStayPresent(t *testing.T) {
 		`{t("app.skipToMain")}`,        // skip-link label
 		`<main id="main"`,              // main landmark with matching id
 		"tabIndex={-1}",                // main is programmatically focusable
-		"focus:ring-2 focus:ring-ring", // visible focus styling
+		"focus-visible:ring-2 focus-visible:ring-focus", // visible focus styling (rule 2: the dedicated --focus token)
 	)
 }
 

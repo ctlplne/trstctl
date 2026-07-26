@@ -19,6 +19,7 @@ package docs
 //     stay equal to what the tree actually contains.
 
 import (
+	"bytes"
 	"encoding/json"
 	"go/parser"
 	"go/token"
@@ -3233,6 +3234,12 @@ func TestDebtMarkersRequireOwnerOrIssue(t *testing.T) {
 				continue
 			}
 			t.Fatalf("CODE-101: read %s: %v", rel, err)
+		}
+		if bytes.IndexByte(body, 0) >= 0 {
+			// Binary artifacts (visual-regression PNG baselines and the like)
+			// are not debt-marker carriers: compressed bytes can spell a
+			// marker by accident, so the text-only scan skips them.
+			continue
 		}
 		for i, line := range strings.Split(string(body), "\n") {
 			if markerRE.MatchString(line) && !ownerRE.MatchString(line) {
