@@ -482,10 +482,15 @@ edges and follow-up integration work.
   executor today: `agent` sources report through the agent mTLS channel
   instead of the worker, and a `secret_store` source's runs fail with a clear
   "no server-side connector" error unless inline findings are supplied.
-  Discovery schedules are stored and readable but nothing ticks them yet —
-  recurring runs need an external scheduler hitting the runs endpoint. The
-  CBOM scanner is also served, through its own `/api/v1/cbom/*` API rather
-  than the discovery-run worker.
+  Discovery schedules tick server-side: a leader-only scheduler sweeps every
+  minute and queues a run for each enabled schedule whose source has no
+  in-flight run and no run newer than the schedule's `interval_seconds`,
+  through the same event + outbox path an operator-initiated run takes
+  (runs it queues carry `requested_by: discovery-scheduler`; a failed run
+  counts as an attempt, so a broken source retries next interval instead of
+  hot-looping; one sweep queues at most 100 runs per tenant). The CBOM
+  scanner is also served, through its own `/api/v1/cbom/*` API rather than
+  the discovery-run worker.
 - SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator): the
   applier that installs a trusted SSH CA and rolls it back on failure is wired
   into the `trstctl-agent` binary behind a **default-off operator opt-in**

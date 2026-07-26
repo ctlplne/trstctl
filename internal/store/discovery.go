@@ -309,6 +309,69 @@ func (s *Store) ListDiscoverySchedulesPage(ctx context.Context, tenantID, afterI
 	return out, err
 }
 
+// TenantsWithEnabledDiscoverySchedules enumerates the tenants that own at
+// least one enabled discovery schedule, so the leader-only schedule ticker can
+// sweep each tenant under its own RLS context.
+func (s *Store) TenantsWithEnabledDiscoverySchedules(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants have enabled discovery schedules so the leader-only scheduler can sweep each tenant under its own RLS context (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM discovery_schedules WHERE enabled ORDER BY tenant_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// DiscoverySchedulesDue returns the tenant's enabled schedules that are due to
+// run at now: their source has no in-flight run (queued/running) and no run —
+// of any outcome — newer than the schedule's interval, so a failed attempt
+// retries on the next interval instead of hot-looping every sweep. limit
+// bounds one sweep's work (AN-7 discipline at the query, before the queue).
+func (s *Store) DiscoverySchedulesDue(ctx context.Context, tenantID string, now time.Time, limit int) ([]DiscoverySchedule, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	var out []DiscoverySchedule
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT s.id::text, s.tenant_id::text, s.source_id::text, s.name, s.interval_seconds, s.enabled, s.created_at, s.updated_at
+			   FROM discovery_schedules s
+			  WHERE s.tenant_id = $1 AND s.enabled
+			    AND NOT EXISTS (
+			      SELECT 1 FROM discovery_runs r
+			       WHERE r.tenant_id = s.tenant_id
+			         AND r.source_id = s.source_id
+			         AND (r.status IN ('queued', 'running')
+			              OR r.created_at > $2::timestamptz - make_interval(secs => GREATEST(s.interval_seconds, 1)))
+			    )
+			  ORDER BY s.created_at, s.id
+			  LIMIT $3`, tenantID, now, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var sched DiscoverySchedule
+			if err := rows.Scan(&sched.ID, &sched.TenantID, &sched.SourceID, &sched.Name,
+				&sched.IntervalSeconds, &sched.Enabled, &sched.CreatedAt, &sched.UpdatedAt); err != nil {
+				return err
+			}
+			out = append(out, sched)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // GetDiscoverySchedule loads a schedule in its tenant context.
 func (s *Store) GetDiscoverySchedule(ctx context.Context, tenantID, id string) (DiscoverySchedule, error) {
 	var out DiscoverySchedule

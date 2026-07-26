@@ -13,6 +13,20 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Discovery schedules tick server-side (A0.2a, 2026-07-26)
+- **"Continuous monitoring" stops needing an external cron.** A leader-only
+  scheduler (`RunDiscoveryScheduler`, started with the CRL and lifecycle
+  workers) sweeps every minute and queues a run for each enabled schedule
+  whose source has no in-flight run and no run newer than its
+  `interval_seconds` — through the exact event + projection + outbox path an
+  operator-initiated run takes (AN-2/5/6), tagged
+  `requested_by: discovery-scheduler`. A failed run counts as an attempt so a
+  broken source retries next interval instead of hot-looping; one sweep
+  queues at most 100 runs per tenant (AN-7 ahead of the bulkheaded worker).
+  The due decision is a real-PostgreSQL integration test under RLS,
+  including in-flight suppression, failed-run backoff, the sweep limit, and
+  tenant isolation.
+
 ### Decision: the issuing CA key stays classical, on purpose (A0.3g, 2026-07-26)
 - **Post-quantum keys are subject keys, not issuer keys, and that is now a
   recorded decision instead of an undisclosed ceiling.** Rationale: (1) a
