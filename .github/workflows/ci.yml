@@ -782,15 +782,23 @@ jobs:
 
       # D9: the OSS license audit runs beside the vulnerability scan, so
       # copyleft contamination of the distributed MPL-2.0 binaries is caught
-      # by CI rather than by an acquirer's diligence.
-      - name: Dependency license audit (shipped binaries)
+      # by CI rather than by an acquirer's diligence. It now covers BOTH
+      # dependency trees: the Go audit reads what is linked into the shipped
+      # binaries, and the npm audit reads the console's runtime closure from
+      # the lockfile. The web half also refuses source-available licenses
+      # (BUSL/Elastic/Confluent/RSAL) — those do not contaminate, but they
+      # restrict or tax selling the software, and can be relicensed under us
+      # without warning.
+      - name: Dependency license audit (shipped binaries + console tree)
         run: make license-audit
 
-      - name: Upload license audit receipt
+      - name: Upload license audit receipts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: license-audit
-          path: dist/release-evidence/license-audit.json
+          path: |
+            dist/release-evidence/license-audit.json
+            dist/release-evidence/npm-license-audit.json
           if-no-files-found: error
 
   supply-chain:

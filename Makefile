@@ -532,10 +532,14 @@ sbom: ## Generate a CycloneDX SBOM of the Go module graph (sbom.module.cyclonedx
 	@test -s sbom.module.cyclonedx.json && echo ">> wrote sbom.module.cyclonedx.json"
 
 .PHONY: license-audit
-license-audit: ## Fail if a copyleft or unlicensed module is linked into a shipped binary (D9)
+license-audit: ## Fail if a copyleft, source-available, or unlicensed dependency ships (D9)
 	@echo ">> dependency license audit (shipped binaries)"
 	@mkdir -p dist/release-evidence
 	@python3 scripts/ci/license-audit.py --json dist/release-evidence/license-audit.json
+	@# The Go audit cannot see the console's dependency tree, so until this ran
+	@# a web dependency could carry any license at all and no gate would notice.
+	@echo ">> dependency license audit (console tree)"
+	@python3 scripts/ci/npm-license-audit.py --json dist/release-evidence/npm-license-audit.json
 
 .PHONY: dependency-freshness
 dependency-freshness: ## Validate dependency freshness SLO report and owner queue (CODE-005)
