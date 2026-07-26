@@ -10983,6 +10983,22 @@ export const messages = {
     defaultMessage: "Evidence sealed",
     description: "S-C17: stepper step for the sealed evidence bundle.",
   },
+  "certificates.detail.relatedViews": {
+    defaultMessage: "Related views",
+    description: "S-C11: accessible name of the cross-link row in the certificate detail drawer.",
+  },
+  "certificates.detail.viewInGraph": {
+    defaultMessage: "View in credential graph",
+    description: "S-C11: link from a certificate detail to its node in the credential graph.",
+  },
+  "certificates.detail.respond": {
+    defaultMessage: "Start incident response",
+    description: "S-C11: link from a certificate detail into the incident response form.",
+  },
+  "graph.respondToNode": {
+    defaultMessage: "Start incident response for this node",
+    description: "S-C11: link from the selected graph node into the incident response form.",
+  },
   "risk.scoreMeter.ariaLabel": {
     defaultMessage: "Risk score {score} of 100 for {subject}",
     description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",

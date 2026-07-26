@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Activity, Bell, CheckCircle, Download, Pause, Play, RotateCcw, Send } from "lucide-react";
 import {
   api,
@@ -138,7 +138,15 @@ const breakGlassChecklist = [
 
 export function Incidents() {
   const { t } = useTranslation();
-  const [form, setForm] = useState<IncidentExecutionRequest>(defaultExecution);
+  // S-C11: /incidents?identity=<id> preselects the affected identity, so the
+  // graph and the certificate detail can hand a compromised credential
+  // straight into the response form instead of making the operator copy an id
+  // between two pages.
+  const [searchParams] = useSearchParams();
+  const [form, setForm] = useState<IncidentExecutionRequest>(() => {
+    const identityID = searchParams.get("identity");
+    return identityID ? { ...defaultExecution, identity_id: identityID } : defaultExecution;
+  });
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [executions, setExecutions] = useState<IncidentExecution[]>([]);
   const [fleetForm, setFleetForm] = useState<FleetReissuanceRequest>(defaultFleetRun);

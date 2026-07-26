@@ -293,6 +293,15 @@ export function Graph() {
                   <div className="grid gap-1 text-sm">
                     {translateNow("source.selected.node.f8716e2fce")}
                     <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">{selectedNode?.name || "No node selected"}</p>
+                    {/* S-C11: the graph is where blast radius becomes obvious,
+                        so it is where responding should start — hand the node
+                        to the incident form instead of making the operator
+                        copy an id across pages. */}
+                    {selectedNode ? (
+                      <Link className="text-brand-accent underline" to={`/incidents?identity=${encodeURIComponent(selectedNode.id)}`}>
+                        {translateNow("graph.respondToNode")}
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-3">

@@ -1512,113 +1512,127 @@ export function Certificates() {
           <ErrorState title={translateNow("source.could.not.load.certificate.details.7999752b96")}>{detailError.message}</ErrorState>
         )}
         {detail && (
-          <dl className="grid gap-3 text-sm md:grid-cols-2">
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
-              <dd>{detail.subject}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.issuer.39e02c46a0")}</dt>
-              <dd>{detail.issuer || "-"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.sans.7a15c9b7f6")}</dt>
-              <dd>{detail.sans?.length ? detail.sans.join(", ") : "-"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.key.algorithm.36da451ea3")}</dt>
-              <dd>{detail.key_algorithm || "-"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.serial.8ea0949377")}</dt>
-              <dd className="mt-0.5">{detail.serial ? <CredentialChip value={detail.serial} label="serial number" /> : "-"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.fingerprint.ba7af0b704")}</dt>
-              <dd className="mt-0.5">{detail.fingerprint ? <CredentialChip value={detail.fingerprint} label="fingerprint" head={12} tail={8} /> : "-"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.validity.9c3050e867")}</dt>
-              <dd>
-                {formatDate(detail.not_before)} {translateNow("source.to.663ea1bfff")} {formatDate(detail.not_after)}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
-              <dd>{detail.status}</dd>
-            </div>
-            {detail.status === "revoked" && (
-              <>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{translateNow("source.revoked.at.144e77bcf0")}</dt>
-                  <dd>{formatDate(detail.revoked_at)}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{translateNow("source.revocation.reason.b11670420f")}</dt>
-                  <dd>{detail.revocation_reason || "-"}</dd>
-                </div>
-              </>
-            )}
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
-              <dd>{detail.source || "-"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.deployment.location.5a9f62f9fc")}</dt>
-              <dd>{detail.deployment_location || "-"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
-              <dd>
-                {detail.owner_id ? (
-                  <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(detail.owner_id)}`}>
-                    {detail.owner_id}
-                  </a>
-                ) : (
-                  "-"
-                )}
-              </dd>
-            </div>
-            <div className="md:col-span-2">
-              <dt className="flex items-center justify-between gap-2 font-medium text-muted-foreground">
-                {translateNow("source.renewal.history.771f739290")}
-                {(() => {
-                  const identity = renewableIdentityFor(detail, identityByCN);
-                  if (identity) {
-                    const busy = renewingIds.has(detail.id);
-                    return (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        aria-label={`Renew ${certificateCN(detail.subject) || detail.subject}`}
-                        onClick={() => void startRenew(detail, identity)}
-                      >
-                        {busy ? "Renewing…" : "Renew now"}
-                      </Button>
-                    );
-                  }
-                  if (detail.status === "active") {
-                    return (
-                      <Link to="/request" className="text-caption font-medium text-brand-accent hover:underline">
-                        {t("certificates.lifecycle.notManaged")}
-                      </Link>
-                    );
-                  }
-                  return null;
-                })()}
-              </dt>
-              <dd>
-                <RenewalHistory
-                  runs={rotationRuns.filter((r) => r.predecessor_fingerprint === detail.fingerprint || r.successor_fingerprint === detail.fingerprint)}
-                />
-              </dd>
-            </div>
-            <div className="md:col-span-2">
-              <CredentialActivityTimeline credentialLabel={detail.subject} />
-            </div>
-          </dl>
+          <>
+            {/* S-C11: close the response loop — a certificate detail is where
+                an operator decides something is wrong, so the graph (blast
+                radius) and the incident form are one click away instead of a
+                copied id and two navigations. */}
+            <nav aria-label={translateNow("certificates.detail.relatedViews")} className="mb-3 flex flex-wrap gap-3 text-sm">
+              <Link className="text-brand-accent underline" to={`/graph?node=${encodeURIComponent(detail.id)}`}>
+                {translateNow("certificates.detail.viewInGraph")}
+              </Link>
+              <Link className="text-brand-accent underline" to={`/incidents?identity=${encodeURIComponent(detail.id)}`}>
+                {translateNow("certificates.detail.respond")}
+              </Link>
+            </nav>
+            <dl className="grid gap-3 text-sm md:grid-cols-2">
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
+                <dd>{detail.subject}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.issuer.39e02c46a0")}</dt>
+                <dd>{detail.issuer || "-"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.sans.7a15c9b7f6")}</dt>
+                <dd>{detail.sans?.length ? detail.sans.join(", ") : "-"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.key.algorithm.36da451ea3")}</dt>
+                <dd>{detail.key_algorithm || "-"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.serial.8ea0949377")}</dt>
+                <dd className="mt-0.5">{detail.serial ? <CredentialChip value={detail.serial} label="serial number" /> : "-"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.fingerprint.ba7af0b704")}</dt>
+                <dd className="mt-0.5">{detail.fingerprint ? <CredentialChip value={detail.fingerprint} label="fingerprint" head={12} tail={8} /> : "-"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.validity.9c3050e867")}</dt>
+                <dd>
+                  {formatDate(detail.not_before)} {translateNow("source.to.663ea1bfff")} {formatDate(detail.not_after)}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
+                <dd>{detail.status}</dd>
+              </div>
+              {detail.status === "revoked" && (
+                <>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.revoked.at.144e77bcf0")}</dt>
+                    <dd>{formatDate(detail.revoked_at)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.revocation.reason.b11670420f")}</dt>
+                    <dd>{detail.revocation_reason || "-"}</dd>
+                  </div>
+                </>
+              )}
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
+                <dd>{detail.source || "-"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.deployment.location.5a9f62f9fc")}</dt>
+                <dd>{detail.deployment_location || "-"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
+                <dd>
+                  {detail.owner_id ? (
+                    <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(detail.owner_id)}`}>
+                      {detail.owner_id}
+                    </a>
+                  ) : (
+                    "-"
+                  )}
+                </dd>
+              </div>
+              <div className="md:col-span-2">
+                <dt className="flex items-center justify-between gap-2 font-medium text-muted-foreground">
+                  {translateNow("source.renewal.history.771f739290")}
+                  {(() => {
+                    const identity = renewableIdentityFor(detail, identityByCN);
+                    if (identity) {
+                      const busy = renewingIds.has(detail.id);
+                      return (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          aria-label={`Renew ${certificateCN(detail.subject) || detail.subject}`}
+                          onClick={() => void startRenew(detail, identity)}
+                        >
+                          {busy ? "Renewing…" : "Renew now"}
+                        </Button>
+                      );
+                    }
+                    if (detail.status === "active") {
+                      return (
+                        <Link to="/request" className="text-caption font-medium text-brand-accent hover:underline">
+                          {t("certificates.lifecycle.notManaged")}
+                        </Link>
+                      );
+                    }
+                    return null;
+                  })()}
+                </dt>
+                <dd>
+                  <RenewalHistory
+                    runs={rotationRuns.filter((r) => r.predecessor_fingerprint === detail.fingerprint || r.successor_fingerprint === detail.fingerprint)}
+                  />
+                </dd>
+              </div>
+              <div className="md:col-span-2">
+                <CredentialActivityTimeline credentialLabel={detail.subject} />
+              </div>
+            </dl>
+          </>
         )}
       </DetailDrawer>
     </section>
