@@ -2908,6 +2908,8 @@ const deDECatalog = {
   "workloads.attesterBreakdown.refusalsTitle": "Aktuelle Ablehnungen",
   "workloads.attesterBreakdown.refusalsScope":
     "In dieser Browsersitzung beobachtet – die bereitgestellte API antwortet pro Anfrage und führt keine Ablehnungshistorie.",
+  "approvals.quorum.remaining": "Noch {count} erforderlich",
+  "approvals.quorum.met": "Quorum erreicht",
   "risk.scoreMeter.ariaLabel": "Risikobewertung {score} von 100 für {subject}",
   "risk.factorChips.none": "Keine beitragenden Faktoren",
   "risk.scoreMeter.remaining": "verbleibend",

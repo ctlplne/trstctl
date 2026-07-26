@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { Info } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ApiError, UnauthorizedError, api, type EphemeralApproval, type Identity } from "@/lib/api";
-import { approvalAuditHref, approvalRows, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
+import { approvalAuditHref, approvalRows, parseApprovalProgress, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
+import { Num } from "@/components/typography";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
@@ -102,7 +103,7 @@ export function Approvals() {
             <Info className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
         ),
-        cell: (row) => row.approvals,
+        cell: (row) => <ApprovalQuorum approvals={row.approvals} />,
       },
       {
         id: "grant",
@@ -215,6 +216,34 @@ export function Approvals() {
 
 function rowKey(row: ApprovalQueueRow): string {
   return `${row.identity.id}:${row.action}`;
+}
+
+/** S-C18: show the quorum as have/need with what is still outstanding, so an
+ * approver reads one number instead of parsing a sentence. Text the server
+ * emits in a shape we do not recognize is passed through untouched rather
+ * than guessed at. */
+function ApprovalQuorum({ approvals }: { approvals: string }) {
+  const progress = parseApprovalProgress(approvals);
+  if (!progress) return <span className="text-caption text-muted-foreground">{approvals}</span>;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="inline-flex items-baseline gap-1">
+        <Num className="font-medium">{String(progress.have)}</Num>
+        <span className="text-caption text-muted-foreground">/</span>
+        <Num>{String(progress.need)}</Num>
+      </span>
+      {progress.remaining > 0 ? (
+        <StatusBadge
+          vocabulary="lifecycle"
+          value="pending"
+          label={translateNow("approvals.quorum.remaining", { count: String(progress.remaining) })}
+          tone="warning"
+        />
+      ) : (
+        <StatusBadge vocabulary="lifecycle" value="approved" label={translateNow("approvals.quorum.met")} tone="success" />
+      )}
+    </div>
+  );
 }
 
 function statusForApprovalAction(action: ApprovalQueueRow["action"]): string {

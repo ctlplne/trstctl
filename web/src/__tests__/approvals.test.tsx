@@ -67,7 +67,11 @@ describe("dedicated approvals inbox", () => {
     expect(screen.getByRole("link", { name: /^Approvals$/i })).toHaveAttribute("href", "/approvals");
     const row = (await screen.findByText("jit-db")).closest("tr")!;
     expect(within(row).getByText("dev@example.test")).toBeInTheDocument();
-    expect(within(row).getByText("1/2")).toBeInTheDocument();
+    // S-C18: the quorum renders structured have/need plus what is still
+    // outstanding, so the raw "1/2" string is now split across elements.
+    expect(within(row).getByText("1")).toBeInTheDocument();
+    expect(within(row).getByText("2")).toBeInTheDocument();
+    expect(within(row).getByText("1 more needed")).toBeInTheDocument();
     expect(within(row).getByText("2026-06-19T18:00:00Z")).toBeInTheDocument();
     expect(within(row).getByRole("link", { name: /audit trail/i })).toHaveAttribute("href", "/audit?type=identity.approval&q=jit-1+issue");
 

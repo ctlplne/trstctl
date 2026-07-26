@@ -2896,6 +2896,8 @@ const esESCatalog = {
   "workloads.attesterBreakdown.refusalsTitle": "Rechazos recientes",
   "workloads.attesterBreakdown.refusalsScope":
     "Observado en esta sesión del navegador: la API servida responde por solicitud y no guarda historial de rechazos.",
+  "approvals.quorum.remaining": "Faltan {count}",
+  "approvals.quorum.met": "Cuórum alcanzado",
   "risk.scoreMeter.ariaLabel": "Puntuación de riesgo {score} de 100 para {subject}",
   "risk.factorChips.none": "Sin factores contribuyentes",
   "risk.scoreMeter.remaining": "restante",

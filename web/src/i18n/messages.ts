@@ -10935,6 +10935,14 @@ export const messages = {
     defaultMessage: "Observed in this browser session — the served API answers per request and keeps no refusal history.",
     description: "S-C20: scope disclaimer under the refusals list, so client-observed history is not read as a server feed.",
   },
+  "approvals.quorum.remaining": {
+    defaultMessage: "{count} more needed",
+    description: "S-C18: badge naming how many approvals are still outstanding for a request.",
+  },
+  "approvals.quorum.met": {
+    defaultMessage: "Quorum met",
+    description: "S-C18: badge when a request has collected all required approvals.",
+  },
   "risk.scoreMeter.ariaLabel": {
     defaultMessage: "Risk score {score} of 100 for {subject}",
     description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",
