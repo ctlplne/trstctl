@@ -13,6 +13,18 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Dependency license audit runs in CI (D9, 2026-07-26)
+- **Copyleft contamination is now caught by us, not by diligence.**
+  `make license-audit` resolves every module actually linked into the shipped
+  binaries (`trstctl`, `-signer`, `-agent`, `-operator`), classifies each
+  license, and fails on strong copyleft (AGPL/GPL/LGPL/SSPL/CDDL/EPL) or a
+  module with no recognizable license text; it runs beside govulncheck in CI
+  and uploads a JSON receipt. Current state: **83 modules, zero copyleft** —
+  41 Apache-2.0, 21 MIT, 19 BSD, 1 MPL-2.0, 1 public-domain. The classifier
+  matches license *titles* in priority order rather than grepping for "GPL",
+  because MPL-2.0's own Exhibit B names the GNU GPL as a compatible secondary
+  license — a naive scan reports every MPL dependency as a GPL finding.
+
 ### Contribution terms: DCO for core, CLA only for `ee/` (D2, 2026-07-26)
 - **The IP terms are written down before the first outside contribution.**
   `CONTRIBUTING.md` states the split plainly: core is MPL-2.0 and accepts

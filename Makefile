@@ -531,6 +531,12 @@ sbom: ## Generate a CycloneDX SBOM of the Go module graph (sbom.module.cyclonedx
 	$(CYCLONEDX_GOMOD) mod -json -licenses -output sbom.module.cyclonedx.json
 	@test -s sbom.module.cyclonedx.json && echo ">> wrote sbom.module.cyclonedx.json"
 
+.PHONY: license-audit
+license-audit: ## Fail if a copyleft or unlicensed module is linked into a shipped binary (D9)
+	@echo ">> dependency license audit (shipped binaries)"
+	@mkdir -p dist/release-evidence
+	@python3 scripts/ci/license-audit.py --json dist/release-evidence/license-audit.json
+
 .PHONY: dependency-freshness
 dependency-freshness: ## Validate dependency freshness SLO report and owner queue (CODE-005)
 	@echo ">> dependency freshness SLO"

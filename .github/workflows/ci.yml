@@ -780,6 +780,19 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
+      # D9: the OSS license audit runs beside the vulnerability scan, so
+      # copyleft contamination of the distributed MPL-2.0 binaries is caught
+      # by CI rather than by an acquirer's diligence.
+      - name: Dependency license audit (shipped binaries)
+        run: make license-audit
+
+      - name: Upload license audit receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: license-audit
+          path: dist/release-evidence/license-audit.json
+          if-no-files-found: error
+
   supply-chain:
     name: supply-chain (SBOM + binary SCA)
     runs-on: ubuntu-latest
