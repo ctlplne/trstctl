@@ -35,6 +35,16 @@ type Config struct {
 	// Delegation, when set, enforces delegated-authority scope floors inside the
 	// signer before successor key generation.
 	Delegation minter.DelegationConstraint
+	// BreakGlassAuthorityPubDER, when set, is the DER public key of the offline
+	// break-glass authority (a key-ceremony artifact, ee/docs/pcas-ceremony.md).
+	// With it, a class DOWNGRADE succession can proceed only when the request
+	// carries a valid, single-use token signed by that authority; single-use
+	// state is durable inside the signer custody dir when FloorDir is set.
+	// Unset — the default — keeps downgrades refused unconditionally: the
+	// authority key is an operator ceremony input, never a control-plane one,
+	// so an unconfigured deployment fails closed rather than accepting tokens
+	// from anywhere (claim 17).
+	BreakGlassAuthorityPubDER []byte
 }
 
 // NewProductionMinter builds a fully-gated succession minter for attachment to the
@@ -60,10 +70,24 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 			floors = newInterimFloorStore()
 		}
 	}
+	// Downgrade refusal on by default (claim 17): a weaker-class successor is
+	// refused outright unless the operator provisioned a break-glass authority
+	// key, in which case a valid single-use token signed by that authority can
+	// authorize one. Durable single-use state when the custody dir is known.
+	var breakGlass minter.BreakGlassVerifier
+	if len(cfg.BreakGlassAuthorityPubDER) > 0 {
+		if cfg.FloorDir != "" {
+			bg, err := minter.NewDurableSignedBreakGlassAuthorizer(cfg.BreakGlassAuthorityPubDER, cfg.FloorDir)
+			if err != nil {
+				return nil, err
+			}
+			breakGlass = bg
+		} else {
+			breakGlass = minter.NewSignedBreakGlassAuthorizer(cfg.BreakGlassAuthorityPubDER)
+		}
+	}
 	opts := []minter.Option{
-		// Downgrade refusal on by default (claim 17): a weaker-class successor is
-		// refused unless a break-glass token is presented (none configured here).
-		minter.WithStrengthOrdering(nil),
+		minter.WithStrengthOrdering(breakGlass),
 		// Production records use the v2 commitment (INT-08): RecordType, authz digest,
 		// attestation evidence + type, and delegation path are bound IN the commitment,
 		// so base chain verification detects a tamper of any of them.

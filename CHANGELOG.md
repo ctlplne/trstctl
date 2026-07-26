@@ -13,6 +13,24 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Break-glass succession is wireable; the dead migration twin is gone (A0.4b, 2026-07-26)
+- **PCAS class-downgrade break-glass can now actually be configured.** The
+  production minter passed a nil verifier, so a downgrade was refused
+  unconditionally and `NewSignedBreakGlassAuthorizer` had only test callers.
+  The signer now loads an operator-provisioned break-glass authority PUBLIC
+  key from `<signer-keystore>/pcas-breakglass-authority.pem` (the same
+  operator-provisions-trust pattern as the XREC plan bundle — never a
+  control-plane input) and, when present, accepts a valid single-use token
+  signed by that authority with durable spent-state inside the custody dir.
+  Absent stays fail-closed; **present-but-unparseable fails startup** rather
+  than looking configured while behaving as if it were not.
+- **Deleted the dead fleet-migration twin.** `ee/pqcmigration.Orchestrator`
+  (the discover→stage→reissue→track loop) and the whole `ee/fleet` package
+  had zero non-test callers — both were shadowed by the differently
+  architected served implementation (`ee/pqcmigration` api/server/plan) and
+  by core's served CA-compromise fleet re-issuance. Removing them deletes
+  ~400 lines of code that read as shipped and was not.
+
 ### Agent collector scope stated; api_key failures name their cause (A0.2c, 2026-07-26)
 - **The unwired agent collectors are disclosed, not implied.** PKCS#11 token,
   Windows certificate/trust store, and in-cluster Kubernetes Secret

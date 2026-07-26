@@ -154,7 +154,19 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 		if floorDir != "" {
 			delegationConstraint = pcasdelegation.NewDurableScopeStore(floorDir)
 		}
-		m, err := signerwiring.NewProductionMinter(signerwiring.Config{SignerID: "trstctl-signer", FloorDir: floorDir, Delegation: delegationConstraint})
+		// Break-glass authority (claim 17): operator-provisioned PUBLIC key
+		// inside the signer custody dir, never a control-plane input. Absent
+		// leaves class downgrades refused unconditionally; present-but-invalid
+		// fails startup rather than silently behaving as unconfigured.
+		breakGlassPub, err := signerwiring.LoadBreakGlassAuthority(floorDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: %v\n", err)
+			os.Exit(1)
+		}
+		m, err := signerwiring.NewProductionMinter(signerwiring.Config{
+			SignerID: "trstctl-signer", FloorDir: floorDir, Delegation: delegationConstraint,
+			BreakGlassAuthorityPubDER: breakGlassPub,
+		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trstctl-signer: build PCAS minter: %v\n", err)
 			os.Exit(1)
