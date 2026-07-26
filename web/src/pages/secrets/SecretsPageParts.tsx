@@ -11,8 +11,10 @@ import {
   type SecretApprovalAction,
   type SecretMeta,
   type SecretRepositoryScanPosture,
+  type SecretRotationSchedule,
   type ThirdPartySecretScanPosture,
 } from "@/lib/api";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export type SecretApprovalQueueItem = {
   id: string;
@@ -26,6 +28,77 @@ export type SecretApprovalQueueItem = {
 };
 
 type Translate = ReturnType<typeof useTranslation>["t"];
+
+// S-C19 (extracted per R-09 before editing the Secrets monolith): rotation
+// schedules showed a next-run timestamp, which means the operator has to do
+// date arithmetic in their head to notice that a rotation never happened. The
+// served schedule already carries everything needed to say it outright:
+// enabled, next_run_at, last_run_at, last_run_status.
+
+export type RotationHealth = {
+  /** Overdue: enabled, its next run is in the past, and nothing has run since. */
+  overdue: boolean;
+  /** How far past due, in whole days (0 when not overdue). */
+  overdueDays: number;
+  /** Stale: enabled and the last successful run is older than two intervals. */
+  stale: boolean;
+  /** Never run at all — a schedule that exists but has produced nothing. */
+  neverRun: boolean;
+  /** The last run failed, which is why the next one may not have happened. */
+  lastRunFailed: boolean;
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function rotationHealth(schedule: SecretRotationSchedule, now: Date = new Date()): RotationHealth {
+  const neverRun = !schedule.last_run_at;
+  const lastRunFailed = (schedule.last_run_status ?? "").toLowerCase() === "failed";
+  if (!schedule.enabled) {
+    // A disabled schedule is a deliberate operator choice, never a finding.
+    return { overdue: false, overdueDays: 0, stale: false, neverRun, lastRunFailed };
+  }
+  const nextRun = Date.parse(schedule.next_run_at ?? "");
+  const overdue = Number.isFinite(nextRun) && nextRun < now.getTime();
+  const overdueDays = overdue ? Math.floor((now.getTime() - nextRun) / DAY_MS) : 0;
+
+  const lastRun = Date.parse(schedule.last_run_at ?? "");
+  // Two intervals of silence is the signal: one missed run can be a worker
+  // hiccup, two means the schedule is not actually rotating anything.
+  const staleAfterMs = Math.max(schedule.interval_seconds, 1) * 2 * 1000;
+  const stale = Number.isFinite(lastRun) ? now.getTime() - lastRun > staleAfterMs : overdue;
+
+  return { overdue, overdueDays, stale, neverRun, lastRunFailed };
+}
+
+export function RotationHealthBadges({ schedule, now }: { schedule: SecretRotationSchedule; now?: Date }) {
+  const health = rotationHealth(schedule, now);
+  if (!health.overdue && !health.stale && !health.neverRun && !health.lastRunFailed) {
+    return <span className="text-caption text-muted-foreground">{translateNow("secrets.rotationHealth.onTrack")}</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {health.overdue ? (
+        <StatusBadge
+          vocabulary="lifecycle"
+          value="overdue"
+          label={
+            health.overdueDays > 0
+              ? translateNow("secrets.rotationHealth.overdueDays", { days: String(health.overdueDays) })
+              : translateNow("secrets.rotationHealth.overdue")
+          }
+          tone="critical"
+        />
+      ) : null}
+      {health.stale && !health.overdue ? (
+        <StatusBadge vocabulary="lifecycle" value="stale" label={translateNow("secrets.rotationHealth.stale")} tone="warning" />
+      ) : null}
+      {health.neverRun ? <StatusBadge vocabulary="lifecycle" value="never_run" label={translateNow("secrets.rotationHealth.neverRun")} tone="warning" /> : null}
+      {health.lastRunFailed ? (
+        <StatusBadge vocabulary="lifecycle" value="failed" label={translateNow("secrets.rotationHealth.lastRunFailed")} tone="critical" />
+      ) : null}
+    </div>
+  );
+}
 
 export function RevealPanel({ title, value, children, onDismiss }: { title: string; value: string; children: ReactNode; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false);

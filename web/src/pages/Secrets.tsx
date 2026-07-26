@@ -55,6 +55,7 @@ import {
   MachineSession,
   RepositoryScanPosture,
   RevealPanel,
+  RotationHealthBadges,
   SecretApprovalQueue,
   Snippet,
   ThirdPartyScanPosture,
@@ -427,6 +428,9 @@ export function Secrets() {
       },
       { id: "last-run", header: "Last run", cell: (item) => <StatusBadge vocabulary="lifecycle" value={item.last_run_status || "never"} /> },
       { id: "next-run", header: "Next run", cell: (item) => formatDate(item.next_run_at) },
+      // S-C19: say "this has not rotated" instead of making the operator do
+      // date arithmetic against the next-run column.
+      { id: "rotation-health", header: "Health", cell: (item) => <RotationHealthBadges schedule={item} /> },
     ],
     [],
   );

@@ -10875,6 +10875,30 @@ export const messages = {
     defaultMessage: "Preview uses sample data in this browser demo — protocol probes are disabled.",
     description: "Protocols page probe detail while preview transport isolation is active.",
   },
+  "secrets.rotationHealth.onTrack": {
+    defaultMessage: "On track",
+    description: "S-C19: rotation-schedule health cell when nothing is overdue or stale.",
+  },
+  "secrets.rotationHealth.overdue": {
+    defaultMessage: "Overdue",
+    description: "S-C19: badge when an enabled rotation schedule's next run is in the past.",
+  },
+  "secrets.rotationHealth.overdueDays": {
+    defaultMessage: "Overdue by {days}d",
+    description: "S-C19: badge naming how many whole days a rotation is overdue.",
+  },
+  "secrets.rotationHealth.stale": {
+    defaultMessage: "Stale",
+    description: "S-C19: badge when a rotation has not run for more than two intervals.",
+  },
+  "secrets.rotationHealth.neverRun": {
+    defaultMessage: "Never run",
+    description: "S-C19: badge for a rotation schedule that has produced no run.",
+  },
+  "secrets.rotationHealth.lastRunFailed": {
+    defaultMessage: "Last run failed",
+    description: "S-C19: badge when the most recent rotation run failed.",
+  },
   "risk.scoreMeter.ariaLabel": {
     defaultMessage: "Risk score {score} of 100 for {subject}",
     description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",
