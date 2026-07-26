@@ -10875,6 +10875,18 @@ export const messages = {
     defaultMessage: "Preview uses sample data in this browser demo — protocol probes are disabled.",
     description: "Protocols page probe detail while preview transport isolation is active.",
   },
+  "risk.scoreMeter.ariaLabel": {
+    defaultMessage: "Risk score {score} of 100 for {subject}",
+    description: "S-C13: accessible name of the per-row risk score meter on the Risk page.",
+  },
+  "risk.factorChips.none": {
+    defaultMessage: "No contributing factors",
+    description: "S-C13: shown in the risk factor column when no factor contributes to the score.",
+  },
+  "risk.scoreMeter.remaining": {
+    defaultMessage: "remaining",
+    description: "S-C13: title of the unfilled portion of the risk score meter.",
+  },
   "posture.algorithmRollup.title": {
     defaultMessage: "Exposure by algorithm",
     description: "S-C14: caption of the CBOM per-algorithm rollup table on Posture.",

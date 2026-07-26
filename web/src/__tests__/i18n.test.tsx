@@ -263,14 +263,16 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      // S-C14 re-pin: 9 new keys per catalog (posture.algorithmRollup.* — the
-      // CBOM per-algorithm exposure rollup on Posture: table caption, four
-      // column headers, three exposure badges, and the already-post-quantum
-      // cell). Machine-authored es/de translations — FLAG FOR HUMAN REVIEW
-      // alongside the outstanding translation review sheet. Previous pin
-      // covered the demo-site transport-isolation copy.
-      "es-ES": "8a29c2a7827c5e9ce3d86b01434d3b8fdc7ffa1be3a3b1825721cb8400e9abdf",
-      "de-DE": "eabd6844afcc1fa83ce8fb5a9eb466f03a58dba17bc0659284040a42d11d9e60",
+      // S-C13/S-C14 re-pin: 12 new keys per catalog — posture.algorithmRollup.*
+      // (the CBOM per-algorithm exposure rollup: caption, four column headers,
+      // three exposure badges, the already-post-quantum cell) and risk.* (the
+      // per-row score meter's accessible name, its unfilled-portion title, and
+      // the no-factors chip label).
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
+      // the outstanding translation review sheet. Previous pin covered the
+      // demo-site transport-isolation copy.
+      "es-ES": "4c468cf25cafed11965abd5da490103aaa5e64fdecf3918c152820118f089171",
+      "de-DE": "4dda4fe3ba0576acae9705fe13971718899a20edc1b294ab08d4836ca9147e2f",
     });
   });
 

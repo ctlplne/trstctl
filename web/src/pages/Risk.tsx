@@ -19,6 +19,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { RiskPosture } from "@/components/risk/posture";
+import { Meter, type ChartTone, type MeterSegment } from "@/components/charts";
+import { Num } from "@/components/typography";
 import { riskBand } from "@/lib/statusVocab";
 import { formatDate as formatDatePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -278,14 +280,9 @@ export function Risk() {
         id: "score",
         header: "Score",
         sortable: true,
-        cell: (risk) => (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{Math.round(risk.score)}</span>
-            <StatusBadge vocabulary="risk" value={riskBand(risk.score)} />
-          </div>
-        ),
+        cell: (risk) => <RiskScoreMeter risk={risk} />,
       },
-      { id: "top_factor", header: "Top factor", cell: (risk) => formatTopFactor(risk) },
+      { id: "top_factor", header: "Top factor", cell: (risk) => <RiskFactorChips risk={risk} /> },
       { id: "expires_at", header: "Expires", sortable: true, cell: (risk) => formatDate(risk.expires_at) },
       {
         id: "privilege",
@@ -1046,9 +1043,65 @@ function factorPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(normalized)));
 }
 
-function formatTopFactor(risk: CredentialRisk): string {
-  const factor = topFactor(risk);
-  return `${factorLabels[factor]} ${factorPercent(risk.components[factor])}`;
+// S-C13: the score was a bare number, so 71 and 94 looked equally urgent in a
+// scan of the list, and the factors driving them were hidden behind a
+// per-row button. The meter makes magnitude readable at a glance (filled
+// portion = the score, in the band's own tone) and the chips surface the two
+// factors actually driving it, so an operator can triage without expanding
+// every row. The expander still holds the full breakdown.
+export function riskScoreSegments(score: number): MeterSegment[] {
+  const filled = Math.max(0, Math.min(100, Math.round(score)));
+  const band = riskBand(score);
+  const tone: ChartTone = band === "critical" ? "critical" : band === "high" ? "high" : band === "medium" ? "medium" : band === "low" ? "low" : "neutral";
+  return [
+    { value: filled, tone, label: `${filled}` },
+    // The Meter renders each segment's label in a title attribute, so this is
+    // user-visible copy and carries a typed key like the rest.
+    { value: 100 - filled, tone: "neutral", label: translateNow("risk.scoreMeter.remaining") },
+  ];
+}
+
+function RiskScoreMeter({ risk }: { risk: CredentialRisk }) {
+  const score = Math.round(risk.score);
+  return (
+    <div className="flex min-w-[7.5rem] flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <Num className="font-medium">{String(score)}</Num>
+        <StatusBadge vocabulary="risk" value={riskBand(risk.score)} />
+      </div>
+      <Meter segments={riskScoreSegments(risk.score)} ariaLabel={translateNow("risk.scoreMeter.ariaLabel", { score: String(score), subject: risk.subject })} />
+    </div>
+  );
+}
+
+// The chips answer "why is this row here": the ranked factors with a
+// meaningful contribution, biggest first, capped at two so the column stays
+// scannable.
+export function rankedRiskFactors(risk: CredentialRisk, limit = 2): Array<{ factor: RiskFactor; percent: number }> {
+  return factorKeys
+    .map((factor) => ({ factor, percent: factorPercent(risk.components[factor]) }))
+    .filter((entry) => entry.percent > 0)
+    .sort((a, b) => b.percent - a.percent)
+    .slice(0, limit);
+}
+
+function RiskFactorChips({ risk }: { risk: CredentialRisk }) {
+  const ranked = rankedRiskFactors(risk);
+  if (ranked.length === 0) return <span className="text-caption text-muted-foreground">{translateNow("risk.factorChips.none")}</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {ranked.map(({ factor, percent }) => (
+        <span
+          key={factor}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-2xs"
+          data-testid={`risk-factor-chip-${factor}`}
+        >
+          <span className="text-muted-foreground">{factorLabels[factor]}</span>
+          <Num>{String(percent)}</Num>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function scaleLabel(labels: string[], value: number): string {
