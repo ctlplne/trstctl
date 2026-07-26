@@ -13,6 +13,22 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Decision: the issuing CA key stays classical, on purpose (A0.3g, 2026-07-26)
+- **Post-quantum keys are subject keys, not issuer keys, and that is now a
+  recorded decision instead of an undisclosed ceiling.** Rationale: (1) a
+  pure ML-DSA issuer breaks every stock TLS client that must chain to it,
+  while an ML-DSA *subject* under a classical issuer interoperates today —
+  the hybrid/pure subject leaf is where the market is; (2) the harvest-now/
+  decrypt-later threat targets confidentiality (KEM), not the issuer
+  signature: a classical issuing CA can be rotated to a PQ issuer when
+  clients are ready, and nothing already issued becomes forgeable
+  retroactively before then; (3) the mechanics (`signOpaqueTBS`'s classical
+  allowlist, the hardcoded ECDSA-P256 issuing handle) are one contained
+  boundary change behind `internal/crypto` when the CA-hierarchy PQC work
+  (P8/F57 follow-up) schedules it — the crypto-agility property this
+  architecture sells. limitations.md already discloses the ceiling; the
+  roadmap owns the lift.
+
 ### The PQC census proofs run in CI on every push (A0.3f, 2026-07-26)
 - **"PQC issuance is proven" stops depending on someone remembering a build
   tag.** A new required check, `pqc e2e (dodproof)`, runs
