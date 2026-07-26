@@ -13,6 +13,20 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### CMP gains the licensed-CSR seam (A0.3a, 2026-07-26)
+- **CMP can now carry subject algorithms the core toolchain cannot check.**
+  `ParseCMPRequest` previously verified the carried PKCS#10 with the strict
+  core parser *before* any licensed parser could see it, so CMP hard-rejected
+  what EST already accepted. `ParseCMPRequestWithVerifier` delegates exactly
+  the inner-CSR check to an injected verifier — PKIMessage protection stays
+  core-verified, unconditionally — and the served mount binds the same
+  licensed-aware verifier EST uses. Covered by seam tests proving the
+  verifier is consulted with the exact CSR bytes, a refusing verifier fails
+  closed, and tampered protection still dies even with an accepting
+  verifier. (SCEP intentionally keeps the core-only path: its CMS reply
+  cannot be delivered to a signature-only subject key — a protocol limit
+  documented in limitations.md, not a code gap.)
+
 ### Terraform provider + Python SDK become published artifacts (B6, 2026-07-26)
 - **The provider's acceptance test now actually runs.** CI drives a REAL
   `terraform apply` (pinned terraform 1.9.8, SHA256SUMS-verified download)

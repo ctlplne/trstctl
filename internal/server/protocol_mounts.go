@@ -190,6 +190,10 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 				CAKeyPKCS8: raKeyPKCS8,
 				Pool:       pool,
 				Log:        s.log,
+				// The licensed-aware verifier: subject algorithms the core
+				// parser cannot check verify through the licensed seam, the
+				// same binding EST carries (protection stays core-verified).
+				CSRVerifier: issuer.verifyCSR,
 			})
 			sp.names = append(sp.names, "cmp")
 		}

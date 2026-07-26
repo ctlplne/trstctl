@@ -162,6 +162,18 @@ func BuildCMPRequest(csrDER, signerCertDER, signerKeyPKCS8, transactionID, sende
 // the certificate in extraCerts, and returns the carried PKCS#10. Fails closed on any
 // malformed, unprotected, or unverifiable input — the CMP parser fuzz target.
 func ParseCMPRequest(der []byte) (*CMPRequest, error) {
+	return ParseCMPRequestWithVerifier(der, VerifyCertificateRequest)
+}
+
+// ParseCMPRequestWithVerifier is ParseCMPRequest with an injected verifier for the
+// CARRIED PKCS#10 — the feature-neutral seam for subject algorithms the Go toolchain
+// cannot check yet, mirroring EST's CSRVerifier. The PKIMessage protection is still
+// verified here, unconditionally, against the classical extraCerts identity; only the
+// inner CSR's verification is delegated. A nil verifier keeps the strict core parser.
+func ParseCMPRequestWithVerifier(der []byte, verifyCSR func([]byte) error) (*CMPRequest, error) {
+	if verifyCSR == nil {
+		verifyCSR = VerifyCertificateRequest
+	}
 	var msg cmpMessage
 	if rest, err := asn1.Unmarshal(der, &msg); err != nil {
 		return nil, fmt.Errorf("cmp: parse PKIMessage: %w", err)
@@ -182,7 +194,7 @@ func ParseCMPRequest(der []byte) (*CMPRequest, error) {
 		return nil, fmt.Errorf("cmp: verify protection: %w", err)
 	}
 	csrDER := msg.Body.Bytes
-	if err := VerifyCertificateRequest(csrDER); err != nil {
+	if err := verifyCSR(csrDER); err != nil {
 		return nil, fmt.Errorf("cmp: body is not a valid CSR: %w", err)
 	}
 	return &CMPRequest{Pvno: msg.Header.Pvno, CSRDER: csrDER, TransactionID: msg.Header.TransactionID, SenderNonce: msg.Header.SenderNonce}, nil

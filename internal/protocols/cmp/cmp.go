@@ -35,6 +35,7 @@ type Server struct {
 	profile    string
 	pool       *bulkhead.Pool
 	log        *events.Log
+	verifyCSR  func([]byte) error
 	mux        *http.ServeMux
 }
 
@@ -48,6 +49,11 @@ type Config struct {
 	ProfileName string
 	Pool        *bulkhead.Pool // AN-7; nil runs inline
 	Log         *events.Log    // AN-2; nil disables audit
+	// CSRVerifier is the feature-neutral production seam for subject algorithms
+	// not yet understood by the Go toolchain, mirroring EST's. It verifies only
+	// the carried PKCS#10; PKIMessage protection is always verified by the core
+	// parser. Nil uses the strict internal/crypto classical parser.
+	CSRVerifier func([]byte) error
 }
 
 // New builds the CMP server.
@@ -55,6 +61,7 @@ func New(cfg Config) *Server {
 	s := &Server{
 		enroller: cfg.Enroller, caCertDER: cfg.CACertDER, caKeyPKCS8: cfg.CAKeyPKCS8,
 		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
+		verifyCSR: cfg.CSRVerifier,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cmp", s.handle)
@@ -86,7 +93,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cmp: empty PKIMessage", http.StatusBadRequest)
 		return
 	}
-	req, err := crypto.ParseCMPRequest(body)
+	req, err := crypto.ParseCMPRequestWithVerifier(body, s.verifyCSR)
 	if err != nil {
 		s.audit(r.Context(), "deny", "malformed pkiMessage", "")
 		http.Error(w, "cmp: bad request", http.StatusBadRequest)
