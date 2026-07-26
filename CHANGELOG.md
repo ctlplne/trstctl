@@ -13,6 +13,17 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### A maintainer transfer document (D7, 2026-07-26)
+- **The operational knowledge leaves one head.** `MAINTAINERS.md` is written
+  for someone who did not build this: the system's mental model in a
+  paragraph, the architecture linter's eight analyzers and how to extend one
+  (including why there is no `//nolint` escape hatch), the three invariants
+  that have **no** analyzer and lean on dependency-closure tests instead, a
+  map of where the danger is (crypto boundary, signer process, RLS store, the
+  three attach seams), what each meaningful CI gate failing actually means,
+  how release publishing is gated, and why the docs are grep-tested. Pairs
+  with the nine existing runbooks as the transfer set.
+
 ### Dependency license audit runs in CI (D9, 2026-07-26)
 - **Copyleft contamination is now caught by us, not by diligence.**
   `make license-audit` resolves every module actually linked into the shipped
