@@ -4,8 +4,11 @@ package spiffe
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 type additionalSVIDProbe struct {
@@ -49,5 +52,47 @@ func TestWorkloadAPIAdditionalResponseCarriesTwoDistinctKeysForSameSPIFFEID(t *t
 	destroyX509SVIDResponse(resp)
 	if classical.X509SvidKey != nil || additional.X509SvidKey != nil {
 		t.Fatal("Workload API response private keys were not wiped after delivery")
+	}
+}
+
+// TestWorkloadAPIAdditionalSVIDIsAuditedLikeClassical pins AN-2 parity: the
+// additional issuer's mint emits the same spiffe.svid.issued audit shape the
+// classical SVID gets, carrying its hint, so the second identity is never
+// invisible to the event log.
+func TestWorkloadAPIAdditionalSVIDIsAuditedLikeClassical(t *testing.T) {
+	const id = "spiffe://example.org/workload"
+	var payloads []string
+	wl, err := New(Config{
+		Issuer: testIssuer(t), TenantID: "tenant-a", TrustDomain: "example.org",
+		Entries: []RegistrationEntry{{SPIFFEID: id, Selectors: []string{"unix"}}},
+		Audit: auditsink.AuditorFunc(func(_ context.Context, eventType, tenantID string, data []byte) error {
+			if eventType != "spiffe.svid.issued" || tenantID != "tenant-a" {
+				t.Errorf("audit emit = %s/%s, want spiffe.svid.issued/tenant-a", eventType, tenantID)
+			}
+			payloads = append(payloads, string(data))
+			return nil
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewWorkloadAPIServer(wl, []string{"unix"}, WithAdditionalX509SVIDIssuer(&additionalSVIDProbe{}))
+	resp, err := api.buildX509SVIDResponse(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer destroyX509SVIDResponse(resp)
+
+	var sawClassical, sawAdditional bool
+	for _, p := range payloads {
+		if strings.Contains(p, `"type":"x509"`) {
+			sawClassical = true
+		}
+		if strings.Contains(p, `"type":"x509-additional:alternate"`) {
+			sawAdditional = true
+		}
+	}
+	if !sawClassical || !sawAdditional {
+		t.Fatalf("audit payloads = %v, want both the classical x509 and the additional x509-additional:alternate mints", payloads)
 	}
 }

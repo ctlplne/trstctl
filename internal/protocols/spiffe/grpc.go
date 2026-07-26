@@ -187,6 +187,11 @@ func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloa
 				SpiffeId: svid.SPIFFEID, X509Svid: append([]byte(nil), additional.CertificateDER...),
 				X509SvidKey: additional.PrivateKeyPKCS8, Bundle: concatDER(svid.Bundle), Hint: additional.Hint,
 			})
+			// Parity with the classical SVID (AN-2): the additional issuer's
+			// mint is audited into the event log and the credential graph with
+			// the same shape, carrying its hint so posture can tell the pair
+			// apart. Without this the second SVID was invisible to audit.
+			s.wl.recordIssued(ctx, "x509-additional:"+additional.Hint, svid.SPIFFEID)
 		}
 	}
 	if len(resp.Svids) == 0 {

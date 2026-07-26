@@ -13,6 +13,17 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### The additional Workload-API SVID is audited like the classical one (A0.3e, 2026-07-26)
+- **The licensed second SVID stops being invisible to the event log.** The
+  Workload API's additional-issuer mint now emits the same
+  `spiffe.svid.issued` audit event and credential-graph node the classical
+  SVID gets, with its hint in the payload (`x509-additional:<hint>`), so
+  posture can tell the pair apart. Profile parity note: the classical SVID's
+  EKUs are equally fixed by the SVID signing profile, so the additional
+  issuer's serverAuth/clientAuth EKUs are parity, not drift; and like every
+  Workload-API SVID it is deliberately ephemeral — audited, graphed, but not
+  an inventory row.
+
 ### Direct-API issuance scope decided; dead licensed twin removed (A0.3d, 2026-07-26)
 - **The identity API's server-side classical keygen is a decision, not a
   gap.** `issuanceDispatcher.issueLicensed` was assigned at boot and called
