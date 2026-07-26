@@ -233,9 +233,11 @@ never live in the API process. What you can do end to end against the running bi
 - CBOM scan and migration inventory: `POST /api/v1/cbom/scans` runs the
   cryptographic bill of materials scanner against TLS endpoints and host config
   files, records `cbom.asset.observed` events, and projects tenant-scoped
-  `crypto_assets`. `GET /api/v1/cbom/assets` returns the inventory plus FIPS
-  203/204/205 migration targets and `migration_progress`, so operators can see
-  which assets are already post-quantum-ready.
+  `crypto_assets`. `GET /api/v1/cbom/assets` returns the inventory plus
+  migration targets and `migration_progress`. The MPL core names only
+  edition-neutral transition targets; with the Enterprise PQC feature
+  licensed, the targets are the concrete FIPS 203/204/205 algorithms and
+  `migration_progress` counts which assets are already post-quantum-ready.
 - Credential-compromise incident execution: when the Enterprise `remediation`
   feature is licensed, `POST /api/v1/incidents/executions` drives a served,
   idempotent (deduplicated by `Idempotency-Key`), history-reconstructable
@@ -470,10 +472,20 @@ edges and follow-up integration work.
   SSH/private-key inventory is served through the agent mTLS inventory report
   path. Connector-specific external secret-store/API-key scanners remain
   source-plugin or provider-owned unless a native served source kind supplies
-  findings. The network, ssh, cloud_certificate, ct_log, drift, and manual
-  source kinds are wired through the served discovery worker (see "Discovery
-  control plane" above). The CBOM scanner is also served, through its own
-  `/api/v1/cbom/*` API rather than the discovery-run worker.
+  findings. The network, ssh, cloud_certificate, cloud_secret, ct_log, drift,
+  k8s_ingress_gateway, and manual source kinds are wired through the served
+  discovery worker (see "Discovery control plane" above), alongside the NHI
+  kinds (nhi_cross_surface, oauth_grant, service_account, nhi_behavior,
+  credential_compromise) and observation-shaped api_key sources; secret-repo
+  and third-party artifact scans dispatch through the same worker from their
+  `/api/v1/secrets/scans/*` routes. Two accepted kinds carry no worker
+  executor today: `agent` sources report through the agent mTLS channel
+  instead of the worker, and a `secret_store` source's runs fail with a clear
+  "no server-side connector" error unless inline findings are supplied.
+  Discovery schedules are stored and readable but nothing ticks them yet —
+  recurring runs need an external scheduler hitting the runs endpoint. The
+  CBOM scanner is also served, through its own `/api/v1/cbom/*` API rather
+  than the discovery-run worker.
 - SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator): the
   applier that installs a trusted SSH CA and rolls it back on failure is wired
   into the `trstctl-agent` binary behind a **default-off operator opt-in**
@@ -1452,21 +1464,37 @@ normal ECDSA P-256 leaf for stock TLS clients, while a signed ML-DSA-44 +
 ECDSA-P256 composite binding is carried inside the certificate for
 PQ-aware verifiers — deployable without forcing every client to understand
 draft composite public keys on day one. The ACME, EST, SCEP, and CMP
-served enrollment paths all run through that same issuer, so a CSR with
-the hybrid proof can be profile-gated and issued through those protocols
-using the `Hybrid-ML-DSA-44-ECDSA-P256` profile algorithm label.
+served enrollment paths all run through that same issuer, and a CSR
+carrying the hybrid proof (a classical ECDSA-P256 CSR with the
+composite-binding extension) issues through all four. Pure ML-DSA CSRs are
+narrower today: EST accepts and issues them (the licensed PKCS#10 parser
+sits behind EST's verifier seam, proven against a stock OpenSSL 3.5
+client), and ACME hands the CSR bytes to the same licensed issuer without
+parsing them first; SCEP and CMP still verify CSRs with the core parser
+before the licensed parser is consulted and therefore reject pure ML-DSA —
+SCEP additionally cannot deliver its CMS-enveloped reply to a
+signature-only subject key, a protocol limit rather than a code gap. Two
+ceilings apply everywhere: the issuing CA key itself remains classical
+ECDSA-P256 (post-quantum keys are subject keys, not issuer keys, in the
+served path), and certificate-profile `allowed_key_algorithms` labels do
+not yet accept post-quantum or hybrid names — profile-gating PQ enrollment
+is a named residual, not a served claim.
 
-The discovery side knows these algorithms too: the CBOM scanner recognizes
-ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+ as quantum-safe when it finds them
-in your estate. Because all cryptography enters through one isolated path,
-each scheme is a contained boundary implementation (a CIRCL scheme plus
-known-answer tests), with no ripple into the rest of the system. The
+The discovery side knows these algorithms when licensed: the licensed CBOM
+posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+ (and hybrid
+labels) as quantum-safe when it finds them in your estate, while the MPL
+core deliberately names no licensed algorithm and classifies those labels
+as unrecognized. Because all cryptography enters through one isolated
+path, each scheme is a contained boundary implementation (a CIRCL scheme
+plus known-answer tests), with no ripple into the rest of the system. The
 served CBOM inventory exposes this posture through
-`GET /api/v1/cbom/assets`: classical signing algorithms are mapped to
-ML-DSA/FIPS 204 targets, weak TLS protocol or cipher findings are mapped
-to ML-KEM/FIPS 203, DSA is mapped to SLH-DSA/FIPS 205, and
-`migration_progress` shows how much of the observed estate is already
-post-quantum-ready.
+`GET /api/v1/cbom/assets`: with PQC licensed, classical signing algorithms
+are mapped to ML-DSA-65/FIPS 204 targets, key-establishment findings (TLS
+protocols and ciphers) to ML-KEM-768/FIPS 203, deprecated DSA to
+SLH-DSA/FIPS 205, and `migration_progress` shows how much of the observed
+estate is already post-quantum-ready — pure post-quantum assets count as
+future-ready, while hybrids stay migration-required until they shed their
+classical component.
 
 The proprietary EE attach serves three former end-to-end residuals behind
 one license boundary: a stock OpenSSL 3.5 client creates an RFC 9881
@@ -1484,9 +1512,11 @@ runtime in a test.
 Those proofs define the compatibility boundary: they do not claim every
 legacy TLS client or every connector understands ML-DSA. A hybrid-to-pure
 cutover for an existing hybrid certificate remains evidence-gated by
-succession/retirement policy; direct pure ML-DSA enrollment is already
-served. See [Lifecycle & PQC](features/lifecycle-and-pqc.md) for operator
-flow and license placement.
+succession/retirement policy; direct pure ML-DSA enrollment is served
+through EST (and as the SPIFFE Workload API's licensed second SVID) — not
+yet through SCEP, CMP, or a direct API CSR endpoint. See
+[Lifecycle & PQC](features/lifecycle-and-pqc.md) for operator flow and
+license placement.
 
 ## Kubernetes deployment
 
@@ -1545,9 +1575,15 @@ as the default, a default-deny `NetworkPolicy`, and TLS.
   controller test that writes `status.certificate` while preserving
   `Approved` only after Kubernetes approval (native CSRs do not define a
   Ready condition). It is still a small poll-based controller rather than
-  an informer/work-queue controller, and CSR approval policy remains a
-  Kubernetes approver responsibility — operational/governance boundaries,
-  not missing signing functionality.
+  an informer/work-queue controller, and it carries **no leader election**:
+  the shipped DaemonSet runs one reconciler per node, relying on idempotent
+  signing and status writes rather than a single elected writer, so
+  cluster-scoped resources may be reconciled by several pods concurrently —
+  run the `--cert-manager-controller` flag on a single replica if that
+  duplication matters to you (the `trstctl-operator`, by contrast, ships
+  real leader election). CSR approval policy remains a Kubernetes approver
+  responsibility — operational/governance boundaries, not missing signing
+  functionality.
 - Multi-replica HA: the Helm chart runs the control plane multi-replica by
   default (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`,
   PodDisruptionBudget, pod anti-affinity), and running >1 replica is safe:
