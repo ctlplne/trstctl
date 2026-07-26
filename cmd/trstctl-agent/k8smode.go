@@ -128,9 +128,35 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 		defer func() { _ = conn.Close() }()
 		postureClient = transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))
 	}
+	// Leader election for the cluster-scoped controller. The agent is a
+	// DaemonSet, so without this every node reconciles the same
+	// Issuer/ClusterIssuer/TrustBundle objects. Signing and status writes are
+	// idempotent, so this is about not multiplying API-server work and audit
+	// noise by the node count. A follower idles and takes over within one
+	// lease duration if the holder dies. The namespaced cert-manager bridge
+	// is unaffected. Absent RBAC for leases, we log once and reconcile
+	// anyway: losing the controller entirely would be worse than duplicating
+	// idempotent work.
+	var lease *k8s.Lease
+	if issuerController != nil {
+		lease = k8s.NewLease(client, k8sControllerLeaseName, k.leaseIdentity())
+	}
+	leaseWarned := false
+
 	ticker := time.NewTicker(k.reconcileEvery)
 	defer ticker.Stop()
 	reconcile := func() {
+		if lease != nil {
+			leading, err := lease.Acquire(ctx)
+			if err != nil {
+				if !leaseWarned {
+					fmt.Fprintln(os.Stderr, "trstctl-agent: leader election unavailable, reconciling without it:", err)
+					leaseWarned = true
+				}
+			} else if !leading {
+				return
+			}
+		}
 		total := 0
 		if bridge != nil {
 			n, err := bridge.Reconcile(ctx, client.Namespace())
@@ -164,6 +190,23 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 			reconcile()
 		}
 	}
+}
+
+// k8sControllerLeaseName is the coordination.k8s.io Lease the DaemonSet's pods
+// contend for before running the cluster-scoped controller.
+const k8sControllerLeaseName = "trstctl-agent-issuer-controller"
+
+// leaseIdentity identifies this pod in the lease. POD_NAME comes from the
+// downward API in the shipped DaemonSet; the hostname is the same value in
+// practice and the fallback keeps a hand-run agent working.
+func (k k8sOptions) leaseIdentity() string {
+	if name := strings.TrimSpace(os.Getenv("POD_NAME")); name != "" {
+		return name
+	}
+	if host, err := os.Hostname(); err == nil && host != "" {
+		return host
+	}
+	return "trstctl-agent"
 }
 
 func transportKubernetesPostureReport(report k8s.ControllerPostureReport) *transport.KubernetesPostureRequest {

@@ -1597,15 +1597,16 @@ as the default, a default-deny `NetworkPolicy`, and TLS.
   controller test that writes `status.certificate` while preserving
   `Approved` only after Kubernetes approval (native CSRs do not define a
   Ready condition). It is still a small poll-based controller rather than
-  an informer/work-queue controller, and it carries **no leader election**:
-  the shipped DaemonSet runs one reconciler per node, relying on idempotent
-  signing and status writes rather than a single elected writer, so
-  cluster-scoped resources may be reconciled by several pods concurrently —
-  run the `--cert-manager-controller` flag on a single replica if that
-  duplication matters to you (the `trstctl-operator`, by contrast, ships
-  real leader election). CSR approval policy remains a Kubernetes approver
-  responsibility — operational/governance boundaries, not missing signing
-  functionality.
+  an informer/work-queue controller. Because the agent runs as a DaemonSet,
+  the cluster-scoped controller elects a single reconciler through a
+  `coordination.k8s.io` **Lease** (`trstctl-agent-issuer-controller`, 30s
+  duration, identity from the pod's `POD_NAME`): one pod reconciles, the
+  others idle, and a follower takes over within one lease duration if the
+  holder dies. If the Lease RBAC is absent the agent logs once and reconciles
+  anyway — duplicated idempotent work beats no controller. The namespaced
+  cert-manager bridge does not contend. CSR approval policy remains a
+  Kubernetes approver responsibility — operational/governance boundaries, not
+  missing signing functionality.
 - Multi-replica HA: the Helm chart runs the control plane multi-replica by
   default (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`,
   PodDisruptionBudget, pod anti-affinity), and running >1 replica is safe:

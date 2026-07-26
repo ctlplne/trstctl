@@ -24,6 +24,13 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # Leader election for the cluster-scoped issuer controller: the agent is a
+  # DaemonSet, so one Lease elects a single reconciler instead of every node
+  # reconciling the same cluster-scoped objects. Namespaced to the agent's own
+  # namespace, and deliberately without delete.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
   - apiGroups: ["cert-manager.io"]
     resources: ["certificaterequests"]
     verbs: ["get", "list", "watch"]

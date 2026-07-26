@@ -13,6 +13,20 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### The Kubernetes issuer controller elects one reconciler (B1 residue, 2026-07-26)
+- **N nodes stop reconciling the same cluster-scoped objects.** The agent ships
+  as a DaemonSet, so every pod was reconciling the same trstctl
+  `Issuer`/`ClusterIssuer`/`TrustBundle` resources — harmless, because signing
+  and status writes are idempotent, but it multiplied API-server work and
+  audit noise by the node count. A `coordination.k8s.io` Lease
+  (`trstctl-agent-issuer-controller`, 30s, identity from the downward API's
+  `POD_NAME`) now elects one reconciler with a compare-and-swap on
+  `resourceVersion`, so a stale renewal loses instead of stomping the holder;
+  a follower takes over within one lease duration. Missing Lease RBAC logs
+  once and reconciles anyway — duplicated idempotent work beats no controller
+  at all. Covered by tests for single-leader election, the cold-start create
+  race, and expiry takeover.
+
 ### A maintainer transfer document (D7, 2026-07-26)
 - **The operational knowledge leaves one head.** `MAINTAINERS.md` is written
   for someone who did not build this: the system's mental model in a

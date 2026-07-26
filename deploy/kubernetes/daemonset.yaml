@@ -74,6 +74,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Leader-election identity for the cluster-scoped issuer
+            # controller. Unique per pod, so exactly one DaemonSet pod holds
+            # the Lease and reconciles.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: TRSTCTL_ENROLL_URL
               value: "https://trstctl:8443"
             - name: TRSTCTL_SERVER
