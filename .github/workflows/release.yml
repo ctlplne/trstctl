@@ -562,6 +562,106 @@ jobs:
       upload-assets: true
       upload-tag-name: ${{ github.ref_name }}
 
+  # Build and publish the SPIRE UpstreamAuthority plugin so a SPIRE operator can
+  # obtain it from the tag's GitHub Release instead of building from source (B2).
+  # SPIRE loads the plugin from its own host filesystem (plugin_cmd), so the
+  # artifact is a standalone linux binary per arch plus a checksum manifest,
+  # published only from a tag whose required CI/security contexts are green
+  # (TEST-003/005). Flags mirror the container build for reproducibility.
+  spire-upstream-authority:
+    name: spire plugin / build + publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
+    needs: [test, required-checks, release-evidence]
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
+    permissions:
+      contents: write # create/update the tag's GitHub Release assets
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Build the plugin (linux amd64 + arm64, reproducible flags)
+        run: |
+          set -euo pipefail
+          mkdir -p dist/spire
+          VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+          COMMIT="$(git rev-parse --short=12 HEAD)"
+          DATE="$(git show -s --format=%cI HEAD)"
+          LDFLAGS="-s -w -buildid= -X trstctl.com/trstctl/internal/buildinfo.version=${VERSION} -X trstctl.com/trstctl/internal/buildinfo.commit=${COMMIT} -X trstctl.com/trstctl/internal/buildinfo.date=${DATE}"
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+              go build -trimpath -buildvcs=false -ldflags "$LDFLAGS" \
+              -o "dist/spire/trstctl-spire-upstream-authority-linux-${arch}" \
+              ./cmd/trstctl-spire-upstream-authority
+          done
+          ( cd dist/spire && sha256sum trstctl-spire-upstream-authority-linux-* > trstctl-spire-upstream-authority-SHA256SUMS )
+          ( cd dist/spire && sha256sum -c trstctl-spire-upstream-authority-SHA256SUMS )
+
+      - name: Compute SLSA subjects (SPIRE plugin assets)
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          subject_file="${RUNNER_TEMP}/trstctl-spire-upstream-authority.subjects"
+          scripts/release/slsa-subjects.sh files "$subject_file" \
+            dist/spire/trstctl-spire-upstream-authority-linux-amd64 \
+            dist/spire/trstctl-spire-upstream-authority-linux-arm64 \
+            dist/spire/trstctl-spire-upstream-authority-SHA256SUMS
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "$subject_file")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish SPIRE plugin GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "::error::SPIRE plugin release assets can only be published from a tag ref, got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" \
+            dist/spire/trstctl-spire-upstream-authority-linux-amd64 \
+            dist/spire/trstctl-spire-upstream-authority-linux-arm64 \
+            dist/spire/trstctl-spire-upstream-authority-SHA256SUMS \
+            --clobber
+
+      - name: Verify GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+          for name in trstctl-spire-upstream-authority-linux-amd64 trstctl-spire-upstream-authority-linux-arm64 trstctl-spire-upstream-authority-SHA256SUMS; do
+            if ! grep -qx "$name" <<<"$assets"; then
+              echo "::error::GitHub Release $GITHUB_REF_NAME is missing SPIRE plugin asset $name"
+              exit 1
+            fi
+          done
+
+  spire-upstream-authority-provenance:
+    name: slsa / spire plugin provenance
+    needs: [spire-upstream-authority]
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.spire-upstream-authority.outputs.slsa_subjects }}
+      provenance-name: trstctl-spire-upstream-authority.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
+
   # Package the control-plane Helm chart and SIGN it so an operator can verify the
   # chart's provenance before installing the root-of-trust control plane (SUPPLY-007).
   # We push the packaged chart as an OCI artifact to GHCR and cosign-sign it keyless

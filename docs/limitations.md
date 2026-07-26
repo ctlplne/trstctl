@@ -1096,11 +1096,16 @@ This is a deliberate, documented trust boundary, not an accident.
   JWT-SVID signing key has its own signer handle. The Workload-API
   gRPC/protobuf contract is vendored verbatim from go-spiffe so the wire
   format is byte-identical without a build-time go-spiffe dependency.
-- SPIRE upstream authority: the `trstctl-spire-upstream-authority` plugin is
-  served for SPIRE X.509 upstream CA custody: SPIRE sends its local CA CSR
-  to `/api/v1/ca/authorities/{id}/intermediates/csr`, trstctl signs it
-  through the served CA hierarchy, and a real SPIRE server container mints
-  an SVID chained to the trstctl root in CI. The plugin intentionally
+- SPIRE upstream authority: the `trstctl-spire-upstream-authority` plugin puts
+  the served CA hierarchy behind SPIRE as its X.509 upstream: SPIRE sends its
+  local CA CSR to `/api/v1/ca/authorities/{id}/intermediates/csr`, trstctl
+  signs it through the served CA hierarchy, and a real SPIRE server container
+  mints an SVID chained to the trstctl root in CI. The plugin binary is built
+  by `make build` and published from every release tag as
+  `trstctl-spire-upstream-authority-linux-{amd64,arm64}` GitHub Release
+  assets with a SHA-256 manifest and SLSA provenance. SPIRE loads it from its
+  own host filesystem (`plugin_cmd`), so it ships as a standalone binary and
+  is **not** part of the trstctl container image. The plugin intentionally
   returns `Unimplemented` for SPIRE's optional JWT upstream publication RPC;
   it anchors X.509-SVID trust, while SPIRE's local JWT key remains
   SPIRE-managed for same-domain JWT-SVID use.

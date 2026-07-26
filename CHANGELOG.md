@@ -13,6 +13,18 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### SPIRE upstream-authority plugin ships (B2, 2026-07-26)
+- **The SPIRE plugin is now an obtainable artifact, not a build-from-source
+  exercise.** `trstctl-spire-upstream-authority` joins `make build`'s `CMDS`
+  and the reproducible-binary check, and every release tag publishes
+  `trstctl-spire-upstream-authority-linux-{amd64,arm64}` GitHub Release assets
+  with a SHA-256 manifest and their own SLSA provenance
+  (`trstctl-spire-upstream-authority.intoto.jsonl`), gated on the same
+  test/required-checks contexts as every other publishing job. SPIRE loads the
+  plugin from its own host (`plugin_cmd`), so it deliberately stays out of the
+  container image; docs/limitations.md now states the exact distribution
+  contract instead of a bare "served".
+
 ### CBOM licensed posture — real FIPS targets (A0.1, 2026-07-26)
 - **A licensed binary's CBOM now names its migration targets.** The MPL core
   still emits edition-neutral `licensed-*` placeholders and recognizes no
