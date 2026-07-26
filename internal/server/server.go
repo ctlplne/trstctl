@@ -942,6 +942,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if s.bulk != nil {
 		defaults = append(defaults, api.WithBulkheadStats(s.bulk.Stats))
 	}
+	// B-6: the connector catalog reports each connector's live sandbox grant
+	// and replay contract from the registry, not from a description beside it.
+	if s.connectorRegistry != nil {
+		defaults = append(defaults, api.WithConnectorRegistry(s.connectorRegistry))
+	}
 	// B-5: the console's system readout reuses the same probes as /readyz, so
 	// the two can never disagree about whether the spine is up.
 	defaults = append(defaults, api.WithSystemReadout(func() api.SystemReadout {

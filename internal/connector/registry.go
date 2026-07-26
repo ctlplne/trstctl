@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -168,6 +169,30 @@ func (r *Registry) Has(name string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.connectors[name] != nil || r.factories[name] != nil
+}
+
+// CapabilitiesFor returns the sandbox capabilities a registered connector
+// declares, sorted, so an operator can see what a delivery is permitted to do
+// before authorizing one (B-6). A factory-registered connector builds its
+// grant per attempt and has none to report here; an unknown name returns nil.
+// This never constructs a connector: reporting must not run connector code.
+func (r *Registry) CapabilitiesFor(name string) []string {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	c := r.connectors[name]
+	if c == nil {
+		return nil
+	}
+	caps := c.Capabilities().Capabilities()
+	out := make([]string, 0, len(caps))
+	for _, capability := range caps {
+		out = append(out, string(capability))
+	}
+	sort.Strings(out)
+	return out
 }
 
 // ReplaySafetyFor returns the audited replay contract for a registered

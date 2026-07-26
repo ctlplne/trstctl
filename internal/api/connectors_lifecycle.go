@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -18,6 +19,25 @@ type connectorCatalogItem struct {
 	Kind         string `json:"kind"`
 	DeliveryMode string `json:"delivery_mode"`
 	Rollback     string `json:"rollback"`
+	// B-6: the catalog described WHAT each connector deploys but not what it
+	// is permitted to do or how it behaves on a redelivery — the two facts an
+	// operator actually needs before authorizing a privileged deployment.
+	// These are read from the live registry, never hardcoded beside the
+	// description, so the catalog cannot drift from what the process will
+	// enforce.
+	//
+	// Native is true when this build carries a native implementation;
+	// otherwise delivery falls to a signed plugin or a receipt.
+	Native bool `json:"native"`
+	// Capabilities is the sandbox grant a native connector declares
+	// (fs.read, fs.write, net.dial, process.exec). Empty means either a
+	// factory-built connector whose grant is per-attempt, or no privileged
+	// operation at all.
+	Capabilities []string `json:"capabilities"`
+	// ReplaySafety is the audited redelivery contract: "reconciled" when the
+	// receiver converges on retry, "at-most-once" otherwise. It fails closed
+	// to at-most-once for anything unregistered.
+	ReplaySafety string `json:"replay_safety"`
 }
 
 type connectorCatalogResponse struct {
@@ -184,7 +204,7 @@ func (a *API) listConnectorCatalog(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	a.writeJSON(w, http.StatusOK, connectorCatalogResponse{Items: servedConnectorCatalog})
+	a.writeJSON(w, http.StatusOK, connectorCatalogResponse{Items: a.connectorCatalogWithSandbox()})
 }
 
 //trstctl:mutation
@@ -716,4 +736,33 @@ func (a *API) getRotationRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, toRotationRunResponse(row))
+}
+
+// connectorCatalogWithSandbox annotates the static descriptions with the live
+// registry's sandbox facts. Without a registry (an assembly that serves no
+// native connectors) every row reports native=false and the conservative
+// at-most-once contract rather than claiming a capability the process cannot
+// enforce.
+func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
+	out := make([]connectorCatalogItem, 0, len(servedConnectorCatalog))
+	for _, item := range servedConnectorCatalog {
+		item.Capabilities = []string{}
+		item.ReplaySafety = replaySafetyLabel(connector.ReplaySafetyAtMostOnce)
+		if a.connectorRegistry != nil {
+			item.Native = a.connectorRegistry.Has(item.Name)
+			if caps := a.connectorRegistry.CapabilitiesFor(item.Name); len(caps) > 0 {
+				item.Capabilities = caps
+			}
+			item.ReplaySafety = replaySafetyLabel(a.connectorRegistry.ReplaySafetyFor(item.Name))
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func replaySafetyLabel(safety connector.ReplaySafety) string {
+	if safety == connector.ReplaySafetyReconciled {
+		return "reconciled"
+	}
+	return "at-most-once"
 }

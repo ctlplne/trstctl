@@ -1674,7 +1674,11 @@ func componentSchemas() map[string]*Schema {
 	}, "generated_at", "items", "summary", "coverage")
 	connectorCatalogItem := object(map[string]*Schema{
 		"name": str(), "kind": str(), "delivery_mode": str(), "rollback": str(),
-	}, "name", "kind", "delivery_mode", "rollback")
+		// B-6: live sandbox facts from the connector registry.
+		"native":        {Type: "boolean"},
+		"capabilities":  {Type: "array", Items: str()},
+		"replay_safety": {Type: "string", Enum: []string{"at-most-once", "reconciled"}},
+	}, "name", "kind", "delivery_mode", "rollback", "native", "capabilities", "replay_safety")
 	connectorCatalog := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ConnectorCatalogItem")},
 	}, "items")

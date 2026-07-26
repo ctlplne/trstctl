@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -108,6 +109,7 @@ type API struct {
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
 	bulkheadStats             func() []bulkhead.Stats
 	systemReadout             SystemReadoutProvider
+	connectorRegistry         *connector.Registry
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -180,6 +182,7 @@ type config struct {
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
 	bulkheadStats             func() []bulkhead.Stats
 	systemReadout             SystemReadoutProvider
+	connectorRegistry         *connector.Registry
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -428,6 +431,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		outboxCircuits:            cfg.outboxCircuits,
 		bulkheadStats:             cfg.bulkheadStats,
 		systemReadout:             cfg.systemReadout,
+		connectorRegistry:         cfg.connectorRegistry,
 		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),

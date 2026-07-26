@@ -13144,7 +13144,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence and advanced by PLUGIN-01. Test evidence: internal/server/plugins_served_test.go loads signed reference CA and connector WASM plugins through the served binary, issues through the external-CA API, deploys through connector.deploy, and proves unsigned/tampered/out-of-grant plugins fail closed. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by route-level feature-map evidence and advanced by PLUGIN-01. Test evidence: internal/server/plugins_served_test.go loads signed reference CA and connector WASM plugins through the served binary, issues through the external-CA API, deploys through connector.deploy, and proves unsigned/tampered/out-of-grant plugins fail closed. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. B-6 surfaces the sandbox contract in the served connector catalog: each row reports native availability, the declared capability grant, and the audited replay contract, read from the live registry so the catalog cannot claim a capability the process would not enforce (TestConnectorCatalogReportsRegistrySandboxFacts, TestConnectorCatalogWithoutRegistryClaimsNothing).",
       "api_surface": [
         "listExternalCAs",
         "issueExternalCA"

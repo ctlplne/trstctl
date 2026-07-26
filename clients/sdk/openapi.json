@@ -4156,6 +4156,12 @@
       },
       "ConnectorCatalogItem": {
         "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "delivery_mode": {
             "type": "string"
           },
@@ -4163,6 +4169,16 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "native": {
+            "type": "boolean"
+          },
+          "replay_safety": {
+            "enum": [
+              "at-most-once",
+              "reconciled"
+            ],
             "type": "string"
           },
           "rollback": {
@@ -4173,7 +4189,10 @@
           "name",
           "kind",
           "delivery_mode",
-          "rollback"
+          "rollback",
+          "native",
+          "capabilities",
+          "replay_safety"
         ],
         "type": "object"
       },

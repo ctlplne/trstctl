@@ -502,6 +502,16 @@ edges and follow-up integration work.
   hot-looping; one sweep queues at most 100 runs per tenant). The CBOM
   scanner is also served, through its own `/api/v1/cbom/*` API rather than
   the discovery-run worker.
+- The connector catalog reports sandbox truth, not description: each row in
+  `GET /api/v1/connectors/catalog` carries `native` (this build has a native
+  implementation), `capabilities` (the declared sandbox grant — `fs.read`,
+  `fs.write`, `net.dial`, `process.exec`), and `replay_safety`
+  (`reconciled` when the receiver converges on retry, otherwise
+  `at-most-once`). Those come from the live registry, so the catalog cannot
+  claim a capability the process would not enforce; a connector this build
+  does not implement natively reports no capabilities and the conservative
+  at-most-once contract. Factory-registered connectors build their grant per
+  attempt and report none here.
 - The running system is readable: `GET /api/v1/platform/system` (and
   `trstctl-cli platform system`) reports the build version/commit/date, the Go
   toolchain, process start time and uptime, the live signer topology

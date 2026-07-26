@@ -1100,9 +1100,12 @@ export interface ConnectorCatalog {
 }
 
 export interface ConnectorCatalogItem {
+  capabilities: string[];
   delivery_mode: string;
   kind: string;
   name: string;
+  native: boolean;
+  replay_safety: "at-most-once" | "reconciled";
   rollback: string;
 }
 

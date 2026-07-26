@@ -8,6 +8,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -65,6 +66,13 @@ func WithBulkheadStats(fn func() []bulkhead.Stats) Option {
 // stamp, the process start time, and the readiness probes.
 func WithSystemReadout(fn SystemReadoutProvider) Option {
 	return func(c *config) { c.systemReadout = fn }
+}
+
+// WithConnectorRegistry wires the native connector registry so the catalog can
+// report each connector's live sandbox grant and replay contract (B-6) instead
+// of a description that could drift from what the process enforces.
+func WithConnectorRegistry(registry *connector.Registry) Option {
+	return func(c *config) { c.connectorRegistry = registry }
 }
 
 // WithFeatureObserver wires per-feature telemetry (COVER-009). The hook is called

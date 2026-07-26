@@ -13,6 +13,22 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### The connector catalog reports its sandbox contract (B-6, 2026-07-26)
+- **The catalog described what a connector deploys, never what it may do.**
+  An operator authorizing a privileged deployment could not see the two facts
+  that matter: what the connector is permitted to touch, and what happens on a
+  redelivery. Each catalog row now carries `native` (this build has a native
+  implementation), `capabilities` (the declared sandbox grant — `fs.read`,
+  `fs.write`, `net.dial`, `process.exec`, sorted), and `replay_safety`
+  (`reconciled` when the receiver converges on retry, otherwise
+  `at-most-once`).
+- **Read from the live registry, not written beside the description**, so the
+  catalog cannot drift into claiming a capability the process would not
+  enforce. Reporting never constructs a connector. A connector this build does
+  not implement natively reports no capabilities and the conservative
+  at-most-once contract, and a control plane assembled with no registry claims
+  nothing at all.
+
 ### The running system is readable from the console (B-5, 2026-07-26)
 - **`/admin/system` showed posture, not the system.** It rendered what the
   product *claims* — edition, support tier, scale plan — but not the readout
