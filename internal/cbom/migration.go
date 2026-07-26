@@ -3,26 +3,42 @@
 package cbom
 
 // MigrationTarget names the edition-neutral replacement posture a finding should
-// move toward. Concrete licensed algorithm choices are supplied by ee/.
+// move toward. Concrete licensed algorithm choices are supplied by ee/ through
+// the InstallLicensedPosture seam.
 type MigrationTarget struct {
 	Algorithm  string `json:"algorithm"`
 	Standard   string `json:"standard"`
 	Generation string `json:"generation"`
 }
 
-// MigrationTargetFor maps observed classical cryptography to an edition-neutral
-// remediation target. The MPL core deliberately does not name licensed algorithms.
+// Generation values a MigrationTarget may carry. GenerationFutureReady marks an
+// asset that needs no further migration; ProgressFor counts exactly these into
+// PostQuantumReadyAssets. The core mapping never emits it — only an installed
+// licensed resolver can recognize a future-ready asset.
+const (
+	GenerationMigrationRequired = "migration-required"
+	GenerationFutureReady       = "future-ready"
+)
+
+// MigrationTargetFor maps observed cryptography to a remediation target. An
+// installed licensed resolver names concrete algorithms; the MPL core fallback
+// deliberately does not, and emits edition-neutral placeholders.
 func MigrationTargetFor(f Finding) MigrationTarget {
+	if licensedTargetFor != nil {
+		if t, ok := licensedTargetFor(f); ok {
+			return t
+		}
+	}
 	if f.Protocol != "" || f.Cipher != "" {
-		return MigrationTarget{Algorithm: "licensed-key-establishment-transition", Standard: "licensed", Generation: "migration-required"}
+		return MigrationTarget{Algorithm: "licensed-key-establishment-transition", Standard: "licensed", Generation: GenerationMigrationRequired}
 	}
 	switch keyFamily(f.Algorithm) {
 	case "RSA", "ECDSA", "EdDSA":
-		return MigrationTarget{Algorithm: "licensed-signature-transition", Standard: "licensed", Generation: "migration-required"}
+		return MigrationTarget{Algorithm: "licensed-signature-transition", Standard: "licensed", Generation: GenerationMigrationRequired}
 	case "DSA":
-		return MigrationTarget{Algorithm: "licensed-deprecated-signature-transition", Standard: "licensed", Generation: "migration-required"}
+		return MigrationTarget{Algorithm: "licensed-deprecated-signature-transition", Standard: "licensed", Generation: GenerationMigrationRequired}
 	default:
-		return MigrationTarget{Algorithm: "licensed-crypto-transition", Standard: "licensed", Generation: "migration-required"}
+		return MigrationTarget{Algorithm: "licensed-crypto-transition", Standard: "licensed", Generation: GenerationMigrationRequired}
 	}
 }
 
@@ -49,7 +65,7 @@ func ProgressFor(findings []Finding) MigrationProgress {
 		if f.Class.OutOfPolicy {
 			p.OutOfPolicyAssets++
 		}
-		if MigrationTargetFor(f).Generation == "future-ready" {
+		if MigrationTargetFor(f).Generation == GenerationFutureReady {
 			p.PostQuantumReadyAssets++
 		}
 	}

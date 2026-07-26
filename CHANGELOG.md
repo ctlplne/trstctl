@@ -13,6 +13,23 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### CBOM licensed posture — real FIPS targets (A0.1, 2026-07-26)
+- **A licensed binary's CBOM now names its migration targets.** The MPL core
+  still emits edition-neutral `licensed-*` placeholders and recognizes no
+  licensed algorithm family — that fence is deliberate and unchanged. A new
+  seam, `cbom.InstallLicensedPosture`, is filled from the tagged PQC attach
+  block with `ee/pqc.CBOMTargetFor` + `ee/pqc.CBOMClassifyKey`, so with
+  FeaturePQC licensed the inventory maps classical signatures →
+  **ML-DSA-65 (FIPS 204)**, key establishment → **ML-KEM-768 (FIPS 203)**, and
+  deprecated DSA → **SLH-DSA-SHA2-128s (FIPS 205)**; ML-DSA / ML-KEM / SLH-DSA
+  / SPHINCS+ / Kyber / Dilithium / hybrid labels classify as strong and not
+  quantum-vulnerable instead of "unrecognized"; and pure post-quantum assets
+  carry `future-ready` — which makes `percent_migrated` a live number instead
+  of a structural zero. Hybrid assets deliberately stay `migration-required`:
+  they are quantum-safe today but the migration endpoint is the pure
+  post-quantum algorithm. Covered by `ee/pqc/cbom_test.go`, including a mixed
+  classical + post-quantum estate reporting 25% migrated.
+
 ### Static console demo enablement (demo.trstctl.com, 2026-07-25)
 - **The console can now ship as a zero-backend static demo.** A build-time
   flag (`VITE_TRSTCTL_DEMO=1`, set only by the demo-site build in

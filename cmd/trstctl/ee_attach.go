@@ -21,6 +21,7 @@ import (
 	eegovernance "trstctl.com/trstctl/ee/governance"
 	eekmip "trstctl.com/trstctl/ee/kmip"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
+	eepqc "trstctl.com/trstctl/ee/pqc"
 	eepqcmigration "trstctl.com/trstctl/ee/pqcmigration"
 	eepqcruntime "trstctl.com/trstctl/ee/pqcruntime"
 	eeprovider "trstctl.com/trstctl/ee/provider"
@@ -33,6 +34,7 @@ import (
 	eesuccessionstore "trstctl.com/trstctl/ee/succession/store"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/license"
@@ -268,6 +270,10 @@ func attachPQC(log *slog.Logger, deps *server.Deps) {
 	deps.LicensedCSRInspector = cryptoRuntime.CSRInspector
 	deps.LicensedCSRParser = cryptoRuntime.CSRParser
 	deps.LicensedSPIFFESVIDFactory = cryptoRuntime.SPIFFESVIDFactory
+	// CBOM licensed posture: name the FIPS-203/204/205 migration targets and
+	// recognize post-quantum families the MPL core deliberately does not know,
+	// so migration progress can count future-ready assets (A0.1).
+	cbom.InstallLicensedPosture(eepqc.CBOMTargetFor, eepqc.CBOMClassifyKey)
 	if log != nil {
 		log.Info("Enterprise PQC attached", slog.String("feature", string(license.FeaturePQC)))
 	}

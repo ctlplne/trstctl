@@ -105,8 +105,16 @@ func keyFamily(algorithm string) string {
 }
 
 // ClassifyKey classifies an asymmetric public key by family and size. RSA,
-// ECDSA, EdDSA, and DSA are quantum-vulnerable.
+// ECDSA, EdDSA, and DSA are quantum-vulnerable. An installed licensed
+// classifier is consulted first, so licensed algorithm families the core
+// deliberately does not know classify correctly instead of falling into
+// "unrecognized".
 func ClassifyKey(algorithm string, bits int, p Policy) Classification {
+	if licensedClassifyKey != nil {
+		if c, ok := licensedClassifyKey(algorithm, bits); ok {
+			return c
+		}
+	}
 	fam := keyFamily(algorithm)
 	c := Classification{Strength: StrengthAcceptable}
 	switch fam {
