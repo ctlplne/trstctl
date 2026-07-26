@@ -1515,8 +1515,12 @@ Those proofs define the compatibility boundary: they do not claim every
 legacy TLS client or every connector understands ML-DSA. A hybrid-to-pure
 cutover for an existing hybrid certificate remains evidence-gated by
 succession/retirement policy; direct pure ML-DSA enrollment is served
-through EST (and as the SPIFFE Workload API's licensed second SVID) — not
-yet through SCEP, CMP, or a direct API CSR endpoint. See
+through EST (and as the SPIFFE Workload API's licensed second SVID), and
+CMP consults the same licensed parser for its carried CSR (PKIMessage
+protection stays classically verified). SCEP cannot by protocol, and the
+direct identity API intentionally has no CSR input at all — it generates
+classical keys server-side, so CSR-based enrollment, including licensed
+subject algorithms, belongs to the enrollment protocols. See
 [Lifecycle & PQC](features/lifecycle-and-pqc.md) for operator flow and
 license placement.
 

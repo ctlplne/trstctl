@@ -13,6 +13,15 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Direct-API issuance scope decided; dead licensed twin removed (A0.3d, 2026-07-26)
+- **The identity API's server-side classical keygen is a decision, not a
+  gap.** `issuanceDispatcher.issueLicensed` was assigned at boot and called
+  nowhere — a dormant seam diligence would flag. It is deleted; the
+  dispatcher documents that ephemeral NHI identities take server-generated
+  classical keys by design, and CSR-based enrollment (including licensed
+  subject algorithms) belongs to the enrollment protocols through
+  `protocolIssuer`, whose licensed twin is live and tested.
+
 ### ACME's algorithm transparency is pinned by test (A0.3c, 2026-07-26)
 - **"ACME never parses the CSR" is now a contract, not an accident.** A new
   test drives a full RFC 8555 order with a real client and finalizes with a

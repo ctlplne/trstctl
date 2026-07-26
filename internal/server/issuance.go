@@ -90,14 +90,19 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // source of truth. It is idempotent on
 // the outbox message's key (AN-5), so a redelivery never mints a second
 // certificate nor double-revokes.
+// Scope decision (A0.3d): the direct identity API deliberately performs
+// server-side CLASSICAL keygen (ephemeral NHI identities; no CSR input), so
+// this dispatcher carries no licensed signer twin — CSR-based enrollment,
+// including licensed subject algorithms, is the protocols' job through
+// protocolIssuer. A future identity key-algorithm parameter is roadmap work,
+// not a dormant seam here.
 type issuanceDispatcher struct {
-	issue         issueFunc
-	issueLicensed issueFunc
-	orch          *orchestrator.Orchestrator
-	idem          *orchestrator.Idempotency
-	outbox        *orchestrator.Outbox
-	store         *store.Store
-	admission     editionseam.AdmissionHook
+	issue     issueFunc
+	orch      *orchestrator.Orchestrator
+	idem      *orchestrator.Idempotency
+	outbox    *orchestrator.Outbox
+	store     *store.Store
+	admission editionseam.AdmissionHook
 
 	// log is the event log used to emit the profile-gated issuance decision
 	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the
