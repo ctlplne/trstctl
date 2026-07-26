@@ -662,6 +662,178 @@ jobs:
       upload-assets: true
       upload-tag-name: ${{ github.ref_name }}
 
+  # Package the Terraform provider in the exact Terraform Registry release
+  # layout (per-OS/arch zips, protocol-6.0 manifest, GPG-signed SHA256SUMS) and
+  # publish it as GitHub Release assets — the shape `terraform init` and the
+  # Registry ingest (B6). The GPG key lives in the protected
+  # terraform-registry-signing environment; publishing without it fails loud
+  # rather than emitting unsigned assets the Registry would reject (CODE-005).
+  terraform-provider:
+    name: terraform provider / package + publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
+    needs: [test, required-checks, release-evidence]
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
+    permissions:
+      contents: write # create/update the tag's GitHub Release assets
+    environment: terraform-registry-signing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Package registry assets (zips + manifest + signed SHA256SUMS)
+        env:
+          TERRAFORM_GPG_PRIVATE_KEY: ${{ secrets.TERRAFORM_GPG_PRIVATE_KEY }}
+          TERRAFORM_GPG_PASSPHRASE: ${{ secrets.TERRAFORM_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TERRAFORM_GPG_PRIVATE_KEY}" ]; then
+            echo "::error::TERRAFORM_GPG_PRIVATE_KEY is required for Terraform Registry publishing. Configure the protected terraform-registry-signing environment with the registry GPG signing key."
+            exit 1
+          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          scripts/release/terraform-registry-assets.sh "$VERSION" dist/terraform
+
+      - name: Compute SLSA subjects (Terraform provider assets)
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          subject_file="${RUNNER_TEMP}/terraform-provider-trstctl.subjects"
+          scripts/release/slsa-subjects.sh files "$subject_file" dist/terraform/*
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "$subject_file")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Terraform provider GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "::error::Terraform provider release assets can only be published from a tag ref, got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/terraform/* --clobber
+
+      - name: Verify GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          assets="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+          for name in \
+            "terraform-provider-trstctl_${VERSION}_linux_amd64.zip" \
+            "terraform-provider-trstctl_${VERSION}_manifest.json" \
+            "terraform-provider-trstctl_${VERSION}_SHA256SUMS" \
+            "terraform-provider-trstctl_${VERSION}_SHA256SUMS.sig"; do
+            if ! grep -qx "$name" <<<"$assets"; then
+              echo "::error::GitHub Release $GITHUB_REF_NAME is missing Terraform provider asset $name"
+              exit 1
+            fi
+          done
+
+  terraform-provider-provenance:
+    name: slsa / terraform provider provenance
+    needs: [terraform-provider]
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.terraform-provider.outputs.slsa_subjects }}
+      provenance-name: terraform-provider-trstctl.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
+
+  # Build the Python SDK from the tag (version stamped from the tag name),
+  # publish sdist+wheel as GitHub Release assets, and push to PyPI (B6). The
+  # PyPI token lives in the protected pypi-publishing environment; a missing
+  # token fails loud instead of silently skipping the publish (CODE-005).
+  python-sdk:
+    name: python sdk / build + publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
+    needs: [test, required-checks, release-evidence]
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
+    permissions:
+      contents: write # create/update the tag's GitHub Release assets
+    environment: pypi-publishing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Build sdist + wheel (version stamped from the tag)
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "::error::Python SDK release assets can only be published from a tag ref, got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 -m pip install --upgrade "build~=1.2" "twine~=6.1"
+          sed -i "s/^version = \"[^\"]*\"/version = \"${VERSION}\"/" clients/sdk/python/pyproject.toml
+          grep -q "^version = \"${VERSION}\"" clients/sdk/python/pyproject.toml
+          python3 -m build --outdir dist/python clients/sdk/python
+          python3 -m twine check dist/python/*
+
+      - name: Compute SLSA subjects (Python SDK assets)
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          subject_file="${RUNNER_TEMP}/trstctl-python-sdk.subjects"
+          scripts/release/slsa-subjects.sh files "$subject_file" dist/python/*
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "$subject_file")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Python SDK GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/python/* --clobber
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TWINE_PASSWORD}" ]; then
+            echo "::error::PYPI_API_TOKEN is required for PyPI publishing. Configure the protected pypi-publishing environment with a project-scoped token."
+            exit 1
+          fi
+          python3 -m twine upload --non-interactive dist/python/*
+
+  python-sdk-provenance:
+    name: slsa / python sdk provenance
+    needs: [python-sdk]
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.python-sdk.outputs.slsa_subjects }}
+      provenance-name: trstctl-python-sdk.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
+
   # Package the control-plane Helm chart and SIGN it so an operator can verify the
   # chart's provenance before installing the root-of-trust control plane (SUPPLY-007).
   # We push the packaged chart as an OCI artifact to GHCR and cosign-sign it keyless

@@ -11,6 +11,23 @@ route constants for profiles, PKI secret issuance, and secret-store CRUD come fr
 
 ## Build or install
 
+Every release tag publishes the provider in the exact Terraform Registry
+release layout as GitHub Release assets: one
+`terraform-provider-trstctl_<version>_<os>_<arch>.zip` per platform
+(linux/darwin amd64+arm64, windows amd64), the
+`terraform-provider-trstctl_<version>_manifest.json` protocol manifest, and a
+GPG-signed `terraform-provider-trstctl_<version>_SHA256SUMS` — the shape the
+Registry ingests directly, produced by
+`scripts/release/terraform-registry-assets.sh` and covered by SLSA provenance
+(`terraform-provider-trstctl.intoto.jsonl`). A real `terraform apply`
+acceptance test runs in CI on every push (`TRSTCTL_RUN_TERRAFORM_ACC=1`
+against a pinned terraform binary), so the plan/apply/read/delete loop is
+exercised, not claimed. Registry publication requires the
+`terraform-registry-signing` environment to carry the signing key
+(`TERRAFORM_GPG_PRIVATE_KEY`); until the `trstctl` Registry namespace is
+registered with that key's public half, install from the Release assets or
+build locally.
+
 Build the provider with the normal release target:
 
 ```bash

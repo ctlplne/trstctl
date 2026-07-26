@@ -13,6 +13,25 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Terraform provider + Python SDK become published artifacts (B6, 2026-07-26)
+- **The provider's acceptance test now actually runs.** CI drives a REAL
+  `terraform apply` (pinned terraform 1.9.8, SHA256SUMS-verified download)
+  through the provider's plan/apply/read/delete loop on every push —
+  previously `TRSTCTL_RUN_TERRAFORM_ACC` was set nowhere and the test was
+  dead weight.
+- **Release tags publish the provider in the Terraform Registry layout.**
+  `scripts/release/terraform-registry-assets.sh` builds per-OS/arch zips
+  (binary named `terraform-provider-trstctl_v<version>`), the protocol-6.0
+  registry manifest, and a GPG-signed SHA256SUMS; the release job uploads them
+  as GitHub Release assets with SLSA provenance. Signing requires the
+  protected `terraform-registry-signing` environment — unsigned assets are
+  refused rather than emitted.
+- **The Python SDK ships to PyPI and the Release.** A release job stamps the
+  tag version into `clients/sdk/python`, builds sdist+wheel, `twine check`s
+  them, uploads them as Release assets with SLSA provenance, and pushes to
+  PyPI via the protected `pypi-publishing` environment (`PYPI_API_TOKEN`) —
+  missing credentials fail loud, never skip silently.
+
 ### SPIRE upstream-authority plugin ships (B2, 2026-07-26)
 - **The SPIRE plugin is now an obtainable artifact, not a build-from-source
   exercise.** `trstctl-spire-upstream-authority` joins `make build`'s `CMDS`
