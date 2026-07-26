@@ -75,6 +75,12 @@ func WithConnectorRegistry(registry *connector.Registry) Option {
 	return func(c *config) { c.connectorRegistry = registry }
 }
 
+// WithSSHFleet wires the standing-SSH-key fleet inventory (B-2): the hosts
+// whose access does not run through the SSH CA.
+func WithSSHFleet(fn SSHFleetProvider) Option {
+	return func(c *config) { c.sshFleet = fn }
+}
+
 // WithFeatureObserver wires per-feature telemetry (COVER-009). The hook is called
 // once per served high-risk feature operation (issuance, revocation, deployment,
 // discovery, certificate ingest) with closed-set, non-sensitive labels — the feature

@@ -14070,6 +14070,91 @@
         ],
         "type": "object"
       },
+      "SSHFleetHost": {
+        "properties": {
+          "first_observed": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "key_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "keys": {
+            "type": "integer"
+          },
+          "last_observed": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "orphaned_keys": {
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "standing_keys": {
+            "type": "integer"
+          },
+          "under_ca": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "location",
+          "keys",
+          "standing_keys",
+          "orphaned_keys",
+          "key_types",
+          "sources",
+          "first_observed",
+          "last_observed",
+          "under_ca"
+        ],
+        "type": "object"
+      },
+      "SSHFleetInventory": {
+        "properties": {
+          "host_count": {
+            "type": "integer"
+          },
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/SSHFleetHost"
+            },
+            "type": "array"
+          },
+          "hosts_not_under_ca": {
+            "type": "integer"
+          },
+          "key_count": {
+            "type": "integer"
+          },
+          "orphaned_key_count": {
+            "type": "integer"
+          },
+          "standing_key_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hosts",
+          "host_count",
+          "key_count",
+          "standing_key_count",
+          "orphaned_key_count",
+          "hosts_not_under_ca"
+        ],
+        "type": "object"
+      },
       "SSHHostRetireRequest": {
         "properties": {
           "host": {
@@ -33191,6 +33276,53 @@
         ],
         "summary": "Revoke an SSH certificate and publish KRL status",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/ssh/fleet": {
+      "get": {
+        "operationId": "getSSHFleet",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHFleetInventory"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List hosts with standing SSH key access not under the CA",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/ssh/hosts/retire": {

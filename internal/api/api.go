@@ -110,6 +110,7 @@ type API struct {
 	bulkheadStats             func() []bulkhead.Stats
 	systemReadout             SystemReadoutProvider
 	connectorRegistry         *connector.Registry
+	sshFleet                  SSHFleetProvider
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -183,6 +184,7 @@ type config struct {
 	bulkheadStats             func() []bulkhead.Stats
 	systemReadout             SystemReadoutProvider
 	connectorRegistry         *connector.Registry
+	sshFleet                  SSHFleetProvider
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -432,6 +434,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		bulkheadStats:             cfg.bulkheadStats,
 		systemReadout:             cfg.systemReadout,
 		connectorRegistry:         cfg.connectorRegistry,
+		sshFleet:                  cfg.sshFleet,
 		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
@@ -923,6 +926,9 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/workloads/attester-trust-sources/{id}/revoke", opID: "revokeWorkloadAttesterTrustSource", summary: "Revoke a workload attester trust source", handler: a.revokeWorkloadAttesterTrustSource, pathParams: idPath, reqSchema: "WorkloadAttesterTrustSourceRevokeRequest", resSchema: "WorkloadAttesterTrustSourceRevoked", successCode: "200", mutation: true, perm: authz.CertsIssue},
 		{method: "DELETE", path: "/api/v1/workloads/attester-trust-sources/{id}", opID: "deleteWorkloadAttesterTrustSource", summary: "Delete a workload attester trust source", handler: a.deleteWorkloadAttesterTrustSource, pathParams: idPath, successCode: "204", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/workloads/attested-issuance", opID: "issueAttestedSVID", summary: "Issue an X.509-SVID after workload attestation", handler: a.issueAttestedSVID, reqSchema: "AttestedSVIDRequest", resSchema: "AttestedSVID", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		// B-2: which hosts still have standing key-based access the CA cannot
+		// reach — the SSH credentials trstctl did NOT issue.
+		{method: "GET", path: "/api/v1/ssh/fleet", opID: "getSSHFleet", summary: "List hosts with standing SSH key access not under the CA", handler: a.getSSHFleet, resSchema: "SSHFleetInventory", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/ssh/status", opID: "getSSHStatus", summary: "Get SSH CA, KRL, and attestation workflow status", handler: a.getSSHStatus, resSchema: "SSHStatus", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/ssh/trust-rollouts", opID: "recordSSHTrustRollout", summary: "Record SSH trust rollout status from the agent-safe workflow", handler: a.recordSSHTrustRollout, reqSchema: "SSHTrustRolloutRequest", resSchema: "SSHTrustRollout", successCode: "201", mutation: true, perm: authz.AgentsWrite},
 		{method: "POST", path: "/api/v1/ssh/attested-user-certs", opID: "issueAttestedSSHUserCert", summary: "Issue an attestation-gated SSH user certificate", handler: a.issueAttestedSSHUserCert, reqSchema: "SSHAttestedUserCertRequest", resSchema: "SSHAttestedUserCert", successCode: "201", mutation: true, perm: authz.CertsIssue},

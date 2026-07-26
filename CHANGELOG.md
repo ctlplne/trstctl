@@ -13,6 +13,23 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### The SSH estate outside the CA is readable (B-2, 2026-07-26)
+- **The SSH surface covered the credentials trstctl issues and nothing about
+  the ones it does not.** CA status, trust rollouts, attested user certs and
+  revocation were all served, while discovered SSH keys sat in the inventory
+  with no view answering the operator's actual question: which hosts still
+  have standing key-based access that certificate rotation cannot reach.
+  `GET /api/v1/ssh/fleet` (and `trstctl-cli ssh fleet`) rolls those keys up
+  per host — key count, standing-access count, orphaned count, key types,
+  sources, observation window — ordered worst host first, so the hosts most
+  needing to come under the CA sort to the top.
+- **The not-under-CA claim is structural, not inferred.** Every row behind the
+  view is a raw key, because a certificate minted by the SSH CA is never
+  stored as an `ssh_key`; each host therefore carries `under_ca: false`
+  explicitly, and the response repeats the count so a dashboard does not have
+  to restate the invariant. Metadata only — fingerprints, types, locations —
+  never private key material.
+
 ### The connector catalog reports its sandbox contract (B-6, 2026-07-26)
 - **The catalog described what a connector deploys, never what it may do.**
   An operator authorizing a privileged deployment could not see the two facts

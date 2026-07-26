@@ -1962,6 +1962,20 @@ func componentSchemas() map[string]*Schema {
 		"failures":   {Type: "integer"},
 		"open_until": timestamp(), "updated_at": timestamp(), "last_error": str(),
 	}, "tenant_id", "destination", "state", "failures", "updated_at")
+	// B-2: hosts with standing SSH key access that is not under the CA.
+	sshFleetHost := object(map[string]*Schema{
+		"location": str(), "keys": {Type: "integer"},
+		"standing_keys": {Type: "integer"}, "orphaned_keys": {Type: "integer"},
+		"key_types": {Type: "array", Items: str()}, "sources": {Type: "array", Items: str()},
+		"first_observed": timestamp(), "last_observed": timestamp(),
+		"under_ca": {Type: "boolean"},
+	}, "location", "keys", "standing_keys", "orphaned_keys", "key_types", "sources", "first_observed", "last_observed", "under_ca")
+	sshFleetInventory := object(map[string]*Schema{
+		"hosts":      {Type: "array", Items: ref("SSHFleetHost")},
+		"host_count": {Type: "integer"}, "key_count": {Type: "integer"},
+		"standing_key_count": {Type: "integer"}, "orphaned_key_count": {Type: "integer"},
+		"hosts_not_under_ca": {Type: "integer"},
+	}, "hosts", "host_count", "key_count", "standing_key_count", "orphaned_key_count", "hosts_not_under_ca")
 	// B-5: running build, uptime, signer topology, and spine reachability.
 	systemDependency := object(map[string]*Schema{
 		"name": str(), "ready": {Type: "boolean"}, "error": str(),
@@ -3503,6 +3517,8 @@ func componentSchemas() map[string]*Schema {
 		"PolicyVersionListSummary":                 policyVersionListSummary,
 		"PolicyVersionList":                        policyVersionList,
 		"OutboxCircuit":                            outboxCircuit,
+		"SSHFleetHost":                             sshFleetHost,
+		"SSHFleetInventory":                        sshFleetInventory,
 		"SystemDependency":                         systemDependency,
 		"SystemReadout":                            systemReadout,
 		"BulkheadPool":                             bulkheadPool,

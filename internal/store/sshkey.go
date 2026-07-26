@@ -45,6 +45,63 @@ func (s *Store) UpsertSSHKey(ctx context.Context, k SSHKey) (SSHKey, error) {
 	return k, err
 }
 
+// SSHFleetHost aggregates a host's discovered SSH key material. Every row in
+// ssh_keys is a RAW key — a certificate issued by the SSH CA is not stored
+// here — so a host appearing in this view has key-based access that does not
+// go through the CA. That is the finding: standing keys are the access path
+// certificate rotation cannot reach.
+type SSHFleetHost struct {
+	Location      string
+	Keys          int
+	StandingKeys  int
+	OrphanedKeys  int
+	KeyTypes      []string
+	Sources       []string
+	FirstObserved time.Time
+	LastObserved  time.Time
+}
+
+// SSHFleetInventory groups the tenant's discovered SSH keys by host, worst
+// first (most standing access, then most orphaned, then most keys), so the
+// hosts that most need bringing under the CA sort to the top. limit bounds one
+// read; 0 uses a sane default.
+func (s *Store) SSHFleetInventory(ctx context.Context, tenantID string, limit int) ([]SSHFleetHost, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	var out []SSHFleetHost
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT COALESCE(NULLIF(location, ''), 'unattributed') AS host,
+			        count(*)::integer AS keys,
+			        count(*) FILTER (WHERE standing_access)::integer AS standing_keys,
+			        count(*) FILTER (WHERE orphaned)::integer AS orphaned_keys,
+			        array_agg(DISTINCT key_type) FILTER (WHERE key_type <> '') AS key_types,
+			        array_agg(DISTINCT source) FILTER (WHERE source <> '') AS sources,
+			        min(created_at) AS first_observed,
+			        max(created_at) AS last_observed
+			   FROM ssh_keys
+			  WHERE tenant_id = $1
+			  GROUP BY host
+			  ORDER BY standing_keys DESC, orphaned_keys DESC, keys DESC, host
+			  LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var host SSHFleetHost
+			if err := rows.Scan(&host.Location, &host.Keys, &host.StandingKeys, &host.OrphanedKeys,
+				&host.KeyTypes, &host.Sources, &host.FirstObserved, &host.LastObserved); err != nil {
+				return err
+			}
+			out = append(out, host)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // ListSSHKeysPage returns up to limit SSH keys with id greater than afterID
 // (keyset pagination; pass ZeroUUID for the first page).
 func (s *Store) ListSSHKeysPage(ctx context.Context, tenantID, afterID string, limit int) ([]SSHKey, error) {

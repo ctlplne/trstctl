@@ -291,6 +291,9 @@ var commandTable = []Command{
 
 	{Name: []string{"risk", "credentials"}, Method: "GET", Path: "/api/v1/risk/credentials", Query: []string{"sort", "min_score", "privilege", "owner"}, Summary: "Rank credentials by risk score"},
 	{Name: []string{"risk", "contextual-priorities"}, Method: "GET", Path: "/api/v1/risk/contextual-priorities", Summary: "Prioritize credential risk with blast-radius context"},
+	// B-2: hosts whose SSH access does not run through the CA.
+	{Name: []string{"ssh", "fleet"}, Method: "GET", Path: "/api/v1/ssh/fleet", Summary: "List hosts with standing SSH key access not under the CA"},
+
 	// B-5: what is running and is the spine reachable.
 	{Name: []string{"platform", "system"}, Method: "GET", Path: "/api/v1/platform/system", Summary: "Show running build, uptime, signer topology, and spine reachability"},
 

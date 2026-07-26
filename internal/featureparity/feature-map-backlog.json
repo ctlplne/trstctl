@@ -670,27 +670,29 @@
         "web/src/lib/api.ts"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence, advanced by DISC-03, and updated by TRACE-002. Test evidence: TestServedSSHHostKeyDiscoveryEndToEnd creates a served ssh discovery source, queues a run, drains the outbox worker, records a metadata-only ssh_key finding, verifies NHI inventory normalization, and proves the probe does not authenticate. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. DISC-03 evidence: TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly plants a private-key fixture, classifies it through internal/crypto, reports it over the served agent channel, and verifies served findings plus graph nodes contain only metadata with key_bytes_present=false.",
+      "notes": "Closed by route-level feature-map evidence, advanced by DISC-03, and updated by TRACE-002. Test evidence: TestServedSSHHostKeyDiscoveryEndToEnd creates a served ssh discovery source, queues a run, drains the outbox worker, records a metadata-only ssh_key finding, verifies NHI inventory normalization, and proves the probe does not authenticate. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. DISC-03 evidence: TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly plants a private-key fixture, classifies it through internal/crypto, reports it over the served agent channel, and verifies served findings plus graph nodes contain only metadata with key_bytes_present=false. B-2 adds getSSHFleet: discovered SSH keys rolled up per host with standing-access and orphaned counts. Every ssh_keys row is a RAW key (a CA-minted certificate is not stored there), so the view is the not-under-CA list and says so explicitly rather than leaving it to be inferred; covered by TestSSHFleetInventoryRollsUpStandingKeyAccess and its empty/unwired/failure/unauthenticated cases.",
       "api_surface": [
-        "createDiscoverySource",
-        "listDiscoverySources",
         "createDiscoverySchedule",
-        "listDiscoverySchedules",
-        "startDiscoveryRun",
-        "listDiscoveryRuns",
+        "createDiscoverySource",
         "getDiscoveryRun",
-        "listDiscoveryFindings"
+        "getSSHFleet",
+        "listDiscoveryFindings",
+        "listDiscoveryRuns",
+        "listDiscoverySchedules",
+        "listDiscoverySources",
+        "startDiscoveryRun"
       ],
       "api_na": "",
       "cli_surface": [
-        "discovery sources create",
-        "discovery sources list",
+        "discovery findings list",
+        "discovery runs get",
+        "discovery runs list",
+        "discovery runs start",
         "discovery schedules create",
         "discovery schedules list",
-        "discovery runs start",
-        "discovery runs list",
-        "discovery runs get",
-        "discovery findings list"
+        "discovery sources create",
+        "discovery sources list",
+        "ssh fleet"
       ],
       "cli_na": "",
       "facet_evidence": {

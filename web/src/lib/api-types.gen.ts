@@ -3633,6 +3633,27 @@ export interface SSHAttestedUserCertRequest {
   ttl_seconds?: number;
 }
 
+export interface SSHFleetHost {
+  first_observed: string;
+  key_types: string[];
+  keys: number;
+  last_observed: string;
+  location: string;
+  orphaned_keys: number;
+  sources: string[];
+  standing_keys: number;
+  under_ca: boolean;
+}
+
+export interface SSHFleetInventory {
+  host_count: number;
+  hosts: SSHFleetHost[];
+  hosts_not_under_ca: number;
+  key_count: number;
+  orphaned_key_count: number;
+  standing_key_count: number;
+}
+
 export interface SSHHostRetireRequest {
   host: string;
   identity_id?: string;
