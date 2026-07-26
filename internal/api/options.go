@@ -7,6 +7,7 @@ import (
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -49,6 +50,14 @@ func WithAgentEnrollmentObserver(fn func(result string)) Option {
 // snapshot provider. The route filters snapshots to the authenticated tenant.
 func WithOutboxCircuitStatus(fn func() []orchestrator.CircuitSnapshot) Option {
 	return func(c *config) { c.outboxCircuits = fn }
+}
+
+// WithBulkheadStats wires the bounded worker-pool snapshot provider (B-1), so
+// AN-7 backpressure is readable from the served API instead of only from the
+// metrics endpoint. The snapshots carry subsystem names and counters, never
+// tenant or credential data.
+func WithBulkheadStats(fn func() []bulkhead.Stats) Option {
+	return func(c *config) { c.bulkheadStats = fn }
 }
 
 // WithFeatureObserver wires per-feature telemetry (COVER-009). The hook is called

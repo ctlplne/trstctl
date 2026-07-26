@@ -1958,6 +1958,16 @@ func componentSchemas() map[string]*Schema {
 		"failures":   {Type: "integer"},
 		"open_until": timestamp(), "updated_at": timestamp(), "last_error": str(),
 	}, "tenant_id", "destination", "state", "failures", "updated_at")
+	// B-1: bounded worker-pool pressure (AN-7) as served telemetry.
+	bulkheadPool := object(map[string]*Schema{
+		"name": str(), "workers": {Type: "integer"}, "capacity": {Type: "integer"},
+		"queued": {Type: "integer"}, "submitted": {Type: "integer"}, "completed": {Type: "integer"},
+		"rejected": {Type: "integer"}, "panicked": {Type: "integer"}, "saturation_percent": {Type: "integer"},
+	}, "name", "workers", "capacity", "queued", "submitted", "completed", "rejected", "panicked", "saturation_percent")
+	bulkheadStats := object(map[string]*Schema{
+		"served": {Type: "boolean"},
+		"pools":  {Type: "array", Items: ref("BulkheadPool")},
+	}, "served", "pools")
 	rotationRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "identity_id": uuid(), "outbox_id": {Type: "integer"},
 		"status":  {Type: "string", Enum: []string{"running", "succeeded", "failed"}},
@@ -3478,6 +3488,8 @@ func componentSchemas() map[string]*Schema {
 		"PolicyVersionListSummary":                 policyVersionListSummary,
 		"PolicyVersionList":                        policyVersionList,
 		"OutboxCircuit":                            outboxCircuit,
+		"BulkheadPool":                             bulkheadPool,
+		"BulkheadStats":                            bulkheadStats,
 		"OutboxCircuitList":                        list("OutboxCircuit"),
 		"RotationRun":                              rotationRun,
 		"RotationRunList":                          list("RotationRun"),

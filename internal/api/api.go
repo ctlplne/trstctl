@@ -106,6 +106,7 @@ type API struct {
 	notificationChannels      []string
 	notificationOutbox        *orchestrator.Outbox
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
+	bulkheadStats             func() []bulkhead.Stats
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -176,6 +177,7 @@ type config struct {
 	notificationChannels      []string
 	notificationOutbox        *orchestrator.Outbox
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
+	bulkheadStats             func() []bulkhead.Stats
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -422,6 +424,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		notificationChannels:      append([]string(nil), cfg.notificationChannels...),
 		notificationOutbox:        cfg.notificationOutbox,
 		outboxCircuits:            cfg.outboxCircuits,
+		bulkheadStats:             cfg.bulkheadStats,
 		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
@@ -984,6 +987,10 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/connectors/targets/{id}/rollback", opID: "rollbackConnectorTarget", summary: "Record rollback evidence for a deployment connector target", handler: a.rollbackConnectorTarget, pathParams: idPath, reqSchema: "ConnectorTargetActionRequest", resSchema: "ConnectorDelivery", successCode: "200", mutation: true, perm: authz.ConnectorsWrite},
 		{method: "POST", path: "/api/v1/identities/{id}/connector-target", opID: "bindIdentityConnectorTarget", summary: "Bind an identity to a deployment connector target", handler: a.bindIdentityConnectorTarget, pathParams: idPath, reqSchema: "IdentityConnectorTargetRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.ConnectorsWrite},
 		{method: "GET", path: "/api/v1/connectors/outbox-circuits", opID: "listOutboxCircuits", summary: "List outbox destination circuit breaker state", handler: a.listOutboxCircuits, resSchema: "OutboxCircuitList", successCode: "200", perm: authz.ConnectorsRead},
+		// B-1: AN-7 backpressure readable from the served API, not only from
+		// the metrics endpoint. Pool counters are process-wide operational
+		// telemetry (subsystem names + counts), never tenant rows.
+		{method: "GET", path: "/api/v1/operations/bulkheads", opID: "listBulkheadStats", summary: "List bounded worker-pool saturation and rejection counters", handler: a.listBulkheadStats, resSchema: "BulkheadStats", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/notification-channels", opID: "createNotificationChannel", summary: "Create a tenant-authored notification channel using secret references", handler: a.createNotificationChannel, reqSchema: "NotificationChannelRequest", resSchema: "NotificationChannel", successCode: "201", mutation: true, perm: authz.NotificationsWrite},
 		{method: "GET", path: "/api/v1/notification-channels", opID: "listNotificationChannels", summary: "List supported and configured notification channels", handler: a.listNotificationChannels, resSchema: "NotificationChannelList", successCode: "200", perm: authz.NotificationsRead},
 		{method: "GET", path: "/api/v1/notification-channels/{id}", opID: "getNotificationChannel", summary: "Get a tenant-authored or configured notification channel", handler: a.getNotificationChannel, pathParams: notificationChannelPath, resSchema: "NotificationChannel", successCode: "200", perm: authz.NotificationsRead},

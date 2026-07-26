@@ -291,6 +291,10 @@ var commandTable = []Command{
 
 	{Name: []string{"risk", "credentials"}, Method: "GET", Path: "/api/v1/risk/credentials", Query: []string{"sort", "min_score", "privilege", "owner"}, Summary: "Rank credentials by risk score"},
 	{Name: []string{"risk", "contextual-priorities"}, Method: "GET", Path: "/api/v1/risk/contextual-priorities", Summary: "Prioritize credential risk with blast-radius context"},
+	// B-1: AN-7 pool pressure as an operator command, beside the outbox
+	// circuit view it complements.
+	{Name: []string{"operations", "bulkheads"}, Method: "GET", Path: "/api/v1/operations/bulkheads", Summary: "Show bounded worker-pool saturation and rejection counters"},
+
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
 	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and crypto migration posture"},
 

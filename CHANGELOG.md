@@ -13,6 +13,23 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Worker-pool backpressure is readable from the API (B-1, 2026-07-26)
+- **AN-7 stops being invisible to operators.** Every subsystem has had its own
+  bounded pool since the first commit, but the only way to see one backing up
+  was to scrape the metrics endpoint. `GET /api/v1/operations/bulkheads` (and
+  `trstctl-cli operations bulkheads`) now reports each pool's workers,
+  capacity, queue depth, computed saturation, and its
+  submitted/completed/rejected/panicked counters — so "is a queue backing up,
+  and which one" is one authenticated read. The snapshot is process-wide
+  operational telemetry: subsystem names and numbers, never tenant or
+  credential data. A control plane assembled without the bulkheaded surfaces
+  answers `served: false` rather than 404, because "nothing is saturated
+  because nothing is wired" is a truthful answer. Unbounded pools report 0%
+  instead of dividing by zero. The new operation carries the whole contract
+  chain in the same change: OpenAPI golden, the pinned SDK spec, generated FE
+  types, and the feature-catalog mapping with its count ratchets raised
+  deliberately.
+
 ### The Kubernetes issuer controller elects one reconciler (B1 residue, 2026-07-26)
 - **N nodes stop reconciling the same cluster-scoped objects.** The agent ships
   as a DaemonSet, so every pod was reconciling the same trstctl

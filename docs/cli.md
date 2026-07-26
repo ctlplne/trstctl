@@ -94,6 +94,7 @@ exhaustive subcommand list:
 | `migration`                        | Licensed crypto-migration runs over CBOM findings — Enterprise PQC only (`start` · `status` · `rollback`)                                                    |
 | `nhi`                              | Unified NHI inventory, posture findings, policy compliance, decommissioning (`inventory` · `posture shadow/stale/overprivilege/static-credentials/exposure` · `policy compliance` · `decommission`) |
 | `notifications`                    | Notification channels, routing policies, inbox/dead-letter management (`channels` · `routing-policies` · `list` · `get` · `read` · `requeue`)               |
+| `operations`                       | Operational telemetry for the bounded worker pools that carry backpressure (`bulkheads`)                                                                    |
 | `owners`                           | Owner CRUD and NHI ownership attribution (`create` · `list` · `get` · `update` · `delete` · `attribution`)                                                   |
 | `platform`                         | Show self-hostable run-anywhere distribution posture (`distribution`)                                                                                        |
 | `policy`                           | Author, list, activate, and roll back lifecycle policy versions; dry-run a candidate module (`versions create/list/activate/rollback` · `dry-run`)           |

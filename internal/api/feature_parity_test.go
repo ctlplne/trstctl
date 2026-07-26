@@ -86,8 +86,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 			out[opID] = true
 		}
 	}
-	if len(out) != 275 {
-		t.Fatalf("OpenAPI operationIds = %d, want 275", len(out))
+	// B-1 raised this to 276 with listBulkheadStats (the served AN-7 pool
+	// snapshot). The count is a deliberate ratchet: every new operation must
+	// be mapped to a feature-catalog row in the same change.
+	if len(out) != 276 {
+		t.Fatalf("OpenAPI operationIds = %d, want 276", len(out))
 	}
 	return out
 }

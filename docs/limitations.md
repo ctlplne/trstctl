@@ -502,6 +502,14 @@ edges and follow-up integration work.
   hot-looping; one sweep queues at most 100 runs per tenant). The CBOM
   scanner is also served, through its own `/api/v1/cbom/*` API rather than
   the discovery-run worker.
+- Worker-pool backpressure is readable: `GET /api/v1/operations/bulkheads`
+  (and `trstctl-cli operations bulkheads`) reports each bounded pool's
+  workers, capacity, queue depth, saturation, and its
+  submitted/completed/rejected/panicked counters, so AN-7 pressure is visible
+  without scraping the metrics endpoint. The counters are process-wide
+  operational telemetry — subsystem names and numbers, never tenant or
+  credential data — and a control plane assembled without the bulkheaded
+  surfaces answers `served: false` rather than 404.
 - SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator): the
   applier that installs a trusted SSH CA and rolls it back on failure is wired
   into the `trstctl-agent` binary behind a **default-off operator opt-in**

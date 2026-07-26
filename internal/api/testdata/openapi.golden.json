@@ -1875,6 +1875,67 @@
         ],
         "type": "object"
       },
+      "BulkheadPool": {
+        "properties": {
+          "capacity": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "panicked": {
+            "type": "integer"
+          },
+          "queued": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "saturation_percent": {
+            "type": "integer"
+          },
+          "submitted": {
+            "type": "integer"
+          },
+          "workers": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "workers",
+          "capacity",
+          "queued",
+          "submitted",
+          "completed",
+          "rejected",
+          "panicked",
+          "saturation_percent"
+        ],
+        "type": "object"
+      },
+      "BulkheadStats": {
+        "properties": {
+          "pools": {
+            "items": {
+              "$ref": "#/components/schemas/BulkheadPool"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "served",
+          "pools"
+        ],
+        "type": "object"
+      },
       "CAAuthority": {
         "properties": {
           "certificate_pem": {
@@ -28212,6 +28273,53 @@
         ],
         "summary": "Requeue a dead-lettered notification dispatch",
         "x-trstctl-permission": "notifications:write"
+      }
+    },
+    "/api/v1/operations/bulkheads": {
+      "get": {
+        "operationId": "listBulkheadStats",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkheadStats"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List bounded worker-pool saturation and rejection counters",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/owners": {

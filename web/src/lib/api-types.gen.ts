@@ -502,6 +502,23 @@ export interface BulkRevokeResult {
   total_skipped: number;
 }
 
+export interface BulkheadPool {
+  capacity: number;
+  completed: number;
+  name: string;
+  panicked: number;
+  queued: number;
+  rejected: number;
+  saturation_percent: number;
+  submitted: number;
+  workers: number;
+}
+
+export interface BulkheadStats {
+  pools: BulkheadPool[];
+  served: boolean;
+}
+
 export interface CAAuthority {
   certificate_pem: string;
   common_name: string;
