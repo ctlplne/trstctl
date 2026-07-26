@@ -12164,6 +12164,7 @@
         "owners get",
         "owners list",
         "owners update",
+        "platform system",
         "privacy export",
         "privacy retention list",
         "privacy retention run",
@@ -12588,10 +12589,11 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: internal/api/platform_distribution_test.go proves CAP-MODEL-01 through the served platform distribution route; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by route-level feature-map evidence. Test evidence: internal/api/platform_distribution_test.go proves CAP-MODEL-01 through the served platform distribution route; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. B-5 adds getPlatformSystem: the running build stamp, uptime, live AN-4 signer topology, FIPS module posture, and per-dependency spine reachability reusing the same probes as /readyz, so the console and the load balancer cannot disagree; covered by TestPlatformSystemReadoutReportsBuildAndDependencies and its unwired/unauthenticated cases.",
       "api_surface": [
         "getEditions",
-        "getPlatformDistribution"
+        "getPlatformDistribution",
+        "getPlatformSystem"
       ],
       "api_na": "",
       "cli_surface": [

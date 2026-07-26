@@ -107,6 +107,7 @@ type API struct {
 	notificationOutbox        *orchestrator.Outbox
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
 	bulkheadStats             func() []bulkhead.Stats
+	systemReadout             SystemReadoutProvider
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -178,6 +179,7 @@ type config struct {
 	notificationOutbox        *orchestrator.Outbox
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
 	bulkheadStats             func() []bulkhead.Stats
+	systemReadout             SystemReadoutProvider
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
@@ -425,6 +427,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		notificationOutbox:        cfg.notificationOutbox,
 		outboxCircuits:            cfg.outboxCircuits,
 		bulkheadStats:             cfg.bulkheadStats,
+		systemReadout:             cfg.systemReadout,
 		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
@@ -847,6 +850,9 @@ func (a *API) routes() []route {
 	}
 	routes := []route{
 		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
+		// B-5: what is running and is the spine reachable — the readout an
+		// operator wants on /admin/system, which only /healthz answered.
+		{method: "GET", path: "/api/v1/platform/system", opID: "getPlatformSystem", summary: "Running build, uptime, signer topology, and spine reachability", handler: a.getPlatformSystem, resSchema: "SystemReadout", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/platform/distribution", opID: "getPlatformDistribution", summary: "Self-hostable run-anywhere distribution posture", handler: a.getPlatformDistribution, resSchema: "PlatformDistributionStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/support/enterprise", opID: "getEnterpriseSupportStatus", summary: "Enterprise support, SLA, and services posture", handler: a.getEnterpriseSupportStatus, resSchema: "EnterpriseSupportStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/managed-offering/status", opID: "getManagedOfferingStatus", summary: "Managed offering/provider-plane posture", handler: a.getManagedOfferingStatus, resSchema: "ManagedOfferingStatus", successCode: "200", perm: authz.AccessRead},

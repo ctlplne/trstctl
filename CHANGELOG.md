@@ -13,6 +13,24 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### The running system is readable from the console (B-5, 2026-07-26)
+- **`/admin/system` showed posture, not the system.** It rendered what the
+  product *claims* — edition, support tier, scale plan — but not the readout
+  an operator wants when something looks wrong. That answer existed only on
+  `/healthz` and `/readyz`, which are unauthenticated infrastructure probes
+  shaped for a load balancer. `GET /api/v1/platform/system` (and
+  `trstctl-cli platform system`) reports the build version/commit/date, the Go
+  toolchain, process start time and uptime, the **live** AN-4 signer topology
+  (`child`/`external`/`none` — what is actually attached, not what the config
+  intended), whether the FIPS module is routing `crypto/*`, and per-dependency
+  reachability for the database, event log, and signer.
+- **It reuses the same probes as `/readyz`**, so the console and the load
+  balancer can never disagree about whether the spine is up — the failure mode
+  that makes an operator distrust both. Probes are bounded at 3s so a hung
+  dependency degrades this endpoint instead of hanging the caller, and the
+  readout carries no addresses, DSNs, or configuration values: a component is
+  reachable or it is not.
+
 ### Worker-pool backpressure is readable from the API (B-1, 2026-07-26)
 - **AN-7 stops being invisible to operators.** Every subsystem has had its own
   bounded pool since the first commit, but the only way to see one backing up

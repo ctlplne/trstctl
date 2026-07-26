@@ -4128,6 +4128,24 @@ export interface ShareValue {
   value: string;
 }
 
+export interface SystemDependency {
+  error?: string;
+  name: string;
+  ready: boolean;
+}
+
+export interface SystemReadout {
+  build_date: string;
+  commit: string;
+  dependencies: SystemDependency[];
+  fips_module_active: boolean;
+  go_version: string;
+  signer_mode: "child" | "external" | "none";
+  started_at: string;
+  uptime_seconds: number;
+  version: string;
+}
+
 export interface TenantWriteFence {
   conflict_outcome: string;
   evidence: string;

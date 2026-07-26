@@ -60,6 +60,13 @@ func WithBulkheadStats(fn func() []bulkhead.Stats) Option {
 	return func(c *config) { c.bulkheadStats = fn }
 }
 
+// WithSystemReadout wires the running-build and spine-reachability readout
+// (B-5). The provider is owned by internal/server, which holds the build
+// stamp, the process start time, and the readiness probes.
+func WithSystemReadout(fn SystemReadoutProvider) Option {
+	return func(c *config) { c.systemReadout = fn }
+}
+
 // WithFeatureObserver wires per-feature telemetry (COVER-009). The hook is called
 // once per served high-risk feature operation (issuance, revocation, deployment,
 // discovery, certificate ingest) with closed-set, non-sensitive labels — the feature

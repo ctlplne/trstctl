@@ -97,6 +97,7 @@ exhaustive subcommand list:
 | `operations`                       | Operational telemetry for the bounded worker pools that carry backpressure (`bulkheads`)                                                                    |
 | `owners`                           | Owner CRUD and NHI ownership attribution (`create` · `list` · `get` · `update` · `delete` · `attribution`)                                                   |
 | `platform`                         | Show self-hostable run-anywhere distribution posture (`distribution`)                                                                                        |
+| `platform`                         | Running build, uptime, signer topology, and spine reachability (`system`)                                                                                    |
 | `policy`                           | Author, list, activate, and roll back lifecycle policy versions; dry-run a candidate module (`versions create/list/activate/rollback` · `dry-run`)           |
 | `privacy`                          | Subject erasure, retention runs, archive-erasure attestations, export, personal-data catalog (`erasures` · `retention` · `archives` · `export` · `catalog`)  |
 | `profiles`                         | Certificate profile versions (`create` · `list` · `get-version`)                                                                                             |

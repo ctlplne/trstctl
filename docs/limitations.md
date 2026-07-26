@@ -502,6 +502,14 @@ edges and follow-up integration work.
   hot-looping; one sweep queues at most 100 runs per tenant). The CBOM
   scanner is also served, through its own `/api/v1/cbom/*` API rather than
   the discovery-run worker.
+- The running system is readable: `GET /api/v1/platform/system` (and
+  `trstctl-cli platform system`) reports the build version/commit/date, the Go
+  toolchain, process start time and uptime, the live signer topology
+  (`child`/`external`/`none`), whether the FIPS module is active, and
+  per-dependency reachability for the database, event log, and signer. It
+  reuses the same probes as `/readyz`, so the console and a load balancer
+  cannot disagree about whether the spine is up; it reports no addresses,
+  DSNs, or configuration values.
 - Worker-pool backpressure is readable: `GET /api/v1/operations/bulkheads`
   (and `trstctl-cli operations bulkheads`) reports each bounded pool's
   workers, capacity, queue depth, saturation, and its

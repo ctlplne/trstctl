@@ -15912,6 +15912,76 @@
         ],
         "type": "object"
       },
+      "SystemDependency": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "ready"
+        ],
+        "type": "object"
+      },
+      "SystemReadout": {
+        "properties": {
+          "build_date": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/SystemDependency"
+            },
+            "type": "array"
+          },
+          "fips_module_active": {
+            "type": "boolean"
+          },
+          "go_version": {
+            "type": "string"
+          },
+          "signer_mode": {
+            "enum": [
+              "child",
+              "external",
+              "none"
+            ],
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "uptime_seconds": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "commit",
+          "build_date",
+          "go_version",
+          "started_at",
+          "uptime_seconds",
+          "signer_mode",
+          "fips_module_active",
+          "dependencies"
+        ],
+        "type": "object"
+      },
       "TenantWriteFence": {
         "properties": {
           "conflict_outcome": {
@@ -28735,6 +28805,53 @@
           }
         ],
         "summary": "Self-hostable run-anywhere distribution posture",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/platform/system": {
+      "get": {
+        "operationId": "getPlatformSystem",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemReadout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Running build, uptime, signer topology, and spine reachability",
         "x-trstctl-permission": "access:read"
       }
     },

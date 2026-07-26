@@ -1958,6 +1958,17 @@ func componentSchemas() map[string]*Schema {
 		"failures":   {Type: "integer"},
 		"open_until": timestamp(), "updated_at": timestamp(), "last_error": str(),
 	}, "tenant_id", "destination", "state", "failures", "updated_at")
+	// B-5: running build, uptime, signer topology, and spine reachability.
+	systemDependency := object(map[string]*Schema{
+		"name": str(), "ready": {Type: "boolean"}, "error": str(),
+	}, "name", "ready")
+	systemReadout := object(map[string]*Schema{
+		"version": str(), "commit": str(), "build_date": str(), "go_version": str(),
+		"started_at": timestamp(), "uptime_seconds": {Type: "integer"},
+		"signer_mode":        {Type: "string", Enum: []string{"child", "external", "none"}},
+		"fips_module_active": {Type: "boolean"},
+		"dependencies":       {Type: "array", Items: ref("SystemDependency")},
+	}, "version", "commit", "build_date", "go_version", "started_at", "uptime_seconds", "signer_mode", "fips_module_active", "dependencies")
 	// B-1: bounded worker-pool pressure (AN-7) as served telemetry.
 	bulkheadPool := object(map[string]*Schema{
 		"name": str(), "workers": {Type: "integer"}, "capacity": {Type: "integer"},
@@ -3488,6 +3499,8 @@ func componentSchemas() map[string]*Schema {
 		"PolicyVersionListSummary":                 policyVersionListSummary,
 		"PolicyVersionList":                        policyVersionList,
 		"OutboxCircuit":                            outboxCircuit,
+		"SystemDependency":                         systemDependency,
+		"SystemReadout":                            systemReadout,
 		"BulkheadPool":                             bulkheadPool,
 		"BulkheadStats":                            bulkheadStats,
 		"OutboxCircuitList":                        list("OutboxCircuit"),

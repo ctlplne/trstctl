@@ -607,10 +607,12 @@ type Server struct {
 	notifications             *notify.Dispatcher
 	licensedBackgroundWorkers []BackgroundWorker
 
-	logger     *slog.Logger
-	registry   *observ.Registry
-	tracer     *observ.Tracer
-	readiness  *observ.Readiness
+	logger    *slog.Logger
+	registry  *observ.Registry
+	tracer    *observ.Tracer
+	readiness *observ.Readiness
+	// startedAt stamps process start for the B-5 system readout's uptime.
+	startedAt  time.Time
 	bulk       *bulkhead.Set
 	mBulkheads *observ.BulkheadMetrics
 	otlp       *observ.OTLPExporter
@@ -940,6 +942,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if s.bulk != nil {
 		defaults = append(defaults, api.WithBulkheadStats(s.bulk.Stats))
 	}
+	// B-5: the console's system readout reuses the same probes as /readyz, so
+	// the two can never disagree about whether the spine is up.
+	defaults = append(defaults, api.WithSystemReadout(func() api.SystemReadout {
+		return s.systemReadout(context.Background())
+	}))
 	if s.plugins != nil {
 		defaults = append(defaults, api.WithACMEDNS01Providers(s.acmeDNS01PluginCatalog()...))
 	}
@@ -1442,6 +1449,9 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.configureRetentionWorker(d, auditSvc)
 	s.configurePrivacyRetentionWorker(d, orch)
 	s.readiness = observ.NewReadiness(s.tracer, s.readinessChecks(ctx, d)...)
+	if s.startedAt.IsZero() {
+		s.startedAt = time.Now().UTC()
+	}
 	return nil
 }
 
