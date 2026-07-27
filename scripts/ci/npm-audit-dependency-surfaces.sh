@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # npm-audit-dependency-surfaces.sh — fail CI on HIGH/CRITICAL npm advisories
-# across dependency trees that live outside go.sum. The web app scans production
-# deps only; the TypeScript SDK scans dev deps too because its generator
-# (openapi-typescript) is intentionally a devDependency used by scripts/gen-sdk.sh.
+# across dependency trees that live outside go.sum. The web release executes its
+# Vite/PostCSS build dependencies, so that complete lockfile is a supply-chain
+# surface even though only production packages remain in the runtime image. The
+# TypeScript SDK likewise executes its devDependency generator.
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -93,7 +94,7 @@ NODE
 }
 
 failures=0
-audit_lock "web" "web production dependency tree" "${web_prefix}" "production" --omit=dev || failures=1
+audit_lock "web" "web build and runtime dependency tree" "${web_prefix}" "build-and-production" --include=dev || failures=1
 audit_lock "typescript-sdk-generator" "TypeScript SDK generator dependency tree" "${sdk_prefix}" "dev-generator" --include=dev || failures=1
 
 mkdir -p "$(dirname "${receipt}")"

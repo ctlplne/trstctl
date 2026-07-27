@@ -23,7 +23,8 @@ func TestSupply005TypeScriptSDKGeneratorLockfileSCAIsRequired(t *testing.T) {
 		"--package-lock-only",
 		"--audit-level=high",
 		"--include=dev",
-		"--omit=dev",
+		"web build and runtime dependency tree",
+		"build-and-production",
 	)
 
 	selftest := read(t, "../scripts/ci/npm-audit-dependency-surfaces_selftest.sh")

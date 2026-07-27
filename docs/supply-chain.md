@@ -101,16 +101,18 @@ Your code is affected by 0 vulnerabilities.
 
 ### npm (web UI + TypeScript SDK generator) — `npm audit`
 
-The web dependency tree is pinned by `web/package-lock.json` and scanned
-with `npm audit --omit=dev --audit-level=high` in the CI `web` job. The
-TypeScript SDK generator tree is pinned by
-`clients/sdk/typescript/package-lock.json` and scanned by
-`scripts/ci/npm-audit-dependency-surfaces.sh` with dev dependencies
-included, because `openapi-typescript` is a generator dependency used by
+The web dependency tree is pinned by `web/package-lock.json`. The CI `web`
+job scans the browser runtime closure with
+`npm audit --omit=dev --audit-level=high`; the supply-chain wrapper also
+scans the complete web build-and-production tree with `--include=dev`
+because Vite, PostCSS, and their plugins execute while producing the
+embedded release bundle. The TypeScript SDK generator tree is pinned by
+`clients/sdk/typescript/package-lock.json` and the same wrapper includes its
+dev dependencies because `openapi-typescript` executes from
 `scripts/gen-sdk.sh`. The scanner is pinned to npm CLI `11.16.0`; the CI
 `supply-chain` job runs it plus a self-test that plants `minimist@0.0.8` in
-a temporary SDK lockfile and expects npm audit to fail on the known
-critical advisory.
+a temporary SDK lockfile and expects npm audit to fail on the known critical
+advisory.
 
 The wrapper writes a machine-readable release-evidence receipt
 (`npm-audit-dependency-surfaces.json`) recording each audited surface,
@@ -119,7 +121,7 @@ tagged releases publish it beside the chaos evidence.
 
 ```
 $ bash scripts/ci/npm-audit-dependency-surfaces.sh
->> npm audit (web production dependency tree)
+>> npm audit (web build and runtime dependency tree)
    severity counts: info=0 low=0 moderate=0 high=0 critical=0 total=0
 >> npm audit (TypeScript SDK generator dependency tree)
    severity counts: info=0 low=0 moderate=0 high=0 critical=0 total=0
