@@ -11,9 +11,10 @@ import (
 
 func TestDependencyFreshnessSLOHasReportAndOwnerQueue(t *testing.T) {
 	var report struct {
-		SchemaVersion int    `json:"schema_version"`
-		ObservedAt    string `json:"observed_at"`
-		MaxReportAge  int    `json:"max_report_age_days"`
+		SchemaVersion int               `json:"schema_version"`
+		ObservedAt    string            `json:"observed_at"`
+		MaxReportAge  int               `json:"max_report_age_days"`
+		SecurityLinks map[string]string `json:"security_finding_links"`
 		FreshnessSLOs []struct {
 			Class      string `json:"class"`
 			Owner      string `json:"owner"`
@@ -43,6 +44,11 @@ func TestDependencyFreshnessSLOHasReportAndOwnerQueue(t *testing.T) {
 	}
 	if report.MaxReportAge <= 0 || report.MaxReportAge > 45 {
 		t.Fatalf("max_report_age_days = %d, want a positive fail-closed age budget no larger than 45 days", report.MaxReportAge)
+	}
+	for _, finding := range []string{"SEC-f19bdd00", "SEC-5b43d4b3", "S-7268c77e"} {
+		if strings.TrimSpace(report.SecurityLinks[finding]) == "" {
+			t.Errorf("dependency freshness report missing security finding link %q", finding)
+		}
 	}
 
 	sloClasses := map[string]bool{}

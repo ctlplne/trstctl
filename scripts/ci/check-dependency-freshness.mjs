@@ -78,6 +78,11 @@ const requiredTracked = new Set([
   "tailwindcss",
   "typescript",
 ]);
+const requiredSecurityLinks = new Set([
+  "SEC-f19bdd00",
+  "SEC-5b43d4b3",
+  "S-7268c77e",
+]);
 
 const report = readJSON(reportPath);
 if (report.schema_version !== 1) {
@@ -95,6 +100,13 @@ if (observedAt) {
     fail(`observed_at is in the future: ${report.observed_at}`);
   } else if (ageDays > maxAge) {
     fail(`dependency freshness report is ${ageDays} days old, over the ${maxAge}-day budget`);
+  }
+}
+
+for (const finding of requiredSecurityLinks) {
+  const note = report.security_finding_links?.[finding];
+  if (typeof note !== "string" || note.trim() === "") {
+    fail(`missing dependency security finding link ${finding}`);
   }
 }
 
