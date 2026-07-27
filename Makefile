@@ -450,7 +450,11 @@ security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wir
 	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC package tests)"
 	@$(GO) test ./internal/signing ./internal/server ./internal/orchestrator ./internal/connector/... ./ee/reconcile/... ./ee/decommission/... -count=1
 
-.PHONY: web-lint web-format-check web-check
+.PHONY: web-typecheck web-lint web-format-check web-check
+web-typecheck: ## Run the frontend TypeScript no-emit check from the repository root (CODE-002)
+	@echo ">> web typecheck"
+	@$(WEB_NPM) run typecheck
+
 web-lint: ## Run frontend ESLint from the repository root (CODE-002)
 	@echo ">> web lint"
 	@$(WEB_NPM) run lint
@@ -459,7 +463,7 @@ web-format-check: ## Check frontend formatting from the repository root (CODE-00
 	@echo ">> web format:check"
 	@$(WEB_NPM) run format:check
 
-web-check: web-lint web-format-check ## Run the frontend lint and formatter gates from the repository root (CODE-002)
+web-check: web-typecheck web-lint web-format-check ## Run the frontend TypeScript, lint, and formatter gates from the repository root (CODE-002)
 
 .PHONY: run
 run: ## Build and run the control plane (pass args via ARGS, e.g. ARGS=--version)

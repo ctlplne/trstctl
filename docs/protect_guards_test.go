@@ -4342,6 +4342,21 @@ func TestReleaseGuardrailCommandsStayFirstClass(t *testing.T) {
 	}
 }
 
+// TestFastWebCheckKeepsAllStaticGuards locks CODE-002: the fast frontend gate
+// must reject type-invalid code as well as lint and formatting regressions.
+func TestFastWebCheckKeepsAllStaticGuards(t *testing.T) {
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{
+		"web-typecheck: ## Run the frontend TypeScript no-emit check from the repository root (CODE-002)",
+		"$(WEB_NPM) run typecheck",
+		"web-check: web-typecheck web-lint web-format-check",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("CODE-002: Makefile no longer contains %q; make web-check must pin typecheck, lint, and formatting", want)
+		}
+	}
+}
+
 // atoiTest parses a small non-negative integer for the count guards.
 func atoiTest(t *testing.T, s string) int {
 	t.Helper()
