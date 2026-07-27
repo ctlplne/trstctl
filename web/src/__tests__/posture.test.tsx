@@ -15,6 +15,11 @@ const { apiMock } = vi.hoisted(() => ({
     decideDriftRemediation: vi.fn(),
     listCBOMAssets: vi.fn(),
     startCBOMScan: vi.fn(),
+    editions: vi.fn(),
+    planPQCMigration: vi.fn(),
+    startPQCMigration: vi.fn(),
+    getPQCMigrationProgress: vi.fn(),
+    rollbackPQCMigration: vi.fn(),
   },
 }));
 
@@ -33,6 +38,7 @@ async function renderPosture() {
   await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.driftRemediation).toHaveBeenCalled());
+  await waitFor(() => expect(apiMock.editions).toHaveBeenCalled());
   return result;
 }
 
@@ -309,6 +315,30 @@ describe("posture collector disclosures", () => {
       ],
     });
     apiMock.startCBOMScan.mockReset();
+    apiMock.editions.mockReset().mockResolvedValue({
+      tier: "community",
+      state: "community",
+      features: [{ name: "pqc", tier: "enterprise", licensed: false, mode: "off" }],
+      fips: { module_active: false, required: false, self_test_passed: true },
+      packaging: {
+        category_label: "",
+        positioning: "",
+        billable_unit: "",
+        provider_billing_unit: "",
+        no_per_certificate_billing: true,
+        no_ephemeral_identity_billing: true,
+        certificate_counters_classification: "",
+        managed_boundary: "",
+        pricing_posture: "",
+        evidence_rail: [],
+        editions: [],
+        meters: [],
+      },
+    });
+    apiMock.planPQCMigration.mockReset();
+    apiMock.startPQCMigration.mockReset();
+    apiMock.getPQCMigrationProgress.mockReset();
+    apiMock.rollbackPQCMigration.mockReset();
   });
 
   it("renders CT monitoring through Discovery findings", async () => {
@@ -401,5 +431,138 @@ describe("posture collector disclosures", () => {
     expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/fixture/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /run inventory|enable pqc|change algorithm/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps Community CBOM useful without calling unavailable migration routes", async () => {
+    await renderPosture();
+
+    expect(screen.getByRole("heading", { name: "PQC migration workflow" })).toBeInTheDocument();
+    expect(screen.getByText("Migration execution is unavailable in this edition")).toBeInTheDocument();
+    expect(screen.getByText(/Community keeps CBOM discovery and readiness fully usable/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review editions and license state" })).toHaveAttribute("href", "/admin/editions");
+    expect(apiMock.planPQCMigration).not.toHaveBeenCalled();
+    expect(apiMock.startPQCMigration).not.toHaveBeenCalled();
+    expect(apiMock.getPQCMigrationProgress).not.toHaveBeenCalled();
+    expect(apiMock.rollbackPQCMigration).not.toHaveBeenCalled();
+  });
+
+  it("previews, explicitly starts, monitors, and rolls back a licensed migration", async () => {
+    apiMock.editions.mockResolvedValue({
+      tier: "enterprise",
+      state: "active",
+      features: [{ name: "pqc", tier: "enterprise", licensed: true, mode: "enabled" }],
+      fips: { module_active: false, required: false, self_test_passed: true },
+      packaging: {
+        category_label: "",
+        positioning: "",
+        billable_unit: "",
+        provider_billing_unit: "",
+        no_per_certificate_billing: true,
+        no_ephemeral_identity_billing: true,
+        certificate_counters_classification: "",
+        managed_boundary: "",
+        pricing_posture: "",
+        evidence_rail: [],
+        editions: [],
+        meters: [],
+      },
+    });
+    apiMock.planPQCMigration.mockResolvedValue({
+      reissues: [
+        {
+          asset_id: "11111111-1111-1111-1111-111111111111",
+          location: "legacy mesh edge",
+          current_algorithm: "RSA-1024",
+          target_algorithm: "ML-DSA-65",
+          effective_algorithm: "hybrid",
+          protocol: "acme",
+          rollback_on_failure: true,
+        },
+      ],
+      tls_rollouts: [],
+      residuals: [],
+      reissue_count: 1,
+      tls_rollout_count: 0,
+    });
+    apiMock.startPQCMigration.mockResolvedValue({
+      run_id: "run-pqc-1",
+      queued: 1,
+      certificate_reissues_queued: 1,
+      tls_findings_queued: 0,
+      target_algorithm: "ML-DSA-65",
+      effective_algorithm: "hybrid",
+      protocol: "acme",
+      rollback_configured: true,
+      migration_progress: {
+        total_assets: 2,
+        out_of_policy_assets: 1,
+        quantum_vulnerable_assets: 1,
+        post_quantum_ready_assets: 1,
+        percent_migrated: 50,
+      },
+      queued_at: "2026-07-27T12:00:00Z",
+    });
+    apiMock.getPQCMigrationProgress.mockResolvedValue({
+      run_id: "run-pqc-1",
+      total: 1,
+      queued: 0,
+      applied: 1,
+      failed: 0,
+      rolled_back: 0,
+      findings: [],
+    });
+    apiMock.rollbackPQCMigration.mockResolvedValue({
+      run_id: "run-pqc-1",
+      queued: 1,
+      reason: "operator rollback from the Posture console",
+      migration_progress: {
+        total_assets: 2,
+        out_of_policy_assets: 1,
+        quantum_vulnerable_assets: 1,
+        post_quantum_ready_assets: 1,
+        percent_migrated: 50,
+      },
+      queued_at: "2026-07-27T12:01:00Z",
+    });
+
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByRole("checkbox", { name: "Select legacy mesh edge for PQC migration" }));
+    await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
+    await waitFor(() =>
+      expect(apiMock.planPQCMigration).toHaveBeenCalledWith({
+        asset_ids: ["11111111-1111-1111-1111-111111111111"],
+        target_algorithm: "ML-DSA-65",
+        protocol: "acme",
+        rollback_on_failure: true,
+      }),
+    );
+
+    const startButton = await screen.findByRole("button", { name: "Start migration" });
+    expect(startButton).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /I reviewed this exact plan/ }));
+    await user.click(startButton);
+    expect(await screen.findByText("Migration run run-pqc-1 queued")).toBeInTheDocument();
+    expect(apiMock.startPQCMigration).toHaveBeenCalledWith({
+      asset_ids: ["11111111-1111-1111-1111-111111111111"],
+      target_algorithm: "ML-DSA-65",
+      protocol: "acme",
+      rollback_on_failure: true,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Refresh progress" }));
+    expect(await screen.findByText("1 applied · 0 queued · 0 failed · 0 rolled back")).toBeInTheDocument();
+    expect(apiMock.getPQCMigrationProgress).toHaveBeenCalledWith("run-pqc-1");
+
+    await user.click(screen.getByRole("checkbox", { name: /I reviewed the current run evidence/ }));
+    await user.click(screen.getByRole("button", { name: "Queue rollback" }));
+    await waitFor(() =>
+      expect(apiMock.rollbackPQCMigration).toHaveBeenCalledWith(
+        "run-pqc-1",
+        ["11111111-1111-1111-1111-111111111111"],
+        "operator rollback from the Posture console",
+      ),
+    );
+    expect(await screen.findByText("1 rollback actions queued")).toBeInTheDocument();
   });
 });

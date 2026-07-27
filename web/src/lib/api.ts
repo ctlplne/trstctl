@@ -349,6 +349,88 @@ export type Attestation = GenAttestation;
 export type AttestedSVID = GenAttestedSVID;
 export type BrokerAgentIdentity = GenBrokerAgentIdentity;
 export type CBOMAsset = GenCBOMAsset;
+// These four shapes come from ee/pqcmigration's runtime OpenAPI schemas. They
+// intentionally remain beside the browser client rather than in the core SDK
+// golden: a core-only binary does not mount or advertise licensed routes.
+export interface PQCMigrationRequest {
+  asset_ids: string[];
+  target_algorithm: "ML-DSA-65";
+  protocol: "acme";
+  rollback_on_failure: boolean;
+}
+
+export interface PQCMigrationPlanReissue {
+  asset_id: string;
+  location: string;
+  current_algorithm: string;
+  target_algorithm: string;
+  effective_algorithm: string;
+  protocol: string;
+  rollback_on_failure: boolean;
+}
+
+export interface PQCMigrationPlanResidual {
+  id: string;
+  status: string;
+  reason: string;
+}
+
+export interface PQCMigrationPlan {
+  reissues: PQCMigrationPlanReissue[];
+  tls_rollouts: Array<{
+    asset_id: string;
+    location: string;
+    finding_kind: string;
+    target_id: string;
+    rollback_on_failure: boolean;
+  }>;
+  residuals: PQCMigrationPlanResidual[];
+  reissue_count: number;
+  tls_rollout_count: number;
+}
+
+export interface PQCMigrationRun {
+  run_id: string;
+  queued: number;
+  certificate_reissues_queued: number;
+  tls_findings_queued: number;
+  target_algorithm: string;
+  effective_algorithm: string;
+  protocol: string;
+  rollback_configured: boolean;
+  migration_progress: CBOMMigrationProgress;
+  queued_at: string;
+}
+
+export interface PQCMigrationFindingProgress {
+  run_id: string;
+  asset_id: string;
+  finding_kind: string;
+  target_id: string;
+  target_revision: string;
+  connector: string;
+  status: string;
+  failure?: string;
+  updated_at: string;
+}
+
+export interface PQCMigrationProgress {
+  run_id: string;
+  total: number;
+  queued: number;
+  applied: number;
+  failed: number;
+  rolled_back: number;
+  findings: PQCMigrationFindingProgress[];
+}
+
+export interface PQCMigrationRollback {
+  run_id: string;
+  queued: number;
+  reason: string;
+  migration_progress: CBOMMigrationProgress;
+  queued_at: string;
+}
 export type AIAnswer = GenAIAnswer;
 export type AIStatus = GenAIStatus;
 export type CredentialRisk = GenCredentialRisk;
@@ -1206,6 +1288,10 @@ export interface Api {
   callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
   listCBOMAssets(): Promise<CBOMInventory>;
   startCBOMScan(input: CBOMScanRequest): Promise<CBOMScan>;
+  planPQCMigration(input: PQCMigrationRequest): Promise<PQCMigrationPlan>;
+  startPQCMigration(input: PQCMigrationRequest): Promise<PQCMigrationRun>;
+  getPQCMigrationProgress(runId: string): Promise<PQCMigrationProgress>;
+  rollbackPQCMigration(runId: string, assetIds: string[], reason: string): Promise<PQCMigrationRollback>;
   issueBrokerAgentIdentity(input: BrokerAgentIdentityRequest): Promise<BrokerAgentIdentity>;
   workloadAttesterTrustSources(): Promise<WorkloadAttesterTrustSourceList>;
   createWorkloadAttesterTrustSource(input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
@@ -1517,6 +1603,14 @@ export const api: Api = {
   callMCPTool: (tool, input) => postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
   listCBOMAssets: () => req<CBOMInventory>("/api/v1/cbom/assets"),
   startCBOMScan: (input) => mutate<CBOMScan>("POST", "/api/v1/cbom/scans", input),
+  planPQCMigration: (input) => postRead<PQCMigrationPlan>("/api/v1/pqc/migrations/plan", input),
+  startPQCMigration: (input) => mutate<PQCMigrationRun>("POST", "/api/v1/pqc/migrations", input),
+  getPQCMigrationProgress: (runId) => req<PQCMigrationProgress>(`/api/v1/pqc/migrations/${encodeURIComponent(runId)}`),
+  rollbackPQCMigration: (runId, assetIds, reason) =>
+    mutate<PQCMigrationRollback>("POST", `/api/v1/pqc/migrations/${encodeURIComponent(runId)}/rollback`, {
+      asset_ids: assetIds,
+      reason,
+    }),
   issueBrokerAgentIdentity: (input) => mutate<BrokerAgentIdentity>("POST", "/api/v1/broker/agent-identities", input),
   workloadAttesterTrustSources: () => req<WorkloadAttesterTrustSourceList>("/api/v1/workloads/attester-trust-sources"),
   createWorkloadAttesterTrustSource: (input) => mutate<WorkloadAttesterTrustSource>("POST", "/api/v1/workloads/attester-trust-sources", input),

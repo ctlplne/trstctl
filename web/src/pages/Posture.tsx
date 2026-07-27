@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { PQCReadinessSummary } from "@/components/pqc";
+import { PQCMigrationWorkflow } from "@/components/PQCMigrationWorkflow";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
@@ -311,7 +312,7 @@ export function Posture() {
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" disabled={ctSaving || linesFromText(ctForm.watchedDomains).length === 0 || linesFromText(ctForm.logs).length === 0}>
               <Radar className="h-4 w-4" aria-hidden="true" />
-              {ctSaving ? "Saving CT" : "Save and poll CT"}
+              {ctSaving ? translateNow("source.saving.ct.c96661dcd1") : translateNow("source.save.and.poll.ct.609730cebd")}
             </Button>
             {ctResult ? <p className="text-sm font-medium text-status-success">{ctResult}</p> : null}
             {ctError ? <p className="text-sm font-medium text-destructive">{ctError}</p> : null}
@@ -400,7 +401,7 @@ export function Posture() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" disabled={cbomScanning}>
-              {cbomScanning ? "Running scan" : "Run CBOM scan"}
+              {cbomScanning ? translateNow("source.running.scan.34932df63a") : translateNow("source.run.cbom.scan.ca786ed005")}
             </Button>
             <p className="text-sm text-muted-foreground">{translateNow("source.the.request.sends.endpoint.and.host.config.057e53f9e9")}</p>
           </div>
@@ -473,6 +474,7 @@ export function Posture() {
           </div>
         </div>
         <CBOMReadinessTable assets={cbomInventory.items} loading={cbomLoading} />
+        <PQCMigrationWorkflow assets={cbomInventory.items} />
       </section>
 
       <section aria-labelledby="alert-heading" className="ui-panel flex items-start gap-3 p-comfortable text-sm">
@@ -569,7 +571,7 @@ function DriftRemediationWorkflow({
                     type="button"
                     variant="outline"
                     title={translateNow("source.investigate.e264109347")}
-                    aria-label={`Investigate ${finding.ref}`}
+                    aria-label={translateNow("source.investigate.value1.39e7603180", { value1: finding.ref })}
                     disabled={!finding.available_decisions.includes("investigate") || busy === `${finding.finding_id}:investigate`}
                     onClick={() => onDecision(finding, "investigate")}
                   >
@@ -580,7 +582,7 @@ function DriftRemediationWorkflow({
                     type="button"
                     variant="outline"
                     title={translateNow("source.mark.managed.61a3f9305a")}
-                    aria-label={`Mark managed ${finding.ref}`}
+                    aria-label={translateNow("source.mark.managed.value1.ba545156d1", { value1: finding.ref })}
                     disabled={!finding.available_decisions.includes("mark_managed") || busy === `${finding.finding_id}:mark_managed`}
                     onClick={() => onDecision(finding, "mark_managed")}
                   >
@@ -591,7 +593,7 @@ function DriftRemediationWorkflow({
                     type="button"
                     variant="outline"
                     title={translateNow("source.dismiss.48845bff33")}
-                    aria-label={`Dismiss ${finding.ref}`}
+                    aria-label={translateNow("source.dismiss.value1.540d3af43e", { value1: finding.ref })}
                     disabled={!finding.available_decisions.includes("dismiss") || busy === `${finding.finding_id}:dismiss`}
                     onClick={() => onDecision(finding, "dismiss")}
                   >
@@ -755,7 +757,7 @@ function CBOMReadinessTable({ assets, loading }: { assets: CBOMAsset[]; loading:
           </td>
           <td>
             {algorithmLabel(asset)}
-            {transportLabel(asset) !== "not reported" ? ` / ${transportLabel(asset)}` : ""}
+            {transportLabel(asset) !== "not reported" ? translateNow("source.value1.550e636eaf", { value1: transportLabel(asset) }) : ""}
           </td>
           <td>
             <StatusBadge value={readinessValue(asset)} label={readinessLabel(asset)} tone={readinessTone(asset)} vocabulary="risk" />
