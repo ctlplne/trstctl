@@ -1,1 +1,46 @@
 39980edeab4f2836dcfef23a81783077c2342e9b:internal/connector/conformance.go:private-key:15
+# Historical false positives pinned by immutable commit/path/rule/line
+# fingerprints. These are code identifiers, translation keys, documentation
+# examples, and deterministic fixtures; new matches at any location still fail.
+014424a38e5e2006b90394f22bff5156fe9de783:clients/sdk/python/tests/test_client.py:generic-api-key:132
+1ed766eb58285be2bdb9bd0b3a61615096a7f4b7:internal/protocols/spiffe/grpc.go:vault-service-token:173
+1ed766eb58285be2bdb9bd0b3a61615096a7f4b7:internal/protocols/spiffe/grpc.go:vault-service-token:177
+1ed766eb58285be2bdb9bd0b3a61615096a7f4b7:internal/protocols/spiffe/grpc.go:vault-service-token:78
+21563258c0fe0bdb11d265ca25365d8eead7edc1:internal/webui/dist/assets/catalog.de-DE-CpsF4BT4.js:generic-api-key:1
+21563258c0fe0bdb11d265ca25365d8eead7edc1:internal/webui/dist/assets/catalog.es-ES-BkoNtjtO.js:generic-api-key:1
+21563258c0fe0bdb11d265ca25365d8eead7edc1:web/src/i18n/catalog.de-DE.ts:generic-api-key:265
+21563258c0fe0bdb11d265ca25365d8eead7edc1:web/src/i18n/catalog.es-ES.ts:generic-api-key:255
+237e568833c76e0c61be65584c0c5ce8dec4c979:web/src/i18n/messages.ts:generic-api-key:9160
+2f98d2cbbf2599a921d77f74507e65e2d3912f01:internal/webui/dist/assets/index-DLnZtuGk.js:generic-api-key:67
+3687d810ac127a6ab409e3a0846718a6416e417a:internal/webui/dist/assets/index-DbSGj9CG.js:generic-api-key:547
+3687d810ac127a6ab409e3a0846718a6416e417a:internal/webui/dist/assets/index-DbSGj9CG.js:generic-api-key:615
+3687d810ac127a6ab409e3a0846718a6416e417a:internal/webui/dist/assets/index-DbSGj9CG.js:generic-api-key:620
+3ca5204a1adec8ced681d66940e1f97689936bc7:internal/webui/dist/assets/index-CP_3oplB.js:generic-api-key:542
+3ca5204a1adec8ced681d66940e1f97689936bc7:internal/webui/dist/assets/index-CP_3oplB.js:generic-api-key:610
+3ca5204a1adec8ced681d66940e1f97689936bc7:internal/webui/dist/assets/index-CP_3oplB.js:generic-api-key:615
+475e1ca7d3a17bbe9d9a486e1282d9fd529d51fd:docs/features/incident-and-jit.md:generic-api-key:119
+481beb76b581f042a37c42dcf1e5fa3ca0e42367:internal/webui/dist/assets/index-DA-mPVyU.js:generic-api-key:542
+65e0d015cc5a7413b37b606edf77985b2701992c:docs/features/incident-and-jit.md:generic-api-key:159
+7343a5693bdaabb3df726fb0013a9228797ee733:internal/webui/dist/assets/index-ocobDs_d.js:generic-api-key:547
+8ab58c7f834794160bb68d28a84758b9ebc62bcd:internal/webui/dist/assets/catalog.de-DE-BTjdXCa1.js:generic-api-key:1
+8ab58c7f834794160bb68d28a84758b9ebc62bcd:internal/webui/dist/assets/catalog.es-ES-GZB9jLLs.js:generic-api-key:1
+8fe79757415c067e8b3719a237b6b2ebf94975cd:internal/webui/dist/assets/catalog.de-DE-hN_ZMrSz.js:generic-api-key:1
+8fe79757415c067e8b3719a237b6b2ebf94975cd:internal/webui/dist/assets/catalog.es-ES-Co2jxibq.js:generic-api-key:1
+a5be4704388500814d09b24374b25a7e941b5760:internal/webui/dist/assets/index-CCYhWrxk.js:generic-api-key:68
+af5cddfef74eb25b7b10d7348c8eb8140bb0c9b9:ee/reconcile/canon/record.go:private-key:482
+b24ef641afd4931e9e7834db09587da78640da1e:docs/features/incident-and-jit.md:generic-api-key:339
+b3eac15386f0caef7b472562862591e3d3f5c389:internal/dynsecret/providers_real.go:generic-api-key:615
+cfbbfeea461f5c93edc233b8f73b549a457f546c:internal/webui/dist/assets/index-DaeGN5Zg.js:generic-api-key:547
+e313c3a07f62e7e44b537ffd08da0542ae903280:web/src/i18n/messages.ts:generic-api-key:6687
+e313c3a07f62e7e44b537ffd08da0542ae903280:web/src/lib/journeys.ts:generic-api-key:116
+e313c3a07f62e7e44b537ffd08da0542ae903280:web/src/lib/journeys.ts:generic-api-key:128
+e313c3a07f62e7e44b537ffd08da0542ae903280:web/src/lib/journeys.ts:generic-api-key:135
+e313c3a07f62e7e44b537ffd08da0542ae903280:web/src/pages/Styleguide.tsx:generic-api-key:217
+e5bc7166c3657301d1404c9318a5415be54fe5f3:internal/webui/dist/assets/index-BdIKZgQy.js:generic-api-key:615
+e5bc7166c3657301d1404c9318a5415be54fe5f3:internal/webui/dist/assets/index-BdIKZgQy.js:generic-api-key:620
+e5bc7166c3657301d1404c9318a5415be54fe5f3:internal/webui/dist/assets/index-BdIKZgQy.js:generic-api-key:67
+e93479cbe5e54805890245d52d9d651db8fc772b:internal/webui/dist/assets/catalog.de-DE-B9Y0y2Gm.js:generic-api-key:1
+e93479cbe5e54805890245d52d9d651db8fc772b:internal/webui/dist/assets/catalog.es-ES-CL1qwdf_.js:generic-api-key:1
+eef27d10203cdc5e9ac34b75fd78351c2a9e297b:internal/webui/dist/assets/Journeys-BDAQWsqH.js:generic-api-key:13
+eef27d10203cdc5e9ac34b75fd78351c2a9e297b:internal/webui/dist/assets/Journeys-BDAQWsqH.js:generic-api-key:18
+eef27d10203cdc5e9ac34b75fd78351c2a9e297b:internal/webui/dist/assets/index-THMVw8pe.js:generic-api-key:68
