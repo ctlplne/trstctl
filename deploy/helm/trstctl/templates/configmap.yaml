@@ -24,6 +24,11 @@ data:
   TRSTCTL_AIRGAP_ALLOW_CIDRS: {{ join "," .Values.airGap.allowCIDRs | quote }}
   # Opt-in product telemetry remains off by default; this path only gives an
   # explicitly-enabled install a stable random anonymous instance ID across restarts.
+  {{- with .Values.telemetry }}
+  TRSTCTL_TELEMETRY_ENABLED: {{ .enabled | quote }}
+  {{- else }}
+  TRSTCTL_TELEMETRY_ENABLED: "false"
+  {{- end }}
   TRSTCTL_TELEMETRY_INSTANCE_ID_FILE: "/data/telemetry/instance-id"
   # AN-7 per-subsystem bulkhead capacities.
   TRSTCTL_BULKHEAD_API_WORKERS: {{ .Values.bulkheads.api.workers | quote }}

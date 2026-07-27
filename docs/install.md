@@ -69,13 +69,38 @@ in-memory socket, so private keys stay in their own process), against external
 PostgreSQL and NATS, behind a default-deny `NetworkPolicy`, with TLS on by
 default:
 
+Production-style external NATS requires an independent signer authorization
+command. The example assumes your control-plane image contains the executable at
+`/usr/local/bin/trstctl-sign-approve`; replace that path with your independently
+operated provider. It receives one sign-intent JSON document on stdin and returns
+one base64 authorization token on stdout. Do not give that provider's verifier
+secret to the control plane.
+
+<!-- helm-doc-render: production-install -->
 ```bash
 helm install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
   --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
-  --set kek.generate=true   # eval only; set kek.existingSecret in production
+  --set kek.existingSecret=trstctl-kek \
+  --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve
+```
+
+For a single-replica evaluation only, the co-resident authorizer is an explicit
+weaker topology. It is accepted only together with single-replica NATS:
+
+<!-- helm-doc-render: evaluation-install -->
+```bash
+helm install trstctl-eval deploy/helm/trstctl \
+  --namespace trstctl --create-namespace \
+  --set image.digest='sha256:<release-image-digest>' \
+  --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
+  --set nats.url='nats://nats-host:4222' \
+  --set nats.replicas=1 \
+  --set nats.allowSingleReplica=true \
+  --set kek.generate=true \
+  --set signer.auth.allowCoResidentAuthorizer=true
 ```
 
 ```bash
@@ -183,7 +208,7 @@ file so it is never placed in pod arguments or environment variables. See
 
 Install from a release binary or build from source.
 
-**From source** (requires Go 1.26.4+):
+**From source** (requires Go 1.26.5+):
 
 ```bash
 git clone https://github.com/ctlplne/trstctl

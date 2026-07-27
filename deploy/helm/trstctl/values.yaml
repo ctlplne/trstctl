@@ -109,6 +109,11 @@ airGap:
   allowHosts: []
   allowCIDRs: []
 
+# Product telemetry is opt-in. The air-gap overlay pins this to false so the
+# rendered posture says exactly what the disconnected install enforces.
+telemetry:
+  enabled: false
+
 # Per-subsystem AN-7 bulkheads. Workers bound concurrent work; queue bounds the
 # accepted backlog before the subsystem rejects fast with structured backpressure.
 # Tune these for deployment size without changing code.

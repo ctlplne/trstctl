@@ -59,8 +59,13 @@ docker push registry.airgap.local/trstctl:v0.5.0
 
 Install with private PostgreSQL and NATS endpoints. Replace the CIDRs in
 `manifests/values-airgap.yaml` with the cluster/VPC ranges that contain your
-datastores, DNS, ingress controller, and optional local OTLP collector:
+datastores, DNS, and ingress controller. Production-style external NATS also
+requires an independent signer authorization executable in the control-plane
+image. The example path is a placeholder for your operator-controlled provider;
+it reads sign-intent JSON on stdin and writes one base64 token on stdout without
+mounting the signer verifier secret into the control plane:
 
+<!-- helm-doc-render: airgap-install -->
 ```bash
 helm upgrade --install trstctl charts/trstctl \
   --namespace trstctl --create-namespace \
@@ -69,7 +74,8 @@ helm upgrade --install trstctl charts/trstctl \
   --set image.tag=v0.5.0 \
   --set postgres.dsn='postgres://user:pass@pg.internal:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats.internal:4222' \
-  --set kek.existingSecret=trstctl-kek
+  --set kek.existingSecret=trstctl-kek \
+  --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve
 ```
 
 The rendered control-plane ConfigMap sets:
@@ -97,7 +103,8 @@ Before opening the service to users, prove the no-phone-home posture:
      --set image.tag=v0.5.0 \
      --set postgres.dsn='postgres://user:pass@pg.internal:5432/trstctl?sslmode=require' \
      --set nats.url='nats://nats.internal:4222' \
-     --set kek.existingSecret=trstctl-kek |
+     --set kek.existingSecret=trstctl-kek \
+     --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve |
      grep -A20 'kind: NetworkPolicy'
    ```
 

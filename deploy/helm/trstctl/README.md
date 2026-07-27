@@ -35,15 +35,36 @@ RuntimeDefault`.
 ## Quick start
 
 The chart fails at template time if the required install inputs are missing. Provide
-external datastores + a stable KEK, then install:
+external datastores, a stable KEK, and an independent signer authorization command,
+then install. The example path must name an executable that your control-plane image
+provides; it reads sign-intent JSON from stdin and returns a base64 token without
+exposing the signer verifier secret to the control plane:
 
+<!-- helm-doc-render: chart-production -->
 ```bash
 helm install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
   --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
-  --set kek.generate=true        # eval only; supply kek.existingSecret in production
+  --set kek.existingSecret=trstctl-kek \
+  --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve
+```
+
+For a single-replica evaluation only, opt into both single-replica NATS and the
+co-resident signer authorizer:
+
+<!-- helm-doc-render: chart-evaluation -->
+```bash
+helm install trstctl-eval deploy/helm/trstctl \
+  --namespace trstctl --create-namespace \
+  --set image.digest='sha256:<release-image-digest>' \
+  --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
+  --set nats.url='nats://nats-host:4222' \
+  --set nats.replicas=1 \
+  --set nats.allowSingleReplica=true \
+  --set kek.generate=true \
+  --set signer.auth.allowCoResidentAuthorizer=true
 ```
 
 Then:
@@ -68,6 +89,9 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 | `persistence.enabled` | `true` | PVCs for the CA cert, audit key, and sealed signer keys. |
 | `networkPolicy.enabled` | `true` | Default-deny; opens `:8443` in, PG/NATS/DNS out, plus signer mTLS egress in isolated mode. |
 | `airGap.enabled` | `false` | Enables the runtime no-phone-home egress guard. Use `values-airgap.yaml` for disconnected installs. |
+| `telemetry.enabled` | `false` | Explicit product telemetry opt-in. `values-airgap.yaml` pins it to `false`. |
+| `signer.auth.tokenCommand` | `""` | Independent production signer-token executable inside the control-plane container; required with production-style external NATS. |
+| `signer.auth.allowCoResidentAuthorizer` | `false` | Eval-only authorizer; requires `nats.replicas=1` and `nats.allowSingleReplica=true`. |
 | `networkPolicy.egress.allowedCIDRs` | `[]` | Optional CIDRs that scope PostgreSQL/NATS egress. The air-gap overlay sets private ranges; replace them with your cluster/VPC ranges. |
 | `metrics.serviceAnnotations.enabled` | `true` | Adds Prometheus scrape annotations for the served HTTPS `/metrics` endpoint on the control-plane Service. |
 | `metrics.serviceMonitor.enabled` | `false` | Renders a Prometheus Operator `ServiceMonitor` for `/metrics`; enable only on clusters with the `monitoring.coreos.com` CRDs. |
