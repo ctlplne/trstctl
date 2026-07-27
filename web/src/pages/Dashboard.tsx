@@ -436,7 +436,7 @@ export function Dashboard() {
                               : "rounded-control bg-destructive/10 px-1.5 py-0.5 text-caption font-medium text-destructive"
                         }
                       >
-                        {a.result === "retry" ? "retry(2)" : a.result}
+                        {a.result === "retry" ? translateNow("source.retry.2.b933ea8d98") : a.result}
                       </span>
                       <span className="font-mono text-caption text-muted-foreground">{a.ts}</span>
                     </span>

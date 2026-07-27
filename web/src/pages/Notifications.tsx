@@ -389,7 +389,7 @@ export function Notifications() {
         >
           <header className="border-b border-border px-5 py-4">
             <h2 id="notification-detail-heading" className="text-title font-semibold">
-              {`Notification ${detail.id}`}
+              {translateNow("source.notification.value1.81c16a52a8", { value1: detail.id })}
             </h2>
             <p id="notification-detail-description" className="mt-1 text-sm text-muted-foreground">
               {translateNow("source.created.d70b9e24bc")} {formatDateTime(detail.created_at)}{" "}
@@ -404,7 +404,9 @@ export function Notifications() {
                 <NotificationDetailRow term="Status">
                   <StatusBadge value={detail.status} label={detail.status} tone={statusTone(detail.status)} />
                 </NotificationDetailRow>
-                <NotificationDetailRow term="Attempts">{`${detail.attempts} / ${maxNotificationAttempts}`}</NotificationDetailRow>
+                <NotificationDetailRow term="Attempts">
+                  {translateNow("source.value1.value2.9539417d74", { value1: detail.attempts, value2: maxNotificationAttempts })}
+                </NotificationDetailRow>
                 <NotificationDetailRow term="Delivered at">{detail.delivered_at ? formatDateTime(detail.delivered_at) : "-"}</NotificationDetailRow>
                 <NotificationDetailRow term="Read at">{detail.read_at ? formatDateTime(detail.read_at) : "-"}</NotificationDetailRow>
                 <NotificationDetailRow term="Last error">
@@ -883,7 +885,7 @@ function NotificationsTable({
             size="sm"
             variant="outline"
             onClick={() => onDetails(notification)}
-            aria-label={`View details for notification ${notification.id}`}
+            aria-label={translateNow("source.view.details.for.notification.value1.786c365358", { value1: notification.id })}
           >
             <span>{t("parity.details_dc3dec")}</span>
           </Button>

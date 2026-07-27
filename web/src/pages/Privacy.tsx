@@ -355,7 +355,7 @@ export function Privacy() {
                     />
                   </label>
                   <Button type="submit" variant="outline" disabled={attestationBusy === "filter"}>
-                    {attestationBusy === "filter" ? "Filtering..." : "Filter"}
+                    {attestationBusy === "filter" ? translateNow("source.filtering.5bdc12007f") : translateNow("source.filter.638e249f4a")}
                   </Button>
                 </form>
                 {attestationError ? <ErrorState title={t("parity.archiveAttestationRequestFailed_6179ba")}>{attestationError}</ErrorState> : null}
@@ -368,7 +368,9 @@ export function Privacy() {
                     attestationCursor ? (
                       <div>
                         <Button type="button" size="sm" variant="outline" disabled={attestationBusy === "more"} onClick={() => void loadMoreAttestations()}>
-                          {attestationBusy === "more" ? "Loading more attestations..." : "Load more attestations"}
+                          {attestationBusy === "more"
+                            ? translateNow("source.loading.more.attestations.c82824a63c")
+                            : translateNow("source.load.more.attestations.fa509be818")}
                         </Button>
                       </div>
                     ) : undefined
@@ -479,7 +481,7 @@ export function Privacy() {
                     {translateNow("source.cancel.19766ed6cc")}
                   </Button>
                   <Button type="submit" disabled={recordBusy || !recordForm.subject.trim()}>
-                    {recordBusy ? "Recording..." : "Record attestation"}
+                    {recordBusy ? translateNow("source.recording.9974b98e8b") : "Record attestation"}
                   </Button>
                 </div>
               </form>
@@ -568,7 +570,7 @@ export function Privacy() {
                     <tr key={run.run_id} className="border-b border-border/60 align-top">
                       <td className="py-2 font-mono text-caption">{run.run_id}</td>
                       <td className="py-2 tabular-nums">{countTotal(run.counts)}</td>
-                      <td className="py-2 text-muted-foreground">{run.requested_by_ref || "system"}</td>
+                      <td className="py-2 text-muted-foreground">{run.requested_by_ref || translateNow("source.system.bbc5e661e1")}</td>
                       <td className="py-2 text-muted-foreground">{formatDateTimePolicy(run.enforced_at)}</td>
                     </tr>
                   ))}

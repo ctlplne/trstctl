@@ -135,7 +135,7 @@ export function Approvals() {
                 aria-describedby={describedBy}
                 onClick={() => void approve(row)}
               >
-                {`Approve ${row.action} for ${row.identity.name}`}
+                {translateNow("source.approve.value1.for.value2.f59c2fc633", { value1: row.action, value2: row.identity.name })}
               </Button>
               {selfApproval && (
                 <p id={describedBy} className="max-w-xs text-xs text-muted-foreground">
@@ -206,7 +206,12 @@ export function Approvals() {
         )}
         {ephemeralApproval && (
           <p role="status" className="text-body text-status-success">
-            {`${ephemeralApproval.action} approval recorded for ${ephemeralApproval.resource} by ${ephemeralApproval.approver} (${ephemeralApproval.approvals} approvals)`}
+            {translateNow("source.value1.approval.recorded.for.value2.by.val.87cb845f84", {
+              value1: ephemeralApproval.action,
+              value2: ephemeralApproval.resource,
+              value3: ephemeralApproval.approver,
+              value4: ephemeralApproval.approvals,
+            })}
           </p>
         )}
       </section>
@@ -227,7 +232,10 @@ function ApprovalQuorum({ approvals }: { approvals: string }) {
   if (!progress) return <span className="text-caption text-muted-foreground">{approvals}</span>;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="inline-flex items-baseline gap-1" aria-label={`${progress.have}/${progress.need}`}>
+      <span
+        className="inline-flex items-baseline gap-1"
+        aria-label={translateNow("source.value1.value2.7d8908f134", { value1: progress.have, value2: progress.need })}
+      >
         <Num className="font-medium">{String(progress.have)}</Num>
         <span className="text-caption text-muted-foreground">/</span>
         <Num>{String(progress.need)}</Num>

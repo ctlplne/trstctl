@@ -41,17 +41,7 @@ import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { hasAnyPermission } from "@/lib/access";
-import {
-  contextualRouteItems,
-  navGroups,
-  navSpaces,
-  permissionAnyForPath,
-  primaryNavItems,
-  spaceForRoute,
-  taskNavItems,
-  type NavIcon,
-  type NavSpace,
-} from "@/lib/navigation";
+import { navGroups, navSpaces, permissionAnyForPath, primaryNavItems, spaceForRoute, taskNavItems, type NavIcon, type NavSpace } from "@/lib/navigation";
 import { persistCollapsedGroups, readCollapsedGroups } from "@/lib/navPreferences";
 import { Eyebrow } from "@/components/typography";
 import { cn } from "@/lib/utils";
@@ -305,17 +295,12 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 const Icon = iconMap[icon];
                 const label = t(labelKey);
                 const description = t(descriptionKey);
-                const active = worklistMatches(to, location.pathname, location.search);
                 return (
                   <li key={`task-${to}`}>
                     <NavLink
                       to={to}
                       onClick={onNavigate}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-                        active ? "bg-sidebar-active font-semibold text-primary" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
-                      )}
+                      className="flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-white"
                     >
                       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1">
@@ -404,9 +389,6 @@ function routeLabel(pathname: string, t: (key: MessageKey) => string): string {
       const base = item.to.split("?")[0];
       if (base === pathname) return t(item.labelKey);
     }
-  }
-  for (const item of contextualRouteItems) {
-    if (item.to === pathname) return t(item.labelKey);
   }
   const segment = pathname.split("/").filter(Boolean)[0] ?? "";
   if (!segment) return t("nav.item.dashboard");

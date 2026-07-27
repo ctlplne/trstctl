@@ -161,7 +161,7 @@ export function CodeSigning() {
 
           <div>
             <Button type="submit" disabled={busy || !digest.trim()}>
-              {busy ? "Signing…" : "Sign artifact"}
+              {busy ? translateNow("source.signing.bdabe34a39") : translateNow("source.sign.artifact.57261585fa")}
             </Button>
           </div>
         </form>

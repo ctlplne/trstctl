@@ -259,7 +259,7 @@ export function DataGrid<Row>({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={`Move ${columnLabel(column)} up`}
+                  aria-label={translateNow("source.move.value1.up.ae68218172", { value1: columnLabel(column) })}
                   disabled={columnOrder.indexOf(column.id) <= 0}
                   className="h-7 w-7"
                   onClick={() => moveColumn(column.id, -1)}
@@ -270,7 +270,7 @@ export function DataGrid<Row>({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={`Move ${columnLabel(column)} down`}
+                  aria-label={translateNow("source.move.value1.down.3b2d940865", { value1: columnLabel(column) })}
                   disabled={columnOrder.indexOf(column.id) === columnOrder.length - 1}
                   className="h-7 w-7"
                   onClick={() => moveColumn(column.id, 1)}
@@ -301,7 +301,7 @@ export function DataGrid<Row>({
       </Button>
       {savedViews.map((view) => (
         <Button key={view.id} type="button" variant="ghost" size="sm" onClick={() => restoreView(view)}>
-          {`Restore view ${view.name}`}
+          {translateNow("source.restore.view.value1.09c622aea3", { value1: view.name })}
         </Button>
       ))}
     </div>
@@ -389,7 +389,7 @@ export function DataGrid<Row>({
                     <td className="px-3 py-2">
                       <input
                         type="checkbox"
-                        aria-label={`Select ${selection.getRowLabel?.(row) ?? getRowId(row)}`}
+                        aria-label={translateNow("source.select.value1.187be5793a", { value1: selection.getRowLabel?.(row) ?? getRowId(row) })}
                         checked={selection.selectedIds.has(getRowId(row))}
                         onChange={(event) => setSelected(getRowId(row), event.target.checked)}
                       />

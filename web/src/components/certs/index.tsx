@@ -104,7 +104,9 @@ export function CertificatesDashboard({ certificates, risks }: { certificates: C
                 <span className="flex-1 truncate font-mono text-caption">{certificate.subject}</span>
                 <span className="w-40 truncate text-muted-foreground">{certificate.issuer ?? "—"}</span>
                 <StatusBadge vocabulary="expiry" value={expiryBandForDate(certificate.not_after)} />
-                <span className="w-16 text-right tabular-nums">{Number.isFinite(days) ? `${days}d` : "—"}</span>
+                <span className="w-16 text-right tabular-nums">
+                  {Number.isFinite(days) ? translateNow("source.value1.d.eb20d8f12a", { value1: days }) : "—"}
+                </span>
               </AttentionRow>
             ))}
           </AttentionList>
@@ -242,7 +244,7 @@ export function RenewalHistory({ runs }: { runs: RotationRun[] }) {
           <StatusBadge value={renewal.status} label={renewal.status} tone={runTone(renewal.status)} />
           <span className="flex-1 truncate text-caption text-muted-foreground">
             {renewal.trigger}
-            {renewal.reason ? ` · ${renewal.reason}` : ""}
+            {renewal.reason ? translateNow("source.value1.d610afc356", { value1: renewal.reason }) : ""}
           </span>
           <span className="w-44 truncate text-caption text-muted-foreground">{renewal.completed_at ?? renewal.created_at}</span>
         </AttentionRow>

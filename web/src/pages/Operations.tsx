@@ -292,10 +292,10 @@ function OperationActions({
     return (
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onApprove(row)}>
-          {`Approve ${row.approval.action} for ${row.approval.identity.name}`}
+          {translateNow("source.approve.value1.for.value2.f59c2fc633", { value1: row.approval.action, value2: row.approval.identity.name })}
         </Button>
         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onReject(row)}>
-          {`Reject ${row.approval.action} for ${row.approval.identity.name}`}
+          {translateNow("source.reject.value1.for.value2.30ca8dca77", { value1: row.approval.action, value2: row.approval.identity.name })}
         </Button>
       </div>
     );
@@ -303,7 +303,7 @@ function OperationActions({
   if (row.statusKey === "running" || row.statusKey === "queued") {
     return (
       <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onCancel(row)}>
-        {`Cancel ${row.id}`}
+        {translateNow("source.cancel.value1.64342fbae8", { value1: row.id })}
       </Button>
     );
   }
@@ -581,7 +581,7 @@ function RotationRunsSection() {
           nextCursor ? (
             <div>
               <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>
-                {loadingMore ? "Loading more rotation runs..." : "Load more rotation runs"}
+                {loadingMore ? translateNow("source.loading.more.rotation.runs.15b9534a52") : translateNow("source.load.more.rotation.runs.4e5894a950")}
               </Button>
             </div>
           ) : undefined
@@ -608,7 +608,7 @@ function RotationRunDetailDialog({ onClose, run }: { run: RotationRun; onClose: 
     >
       <header className="border-b border-border px-5 py-4">
         <h2 id={titleId} className="text-title font-semibold">
-          {`Rotation run ${run.id}`}
+          {translateNow("source.rotation.run.value1.e6b35404aa", { value1: run.id })}
         </h2>
         <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
           {t("parity.fullLifecycleRotationRunRecordIncluding_02687f")}

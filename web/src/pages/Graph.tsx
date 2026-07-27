@@ -292,7 +292,9 @@ export function Graph() {
                   </label>
                   <div className="grid gap-1 text-sm">
                     {translateNow("source.selected.node.f8716e2fce")}
-                    <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">{selectedNode?.name || "No node selected"}</p>
+                    <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">
+                      {selectedNode?.name || translateNow("source.no.node.selected.5eaea81a7b")}
+                    </p>
                     {/* S-C11: the graph is where blast radius becomes obvious,
                         so it is where responding should start — hand the node
                         to the incident form instead of making the operator
@@ -316,7 +318,7 @@ export function Graph() {
                         <li key={node.id}>
                           <button
                             type="button"
-                            aria-label={`Select graph node ${node.name || node.id}`}
+                            aria-label={translateNow("source.select.graph.node.value1.05310572fd", { value1: node.name || node.id })}
                             aria-current={selected === node.id ? "true" : undefined}
                             className={`grid w-full gap-1 px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                               selected === node.id ? "bg-muted" : ""
@@ -653,7 +655,7 @@ function GraphLegend({
                 type="checkbox"
                 checked={!hiddenNodeKinds.has(kind)}
                 onChange={() => onToggleNodeKind(kind)}
-                aria-label={`Show ${graphNodeKindLabel(kind)} nodes`}
+                aria-label={translateNow("source.show.value1.nodes.b6e7a8266b", { value1: graphNodeKindLabel(kind) })}
               />
               <span
                 className="inline-block h-3 w-3 rounded-full border"
@@ -673,7 +675,7 @@ function GraphLegend({
               type="checkbox"
               checked={!hiddenEdgeTypes.has(type)}
               onChange={() => onToggleEdgeType(type)}
-              aria-label={`Show ${graphEdgeTypeLabel(type)} edges`}
+              aria-label={translateNow("source.show.value1.edges.2189dce744", { value1: graphEdgeTypeLabel(type) })}
             />
             <span className="font-mono text-xs">{type}</span>
             <span className="text-muted-foreground">{graphEdgeTypeLabel(type)}</span>

@@ -1310,8 +1310,12 @@ export function Secrets() {
             )}
             {revealError && <ErrorState title={translateNow("source.reveal.failed.f00b1b5ba6")}>{revealError}</ErrorState>}
             {revealed && (
-              <RevealPanel title={`Reveal-once value for ${revealed.name}`} onDismiss={() => setRevealed(null)} value={revealed.value}>
-                {translateNow("source.version.dd167905de")} {revealed.version ?? "latest"}{" "}
+              <RevealPanel
+                title={translateNow("source.reveal.once.value.for.value1.72f4f14f8d", { value1: revealed.name })}
+                onDismiss={() => setRevealed(null)}
+                value={revealed.value}
+              >
+                {translateNow("source.version.dd167905de")} {revealed.version ?? translateNow("source.latest.5e1e2bcac3")}{" "}
                 {translateNow("source.was.returned.for.this.secret.dismiss.clear.67402c3c18")}
               </RevealPanel>
             )}
@@ -1463,13 +1467,14 @@ export function Secrets() {
                   ) : (
                     <div className="grid gap-2">
                       <p>
-                        {t("parity.failedPhase_49b14a")} <span className="font-mono text-xs">{rotationRun.failed_phase ?? "unknown"}</span>
-                        {rotationRun.error ? ` — ${rotationRun.error}` : ""}
+                        {t("parity.failedPhase_49b14a")}{" "}
+                        <span className="font-mono text-xs">{rotationRun.failed_phase ?? translateNow("source.unknown.b23a6a8439")}</span>
+                        {rotationRun.error ? translateNow("source.value1.ed27296cce", { value1: rotationRun.error }) : ""}
                       </p>
                       {rotationRun.rollback_failed ? (
                         <p className="rounded-control border border-risk-critical/30 bg-risk-critical/10 px-3 py-2 text-risk-critical">
                           {translateNow("source.rollback.failed.manual.intervention.requir.113a558395")}
-                          {rotationRun.rollback_error ? ` ${rotationRun.rollback_error}` : ""}
+                          {rotationRun.rollback_error ? translateNow("source.value1.eff53e36f5", { value1: rotationRun.rollback_error }) : ""}
                         </p>
                       ) : rotationRun.rolled_back ? (
                         <p className="rounded-control border border-status-info/30 bg-status-info/10 px-3 py-2 text-status-info">
@@ -1548,7 +1553,7 @@ export function Secrets() {
                   className="rounded-md border border-border bg-background px-3 py-2"
                   value={rotateName}
                   onChange={(event) => setRotateName(event.target.value)}
-                  placeholder={selectedMeta?.name ?? "app/db/password"}
+                  placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
                   list="secret-name-options"
                   required
                 />
@@ -1580,7 +1585,7 @@ export function Secrets() {
                   className="rounded-md border border-border bg-background px-3 py-2"
                   value={deleteName}
                   onChange={(event) => setDeleteName(event.target.value)}
-                  placeholder={selectedMeta?.name ?? "app/db/password"}
+                  placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
                   list="secret-name-options"
                   required
                 />
@@ -1658,7 +1663,8 @@ export function Secrets() {
             {accessError && <ErrorState title={translateNow("source.access.test.failed.e280577658")}>{accessError}</ErrorState>}
             {accessResult && (
               <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-                {translateNow("source.access.test.passed.for.e4a15ad68a")} {accessResult.name}; version {accessResult.version ?? "latest"}{" "}
+                {translateNow("source.access.test.passed.for.e4a15ad68a")} {accessResult.name}; version{" "}
+                {accessResult.version ?? translateNow("source.latest.5e1e2bcac3")}{" "}
                 {translateNow("source.was.reachable.and.the.value.was.not.render.830c77edbc")}
               </p>
             )}
@@ -1708,7 +1714,7 @@ export function Secrets() {
             {pkiError && <ErrorState title={translateNow("source.pki.issue.failed.cb50a25278")}>{pkiError}</ErrorState>}
             {pkiBundle && (
               <RevealPanel
-                title={`PKI bundle ${pkiBundle.serial}`}
+                title={translateNow("source.pki.bundle.value1.18184942ea", { value1: pkiBundle.serial })}
                 onDismiss={() => setPkiBundle(null)}
                 value={`${pkiBundle.certificate}\n${pkiBundle.private_key}`}
               >
@@ -2589,7 +2595,7 @@ export function Secrets() {
             {leaseError && <ErrorState title={translateNow("source.dynamic.lease.operation.failed.115f5893e7")}>{leaseError}</ErrorState>}
             {leaseCredential && (
               <RevealPanel
-                title={`Generated credential for lease ${leaseCredential.id}`}
+                title={translateNow("source.generated.credential.for.lease.value1.814b0bc937", { value1: leaseCredential.id })}
                 onDismiss={() => setLeaseCredential(null)}
                 value={leaseCredential.credential}
               >
@@ -3012,7 +3018,7 @@ export function Secrets() {
                   className="rounded-md border border-border bg-background px-3 py-2"
                   value={syncName}
                   onChange={(event) => setSyncName(event.target.value)}
-                  placeholder={selectedMeta?.name ?? "app/db/password"}
+                  placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
                   required
                 />
               </label>
@@ -3063,11 +3069,11 @@ export function Secrets() {
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{translateNow("source.queue.3b2fe03e36")}</dt>
-                  <dd>{syncResult.enqueued ? "Queued" : "Not queued"}</dd>
+                  <dd>{syncResult.enqueued ? translateNow("source.queued.661ff40a07") : translateNow("source.not.queued.7e52b62ffb")}</dd>
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{translateNow("source.delivery.52bfe584a5")}</dt>
-                  <dd>{syncResult.delivered ? "Delivered" : "Not delivered"}</dd>
+                  <dd>{syncResult.delivered ? translateNow("source.delivered.9061156573") : translateNow("source.not.delivered.f498742c19")}</dd>
                 </div>
               </dl>
             )}

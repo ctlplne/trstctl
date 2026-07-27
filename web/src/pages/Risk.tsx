@@ -302,7 +302,7 @@ export function Risk() {
           const isExpanded = expanded === risk.credential_id;
           return (
             <Button type="button" size="sm" variant="outline" onClick={() => setExpanded(isExpanded ? null : risk.credential_id)}>
-              {isExpanded ? "Hide factors" : "Show factors"}
+              {isExpanded ? translateNow("source.hide.factors.692e022b93") : translateNow("source.show.factors.5508f4f571")}
             </Button>
           );
         },
@@ -957,7 +957,8 @@ function RiskDetail({ risk, activeFactor }: { risk: CredentialRisk; activeFactor
           </li>
           <li>
             <a className="text-primary underline" href={`/owners?status=${risk.owner_active ? "active" : "orphaned"}`}>
-              {translateNow("source.owner.status.74d91b61ae")} {risk.owner_active ? "active" : "orphaned"}
+              {translateNow("source.owner.status.74d91b61ae")}{" "}
+              {risk.owner_active ? translateNow("source.active.9687961165") : translateNow("source.orphaned.6f1aaf37cc")}
             </a>
           </li>
           <li>
@@ -1010,7 +1011,7 @@ function riskBandLabel(value: (typeof riskThresholds)[number]["value"]): string 
 
 function RiskScaleLabel({ label, raw, name }: { label: string; raw: number; name: string }) {
   return (
-    <span title={`Raw ${name} value ${raw}`}>
+    <span title={translateNow("source.raw.value1.value.value2.95aaab9298", { value1: name, value2: raw })}>
       {label}
       <span className="sr-only">
         {translateNow("source.raw.fec6060499")} {raw}
@@ -1027,7 +1028,10 @@ function FactorBar({ factor, value, active }: { factor: RiskFactor; value: numbe
         <span className="font-medium">{factorLabels[factor]}</span>
         <span>{pct}</span>
       </div>
-      <div className="h-2 rounded-full bg-background" aria-label={`${factorLabels[factor]} risk ${pct}`}>
+      <div
+        className="h-2 rounded-full bg-background"
+        aria-label={translateNow("source.value1.risk.value2.5c614305ad", { value1: factorLabels[factor], value2: pct })}
+      >
         <div className="h-2 rounded-full bg-primary" style={{ width: `${pct}%` }} />
       </div>
     </div>

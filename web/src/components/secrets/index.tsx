@@ -36,7 +36,9 @@ export function SecretTree({ secrets, onSelect, selectedName }: { secrets: Secre
         <nav aria-label={translateNow("source.secret.folders.78f2cd9fca")} className="grid gap-3">
           {folders.map((folder) => (
             <div key={folder.path}>
-              <p className="font-mono text-caption font-medium text-muted-foreground">{folder.path === "/" ? "(root)" : folder.path}</p>
+              <p className="font-mono text-caption font-medium text-muted-foreground">
+                {folder.path === "/" ? translateNow("source.root.44c4ce0579") : folder.path}
+              </p>
               <ul className="mt-1 grid gap-0.5">
                 {folder.secrets.map((secret) => (
                   <li key={secret.name}>
@@ -160,7 +162,7 @@ export function EnvDiffPanel({ secrets }: { secrets: SecretMeta[] }) {
         >
           {folders.map((folder) => (
             <option key={folder.path} value={folder.path}>
-              {folder.path === "/" ? "(root)" : folder.path}
+              {folder.path === "/" ? translateNow("source.root.44c4ce0579") : folder.path}
             </option>
           ))}
         </select>
@@ -175,7 +177,7 @@ export function EnvDiffPanel({ secrets }: { secrets: SecretMeta[] }) {
         >
           {folders.map((folder) => (
             <option key={folder.path} value={folder.path}>
-              {folder.path === "/" ? "(root)" : folder.path}
+              {folder.path === "/" ? translateNow("source.root.44c4ce0579") : folder.path}
             </option>
           ))}
         </select>

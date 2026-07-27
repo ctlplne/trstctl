@@ -976,7 +976,7 @@ export function Policy() {
 
         <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
           <Button type="button" onClick={() => void exportComplianceEvidence()} disabled={exporting}>
-            {exporting ? "Exporting..." : "Export audit evidence"}
+            {exporting ? translateNow("source.exporting.639e45361b") : translateNow("source.export.audit.evidence.c3f3b4ad52")}
           </Button>
           <Link className="text-sm underline" to="/audit">
             {translateNow("source.open.audit.explorer.e155d6131a")}
@@ -1035,7 +1035,7 @@ export function Policy() {
           </label>
           <div className="flex items-end">
             <Button className="w-full" type="submit" disabled={reviewAction === "start" || !reviewForm.name.trim() || !reviewForm.nhiId.trim()}>
-              {reviewAction === "start" ? "Starting..." : "Start campaign"}
+              {reviewAction === "start" ? translateNow("source.starting.82b93630a9") : translateNow("source.start.campaign.bfdb5d43fb")}
             </Button>
           </div>
           <label className="grid gap-1 lg:col-span-2">
@@ -1382,8 +1382,8 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
           </h3>
           <p className="mt-1 text-muted-foreground">
             {decision}
-            {result.reason ? `: ${result.reason}` : ""}
-            {result.error ? `: ${result.error}` : ""}
+            {result.reason ? translateNow("source.value1.92dd63d2f3", { value1: result.reason }) : ""}
+            {result.error ? translateNow("source.value1.92dd63d2f3", { value1: result.error }) : ""}
           </p>
         </div>
         <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{result.audit_event}</span>
@@ -1483,11 +1483,11 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
               {controls.map((control) => (
                 <tr key={control.id ?? control.title ?? "control"} className="align-top">
                   <td>
-                    <p className="font-medium">{control.title ?? control.id ?? "Control"}</p>
+                    <p className="font-medium">{control.title ?? control.id ?? translateNow("source.control.32d7e82082")}</p>
                     {control.id && <p className="mt-1 font-mono text-xs text-muted-foreground">{control.id}</p>}
                   </td>
-                  <td>{control.status ?? "unknown"}</td>
-                  <td>{control.evidence?.join(", ") || "No evidence label"}</td>
+                  <td>{control.status ?? translateNow("source.unknown.b23a6a8439")}</td>
+                  <td>{control.evidence?.join(", ") || translateNow("source.no.evidence.label.f46f14947d")}</td>
                 </tr>
               ))}
             </tbody>
@@ -1716,7 +1716,7 @@ function NHIReviewCampaignPanel({
                       <p>{item.resource}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{item.entitlement}</p>
                     </td>
-                    <td>{item.evidence_refs.join(", ") || "No evidence ref"}</td>
+                    <td>{item.evidence_refs.join(", ") || translateNow("source.no.evidence.ref.0697e8fb68")}</td>
                     <td>{item.status}</td>
                     <td>
                       {item.status === "pending" ? (
@@ -1741,7 +1741,7 @@ function NHIReviewCampaignPanel({
                         </div>
                       ) : (
                         <div>
-                          <p>{item.decision_reason || "Recorded"}</p>
+                          <p>{item.decision_reason || translateNow("source.recorded.c7175fa7a0")}</p>
                           {item.decision_by && <p className="mt-1 text-xs text-muted-foreground">{item.decision_by}</p>}
                         </div>
                       )}

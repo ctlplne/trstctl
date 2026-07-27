@@ -315,10 +315,10 @@ export function Connectors() {
                         <td>
                           <div className="flex flex-wrap gap-2">
                             <Button type="button" size="sm" variant="outline" onClick={() => openEdit(target)}>
-                              {`Edit ${target.name}`}
+                              {translateNow("source.edit.value1.b3cfc66057", { value1: target.name })}
                             </Button>
                             <Button type="button" size="sm" variant="destructive-outline" onClick={() => openDelete(target)}>
-                              {`Delete ${target.name}`}
+                              {translateNow("source.delete.value1.ff5250d441", { value1: target.name })}
                             </Button>
                           </div>
                         </td>
@@ -479,7 +479,7 @@ export function Connectors() {
               {deliveriesCursor && (
                 <div>
                   <Button type="button" size="sm" variant="outline" disabled={deliveriesLoadingMore} onClick={() => void loadMoreDeliveries()}>
-                    {deliveriesLoadingMore ? "Loading more receipts..." : "Load more receipts"}
+                    {deliveriesLoadingMore ? translateNow("source.loading.more.receipts.967013adf8") : translateNow("source.load.more.receipts.8f4d8130d6")}
                   </Button>
                 </div>
               )}
@@ -547,7 +547,7 @@ export function Connectors() {
         >
           <header className="border-b border-border px-5 py-4">
             <h2 id="target-edit-heading" className="text-title font-semibold">
-              {`Edit target ${editTarget.name}`}
+              {translateNow("source.edit.target.value1.28751a7b9e", { value1: editTarget.name })}
             </h2>
             <p id="target-edit-description" className="mt-1 text-sm text-muted-foreground">
               {t("parity.updateTheConnectorTargetNameConnector_1dafe2")}
@@ -616,10 +616,10 @@ export function Connectors() {
           panelClassName="relative w-full max-w-md rounded-panel border border-destructive/40 bg-card p-4 shadow-elevation2"
         >
           <h2 id="target-delete-heading" className="text-title font-semibold text-destructive">
-            {`Delete target “${deleteTarget.name}”?`}
+            {translateNow("source.delete.target.value1.e2c7d587e4", { value1: deleteTarget.name })}
           </h2>
           <p id="target-delete-description" className="mt-1 text-sm text-destructive">
-            {`Deleting “${deleteTarget.name}” removes the connector target from deployment routing. This cannot be undone.`}
+            {translateNow("source.deleting.value1.removes.the.connector.targ.b3256fdde9", { value1: deleteTarget.name })}
           </p>
           <label className="mt-3 grid gap-1 text-body font-medium text-destructive">
             {t("parity.typeTargetNameToConfirm_aedaad")}
@@ -666,7 +666,7 @@ export function Connectors() {
         >
           <header className="border-b border-border px-5 py-4">
             <h2 id="delivery-detail-heading" className="text-title font-semibold">
-              {`Delivery receipt ${deliveryDetail.id}`}
+              {translateNow("source.delivery.receipt.value1.0b61c0292f", { value1: deliveryDetail.id })}
             </h2>
             <p id="delivery-detail-description" className="mt-1 text-sm text-muted-foreground">
               {t("parity.fullConnectorDeliveryReceiptEvidenceIncluding_080df5")}

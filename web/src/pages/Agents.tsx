@@ -213,7 +213,7 @@ export function Agents() {
           return (
             <>
               <p>{formatOffboarded(agent.offboarded_at)}</p>
-              <p className="text-xs text-muted-foreground">{agent.offboard_reason || "Terminal tombstone"}</p>
+              <p className="text-xs text-muted-foreground">{agent.offboard_reason || translateNow("source.terminal.tombstone.f332513267")}</p>
             </>
           );
         }

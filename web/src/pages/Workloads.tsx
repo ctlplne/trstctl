@@ -348,15 +348,15 @@ export function Workloads() {
           <div className="grid gap-3 md:grid-cols-4">
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.capability")}</p>
-              <p className="mt-1 font-mono text-sm">{csrSupport?.capability ?? "CAP-K8S-04"}</p>
+              <p className="mt-1 font-mono text-sm">{csrSupport?.capability ?? translateNow("source.cap.k8s.04.8591b21c0c")}</p>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.apiGroup")}</p>
-              <p className="mt-1 font-mono text-sm">{csrSupport?.api_version ?? "certificates.k8s.io/v1"}</p>
+              <p className="mt-1 font-mono text-sm">{csrSupport?.api_version ?? translateNow("source.certificates.k8s.io.v1.0828361139")}</p>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.resource")}</p>
-              <p className="mt-1 font-mono text-sm">{csrSupport?.resource ?? "certificatesigningrequests"}</p>
+              <p className="mt-1 font-mono text-sm">{csrSupport?.resource ?? translateNow("source.certificatesigningrequests.cb597b34bc")}</p>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.generated")}</p>
@@ -418,15 +418,15 @@ export function Workloads() {
           <div className="grid gap-3 md:grid-cols-4">
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.capability")}</p>
-              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.capability ?? "CAP-K8S-07"}</p>
+              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.capability ?? translateNow("source.cap.k8s.07.5ce4e8b7f7")}</p>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.apiGroup")}</p>
-              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.api_version ?? "trstctl.com/v1alpha1"}</p>
+              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.api_version ?? translateNow("source.trstctl.com.v1alpha1.01c465ebb8")}</p>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.resource")}</p>
-              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.resource ?? "trustbundles"}</p>
+              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.resource ?? translateNow("source.trustbundles.6a2792b01d")}</p>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.generated")}</p>

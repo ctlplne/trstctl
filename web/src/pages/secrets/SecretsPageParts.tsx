@@ -164,7 +164,7 @@ export function MachineSession({ session }: { session: MachineLoginResponse }) {
       </div>
       <div className="md:col-span-2">
         <dt className="font-medium text-muted-foreground">{translateNow("source.scopes.0d5644ff52")}</dt>
-        <dd>{session.scopes.join(", ") || "No scopes"}</dd>
+        <dd>{session.scopes.join(", ") || translateNow("source.no.scopes.f466129b86")}</dd>
       </div>
     </dl>
   );

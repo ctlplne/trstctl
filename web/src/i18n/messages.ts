@@ -2447,6 +2447,58 @@ export const messages = {
     defaultMessage: "approver {approver} | principals {principals} | source {source} | force {force}",
     description: "Summary of applied constraints returned with an issued attested SSH user certificate.",
   },
+  "sshTrust.fleet.heading": {
+    defaultMessage: "Standing SSH access inventory",
+    description: "Heading for agent-reported standing SSH access.",
+  },
+  "sshTrust.fleet.description": {
+    defaultMessage: "Metadata reported by configured agents. Key bytes never leave the host.",
+    description: "Safety description for the SSH fleet inventory.",
+  },
+  "sshTrust.fleet.hostsOutsideCA": {
+    defaultMessage: "Hosts outside SSH CA trust",
+    description: "SSH fleet metric for hosts still using raw keys.",
+  },
+  "sshTrust.fleet.standingGrants": {
+    defaultMessage: "Standing grants",
+    description: "SSH fleet metric for persistent authorized_keys access.",
+  },
+  "sshTrust.fleet.orphanedGrants": {
+    defaultMessage: "Orphaned grants",
+    description: "SSH fleet metric for unattributed authorized_keys access.",
+  },
+  "sshTrust.fleet.empty": {
+    defaultMessage: "No agent-reported SSH key locations yet.",
+    description: "Empty state for SSH fleet inventory.",
+  },
+  "sshTrust.fleet.tableLabel": {
+    defaultMessage: "SSH standing access inventory",
+    description: "Accessible label for the SSH fleet table.",
+  },
+  "sshTrust.fleet.location": {
+    defaultMessage: "Location",
+    description: "SSH fleet table location column.",
+  },
+  "sshTrust.fleet.keyTypes": {
+    defaultMessage: "Key types",
+    description: "SSH fleet table key-type column.",
+  },
+  "sshTrust.fleet.sources": {
+    defaultMessage: "Sources",
+    description: "SSH fleet table discovery-source column.",
+  },
+  "sshTrust.fleet.access": {
+    defaultMessage: "Access",
+    description: "SSH fleet table standing-access column.",
+  },
+  "sshTrust.fleet.unknown": {
+    defaultMessage: "unknown",
+    description: "Fallback when SSH inventory metadata is missing.",
+  },
+  "sshTrust.fleet.accessSummary": {
+    defaultMessage: "{standing} standing · {orphaned} orphaned",
+    description: "Standing and orphaned grant counts for one SSH key location.",
+  },
   "nav.item.codeSigning": {
     defaultMessage: "Code signing",
     description: "Primary navigation item.",
@@ -11063,6 +11115,135 @@ export const messages = {
     defaultMessage: "Already post-quantum",
     description: "S-C14: rollup migration-target cell for an algorithm that needs no migration.",
   },
+  "posture.pqcMigration.heading": {
+    defaultMessage: "PQC migration workflow",
+    description: "Heading for the licensed CBOM-to-migration workflow.",
+  },
+  "posture.pqcMigration.description": {
+    defaultMessage: "Select vulnerable CBOM assets, preview the exact plan, then explicitly authorize a rollback-safe migration.",
+    description: "Explains the guarded PQC migration workflow.",
+  },
+  "posture.pqcMigration.checkingEdition": {
+    defaultMessage: "Checking PQC migration entitlement...",
+    description: "Status while the console reads the offline edition state.",
+  },
+  "posture.pqcMigration.unavailableHeading": {
+    defaultMessage: "Migration execution is unavailable in this edition",
+    description: "Heading for honest PQC edition degradation.",
+  },
+  "posture.pqcMigration.communityBody": {
+    defaultMessage:
+      "Community keeps CBOM discovery and readiness fully usable. The licensed fleet migration engine is not mounted, so this page makes no migration API call.",
+    description: "Community-mode explanation that avoids a dead licensed control.",
+  },
+  "posture.pqcMigration.readOnlyBody": {
+    defaultMessage: "The license is read-only. Existing CBOM evidence remains visible, but new migration plans, runs, and rollbacks are disabled.",
+    description: "Read-only license explanation for PQC migration.",
+  },
+  "posture.pqcMigration.editionsLink": {
+    defaultMessage: "Review editions and license state",
+    description: "Link from the PQC edition boundary to the editions page.",
+  },
+  "posture.pqcMigration.noAssets": {
+    defaultMessage: "No vulnerable CBOM assets are currently eligible for migration.",
+    description: "Empty state for the licensed migration selector.",
+  },
+  "posture.pqcMigration.selectLegend": {
+    defaultMessage: "Vulnerable assets",
+    description: "Legend above selectable CBOM migration assets.",
+  },
+  "posture.pqcMigration.selectAsset": {
+    defaultMessage: "Select {location} for PQC migration",
+    description: "Accessible checkbox label for one vulnerable CBOM asset.",
+  },
+  "posture.pqcMigration.preview": {
+    defaultMessage: "Preview migration plan",
+    description: "Read-only planner action.",
+  },
+  "posture.pqcMigration.previewing": {
+    defaultMessage: "Previewing plan...",
+    description: "Busy label while the read-only planner runs.",
+  },
+  "posture.pqcMigration.selectedCount": {
+    defaultMessage: "{count} selected",
+    description: "Count of selected CBOM assets.",
+  },
+  "posture.pqcMigration.planHeading": {
+    defaultMessage: "Exact migration plan",
+    description: "Heading for the served PQC plan preview.",
+  },
+  "posture.pqcMigration.reissues": {
+    defaultMessage: "Certificate reissues",
+    description: "Plan metric counting certificate reissues.",
+  },
+  "posture.pqcMigration.tlsRollouts": {
+    defaultMessage: "TLS rollouts",
+    description: "Plan metric counting TLS posture rollouts.",
+  },
+  "posture.pqcMigration.residuals": {
+    defaultMessage: "Residuals",
+    description: "Plan metric counting assets that cannot migrate.",
+  },
+  "posture.pqcMigration.startConfirmation": {
+    defaultMessage: "I reviewed this exact plan and authorize its rollback-safe external effects.",
+    description: "Explicit confirmation required before starting migration.",
+  },
+  "posture.pqcMigration.start": {
+    defaultMessage: "Start migration",
+    description: "Mutation button that starts the reviewed plan.",
+  },
+  "posture.pqcMigration.starting": {
+    defaultMessage: "Starting migration...",
+    description: "Busy label while the migration start request runs.",
+  },
+  "posture.pqcMigration.runQueued": {
+    defaultMessage: "Migration run {runId} queued",
+    description: "Success message after starting a migration.",
+  },
+  "posture.pqcMigration.progressHeading": {
+    defaultMessage: "Run {runId}",
+    description: "Heading for one migration run.",
+  },
+  "posture.pqcMigration.progressSummary": {
+    defaultMessage: "{applied} applied · {queued} queued · {failed} failed · {rolledBack} rolled back",
+    description: "Migration run progress counters.",
+  },
+  "posture.pqcMigration.progressNotLoaded": {
+    defaultMessage: "Refresh to load receiver-backed run evidence.",
+    description: "Prompt before the first progress refresh.",
+  },
+  "posture.pqcMigration.refresh": {
+    defaultMessage: "Refresh progress",
+    description: "Button to read current migration progress.",
+  },
+  "posture.pqcMigration.refreshing": {
+    defaultMessage: "Refreshing progress...",
+    description: "Busy label while migration progress loads.",
+  },
+  "posture.pqcMigration.rollbackConfirmation": {
+    defaultMessage: "I reviewed the current run evidence and authorize rollback for the selected assets.",
+    description: "Explicit confirmation before rollback.",
+  },
+  "posture.pqcMigration.rollback": {
+    defaultMessage: "Queue rollback",
+    description: "Button that queues a rollback.",
+  },
+  "posture.pqcMigration.rollingBack": {
+    defaultMessage: "Queueing rollback...",
+    description: "Busy label while rollback is queued.",
+  },
+  "posture.pqcMigration.rollbackReason": {
+    defaultMessage: "operator rollback from the Posture console",
+    description: "Auditable reason sent with a console migration rollback.",
+  },
+  "posture.pqcMigration.rollbackQueued": {
+    defaultMessage: "{count} rollback actions queued",
+    description: "Success message after rollback is queued.",
+  },
+  "posture.pqcMigration.error": {
+    defaultMessage: "Unable to complete the PQC migration operation",
+    description: "Fallback error for the PQC migration workflow.",
+  },
   "source.principal.afc19f1734": {
     defaultMessage: "Principal",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/secrets/SecretsPageParts.tsx.",
@@ -12541,6 +12722,904 @@ export const messages = {
   "source.zeroize.9fb44dd187": {
     defaultMessage: "Zeroize",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
+  },
+  "source.a.non.human.identity.bound.to.this.tenant.f58740df6d": {
+    defaultMessage: "A non-human identity bound to this tenant.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:1121.",
+  },
+  "source.acme.saas.5d97e28912": {
+    defaultMessage: "Acme SaaS",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:856.",
+  },
+  "source.active.version.eee2755122": {
+    defaultMessage: "Active version.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Profiles.tsx:407.",
+  },
+  "source.alice.example.com.ff8d9819fc": {
+    defaultMessage: "alice@example.com",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:856.",
+  },
+  "source.already.in.this.state.f32a2089a5": {
+    defaultMessage: "Already in this state.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:1226.",
+  },
+  "source.analyze.cad5bf29c7": {
+    defaultMessage: "Analyze",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:458.",
+  },
+  "source.analyzing.0141ee9533": {
+    defaultMessage: "Analyzing",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:458.",
+  },
+  "source.api.example.com.d0c43d3885": {
+    defaultMessage: "api.example.com",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:1431.",
+  },
+  "source.api.value1.b2b38d558b": {
+    defaultMessage: "api.{value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:1431.",
+  },
+  "source.applied.b4267ce93c": {
+    defaultMessage: "applied",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/bulk/actions.tsx:61.",
+  },
+  "source.approve.ceremony.value1.36200975a5": {
+    defaultMessage: "Approve ceremony {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1583.",
+  },
+  "source.approve.value1.for.value2.f59c2fc633": {
+    defaultMessage: "Approve {value1} for {value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Approvals.tsx:138, src/pages/Operations.tsx:295.",
+  },
+  "source.ask.b8c209cdea": {
+    defaultMessage: "Ask",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:419.",
+  },
+  "source.asking.744700ab93": {
+    defaultMessage: "Asking",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:419.",
+  },
+  "source.authenticated.session.e651c7182d": {
+    defaultMessage: "authenticated session",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:274.",
+  },
+  "source.cancel.value1.64342fbae8": {
+    defaultMessage: "Cancel {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Operations.tsx:306.",
+  },
+  "source.cap.k8s.04.8591b21c0c": {
+    defaultMessage: "CAP-K8S-04",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Workloads.tsx:351.",
+  },
+  "source.cap.k8s.07.5ce4e8b7f7": {
+    defaultMessage: "CAP-K8S-07",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Workloads.tsx:421.",
+  },
+  "source.cap.model.04.d945df90f4": {
+    defaultMessage: "CAP-MODEL-04",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:435.",
+  },
+  "source.certificates.k8s.io.v1.0828361139": {
+    defaultMessage: "certificates.k8s.io/v1",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Workloads.tsx:355.",
+  },
+  "source.certificatesigningrequests.cb597b34bc": {
+    defaultMessage: "certificatesigningrequests",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Workloads.tsx:359.",
+  },
+  "source.close.ingest.9381182077": {
+    defaultMessage: "Close ingest",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Certificates.tsx:1039.",
+  },
+  "source.commercial.support.terms.control.legal.sla.dd90f4015f": {
+    defaultMessage: "Commercial support terms control legal SLA credits and named contacts.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:447.",
+  },
+  "source.community.core.9de2dc1902": {
+    defaultMessage: "community core",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:746.",
+  },
+  "source.community.f354ee99e2": {
+    defaultMessage: "community",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:443, src/pages/Platform.tsx:550.",
+  },
+  "source.configure.value1.852b3f111c": {
+    defaultMessage: "Configure {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2197.",
+  },
+  "source.copied.8d525e5f15": {
+    defaultMessage: "Copied",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2153, src/pages/Platform.tsx:1542.",
+  },
+  "source.copy.id.72ac0d580f": {
+    defaultMessage: "Copy ID",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1542.",
+  },
+  "source.copy.value1.6dd8303613": {
+    defaultMessage: "Copy {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2151.",
+  },
+  "source.copy.value1.value2.command.fbc14f63f6": {
+    defaultMessage: "Copy {value1} {value2} command",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:676.",
+  },
+  "source.default.37a8eec1ce": {
+    defaultMessage: "default",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2351.",
+  },
+  "source.default.redactor.fa0bdd3f61": {
+    defaultMessage: "default-redactor",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:175.",
+  },
+  "source.delete.dns.01.config.value1.c275f568a2": {
+    defaultMessage: "Delete DNS-01 config {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:515.",
+  },
+  "source.delete.scep.policy.value1.62934aa247": {
+    defaultMessage: "Delete SCEP policy {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:608.",
+  },
+  "source.delete.target.value1.e2c7d587e4": {
+    defaultMessage: "Delete target “{value1}”?",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:619.",
+  },
+  "source.delete.value1.ff5250d441": {
+    defaultMessage: "Delete {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:321.",
+  },
+  "source.deleting.value1.removes.the.connector.targ.b3256fdde9": {
+    defaultMessage: "Deleting “{value1}” removes the connector target from deployment routing. This cannot be undone.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:622.",
+  },
+  "source.delivery.receipt.value1.0b61c0292f": {
+    defaultMessage: "Delivery receipt {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:669.",
+  },
+  "source.dismiss.value1.540d3af43e": {
+    defaultMessage: "Dismiss {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:594.",
+  },
+  "source.e.g.key.compromise.cab.1234.ff97b4f9ff": {
+    defaultMessage: "e.g. key compromise CAB-1234",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:659.",
+  },
+  "source.e.g.record.cleanup.approved.in.cab.1234.8cc38f337d": {
+    defaultMessage: "e.g. record cleanup approved in CAB-1234",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:659.",
+  },
+  "source.edit.dns.01.config.value1.58a4415e35": {
+    defaultMessage: "Edit DNS-01 config {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:506.",
+  },
+  "source.edit.scep.policy.value1.883c2507e1": {
+    defaultMessage: "Edit SCEP policy {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:590.",
+  },
+  "source.edit.target.value1.28751a7b9e": {
+    defaultMessage: "Edit target {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:550.",
+  },
+  "source.edit.value1.b3cfc66057": {
+    defaultMessage: "Edit {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:318.",
+  },
+  "source.evaluation.only.7e42530821": {
+    defaultMessage: "· evaluation only",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:842.",
+  },
+  "source.execute.incident.c74e8b45e9": {
+    defaultMessage: "Execute incident",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:622.",
+  },
+  "source.executing.535a363214": {
+    defaultMessage: "Executing...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:622.",
+  },
+  "source.export.audit.evidence.c3f3b4ad52": {
+    defaultMessage: "Export audit evidence",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Policy.tsx:979.",
+  },
+  "source.export.fleet.run.value1.evidence.6065920a10": {
+    defaultMessage: "Export fleet run {value1} evidence",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1557.",
+  },
+  "source.exporting.639e45361b": {
+    defaultMessage: "Exporting...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Policy.tsx:979.",
+  },
+  "source.external.3c4623849a": {
+    defaultMessage: "external",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2194, src/pages/CAHierarchy.tsx:2586.",
+  },
+  "source.external.ca.integration.c66b92973a": {
+    defaultMessage: "External CA integration",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2256.",
+  },
+  "source.filter.638e249f4a": {
+    defaultMessage: "Filter",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Privacy.tsx:358.",
+  },
+  "source.filtering.5bdc12007f": {
+    defaultMessage: "Filtering...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Privacy.tsx:358.",
+  },
+  "source.fips.140.3.b95c3c39f5": {
+    defaultMessage: "FIPS 140-3",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:772.",
+  },
+  "source.fips.module.active.76cb6077b6": {
+    defaultMessage: "FIPS module active",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:766.",
+  },
+  "source.fips.module.inactive.fac8ddb35b": {
+    defaultMessage: "FIPS module inactive",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:766.",
+  },
+  "source.generated.credential.for.lease.value1.814b0bc937": {
+    defaultMessage: "Generated credential for lease {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:2592.",
+  },
+  "source.go.cryptographic.module.0acf566e1e": {
+    defaultMessage: "Go Cryptographic Module",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:772.",
+  },
+  "source.graph.node.value1.3c48c6439b": {
+    defaultMessage: "Graph node {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/GraphView.tsx:232.",
+  },
+  "source.grounded.5b6f73f04f": {
+    defaultMessage: "Grounded",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:100.",
+  },
+  "source.ha.support.6fd6a7fc16": {
+    defaultMessage: "ha_support",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:439.",
+  },
+  "source.hide.factors.692e022b93": {
+    defaultMessage: "Hide factors",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Risk.tsx:305.",
+  },
+  "source.historical.version.5164d291c7": {
+    defaultMessage: "Historical version.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Profiles.tsx:407.",
+  },
+  "source.inactive.d1022618b9": {
+    defaultMessage: "inactive",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:176.",
+  },
+  "source.insufficient.ca57f7a4da": {
+    defaultMessage: "Insufficient",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:105.",
+  },
+  "source.intermediate.ca.create.failed.508df7468d": {
+    defaultMessage: "Intermediate CA create failed",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1809.",
+  },
+  "source.internal.3bed2cb3a3": {
+    defaultMessage: "internal",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2194, src/pages/CAHierarchy.tsx:2586.",
+  },
+  "source.invalid.from.value1.26f942026d": {
+    defaultMessage: "Invalid from {value1}.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:1226.",
+  },
+  "source.investigate.value1.39e7603180": {
+    defaultMessage: "Investigate {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:572.",
+  },
+  "source.invoke.90092e5fb8": {
+    defaultMessage: "Invoke",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:518.",
+  },
+  "source.invoking.fb01312da7": {
+    defaultMessage: "Invoking",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:518.",
+  },
+  "source.issue.leaf.from.value1.4525393020": {
+    defaultMessage: "Issue leaf from {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1679.",
+  },
+  "source.keep.value1.208d6f9b94": {
+    defaultMessage: "keep: {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1862.",
+  },
+  "source.latest.5e1e2bcac3": {
+    defaultMessage: "latest",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:1314, src/pages/Secrets.tsx:1661.",
+  },
+  "source.load.more.attestations.fa509be818": {
+    defaultMessage: "Load more attestations",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Privacy.tsx:371.",
+  },
+  "source.load.more.receipts.8f4d8130d6": {
+    defaultMessage: "Load more receipts",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:482.",
+  },
+  "source.load.more.rotation.runs.4e5894a950": {
+    defaultMessage: "Load more rotation runs",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Operations.tsx:584.",
+  },
+  "source.load.more.runs.627fcc156a": {
+    defaultMessage: "Load more runs",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1203.",
+  },
+  "source.load.more.sessions.e04b242241": {
+    defaultMessage: "Load more sessions",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1350.",
+  },
+  "source.load.next.page.d31b4bf690": {
+    defaultMessage: "Load next page",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Certificates.tsx:1412.",
+  },
+  "source.loading.b4a070a2d3": {
+    defaultMessage: "loading",
+    description:
+      "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:154, src/pages/Assistant.tsx:158, src/pages/Assistant.tsx:162, src/pages/Assistant.tsx:166, src/pages/Assistant.tsx:171.",
+  },
+  "source.loading.more.attestations.c82824a63c": {
+    defaultMessage: "Loading more attestations...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Privacy.tsx:371.",
+  },
+  "source.loading.more.receipts.967013adf8": {
+    defaultMessage: "Loading more receipts...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:482.",
+  },
+  "source.loading.more.rotation.runs.15b9534a52": {
+    defaultMessage: "Loading more rotation runs...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Operations.tsx:584.",
+  },
+  "source.loading.more.runs.89d0b6b736": {
+    defaultMessage: "Loading more runs...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1203.",
+  },
+  "source.loading.more.sessions.25d47273c8": {
+    defaultMessage: "Loading more sessions...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1350.",
+  },
+  "source.loading.next.page.8c0453192f": {
+    defaultMessage: "Loading next page...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Certificates.tsx:1412.",
+  },
+  "source.loading.preview.c02130fa90": {
+    defaultMessage: "Loading preview...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:619.",
+  },
+  "source.local.preview.session.04a12d6877": {
+    defaultMessage: "local preview session",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:274.",
+  },
+  "source.local.signing.authority.0461c7306a": {
+    defaultMessage: "Local signing authority",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2256.",
+  },
+  "source.make.fips.build.ce51354815": {
+    defaultMessage: "make fips-build",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:773.",
+  },
+  "source.mark.managed.value1.ba545156d1": {
+    defaultMessage: "Mark managed {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:583.",
+  },
+  "source.mints.a.signer.backed.intermediate.chained.5b33f94914": {
+    defaultMessage: "Creates an intermediate CA signed by its parent authority.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1801.",
+  },
+  "source.mints.a.signer.backed.root.from.a.quorum.a.592ee04526": {
+    defaultMessage: "Mints a signer-backed root from a quorum-approved key ceremony.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1800.",
+  },
+  "source.move.value1.down.3b2d940865": {
+    defaultMessage: "Move {value1} down",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/DataGrid.tsx:273.",
+  },
+  "source.move.value1.up.ae68218172": {
+    defaultMessage: "Move {value1} up",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/DataGrid.tsx:262.",
+  },
+  "source.negotiated.unlimited.9939fd4cf1": {
+    defaultMessage: "Negotiated / unlimited",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:562, src/pages/Platform.tsx:759.",
+  },
+  "source.next.1ff57a29d7": {
+    defaultMessage: "Next",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/wizard/StepShell.tsx:97.",
+  },
+  "source.no.9390298f3f": {
+    defaultMessage: "no",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1383.",
+  },
+  "source.no.cited.evidence.e48d4838c2": {
+    defaultMessage: "No cited evidence",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:100.",
+  },
+  "source.no.evidence.label.f46f14947d": {
+    defaultMessage: "No evidence label",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Policy.tsx:1490.",
+  },
+  "source.no.evidence.ref.0697e8fb68": {
+    defaultMessage: "No evidence ref",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Policy.tsx:1719.",
+  },
+  "source.no.issuer.bound.d1e424a34f": {
+    defaultMessage: "No issuer bound",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:1162.",
+  },
+  "source.no.node.selected.5eaea81a7b": {
+    defaultMessage: "No node selected",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Graph.tsx:295.",
+  },
+  "source.no.rollback.refs.recorded.0d22293f6b": {
+    defaultMessage: "No rollback refs recorded.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1315.",
+  },
+  "source.no.scopes.f466129b86": {
+    defaultMessage: "No scopes",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/secrets/SecretsPageParts.tsx:167.",
+  },
+  "source.no.session.principal.ffe06f6da5": {
+    defaultMessage: "No session principal",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/RequestCredential.tsx:359, src/pages/RequestCredential.tsx:379.",
+  },
+  "source.none.140bedbf9c": {
+    defaultMessage: "none",
+    description:
+      "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1518, src/pages/Incidents.tsx:1683, src/pages/Platform.tsx:1391.",
+  },
+  "source.none.selected.d2a589f7f4": {
+    defaultMessage: "none selected",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:198.",
+  },
+  "source.not.delivered.f498742c19": {
+    defaultMessage: "Not delivered",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:3070.",
+  },
+  "source.not.published.30839efda7": {
+    defaultMessage: "not published",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/SSHTrust.tsx:258.",
+  },
+  "source.not.queued.7e52b62ffb": {
+    defaultMessage: "Not queued",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:3066.",
+  },
+  "source.not.scoped.dcd55e3956": {
+    defaultMessage: "not scoped",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:202.",
+  },
+  "source.not.visible.in.this.browser.context.09390ab73b": {
+    defaultMessage: "not visible in this browser context",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:278.",
+  },
+  "source.notification.value1.81c16a52a8": {
+    defaultMessage: "Notification {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Notifications.tsx:392.",
+  },
+  "source.off.b4dc66dde8": {
+    defaultMessage: "off",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:546.",
+  },
+  "source.open.session.b205bb47f8": {
+    defaultMessage: "Open session",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1660.",
+  },
+  "source.opening.b19bb6f448": {
+    defaultMessage: "Opening...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1660.",
+  },
+  "source.orphaned.6f1aaf37cc": {
+    defaultMessage: "orphaned",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Risk.tsx:960.",
+  },
+  "source.pause.fleet.run.value1.225d7f781f": {
+    defaultMessage: "Pause fleet run {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1530.",
+  },
+  "source.pki.bundle.value1.18184942ea": {
+    defaultMessage: "PKI bundle {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:1711.",
+  },
+  "source.playbook.run.value1.48f61c2511": {
+    defaultMessage: "Playbook run {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1380.",
+  },
+  "source.preflight.check.value1.dd32be6184": {
+    defaultMessage: "Preflight check {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:497.",
+  },
+  "source.preflight.result.for.value1.b75b62525f": {
+    defaultMessage: "Preflight result for {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:1488.",
+  },
+  "source.present.for.browser.mutations.f21c11a696": {
+    defaultMessage: "present for browser mutations",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:278.",
+  },
+  "source.preview.blast.radius.925ac72409": {
+    defaultMessage: "Preview blast radius",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:619.",
+  },
+  "source.privileged.session.value1.2958e09fb1": {
+    defaultMessage: "Privileged session {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1458.",
+  },
+  "source.queue.servicenow.ticket.f2988e9681": {
+    defaultMessage: "Queue ServiceNow ticket",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1130.",
+  },
+  "source.queued.661ff40a07": {
+    defaultMessage: "Queued",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:3066.",
+  },
+  "source.queueing.d6e3ff1af9": {
+    defaultMessage: "Queueing...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1130.",
+  },
+  "source.raw.value1.value.value2.95aaab9298": {
+    defaultMessage: "Raw {value1} value {value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Risk.tsx:1013.",
+  },
+  "source.re.run.preflight.8d65b96680": {
+    defaultMessage: "Re-run preflight",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:1476.",
+  },
+  "source.read.only.4fed3970dc": {
+    defaultMessage: "read-only",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:233.",
+  },
+  "source.read.only.tools.dd28b5cb26": {
+    defaultMessage: "Read-only tools",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:345.",
+  },
+  "source.reconcile.break.glass.bundles.b664752d57": {
+    defaultMessage: "Reconcile break-glass bundles",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/breakglass/index.tsx:119.",
+  },
+  "source.reconciling.8adbed64b5": {
+    defaultMessage: "Reconciling…",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/breakglass/index.tsx:119.",
+  },
+  "source.recorded.c7175fa7a0": {
+    defaultMessage: "Recorded",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Policy.tsx:1744.",
+  },
+  "source.recording.9974b98e8b": {
+    defaultMessage: "Recording...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Privacy.tsx:482.",
+  },
+  "source.reject.value1.for.value2.30ca8dca77": {
+    defaultMessage: "Reject {value1} for {value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Operations.tsx:298.",
+  },
+  "source.remove.value1.e3301e7b14": {
+    defaultMessage: "remove: {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1860.",
+  },
+  "source.renew.now.905758c33c": {
+    defaultMessage: "Renew now",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Certificates.tsx:1611.",
+  },
+  "source.renew.value1.c52ad584ec": {
+    defaultMessage: "Renew {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Certificates.tsx:1608, src/pages/Certificates.tsx:1685.",
+  },
+  "source.renewing.81caaaa0e6": {
+    defaultMessage: "Renewing…",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Certificates.tsx:1611, src/pages/Certificates.tsx:1688.",
+  },
+  "source.required.cdc2689fe2": {
+    defaultMessage: "· required",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:767.",
+  },
+  "source.required.d0a3630555": {
+    defaultMessage: "required",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:572.",
+  },
+  "source.restore.view.value1.09c622aea3": {
+    defaultMessage: "Restore view {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/DataGrid.tsx:304.",
+  },
+  "source.resume.fleet.run.value1.82d98d67fc": {
+    defaultMessage: "Resume fleet run {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1539.",
+  },
+  "source.retiring.value1.discards.the.credential.re.7f368527a3": {
+    defaultMessage: "Retiring “{value1}” discards the credential record. This cannot be undone.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:636.",
+  },
+  "source.retry.2.b933ea8d98": {
+    defaultMessage: "retry(2)",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Dashboard.tsx:439.",
+  },
+  "source.reveal.once.value.for.value1.72f4f14f8d": {
+    defaultMessage: "Reveal-once value for {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:1313.",
+  },
+  "source.revoke.key.value1.2e6b1284fb": {
+    defaultMessage: "Revoke key {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2529.",
+  },
+  "source.rollback.fleet.run.value1.21446f0a1d": {
+    defaultMessage: "Rollback fleet run {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1548.",
+  },
+  "source.root.44c4ce0579": {
+    defaultMessage: "(root)",
+    description:
+      "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/secrets/index.tsx:163, src/components/secrets/index.tsx:178, src/components/secrets/index.tsx:39.",
+  },
+  "source.root.ca.create.failed.6cab086b1e": {
+    defaultMessage: "Root CA create failed",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1809.",
+  },
+  "source.rotate.challenge.for.value1.c7c084eaeb": {
+    defaultMessage: "Rotate challenge for {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:599.",
+  },
+  "source.rotate.key.value1.f9e66701f9": {
+    defaultMessage: "Rotate key {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2519.",
+  },
+  "source.rotation.run.value1.e6b35404aa": {
+    defaultMessage: "Rotation run {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Operations.tsx:611.",
+  },
+  "source.run.cbom.scan.ca786ed005": {
+    defaultMessage: "Run CBOM scan",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:403.",
+  },
+  "source.run.preflight.3cd0b7ebda": {
+    defaultMessage: "Run preflight",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:1476.",
+  },
+  "source.running.46c541363b": {
+    defaultMessage: "Running…",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/bulk/actions.tsx:41.",
+  },
+  "source.running.scan.34932df63a": {
+    defaultMessage: "Running scan",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:403.",
+  },
+  "source.save.and.poll.ct.609730cebd": {
+    defaultMessage: "Save and poll CT",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:314.",
+  },
+  "source.saving.ct.c96661dcd1": {
+    defaultMessage: "Saving CT",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:314.",
+  },
+  "source.select.graph.node.value1.05310572fd": {
+    defaultMessage: "Select graph node {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Graph.tsx:319.",
+  },
+  "source.select.value1.187be5793a": {
+    defaultMessage: "Select {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/DataGrid.tsx:392.",
+  },
+  "source.self.test.not.confirmed.03a528b202": {
+    defaultMessage: "· self-test not confirmed",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:768.",
+  },
+  "source.self.test.passed.c28b5c9b12": {
+    defaultMessage: "· self-test passed",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:768.",
+  },
+  "source.show.factors.5508f4f571": {
+    defaultMessage: "Show factors",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Risk.tsx:305.",
+  },
+  "source.show.value1.edges.2189dce744": {
+    defaultMessage: "Show {value1} edges",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Graph.tsx:676.",
+  },
+  "source.show.value1.nodes.b6e7a8266b": {
+    defaultMessage: "Show {value1} nodes",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Graph.tsx:656.",
+  },
+  "source.sign.artifact.57261585fa": {
+    defaultMessage: "Sign artifact",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CodeSigning.tsx:164.",
+  },
+  "source.sign.intermediate.csr.with.value1.4a29b8342b": {
+    defaultMessage: "Sign intermediate CSR with {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1687.",
+  },
+  "source.signing.bdabe34a39": {
+    defaultMessage: "Signing…",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CodeSigning.tsx:164.",
+  },
+  "source.start.campaign.bfdb5d43fb": {
+    defaultMessage: "Start campaign",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Policy.tsx:1038.",
+  },
+  "source.start.fleet.run.140963492c": {
+    defaultMessage: "Start fleet run",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1279.",
+  },
+  "source.starting.82b93630a9": {
+    defaultMessage: "Starting...",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1279, src/pages/Policy.tsx:1038.",
+  },
+  "source.sufficient.211fa4c5d7": {
+    defaultMessage: "Sufficient",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:105.",
+  },
+  "source.system.bbc5e661e1": {
+    defaultMessage: "system",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Privacy.tsx:571.",
+  },
+  "source.tenant.registered.62865a2986": {
+    defaultMessage: "tenant.registered",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:568.",
+  },
+  "source.terminal.tombstone.f332513267": {
+    defaultMessage: "Terminal tombstone",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Agents.tsx:216.",
+  },
+  "source.test.connection.value1.3b3d22ad35": {
+    defaultMessage: "Test connection {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2601.",
+  },
+  "source.theme.value1.4049fcb6af": {
+    defaultMessage: "Theme: {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/ThemeToggle.tsx:15.",
+  },
+  "source.theme.value1.switch.to.value2.b9ad93c6e2": {
+    defaultMessage: "Theme: {value1}. Switch to {value2}.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/ThemeToggle.tsx:15.",
+  },
+  "source.this.credential.has.c3e23e67fc": {
+    defaultMessage: "This credential has",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/CredentialActivityTimeline.tsx:44.",
+  },
+  "source.treated.as.unavailable.until.policy.allows.0794a88921": {
+    defaultMessage: "treated as unavailable until policy allows them",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:233.",
+  },
+  "source.trstctl.com.v1alpha1.01c465ebb8": {
+    defaultMessage: "trstctl.com/v1alpha1",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Workloads.tsx:425.",
+  },
+  "source.trustbundles.6a2792b01d": {
+    defaultMessage: "trustbundles",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Workloads.tsx:429.",
+  },
+  "source.unavailable.ba691ba042": {
+    defaultMessage: "unavailable",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1520, src/pages/Incidents.tsx:1685.",
+  },
+  "source.unknown.b23a6a8439": {
+    defaultMessage: "unknown",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Policy.tsx:1489, src/pages/Secrets.tsx:1466.",
+  },
+  "source.valid.from.value1.ae82fe20dd": {
+    defaultMessage: "Valid from {value1}.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:1226.",
+  },
+  "source.value1.1a37d34e22": {
+    defaultMessage: "({value1})",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1856.",
+  },
+  "source.value1.550e636eaf": {
+    defaultMessage: " / {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:758.",
+  },
+  "source.value1.87b66be02d": {
+    defaultMessage: "→ {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1854.",
+  },
+  "source.value1.92dd63d2f3": {
+    defaultMessage: ": {value1}",
+    description:
+      "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:765, src/pages/Policy.tsx:1385, src/pages/Policy.tsx:1386.",
+  },
+  "source.value1.approval.recorded.for.value2.by.val.87cb845f84": {
+    defaultMessage: "{value1} approval recorded for {value2} by {value3} ({value4} approvals)",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Approvals.tsx:209.",
+  },
+  "source.value1.d.eb20d8f12a": {
+    defaultMessage: "{value1}d",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/certs/index.tsx:107.",
+  },
+  "source.value1.d610afc356": {
+    defaultMessage: "· {value1}",
+    description:
+      "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/certs/index.tsx:245, src/pages/Incidents.tsx:1400, src/pages/Incidents.tsx:1849.",
+  },
+  "source.value1.ed27296cce": {
+    defaultMessage: "— {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:1467.",
+  },
+  "source.value1.eff53e36f5": {
+    defaultMessage: "{value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:1521, src/pages/Secrets.tsx:1472.",
+  },
+  "source.value1.has.b0d0cf279e": {
+    defaultMessage: "{value1} has",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/CredentialActivityTimeline.tsx:44.",
+  },
+  "source.value1.lines.a4d63c8ae4": {
+    defaultMessage: "{value1} lines",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Certificates.tsx:1119.",
+  },
+  "source.value1.of.value2.approvals.cb7e517061": {
+    defaultMessage: "{value1} of {value2} approvals",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1628.",
+  },
+  "source.value1.risk.value2.5c614305ad": {
+    defaultMessage: "{value1} risk {value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Risk.tsx:1030.",
+  },
+  "source.value1.v.value2.5a7805046a": {
+    defaultMessage: "{value1} v{value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/RequestCredential.tsx:295, src/pages/RequestCredential.tsx:343.",
+  },
+  "source.value1.v.value2.value3.b49c34f739": {
+    defaultMessage: "{value1} v{value2}{value3}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/RequestCredential.tsx:285.",
+  },
+  "source.value1.value2.48e56a2411": {
+    defaultMessage: "{value1} ({value2})",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/GraphView.tsx:258, src/components/bulk/actions.tsx:41.",
+  },
+  "source.value1.value2.7c639bc99b": {
+    defaultMessage: "{value1} · {value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:631, src/pages/Platform.tsx:1479.",
+  },
+  "source.value1.value2.7d8908f134": {
+    defaultMessage: "{value1}/{value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Approvals.tsx:230.",
+  },
+  "source.value1.value2.9539417d74": {
+    defaultMessage: "{value1} / {value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Notifications.tsx:407.",
+  },
+  "source.value1.value2.efae3eb968": {
+    defaultMessage: "{value1}: {value2}",
+    description:
+      "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/charts/index.tsx:178, src/components/charts/index.tsx:310, src/components/charts/index.tsx:97, src/pages/CAHierarchy.tsx:2485.",
+  },
+  "source.value1.value2.value3.19d646a699": {
+    defaultMessage: "{value1} {value2}: {value3}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/charts/index.tsx:238.",
+  },
+  "source.value1.value2.value3.71fbdf7980": {
+    defaultMessage: "{value1} {value2} {value3}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/GraphView.tsx:216.",
+  },
+  "source.view.ceremony.value1.4ed0eab2e0": {
+    defaultMessage: "View ceremony {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1587.",
+  },
+  "source.view.details.for.notification.value1.786c365358": {
+    defaultMessage: "View details for notification {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Notifications.tsx:886.",
+  },
+  "source.view.value1.version.value2.bcb23df652": {
+    defaultMessage: "View {value1} version {value2}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Profiles.tsx:101.",
+  },
+  "source.write.capable.tools.f7a38bfb1e": {
+    defaultMessage: "Write-capable tools",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:345.",
+  },
+  "source.yes.8a798890fe": {
+    defaultMessage: "yes",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1383.",
+  },
+  "source.yes.value1.0cb667502c": {
+    defaultMessage: "Yes, {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:674.",
+  },
+  "source.your.first.certificate.d48ee36f3a": {
+    defaultMessage: "Your first certificate",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Wizard.tsx:103.",
+  },
+  "source.zeroize.key.value1.4e92e53f48": {
+    defaultMessage: "Zeroize key {value1}",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2539.",
+  },
+  "source.plaintext.local.preview.no.private.cert.ke.e5059d6667": {
+    defaultMessage: "Plaintext local preview. No private cert/key bytes are exposed in this browser view.",
+    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:44.",
   },
 } as const;
 

@@ -116,7 +116,7 @@ export function BreakGlassReconcile() {
         </label>
         <div>
           <Button type="submit" disabled={busy || !bundles.trim()}>
-            {busy ? "Reconciling…" : "Reconcile break-glass bundles"}
+            {busy ? translateNow("source.reconciling.8adbed64b5") : translateNow("source.reconcile.break.glass.bundles.b664752d57")}
           </Button>
         </div>
       </form>

@@ -38,7 +38,7 @@ export function BulkActionRunner({ targets, actionLabel, action }: { targets: Bu
       description="Fan out an idempotent mutation across the selected rows; each row reports its own success or failure."
       actions={
         <Button type="button" onClick={() => void run()} disabled={busy || targets.length === 0}>
-          {busy ? "Running…" : `${actionLabel} (${targets.length})`}
+          {busy ? translateNow("source.running.46c541363b") : translateNow("source.value1.value2.48e56a2411", { value1: actionLabel, value2: targets.length })}
         </Button>
       }
     >
@@ -58,7 +58,7 @@ export function BulkActionRunner({ targets, actionLabel, action }: { targets: Bu
                 <td className="py-2">
                   <StatusBadge vocabulary="risk" value={result.ok ? "low" : "critical"} />
                 </td>
-                <td className="py-2 text-muted-foreground">{result.ok ? "applied" : result.error}</td>
+                <td className="py-2 text-muted-foreground">{result.ok ? translateNow("source.applied.b4267ce93c") : result.error}</td>
               </tr>
             ))}
           </tbody>

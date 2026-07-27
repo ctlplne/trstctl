@@ -94,7 +94,7 @@ export function StepShell({
         </Button>
         {onNext ? (
           <Button type="button" onClick={onNext} disabled={nextDisabled}>
-            {nextLabel ?? "Next"}
+            {nextLabel ?? translateNow("source.next.1ff57a29d7")}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Button>
         ) : null}

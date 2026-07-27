@@ -494,7 +494,7 @@ export function Protocols() {
                           size="sm"
                           variant="outline"
                           onClick={() => setDNSPreflightConfig(config)}
-                          aria-label={`Preflight check ${config.name}`}
+                          aria-label={translateNow("source.preflight.check.value1.dd32be6184", { value1: config.name })}
                         >
                           {t("parity.preflightCheck_4a464a")}
                         </Button>
@@ -503,7 +503,7 @@ export function Protocols() {
                           size="sm"
                           variant="outline"
                           onClick={() => setDNSEditConfig(config)}
-                          aria-label={`Edit DNS-01 config ${config.name}`}
+                          aria-label={translateNow("source.edit.dns.01.config.value1.58a4415e35", { value1: config.name })}
                         >
                           {t("parity.edit_530164")}
                         </Button>
@@ -512,7 +512,7 @@ export function Protocols() {
                           size="sm"
                           variant="destructive-outline"
                           onClick={() => setDNSDeleteConfig(config)}
-                          aria-label={`Delete DNS-01 config ${config.name}`}
+                          aria-label={translateNow("source.delete.dns.01.config.value1.c275f568a2", { value1: config.name })}
                         >
                           {t("parity.delete_f6fdbe")}
                         </Button>
@@ -587,7 +587,7 @@ export function Protocols() {
                             size="sm"
                             variant="outline"
                             onClick={() => setSCEPEditPolicy(policy)}
-                            aria-label={`Edit SCEP policy ${policy.name}`}
+                            aria-label={translateNow("source.edit.scep.policy.value1.883c2507e1", { value1: policy.name })}
                           >
                             {t("parity.edit_530164")}
                           </Button>
@@ -596,7 +596,7 @@ export function Protocols() {
                             size="sm"
                             variant="outline"
                             onClick={() => setSCEPRotatePolicy(policy)}
-                            aria-label={`Rotate challenge for ${policy.name}`}
+                            aria-label={translateNow("source.rotate.challenge.for.value1.c7c084eaeb", { value1: policy.name })}
                           >
                             {t("parity.rotateChallenge_99fc02")}
                           </Button>
@@ -605,7 +605,7 @@ export function Protocols() {
                             size="sm"
                             variant="destructive-outline"
                             onClick={() => setSCEPDeletePolicy(policy)}
-                            aria-label={`Delete SCEP policy ${policy.name}`}
+                            aria-label={translateNow("source.delete.scep.policy.value1.62934aa247", { value1: policy.name })}
                           >
                             {t("parity.delete_f6fdbe")}
                           </Button>
@@ -673,7 +673,7 @@ export function Protocols() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          aria-label={`Copy ${protocol.name} ${snippet.label} command`}
+                          aria-label={translateNow("source.copy.value1.value2.command.fbc14f63f6", { value1: protocol.name, value2: snippet.label })}
                           onClick={() => void copySnippet(protocol, snippet)}
                         >
                           <Copy className="h-4 w-4" aria-hidden="true" />
@@ -1428,7 +1428,9 @@ function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01ProviderCo
               required
               value={domain}
               onChange={(event) => setDomain(event.target.value)}
-              placeholder={config.zone ? `api.${config.zone}` : "api.example.com"}
+              placeholder={
+                config.zone ? translateNow("source.api.value1.b2b38d558b", { value1: config.zone }) : translateNow("source.api.example.com.d0c43d3885")
+              }
               className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
             />
           </label>
@@ -1473,7 +1475,7 @@ function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01ProviderCo
             {translateNow("source.close.7d9eb7acb1")}
           </Button>
           <Button type="submit" disabled={busy || domain.trim() === ""}>
-            {result ? "Re-run preflight" : "Run preflight"}
+            {result ? translateNow("source.re.run.preflight.8d65b96680") : translateNow("source.run.preflight.3cd0b7ebda")}
           </Button>
         </div>
         {result && <DNS01PreflightResultPanel result={result} />}
@@ -1485,7 +1487,11 @@ function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01ProviderCo
 function DNS01PreflightResultPanel({ result }: { result: ACMEDNS01Preflight }) {
   const { t } = useTranslation();
   return (
-    <section role="status" aria-label={`Preflight result for ${result.domain}`} className="grid gap-3 rounded-control border border-border p-3 text-sm">
+    <section
+      role="status"
+      aria-label={translateNow("source.preflight.result.for.value1.b75b62525f", { value1: result.domain })}
+      className="grid gap-3 rounded-control border border-border p-3 text-sm"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge value={result.ready ? "ready" : "not-ready"} tone={result.ready ? "success" : "critical"} label={result.ready ? "Ready" : "Not ready"} />
         <span className="font-medium">{result.domain}</span>
@@ -1518,7 +1524,7 @@ function DNS01PreflightResultPanel({ result }: { result: ACMEDNS01Preflight }) {
             <div className="min-w-0">
               <p className={check.status === "fail" ? "font-medium text-destructive" : "font-medium"}>
                 {check.name}
-                <span className="sr-only">{` ${check.status}`}</span>
+                <span className="sr-only">{translateNow("source.value1.eff53e36f5", { value1: check.status })}</span>
               </p>
               <p className={check.status === "fail" ? "text-sm text-destructive/90" : "text-sm text-muted-foreground"}>{check.detail}</p>
             </div>

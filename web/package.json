@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "vite",
     "gen:api": "node scripts/gen-api-types.mjs",
-    "i18n:check": "node scripts/extract-i18n-messages.mjs --check",
+    "i18n:check": "node --test scripts/extract-i18n-messages.test.mjs && node scripts/extract-i18n-messages.mjs --check",
     "i18n:extract": "node scripts/extract-i18n-messages.mjs",
     "build": "npm run gen:api -- --check && tsc -p tsconfig.build.json && vite build",
     "preview": "vite preview",

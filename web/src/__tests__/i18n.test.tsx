@@ -263,26 +263,19 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
-      // S-C11..S-C20 re-pin: 47 new keys per catalog — posture.algorithmRollup.*
-      // (the CBOM per-algorithm exposure rollup: caption, four column headers,
-      // three exposure badges, the already-post-quantum cell) and risk.* (the
-      // per-row score meter's accessible name, its unfilled-portion title, and
-      // the no-factors chip label), plus secrets.rotationHealth.* (the
-      // overdue/stale/never-run/failed flags on rotation schedules) and
-      // workloads.attesterBreakdown.* (the per-attester issued/refused table
-      // and its client-observed-refusals scope note) and approvals.quorum.*
-      // (the have/need quorum badges) and discovery.sourceActivity.* (the
-      // last-run/findings/drift join on the discovery sources table) and
-      // ssh.rollout.stepperLabel (the trust-rollout stepper) and
-      // incidents.step.* (the remediation stepper) and the response-loop
-      // cross-links (certificates.detail.*, graph.respondToNode) and
-      // ca.lineage.* (the CA lineage tree).
+      // I18N-ca357ca0 re-pin: 223 source keys move strings, conditional
+      // fallbacks, interpolated accessibility labels, and warning copy from
+      // renderable JSX expressions into the typed catalog. Technical
+      // identifiers and punctuation-only format templates stay byte-identical;
+      // all natural-language values carry placeholder-safe es/de translations.
+      // UX-04 follow-up: the intermediate-CA description now uses customer
+      // language in every locale instead of the internal "served" status.
+      // Posture follow-up: the localized crypto inventory separator preserves
+      // its leading space so adjacent algorithm and transport text stays clear.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
-      // the outstanding translation review sheet. This re-pin also replaces
-      // the internal "served API" phrase in the refusal-history disclaimer
-      // with customer language.
-      "es-ES": "8c584cd3b7662ce58c4f6d96440d7d70a6345e192618b25af0e63575196951db",
-      "de-DE": "dd562cfab721a6ddae2fb7a79d248fb69cec649e67a9d3b1f019382939b2ffb1",
+      // the outstanding translation review sheet.
+      "es-ES": "276a432e5ce68f20091e0d3324f37ad8331adf7be9aeba9a699d127e39d4b19e",
+      "de-DE": "b55c2d8ec43687436e77e8d2235eea765580cca8db3f1bd24e002813097956c1",
     });
   });
 

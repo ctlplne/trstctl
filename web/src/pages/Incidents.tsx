@@ -616,10 +616,10 @@ export function Incidents() {
           </label>
           <div className="flex flex-wrap gap-2 md:col-span-2">
             <Button type="button" variant="outline" onClick={previewBlastRadius} disabled={previewing}>
-              {previewing ? "Loading preview..." : "Preview blast radius"}
+              {previewing ? translateNow("source.loading.preview.c02130fa90") : translateNow("source.preview.blast.radius.925ac72409")}
             </Button>
             <Button type="submit" disabled={executing}>
-              {executing ? "Executing..." : "Execute incident"}
+              {executing ? translateNow("source.executing.535a363214") : translateNow("source.execute.incident.c74e8b45e9")}
             </Button>
           </div>
         </form>
@@ -628,7 +628,7 @@ export function Incidents() {
         <datalist id="incident-delivery-method-options">
           {connectorRoster.map((item) => (
             <option key={item.name} value={item.name}>
-              {`${item.kind} · ${item.delivery_mode}`}
+              {translateNow("source.value1.value2.7c639bc99b", { value1: item.kind, value2: item.delivery_mode })}
             </option>
           ))}
         </datalist>
@@ -1127,7 +1127,7 @@ export function Incidents() {
           </label>
           <div className="md:col-span-2">
             <Button type="submit" disabled={ticketing}>
-              {ticketing ? "Queueing..." : "Queue ServiceNow ticket"}
+              {ticketing ? translateNow("source.queueing.d6e3ff1af9") : translateNow("source.queue.servicenow.ticket.f2988e9681")}
             </Button>
           </div>
         </form>
@@ -1200,7 +1200,7 @@ export function Incidents() {
                     evidenceRunsCursor ? (
                       <div>
                         <Button type="button" size="sm" variant="outline" disabled={evidenceRunsLoadingMore} onClick={() => void loadMoreEvidenceRuns()}>
-                          {evidenceRunsLoadingMore ? "Loading more runs..." : "Load more runs"}
+                          {evidenceRunsLoadingMore ? translateNow("source.loading.more.runs.89d0b6b736") : translateNow("source.load.more.runs.627fcc156a")}
                         </Button>
                       </div>
                     ) : undefined
@@ -1276,7 +1276,7 @@ export function Incidents() {
           <div className="md:col-span-2">
             <Button type="button" onClick={() => void startFleetReissuance()} disabled={runningFleet}>
               <Play className="h-4 w-4" aria-hidden="true" />
-              {runningFleet ? "Starting..." : "Start fleet run"}
+              {runningFleet ? translateNow("source.starting.82b93630a9") : translateNow("source.start.fleet.run.140963492c")}
             </Button>
           </div>
         </form>
@@ -1312,7 +1312,9 @@ export function Incidents() {
               {translateNow("source.fleet.evidence.exported.eecc6a3c77")}
             </h3>
             <p className="mt-2 max-w-full truncate font-mono text-xs text-muted-foreground">{fleetEvidence.evidence_bundle}</p>
-            <p className="mt-2 text-sm text-muted-foreground">{fleetEvidence.rollback_refs.join(", ") || "No rollback refs recorded."}</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {fleetEvidence.rollback_refs.join(", ") || translateNow("source.no.rollback.refs.recorded.0d22293f6b")}
+            </p>
           </section>
         )}
         <FleetReissuanceTable runs={fleetRuns} action={fleetAction} onAction={recordFleetAction} />
@@ -1377,7 +1379,7 @@ export function Incidents() {
         >
           <header className="border-b border-border px-5 py-4">
             <h2 id="playbook-run-detail-heading" className="text-title font-semibold">
-              {`Playbook run ${evidenceRunDetail.id}`}
+              {translateNow("source.playbook.run.value1.48f61c2511", { value1: evidenceRunDetail.id })}
             </h2>
             <p id="playbook-run-detail-description" className="mt-1 text-sm text-muted-foreground">
               {t("parity.eventSourcedRemediationRunEvidenceIncluding_cec725")}
@@ -1397,7 +1399,7 @@ export function Incidents() {
             <IncidentDetailRow term="Phase">{evidenceRunDetail.phase}</IncidentDetailRow>
             <IncidentDetailRow term="Created">
               {formatDateTime(evidenceRunDetail.created_at)}
-              {evidenceRunDetail.created_by ? ` · ${evidenceRunDetail.created_by}` : ""}
+              {evidenceRunDetail.created_by ? translateNow("source.value1.d610afc356", { value1: evidenceRunDetail.created_by }) : ""}
             </IncidentDetailRow>
             <IncidentDetailRow term="Updated">{formatDateTime(evidenceRunDetail.updated_at)}</IncidentDetailRow>
             <IncidentDetailRow term="Reason">{evidenceRunDetail.reason || "-"}</IncidentDetailRow>
@@ -1515,9 +1517,9 @@ function FleetReissuanceTable({
                 </p>
                 <p className="text-xs text-muted-foreground">{run.health_gates.map((gate) => `${gate.name}:${gate.status}`).join(", ")}</p>
               </td>
-              <td>{run.failed_targets?.length ? run.failed_targets.join(", ") : "none"}</td>
+              <td>{run.failed_targets?.length ? run.failed_targets.join(", ") : translateNow("source.none.140bedbf9c")}</td>
               <td>
-                <p className="font-medium">{run.evidence_bundle_format || "unavailable"}</p>
+                <p className="font-medium">{run.evidence_bundle_format || translateNow("source.unavailable.ba691ba042")}</p>
                 <p className="max-w-[14rem] truncate font-mono text-xs text-muted-foreground">{run.evidence_bundle || "-"}</p>
               </td>
               <td>
@@ -1527,7 +1529,7 @@ function FleetReissuanceTable({
                     variant="outline"
                     onClick={() => onAction("pause", run)}
                     disabled={action === `pause:${run.id}`}
-                    aria-label={`Pause fleet run ${shortId(run.id)}`}
+                    aria-label={translateNow("source.pause.fleet.run.value1.225d7f781f", { value1: shortId(run.id) })}
                   >
                     <Pause className="h-4 w-4" aria-hidden="true" />
                   </Button>
@@ -1536,7 +1538,7 @@ function FleetReissuanceTable({
                     variant="outline"
                     onClick={() => onAction("resume", run)}
                     disabled={action === `resume:${run.id}`}
-                    aria-label={`Resume fleet run ${shortId(run.id)}`}
+                    aria-label={translateNow("source.resume.fleet.run.value1.82d98d67fc", { value1: shortId(run.id) })}
                   >
                     <Play className="h-4 w-4" aria-hidden="true" />
                   </Button>
@@ -1545,7 +1547,7 @@ function FleetReissuanceTable({
                     variant="outline"
                     onClick={() => onAction("rollback", run)}
                     disabled={action === `rollback:${run.id}`}
-                    aria-label={`Rollback fleet run ${shortId(run.id)}`}
+                    aria-label={translateNow("source.rollback.fleet.run.value1.21446f0a1d", { value1: shortId(run.id) })}
                   >
                     <RotateCcw className="h-4 w-4" aria-hidden="true" />
                   </Button>
@@ -1554,7 +1556,7 @@ function FleetReissuanceTable({
                     variant="outline"
                     onClick={() => onAction("evidence", run)}
                     disabled={action === `evidence:${run.id}`}
-                    aria-label={`Export fleet run ${shortId(run.id)} evidence`}
+                    aria-label={translateNow("source.export.fleet.run.value1.evidence.6065920a10", { value1: shortId(run.id) })}
                   >
                     <Download className="h-4 w-4" aria-hidden="true" />
                   </Button>
@@ -1680,9 +1682,9 @@ function IncidentExecutionTable({ executions }: { executions: IncidentExecution[
                   {item.connector_delivery?.connector ?? ""} {item.connector_delivery?.target ?? ""}
                 </p>
               </td>
-              <td>{item.failed_targets.length ? item.failed_targets.join(", ") : "none"}</td>
+              <td>{item.failed_targets.length ? item.failed_targets.join(", ") : translateNow("source.none.140bedbf9c")}</td>
               <td>
-                <p className="font-medium">{item.evidence_bundle_format || "unavailable"}</p>
+                <p className="font-medium">{item.evidence_bundle_format || translateNow("source.unavailable.ba691ba042")}</p>
                 <p className="max-w-[18rem] truncate font-mono text-xs text-muted-foreground">{item.evidence_bundle || "-"}</p>
               </td>
             </tr>
@@ -1846,20 +1848,20 @@ function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue })
               </div>
               <p className="break-all font-mono text-xs text-muted-foreground">
                 {item.inventory_id}
-                {item.target_identity_id ? ` · ${item.target_identity_id}` : ""}
+                {item.target_identity_id ? translateNow("source.value1.d610afc356", { value1: item.target_identity_id }) : ""}
               </p>
               <p className="text-muted-foreground">{item.recommendation}</p>
               <p className="text-xs text-muted-foreground">
                 {item.playbook_id} · {item.action || item.kind} · {item.source} · {item.connector}
-                {item.target ? ` → ${item.target}` : ""} {translateNow("source.risk.b422944f55")} {item.risk_score} {translateNow("source.owner.6f9e1d3981")}{" "}
-                {item.owner_name}
-                {item.owner_email ? ` (${item.owner_email})` : ""}
+                {item.target ? translateNow("source.value1.87b66be02d", { value1: item.target }) : ""} {translateNow("source.risk.b422944f55")}{" "}
+                {item.risk_score} {translateNow("source.owner.6f9e1d3981")} {item.owner_name}
+                {item.owner_email ? translateNow("source.value1.1a37d34e22", { value1: item.owner_email }) : ""}
               </p>
               {(item.remove_scopes.length > 0 || item.recommended_scopes.length > 0) && (
                 <p className="break-all font-mono text-xs text-muted-foreground">
-                  {item.remove_scopes.length > 0 ? `remove: ${item.remove_scopes.join(", ")}` : ""}
+                  {item.remove_scopes.length > 0 ? translateNow("source.remove.value1.e3301e7b14", { value1: item.remove_scopes.join(", ") }) : ""}
                   {item.remove_scopes.length > 0 && item.recommended_scopes.length > 0 ? " · " : ""}
-                  {item.recommended_scopes.length > 0 ? `keep: ${item.recommended_scopes.join(", ")}` : ""}
+                  {item.recommended_scopes.length > 0 ? translateNow("source.keep.value1.208d6f9b94", { value1: item.recommended_scopes.join(", ") }) : ""}
                 </p>
               )}
               {item.reason && (

@@ -98,11 +98,11 @@ export function Profiles() {
               type="button"
               variant={p.active ? "default" : "outline"}
               size="sm"
-              aria-label={`View ${p.name} version ${p.version}`}
+              aria-label={translateNow("source.view.value1.version.value2.bcb23df652", { value1: p.name, value2: p.version })}
               onClick={() => void loadVersion(p)}
             >
               <Eye className="h-3.5 w-3.5" aria-hidden="true" />v{p.version}
-              {p.active ? " active" : ""}
+              {p.active ? translateNow("source.active.9687961165") : ""}
             </Button>
           ))}
         </div>
@@ -404,8 +404,8 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
           {profile.name} {translateNow("source.version.5ca4f3850c")} {profile.version}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          {profile.active ? "Active version." : "Historical version."} Certificates already bound to a profile keep audit evidence for the version that
-          evaluated issuance; creating a new profile version does not rewrite past decisions.
+          {profile.active ? translateNow("source.active.version.eee2755122") : translateNow("source.historical.version.5164d291c7")} Certificates already bound
+          to a profile keep audit evidence for the version that evaluated issuance; creating a new profile version does not rewrite past decisions.
         </p>
       </div>
 

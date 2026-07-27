@@ -41,7 +41,8 @@ export function CredentialActivityTimeline({
         {translateNow("source.credential.activity.timeline.e03f707dcc")}
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        {credentialLabel ? `${credentialLabel} has` : "This credential has"} {translateNow("source.lifecycle.state.plus.projected.connector.a.efb351b308")}
+        {credentialLabel ? translateNow("source.value1.has.b0d0cf279e", { value1: credentialLabel }) : translateNow("source.this.credential.has.c3e23e67fc")}{" "}
+        {translateNow("source.lifecycle.state.plus.projected.connector.a.efb351b308")}
       </p>
       <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
         {rows.map((row) => (

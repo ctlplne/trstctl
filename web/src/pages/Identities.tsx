@@ -633,7 +633,7 @@ export function Identities() {
           <p id="confirm-desc" className="mt-1 text-sm text-destructive">
             {pending.to === "revoked"
               ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
-              : `Retiring “${pending.name}” discards the credential record. This cannot be undone.`}
+              : translateNow("source.retiring.value1.discards.the.credential.re.7f368527a3", { value1: pending.name })}
           </p>
           <BlastRadiusImpactPanel state={pendingImpact} />
           <div className="mt-3 grid gap-3">
@@ -649,14 +649,18 @@ export function Identities() {
               placeholder={pending.name}
             />
             <label className="block text-sm font-medium text-destructive" htmlFor="destructive-reason">
-              {pending.to === "revoked" ? "Revocation reason" : "Transition reason"}
+              {pending.to === "revoked" ? translateNow("source.revocation.reason.b11670420f") : translateNow("source.transition.reason.2b9e603491")}
             </label>
             <textarea
               id="destructive-reason"
               value={pendingReason}
               onChange={(e) => setPendingReason(e.target.value)}
               className="min-h-20 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
-              placeholder={pending.to === "revoked" ? "e.g. key compromise CAB-1234" : "e.g. record cleanup approved in CAB-1234"}
+              placeholder={
+                pending.to === "revoked"
+                  ? translateNow("source.e.g.key.compromise.cab.1234.ff97b4f9ff")
+                  : translateNow("source.e.g.record.cleanup.approved.in.cab.1234.8cc38f337d")
+              }
             />
           </div>
           <div className="mt-3 flex gap-2">
@@ -671,7 +675,7 @@ export function Identities() {
                 void act(p.id, p.to, pendingReason);
               }}
             >
-              {`Yes, ${pending.label.toLowerCase()}`}
+              {translateNow("source.yes.value1.0cb667502c", { value1: pending.label.toLowerCase() })}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={clearPending}>
               {translateNow("source.cancel.19766ed6cc")}
@@ -762,7 +766,7 @@ export function Identities() {
                 .map((item) => (
                   <li key={item.id}>
                     {(items ?? []).find((identity) => identity.id === item.id)?.name ?? item.id} {item.status}
-                    {item.error ? `: ${item.error}` : ""}
+                    {item.error ? translateNow("source.value1.92dd63d2f3", { value1: item.error }) : ""}
                   </li>
                 ))}
             </ul>
@@ -853,7 +857,13 @@ export function Identities() {
               type={decommissionType === "inactivity" ? "datetime-local" : "text"}
               value={decommissionTarget}
               onChange={(event) => setDecommissionTarget(event.target.value)}
-              placeholder={decommissionType === "vendor_term" ? "Acme SaaS" : decommissionType === "departure" ? "alice@example.com" : undefined}
+              placeholder={
+                decommissionType === "vendor_term"
+                  ? translateNow("source.acme.saas.5d97e28912")
+                  : decommissionType === "departure"
+                    ? translateNow("source.alice.example.com.ff8d9819fc")
+                    : undefined
+              }
               required
             />
           </label>
@@ -1116,9 +1126,9 @@ function IdentityDetailPanel({
         <>
           <section aria-labelledby="identity-kind-heading" className="mb-4 rounded-md border border-border p-3">
             <h3 id="identity-kind-heading" className="font-semibold">
-              {kind?.title ?? "Identity"}
+              {kind?.title ?? translateNow("source.identity.999f23fcd7")}
             </h3>
-            <p className="mt-1 text-muted-foreground">{kind?.description ?? "A non-human identity bound to this tenant."}</p>
+            <p className="mt-1 text-muted-foreground">{kind?.description ?? translateNow("source.a.non.human.identity.bound.to.this.tenant.f58740df6d")}</p>
             {terminal && <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs font-medium text-foreground">{terminal}</p>}
           </section>
 
@@ -1159,7 +1169,7 @@ function IdentityDetailPanel({
                     {translateNow("source.issuer.39e02c46a0")} {identity.issuer_id}
                   </a>
                 ) : (
-                  "No issuer bound"
+                  translateNow("source.no.issuer.bound.d1e424a34f")
                 )}
               </dd>
             </div>
@@ -1223,7 +1233,12 @@ function IdentityDetailPanel({
                       {translateNow("source.move.to.beb8194bc4")} {target}
                     </Button>
                     <p id={reasonId} className="text-xs text-muted-foreground">
-                      {denied || (action ? `Valid from ${state}.` : target === state ? "Already in this state." : `Invalid from ${state || "unknown"}.`)}
+                      {denied ||
+                        (action
+                          ? translateNow("source.valid.from.value1.ae82fe20dd", { value1: state })
+                          : target === state
+                            ? translateNow("source.already.in.this.state.f32a2089a5")
+                            : translateNow("source.invalid.from.value1.26f942026d", { value1: state || "unknown" }))}
                     </p>
                   </div>
                 );

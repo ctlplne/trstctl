@@ -42,13 +42,71 @@ const excludedPathParts = [
 ];
 
 // C-I1 re-audit (DA-14): candidates come from the TypeScript AST instead of
-// regexes. JSX text nodes, whitelisted JSX string attributes, and whitelisted
-// object-property string literals are the entire user-facing surface; comments,
-// type positions, and generics can no longer masquerade as UI copy.
+// regexes. JSX text nodes, whitelisted JSX attributes/properties, and the
+// string/template arms that can render directly from JSX expressions are the
+// guarded user-facing surface; comments, type positions, translation-key calls,
+// class expressions, and generics cannot masquerade as UI copy.
 const attrNames = new Set(["aria-label", "aria-description", "placeholder", "title", "alt"]);
-const propNames = new Set(["label", "title", "description", "heading", "summary", "message", "detail", "emptyTitle", "emptyDescription", "tooltip", "copy"]);
+const propNames = new Set([
+  "label",
+  "title",
+  "description",
+  "heading",
+  "summary",
+  "message",
+  "detail",
+  "warning",
+  "emptyTitle",
+  "emptyDescription",
+  "tooltip",
+  "copy",
+]);
 
-function astCandidates(file, source) {
+function templateValue(node) {
+  if (ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  let value = node.head.text;
+  for (const [index, span] of node.templateSpans.entries()) {
+    value += `{value${index + 1}}${span.literal.text}`;
+  }
+  return value;
+}
+
+function renderedExpressionCandidates(node, sf, out) {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node) ||
+    ts.isNonNullExpression(node) ||
+    ts.isTypeAssertionExpression(node)
+  ) {
+    renderedExpressionCandidates(node.expression, sf, out);
+    return;
+  }
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    out.push({ value: node.text, index: node.getStart(sf) });
+    return;
+  }
+  if (ts.isTemplateExpression(node)) {
+    out.push({ value: templateValue(node), index: node.getStart(sf) });
+    return;
+  }
+  if (ts.isConditionalExpression(node)) {
+    renderedExpressionCandidates(node.whenTrue, sf, out);
+    renderedExpressionCandidates(node.whenFalse, sf, out);
+    return;
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      node.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+      node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+  ) {
+    renderedExpressionCandidates(node.left, sf, out);
+    renderedExpressionCandidates(node.right, sf, out);
+  }
+}
+
+export function astCandidates(file, source) {
   const scriptKind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, scriptKind);
   const out = [];
@@ -57,10 +115,21 @@ function astCandidates(file, source) {
       out.push({ value: node.text, index: node.getStart(sf) });
     } else if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
       const name = node.name.getText(sf);
-      if (attrNames.has(name)) out.push({ value: node.initializer.text, index: node.initializer.getStart(sf) });
+      if (attrNames.has(name)) {
+        out.push({ value: node.initializer.text, index: node.initializer.getStart(sf) });
+      }
     } else if (ts.isPropertyAssignment(node) && ts.isStringLiteral(node.initializer)) {
       const name = ts.isIdentifier(node.name) || ts.isStringLiteral(node.name) ? node.name.text : "";
-      if (propNames.has(name)) out.push({ value: node.initializer.text, index: node.initializer.getStart(sf) });
+      if (propNames.has(name)) {
+        out.push({ value: node.initializer.text, index: node.initializer.getStart(sf) });
+      }
+    } else if (ts.isJsxExpression(node) && node.expression) {
+      if (ts.isJsxAttribute(node.parent)) {
+        const name = node.parent.name.getText(sf);
+        if (attrNames.has(name)) renderedExpressionCandidates(node.expression, sf, out);
+      } else {
+        renderedExpressionCandidates(node.expression, sf, out);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -91,10 +160,12 @@ function normalize(value) {
 function isUserFacing(value) {
   if (!value || value.length < 2) return false;
   if (!/[A-Za-z]/.test(value)) return false;
-  if (/[{}[\];=]/.test(value)) return false;
+  if (/[[\];=]/.test(value)) return false;
   if (/\b(?:const|expect|mock|return|useState|Record)\b/.test(value)) return false;
   if (/^(true|false|null|undefined|return|import|export)$/i.test(value)) return false;
   if (/^[a-z0-9-]+:[a-z0-9-]+$/i.test(value)) return false;
+  const tokens = value.split(/\s+/);
+  if (tokens.every((token) => token.startsWith("--") || /^(?:border|bg|text)-/.test(token))) return false;
   return true;
 }
 
@@ -182,22 +253,28 @@ function loadBudget() {
   return budget.maxExtractedMessages;
 }
 
-const entries = extract();
-const next = emit(entries);
+function main() {
+  const entries = extract();
+  const next = emit(entries);
 
-if (CHECK) {
-  const current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
-  if (current !== next) {
-    console.error("web/src/i18n/extractedMessages.gen.ts is stale; run npm run i18n:extract");
-    process.exit(1);
+  if (CHECK) {
+    const current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
+    if (current !== next) {
+      console.error("web/src/i18n/extractedMessages.gen.ts is stale; run npm run i18n:extract");
+      process.exit(1);
+    }
+    const maxExtractedMessages = loadBudget();
+    if (entries.length > maxExtractedMessages) {
+      console.error(
+        `extractedMessages contains ${entries.length} source literals, above the migration budget of ${maxExtractedMessages}; move new copy into typed runtime message keys or lower the budget after migration`,
+      );
+      process.exit(1);
+    }
+  } else {
+    writeFileSync(OUT, next);
   }
-  const maxExtractedMessages = loadBudget();
-  if (entries.length > maxExtractedMessages) {
-    console.error(
-      `extractedMessages contains ${entries.length} source literals, above the migration budget of ${maxExtractedMessages}; move new copy into typed runtime message keys or lower the budget after migration`,
-    );
-    process.exit(1);
-  }
-} else {
-  writeFileSync(OUT, next);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
 }

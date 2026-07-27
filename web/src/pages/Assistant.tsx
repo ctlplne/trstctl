@@ -97,12 +97,12 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
         )}
         <span className="rounded-control border border-border px-2 py-1">
           <HelpTerm title={translateNow("source.grounded.means.the.answer.cites.tenant.evi.0c488b912f")}>
-            {answer.grounded ? "Grounded" : "No cited evidence"}
+            {answer.grounded ? translateNow("source.grounded.5b6f73f04f") : translateNow("source.no.cited.evidence.e48d4838c2")}
           </HelpTerm>
         </span>
         <span className="rounded-control border border-border px-2 py-1">
           <HelpTerm title={translateNow("source.sufficient.means.the.cited.evidence.is.eno.07cb72f36c")}>
-            {answer.sufficient ? "Sufficient" : "Insufficient"}
+            {answer.sufficient ? translateNow("source.sufficient.211fa4c5d7") : translateNow("source.insufficient.ca57f7a4da")}
           </HelpTerm>
         </span>
       </div>
@@ -151,29 +151,29 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
           <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="ui-panel p-comfortable">
               <dt className="text-caption text-muted-foreground">{translateNow("source.surface.0905f7f590")}</dt>
-              <dd className="mt-1 text-title font-semibold">{loading ? "loading" : enabled}</dd>
+              <dd className="mt-1 text-title font-semibold">{loading ? translateNow("source.loading.b4a070a2d3") : enabled}</dd>
             </div>
             <div className="ui-panel p-comfortable">
               <dt className="text-caption text-muted-foreground">{translateNow("source.model.5e2c614c23")}</dt>
-              <dd className="mt-1 text-title font-semibold">{loading ? "loading" : model}</dd>
+              <dd className="mt-1 text-title font-semibold">{loading ? translateNow("source.loading.b4a070a2d3") : model}</dd>
             </div>
             <div className="ui-panel p-comfortable">
               <dt className="text-caption text-muted-foreground">{translateNow("source.egress.66a3afae15")}</dt>
-              <dd className="mt-1 text-title font-semibold">{loading ? "loading" : egress}</dd>
+              <dd className="mt-1 text-title font-semibold">{loading ? translateNow("source.loading.b4a070a2d3") : egress}</dd>
             </div>
             <div className="ui-panel p-comfortable">
               <dt className="text-caption text-muted-foreground">{t("assistant.runtime.personalData")}</dt>
-              <dd className="mt-1 text-title font-semibold">{loading ? "loading" : personalData.label}</dd>
+              <dd className="mt-1 text-title font-semibold">{loading ? translateNow("source.loading.b4a070a2d3") : personalData.label}</dd>
               <p className="mt-2 text-caption text-muted-foreground">{loading ? t("assistant.runtime.statusLoading") : personalData.detail}</p>
             </div>
             <div className="ui-panel p-comfortable">
               <dt className="text-caption text-muted-foreground">{translateNow("source.endpoint.host.4f0d916bb9")}</dt>
-              <dd className="mt-1 break-words text-title font-semibold">{loading ? "loading" : endpoint}</dd>
+              <dd className="mt-1 break-words text-title font-semibold">{loading ? translateNow("source.loading.b4a070a2d3") : endpoint}</dd>
             </div>
           </dl>
           <p className="text-body text-muted-foreground">
-            {translateNow("source.redaction.boundary.134ed7be9f")} {status?.redaction ?? "default-redactor"}; residual refusal gate:{" "}
-            {status?.residual_refusal_gate === false ? "inactive" : "active"}.
+            {translateNow("source.redaction.boundary.134ed7be9f")} {status?.redaction ?? translateNow("source.default.redactor.fa0bdd3f61")}; residual refusal
+            gate: {status?.residual_refusal_gate === false ? translateNow("source.inactive.d1022618b9") : translateNow("source.active.9687961165")}.
           </p>
           {error && (
             <UnavailableState title={translateNow("source.ai.runtime.status.unavailable.b36957005d")}>
@@ -195,11 +195,11 @@ function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: stri
       <dl className="mt-2 grid gap-2 md:grid-cols-3">
         <div>
           <dt className="text-caption text-muted-foreground">{translateNow("source.surfaces.fbb4dbb2d8")}</dt>
-          <dd>{surfaces.join(", ") || "none selected"}</dd>
+          <dd>{surfaces.join(", ") || translateNow("source.none.selected.d2a589f7f4")}</dd>
         </div>
         <div>
           <dt className="text-caption text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
-          <dd>{subject.trim() || "not scoped"}</dd>
+          <dd>{subject.trim() || translateNow("source.not.scoped.dcd55e3956")}</dd>
         </div>
         <div>
           <dt className="text-caption text-muted-foreground">{translateNow("source.limit.674b0ed54b")}</dt>
@@ -230,7 +230,8 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
         {translateNow("source.permission.boundary.c0d351ef86")}
       </h3>
       <p className="mt-2 text-muted-foreground">
-        {translateNow("source.tools.are.7c933884d0")} {readOnly ? "read-only" : "treated as unavailable until policy allows them"}{" "}
+        {translateNow("source.tools.are.7c933884d0")}{" "}
+        {readOnly ? translateNow("source.read.only.4fed3970dc") : translateNow("source.treated.as.unavailable.until.policy.allows.0794a88921")}{" "}
         {translateNow("source.and.cannot.remediate.or.mutate.credentials.564b159ab9")}
       </p>
     </section>
@@ -342,7 +343,7 @@ export function Assistant() {
         actions={
           tools.data ? (
             <span className="rounded-control border border-border bg-card px-3 py-2 text-caption font-medium shadow-elevation1">
-              {tools.data.read_only ? "Read-only tools" : "Write-capable tools"}
+              {tools.data.read_only ? translateNow("source.read.only.tools.dd28b5cb26") : translateNow("source.write.capable.tools.f7a38bfb1e")}
             </span>
           ) : undefined
         }
@@ -416,7 +417,7 @@ export function Assistant() {
               </fieldset>
               <Button type="submit" disabled={loading === "query"}>
                 <Bot aria-hidden="true" className="h-4 w-4" />
-                {loading === "query" ? "Asking" : "Ask"}
+                {loading === "query" ? translateNow("source.asking.744700ab93") : translateNow("source.ask.b8c209cdea")}
               </Button>
             </form>
             <AnswerPanel answer={queryAnswer} />
@@ -455,7 +456,7 @@ export function Assistant() {
               </div>
               <Button type="submit" disabled={loading === "rca"}>
                 <ShieldAlert aria-hidden="true" className="h-4 w-4" />
-                {loading === "rca" ? "Analyzing" : "Analyze"}
+                {loading === "rca" ? translateNow("source.analyzing.0141ee9533") : translateNow("source.analyze.cad5bf29c7")}
               </Button>
             </form>
             <AnswerPanel answer={rcaAnswer} />
@@ -515,7 +516,7 @@ export function Assistant() {
                 </div>
                 <Button type="submit" disabled={loading === "mcp" || !selectedTool}>
                   <Wrench aria-hidden="true" className="h-4 w-4" />
-                  {loading === "mcp" ? "Invoking" : "Invoke"}
+                  {loading === "mcp" ? translateNow("source.invoking.fb01312da7") : translateNow("source.invoke.90092e5fb8")}
                 </Button>
               </form>
             )}

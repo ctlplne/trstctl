@@ -1580,11 +1580,17 @@ function CeremonyPanel({
             variant="outline"
             disabled={busy || complete}
             onClick={() => onApprove(ceremony.id)}
-            aria-label={`Approve ceremony ${ceremony.id}`}
+            aria-label={translateNow("source.approve.ceremony.value1.36200975a5", { value1: ceremony.id })}
           >
             {translateNow("source.approve.6007acbe30")}
           </Button>
-          <Button type="button" variant="ghost" disabled={busy} onClick={() => onView(ceremony.id)} aria-label={`View ceremony ${ceremony.id}`}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onView(ceremony.id)}
+            aria-label={translateNow("source.view.ceremony.value1.4ed0eab2e0", { value1: ceremony.id })}
+          >
             {t("parity.view_69bd4e")}
           </Button>
         </div>
@@ -1625,7 +1631,9 @@ function CeremonyDetailDialog({ ceremony, onClose }: { ceremony: CAKeyCeremony; 
       <div className="grid gap-4 p-5 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge vocabulary="lifecycle" value={ceremony.status} />
-          <span className="text-body font-medium">{`${ceremony.approvals} of ${ceremony.threshold} approvals`}</span>
+          <span className="text-body font-medium">
+            {translateNow("source.value1.of.value2.approvals.cb7e517061", { value1: ceremony.approvals, value2: ceremony.threshold })}
+          </span>
         </div>
         <dl className="grid gap-3 sm:grid-cols-2">
           <KeyValue label="Purpose" value={ceremony.purpose} mono />
@@ -1676,7 +1684,13 @@ function ServedAuthoritiesPanel({
         header: "Issuance",
         cell: (authority) => (
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => onIssueLeaf(authority)} aria-label={`Issue leaf from ${authority.common_name}`}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onIssueLeaf(authority)}
+              aria-label={translateNow("source.issue.leaf.from.value1.4525393020", { value1: authority.common_name })}
+            >
               {t("parity.issueLeaf_f1c3ee")}
             </Button>
             <Button
@@ -1684,7 +1698,7 @@ function ServedAuthoritiesPanel({
               size="sm"
               variant="outline"
               onClick={() => onSignCSR(authority)}
-              aria-label={`Sign intermediate CSR with ${authority.common_name}`}
+              aria-label={translateNow("source.sign.intermediate.csr.with.value1.4a29b8342b", { value1: authority.common_name })}
             >
               {t("parity.signIntermediateCsr_cf1361")}
             </Button>
@@ -1797,8 +1811,8 @@ function CreateAuthorityDialog({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {isRoot
-              ? "Mints a signer-backed root from a quorum-approved key ceremony."
-              : "Mints a signer-backed intermediate chained to a served parent authority."}
+              ? translateNow("source.mints.a.signer.backed.root.from.a.quorum.a.592ee04526")
+              : translateNow("source.mints.a.signer.backed.intermediate.chained.5b33f94914")}
           </p>
         </div>
         <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeCreateCaForm_e01a8e")}>
@@ -1806,7 +1820,13 @@ function CreateAuthorityDialog({
         </Button>
       </header>
       <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
-        {error && <ErrorState title={isRoot ? "Root CA create failed" : "Intermediate CA create failed"}>{error}</ErrorState>}
+        {error && (
+          <ErrorState
+            title={isRoot ? translateNow("source.root.ca.create.failed.6cab086b1e") : translateNow("source.intermediate.ca.create.failed.508df7468d")}
+          >
+            {error}
+          </ErrorState>
+        )}
         <label className="grid gap-1 text-body font-medium">
           {t("parity.ceremonyId_6f8ee6")}
           <input
@@ -2148,9 +2168,15 @@ function CertificatePEMBlock({ label, pem }: { label: string; pem: string }) {
     <div className="grid gap-1">
       <div className="flex items-center justify-between gap-2">
         <span className="text-body font-medium">{label}</span>
-        <Button type="button" size="sm" variant="outline" onClick={() => void copy()} aria-label={`Copy ${label}`}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => void copy()}
+          aria-label={translateNow("source.copy.value1.6dd8303613", { value1: label })}
+        >
           <Copy className="h-4 w-4" aria-hidden="true" />
-          {copied ? "Copied" : "Copy"}
+          {copied ? translateNow("source.copied.8d525e5f15") : translateNow("source.copy.e21f935f11")}
         </Button>
       </div>
       <pre className="max-h-48 overflow-auto rounded-control border border-border bg-muted/40 p-3 font-mono text-xs">{pem}</pre>
@@ -2191,10 +2217,18 @@ function IssuerCatalogCard({ onConfigure, type }: { type: IssuerTypeConfig; onCo
           </span>
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold">{type.name}</h3>
-            <p className="text-xs text-muted-foreground">{type.internal ? "internal" : "external"}</p>
+            <p className="text-xs text-muted-foreground">
+              {type.internal ? translateNow("source.internal.3bed2cb3a3") : translateNow("source.external.3c4623849a")}
+            </p>
           </div>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => onConfigure(type)} aria-label={`Configure ${type.name}`}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onConfigure(type)}
+          aria-label={translateNow("source.configure.value1.852b3f111c", { value1: type.name })}
+        >
           <Plus className="h-4 w-4" aria-hidden="true" />
           {translateNow("source.configure.6defafa2ca")}
         </Button>
@@ -2253,7 +2287,7 @@ function CreateIssuerDialog({
             {translateNow("source.configure.6defafa2ca")} {type.name} {translateNow("source.issuer.535c6f8eb5")}
           </h2>
           <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
-            {type.internal ? "Local signing authority" : "External CA integration"}
+            {type.internal ? translateNow("source.local.signing.authority.0461c7306a") : translateNow("source.external.ca.integration.c66b92973a")}
           </p>
         </div>
         <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={translateNow("source.close.issuer.form.b40f6c2037")}>
@@ -2348,7 +2382,7 @@ function IssuerConfigFieldControl({ field, onChange, value }: { field: IssuerCon
           <option value="">{translateNow("source.select.2a78025de6")}</option>
           {field.options?.map((option) => (
             <option key={option} value={option}>
-              {option || "default"}
+              {option || translateNow("source.default.37a8eec1ce")}
             </option>
           ))}
         </select>
@@ -2482,7 +2516,9 @@ function ProbeBanner({ onDismiss, probe }: { probe: ProbeState; onDismiss: () =>
           }
           aria-hidden="true"
         />
-        <p className="min-w-0 break-words font-medium">{`${probe.issuerName}: ${probe.message}`}</p>
+        <p className="min-w-0 break-words font-medium">
+          {translateNow("source.value1.value2.efae3eb968", { value1: probe.issuerName, value2: probe.message })}
+        </p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
         {translateNow("source.dismiss.48845bff33")}
@@ -2516,7 +2552,7 @@ function ManagedKeyPanel({
             variant="outline"
             disabled={busy}
             onClick={() => onAction("rotate", managedKey.key_id)}
-            aria-label={`Rotate key ${managedKey.key_id}`}
+            aria-label={translateNow("source.rotate.key.value1.f9e66701f9", { value1: managedKey.key_id })}
           >
             {translateNow("source.rotate.c3613b1704")}
           </Button>
@@ -2526,7 +2562,7 @@ function ManagedKeyPanel({
             variant="outline"
             disabled={busy}
             onClick={() => onAction("revoke", managedKey.key_id)}
-            aria-label={`Revoke key ${managedKey.key_id}`}
+            aria-label={translateNow("source.revoke.key.value1.2e6b1284fb", { value1: managedKey.key_id })}
           >
             {translateNow("source.revoke.87e6d00bbf")}
           </Button>
@@ -2536,7 +2572,7 @@ function ManagedKeyPanel({
             variant="outline"
             disabled={busy}
             onClick={() => onAction("zeroize", managedKey.key_id)}
-            aria-label={`Zeroize key ${managedKey.key_id}`}
+            aria-label={translateNow("source.zeroize.key.value1.4e92e53f48", { value1: managedKey.key_id })}
           >
             {translateNow("source.zeroize.9fb44dd187")}
           </Button>
@@ -2583,7 +2619,7 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
             <tr key={issuer.id} className="align-top">
               <td className="font-medium">{issuer.name}</td>
               <td>{issuer.kind}</td>
-              <td>{issuer.internal ? "internal" : "external"}</td>
+              <td>{issuer.internal ? translateNow("source.internal.3bed2cb3a3") : translateNow("source.external.3c4623849a")}</td>
               <td>{issuer.chain?.length ? issuer.chain.join(" -> ") : "-"}</td>
               <td className="max-w-sm break-all font-mono text-xs">{issuer.public_key || "-"}</td>
               <td>
@@ -2598,7 +2634,7 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
                   variant="outline"
                   disabled={probe?.issuerID === issuer.id && probe.status === "pending"}
                   onClick={() => onTestConnection(issuer)}
-                  aria-label={`Test connection ${issuer.name}`}
+                  aria-label={translateNow("source.test.connection.value1.3b3d22ad35", { value1: issuer.name })}
                 >
                   {translateNow("source.test.532eaabd95")}
                 </Button>

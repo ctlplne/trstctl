@@ -41,7 +41,7 @@ function browserTransport(): { label: string; detail: string; warning?: string }
   return {
     label: translateNow("source.local.preview.http.957e66ac19"),
     detail: translateNow("source.the.local.vite.preview.is.http.production.7f2e105c44"),
-    warning: "Plaintext local preview. No private cert/key bytes are exposed in this browser view.",
+    warning: translateNow("source.plaintext.local.preview.no.private.cert.ke.e5059d6667"),
   };
 }
 
@@ -271,11 +271,15 @@ export function AdminSystem() {
             <dl className="mt-3 grid gap-2 text-sm">
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.mode.visible.to.ui.8520f90032")}</dt>
-                <dd>{preview ? "local preview session" : "authenticated session"}</dd>
+                <dd>{preview ? translateNow("source.local.preview.session.04a12d6877") : translateNow("source.authenticated.session.e651c7182d")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.csrf.cookie.04ee351267")}</dt>
-                <dd>{csrfPresent ? "present for browser mutations" : "not visible in this browser context"}</dd>
+                <dd>
+                  {csrfPresent
+                    ? translateNow("source.present.for.browser.mutations.f21c11a696")
+                    : translateNow("source.not.visible.in.this.browser.context.09390ab73b")}
+                </dd>
               </div>
             </dl>
             <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.oidc.mapping.status.and.api.token.administ.565d8d27fd")}</p>
@@ -432,19 +436,19 @@ export function AdminSystem() {
             <dl className="grid content-start gap-2 text-sm">
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.capability.5faf58a69d")}</dt>
-                <dd>{enterpriseSupport?.capability ?? "CAP-MODEL-04"}</dd>
+                <dd>{enterpriseSupport?.capability ?? translateNow("source.cap.model.04.d945df90f4")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.license.feature.de93785a58")}</dt>
-                <dd className="font-mono text-xs">{enterpriseSupport?.license_feature ?? "ha_support"}</dd>
+                <dd className="font-mono text-xs">{enterpriseSupport?.license_feature ?? translateNow("source.ha.support.6fd6a7fc16")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.license.tier.0c9a751553")}</dt>
-                <dd>{enterpriseSupport?.tier ?? editions?.tier ?? "community"}</dd>
+                <dd>{enterpriseSupport?.tier ?? editions?.tier ?? translateNow("source.community.f354ee99e2")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.contract.boundary.67a4070e64")}</dt>
-                <dd>{enterpriseSupport?.contract_boundary ?? "Commercial support terms control legal SLA credits and named contacts."}</dd>
+                <dd>{enterpriseSupport?.contract_boundary ?? translateNow("source.commercial.support.terms.control.legal.sla.dd90f4015f")}</dd>
               </div>
             </dl>
             <div className="grid gap-4">
@@ -543,11 +547,11 @@ export function AdminSystem() {
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.provider.plane.47b8ba879c")}</dt>
-                <dd>{managedOffering?.provider_plane_mode ?? "off"}</dd>
+                <dd>{managedOffering?.provider_plane_mode ?? translateNow("source.off.b4dc66dde8")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.license.tier.0c9a751553")}</dt>
-                <dd>{managedOffering?.tier ?? editions?.tier ?? "community"}</dd>
+                <dd>{managedOffering?.tier ?? editions?.tier ?? translateNow("source.community.f354ee99e2")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{t("platform.editions.billingUnit")}</dt>
@@ -559,17 +563,17 @@ export function AdminSystem() {
                   <dd>
                     {managedOffering?.managed_customer_band
                       ? formatNumberPolicy(managedOffering.managed_customer_band, formatPolicy)
-                      : "Negotiated / unlimited"}
+                      : translateNow("source.negotiated.unlimited.9939fd4cf1")}
                   </dd>
                 </div>
               ) : null}
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.event.source.60dbb37270")}</dt>
-                <dd>{managedOffering?.event_type ?? "tenant.registered"}</dd>
+                <dd>{managedOffering?.event_type ?? translateNow("source.tenant.registered.62865a2986")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.mutation.idempotency.e5fe0e928c")}</dt>
-                <dd>{managedOffering?.idempotency_required ? "required" : "-"}</dd>
+                <dd>{managedOffering?.idempotency_required ? translateNow("source.required.d0a3630555") : "-"}</dd>
               </div>
               {lastManagedTenant && (
                 <div>
@@ -743,7 +747,7 @@ export function AdminEditions() {
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.customer.bf3763383a")}</dt>
-                <dd>{editions?.customer ?? "community core"}</dd>
+                <dd>{editions?.customer ?? translateNow("source.community.core.9de2dc1902")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.expiry.6956d81401")}</dt>
@@ -756,21 +760,30 @@ export function AdminEditions() {
               {editions?.tier === "provider" ? (
                 <div>
                   <dt className="font-medium text-muted-foreground">{t("platform.editions.managedCustomerBand")}</dt>
-                  <dd>{editions.managed_customer_band ? formatNumberPolicy(editions.managed_customer_band, formatPolicy) : "Negotiated / unlimited"}</dd>
+                  <dd>
+                    {editions.managed_customer_band
+                      ? formatNumberPolicy(editions.managed_customer_band, formatPolicy)
+                      : translateNow("source.negotiated.unlimited.9939fd4cf1")}
+                  </dd>
                 </div>
               ) : null}
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.fips.posture.4051e94687")}</dt>
                 <dd className="grid gap-1">
                   <span>
-                    {editions?.fips?.module_active ? "FIPS module active" : "FIPS module inactive"}
-                    {editions?.fips?.required ? " · required" : ""}
-                    {editions?.fips?.self_test_passed ? " · self-test passed" : " · self-test not confirmed"}
+                    {editions?.fips?.module_active
+                      ? translateNow("source.fips.module.active.76cb6077b6")
+                      : translateNow("source.fips.module.inactive.fac8ddb35b")}
+                    {editions?.fips?.required ? translateNow("source.required.cdc2689fe2") : ""}
+                    {editions?.fips?.self_test_passed
+                      ? translateNow("source.self.test.passed.c28b5c9b12")
+                      : translateNow("source.self.test.not.confirmed.03a528b202")}
                   </span>
                   {editions?.fips?.validated_module_path ? (
                     <span>
-                      {editions.fips.standard ?? "FIPS 140-3"} · {editions.fips.module ?? "Go Cryptographic Module"} ·{" "}
-                      {editions.fips.build_target ?? "make fips-build"}
+                      {editions.fips.standard ?? translateNow("source.fips.140.3.b95c3c39f5")} ·{" "}
+                      {editions.fips.module ?? translateNow("source.go.cryptographic.module.0acf566e1e")} ·{" "}
+                      {editions.fips.build_target ?? translateNow("source.make.fips.build.ce51354815")}
                     </span>
                   ) : null}
                   {editions?.fips?.ci_gate ? <span>{editions.fips.ci_gate}</span> : null}
@@ -839,7 +852,7 @@ export function AdminEditions() {
                     {(distribution.supported_host_archives ?? []).map((archive) => (
                       <span key={`${archive.os_arch}-${archive.postgres_version}`} className="font-mono text-xs">
                         {archive.os_arch} {translateNow("source.postgresql.17197ea102")} {archive.postgres_version}
-                        {archive.evaluation_only ? " · evaluation only" : ""}
+                        {archive.evaluation_only ? translateNow("source.evaluation.only.7e42530821") : ""}
                       </span>
                     ))}
                     {(distribution.supported_host_archives ?? []).length === 0 && <span className="text-muted-foreground">-</span>}
@@ -1347,7 +1360,7 @@ export function AdminAccess() {
                   pamCursor ? (
                     <div>
                       <Button type="button" size="sm" variant="outline" disabled={pamLoadingMore} onClick={() => void loadMorePAMSessions()}>
-                        {pamLoadingMore ? "Loading more sessions..." : "Load more sessions"}
+                        {pamLoadingMore ? translateNow("source.loading.more.sessions.25d47273c8") : translateNow("source.load.more.sessions.e04b242241")}
                       </Button>
                     </div>
                   ) : undefined
@@ -1380,7 +1393,7 @@ export function AdminAccess() {
               <dl className="mt-3 grid gap-2">
                 <div>
                   <dt className="font-medium text-muted-foreground">{translateNow("source.enabled.92c1cdfdf4")}</dt>
-                  <dd>{oidc?.enabled ? "yes" : "no"}</dd>
+                  <dd>{oidc?.enabled ? translateNow("source.yes.8a798890fe") : translateNow("source.no.9390298f3f")}</dd>
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{translateNow("source.claims.1c85c12229")}</dt>
@@ -1388,7 +1401,11 @@ export function AdminAccess() {
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{translateNow("source.mappings.f64ec16b0d")}</dt>
-                  <dd>{oidc?.tenant_mappings?.length ? oidc.tenant_mappings.map((m) => m.group || m.subject || m.claim).join(", ") : "none"}</dd>
+                  <dd>
+                    {oidc?.tenant_mappings?.length
+                      ? oidc.tenant_mappings.map((m) => m.group || m.subject || m.claim).join(", ")
+                      : translateNow("source.none.140bedbf9c")}
+                  </dd>
                 </div>
               </dl>
             </div>
@@ -1433,7 +1450,7 @@ export function AdminAccess() {
                     <tr key={token.id} className="align-top">
                       <td className="font-medium">{token.subject}</td>
                       <td className="font-mono text-xs">{token.scopes.join(", ")}</td>
-                      <td>{token.revoked_at ? "revoked" : "active"}</td>
+                      <td>{token.revoked_at ? translateNow("source.revoked.4bb47f186d") : translateNow("source.active.9687961165")}</td>
                       <td>{formatOptionalDate(token.created_at, formatPolicy)}</td>
                     </tr>
                   ))}
@@ -1455,7 +1472,7 @@ export function AdminAccess() {
           >
             <header className="border-b border-border px-5 py-4">
               <h2 id="pam-session-detail-heading" className="text-title font-semibold">
-                {`Privileged session ${pamDetail.id}`}
+                {translateNow("source.privileged.session.value1.2958e09fb1", { value1: pamDetail.id })}
               </h2>
               <p id="pam-session-detail-description" className="mt-1 text-sm text-muted-foreground">
                 {t("parity.brokerEvidenceForThisJustIn_44ca48")}
@@ -1476,7 +1493,7 @@ export function AdminAccess() {
               </PlatformDetailRow>
               <PlatformDetailRow term="Role">{pamDetail.role}</PlatformDetailRow>
               <PlatformDetailRow term="Target" mono>
-                {`${pamDetail.target_type} · ${pamDetail.target_id}`}
+                {translateNow("source.value1.value2.7c639bc99b", { value1: pamDetail.target_type, value2: pamDetail.target_id })}
               </PlatformDetailRow>
               <PlatformDetailRow term="Reason">{pamDetail.reason || "-"}</PlatformDetailRow>
               <PlatformDetailRow term="Started">{formatOptionalDate(pamDetail.started_at, formatPolicy)}</PlatformDetailRow>
@@ -1539,7 +1556,7 @@ export function AdminAccess() {
                     <span className="inline-flex flex-wrap items-center gap-2">
                       <span className="break-all font-mono text-xs">{pamCreated.id}</span>
                       <Button type="button" size="sm" variant="outline" onClick={() => void copyPAMSessionID(pamCreated.id)}>
-                        {pamCopied ? "Copied" : "Copy ID"}
+                        {pamCopied ? translateNow("source.copied.8d525e5f15") : translateNow("source.copy.id.72ac0d580f")}
                       </Button>
                     </span>
                   </PlatformDetailRow>
@@ -1657,7 +1674,7 @@ export function AdminAccess() {
                     type="submit"
                     disabled={pamBusy || !pamForm.target_id.trim() || !pamForm.role.trim() || !pamForm.method.trim() || !pamForm.payload_base64.trim()}
                   >
-                    {pamBusy ? "Opening..." : "Open session"}
+                    {pamBusy ? translateNow("source.opening.b19bb6f448") : translateNow("source.open.session.b205bb47f8")}
                   </Button>
                 </div>
               </form>

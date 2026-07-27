@@ -100,7 +100,8 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
                 {translateNow("source.setup.complete.aadaf35950")}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {certificate?.name ?? "Your first certificate"} is tracked. trstctl will alert before expiry; renewal is a manual, one-click action today.
+                {certificate?.name ?? translateNow("source.your.first.certificate.d48ee36f3a")} is tracked. trstctl will alert before expiry; renewal is a
+                manual, one-click action today.
               </p>
             </div>
           </div>

@@ -282,7 +282,11 @@ export function RequestCredential() {
                       <Select {...control} {...register("profileKey")} disabled={activeProfiles.length === 0} required>
                         {activeProfiles.map((profile) => (
                           <option key={profileKey(profile)} value={profileKey(profile)}>
-                            {`${profile.name} v${profile.version}${profile.active ? " active" : ""}`}
+                            {translateNow("source.value1.v.value2.value3.b49c34f739", {
+                              value1: profile.name,
+                              value2: profile.version,
+                              value3: profile.active ? " active" : "",
+                            })}
                           </option>
                         ))}
                       </Select>
@@ -292,7 +296,9 @@ export function RequestCredential() {
                     <dl className="grid max-w-xl gap-2 rounded-panel border border-border bg-muted/40 p-3 text-body">
                       <div className="flex items-center justify-between gap-3">
                         <dt className="text-caption text-muted-foreground">{translateNow("source.profile.d696a35bdd")}</dt>
-                        <dd className="font-medium">{`${selectedProfile.name} v${selectedProfile.version}`}</dd>
+                        <dd className="font-medium">
+                          {translateNow("source.value1.v.value2.5a7805046a", { value1: selectedProfile.name, value2: selectedProfile.version })}
+                        </dd>
                       </div>
                       <div className="flex items-center justify-between gap-3">
                         <dt className="text-caption text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
@@ -340,7 +346,11 @@ export function RequestCredential() {
                   <dl className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3 text-body">
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-caption text-muted-foreground">{translateNow("source.profile.d696a35bdd")}</dt>
-                      <dd className="font-medium">{selectedProfile ? `${selectedProfile.name} v${selectedProfile.version}` : "—"}</dd>
+                      <dd className="font-medium">
+                        {selectedProfile
+                          ? translateNow("source.value1.v.value2.5a7805046a", { value1: selectedProfile.name, value2: selectedProfile.version })
+                          : "—"}
+                      </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-caption text-muted-foreground">{translateNow("source.credential.name.911c43d9f0")}</dt>
@@ -356,7 +366,7 @@ export function RequestCredential() {
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-caption text-muted-foreground">{translateNow("source.requester.b5687cf04a")}</dt>
-                      <dd>{requester || "No session principal"}</dd>
+                      <dd>{requester || translateNow("source.no.session.principal.ffe06f6da5")}</dd>
                     </div>
                   </dl>
                   {submitError && <ErrorState title={translateNow("source.request.failed.cfce761bef")}>{submitError}</ErrorState>}
@@ -376,7 +386,7 @@ export function RequestCredential() {
             <dl className="grid gap-2">
               <div>
                 <dt className="text-caption text-muted-foreground">{translateNow("source.requester.b5687cf04a")}</dt>
-                <dd>{requester || "No session principal"}</dd>
+                <dd>{requester || translateNow("source.no.session.principal.ffe06f6da5")}</dd>
               </div>
               <div>
                 <dt className="text-caption text-muted-foreground">{translateNow("source.mutation.c26ee0e4b9")}</dt>

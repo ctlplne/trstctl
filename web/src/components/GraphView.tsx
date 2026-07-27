@@ -213,7 +213,13 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
                       {graphEdgeTypeLabel(edge.type)}
                     </text>
                   )}
-                  <title>{`${from.name || from.id} ${graphEdgeTypeLabel(edge.type)} ${to.name || to.id}`}</title>
+                  <title>
+                    {translateNow("source.value1.value2.value3.71fbdf7980", {
+                      value1: from.name || from.id,
+                      value2: graphEdgeTypeLabel(edge.type),
+                      value3: to.name || to.id,
+                    })}
+                  </title>
                 </g>
               );
             })}
@@ -229,7 +235,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
                   key={node.id}
                   role="button"
                   tabIndex={0}
-                  aria-label={`Graph node ${node.name || node.id}`}
+                  aria-label={translateNow("source.graph.node.value1.3c48c6439b", { value1: node.name || node.id })}
                   data-testid="graph-node"
                   data-node-kind={node.kind}
                   data-node-id={node.id}
@@ -255,7 +261,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
                   <text x={node.x} y={node.y + 32} textAnchor="middle" className="pointer-events-none fill-foreground text-2xs">
                     {truncateLabel(node.name || node.id)}
                   </text>
-                  <title>{`${node.name || node.id} (${graphNodeKindLabel(node.kind)})`}</title>
+                  <title>{translateNow("source.value1.value2.48e56a2411", { value1: node.name || node.id, value2: graphNodeKindLabel(node.kind) })}</title>
                 </g>
               );
             })}

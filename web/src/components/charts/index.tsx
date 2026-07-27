@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export type ChartTone =
   | "critical"
@@ -94,7 +95,7 @@ export function Meter({ segments, ariaLabel, className }: { segments: MeterSegme
       {segments.map((segment) => (
         <span
           key={segment.label}
-          title={`${segment.label}: ${segment.value}`}
+          title={translateNow("source.value1.value2.efae3eb968", { value1: segment.label, value2: segment.value })}
           style={{ width: `${(segment.value / total) * 100}%`, backgroundColor: toneColor(segment.tone) }}
         />
       ))}
@@ -175,7 +176,7 @@ export function TimeBarChart({
         return (
           <g key={datum.label}>
             <rect x={x} y={y} width={barWidth} height={barHeight} rx={4} style={{ fill: toneColor(datum.tone ?? tone) }}>
-              <title>{`${datum.label}: ${datum.value}`}</title>
+              <title>{translateNow("source.value1.value2.efae3eb968", { value1: datum.label, value2: datum.value })}</title>
             </rect>
             <text
               x={x + barWidth / 2}
@@ -235,7 +236,7 @@ export function StackedTimeBarChart({
               cursor -= h;
               return (
                 <rect key={segment.label} x={x} y={cursor} width={barWidth} height={h} rx={2} style={{ fill: toneColor(segment.tone) }}>
-                  <title>{`${datum.label} ${segment.label}: ${segment.value}`}</title>
+                  <title>{translateNow("source.value1.value2.value3.19d646a699", { value1: datum.label, value2: segment.label, value3: segment.value })}</title>
                 </rect>
               );
             })}
@@ -307,7 +308,7 @@ export function Donut({
               strokeDashoffset={-offset}
               style={{ stroke: toneColor(segment.tone) }}
             >
-              <title>{`${segment.label}: ${segment.value}`}</title>
+              <title>{translateNow("source.value1.value2.efae3eb968", { value1: segment.label, value2: segment.value })}</title>
             </circle>
           );
         })}

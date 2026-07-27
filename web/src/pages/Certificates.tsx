@@ -1036,7 +1036,7 @@ export function Certificates() {
               onClick={() => setShowIngest((v) => !v)}
               className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
             >
-              {showIngest ? "Close ingest" : "Add certificate"}
+              {showIngest ? translateNow("source.close.ingest.9381182077") : translateNow("source.add.certificate.6fa2cfd67c")}
             </button>
           </>
         }
@@ -1116,7 +1116,7 @@ export function Certificates() {
                 <dl className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-caption text-muted-foreground">{translateNow("source.certificate.pem.85627425ca")}</dt>
-                    <dd className="font-mono text-xs">{`${pem.trim().split("\n").length} lines`}</dd>
+                    <dd className="font-mono text-xs">{translateNow("source.value1.lines.a4d63c8ae4", { value1: pem.trim().split("\n").length })}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-caption text-muted-foreground">{translateNow("source.owner.id.1611f5e055")}</dt>
@@ -1409,7 +1409,7 @@ export function Certificates() {
                     disabled={loadingMore}
                     className="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm disabled:opacity-60"
                   >
-                    {loadingMore ? "Loading next page..." : "Load next page"}
+                    {loadingMore ? translateNow("source.loading.next.page.8c0453192f") : translateNow("source.load.next.page.d31b4bf690")}
                   </button>
                 ) : (
                   <p className="text-sm text-muted-foreground">{translateNow("source.no.more.certificate.pages.e8cec79bea")}</p>
@@ -1605,10 +1605,10 @@ export function Certificates() {
                           size="sm"
                           variant="outline"
                           disabled={busy}
-                          aria-label={`Renew ${certificateCN(detail.subject) || detail.subject}`}
+                          aria-label={translateNow("source.renew.value1.c52ad584ec", { value1: certificateCN(detail.subject) || detail.subject })}
                           onClick={() => void startRenew(detail, identity)}
                         >
-                          {busy ? "Renewing…" : "Renew now"}
+                          {busy ? translateNow("source.renewing.81caaaa0e6") : translateNow("source.renew.now.905758c33c")}
                         </Button>
                       );
                     }
@@ -1682,10 +1682,10 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
             size="sm"
             variant="outline"
             disabled={busy}
-            aria-label={`Renew ${certificateCN(c.subject) || c.subject}`}
+            aria-label={translateNow("source.renew.value1.c52ad584ec", { value1: certificateCN(c.subject) || c.subject })}
             onClick={() => context.onRenew(c, identity)}
           >
-            {busy ? "Renewing…" : "Renew"}
+            {busy ? translateNow("source.renewing.81caaaa0e6") : translateNow("source.renew.90c1689b0b")}
           </Button>
         );
       }
