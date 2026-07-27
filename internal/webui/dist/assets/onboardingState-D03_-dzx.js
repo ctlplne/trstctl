@@ -1,1 +1,0 @@
-const t="trstctl:onboarding-complete";function e(){try{return localStorage.getItem(t)==="1"}catch{return!1}}function o(){try{localStorage.setItem(t,"1")}catch{}}function r(){try{localStorage.removeItem(t)}catch{}}export{e as i,o as m,r};
