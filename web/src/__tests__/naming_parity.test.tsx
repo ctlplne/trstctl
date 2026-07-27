@@ -7,6 +7,7 @@ import { ToastProvider } from "@/components/ToastProvider";
 import { AppRoutes } from "@/App";
 import { messages, type MessageKey } from "@/i18n/messages";
 import { navGroups, primaryNavItems } from "@/lib/navigation";
+import type { NHIShadowPosture } from "@/lib/api";
 
 /** naming_parity (S-A2, guards DA-07): every rail destination must present ONE
  * name — the nav label, the page H1, and the document.title prefix must match.
@@ -95,6 +96,29 @@ vi.mock("@/lib/api", async (orig) => {
   for (const key of Object.keys(actual.api)) {
     base[key] = vi.fn().mockResolvedValue(dual());
   }
+  const emptyShadowPosture = {
+    capability: "nhi-shadow-posture",
+    generated_at: "2026-07-27T00:00:00Z",
+    coverage: [],
+    summary: {
+      total_analyzed: 0,
+      findings: 0,
+      unmanaged: 0,
+      investigating: 0,
+      unregistered: 0,
+      ownerless: 0,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      kind_counts: {},
+      surface_counts: {},
+    },
+    findings: [],
+    recommended_actions: [],
+    evidence_refs: [],
+  } satisfies NHIShadowPosture;
+  base.nhiShadowPosture = vi.fn().mockResolvedValue(emptyShadowPosture);
   base.me = vi.fn().mockResolvedValue({ subject: "np", tenant_id: "t1", email: "np@example.test", permissions });
   return { ...actual, api: base };
 });
@@ -135,4 +159,17 @@ describe("naming parity (S-A2)", () => {
       view.unmount();
     });
   }
+
+  it("renders the Discovery shadow-posture fixture without a NaN warning", async () => {
+    const consoleError = vi.spyOn(console, "error");
+    const view = renderAt("/discovery");
+    try {
+      await screen.findByRole("heading", { name: messages["discovery.shadow.heading"].defaultMessage });
+      const errors = consoleError.mock.calls.flat().map(String).join("\n");
+      expect(errors).not.toContain("Received NaN");
+    } finally {
+      view.unmount();
+      consoleError.mockRestore();
+    }
+  });
 });
