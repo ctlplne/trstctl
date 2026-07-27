@@ -20,6 +20,58 @@ import (
 	"trstctl.com/trstctl/internal/crypto/sshtestserver"
 )
 
+func TestServedDiscoverySourceUpsertRetryKeepsTenantNameIdentity(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	create := func(idem, target string) struct {
+		ID     string          `json:"id"`
+		Config json.RawMessage `json:"config"`
+	} {
+		t.Helper()
+		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, idem, map[string]any{
+			"name": "retry-safe-source",
+			"kind": "network",
+			"config": map[string]any{
+				"targets": []string{target},
+			},
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("upsert discovery source: status %d body %s", status, body)
+		}
+		var source struct {
+			ID     string          `json:"id"`
+			Config json.RawMessage `json:"config"`
+		}
+		if err := json.Unmarshal(body, &source); err != nil {
+			t.Fatal(err)
+		}
+		return source
+	}
+
+	first := create("discovery-name-upsert-first", "first.example.test:443")
+	second := create("discovery-name-upsert-second", "second.example.test:443")
+	if first.ID == "" || second.ID != first.ID {
+		t.Fatalf("same tenant/name changed source identity: first=%q second=%q", first.ID, second.ID)
+	}
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/sources?limit=10", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list discovery sources: status %d body %s", status, body)
+	}
+	var listed struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Items) != 1 || listed.Items[0].ID != first.ID {
+		t.Fatalf("same tenant/name produced duplicate sources: %+v", listed.Items)
+	}
+}
+
 // TestServedDiscoveryNetworkScanEndToEnd is the JOURNEY-001 proof: the assembled
 // control plane serves discovery source/run/finding APIs, queues scan execution
 // through the outbox, records findings through projected events, and feeds the

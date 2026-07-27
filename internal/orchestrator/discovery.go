@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -21,21 +22,34 @@ const discoveryRunDestination = "discovery.run"
 
 var agentInventorySourceNamespace = uuid.MustParse("d5e0734a-9cc6-53a4-92f3-4f99387f8c3a")
 var secretScanSourceNamespace = uuid.MustParse("f2a0de71-857b-5a96-83be-0e65a0f2f107")
+var discoverySourceNamespace = uuid.MustParse("c47d7a97-a79c-5a36-a5b4-673b5afbe3cf")
 
 // UpsertDiscoverySource records a tenant discovery source as an event and returns
 // the projected source row. Config is metadata/reference JSON only; API validation
 // rejects inline credential values before calling this command.
 func (o *Orchestrator) UpsertDiscoverySource(ctx context.Context, tenantID string, in store.DiscoverySource) (store.DiscoverySource, error) {
+	name := strings.TrimSpace(in.Name)
 	id := in.ID
 	if id == "" {
-		id = uuid.NewString()
+		existing, err := o.store.GetDiscoverySourceByName(ctx, tenantID, name)
+		switch {
+		case err == nil:
+			id = existing.ID
+		case errors.Is(err, pgx.ErrNoRows):
+			// The stable tenant+name identity also closes the concurrent-create
+			// race: two first writers project the same row instead of colliding
+			// on the tenant-local unique name.
+			id = uuid.NewSHA1(discoverySourceNamespace, []byte(tenantID+"\x00"+name)).String()
+		default:
+			return store.DiscoverySource{}, err
+		}
 	}
 	cfg := in.Config
 	if len(cfg) == 0 {
 		cfg = json.RawMessage(`{}`)
 	}
 	payload, err := json.Marshal(projections.DiscoverySourceUpserted{
-		ID: id, Kind: in.Kind, Name: in.Name, Config: cfg,
+		ID: id, Kind: in.Kind, Name: name, Config: cfg,
 	})
 	if err != nil {
 		return store.DiscoverySource{}, err
@@ -45,7 +59,7 @@ func (o *Orchestrator) UpsertDiscoverySource(ctx context.Context, tenantID strin
 		return store.DiscoverySource{}, err
 	}
 	return store.DiscoverySource{
-		ID: id, TenantID: tenantID, Kind: in.Kind, Name: in.Name, Config: cfg,
+		ID: id, TenantID: tenantID, Kind: in.Kind, Name: name, Config: cfg,
 		CreatedAt: ev.Time, UpdatedAt: ev.Time,
 	}, nil
 }

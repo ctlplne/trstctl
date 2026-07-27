@@ -258,6 +258,19 @@ func (s *Store) GetDiscoverySource(ctx context.Context, tenantID, id string) (Di
 	return out, err
 }
 
+// GetDiscoverySourceByName loads the tenant-local identity used by the
+// source-upsert command. Name is unique only inside one tenant; the predicate
+// therefore carries tenant_id even though RLS is also active (AN-1).
+func (s *Store) GetDiscoverySourceByName(ctx context.Context, tenantID, name string) (DiscoverySource, error) {
+	var out DiscoverySource
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanDiscoverySource(tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, kind, name, config, created_at, updated_at
+			   FROM discovery_sources WHERE tenant_id = $1 AND name = $2`, tenantID, name), &out)
+	})
+	return out, err
+}
+
 // ListDiscoverySourcesPage lists tenant sources by id keyset.
 func (s *Store) ListDiscoverySourcesPage(ctx context.Context, tenantID, afterID string, limit int) ([]DiscoverySource, error) {
 	var out []DiscoverySource

@@ -602,14 +602,18 @@ sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=clients/sdk/python/src python3 -m unittest discover -s clients/sdk/python/tests -v
 	clients/sdk/java/scripts/run_tests.sh
 
+.PHONY: docker-context-check
+docker-context-check: ## Prove ignored caches/secrets cannot enter any Docker build stage
+	./scripts/ci/docker-context-audit.sh
+
 .PHONY: image
-image: ## Build the control-plane container image (deploy/docker/Dockerfile)
+image: docker-context-check ## Build the control-plane container image (deploy/docker/Dockerfile)
 	docker build -f deploy/docker/Dockerfile \
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
 		-t trstctl:$(VERSION) .
 
 .PHONY: compose-up
-compose-up: ## Bring up the evaluation stack (Postgres + NATS + trstctl)
+compose-up: docker-context-check ## Bring up the evaluation stack (Postgres + NATS + trstctl)
 	docker compose -f deploy/docker/docker-compose.yml up --build
 
 .PHONY: reproducible-check

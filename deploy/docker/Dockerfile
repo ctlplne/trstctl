@@ -27,6 +27,12 @@ ARG WEB_BUILD_IMAGE=node:22-bookworm-slim
 ARG BUILD_IMAGE=golang:1.26.5-bookworm
 ARG BASE_IMAGE=gcr.io/distroless/static-debian12:nonroot
 
+# Fast audit target used by scripts/ci/docker-context-audit.sh. It exports the
+# exact filtered context Docker gives every COPY instruction without pulling a
+# build image or compiling code.
+FROM scratch AS context-audit
+COPY . /context
+
 # ---- web build stage ------------------------------------------------------
 # Build the React console from the same source context as the Go binaries. The
 # Go embed below must never freeze a stale, previously generated dist directory.

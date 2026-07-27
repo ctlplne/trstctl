@@ -1,35 +1,77 @@
-# Keep the image build context small and deterministic.
-#
-# .git is excluded (so the build uses -buildvcs=false and version metadata comes
-# from --build-arg), along with built artifacts, web dependencies, and editor
-# cruft. The committed web embed placeholder (internal/webui/dist/index.html) is
-# kept; only the regenerated assets are excluded.
+# Keep the image build context small, deterministic, and free of local-only
+# material. Both shipped Dockerfiles use COPY . ., so this file is the security
+# boundary for every build stage, including remote builders.
 
 .git
 .github
 .gitignore
 .dockerignore
+.agents/
+.codex/
+.ruff_cache/
+.site/
+.vite/
+docs-internal/
 
-# Build outputs
+# Repository-local audit, dependency, compiler, and release caches.
+.sandbox-build/
+.supply-chain/
+.cache/
+.tmp/
+tmp/
+**/.cache/
+**/.tmp/
+**/tmp/
+**/.fuse_hidden*
+**/.DS_Store
+
+# Build and generated outputs. The Dockerfile rebuilds the web console before
+# compiling Go, so no worktree-generated web bundle is accepted.
 bin/
 dist/
+internal/webui/dist/
+web/coverage/
+web/test-results/
+web/playwright-report/
+web/.storybook-static/
+sbom*.json
+wiring-census.json
 *.out
 *.test
 coverage*
-cover.out
+cover.out*
+/trstctl
+/trstctl-agent
+/trstctl-signer
+/trstctl-operator
+**/*.go.[0-9]*
+**/*.go.stale*
+**/*.go.old*
+**/*.stale
+**/*.stale.*
 
-# Supply-chain scan cache. scripts/supply-chain/verify-embedded-postgres.sh
-# extracts the ~2.5G embedded-postgres runtime here for checksum-pinning and
-# Trivy scanning; it is never part of the image and would bloat the build
-# context (and bust the layer cache) if sent to the daemon.
-.supply-chain/
-
-# Web UI dependencies. The built internal/webui/dist assets must stay in the
-# Docker context because the Go binary embeds them into the served console.
+# Dependency/vendor caches.
+/node_modules/
 web/node_modules/
+**/node_modules/
+vendor/
 
-# Editor / OS cruft
-.DS_Store
+# Secret-bearing local formats are never valid Docker source inputs. Test
+# fixtures required by Go tests are not compiled into these production images.
+.env
+.env.*
+**/.env
+**/.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.secret
+*.secrets
+
+# Editor cruft.
 .idea/
 .vscode/
 *.swp
+*~

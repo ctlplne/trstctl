@@ -889,15 +889,28 @@ func TestACMEConformanceHarnessIsWired(t *testing.T) {
 	mustContainAny(t, "ci.yml Pebble reference image", ci, "letsencrypt/pebble", "pebble:")
 }
 
-// TestDockerignoreKeepsContextSmall encodes that the build context excludes the
-// heavy, non-deterministic directories so the build stays small and
-// reproducible.
+// TestDockerignoreKeepsContextSmall encodes that COPY . . cannot see local audit,
+// dependency, build, browser, or generated-console artifacts.
 func TestDockerignoreKeepsContextSmall(t *testing.T) {
 	di := readArtifact(t, filepath.Join("..", "..", ".dockerignore"))
-	mustContainAll(t, ".dockerignore", di, "node_modules", ".git", "bin")
-	if strings.Contains(di, "internal/webui/dist/assets") {
-		t.Fatal(".dockerignore must not exclude internal/webui/dist/assets: Docker builds embed the served React bundles from that directory")
-	}
+	mustContainAll(t, ".dockerignore", di,
+		".sandbox-build/", ".supply-chain/", ".cache/", "node_modules/",
+		"internal/webui/dist/", "web/test-results/", "sbom*.json",
+		"*.key", "*.pem", ".env.*", "**/.fuse_hidden*",
+	)
+	dockerfile := readArtifact(t, "Dockerfile")
+	mustContainAll(t, "Dockerfile context audit target", dockerfile,
+		"FROM scratch AS context-audit", "COPY . /context",
+	)
+	script := repoFile(t, "scripts", "ci", "docker-context-audit.sh")
+	mustContainAll(t, "Docker context canary gate", script,
+		".sandbox-build/docker-context-audit", "operator-secret.tmp",
+		"--target context-audit", "64 * 1024", "planted secret excluded",
+	)
+	makefile := repoFile(t, "Makefile")
+	mustContainAll(t, "Docker entrypoints run context gate", makefile,
+		"image: docker-context-check", "compose-up: docker-context-check",
+	)
 }
 
 // TestServerCoverageIsReportedAndGated encodes the R4.3 coverage half: the build
