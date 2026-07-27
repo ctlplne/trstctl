@@ -21,8 +21,8 @@ can still be used when they live on private addresses or explicit allowlists.
 On a connected build host, verify the release image first, then build the bundle:
 
 ```bash
-export VERSION=v0.5.0
-export IMAGE=ghcr.io/ctlplne/trstctl:v0.5.0
+export VERSION=v0.5.4
+export IMAGE=ghcr.io/ctlplne/trstctl:v0.5.4
 
 scripts/verify-image.sh "$IMAGE"
 make airgap-bundle VERSION="$VERSION" IMAGE="$IMAGE"
@@ -41,9 +41,9 @@ Move both the archive and `.sha256` file into the disconnected environment and
 verify them there:
 
 ```bash
-shasum -a 256 -c trstctl-0.5.0-airgap.tar.gz.sha256
-tar -xzf trstctl-0.5.0-airgap.tar.gz
-cd trstctl-0.5.0-airgap
+shasum -a 256 -c trstctl-0.5.4-airgap.tar.gz.sha256
+tar -xzf trstctl-0.5.4-airgap.tar.gz
+cd trstctl-0.5.4-airgap
 shasum -a 256 -c CHECKSUMS.txt
 ```
 
@@ -53,8 +53,8 @@ Load the image into the offline registry or directly onto each node:
 
 ```bash
 docker load -i images/trstctl-image.tar
-docker tag ghcr.io/ctlplne/trstctl:v0.5.0 registry.airgap.local/trstctl:v0.5.0
-docker push registry.airgap.local/trstctl:v0.5.0
+docker tag ghcr.io/ctlplne/trstctl:v0.5.4 registry.airgap.local/trstctl:v0.5.4
+docker push registry.airgap.local/trstctl:v0.5.4
 ```
 
 Install with private PostgreSQL and NATS endpoints. Replace the CIDRs in
@@ -71,7 +71,7 @@ helm upgrade --install trstctl charts/trstctl \
   --namespace trstctl --create-namespace \
   -f manifests/values-airgap.yaml \
   --set image.repository=registry.airgap.local/trstctl \
-  --set image.tag=v0.5.0 \
+  --set image.tag=v0.5.4 \
   --set postgres.dsn='postgres://user:pass@pg.internal:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats.internal:4222' \
   --set kek.existingSecret=trstctl-kek \
@@ -100,7 +100,7 @@ Before opening the service to users, prove the no-phone-home posture:
    ```bash
    helm template trstctl charts/trstctl -f manifests/values-airgap.yaml \
      --set image.repository=registry.airgap.local/trstctl \
-     --set image.tag=v0.5.0 \
+     --set image.tag=v0.5.4 \
      --set postgres.dsn='postgres://user:pass@pg.internal:5432/trstctl?sslmode=require' \
      --set nats.url='nats://nats.internal:4222' \
      --set kek.existingSecret=trstctl-kek \

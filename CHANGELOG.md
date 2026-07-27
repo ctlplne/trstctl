@@ -594,6 +594,79 @@ and still gate the spaces IA.*
   guards (`naming_parity`, `nav_completeness`, `module_map`, demo-data isolation, docs
   IA parity) keep the fixed defect classes from returning.
 
+## [0.5.4] - 2026-06-27
+
+### Added
+- Expanded the shipped console from a basic shell into task-oriented workspaces for
+  certificate lifecycle, secrets, discovery, NHI risk and posture, CA hierarchy,
+  incidents, governance, privacy, integrations, and platform operations. The same
+  train added feature-to-route coverage guards, generated API types, responsive
+  navigation, localization, accessibility checks, and a read-only preview identity.
+- Served the next platform integrations: secret rotation/sync and scanning,
+  SSO/SCIM/ABAC and break-glass administration, a cert-manager issuer controller,
+  Terraform and Python clients, signed compliance evidence, OTLP export, passive
+  federation, JIT access, signed WASM plugins, and cloud managed-key custody.
+- Introduced the single-repository open-core edition boundary: core/Enterprise/
+  Provider status, offline licence seams, Provider metering/branding/isolation, and
+  explicit Enterprise fences for remediation, federation, managed-key/KMIP custody,
+  and governance evidence.
+
+### Changed
+- Reworked the console around shared data grids, task-first navigation, responsive
+  mobile/desktop layouts, theme controls, and served-state disclosures instead of
+  advertising routes without product wiring.
+
+### Security
+- Required independent signer authorization, replay-safe issuance recovery,
+  encrypted disaster-recovery backups, bounded public protocol/request state,
+  bounded outbox execution, default-private optional AI egress, digest-pinned
+  deployment artifacts, and release-gate checks before publishing.
+
+## [0.5.3] - 2026-06-18
+
+### Fixed
+- Stopped the release workflow from uploading unsigned Windows agent artifacts.
+- Corrected the release workflow's shellcheck failure.
+- Prepared the compose-profile artifacts consumed by the repository lint gates.
+
+## [0.5.2] - 2026-06-18
+
+### Security
+- Hardened tenant offboarding, tenant-bound machine login, byte-backed secret and
+  provider credentials, signer content authorization, ceremony purpose binding,
+  certificate-profile EKU enforcement, SSRF-protected notifications, bounded
+  request parsers, and the local-development plaintext transport exception.
+- Made the architecture analyzer run as a repository-wide vet tool and added
+  regression guards for tenancy, crypto custody, signer isolation, idempotency,
+  outbox/bulkhead behavior, release provenance, and served-surface wiring.
+
+### Fixed
+- Routed lifecycle renewal and ACME revocation through persisted platform state,
+  rebuilt agent/profile projections from events, made CRL reads side-effect free,
+  versioned legacy secret events, and made rotation/reconciliation replay-safe.
+- Productized disaster recovery with streamed restore, under-replicated JetStream
+  fail-closed behavior, fair outbox leasing, online lease indexes, migration-lock
+  polling, isolated-signer Helm wiring, and pinned agent enrollment transport.
+- Added stock-client conformance for ACME, EST, SCEP, CMP, and RFC 3161, then fixed
+  their CI/release fixtures, OPA v1 policy compatibility, and SCEP AES envelopes.
+
+## [0.5.1] - 2026-06-16
+
+### Added
+- Added and exercised SCEP, CMP, MDM enrollment, the constrained-device EST client,
+  SPIFFE workload identity and attesters, incident response, SSH CA workflows, code
+  signing, PQC migration, the secrets/dynamic-secret/KMIP stack, discovery and
+  governance, and the grounded read-only AI/MCP surface.
+- Wired the assembled binary to serve issuance protocols, OIDC sessions, the React
+  console, signed WASM plugins, the steady-state agent channel, the Kubernetes
+  operator, cross-node signer mTLS, FIPS builds, and BYOK/HSM key lifecycle.
+
+### Security
+- Completed the first broad hardening sweep across revocation, signer
+  abuse-resistance and dual control, tenant isolation, parser bounds and fuzzing,
+  event-spine resilience, deployment defaults, release signing/provenance, and
+  architecture guard tests.
+
 ## [0.5.0] - 2026-06-13
 - Hardening milestone toward an enterprise-GA bar for the self-hosted, multi-tenant
   profile: isolated signer custody (sealed CA key persisted across restarts), the
@@ -613,7 +686,11 @@ and still gate the spaces IA.*
 ## [0.1] - 2026-05-31
 - Initial tagged development milestone.
 
-[Unreleased]: https://github.com/ctlplne/trstctl/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/ctlplne/trstctl/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.4
+[0.5.3]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.3
+[0.5.2]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.2
+[0.5.1]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.1
 [0.5.0]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.0
 [0.4]: https://github.com/ctlplne/trstctl/releases/tag/v0.4
 [0.3]: https://github.com/ctlplne/trstctl/releases/tag/v0.3

@@ -61,7 +61,7 @@ func TestAirGapOverlayRendersTelemetryExplicitlyDisabled(t *testing.T) {
 		"helm", "template", "trstctl", "trstctl",
 		"-f", "trstctl/values-airgap.yaml",
 		"--set", "image.repository=registry.airgap.local/trstctl",
-		"--set", "image.tag=v0.5.0",
+		"--set", "image.tag=v0.5.4",
 		"--set", "postgres.dsn=postgres://user:pass@pg.internal:5432/trstctl?sslmode=require",
 		"--set", "nats.url=nats://nats.internal:4222",
 		"--set", "kek.existingSecret=trstctl-kek",

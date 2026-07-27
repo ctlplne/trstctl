@@ -4,6 +4,7 @@ package docs
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -173,9 +174,27 @@ func TestChangelogExistsAndIsLinked(t *testing.T) {
 	if !strings.Contains(low, "## [unreleased]") {
 		t.Error("CHANGELOG.md should have an Unreleased section (Keep a Changelog) (DOCS-005)")
 	}
-	// Backfilled tags: the latest tag must be present.
-	if !strings.Contains(body, "[0.5.0]") {
-		t.Error("CHANGELOG.md should backfill the tagged versions (e.g. 0.5.0) (DOCS-005)")
+	// Every published development milestone must have a dated history section.
+	// Reading the repository's tag set avoids a hand-maintained "latest tag"
+	// assertion that becomes stale the moment the next release is tagged.
+	repo, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	tagOutput, err := exec.Command("git", "-C", repo, "tag", "--list", "v[0-9]*", "--sort=version:refname").Output()
+	if err != nil {
+		t.Fatalf("list published tags for CHANGELOG comparison: %v", err)
+	}
+	datedHeading := regexp.MustCompile(`(?m)^## \[([0-9]+\.[0-9]+(?:\.[0-9]+)?)\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$`)
+	documented := map[string]bool{}
+	for _, match := range datedHeading.FindAllStringSubmatch(body, -1) {
+		documented[match[1]] = true
+	}
+	semverTag := regexp.MustCompile(`^v[0-9]+\.[0-9]+(?:\.[0-9]+)?$`)
+	for _, tag := range strings.Fields(string(tagOutput)) {
+		if semverTag.MatchString(tag) && !documented[strings.TrimPrefix(tag, "v")] {
+			t.Errorf("CHANGELOG.md has no dated section for published tag %s (DOCS-005)", tag)
+		}
 	}
 	// Referenced from README and SECURITY.md.
 	if !strings.Contains(read(t, "../README.md"), "CHANGELOG.md") {
