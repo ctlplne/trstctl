@@ -156,6 +156,25 @@ the `TrustedUserCAKeys` directive from `sshd_config`. The same agent path locate
 classifies SSH and TLS private-key files as metadata-only findings instead of copying
 key bytes into the control plane.
 
+On-host SSH collection is explicit, not a surprise filesystem crawl. Configure only
+the paths the agent may read with `--inventory-ssh-host-key-globs`,
+`--inventory-ssh-user-key-globs`, `--inventory-ssh-authorized-keys`,
+`--inventory-ssh-known-hosts`, and `--inventory-ssh-sshd-configs`. Every flag is empty
+by default. For example:
+
+```sh
+trstctl-agent ... \
+  --inventory-ssh-host-key-globs '/etc/ssh/ssh_host_*_key.pub' \
+  --inventory-ssh-authorized-keys '/home/*/.ssh/authorized_keys' \
+  --inventory-ssh-known-hosts '/etc/ssh/ssh_known_hosts,/home/*/.ssh/known_hosts' \
+  --inventory-ssh-sshd-configs /etc/ssh/sshd_config
+```
+
+The agent reports the result over its existing mTLS inventory RPC. The control plane
+derives the tenant from the verified agent certificate, appends discovery events, and
+projects the metadata into `GET /api/v1/ssh/fleet`. Operators can read the same view
+with `trstctl ssh fleet` or in **Workload & SSH → SSH trust**.
+
 Two flags make the result actionable. **StandingAccess** marks an entry that grants
 persistent login (an `authorized_keys` line). **Orphaned** marks a standing-access grant
 whose comment field is blank — meaning nobody can say whose key it is. An orphaned
@@ -420,7 +439,9 @@ what it is.
 - **Agent inventory flags:** `--inventory-cert-roots`, `--inventory-os-trust-roots`,
   `--inventory-java-trust-stores`, `--inventory-java-trust-store-password`,
   `--inventory-nss-trust-roots`, `--inventory-browser-trust-roots`,
-  `--inventory-private-key-roots`.
+  `--inventory-private-key-roots`, `--inventory-ssh-host-key-globs`,
+  `--inventory-ssh-user-key-globs`, `--inventory-ssh-authorized-keys`,
+  `--inventory-ssh-known-hosts`, `--inventory-ssh-sshd-configs`.
 - **Audit events:** `certificate.recorded`, `discovery.source.upserted`,
   `discovery.schedule.upserted`, `discovery.run.queued`, `discovery.run.started`,
   `discovery.finding.recorded`, `discovery.run.completed`, `secretscan.finding`.

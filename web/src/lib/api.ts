@@ -294,6 +294,7 @@ import type {
   ShareValue,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
+  SSHFleetInventory,
   SSHHostRetirement,
   SSHHostRetireRequest,
   SSHRevokeCertificateRequest,
@@ -599,6 +600,7 @@ export type {
   ShareValue,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
+  SSHFleetInventory,
   SSHHostRetirement,
   SSHHostRetireRequest,
   SSHRevokeCertificateRequest,
@@ -1213,6 +1215,7 @@ export interface Api {
   deleteWorkloadAttesterTrustSource(id: string): Promise<void>;
   issueAttestedSVID(input: AttestedSVIDRequest): Promise<AttestedSVID>;
   sshStatus(): Promise<SSHStatus>;
+  sshFleet(): Promise<SSHFleetInventory>;
   recordSSHTrustRollout(input: SSHTrustRolloutRequest): Promise<SSHTrustRollout>;
   issueAttestedSSHUserCert(input: SSHAttestedUserCertRequest): Promise<SSHAttestedUserCert>;
   revokeSSHCertificate(input: SSHRevokeCertificateRequest): Promise<SSHStatus>;
@@ -1526,6 +1529,7 @@ export const api: Api = {
   deleteWorkloadAttesterTrustSource: (id) => mutate<void>("DELETE", `/api/v1/workloads/attester-trust-sources/${encodeURIComponent(id)}`),
   issueAttestedSVID: (input) => mutate<AttestedSVID>("POST", "/api/v1/workloads/attested-issuance", input),
   sshStatus: () => req<SSHStatus>("/api/v1/ssh/status"),
+  sshFleet: () => req<SSHFleetInventory>("/api/v1/ssh/fleet"),
   recordSSHTrustRollout: (input) => mutate<SSHTrustRollout>("POST", "/api/v1/ssh/trust-rollouts", input),
   issueAttestedSSHUserCert: (input) => mutate<SSHAttestedUserCert>("POST", "/api/v1/ssh/attested-user-certs", input),
   revokeSSHCertificate: (input) => mutate<SSHStatus>("POST", "/api/v1/ssh/certificates/revoke", input),

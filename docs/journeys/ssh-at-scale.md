@@ -52,9 +52,10 @@ mutation stays in the operator-confirmed agent path.
    default and startup fails closed if you enable it without a tenant.
 
 2. Find the SSH access you already have, so you know what the certificates are
-   replacing. Create an `ssh` discovery source and queue a run; trstctl records host
-   keys and standing-access grants — and flags an `authorized_keys` grant whose owner is
-   unknown as orphaned. Only fingerprints are stored, never private keys. See
+   replacing. A control-plane `ssh` discovery source records network host keys. To
+   collect on-host grants, explicitly give the shipped agent the safe paths it may
+   read; it records standing access and flags an `authorized_keys` grant whose owner is
+   unknown as orphaned. Only fingerprints and metadata are reported, never key bytes. See
    [Discovery & inventory](../features/discovery-and-inventory.md).
 
    ```sh
@@ -64,6 +65,10 @@ mutation stays in the operator-confirmed agent path.
    trstctl-cli discovery sources create -f ssh-source.json
    echo '{"source_id":"<source-id>"}' | trstctl-cli discovery runs start -f -
    trstctl-cli discovery findings list --run_id <run-id>
+   trstctl-agent ... \
+     --inventory-ssh-authorized-keys '/home/*/.ssh/authorized_keys' \
+     --inventory-ssh-sshd-configs /etc/ssh/sshd_config
+   trstctl ssh fleet
    ```
 
    -> you get a list of standing-access keys to retire as certificates take over. The

@@ -8,6 +8,7 @@ import {
   api,
   type SSHAttestedUserCert,
   type SSHAttestedUserCertRequest,
+  type SSHFleetInventory,
   type SSHHostRetirement,
   type SSHStatus,
   type SSHTrustRollout,
@@ -80,6 +81,7 @@ function numericOrUndefined(input: string): number | undefined {
 export function SSHTrust() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<SSHStatus | null>(null);
+  const [fleet, setFleet] = useState<SSHFleetInventory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
   const [rollout, setRollout] = useState<SSHTrustRollout | null>(null);
@@ -122,11 +124,11 @@ export function SSHTrust() {
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .sshStatus()
-      .then((next) => {
+    Promise.all([api.sshStatus(), api.sshFleet()])
+      .then(([next, nextFleet]) => {
         if (!cancelled) {
           setStatus(next);
+          setFleet(nextFleet);
           setError(null);
         }
       })
@@ -139,6 +141,10 @@ export function SSHTrust() {
   }, []);
 
   const attestors = useMemo(() => (status?.attestors?.length ? status.attestors : fallbackAttestors), [status?.attestors]);
+  // Route-level and rolling-upgrade callers can briefly see the pre-inventory
+  // SSH payload, which has no `hosts` member. Keep that honest empty state
+  // renderable instead of crashing the entire console shell.
+  const fleetHosts = fleet?.hosts ?? [];
 
   const recordRollout = async (event: FormEvent) => {
     event.preventDefault();
@@ -255,9 +261,60 @@ export function SSHTrust() {
             </div>
             <div className="md:col-span-4">
               <p className="text-xs text-muted-foreground">{translateNow("source.authority.key.60329d7d7b")}</p>
-              <p className="break-all font-mono text-xs">{status.authority_key || "not published"}</p>
+              <p className="break-all font-mono text-xs">{status.authority_key || translateNow("source.not.published.30839efda7")}</p>
             </div>
           </div>
+        </section>
+      )}
+
+      {fleet && (
+        <section aria-labelledby="ssh-fleet-heading" className="grid gap-3 border-y border-border py-4">
+          <div>
+            <h2 id="ssh-fleet-heading" className="text-title font-semibold">
+              {t("sshTrust.fleet.heading")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("sshTrust.fleet.description")}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="ui-panel p-3">
+              <p className="text-xs text-muted-foreground">{t("sshTrust.fleet.hostsOutsideCA")}</p>
+              <p className="font-mono text-lg">{fleet.hosts_not_under_ca}</p>
+            </div>
+            <div className="ui-panel p-3">
+              <p className="text-xs text-muted-foreground">{t("sshTrust.fleet.standingGrants")}</p>
+              <p className="font-mono text-lg">{fleet.standing_key_count}</p>
+            </div>
+            <div className="ui-panel p-3">
+              <p className="text-xs text-muted-foreground">{t("sshTrust.fleet.orphanedGrants")}</p>
+              <p className="font-mono text-lg">{fleet.orphaned_key_count}</p>
+            </div>
+          </div>
+          {fleetHosts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("sshTrust.fleet.empty")}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="ui-table" aria-label={t("sshTrust.fleet.tableLabel")}>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("sshTrust.fleet.location")}</th>
+                    <th scope="col">{t("sshTrust.fleet.keyTypes")}</th>
+                    <th scope="col">{t("sshTrust.fleet.sources")}</th>
+                    <th scope="col">{t("sshTrust.fleet.access")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fleetHosts.map((host) => (
+                    <tr key={host.location}>
+                      <td className="font-mono text-xs">{host.location}</td>
+                      <td>{host.key_types.join(", ") || t("sshTrust.fleet.unknown")}</td>
+                      <td>{host.sources.join(", ") || t("sshTrust.fleet.unknown")}</td>
+                      <td>{t("sshTrust.fleet.accessSummary", { standing: host.standing_keys, orphaned: host.orphaned_keys })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
 

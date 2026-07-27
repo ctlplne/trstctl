@@ -7,6 +7,7 @@ import { SSHTrust } from "@/pages/SSHTrust";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     sshStatus: vi.fn(),
+    sshFleet: vi.fn(),
     recordSSHTrustRollout: vi.fn(),
     issueAttestedSSHUserCert: vi.fn(),
     revokeSSHCertificate: vi.fn(),
@@ -37,6 +38,26 @@ describe("SSH trust served workflow surface", () => {
       krl_version: 7,
       revoked_count: 2,
       attestors: ["k8s_sat"],
+    });
+    apiMock.sshFleet.mockResolvedValue({
+      hosts: [
+        {
+          location: "/home/alice/.ssh/authorized_keys",
+          keys: 1,
+          standing_keys: 1,
+          orphaned_keys: 1,
+          key_types: ["ssh-ed25519"],
+          sources: ["ssh-authorized-keys"],
+          first_observed: "2026-06-27T09:00:00Z",
+          last_observed: "2026-06-27T09:00:00Z",
+          under_ca: false,
+        },
+      ],
+      host_count: 1,
+      key_count: 1,
+      standing_key_count: 1,
+      orphaned_key_count: 1,
+      hosts_not_under_ca: 1,
     });
     apiMock.recordSSHTrustRollout.mockResolvedValue({
       id: "evt-rollout",
@@ -86,6 +107,8 @@ describe("SSH trust served workflow surface", () => {
 
     expect(screen.getByRole("heading", { name: "SSH trust" })).toBeInTheDocument();
     expect(await screen.findByText("ssh-ed25519 AAAA trstctl-ca")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "SSH standing access inventory" })).toHaveTextContent("/home/alice/.ssh/authorized_keys");
+    expect(screen.getByText(/1 standing.*1 orphaned/)).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Record trust rollout" })).toBeDisabled();
 
@@ -102,6 +125,21 @@ describe("SSH trust served workflow surface", () => {
       ),
     );
     expect(await screen.findByText("evt-rollout")).toBeInTheDocument();
+  });
+
+  it("renders the honest empty state for a pre-inventory rolling-upgrade payload", async () => {
+    apiMock.sshFleet.mockResolvedValue({
+      host_count: 0,
+      key_count: 0,
+      standing_key_count: 0,
+      orphaned_key_count: 0,
+      hosts_not_under_ca: 0,
+    });
+
+    renderSSHTrust();
+
+    expect(await screen.findByText("No agent-reported SSH key locations yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "SSH standing access inventory" })).not.toBeInTheDocument();
   });
 
   it("issues an attested user cert, revokes it into the KRL, and retires a host", async () => {

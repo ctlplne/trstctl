@@ -223,6 +223,8 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/ssh/status":
 			_, _ = io.WriteString(w, `{"served":true,"krl_version":0,"revoked_count":0}`)
+		case "/api/v1/ssh/fleet":
+			_, _ = io.WriteString(w, `{"hosts":[],"host_count":0,"key_count":0,"standing_key_count":0,"orphaned_key_count":0,"hosts_not_under_ca":0}`)
 		case "/api/v1/ssh/attested-user-certs":
 			_, _ = io.WriteString(w, `{"certificate":"ssh-cert","serial":7,"key_id":"kid","subject":"sa"}`)
 		case "/api/v1/ssh/certificates/revoke":
@@ -244,6 +246,9 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	if err := run(context.Background(), []string{"ssh", "status"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh status: %v", err)
 	}
+	if err := run(context.Background(), []string{"ssh", "fleet"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("ssh fleet: %v", err)
+	}
 	if err := run(context.Background(), []string{"ssh", "issue-attested-user", "--method", "k8s_sat", "--payload-base64", "cHJvb2Y=", "--public-key", "ssh-ed25519 AAAA", "--key-id", "kid", "--ttl-seconds", "600"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh issue-attested-user: %v", err)
 	}
@@ -253,25 +258,30 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	if err := run(context.Background(), []string{"ssh", "retire-host", "--host", "edge-1", "--source", "source-1", "--run", "run-1", "--reason", "replaced"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh retire-host: %v", err)
 	}
-	if len(seen) != 4 {
-		t.Fatalf("requests = %+v, want status, issue, revoke, retire", seen)
+	if len(seen) != 5 {
+		t.Fatalf("requests = %+v, want status, fleet, issue, revoke, retire", seen)
 	}
-	if seen[0].Idem != "" {
-		t.Fatalf("ssh status sent idempotency key: %+v", seen[0])
+	for _, got := range seen[:2] {
+		if got.Idem != "" {
+			t.Fatalf("SSH read sent idempotency key: %+v", got)
+		}
 	}
-	for _, got := range seen[1:] {
+	for _, got := range seen[2:] {
 		if got.Auth != "Bearer tok" || got.Tenant != "11111111-1111-1111-1111-111111111111" || got.Idem == "" {
 			t.Fatalf("bad auth/tenant/idempotency headers: %+v", got)
 		}
 	}
-	if seen[1].Payload["method"] != "k8s_sat" || seen[1].Payload["payload_base64"] != "cHJvb2Y=" {
-		t.Fatalf("bad issue request: %+v", seen[1])
+	if seen[1].Path != "/api/v1/ssh/fleet" {
+		t.Fatalf("bad fleet request: %+v", seen[1])
 	}
-	if seen[2].Payload["serial"].(float64) != 7 {
-		t.Fatalf("bad revoke request: %+v", seen[2])
+	if seen[2].Payload["method"] != "k8s_sat" || seen[2].Payload["payload_base64"] != "cHJvb2Y=" {
+		t.Fatalf("bad issue request: %+v", seen[2])
 	}
-	if seen[3].Payload["host"] != "edge-1" || seen[3].Payload["run_id"] != "run-1" {
-		t.Fatalf("bad retire request: %+v", seen[3])
+	if seen[3].Payload["serial"].(float64) != 7 {
+		t.Fatalf("bad revoke request: %+v", seen[3])
+	}
+	if seen[4].Payload["host"] != "edge-1" || seen[4].Payload["run_id"] != "run-1" {
+		t.Fatalf("bad retire request: %+v", seen[4])
 	}
 }
 

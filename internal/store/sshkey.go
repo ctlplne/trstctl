@@ -45,6 +45,26 @@ func (s *Store) UpsertSSHKey(ctx context.Context, k SSHKey) (SSHKey, error) {
 	return k, err
 }
 
+// ApplySSHKeyDiscoveredTx projects one immutable discovery finding into the
+// tenant SSH inventory. The caller owns the projection transaction; this
+// method never creates command-side state.
+func (s *Store) ApplySSHKeyDiscoveredTx(ctx context.Context, tx pgx.Tx, k SSHKey) error {
+	if k.CreatedAt.IsZero() {
+		k.CreatedAt = time.Now().UTC()
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO ssh_keys
+		        (id, tenant_id, fingerprint, key_type, comment, source, location, standing_access, orphaned, created_at)
+		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10)
+		 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
+		    SET key_type = EXCLUDED.key_type, comment = EXCLUDED.comment, source = EXCLUDED.source,
+		        location = EXCLUDED.location, standing_access = EXCLUDED.standing_access,
+		        orphaned = EXCLUDED.orphaned`,
+		k.ID, k.TenantID, k.Fingerprint, k.KeyType, k.Comment, k.Source, k.Location,
+		k.StandingAccess, k.Orphaned, k.CreatedAt)
+	return err
+}
+
 // SSHFleetHost aggregates a host's discovered SSH key material. Every row in
 // ssh_keys is a RAW key — a certificate issued by the SSH CA is not stored
 // here — so a host appearing in this view has key-based access that does not

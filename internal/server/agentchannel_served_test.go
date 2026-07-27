@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/destination"
 	"trstctl.com/trstctl/internal/agent/destination/certstore"
 	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
+	"trstctl.com/trstctl/internal/agent/sshdiscovery"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -31,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/sshinv"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -78,6 +80,119 @@ func (a channelClientAdapter) ReportInventory(ctx context.Context, req *agent.In
 		return nil, err
 	}
 	return &agent.InventoryResponse{TenantID: resp.TenantID, RunID: resp.RunID, Recorded: resp.Recorded, Rejected: resp.Rejected}, nil
+}
+
+// TestServedAgentSSHInventoryAuthorizedKeysEndToEnd is the P-6cbd64b2
+// reproduction wall. A real configured on-host collector parses an
+// authorized_keys grant, sends metadata over the shipped mTLS agent RPC, and
+// the event projection makes it visible in the tenant's SSH fleet API. Another
+// tenant cannot see the grant.
+func TestServedAgentSSHInventoryAuthorizedKeysEndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	t.Cleanup(chCancel)
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+
+	a := enrollAgent(t, h, "edge-agent-ssh-inventory", "agent.trstctl.local")
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatalf("dial agent channel: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+
+	authorizedKeys := filepath.Join(t.TempDir(), "authorized_keys")
+	const grant = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPexCbv5HmN6JhIN7b1GaDxkyWFY3uSrHBvKdlQYHONt"
+	if err := os.WriteFile(authorizedKeys, []byte(grant+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	found, err := sshdiscovery.New(sshdiscovery.Config{
+		AuthorizedKeysPaths: []string{authorizedKeys},
+	}).Discover(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 || found[0].Source != sshinv.SourceAuthorizedKeys || !found[0].StandingAccess || !found[0].Orphaned {
+		t.Fatalf("collector result = %+v, want one orphaned standing grant", found)
+	}
+	wireFindings := make([]transport.InventoryFinding, 0, len(found))
+	for _, f := range found {
+		wireFindings = append(wireFindings, transport.InventoryFinding{
+			Kind:        "ssh_key",
+			Ref:         f.Location,
+			Provenance:  f.Source + ":" + f.Location + ":" + f.Fingerprint,
+			Fingerprint: f.Fingerprint,
+			RiskScore:   90,
+			Metadata: map[string]string{
+				"source": f.Source, "location": f.Location, "key_type": f.KeyType,
+				"comment": f.Comment, "standing_access": "true", "orphaned": "true",
+				"key_bytes": "not_collected",
+			},
+		})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
+		SourceKind: sshdiscovery.SourceKind,
+		Findings:   wireFindings,
+	})
+	if err != nil {
+		t.Fatalf("report SSH inventory: %v", err)
+	}
+	if inv.TenantID != h.tenant || inv.Recorded != 1 || inv.Rejected != 0 {
+		t.Fatalf("inventory response = %+v", inv)
+	}
+
+	tokA := seedScopedToken(t, h.store, h.tenant, "certs:read")
+	statusCode, body := secretsReq(t, h, http.MethodGet, "/api/v1/ssh/fleet", tokA, nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("tenant A fleet: status %d body %s", statusCode, body)
+	}
+	var fleet struct {
+		Hosts []struct {
+			Location     string   `json:"location"`
+			StandingKeys int      `json:"standing_keys"`
+			OrphanedKeys int      `json:"orphaned_keys"`
+			Sources      []string `json:"sources"`
+		} `json:"hosts"`
+		StandingKeyCount int `json:"standing_key_count"`
+		OrphanedKeyCount int `json:"orphaned_key_count"`
+	}
+	if err := json.Unmarshal(body, &fleet); err != nil {
+		t.Fatalf("decode tenant A fleet: %v (%s)", err, body)
+	}
+	if len(fleet.Hosts) != 1 || fleet.Hosts[0].Location != authorizedKeys ||
+		fleet.Hosts[0].StandingKeys != 1 || fleet.Hosts[0].OrphanedKeys != 1 ||
+		fleet.StandingKeyCount != 1 || fleet.OrphanedKeyCount != 1 {
+		t.Fatalf("tenant A fleet = %+v", fleet)
+	}
+
+	const tenantB = "22222222-2222-2222-2222-222222222222"
+	tokB := seedScopedToken(t, h.store, tenantB, "certs:read")
+	statusCode, body = secretsReq(t, h, http.MethodGet, "/api/v1/ssh/fleet", tokB, nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("tenant B fleet: status %d body %s", statusCode, body)
+	}
+	var fleetB struct {
+		HostCount int `json:"host_count"`
+		KeyCount  int `json:"key_count"`
+	}
+	if err := json.Unmarshal(body, &fleetB); err != nil {
+		t.Fatalf("decode tenant B fleet: %v (%s)", err, body)
+	}
+	if fleetB.HostCount != 0 || fleetB.KeyCount != 0 {
+		t.Fatalf("cross-tenant SSH inventory leak: %+v body %s", fleetB, body)
+	}
 }
 
 // enrollAgent issues a one-time bootstrap token through the served enrollment
@@ -712,7 +827,7 @@ func TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd(t *testing.T) {
 			privateKeyBytes bool
 		}{cap.ReportedOver, cap.MetadataOnly, cap.PrivateKeyBytes}
 	}
-	for _, want := range []string{"filesystem", "pkcs11", "windows-store", "k8s-secret", "trust-store", "private-key"} {
+	for _, want := range []string{"filesystem", "pkcs11", "windows-store", "k8s-secret", "trust-store", "private-key", "ssh"} {
 		got, ok := caps[want]
 		if !ok {
 			t.Fatalf("agent API missing CAP-DISC-02 source kind %s in %+v", want, agents.Agents[0].DiscoveryCapabilities)

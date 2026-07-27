@@ -24,6 +24,7 @@ func TestAgentResponseAdvertisesEndpointDiscoveryCapabilitiesCAPDISC02(t *testin
 		"k8s-secret":    false,
 		"trust-store":   false,
 		"private-key":   false,
+		"ssh":           false,
 	}
 	for _, cap := range got.DiscoveryCapabilities {
 		seen, ok := wantSources[cap.SourceKind]

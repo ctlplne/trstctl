@@ -24,6 +24,9 @@ import (
 	"trstctl.com/trstctl/internal/sshinv"
 )
 
+// SourceKind is the agent inventory channel source for one on-host SSH scan.
+const SourceKind = "ssh"
+
 // Config locates the SSH material to inventory. All fields are optional; paths
 // and globs that match nothing are skipped. Defaulting to system locations is
 // the caller's responsibility, so the source is testable against temp dirs.

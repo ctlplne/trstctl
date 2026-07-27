@@ -645,8 +645,8 @@
       "phase": "P2",
       "priority": 45,
       "served_state": "served",
-      "backend_status": "served discovery control-plane source/run/finding records, outbox-executed SSH host-key scans, NHI inventory normalization, and served agent private-key-material reports; privileged SSH trust mutation remains a separate explicit-confirmation workflow",
-      "current_frontend_mapping": "served: Discovery at /discovery serves ssh sources, schedules, runs, metadata-only ssh_key findings, and continuous monitoring readback; SSH trust mutation remains outside this screen.",
+      "backend_status": "served discovery control-plane source/run/finding records, outbox-executed SSH host-key scans, and explicitly configured on-host SSH/private-key inventory over the agent mTLS channel; SSH findings project into the tenant fleet read model and privileged trust mutation remains separately confirmed",
+      "current_frontend_mapping": "served: Discovery at /discovery serves ssh sources, schedules, runs, metadata-only ssh_key findings, and monitoring; SSH trust at /ssh serves standing/orphaned access from /api/v1/ssh/fleet.",
       "target_gui_mapping": "SSH inventory page showing discovered authorized_keys, trusted CAs, host keys, standing access, weak trust, and agent source evidence.",
       "acceptance_test": "Served Go tests prove ssh discovery sources queue an outbox-executed non-invasive host-key scan, record metadata-only ssh_key findings, normalize into NHI inventory, and never authenticate or expose key bytes; private-key-material discovery reports metadata-only private_key findings over the agent channel.",
       "source_docs": [
@@ -660,6 +660,7 @@
         "internal/crypto/keyinspect.go",
         "internal/sshinv",
         "cmd/trstctl-agent/main.go",
+        "/api/v1/ssh/fleet",
         "/api/v1/discovery/sources",
         "/api/v1/discovery/schedules",
         "/api/v1/discovery/runs",
@@ -667,10 +668,11 @@
       ],
       "source_frontend": [
         "web/src/pages/Discovery.tsx",
+        "web/src/pages/SSHTrust.tsx",
         "web/src/lib/api.ts"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence, advanced by DISC-03, and updated by TRACE-002. Test evidence: TestServedSSHHostKeyDiscoveryEndToEnd creates a served ssh discovery source, queues a run, drains the outbox worker, records a metadata-only ssh_key finding, verifies NHI inventory normalization, and proves the probe does not authenticate. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. DISC-03 evidence: TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly plants a private-key fixture, classifies it through internal/crypto, reports it over the served agent channel, and verifies served findings plus graph nodes contain only metadata with key_bytes_present=false. B-2 adds getSSHFleet: discovered SSH keys rolled up per host with standing-access and orphaned counts. Every ssh_keys row is a RAW key (a CA-minted certificate is not stored there), so the view is the not-under-CA list and says so explicitly rather than leaving it to be inferred; covered by TestSSHFleetInventoryRollsUpStandingKeyAccess and its empty/unwired/failure/unauthenticated cases.",
+      "notes": "Closed by route-level feature-map evidence, advanced by DISC-03, and updated by TRACE-002. Test evidence: TestServedSSHHostKeyDiscoveryEndToEnd creates a served ssh discovery source, queues a run, drains the outbox worker, records a metadata-only ssh_key finding, verifies NHI inventory normalization, and proves the probe does not authenticate. TestShippedAgentReportsConfiguredAuthorizedKeysMetadata proves cmd/trstctl-agent invokes the on-host collector only for operator-configured paths and emits no key bytes. TestServedAgentSSHInventoryAuthorizedKeysEndToEnd carries an orphaned authorized_keys grant over real agent mTLS, projects its immutable event into tenant SSH inventory, reads it from /api/v1/ssh/fleet, and proves cross-tenant isolation. web/src/__tests__/ssh_trust.test.tsx proves the console renders the same standing/orphaned fleet evidence. DISC-03 separately covers metadata-only private-key reports. Every ssh_keys row is a RAW key (a CA-minted certificate is not stored there), so the view is the not-under-CA list and says so explicitly.",
       "api_surface": [
         "createDiscoverySchedule",
         "createDiscoverySource",
@@ -700,8 +702,9 @@
           "evidence": [
             "SSH discovery is served as tenant-scoped discovery source, schedule, run, and finding records; SSH host-key scanning executes from the served discovery outbox worker with bounded queues and reserved-address filtering.",
             "DISC-03 wires private-key-material discovery through the served agent channel as metadata-only private_key findings.",
+            "P-6cbd64b2 wires operator-configured host/user/authorized_keys/known_hosts/trusted-CA collection through cmd/trstctl-agent and projects its immutable agent inventory events into the SSH fleet read model.",
             "served_state=served",
-            "backend_status=served discovery control-plane source/run/finding records, outbox-executed SSH host-key scans, NHI inventory normalization, and served agent private-key-material reports; privileged SSH trust mutation remains a separate explicit-confirmation workflow"
+            "backend_status=served discovery control-plane source/run/finding records, outbox-executed SSH host-key scans, and explicitly configured on-host SSH/private-key inventory over the agent mTLS channel; SSH findings project into the tenant fleet read model and privileged trust mutation remains separately confirmed"
           ],
           "refs": [
             "internal/api/discovery.go",
@@ -718,10 +721,12 @@
         },
         "ui": {
           "evidence": [
-            "served: Discovery at /discovery serves ssh sources, schedules, runs, and metadata-only findings; SSH trust mutation remains outside this screen."
+            "served: Discovery at /discovery serves ssh source/run/finding evidence and SSH trust at /ssh renders tenant standing/orphaned fleet evidence."
           ],
           "refs": [
             "web/src/pages/Discovery.tsx",
+            "web/src/pages/SSHTrust.tsx",
+            "web/src/__tests__/ssh_trust.test.tsx",
             "web/src/__tests__/discovery.test.tsx",
             "web/src/lib/api.ts"
           ]
@@ -735,7 +740,8 @@
             "CLI command: discovery runs start",
             "CLI command: discovery runs list",
             "CLI command: discovery runs get",
-            "CLI command: discovery findings list"
+            "CLI command: discovery findings list",
+            "CLI command: ssh fleet"
           ],
           "refs": [
             "internal/cli/command.go"

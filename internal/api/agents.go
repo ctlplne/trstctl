@@ -30,6 +30,7 @@ var agentDiscoveryCapabilities = []agentDiscoveryCapabilityResponse{
 	{SourceKind: "k8s-secret", Label: "Kubernetes TLS Secrets", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
 	{SourceKind: "trust-store", Label: "OS, Java, NSS, browser, and Windows trust stores", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
 	{SourceKind: "private-key", Label: "Private-key material locations", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
+	{SourceKind: "ssh", Label: "SSH keys, authorized access, known hosts, and trusted CAs", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
 }
 
 // agentResponse is an in-network agent in the API's JSON shape.

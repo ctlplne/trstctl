@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -2021,10 +2022,36 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyDiscoveryFindingRecordedTx(ctx, tx, store.DiscoveryFinding{
+		if err := p.store.ApplyDiscoveryFindingRecordedTx(ctx, tx, store.DiscoveryFinding{
 			ID: pl.ID, TenantID: e.TenantID, RunID: pl.RunID, SourceID: pl.SourceID,
 			Kind: pl.Kind, Ref: pl.Ref, Provenance: pl.Provenance, Fingerprint: pl.Fingerprint,
 			RiskScore: pl.RiskScore, Metadata: pl.Metadata, DiscoveredAt: e.Time,
+		}); err != nil {
+			return err
+		}
+		if pl.Kind != "ssh_key" || pl.Fingerprint == "" {
+			return nil
+		}
+		var meta struct {
+			Source         string          `json:"source"`
+			Location       string          `json:"location"`
+			KeyType        string          `json:"key_type"`
+			Comment        string          `json:"comment"`
+			StandingAccess json.RawMessage `json:"standing_access"`
+			Orphaned       json.RawMessage `json:"orphaned"`
+		}
+		if err := json.Unmarshal(pl.Metadata, &meta); err != nil {
+			return fmt.Errorf("projections: decode SSH discovery metadata: %w", err)
+		}
+		if meta.Location == "" {
+			meta.Location = pl.Ref
+		}
+		return p.store.ApplySSHKeyDiscoveredTx(ctx, tx, store.SSHKey{
+			ID: pl.ID, TenantID: e.TenantID, Fingerprint: pl.Fingerprint,
+			KeyType: meta.KeyType, Comment: meta.Comment, Source: meta.Source,
+			Location: meta.Location, StandingAccess: discoveryMetadataBool(meta.StandingAccess),
+			Orphaned:  discoveryMetadataBool(meta.Orphaned),
+			CreatedAt: e.Time,
 		})
 	case EventDiscoveryFindingTriageChanged:
 		var pl DiscoveryFindingTriageChanged
@@ -2842,6 +2869,22 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return nil
 	}
+}
+
+// discoveryMetadataBool accepts both the server scanner's JSON booleans and
+// the agent channel's string-valued metadata map. Discovery events are
+// immutable, so projections must keep replaying both historical wire shapes.
+func discoveryMetadataBool(raw json.RawMessage) bool {
+	var value bool
+	if err := json.Unmarshal(raw, &value); err == nil {
+		return value
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err != nil {
+		return false
+	}
+	value, _ = strconv.ParseBool(text)
+	return value
 }
 
 func decode(e events.Event, v any) error {

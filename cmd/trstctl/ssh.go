@@ -15,7 +15,7 @@ import (
 
 func runSSH(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	if len(args) < 1 {
-		return errors.New("usage: trstctl ssh <status|trust-rollout|issue-attested-user|revoke|retire-host>")
+		return errors.New("usage: trstctl ssh <status|fleet|trust-rollout|issue-attested-user|revoke|retire-host>")
 	}
 	cfg, err := connectorCLIConfigFromEnv(getenv)
 	if err != nil {
@@ -24,6 +24,8 @@ func runSSH(ctx context.Context, args []string, getenv func(string) string, stdo
 	switch args[0] {
 	case "status":
 		return connectorCLIRequest(ctx, stdout, cfg, http.MethodGet, "/api/v1/ssh/status", nil, false)
+	case "fleet":
+		return connectorCLIRequest(ctx, stdout, cfg, http.MethodGet, "/api/v1/ssh/fleet", nil, false)
 	case "trust-rollout":
 		fs := flag.NewFlagSet("trstctl ssh trust-rollout", flag.ContinueOnError)
 		fs.SetOutput(stderr)

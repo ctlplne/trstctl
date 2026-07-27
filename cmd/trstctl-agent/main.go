@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/agent"
 	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/secretinject"
+	"trstctl.com/trstctl/internal/agent/sshdiscovery"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -57,6 +58,11 @@ func main() {
 	inventoryNSSTrustRoots := flag.String("inventory-nss-trust-roots", "", "comma-separated NSS profile export files/directories whose public CA certificates the agent inventories")
 	inventoryBrowserTrustRoots := flag.String("inventory-browser-trust-roots", "", "comma-separated browser profile export files/directories whose public CA certificates the agent inventories")
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
+	inventorySSHHostKeyGlobs := flag.String("inventory-ssh-host-key-globs", "", "comma-separated public host-key globs to inventory; empty disables this SSH source")
+	inventorySSHUserKeyGlobs := flag.String("inventory-ssh-user-key-globs", "", "comma-separated public user-key globs to inventory; empty disables this SSH source")
+	inventorySSHAuthorizedKeys := flag.String("inventory-ssh-authorized-keys", "", "comma-separated authorized_keys paths or globs to inventory; empty disables this SSH source")
+	inventorySSHKnownHosts := flag.String("inventory-ssh-known-hosts", "", "comma-separated known_hosts paths or globs to inventory; empty disables this SSH source")
+	inventorySSHSSHDConfigs := flag.String("inventory-ssh-sshd-configs", "", "comma-separated sshd_config paths or globs whose TrustedUserCAKeys references are inventoried; empty disables this SSH source")
 	k8sMode := flag.Bool("k8s", false, "run as a Kubernetes DaemonSet: publish the identity into a Secret and reconcile Kubernetes certificate CRDs")
 	k8sSecret := flag.String("k8s-secret", "", "Kubernetes Secret to publish the identity into (namespace/name)")
 	cmIssuer := flag.String("cert-manager-issuer", "", "cert-manager issuerRef name to bridge (enables the external issuer)")
@@ -186,6 +192,13 @@ func main() {
 		inventoryNSSTrustRoots:            splitList(*inventoryNSSTrustRoots),
 		inventoryBrowserTrustRoots:        splitList(*inventoryBrowserTrustRoots),
 		inventoryPrivateKeyRoots:          splitList(*inventoryPrivateKeyRoots),
+		inventorySSH: sshdiscovery.Config{
+			HostKeyGlobs:        splitList(*inventorySSHHostKeyGlobs),
+			UserKeyGlobs:        splitList(*inventorySSHUserKeyGlobs),
+			AuthorizedKeysPaths: splitList(*inventorySSHAuthorizedKeys),
+			KnownHostsPaths:     splitList(*inventorySSHKnownHosts),
+			SSHDConfigPaths:     splitList(*inventorySSHSSHDConfigs),
+		},
 	}
 	if o.inlineToken != "" && !o.allowInsecureDevBootstrapTokenArg {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: inline bootstrap tokens are development-only because process arguments expose bearer credentials; write the token to a 0600 file and use --bootstrap-token-file")
@@ -237,6 +250,7 @@ type agentOptions struct {
 	inventoryNSSTrustRoots                                                                             []string
 	inventoryBrowserTrustRoots                                                                         []string
 	inventoryPrivateKeyRoots                                                                           []string
+	inventorySSH                                                                                       sshdiscovery.Config
 }
 
 func prepareIdentityDir(path string, uid, gid int) error {
@@ -337,6 +351,11 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if len(o.inventoryPrivateKeyRoots) > 0 {
 		if err := reportPrivateKeyInventory(ctx, a, ch, o.inventoryPrivateKeyRoots); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: private-key inventory report failed:", err)
+		}
+	}
+	if hasSSHInventory(o.inventorySSH) {
+		if err := reportSSHInventory(ctx, a, ch, o.inventorySSH); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: SSH inventory report failed:", err)
 		}
 	}
 
@@ -527,6 +546,64 @@ func privateKeyInventoryFindings(found []agentdiscovery.PrivateKeyFound) []agent
 		})
 	}
 	return findings
+}
+
+type inventoryReporter interface {
+	ReportInventory(context.Context, agent.ChannelClient, string, []agent.InventoryFinding) (*agent.InventoryResponse, error)
+}
+
+func hasSSHInventory(cfg sshdiscovery.Config) bool {
+	return len(cfg.HostKeyGlobs) > 0 ||
+		len(cfg.UserKeyGlobs) > 0 ||
+		len(cfg.AuthorizedKeysPaths) > 0 ||
+		len(cfg.KnownHostsPaths) > 0 ||
+		len(cfg.SSHDConfigPaths) > 0
+}
+
+// reportSSHInventory is the shipped-agent caller for F42. Collection is
+// explicitly configured and metadata-only: public key bytes never cross the
+// agent channel. The control plane derives the tenant from this connection's
+// verified client certificate.
+func reportSSHInventory(ctx context.Context, reporter inventoryReporter, ch agent.ChannelClient, cfg sshdiscovery.Config) error {
+	found, err := sshdiscovery.New(cfg).Discover(ctx)
+	if err != nil {
+		return err
+	}
+	findings := make([]agent.InventoryFinding, 0, len(found))
+	for _, f := range found {
+		risk := 20
+		if f.StandingAccess {
+			risk = 70
+		}
+		if f.Orphaned {
+			risk = 90
+		}
+		findings = append(findings, agent.InventoryFinding{
+			Kind:        "ssh_key",
+			Ref:         f.Location,
+			Provenance:  f.Source + ":" + f.Location + ":" + f.Fingerprint,
+			Fingerprint: f.Fingerprint,
+			RiskScore:   risk,
+			Metadata: map[string]string{
+				"source":          f.Source,
+				"location":        f.Location,
+				"key_type":        f.KeyType,
+				"comment":         f.Comment,
+				"standing_access": strconv.FormatBool(f.StandingAccess),
+				"orphaned":        strconv.FormatBool(f.Orphaned),
+				"key_bytes":       "not_collected",
+			},
+		})
+	}
+	if len(findings) == 0 {
+		return nil
+	}
+	resp, err := reporter.ReportInventory(ctx, ch, sshdiscovery.SourceKind, findings)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("trstctl-agent: reported %d SSH inventory findings (run %s, rejected %d)\n", resp.Recorded, resp.RunID, resp.Rejected)
+	return nil
 }
 
 func bootstrapTokenForRun(o agentOptions) ([]byte, error) {
