@@ -1240,10 +1240,10 @@ func validManifest(t *testing.T, repo, enforcement string) Manifest {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, repo, "go.mod", "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.4\n", 0o600)
+	writeFile(t, repo, "go.mod", "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.5\n", 0o600)
 	writeFile(t, repo, "go.sum", "", 0o600)
 	writeFile(t, repo, "tools/dodcensus/Dockerfile.runtime-runner", runtimeRunnerFixture(), 0o600)
-	writeFile(t, repo, runtimeRunnerBaseFile, "golang:1.26.4-bookworm@sha256:"+strings.Repeat("b", 64)+"\n", 0o600)
+	writeFile(t, repo, runtimeRunnerBaseFile, "golang:1.26.5-bookworm@sha256:"+strings.Repeat("b", 64)+"\n", 0o600)
 	runnerFiles := []string{"go.mod", "go.sum", "tools/dodcensus/Dockerfile.runtime-runner", runtimeRunnerBaseFile}
 	runnerDigest, err := commandIdentityDigest(repo, runnerFiles)
 	if err != nil {

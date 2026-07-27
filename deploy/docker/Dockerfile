@@ -16,7 +16,7 @@
 # .dockerignore). Version metadata is injected via --build-arg, and the release
 # pipeline rewrites layer timestamps to SOURCE_DATE_EPOCH.
 
-ARG GO_VERSION=1.26.4
+ARG GO_VERSION=1.26.5
 
 # Web-build, Go-build, and runtime base images. Declared in the GLOBAL scope
 # (before the first FROM) so every FROM can resolve them — a variable in a FROM is
@@ -24,7 +24,7 @@ ARG GO_VERSION=1.26.4
 # the release pipeline overrides all three with immutable @sha256 digests (see
 # .github/workflows/release.yml).
 ARG WEB_BUILD_IMAGE=node:22-bookworm-slim
-ARG BUILD_IMAGE=golang:1.26.4-bookworm
+ARG BUILD_IMAGE=golang:1.26.5-bookworm
 ARG BASE_IMAGE=gcr.io/distroless/static-debian12:nonroot
 
 # ---- web build stage ------------------------------------------------------

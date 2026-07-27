@@ -239,7 +239,7 @@ version = subprocess.run(
     text=True,
     env={"PATH": "/usr/local/go/bin:/usr/bin:/bin"},
 ).stdout.strip()
-if version != "go version go1.26.4 linux/amd64":
+if version != "go version go1.26.5 linux/amd64":
     raise RuntimeError("runtime runner toolchain identity is %r" % version)
 
 kind_path = pathlib.Path("/usr/local/bin/kind")
