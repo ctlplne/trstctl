@@ -4,9 +4,16 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -29,7 +36,11 @@ const defaultRequiredApprovals = 2
 // recorder when nothing is configured, so an unconfigured deployment keeps the prior
 // served behavior. A non-compiling policy module is a hard error (the platform must
 // not serve without an enforceable policy when the gate is on).
-func buildMutationGate(d Deps, bulk *bulkhead.Set) (api.MutationGate, api.ApprovalRecorder, error) {
+type approvalOutbox interface {
+	EnqueueIfAbsent(context.Context, pgx.Tx, orchestrator.Entry) (bool, error)
+}
+
+func buildMutationGate(d Deps, bulk *bulkhead.Set, outbox approvalOutbox) (api.MutationGate, api.ApprovalRecorder, error) {
 	gate := api.MutationGate{}
 
 	if d.EnablePolicyGate {
@@ -71,11 +82,14 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set) (api.MutationGate, api.Approv
 
 	var recorder api.ApprovalRecorder
 	if d.Store != nil {
+		if d.RequireApproval && outbox == nil {
+			return api.MutationGate{}, nil, fmt.Errorf("server: dual control requires the transactional notification outbox")
+		}
 		required := d.RequiredApprovals
 		if required <= 0 {
 			required = defaultRequiredApprovals
 		}
-		gate.Checker = storeApprovalChecker{store: d.Store, required: required}
+		gate.Checker = storeApprovalChecker{store: d.Store, outbox: outbox, required: required}
 		recorder = storeApprovalRecorder{store: d.Store, required: required}
 		if d.RequireApproval {
 			gate.RequireApproval = true
@@ -94,6 +108,7 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set) (api.MutationGate, api.Approv
 // insufficient count denies).
 type storeApprovalChecker struct {
 	store    *store.Store
+	outbox   approvalOutbox
 	required int
 }
 
@@ -106,10 +121,40 @@ func (c storeApprovalChecker) IsApproved(ctx context.Context, tenantID, resource
 	if required <= 0 {
 		required = defaultRequiredApprovals
 	}
-	// Record that this requester's privileged action awaits approval (idempotent;
-	// preserves the original requester on a retry). Capturing the requester is what
-	// lets the store reject a self-approval and lets HasDistinctApproval exclude them.
-	if err := c.store.OpenIssuanceApprovalRequest(ctx, tenantID, resource, action, requester, required); err != nil {
+	if c.outbox == nil {
+		return false, "could not queue the approval notification"
+	}
+	binding := crypto.SHA256Hex([]byte(action + "\x00" + resource))
+	payload, err := json.Marshal(notify.Alert{
+		Kind:           notify.KindApprovalRequest,
+		TenantID:       tenantID,
+		OperationID:    "approval-" + binding,
+		RequestBinding: binding,
+		Subject:        resource,
+		Detail:         fmt.Sprintf("%s requested approval to %s this resource", requester, action),
+		Severity:       notify.AlertSeverityWarning,
+	})
+	if err != nil {
+		return false, "could not encode the approval notification"
+	}
+	// Record the request and notification intent in one transaction. A request
+	// without its message, or a message without its request, cannot commit (AN-6).
+	// EnqueueIfAbsent gives retries one receiver command and rejects a changed
+	// requester/payload under the same durable approval identity.
+	err = c.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := c.store.OpenIssuanceApprovalRequestTx(ctx, tx, tenantID, resource, action, requester, required); err != nil {
+			return err
+		}
+		_, err := c.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+			TenantID:       tenantID,
+			Destination:    notify.DestinationApproval,
+			IdempotencyKey: "approval-request:" + binding,
+			Payload:        payload,
+			EffectLane:     notify.DestinationApproval + ":resource:" + binding,
+		})
+		return err
+	})
+	if err != nil {
 		return false, "could not record the approval request"
 	}
 	ok, err := c.store.HasDistinctApproval(ctx, tenantID, resource, action, requester, required)

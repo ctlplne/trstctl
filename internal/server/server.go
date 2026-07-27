@@ -982,7 +982,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	} else if externalCAs != nil {
 		defaults = append(defaults, api.WithExternalCAs(externalCAs))
 	}
-	if mk, err := buildManagedKeyService(d, idem); err != nil {
+	if mk, err := buildManagedKeyService(d, idem, s.outbox); err != nil {
 		return nil, nil, fmt.Errorf("server: configure managed-key lifecycle: %w", err)
 	} else if mk != nil {
 		defaults = append(defaults, api.WithManagedKeys(mk))
@@ -1112,7 +1112,7 @@ func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
 		s.bulk = bulkhead.Default()
 	}
 	s.mBulkheads = observ.NewBulkheadMetrics(s.registry)
-	gate, approvals, err := buildMutationGate(d, s.bulk)
+	gate, approvals, err := buildMutationGate(d, s.bulk, s.outbox)
 	if err != nil {
 		return err
 	}

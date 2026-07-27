@@ -56,17 +56,30 @@ func (s *Store) OpenIssuanceApprovalRequest(ctx context.Context, tenantID, resou
 		required = 2 // dual control
 	}
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO issuance_approval_requests (tenant_id, resource, action, requester, required)
-			 VALUES ($1, $2, $3, $4, $5)
-			 ON CONFLICT (tenant_id, resource, action) DO UPDATE
-			    SET requester = CASE
-			        WHEN issuance_approval_requests.requester = '' THEN EXCLUDED.requester
-			        ELSE issuance_approval_requests.requester
-			    END`,
-			tenantID, resource, action, requester, required)
-		return err
+		return s.OpenIssuanceApprovalRequestTx(ctx, tx, tenantID, resource, action, requester, required)
 	})
+}
+
+// OpenIssuanceApprovalRequestTx is the transaction-aware form used by producers
+// that must commit another durable fact beside the request. In particular, the
+// served mutation gate calls it immediately before enqueueing the approval
+// notification on the same tx (AN-6). Callers must already be inside
+// Store.WithTenant for tenantID; every predicate still carries tenant_id so RLS
+// remains a second isolation boundary (AN-1).
+func (s *Store) OpenIssuanceApprovalRequestTx(ctx context.Context, tx pgx.Tx, tenantID, resource, action, requester string, required int) error {
+	if required <= 0 {
+		required = 2
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO issuance_approval_requests (tenant_id, resource, action, requester, required)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (tenant_id, resource, action) DO UPDATE
+		    SET requester = CASE
+		        WHEN issuance_approval_requests.requester = '' THEN EXCLUDED.requester
+		        ELSE issuance_approval_requests.requester
+		    END`,
+		tenantID, resource, action, requester, required)
+	return err
 }
 
 // ApproveIssuance records a distinct approver's approval of a privileged action and

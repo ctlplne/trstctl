@@ -30,6 +30,10 @@ const (
 	DestinationResponse = "notification.response"
 	// DestinationTest carries operator-requested channel test alerts.
 	DestinationTest = "notification.test"
+	// DestinationApproval carries dual-control approval requests. The approval
+	// row and this delivery intent are committed in one PostgreSQL transaction;
+	// channel delivery happens later in the bounded notification outbox worker.
+	DestinationApproval = "notification.approval"
 )
 
 // Alert kinds.
@@ -49,6 +53,9 @@ const (
 	KindResponseIntegration = "response.integration"
 	// KindNotificationChannelTest marks an operator-requested channel test.
 	KindNotificationChannelTest = "notification.channel_test"
+	// KindApprovalRequest marks a privileged action waiting for a distinct
+	// approver. It contains routing metadata only, never credential material.
+	KindApprovalRequest = "approval.requested"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing
