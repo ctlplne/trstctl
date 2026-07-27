@@ -4,6 +4,7 @@ package approval
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -17,9 +18,34 @@ func (r *recIssuer) Issue(_ context.Context, _, reqID, _ string) (string, error)
 	return "cred-" + reqID, nil
 }
 
-type recNotifier struct{ n int }
+type recoveringIssuer struct {
+	issues     int
+	recoveries int
+}
 
-func (r *recNotifier) NotifyApprovalRequest(context.Context, Request) error { r.n++; return nil }
+func (r *recoveringIssuer) Issue(_ context.Context, _, reqID, _ string) (string, error) {
+	r.issues++
+	return "cred-" + reqID, nil
+}
+
+func (r *recoveringIssuer) RecoverIssuance(_ context.Context, _, reqID, _ string) (string, bool, error) {
+	r.recoveries++
+	return "cred-" + reqID, true, nil
+}
+
+type failNthSaveStore struct {
+	*MemoryStore
+	saves  int
+	failAt int
+}
+
+func (s *failNthSaveStore) Save(ctx context.Context, req Request) error {
+	s.saves++
+	if s.saves == s.failAt {
+		return errors.New("injected save failure")
+	}
+	return s.MemoryStore.Save(ctx, req)
+}
 
 type policyFn func(ctx context.Context, tenantID, reqID, approver string) (bool, string)
 
@@ -27,10 +53,10 @@ func (p policyFn) CanApprove(ctx context.Context, t, r, a string) (bool, string)
 	return p(ctx, t, r, a)
 }
 
-func newMgr(t *testing.T, iss Issuer, pol ApproverPolicy, notif Notifier, rec auditsink.Auditor, clock func() time.Time) *Manager {
+func newMgr(t *testing.T, iss Issuer, pol ApproverPolicy, rec auditsink.Auditor, clock func() time.Time) *Manager {
 	t.Helper()
 	m, err := New(Config{
-		TenantID: "t1", Store: NewMemoryStore(), Issuer: iss, Policy: pol, Notifier: notif,
+		TenantID: "t1", Store: NewMemoryStore(), Issuer: iss, Policy: pol,
 		Audit: rec, Clock: clock, DefaultTTL: time.Hour,
 	})
 	if err != nil {
@@ -41,8 +67,7 @@ func newMgr(t *testing.T, iss Issuer, pol ApproverPolicy, notif Notifier, rec au
 
 func TestRequiresApprovalBeforeIssuance(t *testing.T) {
 	iss := &recIssuer{}
-	notif := &recNotifier{}
-	m := newMgr(t, iss, nil, notif, &auditsink.Recorder{}, nil)
+	m := newMgr(t, iss, nil, &auditsink.Recorder{}, nil)
 	req, err := m.RequestIssuance(context.Background(), RequestSpec{ID: "r1", Resource: "prod-cert", Requester: "alice"})
 	if err != nil {
 		t.Fatal(err)
@@ -53,15 +78,12 @@ func TestRequiresApprovalBeforeIssuance(t *testing.T) {
 	if iss.n != 0 {
 		t.Error("credential issued before approval")
 	}
-	if notif.n != 1 {
-		t.Error("approvers were not notified")
-	}
 }
 
 func TestDualControlIssuesAtQuorumAndAuditsChain(t *testing.T) {
 	iss := &recIssuer{}
 	rec := &auditsink.Recorder{}
-	m := newMgr(t, iss, nil, &recNotifier{}, rec, nil)
+	m := newMgr(t, iss, nil, rec, nil)
 	ctx := context.Background()
 	if _, err := m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "prod-cert", Requester: "alice"}); err != nil {
 		t.Fatal(err)
@@ -81,7 +103,7 @@ func TestDualControlIssuesAtQuorumAndAuditsChain(t *testing.T) {
 
 func TestSelfApprovalDenied(t *testing.T) {
 	iss := &recIssuer{}
-	m := newMgr(t, iss, nil, nil, &auditsink.Recorder{}, nil)
+	m := newMgr(t, iss, nil, &auditsink.Recorder{}, nil)
 	ctx := context.Background()
 	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "x", Requester: "alice"})
 	if _, err := m.Approve(ctx, "t1", "r1", "alice"); err == nil {
@@ -100,7 +122,7 @@ func TestPolicyScopedApprover(t *testing.T) {
 		}
 		return true, ""
 	})
-	m := newMgr(t, &recIssuer{}, pol, nil, rec, nil)
+	m := newMgr(t, &recIssuer{}, pol, rec, nil)
 	ctx := context.Background()
 	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "x", Requester: "alice"})
 	if _, err := m.Approve(ctx, "t1", "r1", "mallory"); err == nil {
@@ -115,7 +137,7 @@ func TestGrantExpires(t *testing.T) {
 	now := time.Now()
 	clock := func() time.Time { return now }
 	iss := &recIssuer{}
-	m := newMgr(t, iss, nil, nil, &auditsink.Recorder{}, clock)
+	m := newMgr(t, iss, nil, &auditsink.Recorder{}, clock)
 	ctx := context.Background()
 	if _, err := m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "x", Requester: "alice", TTL: time.Minute}); err != nil {
 		t.Fatal(err)
@@ -134,12 +156,50 @@ func TestGrantExpires(t *testing.T) {
 }
 
 func TestApproveIsIdempotent(t *testing.T) {
-	m := newMgr(t, &recIssuer{}, nil, nil, &auditsink.Recorder{}, nil)
+	m := newMgr(t, &recIssuer{}, nil, &auditsink.Recorder{}, nil)
 	ctx := context.Background()
 	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "x", Requester: "alice"})
 	_, _ = m.Approve(ctx, "t1", "r1", "bob")
 	r, _ := m.Approve(ctx, "t1", "r1", "bob") // duplicate
 	if approveCount(r) != 1 {
 		t.Errorf("duplicate approval counted twice: %d", approveCount(r))
+	}
+}
+
+func TestApproveDoesNotReissueAfterPostIssueSaveFailure(t *testing.T) {
+	ctx := context.Background()
+	store := &failNthSaveStore{MemoryStore: NewMemoryStore(), failAt: 3}
+	issuer := &recoveringIssuer{}
+	m, err := New(Config{
+		TenantID: "t1", Store: store, Issuer: issuer,
+		Audit: &auditsink.Recorder{}, DefaultTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.RequestIssuance(ctx, RequestSpec{
+		ID: "crash-window", Resource: "prod-cert", Requester: "alice", RequiredApprovals: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := m.Approve(ctx, "t1", "crash-window", "bob")
+	if err == nil || first.State != StateIssued || first.CredentialID != "cred-crash-window" {
+		t.Fatalf("post-issue save failure = (%+v, %v), want accurate issued result plus persistence error", first, err)
+	}
+	durable, ok, err := store.Get(ctx, "t1", "crash-window")
+	if err != nil || !ok || durable.State != StateIssuing || durable.CredentialID != "" {
+		t.Fatalf("durable crash state = (%+v, %v, %v), want issuing without guessed result", durable, ok, err)
+	}
+
+	recovered, err := m.Approve(ctx, "t1", "crash-window", "bob")
+	if err != nil {
+		t.Fatalf("recover issuance result: %v", err)
+	}
+	if recovered.State != StateIssued || recovered.CredentialID != "cred-crash-window" {
+		t.Fatalf("recovered request = %+v", recovered)
+	}
+	if issuer.issues != 1 || issuer.recoveries != 1 {
+		t.Fatalf("issue/recovery calls = %d/%d, want 1/1 (retry must not reissue)", issuer.issues, issuer.recoveries)
 	}
 }

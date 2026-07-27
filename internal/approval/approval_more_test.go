@@ -11,7 +11,7 @@ import (
 
 func TestDenyIsTerminal(t *testing.T) {
 	iss := &recIssuer{}
-	m := newMgr(t, iss, nil, nil, &auditsink.Recorder{}, nil)
+	m := newMgr(t, iss, nil, &auditsink.Recorder{}, nil)
 	ctx := context.Background()
 	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r", Resource: "x", Requester: "alice"})
 	r, err := m.Deny(ctx, "t1", "r", "bob", "not needed")
@@ -30,7 +30,7 @@ func TestDenyIsTerminal(t *testing.T) {
 }
 
 func TestUnknownRequestErrors(t *testing.T) {
-	m := newMgr(t, &recIssuer{}, nil, nil, &auditsink.Recorder{}, nil)
+	m := newMgr(t, &recIssuer{}, nil, &auditsink.Recorder{}, nil)
 	ctx := context.Background()
 	if _, err := m.Get(ctx, "t1", "nope"); err == nil {
 		t.Error("Get of unknown request should error")
@@ -45,7 +45,7 @@ func TestUnknownRequestErrors(t *testing.T) {
 
 func TestApproveAfterIssuedIsNoOp(t *testing.T) {
 	iss := &recIssuer{}
-	m := newMgr(t, iss, nil, nil, &auditsink.Recorder{}, nil)
+	m := newMgr(t, iss, nil, &auditsink.Recorder{}, nil)
 	ctx := context.Background()
 	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r", Resource: "x", Requester: "alice", RequiredApprovals: 1})
 	if _, err := m.Approve(ctx, "t1", "r", "bob"); err != nil { // issues at quorum=1
@@ -59,7 +59,7 @@ func TestApproveAfterIssuedIsNoOp(t *testing.T) {
 
 func TestDenyAfterIssuedRejected(t *testing.T) {
 	iss := &recIssuer{}
-	m := newMgr(t, iss, nil, nil, &auditsink.Recorder{}, nil)
+	m := newMgr(t, iss, nil, &auditsink.Recorder{}, nil)
 	ctx := context.Background()
 	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r", Resource: "x", Requester: "alice", RequiredApprovals: 1})
 	_, _ = m.Approve(ctx, "t1", "r", "bob")

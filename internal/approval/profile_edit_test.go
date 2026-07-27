@@ -11,7 +11,7 @@ import (
 )
 
 func TestProfileEditApprovalKindAndPayloadAreRecorded(t *testing.T) {
-	m := newMgr(t, &recIssuer{}, nil, nil, &auditsink.Recorder{}, nil)
+	m := newMgr(t, &recIssuer{}, nil, &auditsink.Recorder{}, nil)
 	payload := json.RawMessage(`{"name":"web","requires_approval":true}`)
 
 	req, err := m.RequestIssuance(context.Background(), RequestSpec{

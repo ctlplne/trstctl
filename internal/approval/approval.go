@@ -15,6 +15,7 @@ package approval
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ type State string
 const (
 	StateAwaitingApproval State = "awaiting_approval"
 	StateApproved         State = "approved"
+	StateIssuing          State = "issuing"
 	StateDenied           State = "denied"
 	StateIssued           State = "issued"
 	StateExpired          State = "expired"
@@ -76,22 +78,30 @@ type ApproverPolicy interface {
 	CanApprove(ctx context.Context, tenantID, requestID, approver string) (allowed bool, reason string)
 }
 
-// Notifier delivers an approval request to a channel (Slack/Teams).
-type Notifier interface {
-	NotifyApprovalRequest(ctx context.Context, req Request) error
-}
-
 // Issuer mints the credential once a request is approved.
 type Issuer interface {
 	Issue(ctx context.Context, tenantID, requestID, resource string) (credentialID string, err error)
 }
+
+// IssuanceRecovery resolves the ambiguous crash window after the durable request
+// entered StateIssuing. It must inspect the receiver by the stable request ID; it
+// must never mint another credential. An Issuer that cannot provide this lookup
+// leaves the request visibly recoverable in StateIssuing for an operator-specific
+// reconciler instead of risking a duplicate key operation.
+type IssuanceRecovery interface {
+	RecoverIssuance(ctx context.Context, tenantID, requestID, resource string) (credentialID string, complete bool, err error)
+}
+
+// ErrIssuanceOutcomePending means Issue may already have completed, but its
+// terminal credential ID is not durably attached to the approval request yet.
+// Retrying Approve never calls Issue again while this state is present.
+var ErrIssuanceOutcomePending = errors.New("approval: issuance outcome requires recovery")
 
 // Config configures a Manager.
 type Config struct {
 	TenantID                 string
 	Store                    Store
 	Policy                   ApproverPolicy
-	Notifier                 Notifier
 	Issuer                   Issuer
 	Audit                    auditsink.Auditor
 	DefaultTTL               time.Duration
@@ -138,8 +148,10 @@ type RequestSpec struct {
 	TTL               time.Duration // 0 → default
 }
 
-// RequestIssuance creates an approval request in awaiting-approval state and
-// notifies approvers. Nothing is issued yet.
+// RequestIssuance creates an approval request in awaiting-approval state.
+// Channel delivery does not happen in this library state machine. The served
+// PostgreSQL path persists its approval row and notification.* outbox intent in
+// one transaction, then the bounded notification worker delivers it (AN-6).
 func (m *Manager) RequestIssuance(ctx context.Context, spec RequestSpec) (Request, error) {
 	if spec.ID == "" || spec.Requester == "" || spec.Resource == "" {
 		return Request{}, fmt.Errorf("approval: ID, Requester and Resource are required")
@@ -165,9 +177,6 @@ func (m *Manager) RequestIssuance(ctx context.Context, spec RequestSpec) (Reques
 	if err := m.cfg.Store.Save(ctx, req); err != nil {
 		return Request{}, err
 	}
-	if m.cfg.Notifier != nil {
-		_ = m.cfg.Notifier.NotifyApprovalRequest(ctx, req)
-	}
 	m.audit(ctx, "approval.requested", fmt.Sprintf(`{"id":%q,"requester":%q,"resource":%q,"required":%d}`,
 		req.ID, req.Requester, req.Resource, req.RequiredApprovals))
 	return req, nil
@@ -185,6 +194,9 @@ func (m *Manager) Approve(ctx context.Context, tenantID, reqID, approver string)
 	}
 	if req.State == StateIssued || req.State == StateDenied {
 		return req, nil // terminal: idempotent no-op
+	}
+	if req.State == StateIssuing {
+		return m.recoverIssuance(ctx, req)
 	}
 	now := m.cfg.Clock()
 	if req.State == StateExpired || now.After(req.ExpiresAt) {
@@ -214,19 +226,47 @@ func (m *Manager) Approve(ctx context.Context, tenantID, reqID, approver string)
 	m.audit(ctx, "approval.approved", fmt.Sprintf(`{"id":%q,"approver":%q,"requester":%q}`, req.ID, approver, req.Requester))
 
 	if approveCount(req) >= req.RequiredApprovals {
-		req.State = StateApproved
+		// Persist the receiver command boundary before the external key operation.
+		// If the process dies after Issue, a retry sees StateIssuing and recovers by
+		// request ID; it never calls Issue a second time (AN-5).
+		req.State = StateIssuing
+		if err := m.cfg.Store.Save(ctx, req); err != nil {
+			return req, fmt.Errorf("approval: persist issuing state: %w", err)
+		}
 		credID, ierr := m.cfg.Issuer.Issue(ctx, tenantID, reqID, req.Resource)
 		if ierr != nil {
-			_ = m.cfg.Store.Save(ctx, req)
-			return req, fmt.Errorf("approval: issue: %w", ierr)
+			return req, errors.Join(ErrIssuanceOutcomePending, fmt.Errorf("issue: %w", ierr))
 		}
 		req.State = StateIssued
 		req.CredentialID = credID
 		m.audit(ctx, "approval.issued", fmt.Sprintf(`{"id":%q,"credential_id":%q}`, req.ID, credID))
 	}
 	if err := m.cfg.Store.Save(ctx, req); err != nil {
-		return Request{}, err
+		return req, fmt.Errorf("approval: persist state %q: %w", req.State, err)
 	}
+	return req, nil
+}
+
+func (m *Manager) recoverIssuance(ctx context.Context, req Request) (Request, error) {
+	recovery, ok := m.cfg.Issuer.(IssuanceRecovery)
+	if !ok {
+		return req, ErrIssuanceOutcomePending
+	}
+	credentialID, complete, err := recovery.RecoverIssuance(ctx, req.TenantID, req.ID, req.Resource)
+	if err != nil {
+		return req, errors.Join(ErrIssuanceOutcomePending, err)
+	}
+	if !complete || credentialID == "" {
+		return req, ErrIssuanceOutcomePending
+	}
+	req.State = StateIssued
+	req.CredentialID = credentialID
+	if err := m.cfg.Store.Save(ctx, req); err != nil {
+		req.State = StateIssuing
+		req.CredentialID = ""
+		return req, errors.Join(ErrIssuanceOutcomePending, fmt.Errorf("persist recovered result: %w", err))
+	}
+	m.audit(ctx, "approval.issuance_recovered", fmt.Sprintf(`{"id":%q,"credential_id":%q}`, req.ID, credentialID))
 	return req, nil
 }
 
