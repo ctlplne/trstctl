@@ -140,5 +140,5 @@ func readPEMOrDERFile(path, wantType string) ([]byte, error) {
 	if len(trimmed) == 0 {
 		return nil, errors.New("file is empty")
 	}
-	return append([]byte(nil), trimmed...), nil
+	return append([]byte(nil), raw...), nil
 }
