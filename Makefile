@@ -40,8 +40,8 @@ GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
 # These packages boot real embedded PostgreSQL/JetStream spines. Run them in a
 # serial lane so the all-package race/coverage gate does not make independent
 # database bootstraps contend for the same host resources. No test is skipped.
-LIVE_PERF_PACKAGES := ./scripts/perf/cmd/capacitycalibrate ./scripts/perf/cmd/perfgate ./scripts/perf/cmd/soakcapture ./scripts/perf/cmd/spineburst
-LIVE_PERF_IMPORT_RE := $(MODULE)/scripts/perf/cmd/(capacitycalibrate|perfgate|soakcapture|spineburst)
+LIVE_PERF_PACKAGES := ./internal/perf ./scripts/perf/cmd/capacitycalibrate ./scripts/perf/cmd/perfgate ./scripts/perf/cmd/soakcapture ./scripts/perf/cmd/spineburst
+LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/(capacitycalibrate|perfgate|soakcapture|spineburst))
 PCAS_E2E_RUN ?= TestINT20_FullStackPCASUserJourneys|TestINT20_PCASWASMParity_NoSkip|TestINT21_PCASOpsSLOBackpressureAndCrash
 
 GOLANGCI_LINT_VERSION ?= v2.12.2

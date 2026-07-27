@@ -213,6 +213,24 @@ func TestPerfSmokeScriptAndCIArtifactGateAreCommitted(t *testing.T) {
 	}
 }
 
+func TestMakeTestSerializesRealPerformancePackages(t *testing.T) {
+	mk := read(t, "../Makefile")
+	for _, want := range []string{
+		"LIVE_PERF_PACKAGES := ./internal/perf ",
+		"LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/",
+		"$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
+		"$(GO) test -tags trstctl_core -p=1 $(LIVE_PERF_PACKAGES)",
+		"tail -n +2 $(COVERPROFILE_LIVE_PERF)",
+	} {
+		if !strings.Contains(mk, want) {
+			t.Errorf("Makefile performance test topology missing %q", want)
+		}
+	}
+	if got := strings.Count(mk, "grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$'"); got != 2 {
+		t.Errorf("Makefile excludes the serial performance package set from %d parallel lanes, want test and editions-gate", got)
+	}
+}
+
 func TestPerfLiveLoadArtifactCoversServedRealisticAndPeakPhases(t *testing.T) {
 	doc := read(t, "performance.md")
 	for _, want := range []string{
