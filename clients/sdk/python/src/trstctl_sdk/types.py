@@ -666,6 +666,7 @@ BrokerAgentIdentity = TypedDict(
         'not_after': str,
         'scopes': list[str],
         'subject': str,
+        'task_envelope_digest': str,
     },
     total=False,
 )
@@ -678,6 +679,7 @@ BrokerAgentIdentityRequest = TypedDict(
         'payload_base64': str,
         'public_key_pem': str,
         'scopes': list[str],
+        'task_envelope_base64': str,
         'ttl_seconds': int,
     },
     total=False,
@@ -716,6 +718,31 @@ BulkRevokeResult = TypedDict(
         'total_matched': int,
         'total_revoked': int,
         'total_skipped': int,
+    },
+    total=False,
+)
+
+BulkheadPool = TypedDict(
+    'BulkheadPool',
+    {
+        'capacity': int,
+        'completed': int,
+        'name': str,
+        'panicked': int,
+        'queued': int,
+        'rejected': int,
+        'saturation_percent': int,
+        'submitted': int,
+        'workers': int,
+    },
+    total=False,
+)
+
+BulkheadStats = TypedDict(
+    'BulkheadStats',
+    {
+        'pools': list[dict[str, Any]],
+        'served': bool,
     },
     total=False,
 )
@@ -1435,6 +1462,33 @@ CloudSecretManagerSummary = TypedDict(
     total=False,
 )
 
+CodeSigningIdentity = TypedDict(
+    'CodeSigningIdentity',
+    {
+        'created_at': str,
+        'last_error': str,
+        'mode': str,
+        'operation_id': str,
+        'request_hash': str,
+        'status': str,
+        'transparency': str,
+        'transparency_error': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+CodeSigningIdentityList = TypedDict(
+    'CodeSigningIdentityList',
+    {
+        'items': list[dict[str, Any]],
+        'not_published_count': int,
+        'total': int,
+        'verified_count': int,
+    },
+    total=False,
+)
+
 CodeSigningKeylessRequest = TypedDict(
     'CodeSigningKeylessRequest',
     {
@@ -1567,9 +1621,12 @@ ConnectorCatalog = TypedDict(
 ConnectorCatalogItem = TypedDict(
     'ConnectorCatalogItem',
     {
+        'capabilities': list[str],
         'delivery_mode': str,
         'kind': str,
         'name': str,
+        'native': bool,
+        'replay_safety': str,
         'rollback': str,
     },
     total=False,
@@ -5087,6 +5144,35 @@ SSHAttestedUserCertRequest = TypedDict(
     total=False,
 )
 
+SSHFleetHost = TypedDict(
+    'SSHFleetHost',
+    {
+        'first_observed': str,
+        'key_types': list[str],
+        'keys': int,
+        'last_observed': str,
+        'location': str,
+        'orphaned_keys': int,
+        'sources': list[str],
+        'standing_keys': int,
+        'under_ca': bool,
+    },
+    total=False,
+)
+
+SSHFleetInventory = TypedDict(
+    'SSHFleetInventory',
+    {
+        'host_count': int,
+        'hosts': list[dict[str, Any]],
+        'hosts_not_under_ca': int,
+        'key_count': int,
+        'orphaned_key_count': int,
+        'standing_key_count': int,
+    },
+    total=False,
+)
+
 SSHHostRetireRequest = TypedDict(
     'SSHHostRetireRequest',
     {
@@ -5797,6 +5883,32 @@ ShareValue = TypedDict(
     'ShareValue',
     {
         'value': str,
+    },
+    total=False,
+)
+
+SystemDependency = TypedDict(
+    'SystemDependency',
+    {
+        'error': str,
+        'name': str,
+        'ready': bool,
+    },
+    total=False,
+)
+
+SystemReadout = TypedDict(
+    'SystemReadout',
+    {
+        'build_date': str,
+        'commit': str,
+        'dependencies': list[dict[str, Any]],
+        'fips_module_active': bool,
+        'go_version': str,
+        'signer_mode': str,
+        'started_at': str,
+        'uptime_seconds': int,
+        'version': str,
     },
     total=False,
 )

@@ -121,7 +121,7 @@ export function readGenerated() {
   }
 }
 
-export { generate, OUT, SPEC, WEB };
+export { generate, tsType, OUT, SPEC, WEB };
 
 function main() {
   const check = process.argv.includes("--check");

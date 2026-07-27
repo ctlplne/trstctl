@@ -10,6 +10,9 @@ export function generate(): string;
  * if it does not exist. */
 export function readGenerated(): string;
 
+/** tsType maps the supported JSON Schema subset to the emitted TypeScript type. */
+export function tsType(schema: unknown): string;
+
 export const OUT: string;
 export const SPEC: string;
 export const WEB: string;

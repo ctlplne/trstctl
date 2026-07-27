@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generate, readGenerated } from "../../scripts/gen-api-types.mjs";
+import { generate, readGenerated, tsType } from "../../scripts/gen-api-types.mjs";
 
 // SURFACE-005 / EXC-WIRE-04 — FE↔BE contract gate, FE side (Vitest).
 //
@@ -36,5 +36,28 @@ describe("FE↔BE contract (SURFACE-005)", () => {
     const mutated = fresh.replace(/\n(\s*)subject(\??:)/, "\n$1subject_DRIFT$2");
     expect(mutated, "the fixture mutation did not change the generated source").not.toBe(fresh);
     expect(mutated === fresh, "contract gate is vacuous — an injected field rename was not detectable").toBe(false);
+  });
+
+  it("maps every supported served-schema shape without a codegen dependency", () => {
+    expect(tsType(undefined)).toBe("unknown");
+    expect(tsType({ $ref: "#/components/schemas/Owner" })).toBe("Owner");
+    expect(tsType({ enum: ["active", "retired"] })).toBe('"active" | "retired"');
+    expect(tsType({ type: "string" })).toBe("string");
+    expect(tsType({ type: "integer" })).toBe("number");
+    expect(tsType({ type: "number" })).toBe("number");
+    expect(tsType({ type: "boolean" })).toBe("boolean");
+    expect(tsType({ type: "array", items: { enum: ["rsa", "ecdsa"] } })).toBe('("rsa" | "ecdsa")[]');
+    expect(
+      tsType({
+        type: "object",
+        required: ["tenant_id"],
+        properties: {
+          tenant_id: { type: "string" },
+          "display-name": { type: "string" },
+        },
+      }),
+    ).toBe('{ tenant_id: string; "display-name"?: string }');
+    expect(tsType({ type: "object" })).toBe("Record<string, unknown>");
+    expect(tsType({ type: "mystery" })).toBe("unknown");
   });
 });

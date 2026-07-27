@@ -1032,6 +1032,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/code-signing/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List signing operations with their transparency-log verification state */
+        get: operations["listCodeSigningIdentities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code-signing/keyless": {
         parameters: {
             query?: never;
@@ -2566,6 +2583,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/bulkheads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List bounded worker-pool saturation and rejection counters */
+        get: operations["listBulkheadStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/owners": {
         parameters: {
             query?: never;
@@ -2629,6 +2663,23 @@ export interface paths {
         };
         /** Self-hostable run-anywhere distribution posture */
         get: operations["getPlatformDistribution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Running build, uptime, signer topology, and spine reachability */
+        get: operations["getPlatformSystem"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3683,6 +3734,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ssh/fleet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List hosts with standing SSH key access not under the CA */
+        get: operations["getSSHFleet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/hosts/retire": {
         parameters: {
             query?: never;
@@ -4445,6 +4513,7 @@ export interface components {
             not_after: string;
             scopes: string[];
             subject: string;
+            task_envelope_digest?: string;
         };
         BrokerAgentIdentityRequest: {
             agent_id: string;
@@ -4452,6 +4521,7 @@ export interface components {
             payload_base64: string;
             public_key_pem: string;
             scopes: string[];
+            task_envelope_base64?: string;
             ttl_seconds?: number;
         };
         BulkRevokeItem: {
@@ -4482,6 +4552,21 @@ export interface components {
             total_matched: number;
             total_revoked: number;
             total_skipped: number;
+        };
+        BulkheadPool: {
+            capacity: number;
+            completed: number;
+            name: string;
+            panicked: number;
+            queued: number;
+            rejected: number;
+            saturation_percent: number;
+            submitted: number;
+            workers: number;
+        };
+        BulkheadStats: {
+            pools: components["schemas"]["BulkheadPool"][];
+            served: boolean;
         };
         CAAuthority: {
             certificate_pem: string;
@@ -4979,6 +5064,27 @@ export interface components {
             sync_supported: number;
             total_providers: number;
         };
+        CodeSigningIdentity: {
+            /** Format: date-time */
+            created_at: string;
+            last_error?: string;
+            /** @enum {string} */
+            mode: "managed" | "keyless";
+            operation_id: string;
+            request_hash: string;
+            status: string;
+            /** @enum {string} */
+            transparency: "verified" | "pending" | "failed" | "not-published";
+            transparency_error?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CodeSigningIdentityList: {
+            items: components["schemas"]["CodeSigningIdentity"][];
+            not_published_count: number;
+            total: number;
+            verified_count: number;
+        };
         CodeSigningKeylessRequest: {
             artifact_type: string;
             /** Format: byte */
@@ -5078,9 +5184,13 @@ export interface components {
             items: components["schemas"]["ConnectorCatalogItem"][];
         };
         ConnectorCatalogItem: {
+            capabilities: string[];
             delivery_mode: string;
             kind: string;
             name: string;
+            native: boolean;
+            /** @enum {string} */
+            replay_safety: "at-most-once" | "reconciled";
             rollback: string;
         };
         ConnectorDelivery: {
@@ -7713,6 +7823,27 @@ export interface components {
             source_addresses?: string[];
             ttl_seconds?: number;
         };
+        SSHFleetHost: {
+            /** Format: date-time */
+            first_observed: string;
+            key_types: string[];
+            keys: number;
+            /** Format: date-time */
+            last_observed: string;
+            location: string;
+            orphaned_keys: number;
+            sources: string[];
+            standing_keys: number;
+            under_ca: boolean;
+        };
+        SSHFleetInventory: {
+            host_count: number;
+            hosts: components["schemas"]["SSHFleetHost"][];
+            hosts_not_under_ca: number;
+            key_count: number;
+            orphaned_key_count: number;
+            standing_key_count: number;
+        };
         SSHHostRetireRequest: {
             host: string;
             /** Format: uuid */
@@ -8196,6 +8327,24 @@ export interface components {
         };
         ShareValue: {
             value: string;
+        };
+        SystemDependency: {
+            error?: string;
+            name: string;
+            ready: boolean;
+        };
+        SystemReadout: {
+            build_date: string;
+            commit: string;
+            dependencies: components["schemas"]["SystemDependency"][];
+            fips_module_active: boolean;
+            go_version: string;
+            /** @enum {string} */
+            signer_mode: "child" | "external" | "none";
+            /** Format: date-time */
+            started_at: string;
+            uptime_seconds: number;
+            version: string;
         };
         TenantWriteFence: {
             conflict_outcome: string;
@@ -11423,6 +11572,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Certificate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCodeSigningIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningIdentityList"];
                 };
             };
             /** @description client error */
@@ -16138,6 +16325,44 @@ export interface operations {
             };
         };
     };
+    listBulkheadStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkheadStats"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listOwners: {
         parameters: {
             query?: {
@@ -16408,6 +16633,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformDistributionStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPlatformSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemReadout"];
                 };
             };
             /** @description client error */
@@ -19398,6 +19661,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSHStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSSHFleet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHFleetInventory"];
                 };
             };
             /** @description client error */
