@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -73,10 +74,44 @@ func TestRemediationConnector_ScopedToAuthorizedClass(t *testing.T) {
 	}
 }
 
+func TestRemediationConnector_PreservesConnectorAndReceiptErrors(t *testing.T) {
+	connectorErr := errors.New("connector write failed")
+	receiptErr := errors.New("receipt persistence failed")
+	recorder := &failingReceiptRecorder{err: receiptErr}
+	registry := remediation.NewRegistry(recorder)
+	registry.Register(&scopedWriteConnector{
+		name:  "vault-prod",
+		grant: remediation.NewOperationGrant("rotate-key"),
+		err:   connectorErr,
+	})
+	handler := remediation.NewHandler(registry)
+	job := remediationJob(t, "rotate-key")
+
+	err := handler.Deliver(context.Background(), orchestrator.Message{
+		TenantID: job.TenantID, Destination: remediation.OutboxDestination,
+		IdempotencyKey: job.IdempotencyKey, Payload: mustJobPayload(t, job),
+	})
+	if !errors.Is(err, connectorErr) {
+		t.Fatalf("delivery error = %v, want connector cause %v", err, connectorErr)
+	}
+	if !errors.Is(err, receiptErr) {
+		t.Fatalf("delivery error = %v, want receipt cause %v", err, receiptErr)
+	}
+	if len(recorder.receipts) != 1 {
+		t.Fatalf("receipt attempts = %d, want 1", len(recorder.receipts))
+	}
+	got := recorder.receipts[0]
+	if got.Status != remediation.ReceiptStatusFailed || got.Reason != "connector_failed" ||
+		!strings.Contains(got.Detail, connectorErr.Error()) {
+		t.Fatalf("failed receipt = %+v, want connector failure evidence", got)
+	}
+}
+
 type scopedWriteConnector struct {
 	name     string
 	grant    remediation.OperationGrant
 	executed []remediation.RemediationRequest
+	err      error
 }
 
 func (c *scopedWriteConnector) Name() string { return c.name }
@@ -85,6 +120,9 @@ func (c *scopedWriteConnector) OperationGrant() remediation.OperationGrant { ret
 
 func (c *scopedWriteConnector) ExecuteRemediationAction(_ context.Context, req remediation.RemediationRequest) (string, error) {
 	c.executed = append(c.executed, req)
+	if c.err != nil {
+		return "", c.err
+	}
 	return "rotated " + req.RecordKey.StableID, nil
 }
 
@@ -157,4 +195,14 @@ func (r *memoryReceiptRecorder) Receipts() []remediation.Receipt {
 	out := make([]remediation.Receipt, len(r.receipts))
 	copy(out, r.receipts)
 	return out
+}
+
+type failingReceiptRecorder struct {
+	err      error
+	receipts []remediation.Receipt
+}
+
+func (r *failingReceiptRecorder) RecordRemediationReceipt(_ context.Context, receipt remediation.Receipt) error {
+	r.receipts = append(r.receipts, receipt)
+	return r.err
 }

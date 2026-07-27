@@ -150,7 +150,9 @@ func (r *Registry) ExecuteRemediation(ctx context.Context, job Job) error {
 		receipt.Status = ReceiptStatusFailed
 		receipt.Reason = "connector_failed"
 		receipt.Detail = err.Error()
-		_ = r.record(ctx, receipt)
+		if receiptErr := r.record(ctx, receipt); receiptErr != nil {
+			return errors.Join(err, fmt.Errorf("xrec remediation: record failed-action receipt: %w", receiptErr))
+		}
 		return err
 	}
 	receipt.Status = ReceiptStatusDelivered
