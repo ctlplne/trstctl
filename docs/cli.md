@@ -22,11 +22,18 @@ short-lived PKI credentials, and application secrets, backed by the same served
 OpenAPI routes.
 
 Every command documented below is `trstctl-cli`. The `trstctl` server binary is a
-separate program with exactly three admin verbs of its own — `token create` (see
-"Bootstrapping the first API token" below), `connector target ...`, and `ssh ...`
+separate program with four admin command families of its own — `token create` (see
+"Bootstrapping the first API token" below), `connector target ...`, `ssh ...`, and
+the offline `support-bundle`
 — for direct calls against a running control plane, using their own `--flag`
 arguments and `TRSTCTL_URL` rather than the `-f <file>` bodies and
 `TRSTCTL_SERVER` used everywhere else on this page.
+
+The exception is `trstctl support-bundle`: it deliberately does not require a
+running HTTP server. Use
+`trstctl support-bundle --output support.tar.gz --log-file <local-log>` during
+cold-start failures. The archive is bounded, contains posture and aggregate counts
+instead of raw configuration, and refuses residual secret/PII data after redaction.
 
 ## Global flags
 

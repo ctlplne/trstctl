@@ -67,6 +67,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if len(args) > 0 && args[0] == "ssh" {
 		return runSSH(ctx, args[1:], getenv, stdout, stderr)
 	}
+	if len(args) > 0 && args[0] == "support-bundle" {
+		return runSupportBundle(ctx, args[1:], getenv, stdout, stderr)
+	}
 
 	flags, help, err := parseRootFlags(args, stderr)
 	if err != nil || help {

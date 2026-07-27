@@ -17,6 +17,11 @@ key store healthy again, not silently making a new CA.
   and provider credentials.
 - Confirm the control plane can still answer `/healthz`; `/readyz` may be `503`
   because it checks the signer.
+- Before changing the signer, capture a redacted offline diagnostic:
+  `trstctl support-bundle --output signer-recovery-support.tar.gz --log-file <control-plane-log>`.
+  It runs even when the control-plane HTTP listener never started and distinguishes
+  signer, datastore, event-spine, migration, and queue posture without recording
+  socket paths, DSNs, tenant IDs, raw environment values, or credentials.
 - Capture `trstctl_signer_up`, signer pod logs, control-plane logs, agent
   heartbeat age, and inventory counts before changing anything.
 - Have a recent full backup if the signer key store, signer auth Secret, local KEK,

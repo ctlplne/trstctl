@@ -76,6 +76,16 @@ See [Telemetry](telemetry.md) for what is collected when it is enabled.
 
 ## Still stuck?
 
-Capture `trstctl --version` and the redacted output of `trstctl -check-config`,
-plus the relevant logs, and open an issue. Never paste a Postgres DSN or token —
-`-check-config` already redacts credentials for you.
+Create one bounded artifact:
+
+```bash
+trstctl support-bundle --output trstctl-support.tar.gz --log-file ./control-plane.log
+```
+
+The command works even when configuration validation or HTTP startup fails. It
+includes build/configuration posture, categorical PostgreSQL, NATS, and signer
+health, migration state, aggregate outbox/bulkhead counts, and at most 200 recent
+log lines. It never copies raw environment/configuration values or endpoint,
+path, tenant, subject, or destination identifiers. Logs pass through secret and
+PII redaction followed by a residual fail-closed scan. Review the archive before
+sharing it; if the scan cannot make it safe, the command refuses to write it.

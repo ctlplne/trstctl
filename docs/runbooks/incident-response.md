@@ -17,16 +17,23 @@ credential leak. It assumes you operate trstctl per the other runbooks
 ## First moves (any incident)
 
 1. **Declare and timestamp** the incident; assign an incident lead.
-2. **Preserve evidence.** Take a full DR artifact
+2. **Capture safe diagnostics before restart.** Run
+   `trstctl support-bundle --output incident-support.tar.gz --log-file <control-plane-log>`.
+   This command does not need the HTTP server to be healthy. It records only build
+   and configuration posture, categorical PostgreSQL/NATS/signer health, migration
+   state, aggregate outbox/bulkhead counts, and a bounded log tail. It excludes raw
+   environment/configuration values and fails closed if secret-, tenant-, or
+   PII-shaped data remains after redaction.
+3. **Preserve evidence.** Take a full DR artifact
    (`trstctl --full-backup-dir=<incident-backup-dir>`) before making changes. The
    event log inside it is the immutable source of truth and forensic record;
    the PostgreSQL-state stream keeps auth, CA, approval, secret, policy, and outbox
    state recoverable too.
-3. **Verify the audit chain.** trstctl's audit trail is a hash-linked, signed chain
+4. **Verify the audit chain.** trstctl's audit trail is a hash-linked, signed chain
    (R2.1). Verify it (`audit.VerifyChain`) to confirm the record has not been
    tampered with and to establish a trustworthy timeline of who did what
    (`Actor` is recorded on every event).
-4. **Scope the blast radius.** Identify the affected credentials and everything that
+5. **Scope the blast radius.** Identify the affected credentials and everything that
    depends on them with the served graph API (`/api/v1/graph/blast-radius/{id}`) or
    the `trstctl-cli graph blast-radius` command.
 
