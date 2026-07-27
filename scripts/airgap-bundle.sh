@@ -45,11 +45,46 @@ require() {
 
 require shasum
 require tar
+require git
+require cmp
 
 rm -rf "$bundle_dir" "$archive"
 mkdir -p "$bundle_dir"/{charts,docs,images,manifests}
 
-cp -R "$repo_root/deploy/helm/trstctl" "$bundle_dir/charts/trstctl"
+chart_prefix="deploy/helm/trstctl"
+tracked_chart_files="$(mktemp)"
+actual_chart_files="$(mktemp)"
+cleanup_lists() {
+  rm -f "$tracked_chart_files" "$actual_chart_files"
+}
+trap cleanup_lists EXIT
+
+# Build the exploded chart from Git's immutable allowlist, never from a recursive
+# working-tree copy. A local ignored credential, editor file, or FUSE orphan
+# therefore cannot become customer release content.
+git -C "$repo_root" ls-files -- "$chart_prefix" \
+  | sed "s#^${chart_prefix}/##" \
+  | LC_ALL=C sort > "$tracked_chart_files"
+if [[ ! -s "$tracked_chart_files" ]]; then
+  echo "tracked Helm chart allowlist is empty" >&2
+  exit 2
+fi
+while IFS= read -r rel; do
+  mkdir -p "$bundle_dir/charts/trstctl/$(dirname "$rel")"
+  cp "$repo_root/$chart_prefix/$rel" "$bundle_dir/charts/trstctl/$rel"
+done < "$tracked_chart_files"
+
+# Fail closed if assembly ever produces a file outside that allowlist or omits a
+# tracked chart file.
+find "$bundle_dir/charts/trstctl" -type f \
+  | sed "s#^${bundle_dir}/charts/trstctl/##" \
+  | LC_ALL=C sort > "$actual_chart_files"
+if ! cmp -s "$tracked_chart_files" "$actual_chart_files"; then
+  echo "assembled Helm chart differs from the tracked file allowlist" >&2
+  diff -u "$tracked_chart_files" "$actual_chart_files" >&2 || true
+  exit 2
+fi
+
 cp "$repo_root/deploy/helm/trstctl/values-airgap.yaml" "$bundle_dir/manifests/values-airgap.yaml"
 cp "$repo_root/docs/airgap.md" "$bundle_dir/docs/airgap.md"
 cp "$repo_root/docs/install.md" "$bundle_dir/docs/install.md"
@@ -57,9 +92,9 @@ cp "$repo_root/docs/configuration.md" "$bundle_dir/docs/configuration.md"
 cp "$repo_root/docs/telemetry.md" "$bundle_dir/docs/telemetry.md"
 
 if command -v helm >/dev/null 2>&1; then
-  helm package "$repo_root/deploy/helm/trstctl" --destination "$bundle_dir/charts" >/dev/null
+  helm package "$bundle_dir/charts/trstctl" --destination "$bundle_dir/charts" >/dev/null
 else
-  tar -C "$repo_root/deploy/helm" -czf "$bundle_dir/charts/trstctl-chart.tar.gz" trstctl
+  tar -C "$bundle_dir/charts" -czf "$bundle_dir/charts/trstctl-chart.tar.gz" trstctl
 fi
 
 if [[ "${TRSTCTL_AIRGAP_SKIP_IMAGES:-0}" == "1" ]]; then
