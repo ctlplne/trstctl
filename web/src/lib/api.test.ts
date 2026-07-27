@@ -80,6 +80,82 @@ describe("api error handling (SURFACE-007)", () => {
   });
 });
 
+describe("exported API surface census", () => {
+  it("drives every operation through the bounded same-origin transport and preserves mutation idempotency", async () => {
+    document.cookie = "trstctl_csrf=csrf-census; path=/";
+    const transport = vi.fn(async (target: RequestInfo | URL, init?: RequestInit) => {
+      void target;
+      void init;
+      return new Response(
+        JSON.stringify({
+          id: "result-id",
+          items: [],
+          agents: [],
+          events: [],
+          protocols: [],
+          status: "ok",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", transport);
+
+    const optionBag = {
+      limit: 2,
+      cursor: "next/cursor",
+      identityId: "identity/id",
+      issuerId: "issuer/id",
+      ownerId: "owner/id",
+      playbookId: "playbook/id",
+      runId: "run/id",
+      subjectRef: "subject/ref",
+      subject: "subject/ref",
+      status: "pending",
+      resolve: true,
+      includeOffboarded: true,
+      includeRevoked: true,
+      expiringBefore: "2026-12-31T00:00:00Z",
+    };
+    const universalInput = {
+      ...optionBag,
+      id: "item/id",
+      name: "service.example.test",
+      ownerId: "owner/id",
+      issuerId: "issuer/id",
+      wildcardBlastRadiusAcknowledged: false,
+      toString: () => "item/id",
+      [Symbol.toPrimitive]: () => "item/id",
+    };
+    type GenericOperation = (...args: unknown[]) => Promise<unknown>;
+
+    for (const [name, member] of Object.entries(api)) {
+      const before = transport.mock.calls.length;
+      const operation = member as unknown as GenericOperation;
+      await expect(operation(universalInput, optionBag, "operator reason"), `api.${name}`).resolves.not.toBeUndefined();
+      expect(transport.mock.calls.length, `api.${name} bypassed the shared fetch seam`).toBeGreaterThan(before);
+    }
+
+    const readOnlyPosts = new Set([
+      "/api/v1/ai/query",
+      "/api/v1/ai/rca",
+      "/api/v1/graph/query",
+      "/api/v1/mcp/tools/item%2Fid",
+      "/api/v1/pqc/migrations/plan",
+      "/api/v1/privacy/subject-exports",
+    ]);
+    for (const [target, init] of transport.mock.calls) {
+      const url = String(target);
+      expect(url, "the browser API client attempted absolute egress").toMatch(/^\//);
+      const method = init?.method ?? "GET";
+      if ((method === "POST" || method === "PUT" || method === "DELETE") && url !== "/auth/logout" && !readOnlyPosts.has(url)) {
+        const headers = init?.headers as Record<string, string> | undefined;
+        expect(headers?.["Idempotency-Key"], `${method} ${url} lacks mutation idempotency`).toBeTruthy();
+        expect(headers?.["X-CSRF-Token"], `${method} ${url} lacks the session CSRF echo`).toBe("csrf-census");
+      }
+    }
+  });
+});
+
 describe("eval protocol profile client", () => {
   it("reads and durably activates the served first-run profile", async () => {
     document.cookie = "trstctl_csrf=csrf-protocols; path=/";
@@ -99,6 +175,58 @@ describe("eval protocol profile client", () => {
     const headers = calls[1][1]?.headers as Record<string, string>;
     expect(headers["Idempotency-Key"]).toBeTruthy();
     expect(headers["X-CSRF-Token"]).toBe("csrf-protocols");
+  });
+});
+
+describe("licensed PQC migration client", () => {
+  const input = {
+    asset_ids: ["asset-1"],
+    target_algorithm: "ML-DSA-65" as const,
+    protocol: "acme" as const,
+    rollback_on_failure: true,
+  };
+
+  it("keeps plan preview read-only and puts Idempotency-Key on start and rollback", async () => {
+    mockFetchSequence([
+      { status: 200, body: JSON.stringify({ reissues: [], tls_rollouts: [], residuals: [], reissue_count: 0, tls_rollout_count: 0 }) },
+      {
+        status: 202,
+        body: JSON.stringify({
+          run_id: "run-1",
+          queued: 1,
+          certificate_reissues_queued: 1,
+          tls_findings_queued: 0,
+          target_algorithm: "ML-DSA-65",
+          effective_algorithm: "hybrid",
+          protocol: "acme",
+          rollback_configured: true,
+          migration_progress: {},
+          queued_at: "2026-07-27T12:00:00Z",
+        }),
+      },
+      { status: 200, body: JSON.stringify({ run_id: "run-1", total: 1, queued: 1, applied: 0, failed: 0, rolled_back: 0, findings: [] }) },
+      {
+        status: 202,
+        body: JSON.stringify({ run_id: "run-1", queued: 1, reason: "operator rollback", migration_progress: {}, queued_at: "2026-07-27T12:01:00Z" }),
+      },
+    ]);
+
+    await api.planPQCMigration(input);
+    await api.startPQCMigration(input);
+    await api.getPQCMigrationProgress("run-1");
+    await api.rollbackPQCMigration("run-1", ["asset-1"], "operator rollback");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.map((call) => call[0])).toEqual([
+      "/api/v1/pqc/migrations/plan",
+      "/api/v1/pqc/migrations",
+      "/api/v1/pqc/migrations/run-1",
+      "/api/v1/pqc/migrations/run-1/rollback",
+    ]);
+    expect((calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
+    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(calls[2][1]?.method).toBeUndefined();
+    expect((calls[3][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
   });
 });
 
@@ -550,6 +678,48 @@ describe("protocol responder status contract", () => {
     for (const call of vi.mocked(fetch).mock.calls) {
       expect((call[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
     }
+  });
+
+  it("reports each bounded responder failure mode without treating it as served", async () => {
+    const results: Array<Response | Error> = [
+      new Response("", { status: 503 }),
+      new Response("", { status: 401 }),
+      new Response("", { status: 418, statusText: "Teapot" }),
+      new Response("", { status: 418 }),
+      new Error("offline"),
+      new Response("", { status: 403 }),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const next = results.shift();
+        if (next instanceof Error) throw next;
+        if (!next) throw new Error("unexpected fetch call");
+        return next;
+      }),
+    );
+
+    const page = await api.protocolStatuses();
+
+    expect(page.items.map((item) => item.detail)).toEqual([
+      "Responder is mounted but currently unavailable.",
+      "Responder rejected the browser session.",
+      "Teapot",
+      "Responder returned HTTP 418.",
+      "Responder probe failed before an HTTP status was returned.",
+      "Responder rejected the browser session.",
+    ]);
+    expect(page.items.every((item) => !item.served)).toBe(true);
+  });
+
+  it("keeps idempotency available when randomUUID is absent", async () => {
+    document.cookie = "trstctl_csrf=csrf-fallback; path=/";
+    vi.stubGlobal("crypto", {});
+    mockFetch(201, JSON.stringify({ id: "owner-1" }));
+
+    await api.createOwner({ kind: "team", name: "Platform" });
+
+    expect(lastSentHeaders()["Idempotency-Key"]).toMatch(/^idem-\d+-[0-9a-f]+$/);
   });
 });
 

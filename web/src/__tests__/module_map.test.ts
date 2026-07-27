@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { appRoutePaths, globalBandRoutes, moduleForRoute, navModules, realGuiSurfaces, surfaceModule, type ModuleId } from "@/lib/navigation";
+import {
+  appRoutePaths,
+  globalBandRoutes,
+  moduleForRoute,
+  moduleLabelKey,
+  navModules,
+  permissionAnyForPath,
+  realGuiSurfaces,
+  spaceForRoute,
+  surfaceModule,
+  type ModuleId,
+} from "@/lib/navigation";
 
 /** module_map (S-B1, carried into the S-C1 spaces era): the space registry must
  * partition every customer route into exactly one place — a global plane OR a
@@ -78,5 +89,28 @@ describe("module map (S-B1)", () => {
     // Workload & SSH and Platform. Still five, still shrinking-not-sprawling.
     expect(navModules.length).toBeLessThanOrEqual(5);
     expect(navModules.map((m) => m.id)).toEqual(["certificates", "secrets", "workload", "posture", "platform"]);
+  });
+
+  it("normalizes query links and fails closed for exempt or unknown routes", () => {
+    expect(spaceForRoute("")).toBe("home");
+    expect(spaceForRoute("/journeys?step=first")).toBe("home");
+    expect(spaceForRoute("/certificates?expiry=30d")).toBe("certificates");
+    expect(spaceForRoute("/login")).toBeUndefined();
+    expect(spaceForRoute("/not-registered")).toBeUndefined();
+
+    expect(moduleForRoute("/secrets/sync?status=failed")).toBe("secrets");
+    expect(moduleForRoute("/not-registered")).toBeUndefined();
+    expect(moduleLabelKey("workload")).toBe("nav.space.workload");
+    expect(moduleLabelKey("not-a-space")).toBeUndefined();
+
+    expect(permissionAnyForPath("/notifications?status=unread")).toContain("notifications:read");
+    expect(permissionAnyForPath("")).toEqual(["certs:read", "identities:read", "risk:read"]);
+    expect(permissionAnyForPath("/not-registered")).toBeUndefined();
+  });
+
+  it("honors an explicit surface owner before route-derived and global fallbacks", () => {
+    expect(surfaceModule({ featureId: "explicit", routes: [], component: "x", kind: "observe", evidence: "x", module: "platform" })).toBe("platform");
+    expect(surfaceModule({ featureId: "derived", routes: ["/not-registered", "/ssh"], component: "x", kind: "observe", evidence: "x" })).toBe("workload");
+    expect(surfaceModule({ featureId: "global", routes: ["/not-registered"], component: "x", kind: "observe", evidence: "x" })).toBe("global");
   });
 });

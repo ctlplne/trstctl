@@ -52,6 +52,13 @@ export default defineConfig({
     include: ["web/src/**/*.{test,spec}.{ts,tsx,js,jsx,mts,mtsx,mjs}"],
     environment: "jsdom",
     globals: true,
+    // This suite is DOM-heavy: every worker owns a complete jsdom + React
+    // graph and many files run axe. On the supported audit host, Vitest's
+    // CPU-sized default produced 76 false failures, mostly five-second
+    // timeouts; the same 156 files passed 670/670 with one worker. Keep the
+    // release gate inside that measured memory/CPU envelope. CI can shard the
+    // command across jobs later, but each shard must retain this bound.
+    maxWorkers: 1,
     setupFiles: [path.resolve(webRoot, "src/test/setup.ts")],
     css: false,
     // The audit harness invokes npm --prefix web with web/src/... file filters.
@@ -68,13 +75,16 @@ export default defineConfig({
       include: ["web/src/**/*.{ts,tsx}", "web/scripts/gen-api-types.mjs"],
       exclude: [
         "web/src/**/*.gen.ts",
-        "web/src/**/*.test.{ts,tsx}",
+        // Vitest 4 passes `exclude` directly to picomatch's ignore list.
+        // A negated ignore pattern excludes every non-matching file, so the
+        // former `!security_sinks` re-include silently produced 0/0 coverage.
+        // Express the exception positively: exclude all ordinary test/spec
+        // files while retaining security_sinks.test.ts as measured code.
+        "web/src/**/!(*security_sinks).{test,spec}.{ts,tsx}",
         "web/src/**/*.stories.tsx",
         "web/src/main.tsx",
         "web/src/vite-env.d.ts",
         "web/src/test/**",
-        "web/src/__tests__/**",
-        "!web/src/__tests__/security_sinks.test.ts",
       ],
       thresholds: {
         lines: 75,

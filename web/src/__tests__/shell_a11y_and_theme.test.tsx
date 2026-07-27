@@ -400,6 +400,11 @@ describe("app shell accessibility and theme", () => {
 
     expect(screen.queryByRole("navigation", { name: /Primary/i })).not.toBeInTheDocument();
     expect(screen.getByRole("main")).toHaveClass("min-w-0");
+    const mobileCommandOpener = screen.getAllByRole("button", { name: "Open command palette" })[0];
+    await user.click(mobileCommandOpener);
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    await user.click(within(palette).getByRole("button", { name: "Close command palette" }));
+
     const toggle = screen.getByRole("button", { name: "Open primary navigation" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
 
@@ -415,7 +420,12 @@ describe("app shell accessibility and theme", () => {
     const results = await axe(container);
     expect(results).toHaveNoViolations();
 
-    await user.click(within(drawer).getByRole("button", { name: "Close primary navigation" }));
+    await user.click(within(drawer).getByRole("button", { name: "Certificates & PKI" }));
+    expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open primary navigation" }));
+    const reopened = screen.getByRole("dialog", { name: "Primary navigation" });
+    await user.click(within(reopened).getByRole("button", { name: "Close primary navigation" }));
     expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
   });
 
@@ -599,6 +609,16 @@ describe("app shell accessibility and theme", () => {
     expect(within(nav).queryByText("Observe")).not.toBeInTheDocument();
     expect(within(nav).queryByText("Disclose")).not.toBeInTheDocument();
     expect(within(nav).queryByText(/^map$/i)).not.toBeInTheDocument();
+  });
+
+  it("does not mark the plain inventory row active for an expiry worklist URL", async () => {
+    renderShell(["/certificates?expiry=30d"]);
+    await screen.findByText("u@example.test");
+
+    const nav = screen.getByRole("navigation", { name: /Primary/i });
+    const inventory = within(nav).getByRole("link", { name: "Certificates" });
+    expect(inventory).toHaveAttribute("href", "/certificates");
+    expect(inventory).not.toHaveClass("bg-sidebar-active");
   });
 
   it("routes to the split admin pages from grouped navigation (C-A1)", async () => {

@@ -456,9 +456,9 @@ export const navGroups: NavGroup[] = navSpaces.flatMap((space) => space.groups);
 
 /* S-A1: every product surface now lives in the rail, so there are no
  * contextual-only routes. The export stays (as an empty list) so downstream
- * consumers — AppShell.routeLabel, CommandPalette, i18n/route-parity tests —
- * keep their stable shape; the module switcher (S-B2) reads `navModules`
- * rather than this list. */
+ * consumers — CommandPalette and i18n/route-parity tests — keep their stable
+ * shape; AppShell falls back to a title-cased route segment for non-rail
+ * routes, and the module switcher (S-B2) reads `navModules` instead. */
 export const contextualRouteItems: ContextualRouteItem[] = [];
 
 export interface RealGuiSurface {

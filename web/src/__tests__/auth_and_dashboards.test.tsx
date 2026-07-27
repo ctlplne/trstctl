@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -52,6 +52,18 @@ function AuthProbe() {
   if (auth.loading) return <p role="status">loading</p>;
   if (auth.error) return <p role="alert">{auth.error}</p>;
   return <p>{auth.user?.subject ?? "anonymous"}</p>;
+}
+
+function PreviewRaceProbe() {
+  const auth = useAuth();
+  return (
+    <>
+      <button type="button" onClick={auth.startPreview}>
+        Start preview
+      </button>
+      <p>{auth.user?.subject ?? (auth.loading ? "loading" : "anonymous")}</p>
+    </>
+  );
 }
 
 function sessionForRole(role: "viewer" | "auditor" | "ra-officer"): Me {
@@ -135,6 +147,10 @@ describe("auth + dashboards", () => {
     expect(screen.queryByRole("heading", { name: "Backend-to-GUI coverage" })).not.toBeInTheDocument();
     expect(localStorage.getItem("token")).toBeNull();
     expect(sessionStorage.length).toBe(0);
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument();
+    expect(apiMock.logout).not.toHaveBeenCalled();
   });
 
   it("surfaces non-auth session failures and can begin OIDC login", async () => {
@@ -161,6 +177,32 @@ describe("auth + dashboards", () => {
     } finally {
       Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
     }
+  });
+
+  it("does not let a late session response replace an explicitly started preview", async () => {
+    let resolveSession: ((user: Me) => void) | undefined;
+    apiMock.me.mockReturnValue(
+      new Promise<Me>((resolve) => {
+        resolveSession = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <AuthProvider>
+        <PreviewRaceProbe />
+      </AuthProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Start preview" }));
+    expect(screen.getByText("dev-preview")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSession?.({ subject: "late-session", tenant_id: "t1", email: "late@example.test" });
+      await Promise.resolve();
+    });
+    expect(screen.getByText("dev-preview")).toBeInTheDocument();
+    expect(screen.queryByText("late-session")).not.toBeInTheDocument();
   });
 
   it("shows the dashboard once authenticated", async () => {
@@ -207,6 +249,20 @@ describe("auth + dashboards", () => {
     await waitFor(() => expect(apiMock.logout).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument();
     expect(screen.queryByTestId("current-user")).not.toBeInTheDocument();
+  });
+
+  it("keeps the authenticated shell mounted and reports a failed served logout", async () => {
+    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.logout.mockRejectedValue(new Error("logout offline"));
+    const user = userEvent.setup();
+
+    renderAt("/");
+
+    await user.click(await screen.findByRole("button", { name: "Sign out" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Sign-out failed");
+    expect(screen.getByTestId("current-user")).toHaveTextContent("u@example.test");
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
   });
 
   it("sends a fresh, empty tenant to first-run setup instead of demo data", async () => {

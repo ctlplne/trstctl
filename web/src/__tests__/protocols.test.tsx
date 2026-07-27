@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Protocols } from "@/pages/Protocols";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -10,6 +11,12 @@ const { apiMock } = vi.hoisted(() => ({
     acmeDNS01Providers: vi.fn(),
     acmeDNS01ProviderConfigs: vi.fn(),
     mdmSCEPStatus: vi.fn(),
+    updateMDMSCEPPolicy: vi.fn(),
+    rotateMDMSCEPChallenge: vi.fn(),
+    deleteMDMSCEPPolicy: vi.fn(),
+    updateACMEDNS01ProviderConfig: vi.fn(),
+    deleteACMEDNS01ProviderConfig: vi.fn(),
+    acmeDNS01Preflight: vi.fn(),
   },
 }));
 
@@ -18,14 +25,18 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-async function renderProtocols() {
-  const result = render(
+function mountProtocols() {
+  return render(
     <MemoryRouter>
       <ToastProvider>
         <Protocols />
       </ToastProvider>
     </MemoryRouter>,
   );
+}
+
+async function renderProtocols() {
+  const result = mountProtocols();
   await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01ProviderConfigs).toHaveBeenCalledTimes(1));
@@ -55,6 +66,12 @@ describe("protocol surface", () => {
     apiMock.acmeDNS01Providers.mockReset();
     apiMock.acmeDNS01ProviderConfigs.mockReset();
     apiMock.mdmSCEPStatus.mockReset();
+    apiMock.updateMDMSCEPPolicy.mockReset();
+    apiMock.rotateMDMSCEPChallenge.mockReset();
+    apiMock.deleteMDMSCEPPolicy.mockReset();
+    apiMock.updateACMEDNS01ProviderConfig.mockReset();
+    apiMock.deleteACMEDNS01ProviderConfig.mockReset();
+    apiMock.acmeDNS01Preflight.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:00:00Z",
@@ -185,6 +202,26 @@ describe("protocol surface", () => {
         },
       ],
     });
+    apiMock.updateMDMSCEPPolicy.mockImplementation(async (_id, input) => ({
+      ...(await apiMock.mdmSCEPStatus.mock.results[0]?.value)?.policies?.[0],
+      ...input,
+      id: "01900000-0000-7000-8000-000000000056",
+      tenant_id: "11111111-1111-1111-1111-111111111111",
+      rotation_version: 2,
+      created_at: "2026-06-26T14:00:00Z",
+      updated_at: "2026-06-26T14:04:00Z",
+    }));
+    apiMock.deleteMDMSCEPPolicy.mockResolvedValue(undefined);
+    apiMock.updateACMEDNS01ProviderConfig.mockImplementation(async (_id, input) => ({
+      ...(await apiMock.acmeDNS01ProviderConfigs.mock.results[0]?.value)?.items?.[0],
+      ...input,
+      id: "01900000-0000-7000-8000-000000000069",
+      tenant_id: "11111111-1111-1111-1111-111111111111",
+      secret_handling: "credential_refs_only",
+      created_at: "2026-06-26T14:00:00Z",
+      updated_at: "2026-06-26T14:04:00Z",
+    }));
+    apiMock.deleteACMEDNS01ProviderConfig.mockResolvedValue(undefined);
   });
 
   it("renders ACME setup with live responder status", async () => {
@@ -240,6 +277,97 @@ describe("protocol surface", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--server https://trstctl.example.test/directory")));
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/Bearer|token|password/i));
     expect(screen.getByText("Copied command without token material.")).toBeInTheDocument();
+  });
+
+  it("fails closed with the served responder error instead of stale status", async () => {
+    apiMock.protocolStatuses.mockRejectedValueOnce(new Error("responder registry offline"));
+    mountProtocols();
+
+    expect(await screen.findByText("Protocol status check failed")).toBeInTheDocument();
+    expect(screen.getByText("responder registry offline")).toBeInTheDocument();
+    expect(screen.queryByText("ACME directory responded.")).not.toBeInTheDocument();
+  });
+
+  it("renders honest empty states and endpoint fallbacks when every served collection is empty", async () => {
+    apiMock.protocolStatuses.mockResolvedValueOnce({ source: "public_responder_probe", checked_at: "", items: [] });
+    apiMock.acmeDNS01Providers.mockResolvedValueOnce({ items: [] });
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValueOnce({ items: [] });
+    apiMock.mdmSCEPStatus.mockResolvedValueOnce({
+      runtime_gate: "",
+      runtime_note: "",
+      telemetry: { allowed: 0, denied: 0, replay_rejected: 0 },
+      policies: [],
+    });
+    mountProtocols();
+
+    expect(await screen.findByText("DNS-01 providers unavailable")).toBeInTheDocument();
+    expect(screen.getByText("DNS-01 provider configs unavailable")).toBeInTheDocument();
+    expect(screen.getByText("MDM SCEP policies unavailable")).toBeInTheDocument();
+    expect(screen.getAllByText("Not browser-readable").length).toBeGreaterThan(0);
+    expect(screen.getByText("unix:///tmp/trstctl-spiffe-workload.sock")).toBeInTheDocument();
+    expect(screen.getByText("Unknown")).toBeInTheDocument();
+  });
+
+  it("degrades honestly for partial older provider, config, and policy records", async () => {
+    apiMock.acmeDNS01Providers.mockResolvedValueOnce({
+      items: [
+        provider("legacy-dns", "Legacy DNS", "hosted-dns", [], [], {
+          served: false,
+          admission_state: undefined,
+          provenance: undefined,
+          propagation_preflight: false,
+          credential_reference_fields: undefined,
+          secret_fields: undefined,
+          capabilities: undefined,
+        }),
+      ],
+    });
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValueOnce({
+      items: [
+        {
+          id: "01900000-0000-7000-8000-000000000070",
+          tenant_id: "11111111-1111-1111-1111-111111111111",
+          name: "legacy-config",
+          provider: "legacy-dns",
+          allowed_methods: undefined,
+          allow_wildcards: false,
+          credential_refs: undefined,
+          config: {},
+          secret_handling: "credential_refs_only",
+          created_at: "2026-06-26T14:00:00Z",
+          updated_at: "2026-06-26T14:00:00Z",
+        },
+      ],
+    });
+    apiMock.mdmSCEPStatus.mockResolvedValueOnce({
+      runtime_gate: "served",
+      runtime_note: "",
+      telemetry: { allowed: 0, denied: 0, replay_rejected: 0 },
+      policies: [
+        {
+          id: "01900000-0000-7000-8000-000000000057",
+          tenant_id: "11111111-1111-1111-1111-111111111111",
+          name: "legacy-mdm",
+          provider: "jamf",
+          scep_profile: "legacy",
+          scep_endpoint: "https://trstctl.example.test/scep/legacy",
+          challenge_mode: "hmac-dynamic",
+          trust_anchor_refs: undefined,
+          profile_guidance: {},
+          enabled: false,
+          rotation_version: 1,
+          created_at: "2026-06-26T14:00:00Z",
+          updated_at: "2026-06-26T14:00:00Z",
+        },
+      ],
+    });
+    mountProtocols();
+
+    expect(await screen.findByText("Legacy DNS")).toBeInTheDocument();
+    expect(screen.getByText("Zone unbound")).toBeInTheDocument();
+    expect(screen.getByText("No method policy")).toBeInTheDocument();
+    expect(screen.getByText("Wildcards denied")).toBeInTheDocument();
+    expect(screen.getByText("Disabled")).toBeInTheDocument();
   });
 
   it("renders EST, SCEP, and CMP with live responder routes and no transcript placeholders", async () => {
@@ -324,6 +452,194 @@ describe("protocol surface", () => {
     expect(screen.queryByRole("button", { name: /issue wildcard|acknowledge wildcard|run challenge/i })).not.toBeInTheDocument();
     // Challenge rotation is now a real console feature (CLI parity), so it is intentionally present.
     expect(screen.queryByRole("button", { name: /sync intune|retry enrollment/i })).not.toBeInTheDocument();
+  });
+
+  it("runs DNS-01 preflight with explicit evidence and renders pass, fail, and skipped checks", async () => {
+    const user = userEvent.setup();
+    apiMock.acmeDNS01Preflight
+      .mockRejectedValueOnce(new Error("preflight worker offline"))
+      .mockResolvedValueOnce({
+        config_id: "01900000-0000-7000-8000-000000000069",
+        domain: "*.api.example.test",
+        wildcard: true,
+        selected_method: "dns-01",
+        record_name: "_acme-challenge.api.example.test",
+        method_rationale: "Wildcard orders require DNS-01.",
+        ready: false,
+        checks: [
+          { name: "delegation", status: "pass", detail: "Delegation reached the configured target." },
+          { name: "CAA", status: "fail", detail: "The issuer is not allowed." },
+          { name: "port 80", status: "skipped", detail: "Not used by DNS-01." },
+        ],
+        failed_checks: ["CAA"],
+      })
+      .mockResolvedValueOnce({
+        config_id: "01900000-0000-7000-8000-000000000069",
+        domain: "api.example.test",
+        wildcard: false,
+        selected_method: "dns-01",
+        record_name: "_acme-challenge.api.example.test",
+        ready: true,
+        checks: [{ name: "delegation", status: "pass", detail: "Ready." }],
+        failed_checks: [],
+      });
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Preflight check prod-cloudflare" }));
+    const dialog = screen.getByRole("dialog", { name: "DNS-01 preflight: prod-cloudflare" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Domain" }), "*.api.example.test");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Method override (optional)" }), "dns-01");
+    await user.type(within(dialog).getByRole("textbox", { name: "Expected TXT value (optional)" }), "expected-proof");
+    await user.type(within(dialog).getByRole("textbox", { name: "Observed TXT records (optional, one per line)" }), "first-proof\n\nsecond-proof");
+    await user.click(within(dialog).getByRole("button", { name: "Run preflight" }));
+    expect(await within(dialog).findByText("preflight worker offline")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Run preflight" }));
+
+    await waitFor(() =>
+      expect(apiMock.acmeDNS01Preflight).toHaveBeenLastCalledWith({
+        config_id: "01900000-0000-7000-8000-000000000069",
+        domain: "*.api.example.test",
+        expected_txt: "expected-proof",
+        method_override: "dns-01",
+        observed_txt: ["first-proof", "second-proof"],
+      }),
+    );
+    expect(await within(dialog).findByText("Not ready")).toBeInTheDocument();
+    expect(within(dialog).getByText("Wildcard orders require DNS-01.")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Failed checks:.*CAA/)).toBeInTheDocument();
+
+    await user.clear(within(dialog).getByRole("textbox", { name: "Domain" }));
+    await user.type(within(dialog).getByRole("textbox", { name: "Domain" }), "api.example.test");
+    await user.click(within(dialog).getByRole("button", { name: "Re-run preflight" }));
+    expect(await within(dialog).findByText("Ready")).toBeInTheDocument();
+    expect(apiMock.acmeDNS01Preflight).toHaveBeenCalledTimes(3);
+  });
+
+  it("validates and saves the served DNS-01 config form without accepting raw non-object JSON", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Edit DNS-01 config prod-cloudflare" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit DNS-01 provider config prod-cloudflare" });
+    const configJSON = within(dialog).getByRole("textbox", { name: "Provider config JSON (optional)" });
+    const refsJSON = within(dialog).getByRole("textbox", { name: /Credential references JSON \(optional\)/ });
+
+    fireEvent.change(configJSON, { target: { value: "{" } });
+    await user.click(within(dialog).getByRole("button", { name: "Save config" }));
+    expect(await within(dialog).findByText(/Provider config must be valid JSON/)).toBeInTheDocument();
+    expect(apiMock.updateACMEDNS01ProviderConfig).not.toHaveBeenCalled();
+
+    fireEvent.change(configJSON, { target: { value: '{"zone_id":"zone-next"}' } });
+    fireEvent.change(refsJSON, { target: { value: "[]" } });
+    await user.click(within(dialog).getByRole("button", { name: "Save config" }));
+    expect(await within(dialog).findByText("Credential references must be a JSON object.")).toBeInTheDocument();
+
+    fireEvent.change(refsJSON, { target: { value: '{"api_token_ref":"secret://dns/cloudflare/next"}' } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Config name" }), { target: { value: "prod-cloudflare-next" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Zone (optional)" }), { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "dns-01" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "http-01" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Allow wildcard issuance" }));
+    apiMock.updateACMEDNS01ProviderConfig.mockRejectedValueOnce(new Error("config service offline"));
+
+    await user.click(within(dialog).getByRole("button", { name: "Save config" }));
+    expect(await within(dialog).findByText("config service offline")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Save config" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Edit DNS-01 provider config/ })).not.toBeInTheDocument());
+    expect(apiMock.updateACMEDNS01ProviderConfig).toHaveBeenLastCalledWith(
+      "01900000-0000-7000-8000-000000000069",
+      expect.objectContaining({
+        name: "prod-cloudflare-next",
+        provider: "cloudflare",
+        allow_wildcards: false,
+        allowed_methods: ["http-01"],
+        config: { zone_id: "zone-next" },
+        credential_refs: { api_token_ref: "secret://dns/cloudflare/next" },
+      }),
+    );
+    expect(screen.getAllByText("prod-cloudflare-next").length).toBeGreaterThan(0);
+  });
+
+  it("validates and saves MDM SCEP policy references through the served mutation", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Edit SCEP policy intune-mobile" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit SCEP policy intune-mobile" });
+    const anchors = within(dialog).getByRole("textbox", { name: "Trust anchor references JSON (optional)" });
+    const guidance = within(dialog).getByRole("textbox", { name: "Profile guidance JSON (optional)" });
+
+    fireEvent.change(anchors, { target: { value: "{" } });
+    await user.click(within(dialog).getByRole("button", { name: "Save policy" }));
+    expect(await within(dialog).findByText(/Trust anchor references must be valid JSON/)).toBeInTheDocument();
+
+    fireEvent.change(anchors, { target: { value: '{"root_ca_ref":"secret://mdm/intune/root-ca-next"}' } });
+    fireEvent.change(guidance, { target: { value: "[]" } });
+    await user.click(within(dialog).getByRole("button", { name: "Save policy" }));
+    expect(await within(dialog).findByText("Profile guidance must be a JSON object.")).toBeInTheDocument();
+
+    fireEvent.change(guidance, { target: { value: '{"challenge_source":"hmac-dynamic"}' } });
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Provider" }), "intune");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Provider" }), "jamf");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Challenge mode" }), "");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Challenge mode" }), "hmac-dynamic");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Expected audience (optional)" }), { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Enabled" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save policy" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Edit SCEP policy/ })).not.toBeInTheDocument());
+    expect(apiMock.updateMDMSCEPPolicy).toHaveBeenCalledWith(
+      "01900000-0000-7000-8000-000000000056",
+      expect.objectContaining({
+        provider: "jamf",
+        challenge_mode: "hmac-dynamic",
+        enabled: false,
+        trust_anchor_refs: { root_ca_ref: "secret://mdm/intune/root-ca-next" },
+        profile_guidance: { challenge_source: "hmac-dynamic" },
+      }),
+    );
+  });
+
+  it("rotates and deletes SCEP policy evidence and deletes DNS config only after exact-name confirmation", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+    const mdm = await apiMock.mdmSCEPStatus.mock.results[0].value;
+    apiMock.rotateMDMSCEPChallenge.mockRejectedValueOnce(new Error("rotation worker offline")).mockResolvedValueOnce({
+      policy: { ...mdm.policies[0], rotation_version: 3, last_rotated_at: "2026-06-26T14:05:00Z" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Rotate challenge for intune-mobile" }));
+    let dialog = screen.getByRole("dialog", { name: "Rotate SCEP challenge for intune-mobile?" });
+    await user.click(within(dialog).getByRole("button", { name: "Rotate challenge" }));
+    expect(await within(dialog).findByText("rotation worker offline")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Rotate challenge" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Rotate SCEP challenge/ })).not.toBeInTheDocument());
+    expect(screen.getByText("Rotation version 3")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete SCEP policy intune-mobile" }));
+    dialog = screen.getByRole("alertdialog", { name: /Delete SCEP policy.*intune-mobile/ });
+    const deletePolicy = within(dialog).getByRole("button", { name: "Yes, delete policy" });
+    expect(deletePolicy).toBeDisabled();
+    await user.type(within(dialog).getByRole("textbox", { name: "Type policy name to confirm" }), "intune-mobile");
+    apiMock.deleteMDMSCEPPolicy.mockRejectedValueOnce(new Error("policy delete offline"));
+    await user.click(deletePolicy);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("policy delete offline");
+    await user.click(deletePolicy);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Delete SCEP policy intune-mobile" })).not.toBeInTheDocument());
+    expect(apiMock.deleteMDMSCEPPolicy).toHaveBeenCalledWith("01900000-0000-7000-8000-000000000056");
+
+    await user.click(screen.getByRole("button", { name: "Delete DNS-01 config prod-cloudflare" }));
+    dialog = screen.getByRole("alertdialog", { name: /Delete DNS-01 provider config.*prod-cloudflare/ });
+    const deleteConfig = within(dialog).getByRole("button", { name: "Yes, delete config" });
+    expect(deleteConfig).toBeDisabled();
+    await user.type(within(dialog).getByRole("textbox", { name: "Type config name to confirm" }), "prod-cloudflare");
+    apiMock.deleteACMEDNS01ProviderConfig.mockRejectedValueOnce(new Error("config delete offline"));
+    await user.click(deleteConfig);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("config delete offline");
+    await user.click(deleteConfig);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Delete DNS-01 config prod-cloudflare" })).not.toBeInTheDocument());
+    expect(apiMock.deleteACMEDNS01ProviderConfig).toHaveBeenCalledWith("01900000-0000-7000-8000-000000000069");
   });
 });
 
