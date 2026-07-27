@@ -16,7 +16,7 @@ stack at <https://localhost:8443>; the two can run side by side.
 ## Prerequisites
 
 - Docker with the Compose plugin (`docker compose version` works), or a Go
-  1.26.4+ toolchain to run from source.
+  1.26.5+ toolchain to run from source.
 - About 1 GB of free disk for the PostgreSQL and NATS volumes.
 
 ## 1. Bring up the control plane (about 2 minutes)
