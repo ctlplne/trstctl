@@ -41,6 +41,9 @@ func TestWorkloadIdentityReadModelsUseEventRecoveryAndSnapshots(t *testing.T) {
 	if SnapshotFormatVersion < 6 {
 		t.Errorf("SnapshotFormatVersion = %d; adding workload-identity projections must invalidate older snapshots", SnapshotFormatVersion)
 	}
+	if SnapshotFormatVersion < 7 {
+		t.Errorf("SnapshotFormatVersion = %d; adding GCP workload-identity source fields must invalidate older snapshots", SnapshotFormatVersion)
+	}
 }
 
 func containsRecoveryTable(tables []string, want string) bool {

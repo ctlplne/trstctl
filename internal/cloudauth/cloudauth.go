@@ -5,9 +5,9 @@
 // locked, non-dumpable buffers, caches them only until a refresh-before-expiry
 // boundary, and destroys every cached or caller-owned copy explicitly.
 //
-// Provider packages contribute only thin HTTP request/response encoders. AWS is
-// the first served encoder; GCP and Azure must instantiate this same cache and
-// exchange seam rather than grow parallel authentication stacks.
+// Provider packages contribute only thin HTTP request/response encoders. AWS
+// and GCP are served encoders; Azure must instantiate this same cache and
+// exchange seam rather than grow a parallel authentication stack.
 package cloudauth
 
 import (
@@ -27,6 +27,36 @@ import (
 // has air-gap enforcement enabled. The outbox treats it as a terminal, honestly
 // reported disabled state instead of retrying a connection that policy forbids.
 var ErrOfflineDisabled = errors.New("cloud workload identity is disabled by air-gap policy")
+
+type offlineDisabledError struct {
+	provider string
+}
+
+func (e *offlineDisabledError) Error() string {
+	return e.provider + " workload identity is disabled by air-gap policy"
+}
+
+func (e *offlineDisabledError) Unwrap() error {
+	return ErrOfflineDisabled
+}
+
+// OfflineDisabled returns the common terminal sentinel with a non-secret
+// provider label that the outbox may preserve in its honest failure record.
+func OfflineDisabled(provider string) error {
+	if provider == "" {
+		provider = "Cloud"
+	}
+	return &offlineDisabledError{provider: provider}
+}
+
+// OfflineProvider returns the provider label attached by OfflineDisabled.
+func OfflineProvider(err error) string {
+	var target *offlineDisabledError
+	if errors.As(err, &target) {
+		return target.provider
+	}
+	return ""
+}
 
 // ErrInvalidWorkloadProof is deliberately closed and content-free. A rejected
 // JWT is attacker-controlled authority material and must never flow into durable

@@ -27,6 +27,7 @@ const source = {
   name: "Payments delivery",
   provider: "aws" as const,
   role_arn: "arn:aws:iam::123456789012:role/payments-sync",
+  service_account: "",
   audience: "trstctl-secrets",
   subject: "system:serviceaccount:security:trstctl",
   target_id: "aws-secretsmanager-primary",
@@ -55,7 +56,7 @@ async function completeWizard(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Token audience"), "trstctl-secrets");
   await user.type(screen.getByLabelText("Token subject"), "system:serviceaccount:security:edge");
   await user.click(screen.getByRole("button", { name: "Next" }));
-  await user.selectOptions(screen.getByLabelText("AWS sync target"), "aws-secretsmanager-primary");
+  await user.selectOptions(screen.getByLabelText("Cloud sync target"), "aws-secretsmanager-primary");
   await user.type(screen.getByLabelText("Allowed remote-key prefixes"), "edge/\nshared/");
   await user.click(screen.getByRole("button", { name: "Next" }));
   await user.type(screen.getByLabelText("Workload proof reference"), "secret://sync/edge-proof");
@@ -105,6 +106,17 @@ describe("AWS workload identity secret sync", () => {
           secret_handling: "byte-native",
           wire_format: "aws-json",
         },
+        {
+          id: "gcp-secretmanager-primary",
+          name: "GCP Secret Manager primary",
+          platform: "GCP Secret Manager",
+          configured: true,
+          capabilities: ["write"],
+          auth_mode: "workload_identity",
+          delivery_mode: "outbox",
+          secret_handling: "byte-native",
+          wire_format: "gcp-json",
+        },
       ],
     });
     apiMock.createSecretSyncWorkloadIdentitySource.mockResolvedValue(source);
@@ -150,5 +162,38 @@ describe("AWS workload identity secret sync", () => {
     await completeWizard(user);
     await user.click(screen.getByRole("button", { name: "Save source" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("AWS workload identity exchange policy rejected the source");
+  });
+
+  it("creates a GCP RFC 8693 source with optional service-account impersonation", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await screen.findByText("Payments delivery");
+    await user.type(screen.getByLabelText("Source name"), "GCP delivery");
+    await user.selectOptions(screen.getByLabelText("Cloud provider"), "gcp");
+    await user.type(screen.getByLabelText("GCP service account (optional)"), "sync@example.iam.gserviceaccount.com");
+    await user.type(screen.getByLabelText("Token audience"), "trstctl-secrets");
+    await user.type(screen.getByLabelText("Token subject"), "system:serviceaccount:security:gcp");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.selectOptions(screen.getByLabelText("Cloud sync target"), "gcp-secretmanager-primary");
+    await user.type(screen.getByLabelText("Allowed remote-key prefixes"), "gcp/");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(screen.getByLabelText("Workload proof reference"), "secret://sync/gcp-proof");
+    await user.selectOptions(screen.getByLabelText("JWT trust source"), "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    await user.click(screen.getByRole("button", { name: "Save source" }));
+    await waitFor(() =>
+      expect(apiMock.createSecretSyncWorkloadIdentitySource).toHaveBeenCalledWith({
+        name: "GCP delivery",
+        provider: "gcp",
+        role_arn: "",
+        service_account: "sync@example.iam.gserviceaccount.com",
+        audience: "trstctl-secrets",
+        subject: "system:serviceaccount:security:gcp",
+        target_id: "gcp-secretmanager-primary",
+        allowed_remote_key_prefixes: ["gcp/"],
+        workload_proof_ref: "secret://sync/gcp-proof",
+        trust_source_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        enabled: true,
+      }),
+    );
   });
 });

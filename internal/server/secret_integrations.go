@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/cloudauth"
+	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -528,9 +530,9 @@ func secretSyncTargetsFromConfig(
 			minter.Close()
 			return nil, nil, errors.New("server: secret-sync target requires tenant and id")
 		}
-		if entry.AWSWorkloadIdentity && (st == nil || kek == nil || log == nil) {
+		if (entry.AWSWorkloadIdentity || entry.GCPWorkloadIdentity) && (st == nil || kek == nil || log == nil) {
 			minter.Close()
-			return nil, nil, fmt.Errorf("server: AWS workload identity target %s/%s requires store, event log, and KEK", entry.TenantID, entry.ID)
+			return nil, nil, fmt.Errorf("server: workload identity target %s/%s requires store, event log, and KEK", entry.TenantID, entry.ID)
 		}
 		if _, err := secretIntegrationHTTPClient(entry.Endpoint, entry.AllowPrivate, entry.AllowInsecureLoopback, entry.PrivateEgressCIDRs, guard); err != nil {
 			minter.Close()
@@ -540,6 +542,18 @@ func secretSyncTargetsFromConfig(
 			if _, err := secretIntegrationHTTPClient(awsWorkloadIdentityEndpoint(entry), entry.AllowPrivate, entry.AllowInsecureLoopback, entry.PrivateEgressCIDRs, guard); err != nil {
 				minter.Close()
 				return nil, nil, fmt.Errorf("server: secret-sync target %s/%s workload identity endpoint: %w", entry.TenantID, entry.ID, err)
+			}
+		}
+		if entry.GCPWorkloadIdentity {
+			if _, err := secretIntegrationHTTPClient(gcpWorkloadIdentityEndpoint(entry), entry.AllowPrivate, entry.AllowInsecureLoopback, entry.PrivateEgressCIDRs, guard); err != nil {
+				minter.Close()
+				return nil, nil, fmt.Errorf("server: secret-sync target %s/%s GCP workload identity endpoint: %w", entry.TenantID, entry.ID, err)
+			}
+			if endpoint := strings.TrimSpace(entry.WorkloadIdentityImpersonationEndpoint); endpoint != "" {
+				if _, err := secretIntegrationHTTPClient(endpoint, entry.AllowPrivate, entry.AllowInsecureLoopback, entry.PrivateEgressCIDRs, guard); err != nil {
+					minter.Close()
+					return nil, nil, fmt.Errorf("server: secret-sync target %s/%s GCP impersonation endpoint: %w", entry.TenantID, entry.ID, err)
+				}
 			}
 		}
 		if _, ok := registry[entry.TenantID]; !ok {
@@ -627,10 +641,11 @@ func pushConfiguredSecretSync(ctx context.Context, p *configuredSyncPusher, key 
 			AccessKeyID: accessKeyID, SecretAccessKey: secretKey, SessionToken: session,
 		})
 	case "gcp-secret-manager":
-		token, resolveErr := resolve(cfg.TokenRef)
-		if resolveErr != nil {
-			return resolveErr
+		token, cleanup, credentialErr := p.gcpSyncCredentials(ctx, key, resolve)
+		if credentialErr != nil {
+			return credentialErr
 		}
+		defer cleanup()
 		concrete, err = secretsync.NewGCPSecretManagerPusher(secretsync.GCPSecretManagerConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, Project: cfg.Project, BearerToken: token,
 		})
@@ -770,7 +785,7 @@ func (p *configuredSyncPusher) mintAWSWorkloadIdentity(ctx context.Context, remo
 			store.SecretSyncWorkloadIdentityOfflineDisabled, "air_gap_enabled", nil); err != nil {
 			return nil, fmt.Errorf("server: record AWS workload identity offline state: %w", err)
 		}
-		return nil, cloudauth.ErrOfflineDisabled
+		return nil, cloudauth.OfflineDisabled("AWS")
 	}
 	trust, err := p.store.GetWorkloadAttesterTrustSource(ctx, p.tenantID, source.TrustSourceID)
 	if err != nil || !trust.Enabled || trust.RevokedAt != nil || trust.Audience != source.Audience {
@@ -850,6 +865,133 @@ func awsWorkloadIdentitySessionName(operationID string) string {
 		}
 	}
 	return strings.TrimRight(out.String(), "-")
+}
+
+func (p *configuredSyncPusher) gcpSyncCredentials(
+	ctx context.Context,
+	remoteKey string,
+	resolve func(string) ([]byte, error),
+) ([]byte, func(), error) {
+	if !p.cfg.GCPWorkloadIdentity {
+		token, err := resolve(p.cfg.TokenRef)
+		return token, func() {}, err
+	}
+	credential, err := p.mintGCPWorkloadIdentity(ctx, remoteKey)
+	if err != nil {
+		return nil, func() {}, err
+	}
+	return credential.Primary.Bytes(), credential.Destroy, nil
+}
+
+const defaultGCPWorkloadIdentityEndpoint = "https://sts.googleapis.com/v1/token"
+
+func gcpWorkloadIdentityEndpoint(cfg config.SecretSyncTargetConfig) string {
+	if endpoint := strings.TrimSpace(cfg.WorkloadIdentityEndpoint); endpoint != "" {
+		return endpoint
+	}
+	return defaultGCPWorkloadIdentityEndpoint
+}
+
+func gcpWorkloadIdentityImpersonationEndpoint(cfg config.SecretSyncTargetConfig, serviceAccount string) string {
+	if endpoint := strings.TrimSpace(cfg.WorkloadIdentityImpersonationEndpoint); endpoint != "" {
+		return endpoint
+	}
+	if serviceAccount == "" {
+		return ""
+	}
+	return "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/" +
+		url.PathEscape(serviceAccount) + ":generateAccessToken"
+}
+
+func (p *configuredSyncPusher) mintGCPWorkloadIdentity(ctx context.Context, remoteKey string) (*cloudauth.Credential, error) {
+	if p.store == nil || p.log == nil || p.minter == nil {
+		return nil, errors.New("server: GCP workload identity is not fully assembled")
+	}
+	source, err := p.store.FindSecretSyncWorkloadIdentitySourceForTarget(ctx, p.tenantID, "gcp", p.cfg.ID, remoteKey)
+	if err != nil {
+		if errors.Is(err, store.ErrSecretSyncWorkloadIdentitySourceNotFound) {
+			return nil, errors.New("server: no enabled GCP workload identity source authorizes this target and remote key")
+		}
+		return nil, fmt.Errorf("server: load GCP workload identity source: %w", err)
+	}
+	operationID := secretsync.OperationID(ctx)
+	if operationID == "" {
+		return nil, errors.New("server: GCP workload identity exchange requires a durable outbox operation id")
+	}
+	if p.guard != nil && p.guard.Enabled() {
+		if err := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityOfflineDisabled, "air_gap_enabled", nil); err != nil {
+			return nil, fmt.Errorf("server: record GCP workload identity offline state: %w", err)
+		}
+		return nil, cloudauth.OfflineDisabled("GCP")
+	}
+	trust, err := p.store.GetWorkloadAttesterTrustSource(ctx, p.tenantID, source.TrustSourceID)
+	if err != nil || !trust.Enabled || trust.RevokedAt != nil || trust.Audience != source.Audience {
+		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityExchangeFailed, "trust_source_invalid", nil); statusErr != nil {
+			return nil, fmt.Errorf("server: record GCP workload identity trust failure: %w", statusErr)
+		}
+		return nil, errors.New("server: GCP workload identity trust source is unavailable")
+	}
+	cacheKey := fmt.Sprintf("%s\x00%s\x00%d\x00%d\x00%d",
+		p.tenantID, source.ID, source.UpdatedAt.UnixNano(), trust.RotationVersion, trust.UpdatedAt.UnixNano())
+	credential, cacheHit, err := p.minter.Mint(ctx, cacheKey, func(exchangeCtx context.Context) (cloudauth.Material, error) {
+		proof, resolveErr := p.credentials.resolve(exchangeCtx, p.tenantID, source.WorkloadProofRef)
+		if resolveErr != nil {
+			return cloudauth.Material{}, errors.New("cloudauth: workload proof reference could not be resolved")
+		}
+		defer proof.Destroy()
+		if validateErr := cloudauth.ValidateOIDCProof(
+			proof.Bytes(), trust.JWKS, trust.Issuer, source.Audience, source.Subject, time.Now().UTC(),
+		); validateErr != nil {
+			return cloudauth.Material{}, validateErr
+		}
+		client, clientErr := secretIntegrationHTTPClient(
+			gcpWorkloadIdentityEndpoint(p.cfg), p.cfg.AllowPrivate, p.cfg.AllowInsecureLoopback,
+			p.cfg.PrivateEgressCIDRs, p.guard,
+		)
+		if clientErr != nil {
+			return cloudauth.Material{}, errors.New("cloudauth: GCP STS client is unavailable")
+		}
+		impersonationEndpoint := gcpWorkloadIdentityImpersonationEndpoint(p.cfg, source.ServiceAccount)
+		var impersonationClient cloudhttp.Doer
+		if impersonationEndpoint != "" {
+			impersonationClient, clientErr = secretIntegrationHTTPClient(
+				impersonationEndpoint, p.cfg.AllowPrivate, p.cfg.AllowInsecureLoopback,
+				p.cfg.PrivateEgressCIDRs, p.guard,
+			)
+			if clientErr != nil {
+				return cloudauth.Material{}, errors.New("cloudauth: GCP impersonation client is unavailable")
+			}
+		}
+		return cloudauth.ExchangeGCPWorkloadIdentity(exchangeCtx, client, cloudauth.GCPExchangeRequest{
+			STSEndpoint: gcpWorkloadIdentityEndpoint(p.cfg), Audience: source.Audience,
+			SubjectToken: proof.Bytes(), ServiceAccount: source.ServiceAccount,
+			ImpersonationEndpoint: impersonationEndpoint, ImpersonationDoer: impersonationClient,
+		})
+	})
+	if err != nil {
+		reason := "exchange_failed"
+		if errors.Is(err, cloudauth.ErrInvalidWorkloadProof) {
+			reason = "proof_invalid"
+		}
+		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityExchangeFailed, reason, nil); statusErr != nil {
+			return nil, fmt.Errorf("server: record GCP workload identity failure: %w", statusErr)
+		}
+		return nil, fmt.Errorf("server: GCP workload identity exchange failed: %w", err)
+	}
+	reason := "credential_exchanged"
+	if cacheHit {
+		reason = "credential_cache_hit"
+	}
+	expiresAt := credential.ExpiresAt
+	if err := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+		store.SecretSyncWorkloadIdentityActive, reason, &expiresAt); err != nil {
+		credential.Destroy()
+		return nil, fmt.Errorf("server: record GCP workload identity active state: %w", err)
+	}
+	return credential, nil
 }
 
 var secretSyncWorkloadIdentityEventNamespace = uuid.MustParse("cf6b81b1-8665-5ca2-b31b-b807d1070172")

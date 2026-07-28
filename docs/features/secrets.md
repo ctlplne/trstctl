@@ -305,7 +305,7 @@ holder, never sent as plaintext. Sync endpoints follow the dynamic-provider tran
 rule: HTTPS by default, `allow_private_endpoint` is only an address grant, plaintext
 needs the explicit loopback-only switch.
 
-#### AWS workload identity for secret sync
+#### AWS and GCP workload identity for secret sync
 
 AWS Secrets Manager targets can replace long-lived access keys with an explicitly
 configured workload identity. Set `aws_workload_identity: true` on that target and
@@ -333,6 +333,18 @@ wipeable, and passes them into the existing hand-written AWS SigV4 pusher. No ve
 SDK or parallel AWS integration is involved. When air-gap policy is enabled, the
 worker records `offline_disabled` before opening a connection, marks that delivery
 failed once with a stable reason, and does not retry forever.
+
+GCP Secret Manager targets use the same boundary with
+`gcp_workload_identity: true` and no `token_ref`.
+`workload_identity_endpoint` defaults to the RFC 8693 endpoint at
+`sts.googleapis.com`. A GCP source leaves `role_arn` empty and may set
+`service_account`: when it is blank, the worker passes the short-lived STS bearer
+to the existing GCP pusher; when it is present, the worker performs the optional
+IAM Credentials `generateAccessToken` step at the configured
+`workload_identity_impersonation_endpoint`. Both paths resolve and validate the
+OIDC proof, exchange it, cache it, and refresh it through the same
+`internal/cloudauth` minter used by AWS. The API, CLI, generated clients, and
+console expose the same tenant-scoped source and honest runtime status.
 
 `GET /api/v1/secrets/cloud-secret-managers` / `trstctl-cli secrets
 cloud-secret-managers`: read-only `cloud_secret` discovery for AWS Secrets Manager, GCP

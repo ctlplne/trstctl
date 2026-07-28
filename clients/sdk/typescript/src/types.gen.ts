@@ -8514,8 +8514,9 @@ export interface components {
             last_failure_at?: string;
             name: string;
             /** @enum {string} */
-            provider: "aws";
+            provider: "aws" | "gcp";
             role_arn: string;
+            service_account: string;
             /** @enum {string} */
             status: "ready" | "active" | "disabled" | "offline_disabled" | "exchange_failed";
             status_reason: string;
@@ -8541,8 +8542,9 @@ export interface components {
             enabled?: boolean;
             name: string;
             /** @enum {string} */
-            provider?: "aws";
-            role_arn: string;
+            provider?: "aws" | "gcp";
+            role_arn?: string;
+            service_account?: string;
             subject: string;
             target_id: string;
             /** Format: uuid */

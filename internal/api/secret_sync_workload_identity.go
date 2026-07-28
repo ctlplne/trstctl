@@ -21,6 +21,7 @@ type secretSyncWorkloadIdentitySourceRequest struct {
 	Name                     string   `json:"name"`
 	Provider                 string   `json:"provider,omitempty"`
 	RoleARN                  string   `json:"role_arn"`
+	ServiceAccount           string   `json:"service_account,omitempty"`
 	Audience                 string   `json:"audience"`
 	Subject                  string   `json:"subject"`
 	TargetID                 string   `json:"target_id"`
@@ -36,6 +37,7 @@ type secretSyncWorkloadIdentitySourceResponse struct {
 	Name                     string   `json:"name"`
 	Provider                 string   `json:"provider"`
 	RoleARN                  string   `json:"role_arn"`
+	ServiceAccount           string   `json:"service_account"`
 	Audience                 string   `json:"audience"`
 	Subject                  string   `json:"subject"`
 	TargetID                 string   `json:"target_id"`
@@ -158,6 +160,7 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 		req.Provider = "aws"
 	}
 	req.RoleARN = strings.TrimSpace(req.RoleARN)
+	req.ServiceAccount = strings.TrimSpace(req.ServiceAccount)
 	req.Audience = strings.TrimSpace(req.Audience)
 	req.Subject = strings.TrimSpace(req.Subject)
 	req.TargetID = strings.TrimSpace(req.TargetID)
@@ -167,15 +170,30 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 		on := true
 		req.Enabled = &on
 	}
-	if req.Name == "" || req.RoleARN == "" || req.Audience == "" || req.Subject == "" ||
+	if req.Name == "" || req.Audience == "" || req.Subject == "" ||
 		req.TargetID == "" || req.WorkloadProofRef == "" || req.TrustSourceID == "" {
-		return req, errStatus(http.StatusBadRequest, "name, role_arn, audience, subject, target_id, workload_proof_ref, and trust_source_id are required")
+		return req, errStatus(http.StatusBadRequest, "name, audience, subject, target_id, workload_proof_ref, and trust_source_id are required")
 	}
-	if req.Provider != "aws" {
-		return req, errStatus(http.StatusBadRequest, "provider must be aws for this independently shipped stage")
-	}
-	if !strings.HasPrefix(req.RoleARN, "arn:aws:iam::") || !strings.Contains(req.RoleARN, ":role/") {
-		return req, errStatus(http.StatusBadRequest, "role_arn must be an AWS IAM role ARN")
+	switch req.Provider {
+	case "aws":
+		if !strings.HasPrefix(req.RoleARN, "arn:aws:iam::") || !strings.Contains(req.RoleARN, ":role/") {
+			return req, errStatus(http.StatusBadRequest, "role_arn must be an AWS IAM role ARN")
+		}
+		if req.ServiceAccount != "" {
+			return req, errStatus(http.StatusBadRequest, "service_account is only valid for GCP")
+		}
+	case "gcp":
+		if req.RoleARN != "" {
+			return req, errStatus(http.StatusBadRequest, "role_arn is only valid for AWS")
+		}
+		if req.ServiceAccount != "" &&
+			(!strings.HasSuffix(req.ServiceAccount, ".iam.gserviceaccount.com") ||
+				strings.Count(req.ServiceAccount, "@") != 1 ||
+				strings.ContainsAny(req.ServiceAccount, " \t\r\n")) {
+			return req, errStatus(http.StatusBadRequest, "service_account must be a GCP IAM service-account email")
+		}
+	default:
+		return req, errStatus(http.StatusBadRequest, "provider must be aws or gcp")
 	}
 	if !strings.HasPrefix(req.WorkloadProofRef, "file:") && !strings.HasPrefix(req.WorkloadProofRef, "secret://") {
 		return req, errStatus(http.StatusBadRequest, "workload_proof_ref must use file: or secret://; inline proofs are forbidden")
@@ -220,7 +238,8 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 func (a *API) emitSecretSyncWorkloadIdentitySource(ctx context.Context, tenantID, id string, req secretSyncWorkloadIdentitySourceRequest) error {
 	data, err := json.Marshal(projections.SecretSyncWorkloadIdentitySourceUpserted{
 		ID: id, Name: req.Name, Provider: req.Provider, RoleARN: req.RoleARN,
-		Audience: req.Audience, Subject: req.Subject, TargetID: req.TargetID,
+		ServiceAccount: req.ServiceAccount,
+		Audience:       req.Audience, Subject: req.Subject, TargetID: req.TargetID,
 		AllowedRemoteKeyPrefixes: req.AllowedRemoteKeyPrefixes,
 		WorkloadProofRef:         req.WorkloadProofRef, TrustSourceID: req.TrustSourceID,
 		Enabled: *req.Enabled,
@@ -245,7 +264,8 @@ func (a *API) appendAndProjectSecretSyncWorkloadIdentitySource(ctx context.Conte
 func toSecretSyncWorkloadIdentitySourceResponse(source store.SecretSyncWorkloadIdentitySource) secretSyncWorkloadIdentitySourceResponse {
 	out := secretSyncWorkloadIdentitySourceResponse{
 		ID: source.ID, TenantID: source.TenantID, Name: source.Name, Provider: source.Provider,
-		RoleARN: source.RoleARN, Audience: source.Audience, Subject: source.Subject,
+		RoleARN: source.RoleARN, ServiceAccount: source.ServiceAccount,
+		Audience: source.Audience, Subject: source.Subject,
 		TargetID: source.TargetID, AllowedRemoteKeyPrefixes: append([]string(nil), source.AllowedRemoteKeyPrefixes...),
 		WorkloadProofRef: source.WorkloadProofRef, TrustSourceID: source.TrustSourceID,
 		Enabled: source.Enabled, Status: source.Status, StatusReason: source.StatusReason,

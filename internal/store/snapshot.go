@@ -34,7 +34,7 @@ import (
 // (SPINE-007). It is stored on every snapshot row; a snapshot whose version the
 // running code does not understand is ignored on restore (falling back to a full
 // rebuild), so the blob shape can evolve without silently mis-decoding an old one.
-const SnapshotFormatVersion = 6
+const SnapshotFormatVersion = 7
 
 // snapshotTables are the read-model tables captured in a per-tenant snapshot, in
 // dependency order (parents before children) so a restore's inserts never trip a

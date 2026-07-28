@@ -4197,8 +4197,9 @@ export interface SecretSyncWorkloadIdentitySource {
   last_exchange_at?: string;
   last_failure_at?: string;
   name: string;
-  provider: "aws";
+  provider: "aws" | "gcp";
   role_arn: string;
+  service_account: string;
   status: "ready" | "active" | "disabled" | "offline_disabled" | "exchange_failed";
   status_reason: string;
   subject: string;
@@ -4220,8 +4221,9 @@ export interface SecretSyncWorkloadIdentitySourceRequest {
   audience: string;
   enabled?: boolean;
   name: string;
-  provider?: "aws";
-  role_arn: string;
+  provider?: "aws" | "gcp";
+  role_arn?: string;
+  service_account?: string;
   subject: string;
   target_id: string;
   trust_source_id: string;

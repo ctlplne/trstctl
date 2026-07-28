@@ -435,12 +435,16 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 			if attempts < 1 {
 				attempts = 1
 			}
+			provider := cloudauth.OfflineProvider(err)
+			if provider == "" {
+				provider = "Cloud"
+			}
 			return d.appendAndProjectID(ctx,
 				"secret-sync-failed-"+uuid.NewSHA1(secretSyncEventNamespace, []byte(m.TenantID+"\x00"+payload.ID)).String(),
 				m.TenantID, projections.EventSecretSyncFailed,
 				projections.SecretSyncFailed{
 					ID: payload.ID, Attempts: attempts,
-					Error: "AWS workload identity disabled by air-gap policy",
+					Error: provider + " workload identity disabled by air-gap policy",
 				})
 		}
 		return fmt.Errorf("server: deliver secret-sync job %s to %s: %w", payload.ID, targetID, err)

@@ -2508,8 +2508,9 @@ func componentSchemas() map[string]*Schema {
 	}, "trust_source")
 	secretSyncWorkloadIdentitySourceReq := object(map[string]*Schema{
 		"name":                        str(),
-		"provider":                    {Type: "string", Enum: []string{"aws"}},
+		"provider":                    {Type: "string", Enum: []string{"aws", "gcp"}},
 		"role_arn":                    str(),
+		"service_account":             str(),
 		"audience":                    str(),
 		"subject":                     str(),
 		"target_id":                   str(),
@@ -2517,13 +2518,14 @@ func componentSchemas() map[string]*Schema {
 		"workload_proof_ref":          str(),
 		"trust_source_id":             uuid(),
 		"enabled":                     {Type: "boolean"},
-	}, "name", "role_arn", "audience", "subject", "target_id", "workload_proof_ref", "trust_source_id")
+	}, "name", "audience", "subject", "target_id", "workload_proof_ref", "trust_source_id")
 	secretSyncWorkloadIdentitySource := object(map[string]*Schema{
 		"id":                          uuid(),
 		"tenant_id":                   uuid(),
 		"name":                        str(),
-		"provider":                    {Type: "string", Enum: []string{"aws"}},
+		"provider":                    {Type: "string", Enum: []string{"aws", "gcp"}},
 		"role_arn":                    str(),
+		"service_account":             str(),
 		"audience":                    str(),
 		"subject":                     str(),
 		"target_id":                   str(),
@@ -2538,7 +2540,7 @@ func componentSchemas() map[string]*Schema {
 		"last_failure_at":             timestamp(),
 		"created_at":                  timestamp(),
 		"updated_at":                  timestamp(),
-	}, "id", "tenant_id", "name", "provider", "role_arn", "audience", "subject", "target_id", "allowed_remote_key_prefixes", "workload_proof_ref", "trust_source_id", "enabled", "status", "status_reason", "created_at", "updated_at")
+	}, "id", "tenant_id", "name", "provider", "role_arn", "service_account", "audience", "subject", "target_id", "allowed_remote_key_prefixes", "workload_proof_ref", "trust_source_id", "enabled", "status", "status_reason", "created_at", "updated_at")
 	sshStatus := object(map[string]*Schema{
 		"served":        {Type: "boolean"},
 		"tenant_id":     uuid(),

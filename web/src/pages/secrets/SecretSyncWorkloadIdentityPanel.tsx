@@ -19,6 +19,7 @@ import { apiProblemMessage } from "./SecretsPageParts";
 type ValidationMessage =
   | "secrets.wif.nameRequired"
   | "secrets.wif.roleArnInvalid"
+  | "secrets.wif.serviceAccountInvalid"
   | "secrets.wif.audienceRequired"
   | "secrets.wif.subjectRequired"
   | "secrets.wif.targetRequired"
@@ -26,28 +27,40 @@ type ValidationMessage =
   | "secrets.wif.trustSourceRequired";
 
 function buildSourceSchema(translate: (id: ValidationMessage) => string) {
-  return z.object({
-    name: z.string().trim().min(1, translate("secrets.wif.nameRequired")),
-    roleArn: z
-      .string()
-      .trim()
-      .regex(/^arn:aws:iam::[0-9]{12}:role\/.+$/, translate("secrets.wif.roleArnInvalid")),
-    audience: z.string().trim().min(1, translate("secrets.wif.audienceRequired")),
-    subject: z.string().trim().min(1, translate("secrets.wif.subjectRequired")),
-    targetId: z.string().trim().min(1, translate("secrets.wif.targetRequired")),
-    prefixes: z.string(),
-    proofRef: z
-      .string()
-      .trim()
-      .regex(/^(file:.+|secret:\/\/.+)$/, translate("secrets.wif.proofRefInvalid")),
-    trustSourceId: z.string().uuid(translate("secrets.wif.trustSourceRequired")),
-    enabled: z.boolean(),
-  });
+  return z
+    .object({
+      name: z.string().trim().min(1, translate("secrets.wif.nameRequired")),
+      provider: z.enum(["aws", "gcp"]),
+      roleArn: z.string().trim(),
+      serviceAccount: z.string().trim(),
+      audience: z.string().trim().min(1, translate("secrets.wif.audienceRequired")),
+      subject: z.string().trim().min(1, translate("secrets.wif.subjectRequired")),
+      targetId: z.string().trim().min(1, translate("secrets.wif.targetRequired")),
+      prefixes: z.string(),
+      proofRef: z
+        .string()
+        .trim()
+        .regex(/^(file:.+|secret:\/\/.+)$/, translate("secrets.wif.proofRefInvalid")),
+      trustSourceId: z.string().uuid(translate("secrets.wif.trustSourceRequired")),
+      enabled: z.boolean(),
+    })
+    .superRefine((value, context) => {
+      if (value.provider === "aws" && !/^arn:aws:iam::[0-9]{12}:role\/.+$/.test(value.roleArn)) {
+        context.addIssue({ code: "custom", path: ["roleArn"], message: translate("secrets.wif.roleArnInvalid") });
+      }
+      if (
+        value.provider === "gcp" &&
+        value.serviceAccount !== "" &&
+        !/^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/.test(value.serviceAccount)
+      ) {
+        context.addIssue({ code: "custom", path: ["serviceAccount"], message: translate("secrets.wif.serviceAccountInvalid") });
+      }
+    });
 }
 type SourceValues = z.infer<ReturnType<typeof buildSourceSchema>>;
 
 const wizardFields: Record<number, Array<keyof SourceValues>> = {
-  1: ["name", "roleArn", "audience", "subject"],
+  1: ["name", "provider", "roleArn", "serviceAccount", "audience", "subject"],
   2: ["targetId", "prefixes"],
   3: ["proofRef", "trustSourceId", "enabled"],
 };
@@ -71,7 +84,9 @@ export function SecretSyncWorkloadIdentityPanel() {
     mode: "onTouched",
     defaultValues: {
       name: "",
+      provider: "aws",
       roleArn: "",
+      serviceAccount: "",
       audience: "",
       subject: "",
       targetId: "",
@@ -81,13 +96,16 @@ export function SecretSyncWorkloadIdentityPanel() {
       enabled: true,
     },
   });
+  const selectedProvider = form.watch("provider");
 
-  const awsTargets = useMemo(
+  const providerTargets = useMemo(
     () =>
       (targets.data?.targets ?? []).filter(
-        (target) => target.configured && (target.id.toLowerCase().includes("aws") || target.platform.toLowerCase().includes("aws")),
+        (target) =>
+          target.configured &&
+          (target.id.toLowerCase().includes(selectedProvider) || target.platform.toLowerCase().includes(selectedProvider)),
       ),
-    [targets.data],
+    [selectedProvider, targets.data],
   );
   const oidcTrustSources = useMemo(
     () =>
@@ -110,7 +128,9 @@ export function SecretSyncWorkloadIdentityPanel() {
   function editSource(source: SecretSyncWorkloadIdentitySource) {
     form.reset({
       name: source.name,
+      provider: source.provider,
       roleArn: source.role_arn,
+      serviceAccount: source.service_account,
       audience: source.audience,
       subject: source.subject,
       targetId: source.target_id,
@@ -135,8 +155,9 @@ export function SecretSyncWorkloadIdentityPanel() {
     setNotice(null);
     const input: SecretSyncWorkloadIdentitySourceRequest = {
       name: values.name.trim(),
-      provider: "aws",
-      role_arn: values.roleArn.trim(),
+      provider: values.provider,
+      role_arn: values.provider === "aws" ? values.roleArn.trim() : "",
+      ...(values.provider === "gcp" ? { service_account: values.serviceAccount.trim() } : {}),
       audience: values.audience.trim(),
       subject: values.subject.trim(),
       target_id: values.targetId.trim(),
@@ -186,6 +207,7 @@ export function SecretSyncWorkloadIdentityPanel() {
         cell: (source) => (
           <span>
             <span className="block font-medium">{source.name}</span>
+            <span className="block font-mono text-xs uppercase text-muted-foreground">{source.provider}</span>
             <span className="block font-mono text-xs text-muted-foreground">{source.target_id}</span>
           </span>
         ),
@@ -287,9 +309,41 @@ export function SecretSyncWorkloadIdentityPanel() {
               <Field label={t("secrets.wif.name")} error={form.formState.errors.name?.message} required>
                 {(control) => <Input {...control} {...form.register("name")} />}
               </Field>
-              <Field label={t("secrets.wif.roleArn")} error={form.formState.errors.roleArn?.message} required>
-                {(control) => <Input {...control} {...form.register("roleArn")} placeholder={t("secrets.wif.roleArnPlaceholder")} />}
+              <Field label={t("secrets.wif.provider")} required>
+                {(control) => (
+                  <Select
+                    {...control}
+                    {...form.register("provider", {
+                      onChange: () => {
+                        form.setValue("targetId", "");
+                        form.clearErrors(["roleArn", "serviceAccount", "targetId"]);
+                      },
+                    })}
+                  >
+                    <option value="aws">{t("secrets.wif.providerAWS")}</option>
+                    <option value="gcp">{t("secrets.wif.providerGCP")}</option>
+                  </Select>
+                )}
               </Field>
+              {selectedProvider === "aws" ? (
+                <Field label={t("secrets.wif.roleArn")} error={form.formState.errors.roleArn?.message} required>
+                  {(control) => <Input {...control} {...form.register("roleArn")} placeholder={t("secrets.wif.roleArnPlaceholder")} />}
+                </Field>
+              ) : (
+                <Field
+                  label={t("secrets.wif.serviceAccount")}
+                  description={t("secrets.wif.serviceAccountHint")}
+                  error={form.formState.errors.serviceAccount?.message}
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      {...form.register("serviceAccount")}
+                      placeholder={t("secrets.wif.serviceAccountPlaceholder")}
+                    />
+                  )}
+                </Field>
+              )}
               <Field label={t("secrets.wif.audience")} error={form.formState.errors.audience?.message} required>
                 {(control) => <Input {...control} {...form.register("audience")} />}
               </Field>
@@ -305,7 +359,7 @@ export function SecretSyncWorkloadIdentityPanel() {
                 {(control) => (
                   <Select {...control} {...form.register("targetId")}>
                     <option value="">{t("secrets.wif.selectTarget")}</option>
-                    {awsTargets.map((target) => (
+                    {providerTargets.map((target) => (
                       <option key={target.id} value={target.id}>
                         {target.name} ({target.id})
                       </option>
@@ -364,7 +418,7 @@ export function SecretSyncWorkloadIdentityPanel() {
                 {t("secrets.wif.next")}
               </Button>
             ) : (
-              <Button type="submit" disabled={busy !== null || oidcTrustSources.length === 0 || awsTargets.length === 0}>
+              <Button type="submit" disabled={busy !== null || oidcTrustSources.length === 0 || providerTargets.length === 0}>
                 {busy === "save" ? t("secrets.wif.saving") : t("secrets.wif.save")}
               </Button>
             )}

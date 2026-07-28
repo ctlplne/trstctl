@@ -67,6 +67,30 @@ func TestValidateSecretIntegrationsAWSFederatedIsExplicitAndRejectsStaticFallbac
 	}
 }
 
+func TestValidateSecretIntegrationsGCPFederatedIsExplicitAndRejectsStaticFallback(t *testing.T) {
+	base := SecretSyncTargetConfig{
+		TenantID: "11111111-1111-1111-1111-111111111111",
+		ID:       "gcp-federated", Type: "gcp-secret-manager",
+		Endpoint: "https://secretmanager.googleapis.com",
+		Project:  "payments-production", GCPWorkloadIdentity: true,
+	}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{base}}, true); err != nil {
+		t.Fatalf("explicit GCP workload identity target rejected: %v", err)
+	}
+	withStatic := base
+	withStatic.TokenRef = "file:/run/secrets/gcp-token"
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{withStatic}}, true); err == nil ||
+		!strings.Contains(err.Error(), "forbids static token_ref") {
+		t.Fatalf("GCP workload identity with static fallback error = %v", err)
+	}
+	implicit := base
+	implicit.GCPWorkloadIdentity = false
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{implicit}}, true); err == nil ||
+		!strings.Contains(err.Error(), "token_ref") {
+		t.Fatalf("implicit GCP workload identity target error = %v", err)
+	}
+}
+
 func TestValidateSecretIntegrationsFailsClosed(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	tests := []struct {

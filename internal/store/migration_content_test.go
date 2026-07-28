@@ -35,6 +35,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	81: true,
 	82: true,
 	83: true,
+	89: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -287,6 +288,7 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0081_dynamic_secret_command_backfill", testMigration0081DynamicSecretCommandBackfill)
 	t.Run("0082_connector_right_size_operation_defaults", testMigration0082ConnectorRightSizeOperationDefaults)
 	t.Run("0083_outbox_effect_lane_default", testMigration0083OutboxEffectLaneDefault)
+	t.Run("0089_gcp_workload_identity_default", testMigration0089GCPWorkloadIdentityDefault)
 }
 
 func testMigration0072ConnectorTargetRevisionBackfill(t *testing.T) {
@@ -835,6 +837,70 @@ func assertIndexReady(t *testing.T, ctx context.Context, pool *pgxpool.Pool, nam
 	if !valid || !ready {
 		t.Fatalf("index %s valid=%t ready=%t, want true/true", name, valid, ready)
 	}
+}
+
+func testMigration0089GCPWorkloadIdentityDefault(t *testing.T) {
+	stable := `
+		SELECT tenant_id::text, id::text, name, provider, role_arn, audience,
+		       subject, target_id, array_to_string(allowed_remote_key_prefixes, ','),
+		       workload_proof_ref, trust_source_id::text, enabled::text, status,
+		       status_reason, created_at::text, updated_at::text
+		  FROM secret_sync_workload_identity_sources
+		 ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 89, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				trustID := uuid(tenantID, 8900+index)
+				sourceID := uuid(tenantID, 8910+index)
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO tenants (tenant_id, name)
+					VALUES ($1, $2)
+					ON CONFLICT (tenant_id) DO NOTHING`, tenantID, fmt.Sprintf("pre-0089-tenant-%d", index)); err != nil {
+					t.Fatalf("seed pre-0089 tenant %s: %v", tenantID, err)
+				}
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO workload_attester_trust_sources
+					       (id, tenant_id, name, method, issuer, audience, jwks,
+					        enabled, created_at, updated_at)
+					VALUES ($1, $2, $3, 'k8s_sat', 'https://issuer.example.test',
+					        'trstctl', '{"keys":[]}'::jsonb, true,
+					        '2026-07-28T10:00:00Z'::timestamptz,
+					        '2026-07-28T10:00:01Z'::timestamptz)`,
+					trustID, tenantID, fmt.Sprintf("pre-0089-trust-%d", index)); err != nil {
+					t.Fatalf("seed pre-0089 trust source %s: %v", tenantID, err)
+				}
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO secret_sync_workload_identity_sources
+					       (tenant_id, id, name, provider, role_arn, audience, subject,
+					        target_id, allowed_remote_key_prefixes, workload_proof_ref,
+					        trust_source_id, enabled, status, status_reason, created_at, updated_at)
+					VALUES ($1, $2, $3, 'aws', $4, 'trstctl', $5, $6, ARRAY['prod/'],
+					        $7, $8, true, 'ready', 'configured',
+					        '2026-07-28T10:01:00Z'::timestamptz,
+					        '2026-07-28T10:01:01Z'::timestamptz)`,
+					tenantID, sourceID, fmt.Sprintf("pre-0089-source-%d", index),
+					fmt.Sprintf("arn:aws:iam::12345678901%d:role/sync", index),
+					fmt.Sprintf("system:serviceaccount:sync:worker-%d", index),
+					fmt.Sprintf("aws-target-%d", index), fmt.Sprintf("secret://sync/proof-%d", index),
+					trustID); err != nil {
+					t.Fatalf("seed pre-0089 workload identity source %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var empty, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(service_account = ''),
+				       bool_and(service_account IS NOT NULL)
+				  FROM secret_sync_workload_identity_sources`).Scan(&rows, &empty, &nonnull); err != nil {
+				t.Fatalf("inspect 0089 service-account default: %v", err)
+			}
+			if rows != want || !empty || !nonnull {
+				t.Fatalf("0089 defaults rows=%d want=%d empty=%t nonnull=%t",
+					rows, want, empty, nonnull)
+			}
+		})
 }
 
 // TestMigration0071HistoricalLifecycleCompositePKContent is the SCHEMA-007

@@ -16224,11 +16224,15 @@
           },
           "provider": {
             "enum": [
-              "aws"
+              "aws",
+              "gcp"
             ],
             "type": "string"
           },
           "role_arn": {
+            "type": "string"
+          },
+          "service_account": {
             "type": "string"
           },
           "status": {
@@ -16276,6 +16280,7 @@
           "name",
           "provider",
           "role_arn",
+          "service_account",
           "audience",
           "subject",
           "target_id",
@@ -16326,11 +16331,15 @@
           },
           "provider": {
             "enum": [
-              "aws"
+              "aws",
+              "gcp"
             ],
             "type": "string"
           },
           "role_arn": {
+            "type": "string"
+          },
+          "service_account": {
             "type": "string"
           },
           "subject": {
@@ -16349,7 +16358,6 @@
         },
         "required": [
           "name",
-          "role_arn",
           "audience",
           "subject",
           "target_id",

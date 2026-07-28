@@ -113,11 +113,13 @@ type SecretSyncTargetConfig struct {
 	// short-lived AWS STS credentials. It is false by default. When true, static
 	// AWS access-key fields are forbidden and the bounded secret-sync outbox
 	// worker is the only component allowed to use WorkloadIdentityEndpoint.
-	AWSWorkloadIdentity      bool     `json:"aws_workload_identity,omitempty"`
-	WorkloadIdentityEndpoint string   `json:"workload_identity_endpoint,omitempty"`
-	AllowPrivate             bool     `json:"allow_private_endpoint,omitempty"`
-	AllowInsecureLoopback    bool     `json:"allow_insecure_loopback,omitempty"`
-	PrivateEgressCIDRs       []string `json:"private_egress_cidrs,omitempty"`
+	AWSWorkloadIdentity                   bool     `json:"aws_workload_identity,omitempty"`
+	GCPWorkloadIdentity                   bool     `json:"gcp_workload_identity,omitempty"`
+	WorkloadIdentityEndpoint              string   `json:"workload_identity_endpoint,omitempty"`
+	WorkloadIdentityImpersonationEndpoint string   `json:"workload_identity_impersonation_endpoint,omitempty"`
+	AllowPrivate                          bool     `json:"allow_private_endpoint,omitempty"`
+	AllowInsecureLoopback                 bool     `json:"allow_insecure_loopback,omitempty"`
+	PrivateEgressCIDRs                    []string `json:"private_egress_cidrs,omitempty"`
 }
 
 var dynamicSecretTypes = map[string]struct{}{
@@ -305,7 +307,27 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 		}
 	case "gcp-secret-manager":
 		require(c.Project, "project")
-		ref(c.TokenRef, "token_ref", false)
+		if c.GCPWorkloadIdentity {
+			if strings.TrimSpace(c.TokenRef) != "" {
+				errs = append(errs, fmt.Errorf("%s GCP workload identity forbids static token_ref", where))
+			}
+			if c.WorkloadIdentityEndpoint != "" {
+				if err := validateSecretIntegrationEndpoint(c.WorkloadIdentityEndpoint, c.AllowInsecureLoopback); err != nil {
+					errs = append(errs, fmt.Errorf("%s workload_identity_endpoint: %w", where, err))
+				}
+			}
+			if c.WorkloadIdentityImpersonationEndpoint != "" {
+				if err := validateSecretIntegrationEndpoint(c.WorkloadIdentityImpersonationEndpoint, c.AllowInsecureLoopback); err != nil {
+					errs = append(errs, fmt.Errorf("%s workload_identity_impersonation_endpoint: %w", where, err))
+				}
+			}
+		} else {
+			ref(c.TokenRef, "token_ref", false)
+			if strings.TrimSpace(c.WorkloadIdentityEndpoint) != "" ||
+				strings.TrimSpace(c.WorkloadIdentityImpersonationEndpoint) != "" {
+				errs = append(errs, fmt.Errorf("%s workload identity endpoints require gcp_workload_identity=true", where))
+			}
+		}
 	case "azure-key-vault":
 		ref(c.TokenRef, "token_ref", false)
 	case "github-actions":

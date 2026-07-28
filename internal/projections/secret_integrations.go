@@ -155,6 +155,7 @@ type SecretSyncWorkloadIdentitySourceUpserted struct {
 	Name                     string   `json:"name"`
 	Provider                 string   `json:"provider"`
 	RoleARN                  string   `json:"role_arn"`
+	ServiceAccount           string   `json:"service_account,omitempty"`
 	Audience                 string   `json:"audience"`
 	Subject                  string   `json:"subject"`
 	TargetID                 string   `json:"target_id"`
@@ -342,10 +343,14 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		if err := decode(e, &payload); err != nil {
 			return true, err
 		}
-		if payload.ID == "" || payload.Name == "" || payload.Provider == "" || payload.RoleARN == "" ||
+		if payload.ID == "" || payload.Name == "" || payload.Provider == "" ||
 			payload.Audience == "" || payload.Subject == "" || payload.TargetID == "" ||
 			payload.WorkloadProofRef == "" || payload.TrustSourceID == "" {
 			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
+		}
+		if (payload.Provider == "aws" && payload.RoleARN == "") ||
+			(payload.Provider == "gcp" && payload.RoleARN != "") {
+			return true, fmt.Errorf("projections: %s provider configuration is invalid", e.Type)
 		}
 		status := store.SecretSyncWorkloadIdentityReady
 		reason := "configured"
@@ -355,7 +360,8 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		}
 		return true, p.store.ApplySecretSyncWorkloadIdentitySourceUpsertedTx(ctx, tx, store.SecretSyncWorkloadIdentitySource{
 			ID: payload.ID, TenantID: e.TenantID, Name: payload.Name, Provider: payload.Provider,
-			RoleARN: payload.RoleARN, Audience: payload.Audience, Subject: payload.Subject,
+			RoleARN: payload.RoleARN, ServiceAccount: payload.ServiceAccount,
+			Audience: payload.Audience, Subject: payload.Subject,
 			TargetID: payload.TargetID, AllowedRemoteKeyPrefixes: payload.AllowedRemoteKeyPrefixes,
 			WorkloadProofRef: payload.WorkloadProofRef, TrustSourceID: payload.TrustSourceID,
 			Enabled: payload.Enabled, Status: status, StatusReason: reason,
