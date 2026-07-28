@@ -58,9 +58,9 @@ vi.mock("@/lib/api", async (orig) => {
   };
 });
 
-function renderIncidents() {
+function renderIncidents(initialEntry = "/incidents") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Incidents />
     </MemoryRouter>,
   );
@@ -356,6 +356,28 @@ describe("incident response served execution surface", () => {
       idempotency_key: "evt-555",
       created_at: "2026-06-20T12:05:00Z",
     });
+  });
+
+  it("opens on execution evidence and gives every response workflow a stable tab", async () => {
+    const user = userEvent.setup();
+    renderIncidents();
+
+    expect(await screen.findByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Active incidents and evidence" })).toBeInTheDocument();
+    expect(document.getElementById("incidents-panel-overview")).not.toHaveClass("hidden");
+    expect(document.getElementById("incidents-panel-integrations")).toHaveClass("hidden");
+
+    await user.click(screen.getByRole("tab", { name: "Integrations" }));
+    expect(screen.getByRole("tab", { name: "Integrations" })).toHaveAttribute("aria-selected", "true");
+    expect(document.getElementById("incidents-panel-overview")).toHaveClass("hidden");
+    expect(document.getElementById("incidents-panel-integrations")).not.toHaveClass("hidden");
+  });
+
+  it("opens an explicit compromised-identity deep link on the execution workspace", async () => {
+    renderIncidents("/incidents?identity=11111111-1111-1111-1111-111111111111");
+
+    expect(await screen.findByRole("tab", { name: "Execute response" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Affected identity")).toHaveValue("11111111-1111-1111-1111-111111111111");
   });
 
   it("loads execution evidence and runs served replacement-before-revoke remediation", async () => {

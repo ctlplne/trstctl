@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Building2,
   CheckCircle2,
@@ -20,6 +21,7 @@ import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { CAOverview } from "@/components/ca";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -60,6 +62,13 @@ type ExternalCAIssueResult = {
   path: string;
   certificate?: ExternalCAIssuedCertificate;
 };
+type CAWorkspaceTab = "overview" | "authorities" | "lifecycle" | "imports" | "custody";
+
+const caWorkspaceTabIDs: readonly CAWorkspaceTab[] = ["overview", "authorities", "lifecycle", "imports", "custody"];
+
+function caWorkspaceTabFromSearchParam(value: string | null): CAWorkspaceTab {
+  return caWorkspaceTabIDs.includes(value as CAWorkspaceTab) ? (value as CAWorkspaceTab) : "overview";
+}
 
 const rootCeremonyRequest: CACeremonyStartRequest = {
   operation: "create_root",
@@ -107,6 +116,8 @@ const externalCAIssueDefaults: ExternalCAIssueForm = {
 
 export function CAHierarchy() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = caWorkspaceTabFromSearchParam(searchParams.get("tab"));
   const [issuers, setIssuers] = useState<Issuer[]>([]);
   const [caDiscovery, setCADiscovery] = useState<CADiscovery | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -534,6 +545,22 @@ export function CAHierarchy() {
     }
   }
 
+  function selectTab(next: string) {
+    const value = caWorkspaceTabFromSearchParam(next);
+    setSearchParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current);
+        if (value === "overview") {
+          nextParams.delete("tab");
+        } else {
+          nextParams.set("tab", value);
+        }
+        return nextParams;
+      },
+      { replace: true },
+    );
+  }
+
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
@@ -541,82 +568,126 @@ export function CAHierarchy() {
         title={translateNow("source.ca.hierarchy.73e4cbcaf4")}
         description="Your certificate authorities — roots and intermediates — and their issuers, with multi-person approval ceremonies (no single admin can act alone) and custody controls for the signing keys."
         actions={
-          <>
-            <Button type="button" variant="outline" onClick={() => setCreateAuthorityKind("root")}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              {t("parity.createRootCa_94fb33")}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setCreateAuthorityKind("intermediate")}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              {t("parity.createIntermediateCa_829ab7")}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              {translateNow("source.refresh.0e91610117")}
-            </Button>
-          </>
+          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+            {translateNow("source.refresh.0e91610117")}
+          </Button>
         }
       />
 
-      <CAOverview issuers={sortedIssuers} profiles={profiles} />
-
-      <IssuerCatalog onConfigure={(type) => setIssuerDialogType(type)} />
-
-      <CADiscoveryInventoryPanel inventory={caDiscovery} />
-
-      <ServedAuthoritiesPanel
-        authorities={authorities}
-        error={authoritiesError}
-        loading={loading}
-        onIssueLeaf={setLeafTarget}
-        onShowDetail={setAuthorityDetail}
-        onSignCSR={setSignTarget}
+      <PageTabs
+        tabs={[
+          { id: "overview", label: t("caHierarchy.workspace.tabs.overview") },
+          { id: "authorities", label: t("caHierarchy.workspace.tabs.authorities") },
+          { id: "lifecycle", label: t("caHierarchy.workspace.tabs.lifecycle") },
+          { id: "imports", label: t("caHierarchy.workspace.tabs.imports") },
+          { id: "custody", label: t("caHierarchy.workspace.tabs.custody") },
+        ]}
+        active={tab}
+        onChange={selectTab}
+        ariaLabel={t("caHierarchy.workspace.label")}
+        idPrefix="ca"
       />
 
-      <ExternalCAIssuancePanel
-        busy={externalIssueBusy}
-        error={externalIssueError}
-        form={externalIssueForm}
-        inventory={caDiscovery}
-        result={externalIssueResult}
-        onChange={(patch) => setExternalIssueForm((current) => ({ ...current, ...patch }))}
-        onIssue={() => void issueExternalCA()}
-      />
+      <div {...tabPanelProps("ca", "overview")} className={tab === "overview" ? "grid gap-6" : "hidden"}>
+        <CAWorkspaceOverview
+          authorities={authorities}
+          authoritiesError={authoritiesError}
+          ceremony={ceremony}
+          discovery={caDiscovery}
+          loading={loading}
+          managedKey={managedKey}
+          onOpen={selectTab}
+        />
+      </div>
 
-      <CARotationPanel
-        busy={rotationBusy}
-        error={rotationError}
-        inventory={caDiscovery}
-        predecessorID={rotationPredecessorID}
-        reason={rotationReason}
-        result={rotationResult}
-        successorID={rotationSuccessorID}
-        onActivate={() => void activateCARotation()}
-        onPredecessorChange={setRotationPredecessorID}
-        onReasonChange={setRotationReason}
-        onSuccessorChange={setRotationSuccessorID}
-      />
+      <div className={tab === "overview" ? undefined : "hidden"}>
+        <CAOverview issuers={sortedIssuers} profiles={profiles} />
+      </div>
 
-      <CARekeyPanel
-        authorityID={rekeyAuthorityID}
-        busy={rekeyBusy}
-        ceremonyID={rekeyCeremonyID}
-        error={rekeyError}
-        inventory={caDiscovery}
-        reason={rekeyReason}
-        result={rekeyResult}
-        ttlDays={rekeyTTLDays}
-        onActivate={() => void activateCARekey()}
-        onAuthorityChange={setRekeyAuthorityID}
-        onCeremonyChange={setRekeyCeremonyID}
-        onReasonChange={setRekeyReason}
-        onStartCeremony={() => void startCARekeyCeremony()}
-        onTTLChange={setRekeyTTLDays}
-      />
+      <div {...tabPanelProps("ca", "authorities")} className={tab === "authorities" ? "grid gap-6" : "hidden"}>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => setCreateAuthorityKind("root")}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            {t("parity.createRootCa_94fb33")}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setCreateAuthorityKind("intermediate")}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            {t("parity.createIntermediateCa_829ab7")}
+          </Button>
+        </div>
+        <IssuerCatalog onConfigure={(type) => setIssuerDialogType(type)} />
+      </div>
 
-      {probe && <ProbeBanner probe={probe} onDismiss={() => setProbe(null)} />}
+      <div className={tab === "overview" ? undefined : "hidden"}>
+        <CADiscoveryInventoryPanel inventory={caDiscovery} />
+      </div>
 
-      <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
+      <div className={tab === "overview" ? undefined : "hidden"}>
+        <ServedAuthoritiesPanel
+          authorities={authorities}
+          error={authoritiesError}
+          loading={loading}
+          onIssueLeaf={setLeafTarget}
+          onShowDetail={setAuthorityDetail}
+          onSignCSR={setSignTarget}
+        />
+      </div>
+
+      <div className={tab === "authorities" ? undefined : "hidden"}>
+        <ExternalCAIssuancePanel
+          busy={externalIssueBusy}
+          error={externalIssueError}
+          form={externalIssueForm}
+          inventory={caDiscovery}
+          result={externalIssueResult}
+          onChange={(patch) => setExternalIssueForm((current) => ({ ...current, ...patch }))}
+          onIssue={() => void issueExternalCA()}
+        />
+      </div>
+
+      <div {...tabPanelProps("ca", "lifecycle")} className={tab === "lifecycle" ? undefined : "hidden"}>
+        <CARotationPanel
+          busy={rotationBusy}
+          error={rotationError}
+          inventory={caDiscovery}
+          predecessorID={rotationPredecessorID}
+          reason={rotationReason}
+          result={rotationResult}
+          successorID={rotationSuccessorID}
+          onActivate={() => void activateCARotation()}
+          onPredecessorChange={setRotationPredecessorID}
+          onReasonChange={setRotationReason}
+          onSuccessorChange={setRotationSuccessorID}
+        />
+      </div>
+
+      <div className={tab === "lifecycle" ? undefined : "hidden"}>
+        <CARekeyPanel
+          authorityID={rekeyAuthorityID}
+          busy={rekeyBusy}
+          ceremonyID={rekeyCeremonyID}
+          error={rekeyError}
+          inventory={caDiscovery}
+          reason={rekeyReason}
+          result={rekeyResult}
+          ttlDays={rekeyTTLDays}
+          onActivate={() => void activateCARekey()}
+          onAuthorityChange={setRekeyAuthorityID}
+          onCeremonyChange={setRekeyCeremonyID}
+          onReasonChange={setRekeyReason}
+          onStartCeremony={() => void startCARekeyCeremony()}
+          onTTLChange={setRekeyTTLDays}
+        />
+      </div>
+
+      {probe && (
+        <div className={tab === "authorities" ? undefined : "hidden"}>
+          <ProbeBanner probe={probe} onDismiss={() => setProbe(null)} />
+        </div>
+      )}
+
+      <section aria-labelledby="issuer-heading" className={tab === "authorities" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
@@ -650,7 +721,7 @@ export function CAHierarchy() {
         )}
       </section>
 
-      <section aria-labelledby="ceremony-heading" className="grid gap-3 border-y border-border py-4">
+      <section aria-labelledby="ceremony-heading" className={tab === "lifecycle" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
         <div className="flex items-start gap-3">
           <FileKey2 className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
@@ -676,40 +747,44 @@ export function CAHierarchy() {
         )}
       </section>
 
-      <OfflineRootWorkflow
-        busy={offlineBusy}
-        error={offlineError}
-        intermediate={offlineIntermediate}
-        intermediateCeremonyID={offlineIntermediateCeremonyID}
-        intermediateForm={offlineIntermediateForm}
-        offlineCSR={offlineCSR}
-        root={offlineRoot}
-        rootCeremonyID={offlineRootCeremonyID}
-        rootForm={offlineRootForm}
-        onCreateCSR={() => void createOfflineIntermediateCSR()}
-        onImportIntermediate={() => void importOfflineIntermediate()}
-        onImportRoot={() => void importOfflineRoot()}
-        onIntermediateCeremonyIDChange={setOfflineIntermediateCeremonyID}
-        onIntermediateFormChange={(patch) => setOfflineIntermediateForm((current) => ({ ...current, ...patch }))}
-        onRootCeremonyIDChange={setOfflineRootCeremonyID}
-        onRootFormChange={(patch) => setOfflineRootForm((current) => ({ ...current, ...patch }))}
-        onStartIntermediateCeremony={() => void startOfflineIntermediateCeremony()}
-        onStartRootCeremony={() => void startOfflineRootCeremony()}
-      />
+      <div {...tabPanelProps("ca", "imports")} className={tab === "imports" ? undefined : "hidden"}>
+        <OfflineRootWorkflow
+          busy={offlineBusy}
+          error={offlineError}
+          intermediate={offlineIntermediate}
+          intermediateCeremonyID={offlineIntermediateCeremonyID}
+          intermediateForm={offlineIntermediateForm}
+          offlineCSR={offlineCSR}
+          root={offlineRoot}
+          rootCeremonyID={offlineRootCeremonyID}
+          rootForm={offlineRootForm}
+          onCreateCSR={() => void createOfflineIntermediateCSR()}
+          onImportIntermediate={() => void importOfflineIntermediate()}
+          onImportRoot={() => void importOfflineRoot()}
+          onIntermediateCeremonyIDChange={setOfflineIntermediateCeremonyID}
+          onIntermediateFormChange={(patch) => setOfflineIntermediateForm((current) => ({ ...current, ...patch }))}
+          onRootCeremonyIDChange={setOfflineRootCeremonyID}
+          onRootFormChange={(patch) => setOfflineRootForm((current) => ({ ...current, ...patch }))}
+          onStartIntermediateCeremony={() => void startOfflineIntermediateCeremony()}
+          onStartRootCeremony={() => void startOfflineRootCeremony()}
+        />
+      </div>
 
-      <ExistingCAImportWorkflow
-        busy={existingCABusy}
-        ceremonyID={existingCACeremonyID}
-        error={existingCAError}
-        form={existingCAForm}
-        imported={existingCA}
-        onCeremonyIDChange={setExistingCACeremonyID}
-        onFormChange={(patch) => setExistingCAForm((current) => ({ ...current, ...patch }))}
-        onImport={() => void importExistingCA()}
-        onStartCeremony={() => void startExistingCACeremony()}
-      />
+      <div className={tab === "imports" ? undefined : "hidden"}>
+        <ExistingCAImportWorkflow
+          busy={existingCABusy}
+          ceremonyID={existingCACeremonyID}
+          error={existingCAError}
+          form={existingCAForm}
+          imported={existingCA}
+          onCeremonyIDChange={setExistingCACeremonyID}
+          onFormChange={(patch) => setExistingCAForm((current) => ({ ...current, ...patch }))}
+          onImport={() => void importExistingCA()}
+          onStartCeremony={() => void startExistingCACeremony()}
+        />
+      </div>
 
-      <section aria-labelledby="custody-heading" className="grid gap-3 border-y border-border py-4">
+      <section {...tabPanelProps("ca", "custody")} className={tab === "custody" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
         <div className="flex items-start gap-3">
           <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
@@ -761,6 +836,85 @@ export function CAHierarchy() {
       {authorityDetail && <AuthorityDetailDialog authority={authorityDetail} onClose={() => setAuthorityDetail(null)} />}
       {ceremonyDetail && <CeremonyDetailDialog ceremony={ceremonyDetail} onClose={() => setCeremonyDetail(null)} />}
     </section>
+  );
+}
+
+function CAWorkspaceOverview({
+  authorities,
+  authoritiesError,
+  ceremony,
+  discovery,
+  loading,
+  managedKey,
+  onOpen,
+}: {
+  authorities: CAAuthority[];
+  authoritiesError: string | null;
+  ceremony: CAKeyCeremony | null;
+  discovery: CADiscovery | null;
+  loading: boolean;
+  managedKey: ManagedKey | null;
+  onOpen: (tab: CAWorkspaceTab) => void;
+}) {
+  const { t } = useTranslation();
+  const roots = authorities.filter((authority) => !authority.parent_id).length;
+  const intermediates = Math.max(authorities.length - roots, 0);
+  const health = loading
+    ? t("caHierarchy.workspace.healthLoading")
+    : authoritiesError
+      ? t("caHierarchy.workspace.healthUnavailable")
+      : t("caHierarchy.workspace.healthReady", { count: authorities.length });
+  const lineage = t("caHierarchy.workspace.lineageSummary", {
+    roots,
+    intermediates,
+    discovered: discovery?.summary.authority_count ?? authorities.length,
+  });
+  const custody = managedKey
+    ? t("caHierarchy.workspace.custodyLoaded", { algorithm: managedKey.algorithm, version: managedKey.version, state: managedKey.state })
+    : t("caHierarchy.workspace.custodyEmpty");
+  const pending = ceremony
+    ? t("caHierarchy.workspace.pendingCeremony", { status: ceremony.status, approvals: ceremony.approvals, threshold: ceremony.threshold })
+    : t("caHierarchy.workspace.pendingEmpty");
+
+  return (
+    <section aria-label={t("caHierarchy.workspace.overviewLabel")} className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <WorkspaceSummaryCard
+        heading={t("caHierarchy.workspace.authorityHealth")}
+        body={health}
+        action={t("caHierarchy.workspace.tabs.authorities")}
+        onOpen={() => onOpen("authorities")}
+      />
+      <WorkspaceSummaryCard
+        heading={t("caHierarchy.workspace.lineage")}
+        body={lineage}
+        action={t("caHierarchy.workspace.tabs.authorities")}
+        onOpen={() => onOpen("authorities")}
+      />
+      <WorkspaceSummaryCard
+        heading={t("caHierarchy.workspace.custody")}
+        body={custody}
+        action={t("caHierarchy.workspace.tabs.custody")}
+        onOpen={() => onOpen("custody")}
+      />
+      <WorkspaceSummaryCard
+        heading={t("caHierarchy.workspace.pendingActions")}
+        body={pending}
+        action={t("caHierarchy.workspace.tabs.lifecycle")}
+        onOpen={() => onOpen("lifecycle")}
+      />
+    </section>
+  );
+}
+
+function WorkspaceSummaryCard({ heading, body, action, onOpen }: { heading: string; body: string; action: string; onOpen: () => void }) {
+  return (
+    <article className="rounded-panel border border-border bg-card p-4 shadow-elevation1">
+      <h2 className="text-body font-semibold">{heading}</h2>
+      <p className="mt-2 min-h-10 text-sm text-muted-foreground">{body}</p>
+      <Button type="button" variant="ghost" size="sm" className="mt-3 px-0" onClick={onOpen}>
+        {action}
+      </Button>
+    </article>
   );
 }
 

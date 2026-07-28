@@ -34,9 +34,9 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderCAHierarchy() {
+function renderCAHierarchy(initialEntry = "/ca-hierarchy") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <ToastProvider>
         <CAHierarchy />
       </ToastProvider>
@@ -287,6 +287,27 @@ describe("CA hierarchy and custody surface", () => {
         { authority_id: "ca-existing-rekeyed", role: "successor", status: "active", issue_path: "/api/v1/ca/authorities/ca-existing-rekeyed/issue" },
       ],
     });
+  });
+
+  it("opens on an overview-first workspace and deep-links every rare workflow", async () => {
+    const user = userEvent.setup();
+    renderCAHierarchy();
+
+    expect(await screen.findByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Authority health" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Lineage" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Key custody" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Pending actions" })).toBeInTheDocument();
+    expect(document.getElementById("ca-panel-overview")).not.toHaveClass("hidden");
+    expect(document.getElementById("ca-panel-imports")).toHaveClass("hidden");
+
+    await user.click(screen.getByRole("tab", { name: "Imports" }));
+    expect(screen.getByRole("tab", { name: "Imports" })).toHaveAttribute("aria-selected", "true");
+    expect(document.getElementById("ca-panel-overview")).toHaveClass("hidden");
+    expect(document.getElementById("ca-panel-imports")).not.toHaveClass("hidden");
+
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+    expect(screen.getAllByRole("tab", { name: "Key custody" })[1]).toHaveAttribute("aria-selected", "true");
   });
 
   it("renders issuers with kind, chain, public key, and certificate links", async () => {

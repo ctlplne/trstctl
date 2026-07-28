@@ -48,6 +48,114 @@ export const messages = {
     defaultMessage: "Results are painted on the map below and detailed in the analysis rail.",
     description: "Hint under the blast-radius explorer on the Graph page explaining where shared analysis results appear.",
   },
+  "caHierarchy.workspace.label": {
+    defaultMessage: "CA hierarchy workspaces",
+    description: "Accessible label for the task-oriented CA hierarchy workspace tabs.",
+  },
+  "caHierarchy.workspace.tabs.overview": {
+    defaultMessage: "Overview",
+    description: "CA hierarchy workspace tab showing health, lineage, custody, and pending-action summaries.",
+  },
+  "caHierarchy.workspace.tabs.authorities": {
+    defaultMessage: "Authorities",
+    description: "CA hierarchy workspace tab for authority creation, issuers, and external issuance.",
+  },
+  "caHierarchy.workspace.tabs.lifecycle": {
+    defaultMessage: "Lifecycle",
+    description: "CA hierarchy workspace tab for rotation, re-key, and ceremony workflows.",
+  },
+  "caHierarchy.workspace.tabs.imports": {
+    defaultMessage: "Imports",
+    description: "CA hierarchy workspace tab for offline-root and existing-CA import workflows.",
+  },
+  "caHierarchy.workspace.tabs.custody": {
+    defaultMessage: "Key custody",
+    description: "CA hierarchy workspace tab for managed-key custody workflows.",
+  },
+  "caHierarchy.workspace.overviewLabel": {
+    defaultMessage: "CA authority overview",
+    description: "Accessible label for the overview-first CA hierarchy summary.",
+  },
+  "caHierarchy.workspace.authorityHealth": {
+    defaultMessage: "Authority health",
+    description: "Heading for the authority-health summary on the CA hierarchy overview.",
+  },
+  "caHierarchy.workspace.lineage": {
+    defaultMessage: "Lineage",
+    description: "Heading for the lineage summary on the CA hierarchy overview.",
+  },
+  "caHierarchy.workspace.custody": {
+    defaultMessage: "Key custody",
+    description: "Heading for the custody summary on the CA hierarchy overview.",
+  },
+  "caHierarchy.workspace.pendingActions": {
+    defaultMessage: "Pending actions",
+    description: "Heading for the pending-action summary on the CA hierarchy overview.",
+  },
+  "caHierarchy.workspace.healthLoading": {
+    defaultMessage: "Loading served authority health.",
+    description: "Authority-health summary while the served authority inventory is loading.",
+  },
+  "caHierarchy.workspace.healthUnavailable": {
+    defaultMessage: "Served authority health is unavailable.",
+    description: "Authority-health summary when the served authority inventory cannot be read.",
+  },
+  "caHierarchy.workspace.healthReady": {
+    defaultMessage: "{count} served authorities are available.",
+    description: "Authority-health summary with the count of served authorities.",
+  },
+  "caHierarchy.workspace.lineageSummary": {
+    defaultMessage: "{roots} roots and {intermediates} intermediates; {discovered} hierarchy authorities discovered.",
+    description: "CA hierarchy overview summary of served lineage and direct discovery.",
+  },
+  "caHierarchy.workspace.custodyLoaded": {
+    defaultMessage: "{algorithm} version {version} is {state}.",
+    description: "CA hierarchy overview summary for the managed key currently loaded in the workspace.",
+  },
+  "caHierarchy.workspace.custodyEmpty": {
+    defaultMessage: "No managed key is loaded; custody actions remain available in their workspace.",
+    description: "CA hierarchy overview summary when no managed key has been generated or loaded.",
+  },
+  "caHierarchy.workspace.pendingCeremony": {
+    defaultMessage: "Ceremony is {status} with {approvals} of {threshold} approvals.",
+    description: "CA hierarchy overview summary for the current key ceremony.",
+  },
+  "caHierarchy.workspace.pendingEmpty": {
+    defaultMessage: "No key ceremony is waiting for approval.",
+    description: "CA hierarchy overview summary when no key ceremony is pending.",
+  },
+  "incidents.workspace.label": {
+    defaultMessage: "Incident response workspaces",
+    description: "Accessible label for the task-oriented incident response workspace tabs.",
+  },
+  "incidents.workspace.tabs.overview": {
+    defaultMessage: "Overview",
+    description: "Incident workspace tab showing active incidents and execution evidence.",
+  },
+  "incidents.workspace.tabs.execute": {
+    defaultMessage: "Execute response",
+    description: "Incident workspace tab for replacement-before-revoke execution.",
+  },
+  "incidents.workspace.tabs.remediation": {
+    defaultMessage: "Remediation",
+    description: "Incident workspace tab for remediation playbooks and owner actions.",
+  },
+  "incidents.workspace.tabs.integrations": {
+    defaultMessage: "Integrations",
+    description: "Incident workspace tab for SIEM, SOAR, chat, and ITSM dispatch.",
+  },
+  "incidents.workspace.tabs.fleet": {
+    defaultMessage: "Fleet & break-glass",
+    description: "Incident workspace tab for fleet reissuance and break-glass operations.",
+  },
+  "incidents.workspace.overviewHeading": {
+    defaultMessage: "Active incidents and evidence",
+    description: "Heading for the overview-first incident response summary.",
+  },
+  "incidents.workspace.overviewSummary": {
+    defaultMessage: "Review {executions} incident executions and {runs} remediation runs before starting a new action.",
+    description: "Incident overview summary of the evidence records already served.",
+  },
   "certificates.tabs.inventory": {
     defaultMessage: "Inventory",
     description: "Certificates page tab: the primary certificate table.",

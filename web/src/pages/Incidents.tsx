@@ -28,6 +28,7 @@ import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { IdentityPicker } from "@/components/IdentityPicker";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,14 @@ type ResponseIntegrationForm = {
   servicenow_instance_url: string;
   servicenow_token_ref: string;
 };
+type IncidentWorkspaceTab = "overview" | "execute" | "remediation" | "integrations" | "fleet";
+
+const incidentWorkspaceTabIDs: readonly IncidentWorkspaceTab[] = ["overview", "execute", "remediation", "integrations", "fleet"];
+
+function incidentWorkspaceTabFromSearchParam(value: string | null, hasIdentityDeepLink: boolean): IncidentWorkspaceTab {
+  if (incidentWorkspaceTabIDs.includes(value as IncidentWorkspaceTab)) return value as IncidentWorkspaceTab;
+  return hasIdentityDeepLink ? "execute" : "overview";
+}
 
 const defaultResponseIntegration: ResponseIntegrationForm = {
   title: "",
@@ -142,7 +151,8 @@ export function Incidents() {
   // graph and the certificate detail can hand a compromised credential
   // straight into the response form instead of making the operator copy an id
   // between two pages.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = incidentWorkspaceTabFromSearchParam(searchParams.get("tab"), searchParams.has("identity"));
   const [form, setForm] = useState<IncidentExecutionRequest>(() => {
     const identityID = searchParams.get("identity");
     return identityID ? { ...defaultExecution, identity_id: identityID } : defaultExecution;
@@ -530,6 +540,22 @@ export function Incidents() {
     }
   }
 
+  function selectTab(next: string) {
+    const value = incidentWorkspaceTabFromSearchParam(next, false);
+    setSearchParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current);
+        if (value === "overview") {
+          nextParams.delete("tab");
+        } else {
+          nextParams.set("tab", value);
+        }
+        return nextParams;
+      },
+      { replace: true },
+    );
+  }
+
   return (
     <section aria-labelledby="incidents-heading" className="grid gap-6">
       <PageHeader
@@ -556,7 +582,21 @@ export function Incidents() {
         }
       />
 
-      <section aria-labelledby="execute-heading" className="grid gap-4 border-y border-border py-4">
+      <PageTabs
+        tabs={[
+          { id: "overview", label: t("incidents.workspace.tabs.overview") },
+          { id: "execute", label: t("incidents.workspace.tabs.execute") },
+          { id: "remediation", label: t("incidents.workspace.tabs.remediation") },
+          { id: "integrations", label: t("incidents.workspace.tabs.integrations") },
+          { id: "fleet", label: t("incidents.workspace.tabs.fleet") },
+        ]}
+        active={tab}
+        onChange={selectTab}
+        ariaLabel={t("incidents.workspace.label")}
+        idPrefix="incidents"
+      />
+
+      <section {...tabPanelProps("incidents", "execute")} className={tab === "execute" ? "grid gap-4 border-y border-border py-4" : "hidden"}>
         <div>
           <h2 id="execute-heading" className="text-title font-semibold">
             {translateNow("source.credential.compromise.execution.3cfb067780")}
@@ -661,7 +701,7 @@ export function Incidents() {
         {impact && <BlastRadiusPreview impact={impact} />}
       </section>
 
-      <section aria-labelledby="playbooks-heading" className="grid gap-4 border-y border-border py-4">
+      <section {...tabPanelProps("incidents", "remediation")} className={tab === "remediation" ? "grid gap-4 border-y border-border py-4" : "hidden"}>
         <div>
           <h2 id="playbooks-heading" className="text-title font-semibold">
             {t("incidents.playbooks.heading")}
@@ -784,7 +824,7 @@ export function Incidents() {
         )}
       </section>
 
-      <section aria-labelledby="owner-remediation-heading" className="grid gap-4 border-y border-border py-4">
+      <section aria-labelledby="owner-remediation-heading" className={tab === "remediation" ? "grid gap-4 border-y border-border py-4" : "hidden"}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="owner-remediation-heading" className="text-title font-semibold">
@@ -890,7 +930,7 @@ export function Incidents() {
         )}
       </section>
 
-      <section aria-labelledby="response-integrations-heading" className="grid gap-4 border-y border-border py-4">
+      <section {...tabPanelProps("incidents", "integrations")} className={tab === "integrations" ? "grid gap-4 border-y border-border py-4" : "hidden"}>
         <div>
           <h2 id="response-integrations-heading" className="text-title font-semibold">
             {t("incidents.response.heading")}
@@ -1045,7 +1085,7 @@ export function Incidents() {
         )}
       </section>
 
-      <section aria-labelledby="servicenow-heading" className="grid gap-4 border-y border-border py-4">
+      <section aria-labelledby="servicenow-heading" className={tab === "integrations" ? "grid gap-4 border-y border-border py-4" : "hidden"}>
         <div>
           <h2 id="servicenow-heading" className="text-title font-semibold">
             {translateNow("source.servicenow.itsm.workflow.9ebb1f9288")}
@@ -1159,7 +1199,15 @@ export function Incidents() {
         )}
       </section>
 
-      <section aria-labelledby="evidence-heading" className="grid gap-3 border-y border-border py-4">
+      <section {...tabPanelProps("incidents", "overview")} className={tab === "overview" ? "ui-panel p-comfortable" : "hidden"}>
+        <h2 id="incidents-overview-heading" className="text-title font-semibold">
+          {t("incidents.workspace.overviewHeading")}
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          {t("incidents.workspace.overviewSummary", { executions: executions.length, runs: playbookRuns.length })}
+        </p>
+      </section>
+      <section aria-labelledby="evidence-heading" className={tab === "overview" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
         <div>
           <h2 id="evidence-heading" className="text-title font-semibold">
             {translateNow("source.execution.evidence.81ad27c5fa")}
@@ -1177,7 +1225,7 @@ export function Incidents() {
       </section>
 
       {(evidenceRuns || ownerQueueEvidence) && (
-        <section aria-labelledby="remediation-evidence-heading" className="grid gap-3 border-y border-border py-4">
+        <section aria-labelledby="remediation-evidence-heading" className={tab === "overview" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
           <div>
             <h2 id="remediation-evidence-heading" className="text-title font-semibold">
               {t("parity.remediationEvidence_5174c6")}
@@ -1213,9 +1261,11 @@ export function Incidents() {
         </section>
       )}
 
-      <BreakGlassReconcile />
+      <div className={tab === "fleet" ? undefined : "hidden"}>
+        <BreakGlassReconcile />
+      </div>
 
-      <section aria-labelledby="fleet-heading" className="grid gap-3 border-y border-border py-4">
+      <section {...tabPanelProps("incidents", "fleet")} className={tab === "fleet" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
         <div>
           <h2 id="fleet-heading" className="text-title font-semibold">
             {translateNow("source.fleet.re.issuance.fa35f7921e")}
@@ -1320,7 +1370,7 @@ export function Incidents() {
         <FleetReissuanceTable runs={fleetRuns} action={fleetAction} onAction={recordFleetAction} />
       </section>
 
-      <section aria-labelledby="incident-help-heading" className="grid gap-3 border-y border-border py-4">
+      <section aria-labelledby="incident-help-heading" className={tab === "fleet" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
         <div>
           <h2 id="incident-help-heading" className="text-title font-semibold">
             {translateNow("source.incident.response.help.7245c4b82c")}
