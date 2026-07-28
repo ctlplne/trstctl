@@ -1923,10 +1923,21 @@ func binaryServesTransitOrKMIP(t *testing.T) bool {
 }
 
 func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
-	for _, pkg := range []string{"transit", "kmip"} {
-		if _, err := os.Stat(filepath.FromSlash("../internal/" + pkg)); err != nil {
-			t.Fatalf("internal/%s no longer exists; revisit this F66 reality test", pkg)
+	if _, err := os.Stat(filepath.FromSlash("../internal/transit")); err != nil {
+		t.Fatalf("internal/transit no longer exists; revisit this F66 reality test: %v", err)
+	}
+	if _, err := os.Stat(filepath.FromSlash("../ee/kmip")); err != nil {
+		t.Fatalf("licensed ee/kmip no longer exists; revisit this F66 reality test: %v", err)
+	}
+	// B-6a332fa9: Git cannot represent an empty directory. Missing and empty
+	// both mean the core KMIP boundary is clean; any entry means KMIP leaked
+	// back across PACKAGING-007.
+	if entries, err := os.ReadDir(filepath.FromSlash("../internal/kmip")); err != nil {
+		if !os.IsNotExist(err) {
+			t.Fatalf("inspect core internal/kmip boundary: %v", err)
 		}
+	} else if len(entries) != 0 {
+		t.Fatalf("internal/kmip must stay absent or empty, found %d entries", len(entries))
 	}
 
 	feature := strings.Join(strings.Fields(strings.ToLower(read(t, "features/secrets.md"))), " ")

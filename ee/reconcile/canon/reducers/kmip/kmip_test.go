@@ -309,6 +309,11 @@ func assertInternalKMIPEmpty(t *testing.T) {
 	root := filepath.Clean("../../../../../internal/kmip")
 	entries, err := os.ReadDir(root)
 	if err != nil {
+		// B-6a332fa9: an absent directory is the clean-checkout
+		// representation of the required empty core KMIP boundary.
+		if os.IsNotExist(err) {
+			return
+		}
 		t.Fatalf("read internal/kmip: %v", err)
 	}
 	if len(entries) != 0 {
