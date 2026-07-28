@@ -80,6 +80,7 @@ const requiredTracked = new Set([
 ]);
 const requiredSecurityLinks = new Set([
   "SEC-f19bdd00",
+  "SEC-de4eb072",
   "SEC-5b43d4b3",
   "S-7268c77e",
 ]);

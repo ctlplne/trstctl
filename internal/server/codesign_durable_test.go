@@ -285,18 +285,53 @@ func TestCodeSigningRetryAfterAppendBeforeProjectionUsesCanonicalEvent(t *testin
 		t.Fatalf("append command before simulated crash: %v", err)
 	}
 
-	requestCtx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	// The retry must project the canonical event before it waits for the absent
+	// dispatcher. Do not use a tiny request timeout as a synchronization barrier:
+	// under the race detector it can cancel the projection that this test is
+	// trying to observe.
+	requestCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err = h.srv.codeSign.SignCode(requestCtx, h.tenant, idempotencyKey, api.CodeSigningRequest{
-		Principal: command.Principal, KeyID: command.KeyID,
-		ArtifactType: command.ArtifactType, Digest: command.Digest,
-	})
-	if err == nil {
-		t.Fatal("retry without dispatcher unexpectedly completed")
+	retryDone := make(chan error, 1)
+	go func() {
+		_, retryErr := h.srv.codeSign.SignCode(requestCtx, h.tenant, idempotencyKey, api.CodeSigningRequest{
+			Principal: command.Principal, KeyID: command.KeyID,
+			ArtifactType: command.ArtifactType, Digest: command.Digest,
+		})
+		retryDone <- retryErr
+	}()
+
+	projectionCtx, stopProjectionWait := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stopProjectionWait()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	var (
+		op    store.CodeSigningOperation
+		found bool
+	)
+	for !found {
+		op, found, err = h.store.CodeSigningOperationByIdempotency(projectionCtx, h.tenant, idempotencyKey)
+		if err != nil {
+			t.Fatalf("retry projection: %v", err)
+		}
+		if found {
+			break
+		}
+		select {
+		case retryErr := <-retryDone:
+			t.Fatalf("retry returned before projecting the canonical event: %v", retryErr)
+		case <-projectionCtx.Done():
+			t.Fatalf("retry projection: %v", projectionCtx.Err())
+		case <-ticker.C:
+		}
 	}
-	op, found, err := h.store.CodeSigningOperationByIdempotency(context.Background(), h.tenant, idempotencyKey)
-	if err != nil || !found {
-		t.Fatalf("retry projection = found %v err %v", found, err)
+	cancel()
+	select {
+	case retryErr := <-retryDone:
+		if retryErr == nil {
+			t.Fatal("retry without dispatcher unexpectedly completed")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("retry did not stop after request cancellation")
 	}
 	if !bytes.Equal(op.SealedCommand, canonicalCiphertext) {
 		t.Fatal("retry projected newly sealed ciphertext instead of canonical JetStream event")

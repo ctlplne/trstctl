@@ -45,7 +45,9 @@ func TestDependencyFreshnessSLOHasReportAndOwnerQueue(t *testing.T) {
 	if report.MaxReportAge <= 0 || report.MaxReportAge > 45 {
 		t.Fatalf("max_report_age_days = %d, want a positive fail-closed age budget no larger than 45 days", report.MaxReportAge)
 	}
-	for _, finding := range []string{"SEC-f19bdd00", "SEC-5b43d4b3", "S-7268c77e"} {
+	// Security upgrades must add their finding here so a version-only ledger edit
+	// cannot erase the reason the dependency moved.
+	for _, finding := range []string{"SEC-f19bdd00", "SEC-de4eb072", "SEC-5b43d4b3", "S-7268c77e"} {
 		if strings.TrimSpace(report.SecurityLinks[finding]) == "" {
 			t.Errorf("dependency freshness report missing security finding link %q", finding)
 		}
