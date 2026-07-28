@@ -184,6 +184,19 @@ dod-gate: ## Prove every required capability is compiled, production-assembled, 
 	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) run ./tools/dodcensus \
 		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)" $(DOD_SELECTION)
 
+PQC_OPERATOR_LAB_MODE = $(if $(filter core-only,$(MAKECMDGOALS)),core,licensed)
+PQC_OPERATOR_LAB_OUT ?= dist/pqc-operator-lab-$(PQC_OPERATOR_LAB_MODE).tar.gz
+
+.PHONY: pqc-operator-lab core-only
+pqc-operator-lab: ## Run the offline shipped-binary PQC rehearsal and archive non-secret receipts
+	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" \
+		$(GO) run ./tools/pqclab --repo . --mode "$(PQC_OPERATOR_LAB_MODE)" --out "$(PQC_OPERATOR_LAB_OUT)"
+
+core-only:
+	@if [ -z "$(filter pqc-operator-lab,$(MAKECMDGOALS))" ]; then \
+		echo "core-only is a selector; run: make core-only pqc-operator-lab" >&2; exit 2; \
+	fi
+
 .PHONY: journey-census journey-census-check
 journey-census: ## Regenerate journey served badges and console data from wiring-census.json
 	@python3 scripts/docs/render-journey-served.py

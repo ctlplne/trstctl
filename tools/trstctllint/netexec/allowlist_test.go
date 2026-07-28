@@ -46,6 +46,13 @@ func TestReviewedExecAllowlistPinsDODCensusProcessBoundaries(t *testing.T) {
 	}
 }
 
+func TestReviewedExecAllowlistPinsPQCOperatorLabBoundary(t *testing.T) {
+	want := map[string]bool{"newValidatedCommand": true}
+	if got := reviewedExecUses["tools/pqclab/main.go"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("tools/pqclab/main.go reviewed exec allowlist = %#v, want %#v", got, want)
+	}
+}
+
 func TestReviewedExecAllowlistPinsConnectorLocalOpsBoundary(t *testing.T) {
 	want := map[string]bool{"ExecContext": true}
 	if got := reviewedExecUses["internal/connector/localops.go"]; !reflect.DeepEqual(got, want) {

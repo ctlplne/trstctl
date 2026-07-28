@@ -125,6 +125,40 @@ certificate-key assets through ACME hybrid transition re-issuance with rollback.
 core exposes CBOM posture, classical profile selection, and migration campaign
 tracking/proof, but not PQC algorithms, issuance, or automated fleet execution.
 
+### Offline operator rehearsal
+
+Run the licensed rehearsal from the repository root after the pinned Go modules,
+container images, OpenSSL interop image, and bundled PostgreSQL artifact have been
+supplied locally:
+
+```sh
+make pqc-operator-lab
+```
+
+The command runs the three exact shipped-binary definition-of-done proofs: pure
+ML-DSA EST enrollment with stock OpenSSL, the classical/PQ SPIFFE SVID pair, and
+CBOM migration plus rollback. It sets the Go module resolver offline and the
+pinned interop runner uses `--pull=never`. The result is
+`dist/pqc-operator-lab-licensed.tar.gz`.
+
+Community operators use the same workflow with an edition selector:
+
+```sh
+make core-only pqc-operator-lab
+```
+
+That command builds and starts isolated `trstctl_core` control-plane and signer
+binaries against private bundled PostgreSQL and embedded NATS data directories.
+It proves that CBOM reading remains served and that `/v1/editions` reports PQC
+execution as unavailable. It exits successfully without advertising or calling
+the proprietary migration mutation.
+
+Both archives contain a versioned manifest, one machine report and one public
+transcript per stage, and `SHA256SUMS`. Archive construction rejects private-key
+PEM, bearer credentials, trstctl API tokens, and non-empty password/secret/token
+JSON fields. The command deletes only its own private runtime directory; the
+receipt archive is the only retained output.
+
 ### In the console
 
 In the web console, the certificate inventory at `/certificates` is also a lifecycle

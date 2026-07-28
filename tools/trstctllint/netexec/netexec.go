@@ -109,6 +109,9 @@ var reviewedDefaultClientUses = map[string]map[string]bool{
 }
 
 var reviewedExecUses = map[string]map[string]bool{
+	"tools/pqclab/main.go": {
+		"newValidatedCommand": true,
+	},
 	"tools/dodcensus/main.go": {
 		"Run": true,
 	},

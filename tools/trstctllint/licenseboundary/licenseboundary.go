@@ -199,6 +199,10 @@ func isPQCAllowedCorePath(filename string) bool {
 		// DoD census code verifies proprietary algorithms in externally built
 		// shipped artifacts but is not linked into a product binary.
 		"tools/dodcensus/",
+		// The operator lab composes those exact shipped-artifact proofs and a
+		// Community edition check. It contains no algorithm implementation and is
+		// not linked into any shipped core binary.
+		"tools/pqclab/",
 		"docs/",
 	} {
 		if strings.HasPrefix(rel, prefix) {

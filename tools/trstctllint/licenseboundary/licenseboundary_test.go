@@ -2,12 +2,19 @@
 
 package licenseboundary
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestPQCPlacementAllowsOnlyNonShippedEvidenceTooling(t *testing.T) {
 	for _, path := range []string{
 		"/workspace/trstctl/tools/dodcensus/runtime_runner.go",
 		"/workspace/trstctl/tools/dodcensus/runtime_runner_test.go",
+		"/workspace/trstctl/tools/pqclab/main.go",
+		"/workspace/trstctl/tools/pqclab/main_test.go",
 	} {
 		if !isPQCAllowedCorePath(path) {
 			t.Fatalf("DoD evidence tooling path %q was not allowed", path)
@@ -20,6 +27,35 @@ func TestPQCPlacementAllowsOnlyNonShippedEvidenceTooling(t *testing.T) {
 	} {
 		if isPQCAllowedCorePath(path) {
 			t.Fatalf("shipped core product path %q bypassed PACKAGING-007", path)
+		}
+	}
+}
+
+func TestPQCOperatorLabExemptionContainsNoAlgorithmOrEEImplementation(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "pqclab", "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, forbidden := range []string{
+		`"trstctl.com/trstctl/ee/`,
+		`"github.com/cloudflare/circl/`,
+		`"crypto/x509"`,
+		`"crypto/rsa"`,
+		`"crypto/ecdsa"`,
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("operator-lab evidence exemption contains implementation import %q", forbidden)
+		}
+	}
+	for _, required := range []string{
+		`"./tools/dodcensus"`,
+		`"/v1/editions"`,
+		`"/api/v1/cbom/assets"`,
+		`"trstctl_core"`,
+	} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("operator-lab evidence exemption lost bounded proof marker %q", required)
 		}
 	}
 }
