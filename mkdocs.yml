@@ -108,6 +108,7 @@ nav:
       - Product threat model: security/threat-model.md
       - Architecture invariants: design/architecture-invariants.md
       - Vulnerability management: security/vulnerability-management.md
+      - Accepted advisory debt: security-exceptions.md
       - Dependency freshness: security/dependency-freshness.md
       - Supply chain: supply-chain.md
       - Branch protection & required checks: branch-protection.md

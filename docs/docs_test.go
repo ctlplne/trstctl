@@ -44,6 +44,7 @@ var requiredPages = []string{
 	"runbooks/upgrade-rollback.md",
 	"security/threat-model.md",
 	"security/vulnerability-management.md",
+	"security-exceptions.md",
 	"troubleshooting.md",
 	"cli.md",
 	"terraform-provider.md",
