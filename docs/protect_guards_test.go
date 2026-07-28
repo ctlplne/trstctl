@@ -147,7 +147,10 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 
 	bulk := read(t, "../internal/bulkhead/bulkhead.go")
 	for _, want := range []string{
-		"case p.queue <- task:",
+		// B-5bbcb4c3: admission, not a worker/channel rendezvous, now proves
+		// immediate idle capacity while the default branch still rejects fast.
+		"case p.admission <- struct{}{}:",
+		"make(chan struct{}, cfg.Workers+cfg.Queue)",
 		"return &Rejected{Pool: p.name, Reason: ReasonFull",
 		"default:",
 		"close(p.queue)",
@@ -3024,7 +3027,10 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 		"type Rejected struct",
 		"func (e *Rejected) Retryable() bool",
 		"ReasonFull",
-		"case p.queue <- task:",
+		// B-5bbcb4c3 preserves the bounded fast-rejection primitive while
+		// removing scheduler timing from the definition of saturation.
+		"case p.admission <- struct{}{}:",
+		"make(chan struct{}, cfg.Workers+cfg.Queue)",
 		"default:",
 	} {
 		if !strings.Contains(bulkheadGo, want) {

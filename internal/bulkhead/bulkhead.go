@@ -75,9 +75,11 @@ type Stats struct {
 // Pool is a bounded worker pool: Workers goroutines draining a queue of at most
 // Queue tasks. Submitting to a full pool fails fast rather than blocking.
 type Pool struct {
-	name    string
-	workers int
-	queue   chan func()
+	name          string
+	workers       int
+	queueCapacity int
+	queue         chan func()
+	admission     chan struct{}
 
 	mu     sync.Mutex
 	closed bool
@@ -99,9 +101,14 @@ func New(cfg Config) *Pool {
 		cfg.Queue = 0
 	}
 	p := &Pool{
-		name:    cfg.Name,
-		workers: cfg.Workers,
-		queue:   make(chan func(), cfg.Queue),
+		name:          cfg.Name,
+		workers:       cfg.Workers,
+		queueCapacity: cfg.Queue,
+		// Admission, not a scheduler rendezvous, defines saturation. The
+		// internal channel holds running capacity plus waiting capacity so New
+		// returns ready even before a worker goroutine reaches its receive.
+		queue:     make(chan func(), cfg.Workers+cfg.Queue),
+		admission: make(chan struct{}, cfg.Workers+cfg.Queue),
 	}
 	p.wg.Add(cfg.Workers)
 	for i := 0; i < cfg.Workers; i++ {
@@ -114,6 +121,7 @@ func (p *Pool) worker() {
 	defer p.wg.Done()
 	for task := range p.queue {
 		p.run(task)
+		<-p.admission
 	}
 }
 
@@ -137,15 +145,19 @@ func (p *Pool) Submit(task func()) error {
 	defer p.mu.Unlock()
 	if p.closed {
 		p.rejected.Add(1)
-		return &Rejected{Pool: p.name, Reason: ReasonClosed, Capacity: cap(p.queue)}
+		return &Rejected{Pool: p.name, Reason: ReasonClosed, Capacity: p.queueCapacity}
 	}
 	select {
-	case p.queue <- task:
+	case p.admission <- struct{}{}:
+		// The task channel has the same bound as admission. Holding mu keeps
+		// Close from closing it between admission and enqueue, and a successful
+		// admission guarantees this send has storage.
+		p.queue <- task
 		p.submitted.Add(1)
 		return nil
 	default:
 		p.rejected.Add(1)
-		return &Rejected{Pool: p.name, Reason: ReasonFull, Capacity: cap(p.queue)}
+		return &Rejected{Pool: p.name, Reason: ReasonFull, Capacity: p.queueCapacity}
 	}
 }
 
@@ -165,11 +177,15 @@ func (p *Pool) Close() {
 
 // Stats returns a snapshot of the pool's counters.
 func (p *Pool) Stats() Stats {
+	queued := len(p.admission) - p.workers
+	if queued < 0 {
+		queued = 0
+	}
 	return Stats{
 		Name:      p.name,
 		Workers:   p.workers,
-		Capacity:  cap(p.queue),
-		Queued:    len(p.queue),
+		Capacity:  p.queueCapacity,
+		Queued:    queued,
 		Submitted: p.submitted.Load(),
 		Completed: p.completed.Load(),
 		Rejected:  p.rejected.Load(),

@@ -4,6 +4,7 @@ package bulkhead_test
 
 import (
 	"errors"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -11,6 +12,30 @@ import (
 
 	"trstctl.com/trstctl/internal/bulkhead"
 )
+
+// TestNewZeroQueuePoolAcceptsImmediateIdleCapacity pins the startup side of
+// AN-7. New must return a ready pool: an idle worker is capacity even when the
+// scheduler has not yet run its receive loop.
+func TestNewZeroQueuePoolAcceptsImmediateIdleCapacity(t *testing.T) {
+	oldProcs := runtime.GOMAXPROCS(1)
+	t.Cleanup(func() { runtime.GOMAXPROCS(oldProcs) })
+
+	for i := 0; i < 100; i++ {
+		p := bulkhead.New(bulkhead.Config{Name: "zero-queue", Workers: 1, Queue: 0})
+		ran := make(chan struct{})
+		err := p.Submit(func() { close(ran) })
+		if err != nil {
+			p.Close()
+			t.Fatalf("new idle pool rejected its first task on attempt %d: %v", i, err)
+		}
+		p.Close()
+		select {
+		case <-ran:
+		default:
+			t.Fatalf("accepted task %d did not run before Close returned", i)
+		}
+	}
+}
 
 // waitTimeout fails the test if wg does not complete within d.
 func waitTimeout(t *testing.T, wg *sync.WaitGroup, d time.Duration) {
@@ -70,6 +95,9 @@ func TestPoolFastRejectsWhenSaturated(t *testing.T) {
 	<-started // the only worker is now busy and blocked
 	if err := p.Submit(func() { <-release }); err != nil {
 		t.Fatalf("submit (fill queue): %v", err)
+	}
+	if stats := p.Stats(); stats.Workers != 1 || stats.Capacity != 1 || stats.Queued != 1 {
+		t.Fatalf("saturated stats = workers %d capacity %d queued %d, want 1/1/1", stats.Workers, stats.Capacity, stats.Queued)
 	}
 
 	// The pool is now saturated. The next submit must reject — fast.
