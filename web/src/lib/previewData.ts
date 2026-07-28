@@ -688,6 +688,32 @@ const previewReaders: Record<string, () => unknown> = {
       percent_migrated: 50,
     },
   }),
+  pqcCampaigns: () => ({
+    items: [
+      {
+        id: "77777777-7777-4777-8777-777777777777",
+        tenant_id: tenantID,
+        name: "Payments PQC migration",
+        owner: "team:payments",
+        deadline: "2026-12-01T00:00:00Z",
+        wave: "wave-1",
+        readiness_criteria: ["Owner approved", "Rollback documented"],
+        readiness_status: "pending",
+        readiness_evidence_refs: [],
+        status: "open",
+        finding_count: 1,
+        pending_count: 1,
+        remediated_count: 0,
+        excepted_count: 0,
+        automated_execution_available: false,
+        automated_execution_note:
+          "Campaign tracking and evidence work without a licence. Automated fleet execution is unavailable in this edition; record work performed manually or by another tool.",
+        created_at: generatedAt,
+        updated_at: generatedAt,
+      },
+    ],
+    next_cursor: "",
+  }),
 
   secretPage: () => ({
     items: [

@@ -13,7 +13,7 @@
 //   - eventsource    (AN-2): a served mutation must not write the read model directly; it emits an event.
 //   - cryptoagility  (PQC-00): crypto/signer code must not grow runtime plugin/provider/engine registries.
 //   - netexec        (SEC-005): new HTTP/exec surfaces must use SSRF-safe clients or reviewed argv paths.
-//   - licenseboundary (PACKAGING-007): core files carry MPL-2.0 SPDX, ee/ files carry the proprietary SPDX, core cannot import ee/, and PQC stays out of core.
+//   - licenseboundary (PACKAGING-007): core files carry MPL-2.0 SPDX, ee/ files carry the proprietary SPDX, core cannot import ee/, and PQC algorithms/fleet execution stay out of core while CBOM campaign records remain core.
 //
 // As built by multichecker, the binary runs standalone over the module
 //

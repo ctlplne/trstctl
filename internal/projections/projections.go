@@ -121,6 +121,10 @@ const (
 	EventMachineAuthMethodEnabled                 = "secrets.auth_method.enabled"
 	EventNHIAccessReviewCampaignStarted           = "nhi.access_review.campaign.started"
 	EventNHIAccessReviewItemDecided               = "nhi.access_review.item.decided"
+	EventPQCMigrationCampaignStarted              = "pqc.migration_campaign.started"
+	EventPQCMigrationCampaignUpdated              = "pqc.migration_campaign.updated"
+	EventPQCMigrationCampaignFindingDispositioned = "pqc.migration_campaign.finding_dispositioned"
+	EventPQCMigrationCampaignClosed               = "pqc.migration_campaign.closed"
 	EventAccessChangeRequestCreated               = "access.change_request.created"
 	EventAccessChangeRequestDecided               = "access.change_request.decided"
 
@@ -318,6 +322,60 @@ type NHIAccessReviewItemDecided struct {
 	Reason               string    `json:"reason,omitempty"`
 	DecisionEvidenceRefs []string  `json:"decision_evidence_refs,omitempty"`
 	DecidedAt            time.Time `json:"decided_at,omitempty"`
+}
+
+// PQCMigrationCampaignStarted is the full rebuildable snapshot of a core
+// campaign over CBOM findings. It tracks work; it never invokes the licensed
+// fleet execution engine.
+type PQCMigrationCampaignStarted struct {
+	ID                string                        `json:"id"`
+	Name              string                        `json:"name"`
+	OwnerRef          string                        `json:"owner_ref"`
+	Deadline          time.Time                     `json:"deadline"`
+	Wave              string                        `json:"wave"`
+	ReadinessCriteria []string                      `json:"readiness_criteria"`
+	Findings          []PQCMigrationCampaignFinding `json:"findings"`
+}
+
+type PQCMigrationCampaignFinding struct {
+	FindingID     string `json:"finding_id"`
+	FindingDigest string `json:"finding_digest"`
+	Kind          string `json:"kind"`
+	Location      string `json:"location"`
+	Algorithm     string `json:"algorithm,omitempty"`
+	KeyBits       int    `json:"key_bits,omitempty"`
+	Protocol      string `json:"protocol,omitempty"`
+	Cipher        string `json:"cipher,omitempty"`
+}
+
+type PQCMigrationCampaignUpdated struct {
+	CampaignID            string    `json:"campaign_id"`
+	OwnerRef              string    `json:"owner_ref"`
+	Deadline              time.Time `json:"deadline"`
+	Wave                  string    `json:"wave"`
+	ReadinessCriteria     []string  `json:"readiness_criteria"`
+	ReadinessStatus       string    `json:"readiness_status"`
+	ReadinessEvidenceRefs []string  `json:"readiness_evidence_refs,omitempty"`
+	UpdatedAt             time.Time `json:"updated_at,omitempty"`
+}
+
+type PQCMigrationCampaignFindingDispositioned struct {
+	CampaignID        string    `json:"campaign_id"`
+	FindingID         string    `json:"finding_id"`
+	Disposition       string    `json:"disposition"`
+	RemediationMethod string    `json:"remediation_method"`
+	Reason            string    `json:"reason"`
+	EvidenceRefs      []string  `json:"evidence_refs"`
+	EvidenceDigests   []string  `json:"evidence_digests"`
+	DispositionedAt   time.Time `json:"dispositioned_at,omitempty"`
+}
+
+type PQCMigrationCampaignClosed struct {
+	CampaignID string          `json:"campaign_id"`
+	SignedJWS  string          `json:"signed_jws"`
+	PublicJWKS json.RawMessage `json:"public_jwks"`
+	ClosedBy   string          `json:"closed_by"`
+	ClosedAt   time.Time       `json:"closed_at,omitempty"`
 }
 
 // AccessChangeRequestCreated is the payload of
@@ -1454,102 +1512,106 @@ func (p *Projector) rebuildEventProjections(ctx context.Context, log *events.Log
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
-	EventTenantRegistered:                    {1: true},
-	EventTenantOffboarded:                    {1: true},
-	EventOwnerCreated:                        {1: true},
-	EventOwnerUpdated:                        {1: true},
-	EventOwnerDeleted:                        {1: true},
-	EventIssuerCreated:                       {1: true},
-	EventIdentityCreated:                     {1: true},
-	EventIdentityIssued:                      {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityDeployed:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityRevoked:                     {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityRenewing:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityRenewed:                     {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityRetired:                     {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventCertificateRecorded:                 {1: true},
-	EventCertificateRevoked:                  {1: true},
-	EventCertificateSuperseded:               {1: true},
-	EventCAIssuedCertificate:                 {1: true},
-	EventCACertificateRevoked:                {1: true},
-	EventCACeremonyStarted:                   {1: true},
-	EventCACeremonyApproved:                  {1: true},
-	EventCARootCreated:                       {1: true, CAAuthorityCreatedEventSchemaVersion: true},
-	EventCAAuthorityImported:                 {1: true, CAAuthorityCreatedEventSchemaVersion: true},
-	EventCAIntermediateCreated:               {1: true, CAAuthorityCreatedEventSchemaVersion: true},
-	EventCAEndEntityIssued:                   {1: true},
-	EventCAAuthorityRotated:                  {1: true},
-	EventCAAuthorityRekeyed:                  {1: true},
-	EventCACrossSigned:                       {1: true},
-	EventBreakglassIssued:                    {1: true},
-	EventBreakglassCARotated:                 {1: true},
-	EventBreakglassCACrossSigned:             {1: true},
-	EventCRLPublished:                        {1: true, 2: true, 3: true},
-	EventOCSPResponderRotated:                {1: true},
-	EventAgentHeartbeat:                      {1: true},
-	EventAgentCertRenewed:                    {1: true},
-	EventAgentCertRevoked:                    {1: true},
-	EventAgentOffboarded:                     {1: true},
-	EventKubernetesControllerPostureReported: {1: true},
-	EventProfileCreated:                      {1: true, 2: true},
-	EventProfileUpdated:                      {1: true, 2: true},
-	EventDiscoverySourceUpserted:             {1: true},
-	EventDiscoveryScheduleUpserted:           {1: true},
-	EventDiscoveryRunQueued:                  {1: true},
-	EventDiscoveryRunStarted:                 {1: true},
-	EventDiscoveryFindingRecorded:            {1: true},
-	EventDiscoveryFindingTriageChanged:       {1: true},
-	EventDiscoveryRunCompleted:               {1: true},
-	EventACMEDNS01ProviderConfigUpserted:     {1: true},
-	EventACMEDNS01ProviderConfigDeleted:      {1: true},
-	EventACMEDNS01Preflighted:                {1: true},
-	EventACMEDNS01RecordPresented:            {1: true},
-	EventACMEDNS01RecordCleaned:              {1: true},
-	EventMDMSCEPPolicyUpserted:               {1: true},
-	EventMDMSCEPPolicyDeleted:                {1: true},
-	EventMDMSCEPChallengeRotated:             {1: true},
-	EventWorkloadAttesterTrustSourceUpserted: {1: true},
-	EventWorkloadAttesterTrustSourceRotated:  {1: true},
-	EventWorkloadAttesterTrustSourceRevoked:  {1: true},
-	EventWorkloadAttesterTrustSourceDeleted:  {1: true},
-	EventComplianceReportScheduleUpserted:    {1: true},
-	EventSecretRotationScheduleUpserted:      {1: true},
-	EventSecretRotationScheduleRan:           {1: true},
-	EventNotificationRead:                    {1: true},
-	EventNotificationChannelUpserted:         {1: true},
-	EventNotificationChannelDeleted:          {1: true},
-	EventNotificationRoutingPolicyUpserted:   {1: true},
-	EventNotificationRoutingPolicyDeleted:    {1: true},
-	EventNotificationThresholdDelivered:      {1: true},
-	EventNotificationTestQueued:              {1: true},
-	EventNotificationDeliveryRecorded:        {1: true},
-	EventCBOMAssetObserved:                   {1: true},
-	EventDeploymentTargetUpserted:            {1: true},
-	EventDeploymentTargetDeleted:             {1: true},
-	EventIdentityConnectorTargetBound:        {1: true},
-	EventConnectorDeliveryRecorded:           {1: true},
-	EventLifecycleRotationRecorded:           {1: true},
-	EventIncidentExecutionRecorded:           {1: true},
-	EventIncidentFleetReissuanceRecorded:     {1: true},
-	EventRemediationPlaybookRunRecorded:      {1: true},
-	EventResponseIntegrationDispatched:       {1: true},
-	EventPrivacySubjectErased:                {1: true},
-	EventPrivacyRetentionEnforced:            {1: true},
-	EventPrivacyArchiveErasureAttested:       {1: true},
-	EventTenantMemberUpserted:                {1: true},
-	EventTenantMemberOffboarded:              {1: true},
-	EventAPITokenCreated:                     {1: true},
-	EventAPITokenRevoked:                     {1: true},
-	EventPAMSessionStarted:                   {1: true},
-	EventMachineSessionStarted:               {1: true},
-	EventMachineSessionRevoked:               {1: true},
-	EventMachineAuthMethodDisabled:           {1: true},
-	EventMachineAuthMethodEnabled:            {1: true},
-	EventPAMSessionExpired:                   {1: true},
-	EventNHIAccessReviewCampaignStarted:      {1: true},
-	EventNHIAccessReviewItemDecided:          {1: true},
-	EventAccessChangeRequestCreated:          {1: true},
-	EventAccessChangeRequestDecided:          {1: true},
+	EventTenantRegistered:                         {1: true},
+	EventTenantOffboarded:                         {1: true},
+	EventOwnerCreated:                             {1: true},
+	EventOwnerUpdated:                             {1: true},
+	EventOwnerDeleted:                             {1: true},
+	EventIssuerCreated:                            {1: true},
+	EventIdentityCreated:                          {1: true},
+	EventIdentityIssued:                           {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityRenewing:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventCertificateRecorded:                      {1: true},
+	EventCertificateRevoked:                       {1: true},
+	EventCertificateSuperseded:                    {1: true},
+	EventCAIssuedCertificate:                      {1: true},
+	EventCACertificateRevoked:                     {1: true},
+	EventCACeremonyStarted:                        {1: true},
+	EventCACeremonyApproved:                       {1: true},
+	EventCARootCreated:                            {1: true, CAAuthorityCreatedEventSchemaVersion: true},
+	EventCAAuthorityImported:                      {1: true, CAAuthorityCreatedEventSchemaVersion: true},
+	EventCAIntermediateCreated:                    {1: true, CAAuthorityCreatedEventSchemaVersion: true},
+	EventCAEndEntityIssued:                        {1: true},
+	EventCAAuthorityRotated:                       {1: true},
+	EventCAAuthorityRekeyed:                       {1: true},
+	EventCACrossSigned:                            {1: true},
+	EventBreakglassIssued:                         {1: true},
+	EventBreakglassCARotated:                      {1: true},
+	EventBreakglassCACrossSigned:                  {1: true},
+	EventCRLPublished:                             {1: true, 2: true, 3: true},
+	EventOCSPResponderRotated:                     {1: true},
+	EventAgentHeartbeat:                           {1: true},
+	EventAgentCertRenewed:                         {1: true},
+	EventAgentCertRevoked:                         {1: true},
+	EventAgentOffboarded:                          {1: true},
+	EventKubernetesControllerPostureReported:      {1: true},
+	EventProfileCreated:                           {1: true, 2: true},
+	EventProfileUpdated:                           {1: true, 2: true},
+	EventDiscoverySourceUpserted:                  {1: true},
+	EventDiscoveryScheduleUpserted:                {1: true},
+	EventDiscoveryRunQueued:                       {1: true},
+	EventDiscoveryRunStarted:                      {1: true},
+	EventDiscoveryFindingRecorded:                 {1: true},
+	EventDiscoveryFindingTriageChanged:            {1: true},
+	EventDiscoveryRunCompleted:                    {1: true},
+	EventACMEDNS01ProviderConfigUpserted:          {1: true},
+	EventACMEDNS01ProviderConfigDeleted:           {1: true},
+	EventACMEDNS01Preflighted:                     {1: true},
+	EventACMEDNS01RecordPresented:                 {1: true},
+	EventACMEDNS01RecordCleaned:                   {1: true},
+	EventMDMSCEPPolicyUpserted:                    {1: true},
+	EventMDMSCEPPolicyDeleted:                     {1: true},
+	EventMDMSCEPChallengeRotated:                  {1: true},
+	EventWorkloadAttesterTrustSourceUpserted:      {1: true},
+	EventWorkloadAttesterTrustSourceRotated:       {1: true},
+	EventWorkloadAttesterTrustSourceRevoked:       {1: true},
+	EventWorkloadAttesterTrustSourceDeleted:       {1: true},
+	EventComplianceReportScheduleUpserted:         {1: true},
+	EventSecretRotationScheduleUpserted:           {1: true},
+	EventSecretRotationScheduleRan:                {1: true},
+	EventNotificationRead:                         {1: true},
+	EventNotificationChannelUpserted:              {1: true},
+	EventNotificationChannelDeleted:               {1: true},
+	EventNotificationRoutingPolicyUpserted:        {1: true},
+	EventNotificationRoutingPolicyDeleted:         {1: true},
+	EventNotificationThresholdDelivered:           {1: true},
+	EventNotificationTestQueued:                   {1: true},
+	EventNotificationDeliveryRecorded:             {1: true},
+	EventCBOMAssetObserved:                        {1: true},
+	EventDeploymentTargetUpserted:                 {1: true},
+	EventDeploymentTargetDeleted:                  {1: true},
+	EventIdentityConnectorTargetBound:             {1: true},
+	EventConnectorDeliveryRecorded:                {1: true},
+	EventLifecycleRotationRecorded:                {1: true},
+	EventIncidentExecutionRecorded:                {1: true},
+	EventIncidentFleetReissuanceRecorded:          {1: true},
+	EventRemediationPlaybookRunRecorded:           {1: true},
+	EventResponseIntegrationDispatched:            {1: true},
+	EventPrivacySubjectErased:                     {1: true},
+	EventPrivacyRetentionEnforced:                 {1: true},
+	EventPrivacyArchiveErasureAttested:            {1: true},
+	EventTenantMemberUpserted:                     {1: true},
+	EventTenantMemberOffboarded:                   {1: true},
+	EventAPITokenCreated:                          {1: true},
+	EventAPITokenRevoked:                          {1: true},
+	EventPAMSessionStarted:                        {1: true},
+	EventMachineSessionStarted:                    {1: true},
+	EventMachineSessionRevoked:                    {1: true},
+	EventMachineAuthMethodDisabled:                {1: true},
+	EventMachineAuthMethodEnabled:                 {1: true},
+	EventPAMSessionExpired:                        {1: true},
+	EventNHIAccessReviewCampaignStarted:           {1: true},
+	EventNHIAccessReviewItemDecided:               {1: true},
+	EventPQCMigrationCampaignStarted:              {1: true},
+	EventPQCMigrationCampaignUpdated:              {1: true},
+	EventPQCMigrationCampaignFindingDispositioned: {1: true},
+	EventPQCMigrationCampaignClosed:               {1: true},
+	EventAccessChangeRequestCreated:               {1: true},
+	EventAccessChangeRequestDecided:               {1: true},
 }
 
 func init() {
@@ -2754,6 +2816,88 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires name", e.Type)
 		}
 		return p.store.ApplyMachineAuthMethodOverrideTx(ctx, tx, e.TenantID, pl.Name, e.Type == EventMachineAuthMethodDisabled, pl.UpdatedBy, e.Time)
+	case EventPQCMigrationCampaignStarted:
+		var pl PQCMigrationCampaignStarted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.OwnerRef == "" || pl.Deadline.IsZero() ||
+			pl.Wave == "" || len(pl.ReadinessCriteria) == 0 || len(pl.Findings) == 0 {
+			return fmt.Errorf("projections: %s requires id, name, owner_ref, deadline, wave, readiness_criteria, and findings", e.Type)
+		}
+		findings := make([]store.PQCMigrationCampaignFinding, 0, len(pl.Findings))
+		for _, finding := range pl.Findings {
+			if finding.FindingID == "" || finding.FindingDigest == "" ||
+				finding.Kind == "" || finding.Location == "" {
+				return fmt.Errorf("projections: %s finding requires finding_id, finding_digest, kind, and location", e.Type)
+			}
+			findings = append(findings, store.PQCMigrationCampaignFinding{
+				TenantID: e.TenantID, CampaignID: pl.ID, FindingID: finding.FindingID,
+				FindingDigest: finding.FindingDigest, Kind: finding.Kind, Location: finding.Location,
+				Algorithm: finding.Algorithm, KeyBits: finding.KeyBits, Protocol: finding.Protocol,
+				Cipher: finding.Cipher, Disposition: "pending", CreatedAt: e.Time, UpdatedAt: e.Time,
+			})
+		}
+		return p.store.ApplyPQCMigrationCampaignStartedTx(ctx, tx, store.PQCMigrationCampaign{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, OwnerRef: pl.OwnerRef,
+			Deadline: pl.Deadline, Wave: pl.Wave, ReadinessCriteria: pl.ReadinessCriteria,
+			ReadinessStatus: "pending", Status: "open", FindingCount: len(findings),
+			PendingCount: len(findings), CreatedAt: e.Time, UpdatedAt: e.Time,
+		}, findings)
+	case EventPQCMigrationCampaignUpdated:
+		var pl PQCMigrationCampaignUpdated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CampaignID == "" || pl.OwnerRef == "" || pl.Deadline.IsZero() ||
+			pl.Wave == "" || len(pl.ReadinessCriteria) == 0 || pl.ReadinessStatus == "" {
+			return fmt.Errorf("projections: %s requires campaign_id, owner_ref, deadline, wave, readiness_criteria, and readiness_status", e.Type)
+		}
+		updatedAt := pl.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = e.Time
+		}
+		return p.store.ApplyPQCMigrationCampaignUpdatedTx(ctx, tx, e.TenantID, store.PQCMigrationCampaignUpdate{
+			CampaignID: pl.CampaignID, OwnerRef: pl.OwnerRef, Deadline: pl.Deadline,
+			Wave: pl.Wave, ReadinessCriteria: pl.ReadinessCriteria,
+			ReadinessStatus: pl.ReadinessStatus, ReadinessEvidenceRefs: pl.ReadinessEvidenceRefs,
+			UpdatedAt: updatedAt,
+		})
+	case EventPQCMigrationCampaignFindingDispositioned:
+		var pl PQCMigrationCampaignFindingDispositioned
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CampaignID == "" || pl.FindingID == "" || pl.Disposition == "" ||
+			pl.RemediationMethod == "" || pl.Reason == "" || len(pl.EvidenceDigests) == 0 {
+			return fmt.Errorf("projections: %s requires campaign_id, finding_id, disposition, remediation_method, reason, and evidence_digests", e.Type)
+		}
+		dispositionedAt := pl.DispositionedAt
+		if dispositionedAt.IsZero() {
+			dispositionedAt = e.Time
+		}
+		return p.store.ApplyPQCMigrationFindingDispositionedTx(ctx, tx, e.TenantID, store.PQCMigrationFindingDisposition{
+			CampaignID: pl.CampaignID, FindingID: pl.FindingID, Disposition: pl.Disposition,
+			RemediationMethod: pl.RemediationMethod, Reason: pl.Reason,
+			EvidenceRefs: pl.EvidenceRefs, EvidenceDigests: pl.EvidenceDigests,
+			DispositionedAt: dispositionedAt,
+		})
+	case EventPQCMigrationCampaignClosed:
+		var pl PQCMigrationCampaignClosed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CampaignID == "" || pl.SignedJWS == "" || len(pl.PublicJWKS) == 0 || pl.ClosedBy == "" {
+			return fmt.Errorf("projections: %s requires campaign_id, signed_jws, public_jwks, and closed_by", e.Type)
+		}
+		closedAt := pl.ClosedAt
+		if closedAt.IsZero() {
+			closedAt = e.Time
+		}
+		return p.store.ApplyPQCMigrationCampaignClosedTx(ctx, tx, e.TenantID, store.PQCMigrationCampaignClosure{
+			CampaignID: pl.CampaignID, SignedJWS: pl.SignedJWS, PublicJWKS: pl.PublicJWKS,
+			ClosedBy: pl.ClosedBy, ClosedAt: closedAt,
+		})
 	case EventNHIAccessReviewCampaignStarted:
 		var pl NHIAccessReviewCampaignStarted
 		if err := decode(e, &pl); err != nil {

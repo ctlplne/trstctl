@@ -73,6 +73,10 @@ const (
 	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
 	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
+	EventPQCMigrationCampaignStarted              = "pqc.migration_campaign.started"
+	EventPQCMigrationCampaignUpdated              = "pqc.migration_campaign.updated"
+	EventPQCMigrationCampaignFindingDispositioned = "pqc.migration_campaign.finding_dispositioned"
+	EventPQCMigrationCampaignClosed               = "pqc.migration_campaign.closed"
 	EventLicensedCryptoMigrationStarted           = "licensed_crypto.migration.started"
 	EventLicensedCryptoMigrationAssetCompleted    = "licensed_crypto.migration.asset_completed"
 	EventLicensedCryptoMigrationRollbackCompleted = "licensed_crypto.migration.rollback_completed"
@@ -144,6 +148,11 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "triage_finding", "claimDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F2", "Network discovery", "dismiss_finding", "dismissDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved}},
+	{"F52", "Cryptographic Bill of Materials", "start_campaign", "startPQCMigrationCampaign", []string{EventPQCMigrationCampaignStarted}},
+	{"F52", "Cryptographic Bill of Materials", "update_campaign", "updatePQCMigrationCampaign", []string{EventPQCMigrationCampaignUpdated}},
+	{"F52", "Cryptographic Bill of Materials", "record_readiness", "setPQCMigrationCampaignReadiness", []string{EventPQCMigrationCampaignUpdated}},
+	{"F52", "Cryptographic Bill of Materials", "record_finding_disposition", "dispositionPQCMigrationFinding", []string{EventPQCMigrationCampaignFindingDispositioned}},
+	{"F52", "Cryptographic Bill of Materials", "close_campaign", "closePQCMigrationCampaign", []string{EventPQCMigrationCampaignClosed}},
 
 	// F69-F74 — served ACME DNS-01 provider configuration and validation policy.
 	{"F69", "DNS-01 challenge automation", "configure_provider", "createACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigUpserted}},

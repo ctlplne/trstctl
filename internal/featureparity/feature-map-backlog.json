@@ -2022,30 +2022,51 @@
       "priority": 51,
       "served_state": "served",
       "backend_status": "served-cbom-scan-and-inventory",
-      "current_frontend_mapping": "served CBOM scan/inventory API feeds PQC migration posture; UI remains registered /posture and /risk disclosure until the dedicated CBOM table lands",
+      "current_frontend_mapping": "served CBOM scan/inventory and standalone core PQC migration campaigns are operated from /posture; campaigns remain useful without a licence while the Enterprise engine is an optional execution handoff",
       "target_gui_mapping": "CBOM UI showing algorithms, key sizes, TLS versions, weak crypto, PQC posture, source host/service, and policy violations.",
-      "acceptance_test": "internal/server/cbom_served_test.go drives POST /api/v1/cbom/scans over a real TLS endpoint and host config, then reads /api/v1/cbom/assets with FIPS 203/204/205 migration progress.",
+      "acceptance_test": "internal/server/cbom_served_test.go proves scan/inventory; internal/server/pqc_migration_campaign_served_test.go proves tenant-scoped manual campaign closure and offline-verifiable signed evidence.",
       "source_docs": [
         "docs/features/observability-and-risk.md"
       ],
       "source_backend": [
         "internal/cbom",
         "internal/api/cbom.go",
+        "internal/api/pqc_migration_campaign.go",
         "internal/server/cbom.go",
         "internal/store/cryptoasset.go",
+        "internal/store/pqc_migration_campaign.go",
         "internal/projections/projections.go"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Posture.tsx",
+        "web/src/pages/posture/PQCCampaigns.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
         "startCBOMScan",
-        "listCBOMAssets"
+        "listCBOMAssets",
+        "startPQCMigrationCampaign",
+        "listPQCMigrationCampaigns",
+        "getPQCMigrationCampaign",
+        "updatePQCMigrationCampaign",
+        "setPQCMigrationCampaignReadiness",
+        "dispositionPQCMigrationFinding",
+        "closePQCMigrationCampaign",
+        "getPQCMigrationCampaignEvidence"
       ],
       "api_na": "",
       "cli_surface": [
         "cbom scan",
-        "cbom assets"
+        "cbom assets",
+        "pqc campaigns create",
+        "pqc campaigns list",
+        "pqc campaigns get",
+        "pqc campaigns update",
+        "pqc campaigns readiness",
+        "pqc campaigns disposition",
+        "pqc campaigns close",
+        "pqc campaigns evidence"
       ],
       "cli_na": "",
       "facet_evidence": {
@@ -2053,13 +2074,15 @@
           "evidence": [
             "server.Build wires api.WithCBOM, mounting POST /api/v1/cbom/scans and GET /api/v1/cbom/assets on the served handler.",
             "internal/server/cbom.go invokes tlssource/hostsource through cbom.Scanner and persists observations after cbom.asset.observed is appended.",
+            "Core campaign routes stay mounted without a licence and track manual or external remediation through signed closure; automated execution is explicitly unavailable by edition.",
             "served_state=served",
             "backend_status=served-cbom-scan-and-inventory"
           ],
           "refs": [
             "internal/server/server.go",
             "internal/server/cbom.go",
-            "internal/server/cbom_served_test.go"
+            "internal/server/cbom_served_test.go",
+            "internal/server/pqc_migration_campaign_served_test.go"
           ],
           "commands": [
             "make test"
@@ -2067,18 +2090,19 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served CBOM scan/inventory API feeds PQC migration posture; UI remains registered /posture and /risk disclosure until the dedicated CBOM table lands",
+            "current_frontend_mapping: /posture serves campaign creation, list/detail, readiness, per-finding disposition, closure, and signed evidence in Community.",
             "target_gui_mapping: CBOM UI showing algorithms, key sizes, TLS versions, weak crypto, PQC posture, source host/service, and policy violations."
           ],
           "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/App.tsx"
+            "web/src/pages/Posture.tsx",
+            "web/src/pages/posture/PQCCampaigns.tsx"
           ]
         },
         "cli": {
           "evidence": [
             "cli_surface: cbom scan posts a CBOM scan request body with an Idempotency-Key.",
-            "cli_surface: cbom assets reads the served CBOM inventory and migration_progress."
+            "cli_surface: cbom assets reads the served CBOM inventory and migration_progress.",
+            "cli_surface: pqc campaigns exposes all eight core campaign operations; mutations carry Idempotency-Key and close requires --force."
           ],
           "refs": [
             "internal/cli/command.go",
@@ -2089,17 +2113,22 @@
         "api": {
           "evidence": [
             "api_surface: startCBOMScan and listCBOMAssets are in the served OpenAPI route registry.",
-            "Responses include CBOM assets, FIPS migration targets, and migration_progress."
+            "api_surface: eight core PQC campaign operations are in the served OpenAPI contract and regenerated SDKs.",
+            "Responses state automated execution is unavailable while leaving the complete campaign workflow usable."
           ],
           "refs": [
             "internal/api/api.go",
             "internal/api/cbom.go",
+            "internal/api/pqc_migration_campaign.go",
             "internal/api/openapi.go"
           ]
         },
         "test": {
           "evidence": [
             "acceptance_test: internal/server/cbom_served_test.go scans a real TLS endpoint plus host config and verifies stored CBOM assets, FIPS targets, migration percentage, and cbom.asset.observed.",
+            "TestPQCMigrationCampaignServedManualClosureSignedEvidence verifies manual remediation, readiness, closure gating, signed finding/evidence digests, and public-JWKS offline verification.",
+            "TestPQCMigrationCampaignTenantIsolation rejects a campaign built from another tenant's CBOM finding.",
+            "web/src/__tests__/pqc_campaigns.test.tsx covers list/create/readiness/disposition/close/export/error and axe.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
             "TestServedCBOMScanPopulatesMigrationInventory is a named acceptance test executed by the CI make test package set."
@@ -2107,21 +2136,26 @@
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
             "internal/server/cbom_served_test.go",
+            "internal/server/pqc_migration_campaign_served_test.go",
+            "web/src/__tests__/pqc_campaigns.test.tsx",
             "web/src/__tests__/feature_coverage.test.tsx",
             "web/src/__tests__/route_parity.test.ts"
           ]
         },
         "docs": {
           "evidence": [
-            "documented in docs/features/observability-and-risk.md"
+            "Core campaign ownership, edition boundary, API/CLI/UI, event model, closure gate, and signed proof are documented."
           ],
           "refs": [
-            "docs/features/observability-and-risk.md"
+            "docs/features/observability-and-risk.md",
+            "docs/features/lifecycle-and-pqc.md",
+            "docs/cli.md"
           ]
         },
         "rbac": {
           "evidence": [
             "POST /api/v1/cbom/scans requires discovery:write; GET /api/v1/cbom/assets requires risk:read.",
+            "PQC campaign reads/evidence require risk:read; all campaign mutations require discovery:write.",
             "Feature authz manifest tests bind both operations to OpenAPI security and route permissions."
           ],
           "refs": [
@@ -2132,10 +2166,12 @@
         "audit": {
           "evidence": [
             "Each served scan observation appends cbom.asset.observed before the inventory row is projected.",
-            "The event ledger maps F52 scan to cbom.asset.observed for audit filtering."
+            "Campaign mutations append pqc.migration_campaign.started/updated/finding_dispositioned/closed before projection.",
+            "The event ledger maps all F52 campaign mutation operationIds to those immutable events."
           ],
           "refs": [
             "internal/server/cbom.go",
+            "internal/orchestrator/pqc_migration_campaign.go",
             "internal/eventledger/ledger.go",
             "internal/projections/projections.go"
           ]
@@ -2152,20 +2188,24 @@
         },
         "a11y": {
           "evidence": [
-            "feature-specific a11y receipt: CBOM and cryptographic observability is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx, which renders the registered route surface, runs axe, and verifies keyboard focus reaches the workflow."
+            "feature-specific a11y receipt: the registered /posture route is covered globally and pqc_campaigns.test.tsx runs axe over the standalone campaign workflow."
           ],
           "refs": [
             "web/src/__tests__/feature_a11y_receipts.test.tsx",
+            "web/src/__tests__/pqc_campaigns.test.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
         },
         "i18n": {
           "evidence": [
-            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+            "Campaign UI strings are typed messages with en-US, es-ES, and de-DE catalogs; npm run i18n:check enforces extraction parity."
           ],
           "refs": [
             "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/messages.ts",
+            "web/src/i18n/catalog.es-ES.ts",
+            "web/src/i18n/catalog.de-DE.ts",
             "web/src/i18n/extractedMessages.gen.ts",
             "web/src/__tests__/i18n.test.tsx"
           ]

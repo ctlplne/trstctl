@@ -99,6 +99,7 @@ type API struct {
 	secrets                   *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
 	ai                        *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
 	cbom                      CBOMService     // served CBOM scanner and crypto inventory
+	pqcCampaignSigner         PQCCampaignClosureSigner
 	licensedRoutes            []LicensedRoute
 	licensedSchemas           map[string]*Schema
 	complianceEvidence        ComplianceEvidenceService
@@ -174,6 +175,7 @@ type config struct {
 	secrets                   *secretsService
 	ai                        *aiSurface
 	cbom                      CBOMService
+	pqcCampaignSigner         PQCCampaignClosureSigner
 	licensedRoutes            []LicensedRoute
 	licensedSchemas           map[string]*Schema
 	complianceEvidence        ComplianceEvidenceService
@@ -425,6 +427,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		secrets:                   cfg.secrets,
 		ai:                        cfg.ai,
 		cbom:                      cfg.cbom,
+		pqcCampaignSigner:         cfg.pqcCampaignSigner,
 		licensedRoutes:            append([]LicensedRoute(nil), cfg.licensedRoutes...),
 		licensedSchemas:           copySchemaMap(cfg.licensedSchemas),
 		complianceEvidence:        cfg.complianceEvidence,
@@ -771,6 +774,7 @@ func (a *API) routes() []route {
 	}
 	memberSubjectPath := []param{pathString("subject", "tenant member subject")}
 	nhiReviewItemPath := []param{pathUUID("id"), pathUUID("item_id")}
+	pqcCampaignFindingPath := []param{pathUUID("id"), pathUUID("finding_id")}
 	mcpToolPath := []param{pathString("tool", "MCP tool name")}
 	notificationIDPath := []param{pathInteger("id", "notification outbox id")}
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
@@ -1100,6 +1104,14 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/risk/contextual-priorities", opID: "listContextualRiskPriorities", summary: "Prioritize credential risk with blast-radius context", handler: a.listContextualRiskPriorities, resSchema: "ContextualRiskPriorities", successCode: "200", perm: authz.RiskRead},
 		{method: "POST", path: "/api/v1/cbom/scans", opID: "startCBOMScan", summary: "Scan TLS endpoints and host crypto config into the CBOM inventory", handler: a.startCBOMScan, reqSchema: "CBOMScanRequest", resSchema: "CBOMScan", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "GET", path: "/api/v1/cbom/assets", opID: "listCBOMAssets", summary: "List CBOM assets with crypto migration posture", handler: a.listCBOMAssets, resSchema: "CBOMInventory", successCode: "200", perm: authz.RiskRead},
+		{method: "POST", path: "/api/v1/pqc/campaigns", opID: "startPQCMigrationCampaign", summary: "Start a core PQC migration tracking campaign", handler: a.startPQCMigrationCampaign, reqSchema: "PQCMigrationCampaignStartRequest", resSchema: "PQCMigrationCampaign", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "GET", path: "/api/v1/pqc/campaigns", opID: "listPQCMigrationCampaigns", summary: "List core PQC migration tracking campaigns", handler: a.listPQCMigrationCampaigns, query: page, resSchema: "PQCMigrationCampaignList", successCode: "200", perm: authz.RiskRead},
+		{method: "GET", path: "/api/v1/pqc/campaigns/{id}", opID: "getPQCMigrationCampaign", summary: "Get a core PQC migration tracking campaign", handler: a.getPQCMigrationCampaign, pathParams: idPath, resSchema: "PQCMigrationCampaign", successCode: "200", perm: authz.RiskRead},
+		{method: "PUT", path: "/api/v1/pqc/campaigns/{id}", opID: "updatePQCMigrationCampaign", summary: "Update PQC campaign ownership, deadline, wave, or gate", handler: a.updatePQCMigrationCampaign, pathParams: idPath, reqSchema: "PQCMigrationCampaignUpdateRequest", resSchema: "PQCMigrationCampaign", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "POST", path: "/api/v1/pqc/campaigns/{id}/readiness", opID: "setPQCMigrationCampaignReadiness", summary: "Record a PQC campaign readiness gate", handler: a.setPQCMigrationCampaignReadiness, pathParams: idPath, reqSchema: "PQCMigrationCampaignReadinessRequest", resSchema: "PQCMigrationCampaign", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "POST", path: "/api/v1/pqc/campaigns/{id}/findings/{finding_id}/disposition", opID: "dispositionPQCMigrationFinding", summary: "Record manual or external remediation evidence for a PQC finding", handler: a.dispositionPQCMigrationFinding, pathParams: pqcCampaignFindingPath, reqSchema: "PQCMigrationFindingDispositionRequest", resSchema: "PQCMigrationCampaign", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "POST", path: "/api/v1/pqc/campaigns/{id}/close", opID: "closePQCMigrationCampaign", summary: "Close a ready PQC campaign with signed evidence", handler: a.closePQCMigrationCampaign, pathParams: idPath, reqSchema: "PQCMigrationCampaignCloseRequest", reqOptional: true, resSchema: "PQCMigrationCampaign", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "GET", path: "/api/v1/pqc/campaigns/{id}/evidence", opID: "getPQCMigrationCampaignEvidence", summary: "Export independently verifiable PQC campaign closure evidence", handler: a.getPQCMigrationCampaignEvidence, pathParams: idPath, resSchema: "PQCMigrationCampaignClosure", successCode: "200", perm: authz.RiskRead},
 
 		// Served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/F77/F78). All
 		// READ-ONLY and tenant-scoped: the tenant + RBAC scope come from the

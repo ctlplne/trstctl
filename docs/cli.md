@@ -76,6 +76,7 @@ exhaustive subcommand list:
 | `ca authorities`                   | Private CA authority lifecycle — create/import roots and intermediates, rotate, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate` · `rekey` · `cross-sign` · `issue`) |
 | `ca discovery`                     | List public and private CA discovery inventory (`list`)                                                                                                      |
 | `cbom`                             | Cryptographic bill of materials: scan TLS endpoints/configs, list assets (`scan` · `assets`)                                                                 |
+| `pqc campaigns`                    | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)               |
 | `certificates`                     | Certificate inventory: ingest, list, get, health, bulk-revoke (`ingest` · `list` · `get` · `health` · `bulk-revoke`)                                         |
 | `code-signing`                     | Sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `sign` · `keyless`)                                                          |
 | `compliance`                       | Compliance/inventory reporting and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules` · `evidence-pack`)                   |
@@ -459,6 +460,17 @@ cat > cbom-scan.json <<'JSON'
 JSON
 trstctl-cli cbom scan -f cbom-scan.json
 trstctl-cli cbom assets
+
+# Track migration work in Community without attaching the licensed fleet engine.
+# Operators may remediate manually or with any external tool, then record evidence.
+cat > pqc-campaign.json <<'JSON'
+{"name":"Payments PQC migration","owner":"team:payments","deadline":"2026-12-01T00:00:00Z","wave":"wave-1","readiness_criteria":["owner approved","rollback documented"],"finding_ids":["<cbom-finding-id>"]}
+JSON
+trstctl-cli --idempotency-key pqc-payments-create pqc campaigns create -f pqc-campaign.json
+printf '{"status":"passed","evidence_refs":["change:CAB-2048"]}\n' | trstctl-cli --idempotency-key pqc-payments-ready pqc campaigns readiness <campaign-id> -f -
+printf '{"disposition":"remediated","method":"manual","reason":"replaced through the existing CA workflow","evidence_refs":["audit:certificate.issued:replacement"],"evidence_digests":["sha256:<64-lowercase-hex>"]}\n' | trstctl-cli --idempotency-key pqc-payments-finding pqc campaigns disposition <campaign-id> <finding-id> -f -
+trstctl-cli --idempotency-key pqc-payments-close pqc campaigns close <campaign-id> --force
+trstctl-cli pqc campaigns evidence <campaign-id>
 
 # Migrate what the CBOM found (Enterprise PQC license required; an unlicensed
 # server answers 404 because it does not serve these routes). Start returns a

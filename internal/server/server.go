@@ -900,6 +900,9 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	}
 	s.featureMetrics = observ.NewFeatureMetrics(s.registry)
 	defaults := s.baseAPIOptions(d, ea)
+	if d.AuditSigningKey != nil {
+		defaults = append(defaults, api.WithPQCCampaignClosureSigner(d.AuditSigningKey))
+	}
 	if d.EnableRemediation {
 		defaults = append(defaults,
 			api.WithRemediation(),

@@ -33,6 +33,12 @@ func WithEventLog(log *events.Log) Option {
 	return func(c *config) { c.eventLog = log }
 }
 
+// WithPQCCampaignClosureSigner wires the persistent core audit key used to make
+// campaign closure evidence independently verifiable offline.
+func WithPQCCampaignClosureSigner(signer PQCCampaignClosureSigner) Option {
+	return func(c *config) { c.pqcCampaignSigner = signer }
+}
+
 // WithAgentEnrollment wires the agent bootstrap-token issuer that backs
 // POST /api/v1/agents/enrollment-tokens (the web wizard's "install an agent"
 // step). When unset, that endpoint reports the capability is unavailable.

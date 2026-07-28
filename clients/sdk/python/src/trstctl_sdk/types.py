@@ -4381,6 +4381,130 @@ PKISecretRequest = TypedDict(
     total=False,
 )
 
+PQCMigrationCampaign = TypedDict(
+    'PQCMigrationCampaign',
+    {
+        'automated_execution_available': bool,
+        'automated_execution_note': str,
+        'closed_at': str,
+        'closure': dict[str, Any],
+        'created_at': str,
+        'deadline': str,
+        'excepted_count': int,
+        'finding_count': int,
+        'findings': list[dict[str, Any]],
+        'id': str,
+        'name': str,
+        'owner': str,
+        'pending_count': int,
+        'readiness_criteria': list[str],
+        'readiness_evidence_refs': list[str],
+        'readiness_status': str,
+        'remediated_count': int,
+        'status': str,
+        'tenant_id': str,
+        'updated_at': str,
+        'wave': str,
+    },
+    total=False,
+)
+
+PQCMigrationCampaignCloseRequest = TypedDict(
+    'PQCMigrationCampaignCloseRequest',
+    {
+        'closed_by': str,
+    },
+    total=False,
+)
+
+PQCMigrationCampaignClosure = TypedDict(
+    'PQCMigrationCampaignClosure',
+    {
+        'format': str,
+        'public_jwks': dict[str, Any],
+        'signed_closure': str,
+    },
+    total=False,
+)
+
+PQCMigrationCampaignFinding = TypedDict(
+    'PQCMigrationCampaignFinding',
+    {
+        'algorithm': str,
+        'cipher': str,
+        'disposition': str,
+        'disposition_reason': str,
+        'dispositioned_at': str,
+        'evidence_digests': list[str],
+        'evidence_refs': list[str],
+        'finding_digest': str,
+        'finding_id': str,
+        'key_bits': int,
+        'kind': str,
+        'location': str,
+        'protocol': str,
+        'remediation_method': str,
+    },
+    total=False,
+)
+
+PQCMigrationCampaignList = TypedDict(
+    'PQCMigrationCampaignList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PQCMigrationCampaignReadinessRequest = TypedDict(
+    'PQCMigrationCampaignReadinessRequest',
+    {
+        'evidence_refs': list[str],
+        'status': str,
+    },
+    total=False,
+)
+
+PQCMigrationCampaignStartRequest = TypedDict(
+    'PQCMigrationCampaignStartRequest',
+    {
+        'deadline': str,
+        'finding_ids': list[str],
+        'id': str,
+        'name': str,
+        'owner': str,
+        'readiness_criteria': list[str],
+        'wave': str,
+    },
+    total=False,
+)
+
+PQCMigrationCampaignUpdateRequest = TypedDict(
+    'PQCMigrationCampaignUpdateRequest',
+    {
+        'deadline': str,
+        'owner': str,
+        'readiness_criteria': list[str],
+        'readiness_evidence_refs': list[str],
+        'readiness_status': str,
+        'wave': str,
+    },
+    total=False,
+)
+
+PQCMigrationFindingDispositionRequest = TypedDict(
+    'PQCMigrationFindingDispositionRequest',
+    {
+        'disposition': str,
+        'evidence_digests': list[str],
+        'evidence_refs': list[str],
+        'method': str,
+        'reason': str,
+    },
+    total=False,
+)
+
 PlatformAirGap = TypedDict(
     'PlatformAirGap',
     {

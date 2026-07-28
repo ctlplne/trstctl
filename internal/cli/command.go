@@ -45,6 +45,7 @@ func (c Command) Destructive() bool {
 		"erase",
 		"managed-keys rotate",
 		"offboard",
+		"pqc campaigns close",
 		"recover",
 		"remediation playbooks run",
 		"retention run",
@@ -320,6 +321,14 @@ var coreCommandTable = []Command{
 
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
 	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and crypto migration posture"},
+	{Name: []string{"pqc", "campaigns", "create"}, Method: "POST", Path: "/api/v1/pqc/campaigns", Body: bodyFile, Summary: "Start a core PQC migration tracking campaign"},
+	{Name: []string{"pqc", "campaigns", "list"}, Method: "GET", Path: "/api/v1/pqc/campaigns", Query: []string{"limit", "cursor"}, Summary: "List core PQC migration tracking campaigns"},
+	{Name: []string{"pqc", "campaigns", "get"}, Method: "GET", Path: "/api/v1/pqc/campaigns/{id}", Summary: "Get a core PQC migration tracking campaign"},
+	{Name: []string{"pqc", "campaigns", "update"}, Method: "PUT", Path: "/api/v1/pqc/campaigns/{id}", Body: bodyFile, Summary: "Update PQC campaign ownership, deadline, wave, or gate"},
+	{Name: []string{"pqc", "campaigns", "readiness"}, Method: "POST", Path: "/api/v1/pqc/campaigns/{id}/readiness", Body: bodyFile, Summary: "Record a PQC campaign readiness gate"},
+	{Name: []string{"pqc", "campaigns", "disposition"}, Method: "POST", Path: "/api/v1/pqc/campaigns/{id}/findings/{finding_id}/disposition", Body: bodyFile, Summary: "Record manual or external remediation evidence"},
+	{Name: []string{"pqc", "campaigns", "close"}, Method: "POST", Path: "/api/v1/pqc/campaigns/{id}/close", Body: bodyOptionalFile, Summary: "Close a ready PQC campaign with signed evidence"},
+	{Name: []string{"pqc", "campaigns", "evidence"}, Method: "GET", Path: "/api/v1/pqc/campaigns/{id}/evidence", Summary: "Export signed PQC campaign closure evidence"},
 
 	// The licensed crypto-migration commands that used to sit here now live in
 	// command_licensed.go; they are appended to this table by buildCommandTable.

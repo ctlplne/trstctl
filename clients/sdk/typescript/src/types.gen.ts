@@ -2757,6 +2757,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pqc/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List core PQC migration tracking campaigns */
+        get: operations["listPQCMigrationCampaigns"];
+        put?: never;
+        /** Start a core PQC migration tracking campaign */
+        post: operations["startPQCMigrationCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pqc/campaigns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a core PQC migration tracking campaign */
+        get: operations["getPQCMigrationCampaign"];
+        /** Update PQC campaign ownership, deadline, wave, or gate */
+        put: operations["updatePQCMigrationCampaign"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pqc/campaigns/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close a ready PQC campaign with signed evidence */
+        post: operations["closePQCMigrationCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pqc/campaigns/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export independently verifiable PQC campaign closure evidence */
+        get: operations["getPQCMigrationCampaignEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pqc/campaigns/{id}/findings/{finding_id}/disposition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record manual or external remediation evidence for a PQC finding */
+        post: operations["dispositionPQCMigrationFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pqc/campaigns/{id}/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a PQC campaign readiness gate */
+        post: operations["setPQCMigrationCampaignReadiness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy/archive-erasure-attestations": {
         parameters: {
             query?: never;
@@ -7258,6 +7362,104 @@ export interface components {
         PKISecretRequest: {
             common_name: string;
             ttl_seconds?: number;
+        };
+        PQCMigrationCampaign: {
+            automated_execution_available: boolean;
+            automated_execution_note: string;
+            /** Format: date-time */
+            closed_at?: string;
+            closure?: components["schemas"]["PQCMigrationCampaignClosure"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            deadline: string;
+            excepted_count: number;
+            finding_count: number;
+            findings?: components["schemas"]["PQCMigrationCampaignFinding"][];
+            /** Format: uuid */
+            id: string;
+            name: string;
+            owner: string;
+            pending_count: number;
+            readiness_criteria: string[];
+            readiness_evidence_refs: string[];
+            /** @enum {string} */
+            readiness_status: "pending" | "passed" | "blocked";
+            remediated_count: number;
+            /** @enum {string} */
+            status: "open" | "closed";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            wave: string;
+        };
+        PQCMigrationCampaignCloseRequest: {
+            closed_by?: string;
+        };
+        PQCMigrationCampaignClosure: {
+            format: string;
+            public_jwks: {
+                [key: string]: unknown;
+            };
+            signed_closure: string;
+        };
+        PQCMigrationCampaignFinding: {
+            algorithm?: string;
+            cipher?: string;
+            /** @enum {string} */
+            disposition: "pending" | "remediated" | "excepted";
+            disposition_reason?: string;
+            /** Format: date-time */
+            dispositioned_at?: string;
+            evidence_digests: string[];
+            evidence_refs: string[];
+            finding_digest: string;
+            /** Format: uuid */
+            finding_id: string;
+            key_bits?: number;
+            kind: string;
+            location: string;
+            protocol?: string;
+            remediation_method?: string;
+        };
+        PQCMigrationCampaignList: {
+            items: components["schemas"]["PQCMigrationCampaign"][];
+            next_cursor?: string;
+        };
+        PQCMigrationCampaignReadinessRequest: {
+            evidence_refs?: string[];
+            /** @enum {string} */
+            status: "pending" | "passed" | "blocked";
+        };
+        PQCMigrationCampaignStartRequest: {
+            /** Format: date-time */
+            deadline: string;
+            finding_ids: string[];
+            /** Format: uuid */
+            id?: string;
+            name: string;
+            owner: string;
+            readiness_criteria: string[];
+            wave: string;
+        };
+        PQCMigrationCampaignUpdateRequest: {
+            /** Format: date-time */
+            deadline?: string;
+            owner?: string;
+            readiness_criteria?: string[];
+            readiness_evidence_refs?: string[];
+            /** @enum {string} */
+            readiness_status?: "pending" | "passed" | "blocked";
+            wave?: string;
+        };
+        PQCMigrationFindingDispositionRequest: {
+            /** @enum {string} */
+            disposition: "remediated" | "excepted";
+            evidence_digests: string[];
+            evidence_refs?: string[];
+            method: string;
+            reason: string;
         };
         PlatformAirGap: {
             buyer_evidence_receipts: string[];
@@ -16893,6 +17095,363 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyVersion"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPQCMigrationCampaigns: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaignList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startPQCMigrationCampaign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PQCMigrationCampaignStartRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPQCMigrationCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updatePQCMigrationCampaign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PQCMigrationCampaignUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    closePQCMigrationCampaign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PQCMigrationCampaignCloseRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPQCMigrationCampaignEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaignClosure"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    dispositionPQCMigrationFinding: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PQCMigrationFindingDispositionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setPQCMigrationCampaignReadiness: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PQCMigrationCampaignReadinessRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaign"];
                 };
             };
             /** @description client error */

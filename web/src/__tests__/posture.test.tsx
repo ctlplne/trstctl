@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Posture } from "@/pages/Posture";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -31,7 +32,9 @@ vi.mock("@/lib/api", async (orig) => {
 async function renderPosture() {
   const result = render(
     <MemoryRouter>
-      <Posture />
+      <AppQueryProvider>
+        <Posture />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
   await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalled());

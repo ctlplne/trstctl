@@ -950,6 +950,59 @@ func componentSchemas() map[string]*Schema {
 		"completed_at":    timestamp(),
 		"items":           {Type: "array", Items: ref("NHIReviewItem")},
 	}, "id", "tenant_id", "name", "scope", "reviewer_subject", "requested_by", "status", "item_count", "pending_count", "certified_count", "revoked_count", "exception_count", "created_at", "updated_at")
+	pqcCampaignStartReq := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "owner": str(), "deadline": timestamp(), "wave": str(),
+		"readiness_criteria": {Type: "array", Items: str()},
+		"finding_ids":        {Type: "array", Items: uuid()},
+	}, "name", "owner", "deadline", "wave", "readiness_criteria", "finding_ids")
+	pqcCampaignUpdateReq := object(map[string]*Schema{
+		"owner": str(), "deadline": timestamp(), "wave": str(),
+		"readiness_criteria":      {Type: "array", Items: str()},
+		"readiness_status":        {Type: "string", Enum: []string{"pending", "passed", "blocked"}},
+		"readiness_evidence_refs": {Type: "array", Items: str()},
+	})
+	pqcCampaignReadinessReq := object(map[string]*Schema{
+		"status":        {Type: "string", Enum: []string{"pending", "passed", "blocked"}},
+		"evidence_refs": {Type: "array", Items: str()},
+	}, "status")
+	campaignFindingDispositionReq := object(map[string]*Schema{
+		"disposition":      {Type: "string", Enum: []string{"remediated", "excepted"}},
+		"method":           str(),
+		"reason":           str(),
+		"evidence_refs":    {Type: "array", Items: str()},
+		"evidence_digests": {Type: "array", Items: str()},
+	}, "disposition", "method", "reason", "evidence_digests")
+	pqcCampaignCloseReq := object(map[string]*Schema{"closed_by": str()})
+	pqcCampaignFinding := object(map[string]*Schema{
+		"finding_id": uuid(), "finding_digest": str(), "kind": str(), "location": str(),
+		"algorithm": str(), "key_bits": {Type: "integer"}, "protocol": str(), "cipher": str(),
+		"disposition":        {Type: "string", Enum: []string{"pending", "remediated", "excepted"}},
+		"remediation_method": str(), "disposition_reason": str(),
+		"evidence_refs":    {Type: "array", Items: str()},
+		"evidence_digests": {Type: "array", Items: str()},
+		"dispositioned_at": timestamp(),
+	}, "finding_id", "finding_digest", "kind", "location", "disposition", "evidence_refs", "evidence_digests")
+	pqcCampaignClosure := object(map[string]*Schema{
+		"format": str(), "signed_closure": str(),
+		"public_jwks": {Type: "object", AdditionalProperties: &Schema{}},
+	}, "format", "signed_closure", "public_jwks")
+	pqcCampaign := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "name": str(), "owner": str(),
+		"deadline": timestamp(), "wave": str(),
+		"readiness_criteria":            {Type: "array", Items: str()},
+		"readiness_status":              {Type: "string", Enum: []string{"pending", "passed", "blocked"}},
+		"readiness_evidence_refs":       {Type: "array", Items: str()},
+		"status":                        {Type: "string", Enum: []string{"open", "closed"}},
+		"finding_count":                 {Type: "integer"},
+		"pending_count":                 {Type: "integer"},
+		"remediated_count":              {Type: "integer"},
+		"excepted_count":                {Type: "integer"},
+		"automated_execution_available": {Type: "boolean"},
+		"automated_execution_note":      str(),
+		"created_at":                    timestamp(), "updated_at": timestamp(), "closed_at": timestamp(),
+		"findings": {Type: "array", Items: ref("PQCMigrationCampaignFinding")},
+		"closure":  ref("PQCMigrationCampaignClosure"),
+	}, "id", "tenant_id", "name", "owner", "deadline", "wave", "readiness_criteria", "readiness_status", "readiness_evidence_refs", "status", "finding_count", "pending_count", "remediated_count", "excepted_count", "automated_execution_available", "automated_execution_note", "created_at", "updated_at")
 	accessChangeRequestCreateReq := object(map[string]*Schema{
 		"id": uuid(), "requested_action": {Type: "string", Enum: []string{"grant", "modify", "revoke", "rotate", "deploy", "break_glass"}},
 		"requester_subject": str(), "nhi_id": str(), "nhi_kind": str(), "display_name": str(),
@@ -3391,6 +3444,15 @@ func componentSchemas() map[string]*Schema {
 		"NHIReviewItem":                            nhiReviewItem,
 		"NHIReviewCampaign":                        nhiReviewCampaign,
 		"NHIReviewCampaignList":                    list("NHIReviewCampaign"),
+		"PQCMigrationCampaignStartRequest":         pqcCampaignStartReq,
+		"PQCMigrationCampaignUpdateRequest":        pqcCampaignUpdateReq,
+		"PQCMigrationCampaignReadinessRequest":     pqcCampaignReadinessReq,
+		"PQCMigrationFindingDispositionRequest":    campaignFindingDispositionReq,
+		"PQCMigrationCampaignCloseRequest":         pqcCampaignCloseReq,
+		"PQCMigrationCampaignFinding":              pqcCampaignFinding,
+		"PQCMigrationCampaignClosure":              pqcCampaignClosure,
+		"PQCMigrationCampaign":                     pqcCampaign,
+		"PQCMigrationCampaignList":                 list("PQCMigrationCampaign"),
 		"AccessChangeRequestCreateRequest":         accessChangeRequestCreateReq,
 		"AccessChangeDecisionRequest":              accessChangeDecisionReq,
 		"AccessChangeDecision":                     accessChangeDecision,

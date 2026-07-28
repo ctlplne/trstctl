@@ -23,3 +23,28 @@ func TestPQCPlacementAllowsOnlyNonShippedEvidenceTooling(t *testing.T) {
 		}
 	}
 }
+
+func TestPQCPlacementAllowsCoreCampaignRecordsButNotAlgorithmsOrFleetExecution(t *testing.T) {
+	for _, body := range []string{
+		`type PQCMigrationCampaign struct{ Owner string }`,
+		`const event = "pqc.migration_campaign.closed"`,
+		`const route = "/api/v1/pqc/campaigns/{id}/evidence"`,
+		`const summary = "Record a PQC finding disposition in the core campaign"`,
+	} {
+		if term := forbiddenCorePQCTerm(body); term != "" {
+			t.Fatalf("core campaign bookkeeping was rejected by %q: %s", term, body)
+		}
+	}
+	for _, body := range []string{
+		`const Algorithm = "ML-DSA-65" // even inside a PQC campaign`,
+		`const Route = "/api/v1/pqc/migrations"`,
+		`type PQCMigrationRun struct{ Executor any }`,
+		`const Scope = "post-quantum fleet execution"`,
+		`type PQCCampaignExecutor struct{ Worker any }`,
+		`const Route = "/api/v1/pqc/campaigns/{id}/execute"`,
+	} {
+		if term := forbiddenCorePQCTerm(body); term == "" {
+			t.Fatalf("licensed PQC implementation/execution escaped PACKAGING-007: %s", body)
+		}
+	}
+}

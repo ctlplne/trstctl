@@ -3107,6 +3107,94 @@ export interface PKISecretRequest {
   ttl_seconds?: number;
 }
 
+export interface PQCMigrationCampaign {
+  automated_execution_available: boolean;
+  automated_execution_note: string;
+  closed_at?: string;
+  closure?: PQCMigrationCampaignClosure;
+  created_at: string;
+  deadline: string;
+  excepted_count: number;
+  finding_count: number;
+  findings?: PQCMigrationCampaignFinding[];
+  id: string;
+  name: string;
+  owner: string;
+  pending_count: number;
+  readiness_criteria: string[];
+  readiness_evidence_refs: string[];
+  readiness_status: "pending" | "passed" | "blocked";
+  remediated_count: number;
+  status: "open" | "closed";
+  tenant_id: string;
+  updated_at: string;
+  wave: string;
+}
+
+export interface PQCMigrationCampaignCloseRequest {
+  closed_by?: string;
+}
+
+export interface PQCMigrationCampaignClosure {
+  format: string;
+  public_jwks: Record<string, unknown>;
+  signed_closure: string;
+}
+
+export interface PQCMigrationCampaignFinding {
+  algorithm?: string;
+  cipher?: string;
+  disposition: "pending" | "remediated" | "excepted";
+  disposition_reason?: string;
+  dispositioned_at?: string;
+  evidence_digests: string[];
+  evidence_refs: string[];
+  finding_digest: string;
+  finding_id: string;
+  key_bits?: number;
+  kind: string;
+  location: string;
+  protocol?: string;
+  remediation_method?: string;
+}
+
+export interface PQCMigrationCampaignList {
+  items: PQCMigrationCampaign[];
+  next_cursor?: string;
+}
+
+export interface PQCMigrationCampaignReadinessRequest {
+  evidence_refs?: string[];
+  status: "pending" | "passed" | "blocked";
+}
+
+export interface PQCMigrationCampaignStartRequest {
+  deadline: string;
+  finding_ids: string[];
+  id?: string;
+  name: string;
+  owner: string;
+  readiness_criteria: string[];
+  wave: string;
+}
+
+export interface PQCMigrationCampaignUpdateRequest {
+  deadline?: string;
+  owner?: string;
+  readiness_criteria?: string[];
+  readiness_evidence_refs?: string[];
+  readiness_status?: "pending" | "passed" | "blocked";
+  wave?: string;
+}
+
+export interface PQCMigrationFindingDispositionRequest {
+  disposition: "remediated" | "excepted";
+  evidence_digests: string[];
+  evidence_refs?: string[];
+  method: string;
+  reason: string;
+}
+
 export interface PlatformAirGap {
   buyer_evidence_receipts: string[];
   capability: string;

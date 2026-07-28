@@ -274,10 +274,12 @@ describe("i18n boundary", () => {
       // its leading space so adjacent algorithm and transport text stays clear.
       // D-7806a198 adds the isolated-preview banner and sample-playbook copy,
       // and removes "served" implementation jargon from CA health copy.
+      // I-60770d64 adds the reviewed core PQC campaign workflow copy while
+      // preserving placeholders and technical identifiers in every locale.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "76aebe2f2c1410becc776c108a201022a01cbf60adf461c680f339ead8dba5d9",
-      "de-DE": "ae00a11fb1edd54317ae90508e7f384531cdba833a368cdd8694261a33dbdccc",
+      "es-ES": "38c835c939fd8e75e48bd87ae2b9531c890e585e01bf93515341aa6d84c187ab",
+      "de-DE": "c6138fdde061ca851a1c0ec2934ab8e8ff18dd94358005c1dbc7a44d773b59e8",
     });
   });
 

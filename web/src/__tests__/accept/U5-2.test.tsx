@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Posture } from "@/pages/Posture";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -58,7 +59,9 @@ describe("U5-2 CBOM inventory explorer", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <Posture />
+        <AppQueryProvider>
+          <Posture />
+        </AppQueryProvider>
       </MemoryRouter>,
     );
     await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalled());

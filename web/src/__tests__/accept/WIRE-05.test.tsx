@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Posture } from "@/pages/Posture";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -23,7 +24,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderPosture() {
   return render(
     <MemoryRouter>
-      <Posture />
+      <AppQueryProvider>
+        <Posture />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }

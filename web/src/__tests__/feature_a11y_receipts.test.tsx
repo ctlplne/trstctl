@@ -92,6 +92,9 @@ async function waitForRouteEffectsToSettle() {
     for (let pass = 0; pass < 8; pass += 1) {
       resolvePendingApiResponses();
       await Promise.resolve();
+      // TanStack Query batches observer notifications on a zero-delay timer.
+      // Drain that queue inside act before deciding the route is settled.
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
   });
 }
@@ -503,6 +506,11 @@ const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
             percent_migrated: 0,
           },
           items: [],
+        };
+      case "pqcCampaigns":
+        return {
+          items: [],
+          next_cursor: "",
         };
       case "complianceEvidencePack":
         return {

@@ -99,23 +99,84 @@ func checkCorePQCPlacement(pass *analysis.Pass, file *ast.File, filename, body s
 	if isPQCAllowedCorePath(filename) {
 		return
 	}
+	if term := forbiddenCorePQCTerm(body); term != "" {
+		pass.Reportf(file.Package, "PQC algorithm or fleet-execution code (%s) belongs under ee/ for PACKAGING-007; move %s behind the proprietary boundary", term, shortPath(filename))
+	}
+}
+
+// forbiddenCorePQCTerm distinguishes the owner-approved core campaign record
+// from licensed algorithms and fleet execution. Campaigns are CBOM bookkeeping:
+// they may name PQC, findings, and campaign state, but algorithm names and the
+// non-campaign migration surface remain forbidden even in a campaign file.
+func forbiddenCorePQCTerm(body string) string {
 	upper := strings.ToUpper(body)
+	for _, line := range strings.Split(upper, "\n") {
+		if isCorePQCCampaignReference(line) &&
+			(strings.Contains(line, "EXECUTOR") ||
+				strings.Contains(line, "/EXECUTE") ||
+				strings.Contains(line, "/RUN") ||
+				strings.Contains(line, "/PLAN")) {
+			return "PQC campaign fleet execution"
+		}
+	}
 	for _, term := range []string{
-		"PQC",
-		"POST-QUANTUM",
 		"ML-DSA",
 		"ML-KEM",
 		"SLH-DSA",
 		"MLDSA",
 		"MLKEM",
 		"SLHDSA",
-		"PQCMIGRATION",
 	} {
 		if strings.Contains(upper, term) {
-			pass.Reportf(file.Package, "PQC-related code belongs under ee/ for PACKAGING-007; move %s behind the proprietary boundary", shortPath(filename))
-			return
+			return term
 		}
 	}
+	coreCampaignTerms := strings.NewReplacer(
+		"PQC_MIGRATION_CAMPAIGN", "",
+		"PQC-MIGRATION-CAMPAIGN", "",
+		"PQC.MIGRATION_CAMPAIGN", "",
+		"PQC MIGRATION CAMPAIGN", "",
+		"PQC MIGRATION TRACKING CAMPAIGN", "",
+		"PQCMIGRATIONCAMPAIGN", "",
+		"PQC_CAMPAIGN", "",
+		"PQC-CAMPAIGN", "",
+		"PQC CAMPAIGN", "",
+		"PQCCAMPAIGN", "",
+		"/PQC/CAMPAIGN", "",
+		`"PQC", "CAMPAIGN`, "",
+		"PQC_MIGRATION_FINDING", "",
+		"PQC-MIGRATION-FINDING", "",
+		"PQC MIGRATION FINDING", "",
+		"PQCMIGRATIONFINDING", "",
+		"PQC FINDING", "",
+	)
+	remaining := coreCampaignTerms.Replace(upper)
+	for _, term := range []string{"POST-QUANTUM", "PQCMIGRATION", "PQC"} {
+		if strings.Contains(remaining, term) {
+			return term
+		}
+	}
+	return ""
+}
+
+func isCorePQCCampaignReference(line string) bool {
+	for _, marker := range []string{
+		"PQCMIGRATIONCAMPAIGN",
+		"PQC_MIGRATION_CAMPAIGN",
+		"PQC-MIGRATION-CAMPAIGN",
+		"PQC.MIGRATION_CAMPAIGN",
+		"PQC MIGRATION CAMPAIGN",
+		"PQCCAMPAIGN",
+		"PQC_CAMPAIGN",
+		"PQC-CAMPAIGN",
+		"PQC CAMPAIGN",
+		"/PQC/CAMPAIGN",
+	} {
+		if strings.Contains(line, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func isEEPath(filename string) bool {

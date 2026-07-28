@@ -115,7 +115,7 @@ const Algorithm = "ML-DSA-65"
 		"core file must carry SPDX-License-Identifier: MPL-2.0",
 		"core file imports \"trstctl.com/trstctl/ee/billing\"",
 		"ee/ file must not carry MPL-2.0 SPDX",
-		"PQC-related code belongs under ee/",
+		"PQC algorithm or fleet-execution code",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("planted violation output missing %q:\n%s", want, got)

@@ -248,6 +248,15 @@ import type {
   PrivacySubjectErasureRequest,
   PrivacySubjectExport,
   PrivacySubjectExportRequest,
+  PQCMigrationCampaign,
+  PQCMigrationCampaignCloseRequest,
+  PQCMigrationCampaignClosure,
+  PQCMigrationCampaignFinding,
+  PQCMigrationCampaignList,
+  PQCMigrationCampaignReadinessRequest,
+  PQCMigrationCampaignStartRequest,
+  PQCMigrationCampaignUpdateRequest,
+  PQCMigrationFindingDispositionRequest,
   Profile as GenProfile,
   ProfileRequest,
   ProtocolProfileStatus,
@@ -349,6 +358,17 @@ export type Attestation = GenAttestation;
 export type AttestedSVID = GenAttestedSVID;
 export type BrokerAgentIdentity = GenBrokerAgentIdentity;
 export type CBOMAsset = GenCBOMAsset;
+export type {
+  PQCMigrationCampaign,
+  PQCMigrationCampaignCloseRequest,
+  PQCMigrationCampaignClosure,
+  PQCMigrationCampaignFinding,
+  PQCMigrationCampaignList,
+  PQCMigrationCampaignReadinessRequest,
+  PQCMigrationCampaignStartRequest,
+  PQCMigrationCampaignUpdateRequest,
+  PQCMigrationFindingDispositionRequest,
+};
 // These four shapes come from ee/pqcmigration's runtime OpenAPI schemas. They
 // intentionally remain beside the browser client rather than in the core SDK
 // golden: a core-only binary does not mount or advertise licensed routes.
@@ -1309,6 +1329,14 @@ export interface Api {
   callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
   listCBOMAssets(): Promise<CBOMInventory>;
   startCBOMScan(input: CBOMScanRequest): Promise<CBOMScan>;
+  pqcCampaigns(options?: { limit?: number; cursor?: string }): Promise<PQCMigrationCampaignList>;
+  pqcCampaign(id: string): Promise<PQCMigrationCampaign>;
+  createPQCCampaign(input: PQCMigrationCampaignStartRequest): Promise<PQCMigrationCampaign>;
+  updatePQCCampaign(id: string, input: PQCMigrationCampaignUpdateRequest): Promise<PQCMigrationCampaign>;
+  setPQCCampaignReadiness(id: string, input: PQCMigrationCampaignReadinessRequest): Promise<PQCMigrationCampaign>;
+  dispositionPQCCampaignFinding(id: string, findingId: string, input: PQCMigrationFindingDispositionRequest): Promise<PQCMigrationCampaign>;
+  closePQCCampaign(id: string, input?: PQCMigrationCampaignCloseRequest): Promise<PQCMigrationCampaign>;
+  pqcCampaignEvidence(id: string): Promise<PQCMigrationCampaignClosure>;
   planPQCMigration(input: PQCMigrationRequest): Promise<PQCMigrationPlan>;
   startPQCMigration(input: PQCMigrationRequest): Promise<PQCMigrationRun>;
   getPQCMigrationProgress(runId: string): Promise<PQCMigrationProgress>;
@@ -1624,6 +1652,15 @@ const liveApi: Api = {
   callMCPTool: (tool, input) => postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
   listCBOMAssets: () => req<CBOMInventory>("/api/v1/cbom/assets"),
   startCBOMScan: (input) => mutate<CBOMScan>("POST", "/api/v1/cbom/scans", input),
+  pqcCampaigns: (options) => req<PQCMigrationCampaignList>(`/api/v1/pqc/campaigns${pageQueryString(options)}`),
+  pqcCampaign: (id) => req<PQCMigrationCampaign>(`/api/v1/pqc/campaigns/${encodeURIComponent(id)}`),
+  createPQCCampaign: (input) => mutate<PQCMigrationCampaign>("POST", "/api/v1/pqc/campaigns", input),
+  updatePQCCampaign: (id, input) => mutate<PQCMigrationCampaign>("PUT", `/api/v1/pqc/campaigns/${encodeURIComponent(id)}`, input),
+  setPQCCampaignReadiness: (id, input) => mutate<PQCMigrationCampaign>("POST", `/api/v1/pqc/campaigns/${encodeURIComponent(id)}/readiness`, input),
+  dispositionPQCCampaignFinding: (id, findingId, input) =>
+    mutate<PQCMigrationCampaign>("POST", `/api/v1/pqc/campaigns/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}/disposition`, input),
+  closePQCCampaign: (id, input) => mutate<PQCMigrationCampaign>("POST", `/api/v1/pqc/campaigns/${encodeURIComponent(id)}/close`, input),
+  pqcCampaignEvidence: (id) => req<PQCMigrationCampaignClosure>(`/api/v1/pqc/campaigns/${encodeURIComponent(id)}/evidence`),
   planPQCMigration: (input) => postRead<PQCMigrationPlan>("/api/v1/pqc/migrations/plan", input),
   startPQCMigration: (input) => mutate<PQCMigrationRun>("POST", "/api/v1/pqc/migrations", input),
   getPQCMigrationProgress: (runId) => req<PQCMigrationProgress>(`/api/v1/pqc/migrations/${encodeURIComponent(runId)}`),

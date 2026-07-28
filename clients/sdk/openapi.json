@@ -12053,6 +12053,368 @@
         ],
         "type": "object"
       },
+      "PQCMigrationCampaign": {
+        "properties": {
+          "automated_execution_available": {
+            "type": "boolean"
+          },
+          "automated_execution_note": {
+            "type": "string"
+          },
+          "closed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "closure": {
+            "$ref": "#/components/schemas/PQCMigrationCampaignClosure"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "excepted_count": {
+            "type": "integer"
+          },
+          "finding_count": {
+            "type": "integer"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/PQCMigrationCampaignFinding"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "pending_count": {
+            "type": "integer"
+          },
+          "readiness_criteria": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "readiness_evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "readiness_status": {
+            "enum": [
+              "pending",
+              "passed",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "remediated_count": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "wave": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "owner",
+          "deadline",
+          "wave",
+          "readiness_criteria",
+          "readiness_status",
+          "readiness_evidence_refs",
+          "status",
+          "finding_count",
+          "pending_count",
+          "remediated_count",
+          "excepted_count",
+          "automated_execution_available",
+          "automated_execution_note",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "PQCMigrationCampaignCloseRequest": {
+        "properties": {
+          "closed_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PQCMigrationCampaignClosure": {
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "public_jwks": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "signed_closure": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "signed_closure",
+          "public_jwks"
+        ],
+        "type": "object"
+      },
+      "PQCMigrationCampaignFinding": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "cipher": {
+            "type": "string"
+          },
+          "disposition": {
+            "enum": [
+              "pending",
+              "remediated",
+              "excepted"
+            ],
+            "type": "string"
+          },
+          "disposition_reason": {
+            "type": "string"
+          },
+          "dispositioned_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "evidence_digests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding_digest": {
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key_bits": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "remediation_method": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "finding_digest",
+          "kind",
+          "location",
+          "disposition",
+          "evidence_refs",
+          "evidence_digests"
+        ],
+        "type": "object"
+      },
+      "PQCMigrationCampaignList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PQCMigrationCampaign"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PQCMigrationCampaignReadinessRequest": {
+        "properties": {
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "passed",
+              "blocked"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "PQCMigrationCampaignStartRequest": {
+        "properties": {
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "finding_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "readiness_criteria": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "wave": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "owner",
+          "deadline",
+          "wave",
+          "readiness_criteria",
+          "finding_ids"
+        ],
+        "type": "object"
+      },
+      "PQCMigrationCampaignUpdateRequest": {
+        "properties": {
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "readiness_criteria": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "readiness_evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "readiness_status": {
+            "enum": [
+              "pending",
+              "passed",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "wave": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PQCMigrationFindingDispositionRequest": {
+        "properties": {
+          "disposition": {
+            "enum": [
+              "remediated",
+              "excepted"
+            ],
+            "type": "string"
+          },
+          "evidence_digests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "method": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "disposition",
+          "method",
+          "reason",
+          "evidence_digests"
+        ],
+        "type": "object"
+      },
       "PlatformAirGap": {
         "properties": {
           "buyer_evidence_receipts": {
@@ -29424,6 +29786,567 @@
         ],
         "summary": "Rollback the active lifecycle policy version to its prior module",
         "x-trstctl-permission": "policy:write"
+      }
+    },
+    "/api/v1/pqc/campaigns": {
+      "get": {
+        "operationId": "listPQCMigrationCampaigns",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaignList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List core PQC migration tracking campaigns",
+        "x-trstctl-permission": "risk:read"
+      },
+      "post": {
+        "operationId": "startPQCMigrationCampaign",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PQCMigrationCampaignStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start a core PQC migration tracking campaign",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/pqc/campaigns/{id}": {
+      "get": {
+        "operationId": "getPQCMigrationCampaign",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a core PQC migration tracking campaign",
+        "x-trstctl-permission": "risk:read"
+      },
+      "put": {
+        "operationId": "updatePQCMigrationCampaign",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PQCMigrationCampaignUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Update PQC campaign ownership, deadline, wave, or gate",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/pqc/campaigns/{id}/close": {
+      "post": {
+        "operationId": "closePQCMigrationCampaign",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PQCMigrationCampaignCloseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Close a ready PQC campaign with signed evidence",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/pqc/campaigns/{id}/evidence": {
+      "get": {
+        "operationId": "getPQCMigrationCampaignEvidence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaignClosure"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export independently verifiable PQC campaign closure evidence",
+        "x-trstctl-permission": "risk:read"
+      }
+    },
+    "/api/v1/pqc/campaigns/{id}/findings/{finding_id}/disposition": {
+      "post": {
+        "operationId": "dispositionPQCMigrationFinding",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "finding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PQCMigrationFindingDispositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record manual or external remediation evidence for a PQC finding",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/pqc/campaigns/{id}/readiness": {
+      "post": {
+        "operationId": "setPQCMigrationCampaignReadiness",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PQCMigrationCampaignReadinessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record a PQC campaign readiness gate",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/privacy/archive-erasure-attestations": {

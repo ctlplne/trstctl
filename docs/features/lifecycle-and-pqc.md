@@ -77,9 +77,33 @@ closed.
 
 All post-quantum algorithms and post-quantum issuance/signing paths are proprietary EE
 features. That includes ML-DSA (FIPS 204), ML-KEM (FIPS 203), SLH-DSA (FIPS 205), hybrid
-certificate/key types, PQC signer-held keys, PQC APIs, PQC UI, and PQC tests. They plug
-into the same crypto and signer interfaces from `ee/`, so the MPL core stays buildable
-without them and never imports `ee/`.
+certificate/key types, and PQC signer-held keys. They plug into the same crypto and
+signer interfaces from `ee/`, so the MPL core stays buildable without them and never
+imports `ee/`. The core campaign tracker described next records work and evidence; it
+does not contain an algorithm implementation or fleet executor.
+
+### Core migration campaigns
+
+CBOM sees the problem, so campaign ownership lives beside CBOM in core. A Community
+operator can create a tenant-scoped campaign over existing quantum-vulnerable or
+out-of-policy CBOM findings, assign an owner, deadline, wave, and readiness criteria,
+then record work performed manually or by any external tool. No licence is required:
+`POST /api/v1/pqc/campaigns` starts the campaign; the corresponding list/detail/update,
+readiness, finding-disposition, close, and evidence routes serve the complete workflow.
+The same operations are available under `trstctl-cli pqc campaigns` and on `/posture`.
+
+Campaign mutations emit immutable `pqc.migration_campaign.*` events. PostgreSQL
+projections carry `tenant_id` and forced row-level security. Closure is rejected until
+the readiness gate passes and every selected finding is marked `remediated` or
+`excepted` with a SHA-256 evidence digest. The closure artifact is signed by the
+persistent audit key and binds the tenant, campaign, frozen finding digests,
+dispositions, evidence digests, and timestamps; its included public JWKS permits
+offline verification.
+
+The edition boundary is explicit: the core response says automated fleet execution is
+unavailable while keeping all tracking and proof actions live. The licensed engine may
+execute a campaign across a fleet, but it is an optional executor—not a prerequisite
+for a useful core campaign.
 
 ### PQC migration orchestration (F57)
 
@@ -91,14 +115,15 @@ re-issuance through the outbox toward the licensed target.
 
 The licensed EE API attaches `POST /api/v1/pqc/migrations` and
 `POST /api/v1/pqc/migrations/{run_id}/rollback`. Those routes are not part of the MPL core OpenAPI
-golden, and there is no MPL-core CLI command for PQC migration. Completion and rollback
+golden. There is no MPL-core CLI command for licensed fleet execution or rollback; the core
+`pqc campaigns` commands record operator work and never call these licensed routes. Completion and rollback
 project through the event log into `crypto_assets`, so posture dashboards and
 `migration_progress` stay derived from replayable state, not hand-edited tables.
 
-**Status:** served when the Enterprise/PQC license attaches `ee/pqcmigration`, for CBOM
+**Execution status:** served when the Enterprise/PQC license attaches `ee/pqcmigration`, for CBOM
 certificate-key assets through ACME hybrid transition re-issuance with rollback. The MPL
-core exposes CBOM posture and classical profile selection, but not PQC algorithms,
-issuance, or the migration trigger.
+core exposes CBOM posture, classical profile selection, and migration campaign
+tracking/proof, but not PQC algorithms, issuance, or automated fleet execution.
 
 ### In the console
 
@@ -106,8 +131,8 @@ In the web console, the certificate inventory at `/certificates` is also a lifec
 command center: expiry bands, a 47-day renewal-readiness simulator (does each certificate
 renew inside the shrinking CA/Browser Forum maximum lifetime?), deployment receipts, and
 a per-certificate renewal-history timeline. The crypto-agility work surfaces at
-`/posture` as CBOM-backed algorithm posture and remediation handoff; proprietary PQC
-controls come from the EE UI bundle when licensed. See [The web console](../web-console.md).
+`/posture` as CBOM-backed algorithm posture, the complete core campaign/evidence
+workflow, and the licensed executor when attached. See [The web console](../web-console.md).
 
 ## Use it
 
@@ -126,16 +151,18 @@ Both are shipped defaults (30 / 14 days). `renew_before` is the fallback window 
 expiry when trstctl re-issues absent an earlier ARI window; `alert_before` is when it
 warns. See [Configuration](../configuration.md) and [Operations](../operations.md) for
 the full set and running behavior. PQC posture is visible in the
-[CBOM](observability-and-risk.md) via `GET /api/v1/cbom/assets`; the migration trigger
-attaches only from proprietary EE.
+[CBOM](observability-and-risk.md) via `GET /api/v1/cbom/assets`; core campaigns are
+served under `/api/v1/pqc/campaigns`, while automated fleet execution attaches only
+from proprietary EE.
 
 ## Pitfalls & limits
 
 - **ARI-driven renewal** covers trstctl-issued deployed X.509 identities. Rows discovered
   from an outside CA stay visible for expiry/risk, but renewing them needs an issuer or
   connector path that can actually replace that external certificate.
-- **PQC migration** is licensed EE scope. The MPL core exposes CBOM posture but not PQC
-  algorithms, the PQC migration API, or a PQC CLI command.
+- **PQC execution** is licensed EE scope. The MPL core exposes CBOM posture and the
+  useful standalone `pqc campaigns` API/CLI/UI, but not PQC algorithms or automated
+  fleet execution.
 - **Former PQC end-to-end residuals** are served under the Enterprise/PQC attach.
   Stock OpenSSL 3.5 enrolls and verifies a pure ML-DSA-65 subject leaf over EST; the
   stock SPIFFE Workload API receives a two-entry classical + ML-DSA-65 response; and CBOM
@@ -154,6 +181,8 @@ attaches only from proprietary EE.
   `TRSTCTL_LIFECYCLE_ALERT_BEFORE`.
 - **Lifecycle ops:** `RenewExpiring`, `Rotate`, `Revoke`, `AlertExpiring`.
 - **Events:** `certificate.renewed`, `certificate.revoked`, `certificate.expiring`;
+  `pqc.migration_campaign.started`, `pqc.migration_campaign.updated`,
+  `pqc.migration_campaign.finding_dispositioned`, `pqc.migration_campaign.closed`;
   `licensed_crypto.migration.started`, `licensed_crypto.migration.asset_completed`,
   `licensed_crypto.migration.rollback_completed`, `protocol.issued`.
 - **CBOM migration feed:** `POST /api/v1/cbom/scans` records `cbom.asset.observed`; `GET
@@ -161,6 +190,8 @@ attaches only from proprietary EE.
   `migration_progress`.
 - **PQC migration API:** proprietary EE attaches `POST /api/v1/pqc/migrations` (CBOM
   certificate-key assets) and `POST /api/v1/pqc/migrations/{run_id}/rollback`.
+- **Core PQC campaign API:** `/api/v1/pqc/campaigns` plus detail, update, readiness,
+  finding disposition, close, and signed-evidence export routes.
 - **PQC algorithms:** proprietary EE scope: ML-DSA (FIPS 204), ML-KEM (FIPS 203),
   SLH-DSA (FIPS 205), and hybrid algorithms. See the post-quantum section of
   [Current limitations](../limitations.md).

@@ -133,6 +133,14 @@ posture, and a migration target:
 `migration_progress` is computed from the stored inventory: total assets, how many are
 post-quantum-ready or quantum-vulnerable, and the ready percentage.
 
+Core PQC campaigns turn those observations into owned work without requiring a
+licence. From `/posture`, `/api/v1/pqc/campaigns`, or `trstctl-cli pqc campaigns`, an
+operator can assign owner/deadline/wave/readiness, record a manual or third-party
+remediation for each finding, and close only after every finding has evidence. Closure
+produces an offline-verifiable signed artifact. Automated fleet execution remains an
+optional Enterprise executor and is stated as unavailable by edition; campaign
+tracking itself does not degrade into an upsell-only shell.
+
 ### In the console
 
 The overview dashboard surfaces a severity-ranked alert center from served risk and
@@ -249,7 +257,7 @@ The response contains `items` and `migration_progress`; a non-empty
 | Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`, and the four `/api/v1/nhi/posture/*` routes above, plus `risk`/`nhi posture` CLI |
 | CT monitoring (F17) | **Served** — CT watchlist/checkpoint API, CLI, Posture UI, plus Discovery `ct_log` execution and outbox-backed alerts |
 | Drift detection (F18) | **Served** — Discovery `drift` execution, outbox-backed alerts, remediation API/CLI/Posture dashboard, and event-sourced decisions |
-| CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, event-backed inventory + FIPS migration progress |
+| CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, core `/api/v1/pqc/campaigns`, event-backed inventory + signed campaign closure |
 
 Other notes: CT monitoring depends on the logs/domains you list. Drift permission
 detection is best-effort where the ACL model can't be fully read — the agent says so

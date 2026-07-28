@@ -332,6 +332,60 @@ export const apiWorkflowCoverage = [
     rationale: "The Platform page shows the run-anywhere distribution posture: production mode, lineage, run modes, host archives, and air-gap readiness.",
   },
   {
+    path: "/api/v1/pqc/campaigns",
+    route: "/posture",
+    owner: "SURFACE/posture",
+    kind: "console-flow",
+    workflow: "Core PQC migration campaign inventory and creation",
+    rationale:
+      "The Posture page lists tenant-scoped migration campaigns and creates campaigns over selected CBOM findings with owner, deadline, and wave controls.",
+  },
+  {
+    path: "/api/v1/pqc/campaigns/{id}",
+    route: "/posture",
+    owner: "SURFACE/posture",
+    kind: "console-flow",
+    workflow: "Core PQC migration campaign detail and update",
+    rationale:
+      "Selecting a campaign on the Posture page loads its findings, evidence state, and Community-safe edition disclosure while the typed client exposes its update path.",
+  },
+  {
+    path: "/api/v1/pqc/campaigns/{id}/readiness",
+    route: "/posture",
+    owner: "SURFACE/posture",
+    kind: "console-flow",
+    workflow: "PQC migration readiness evidence",
+    rationale:
+      "The selected campaign workflow records operator readiness gates and their evidence digest without requiring the licensed fleet execution engine.",
+  },
+  {
+    path: "/api/v1/pqc/campaigns/{id}/findings/{finding_id}/disposition",
+    route: "/posture",
+    owner: "SURFACE/posture",
+    kind: "console-flow",
+    workflow: "PQC finding migration disposition",
+    rationale:
+      "Operators can record manual or third-party remediation of an individual CBOM finding, including method and evidence digest, from the campaign detail.",
+  },
+  {
+    path: "/api/v1/pqc/campaigns/{id}/close",
+    route: "/posture",
+    owner: "SURFACE/posture",
+    kind: "console-flow",
+    workflow: "PQC migration campaign closure",
+    rationale:
+      "The Posture workflow gates closure on readiness and finding dispositions, requires explicit confirmation, and surfaces mutation failures in place.",
+  },
+  {
+    path: "/api/v1/pqc/campaigns/{id}/evidence",
+    route: "/posture",
+    owner: "SURFACE/posture",
+    kind: "console-flow",
+    workflow: "Signed PQC migration closure evidence",
+    rationale:
+      "A closed campaign exposes its signed closure evidence and verification key for operator inspection and download from the reachable Posture page.",
+  },
+  {
     path: "/api/v1/acme/dns-01/preflight",
     route: "/protocols",
     owner: "SURFACE/protocols",

@@ -25,6 +25,7 @@ import {
   type DiscoverySource,
 } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import { PQCCampaigns } from "@/pages/posture/PQCCampaigns";
 
 const emptyCBOMProgress: CBOMMigrationProgress = {
   total_assets: 0,
@@ -474,6 +475,7 @@ export function Posture() {
           </div>
         </div>
         <CBOMReadinessTable assets={cbomInventory.items} loading={cbomLoading} />
+        <PQCCampaigns assets={cbomInventory.items} />
         <PQCMigrationWorkflow assets={cbomInventory.items} />
       </section>
 

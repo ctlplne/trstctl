@@ -50,6 +50,8 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
 }
 
 export interface ApiQueryOptions {
+  /** Keeps dependent queries idle until their parent selection exists. */
+  enabled?: boolean;
   /** Marks a live tile: poll every intervalMs while the tab is visible, pause
    * entirely while hidden, and refresh immediately on return to visibility. */
   live?: { intervalMs: number };
@@ -76,6 +78,7 @@ export function useApiQuery<T>(key: readonly unknown[], loader: () => Promise<T>
   const query = useQuery({
     queryKey: key,
     queryFn: loader,
+    enabled: options?.enabled,
     meta: live ? { live: true } : undefined,
     refetchInterval: live ? () => liveRefetchInterval(live.intervalMs) : undefined,
   });

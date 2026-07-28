@@ -5,6 +5,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Posture } from "@/pages/Posture";
+import { AppQueryProvider } from "@/lib/query";
 
 const emptyProgress = {
   total_assets: 0,
@@ -37,7 +38,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderPosture() {
   return render(
     <MemoryRouter>
-      <Posture />
+      <AppQueryProvider>
+        <Posture />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }

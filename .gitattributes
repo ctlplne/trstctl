@@ -7,3 +7,7 @@ go.sum  text eol=lf
 Makefile text eol=lf
 *.yml   text eol=lf
 *.yaml  text eol=lf
+
+# Vite bundles can preserve dependency template-literal whitespace. These files
+# are deterministic generated artifacts; enforce whitespace on their sources.
+internal/webui/dist/assets/*.js -whitespace
