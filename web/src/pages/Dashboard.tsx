@@ -6,7 +6,6 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useApiQuery } from "@/lib/query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  AreaTrend,
   Donut,
   Sparkline,
   StackedTimeBarChart,
@@ -21,7 +20,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { ReadinessPanel } from "@/components/certs";
 import { NhiInventory } from "@/components/nhi";
 import { NotificationCenter } from "@/components/notifications";
-import { demoDashboard } from "@/lib/demoData";
 import { isOnboardingComplete } from "@/lib/onboardingState";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime, formatShortDate, type FormatPolicy } from "@/i18n/format";
@@ -137,9 +135,9 @@ function servedExpiryBands(certificates: Certificate[]): Array<{ label: string; 
   ];
 }
 
-/** Dashboard is the single pane of glass over every non-human identity. It renders
- * real served data when present; in dev/preview (no backend) it falls back to demo
- * data so the console reads as a live product rather than an empty shell. */
+/** Dashboard is the single pane of glass over every non-human identity. Both
+ * tenants and the isolated preview render through the same served read-model
+ * shapes; previewData supplies those shapes only in the explicit demo build. */
 export function Dashboard() {
   const { preview } = useAuth();
   const { formatNumber, t } = useTranslation();
@@ -160,34 +158,28 @@ export function Dashboard() {
   const inventoryTotal = nhiInventory.data?.items?.length ?? identities.data?.length ?? 0;
   const resourcesLoading = certs.loading || risk.loading || identities.loading || nhiInventory.loading;
   const realEmpty = !resourcesLoading && (certs.data?.length ?? 0) === 0 && riskRows.length === 0 && inventoryTotal === 0;
-  // Preview mode stays a showcase (demo data). A real, empty tenant that has not
-  // completed first-run setup is sent to the wizard instead of seeing demo numbers.
+  // A real, empty tenant that has not completed first-run setup is sent to the
+  // wizard. Preview is populated by the isolated read-model catalog.
   const showOnboarding = realEmpty && !preview && !readOnboardingDone() && !dismissed;
-  const useDemo = preview;
   const servedCertificates = certs.data ?? [];
   const servedRotationRuns = rotationRuns.data?.items ?? [];
 
-  const d = demoDashboard;
   const topRisk = [...riskRows].sort((a, b) => b.score - a.score).slice(0, 5);
   const highRisk = riskRows.filter((r) => r.score >= highRiskThreshold).length;
 
-  const kpis = useDemo
-    ? d.kpis
-    : {
-        certificates: certs.data?.length ?? 0,
-        identities: inventoryTotal,
-        secrets: secretsCount.data ?? inventoryCount(nhiInventory.data, "secret"),
-        agentsOnline: inventoryCount(nhiInventory.data, "agent"),
-        agentsTotal: inventoryCount(nhiInventory.data, "agent"),
-        expiring7d: servedCertificates.filter((c) => expiresWithinDays(c, 7)).length,
-        highRisk,
-        openIncidents: openIncidents.data ?? 0,
-        pqcReady: servedCertificates.filter(isPqcReady).length,
-      };
+  const kpis = {
+    certificates: certs.data?.length ?? 0,
+    identities: inventoryTotal,
+    secrets: secretsCount.data ?? inventoryCount(nhiInventory.data, "secret"),
+    agentsOnline: inventoryCount(nhiInventory.data, "agent"),
+    agentsTotal: inventoryCount(nhiInventory.data, "agent"),
+    expiring7d: servedCertificates.filter((c) => expiresWithinDays(c, 7)).length,
+    highRisk,
+    openIncidents: openIncidents.data ?? 0,
+    pqcReady: servedCertificates.filter(isPqcReady).length,
+  };
 
-  const rotateFirst = useDemo
-    ? d.rotateFirst
-    : topRisk.map((r) => ({ subject: r.subject, detail: `risk score ${Math.round(r.score)}`, score: Math.round(r.score) }));
+  const rotateFirst = topRisk.map((r) => ({ subject: r.subject, detail: `risk score ${Math.round(r.score)}`, score: Math.round(r.score) }));
 
   if (showOnboarding) {
     return (
@@ -232,37 +224,15 @@ export function Dashboard() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi
-          icon={<ScrollText className="h-4 w-4" />}
-          label="Certificates"
-          value={kpis.certificates}
-          to="/certificates"
-          delta={useDemo ? d.deltas.certificates : undefined}
-          spark={useDemo ? d.issuanceTrend : undefined}
-        />
-        <Kpi
-          icon={<KeyRound className="h-4 w-4" />}
-          label="Identities (NHI)"
-          value={kpis.identities}
-          to="/identities"
-          delta={useDemo ? d.deltas.identities : undefined}
-          spark={useDemo ? [28, 31, 30, 34, 33, 37, 39, 41, 44, 46, 48, 51] : undefined}
-        />
-        <Kpi
-          icon={<Boxes className="h-4 w-4" />}
-          label="Secrets"
-          value={kpis.secrets}
-          to="/secrets"
-          delta={useDemo ? d.deltas.secrets : undefined}
-          spark={useDemo ? [20, 22, 21, 24, 23, 25, 26, 27, 27, 29, 30, 31] : undefined}
-        />
+        <Kpi icon={<ScrollText className="h-4 w-4" />} label="Certificates" value={kpis.certificates} to="/certificates" />
+        <Kpi icon={<KeyRound className="h-4 w-4" />} label="Identities (NHI)" value={kpis.identities} to="/identities" />
+        <Kpi icon={<Boxes className="h-4 w-4" />} label="Secrets" value={kpis.secrets} to="/secrets" />
         <Kpi
           icon={<Activity className="h-4 w-4" />}
           label="Agents online"
           value={kpis.agentsOnline}
           to="/agents"
           sub={kpis.agentsTotal ? `${kpis.agentsOnline}/${kpis.agentsTotal}` : undefined}
-          spark={useDemo ? [44, 45, 46, 46, 47, 46, 47, 48, 47, 48, 46, 48] : undefined}
         />
         <Kpi
           icon={<AlertTriangle className="h-4 w-4" />}
@@ -281,59 +251,30 @@ export function Dashboard() {
           tone={kpis.openIncidents ? "warn" : "ok"}
           to="/incidents"
         />
-        <Kpi
-          icon={<ShieldCheck className="h-4 w-4" />}
-          label="Future-ready"
-          value={kpis.pqcReady}
-          to="/posture"
-          delta={useDemo ? d.deltas.pqcReady : undefined}
-          tone="ok"
-          spark={useDemo ? [10, 13, 16, 18, 21, 24, 26, 28, 30, 31, 33, 34] : undefined}
-        />
+        <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="Future-ready" value={kpis.pqcReady} to="/posture" tone="ok" />
       </div>
 
-      {/* Non-human identity inventory — by kind, with a shared risk lens (real data only) */}
-      {!useDemo && <NhiInventory identities={identities.data ?? []} inventory={nhiInventory.data ?? undefined} risks={riskRows} />}
-      {!useDemo && <NotificationCenter risks={riskRows} certs={certs.data ?? []} />}
-      {!useDemo && <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />}
+      {/* Non-human identity inventory — by kind, with a shared risk lens. */}
+      <NhiInventory identities={identities.data ?? []} inventory={nhiInventory.data ?? undefined} risks={riskRows} />
+      <NotificationCenter risks={riskRows} certs={certs.data ?? []} />
+      <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />
       {/* 47-day renewal readiness on the global home (C-D1, 07-closeout plan):
           derived from the same served certs + rotation runs as the trend
           charts — the posture statement lives here, the simulator stays on
           Certificates. The 100-day SC-081 step lands 2027-03-15. */}
-      {!useDemo && (
-        <ReadinessPanel
-          certificates={servedCertificates}
-          rotationRuns={servedRotationRuns}
-          actions={
-            <Link to="/certificates?tab=renewal" className="text-caption font-medium text-brand-accent hover:underline">
-              {t("dashboard.readiness.viewAll")}
-            </Link>
-          }
-        />
-      )}
+      <ReadinessPanel
+        certificates={servedCertificates}
+        rotationRuns={servedRotationRuns}
+        actions={
+          <Link to="/certificates?tab=renewal" className="text-caption font-medium text-brand-accent hover:underline">
+            {t("dashboard.readiness.viewAll")}
+          </Link>
+        }
+      />
 
-      {/* Trend + algorithm mix. The monthly issuance-trend card is demo-showcase
-          only (S-N0/DA-01): real tenants already get the served daily charts above,
-          and rendering the fabricated series beside them destroyed trust. The
-          algorithm mix renders SERVED segments in real mode so its legend can
-          never disagree with its own center count again. */}
+      {/* Algorithm and expiry projections use the same served response shapes in
+          both tenant and isolated-preview modes. */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {useDemo && (
-          <Card className="lg:col-span-2">
-            <CardHeader className="flex-row items-baseline justify-between space-y-0">
-              <CardTitle>
-                {translateNow("source.issuance.trend.b53089f166")}{" "}
-                <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.credentials.issued.per.month.11bd254ee7")}</span>
-              </CardTitle>
-              <span className="rounded-control bg-brand-accent/10 px-2 py-0.5 text-caption font-medium text-brand-accent">
-                {d.issuanceTrend[d.issuanceTrend.length - 1] ?? 0} {translateNow("source.this.month.5510b12a58")}
-              </span>
-            </CardHeader>
-            <CardContent>
-              <AreaTrend points={d.issuanceTrend} ariaLabel="Issuance trend over the last 12 months" />
-            </CardContent>
-          </Card>
-        )}
         <Card>
           <CardHeader>
             <CardTitle>
@@ -343,7 +284,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <Donut
-              segments={algoSegments(useDemo ? d.algoMix : servedAlgoMix(servedCertificates))}
+              segments={algoSegments(servedAlgoMix(servedCertificates))}
               ariaLabel="Algorithm mix by key type"
               centerLabel={formatNumber(kpis.certificates)}
               centerSub="certificates"
@@ -351,37 +292,21 @@ export function Dashboard() {
             />
           </CardContent>
         </Card>
-        {!useDemo && (
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>
-                {translateNow("source.expiry.bands.cbfe64f7cb")}{" "}
-                <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.time.to.expiry.b1bf11183a")}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Bands bands={servedExpiryBands(servedCertificates)} />
-            </CardContent>
-          </Card>
-        )}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>
+              {translateNow("source.expiry.bands.cbfe64f7cb")}{" "}
+              <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.time.to.expiry.b1bf11183a")}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Bands bands={servedExpiryBands(servedCertificates)} />
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Expiry bands + rotate first + recent activity */}
+      {/* Rotate first + recent activity */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {useDemo && (
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {translateNow("source.expiry.bands.cbfe64f7cb")}{" "}
-                <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.time.to.expiry.b1bf11183a")}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Bands bands={d.expiryBands} />
-            </CardContent>
-          </Card>
-        )}
-
         <Card>
           <CardHeader className="flex-row items-baseline justify-between space-y-0">
             <CardTitle>
@@ -418,34 +343,7 @@ export function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            {useDemo ? (
-              <ul className="-mt-1 divide-y divide-border">
-                {d.recentActivity.map((a, i) => (
-                  <li key={`${a.action}-${i}`} className="flex items-center justify-between gap-3 py-2">
-                    <span className="min-w-0">
-                      <span className="block truncate font-mono text-caption font-medium">{a.action}</span>
-                      <span className="block truncate text-caption text-muted-foreground">{a.detail}</span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      <span
-                        className={
-                          a.result === "ok"
-                            ? "rounded-control bg-status-success/10 px-1.5 py-0.5 text-caption font-medium text-status-success"
-                            : a.result === "retry"
-                              ? "rounded-control bg-status-warning/10 px-1.5 py-0.5 text-caption font-medium text-status-warning"
-                              : "rounded-control bg-destructive/10 px-1.5 py-0.5 text-caption font-medium text-destructive"
-                        }
-                      >
-                        {a.result === "retry" ? translateNow("source.retry.2.b933ea8d98") : a.result}
-                      </span>
-                      <span className="font-mono text-caption text-muted-foreground">{a.ts}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <RecentAuditList events={recentAudit.data ?? []} />
-            )}
+            <RecentAuditList events={recentAudit.data ?? []} />
           </CardContent>
         </Card>
       </div>

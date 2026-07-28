@@ -144,6 +144,9 @@ describe("auth + dashboards", () => {
     await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
 
     expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByTestId("preview-read-only-banner")).toHaveTextContent(
+      "Read-only sample workspace. Changes are disabled and nothing leaves this browser.",
+    );
     expect(screen.queryByRole("heading", { name: "Backend-to-GUI coverage" })).not.toBeInTheDocument();
     expect(localStorage.getItem("token")).toBeNull();
     expect(sessionStorage.length).toBe(0);
@@ -464,8 +467,9 @@ describe("auth + dashboards", () => {
     expect(within(dash).queryByText("368")).not.toBeInTheDocument();
   });
 
-  it("keeps the demo showcase intact in preview mode (S-N0)", async () => {
+  it("renders preview through the same populated read-model panels as a tenant (S-N0)", async () => {
     const { UnauthorizedError } = await import("@/lib/api");
+    seededTenant();
     apiMock.me.mockRejectedValue(new UnauthorizedError());
     const user = userEvent.setup();
 
@@ -473,8 +477,9 @@ describe("auth + dashboards", () => {
     await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
 
     const dash = await screen.findByRole("region", { name: "Dashboard" });
-    // Preview stays a rich showcase: the demo trend card still renders there.
-    expect(await within(dash).findByText(/Issuance trend/)).toBeInTheDocument();
+    expect(await within(dash).findByText(/Non-human identity inventory/)).toBeInTheDocument();
+    expect(within(dash).getByText(/Algorithm mix/)).toBeInTheDocument();
+    expect(within(dash).queryByText(/Issuance trend/)).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------- C-D1 ----
@@ -501,8 +506,9 @@ describe("auth + dashboards", () => {
     expect(link).toHaveAttribute("href", "/certificates?tab=renewal");
   });
 
-  it("keeps the readiness panel out of the demo showcase (C-D1)", async () => {
+  it("renders served-shape readiness evidence in preview (C-D1)", async () => {
     const { UnauthorizedError } = await import("@/lib/api");
+    seededTenant();
     apiMock.me.mockRejectedValue(new UnauthorizedError());
     const user = userEvent.setup();
 
@@ -510,11 +516,7 @@ describe("auth + dashboards", () => {
     await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
 
     const dash = await screen.findByRole("region", { name: "Dashboard" });
-    await within(dash).findByText(/Issuance trend/);
-    // Preview has no served certs/rotation runs, so a 0% readiness statement
-    // would be noise beside the demo showcase — the panel is real-mode only,
-    // like every other served-data section on the dashboard.
-    expect(within(dash).queryByText("47-day renewal readiness")).not.toBeInTheDocument();
+    expect(await within(dash).findByText("47-day renewal readiness")).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------- S-N1 ----

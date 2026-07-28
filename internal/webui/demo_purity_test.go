@@ -10,18 +10,22 @@ import (
 	"trstctl.com/trstctl/internal/webui"
 )
 
-// TestEmbeddedConsoleCarriesNoPreviewIdentity is the embed-purity half of the
+// TestEmbeddedConsoleCarriesNoPreviewData is the embed-purity half of the
 // demo-site contract (demo.trstctl.com). The static demo build enables the
 // in-browser preview showcase with VITE_TRSTCTL_DEMO=1; the PRODUCT build
 // must never set that flag, and when it does not, Vite tree-shakes the
-// preview identity out of the bundle entirely. This test proves the property
-// on the committed artifact: no embedded asset may contain the preview
-// principal. If it fires, the embed under internal/webui/dist was built with
-// the demo flag — rebuild with `make web`.
-func TestEmbeddedConsoleCarriesNoPreviewIdentity(t *testing.T) {
+// preview identity and fixtures out of the bundle entirely. This test proves
+// the property on the committed artifact: no embedded asset may contain the
+// preview principal or representative sample records. If it fires, the embed
+// under internal/webui/dist was built with the demo flag — rebuild with
+// `make web`.
+func TestEmbeddedConsoleCarriesNoPreviewData(t *testing.T) {
 	forbidden := [][]byte{
 		[]byte("dev-preview"),
 		[]byte("preview@trstctl.local"),
+		[]byte("api.preview-lab.example"),
+		[]byte("payments/production/database"),
+		[]byte("Preview Lab Root CA"),
 	}
 	assets := webui.Assets()
 	checked := 0

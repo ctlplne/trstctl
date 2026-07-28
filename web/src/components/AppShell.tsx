@@ -440,7 +440,7 @@ function useRouteFocus(mainRef: RefObject<HTMLElement>, t: I18nContextValue["t"]
  * navigation sidebar, and the routed main content — landmarked and keyboard
  * navigable for WCAG 2.1 AA. */
 export function AppShell() {
-  const { user, logout } = useAuth();
+  const { user, logout, preview } = useAuth();
   const { locale, setLocale, t } = useTranslation();
   const isDesktop = useIsDesktop();
   const commandButtonRef = useRef<HTMLButtonElement>(null);
@@ -635,6 +635,16 @@ export function AppShell() {
           )}
         </div>
       </header>
+
+      {preview && (
+        <div
+          role="note"
+          data-testid="preview-read-only-banner"
+          className="border-b border-status-warning/40 bg-status-warning/10 px-4 py-2 text-center text-sm"
+        >
+          {t("preview.readOnlyBanner")}
+        </div>
+      )}
 
       {!isDesktop && mobileNavOpen && (
         <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm">

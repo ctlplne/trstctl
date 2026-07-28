@@ -93,16 +93,16 @@ export const messages = {
     description: "Heading for the pending-action summary on the CA hierarchy overview.",
   },
   "caHierarchy.workspace.healthLoading": {
-    defaultMessage: "Loading served authority health.",
-    description: "Authority-health summary while the served authority inventory is loading.",
+    defaultMessage: "Loading certificate authority health.",
+    description: "Authority-health summary while the authority inventory is loading.",
   },
   "caHierarchy.workspace.healthUnavailable": {
-    defaultMessage: "Served authority health is unavailable.",
-    description: "Authority-health summary when the served authority inventory cannot be read.",
+    defaultMessage: "Certificate authority health is unavailable.",
+    description: "Authority-health summary when the authority inventory cannot be read.",
   },
   "caHierarchy.workspace.healthReady": {
-    defaultMessage: "{count} served authorities are available.",
-    description: "Authority-health summary with the count of served authorities.",
+    defaultMessage: "{count} certificate authorities are available.",
+    description: "Authority-health summary with the count of available authorities.",
   },
   "caHierarchy.workspace.lineageSummary": {
     defaultMessage: "{roots} roots and {intermediates} intermediates; {discovered} hierarchy authorities discovered.",
@@ -11030,6 +11030,14 @@ export const messages = {
   "preview.transportIsolated": {
     defaultMessage: "Preview uses sample data in this browser demo — live tenant APIs are disabled.",
     description: "Error-state copy when the preview transport isolation refuses an API call (demo.trstctl.com).",
+  },
+  "preview.readOnlyBanner": {
+    defaultMessage: "Read-only sample workspace. Changes are disabled and nothing leaves this browser.",
+    description: "Persistent banner explaining the isolated preview's non-production and no-egress behavior.",
+  },
+  "preview.sample.playbookSummary": {
+    defaultMessage: "Remove unused scopes with rollback evidence.",
+    description: "Summary of the representative least-privilege playbook in the isolated preview dataset.",
   },
   "preview.probesDisabled": {
     defaultMessage: "Preview uses sample data in this browser demo — protocol probes are disabled.",

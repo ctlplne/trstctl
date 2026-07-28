@@ -272,10 +272,12 @@ describe("i18n boundary", () => {
       // language in every locale instead of the internal "served" status.
       // Posture follow-up: the localized crypto inventory separator preserves
       // its leading space so adjacent algorithm and transport text stays clear.
+      // D-7806a198 adds the isolated-preview banner and sample-playbook copy,
+      // and removes "served" implementation jargon from CA health copy.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "276a432e5ce68f20091e0d3324f37ad8331adf7be9aeba9a699d127e39d4b19e",
-      "de-DE": "b55c2d8ec43687436e77e8d2235eea765580cca8db3f1bd24e002813097956c1",
+      "es-ES": "76aebe2f2c1410becc776c108a201022a01cbf60adf461c680f339ead8dba5d9",
+      "de-DE": "ae00a11fb1edd54317ae90508e7f384531cdba833a368cdd8694261a33dbdccc",
     });
   });
 

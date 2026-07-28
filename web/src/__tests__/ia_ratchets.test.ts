@@ -19,32 +19,28 @@ function walk(dir: string): string[] {
 }
 
 describe("IA ratchets (S-R1)", () => {
-  it("keeps demo data out of every page except the demo-gated Dashboard (DA-01)", () => {
+  it("keeps preview data out of every route component (DA-01)", () => {
     const pages = walk(path.join(SRC, "pages"));
     const offenders: string[] = [];
     for (const file of pages) {
-      if (path.basename(file) === "Dashboard.tsx") continue; // the only demo showcase, and it is useDemo-gated
       const src = readFileSync(file, "utf8");
-      if (/from\s+["']@\/lib\/demoData["']/.test(src) || /\bdemoDashboard\b/.test(src)) {
+      if (/from\s+["']@\/lib\/previewData["']/.test(src) || /\bpreviewReaders\b/.test(src)) {
         offenders.push(path.relative(SRC, file));
       }
     }
-    expect(offenders, `these pages import demo data (real tenants must see served data only): ${offenders.join(", ")}`).toEqual([]);
+    expect(offenders, `these pages import preview data (real tenants must see served data only): ${offenders.join(", ")}`).toEqual([]);
   });
 
-  it("keeps Dashboard's demo data strictly behind useDemo (DA-01/DA-12)", () => {
-    const src = readFileSync(path.join(SRC, "pages", "Dashboard.tsx"), "utf8");
-    // The demo dataset is referenced only via the `d` alias, and every render of
-    // it is gated: the file must contain the useDemo gate and must not render
-    // the demo trend/activity unconditionally.
-    expect(src).toMatch(/const useDemo = preview/);
-    // The demo dataset feeds KPIs only through the useDemo gate.
-    expect(src).toMatch(/useDemo[\s\n]*\?[\s\n]*d\.kpis/);
-    // The demo-only cards render behind {useDemo && …}.
-    expect(src).toMatch(/\{useDemo && \(/);
-    // Served readers exist (KPIs are wired, not stubbed zeros).
-    expect(src).toMatch(/readOpenIncidents|openIncidents\.data/);
-    expect(src).toMatch(/expiresWithinDays|servedAlgoMix/);
+  it("keeps preview fixtures behind the compile-time demo boundary (DA-01/DA-12)", () => {
+    const api = readFileSync(path.join(SRC, "lib", "api.ts"), "utf8");
+    expect(api).toMatch(/import\.meta\.env\.DEV\s*\|\|\s*import\.meta\.env\.VITE_TRSTCTL_DEMO\s*===\s*["']1["']/);
+    expect(api).toMatch(/await import\(["']\.\/previewData["']\)/);
+    expect(api).not.toMatch(/^import .*previewData/m);
+
+    const dashboard = readFileSync(path.join(SRC, "pages", "Dashboard.tsx"), "utf8");
+    expect(dashboard).not.toMatch(/demoDashboard|useDemo|demoData/);
+    expect(dashboard).toMatch(/readOpenIncidents|openIncidents\.data/);
+    expect(dashboard).toMatch(/expiresWithinDays|servedAlgoMix/);
   });
 
   it("keeps the behavioural IA guards present in the test suite", () => {

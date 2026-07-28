@@ -959,11 +959,32 @@ export function setPreviewTransportIsolation(isolated: boolean): void {
   previewTransportIsolated = isolated;
 }
 
+const previewFixturesCompiled = import.meta.env.DEV || import.meta.env.VITE_TRSTCTL_DEMO === "1";
+
+function previewRefusal(): ApiError {
+  const refusal = new ApiError(0, translateNow("preview.transportIsolated"));
+  refusal.message = refusal.body;
+  return refusal;
+}
+
+async function previewResponse(method: string): Promise<unknown> {
+  // This branch is a compile-time constant. Vite removes both the import and
+  // its chunk from the ordinary embedded product build; dev and the explicit
+  // demo build retain it.
+  if (previewFixturesCompiled) {
+    const { previewRead } = await import("./previewData");
+    const response = previewRead(method);
+    if (response.matched) return response.value;
+  }
+  throw previewRefusal();
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   if (previewTransportIsolated) {
-    const refusal = new ApiError(0, translateNow("preview.transportIsolated"));
-    refusal.message = refusal.body; // error states render .message or .body; say the same thing in both
-    throw refusal;
+    // api methods are intercepted before reaching req. Keep this second wall
+    // for direct/internal callers and future code that accidentally bypasses
+    // the exported client wrapper.
+    throw previewRefusal();
   }
   const method = init?.method;
   const res = await fetch(path, {
@@ -1373,7 +1394,7 @@ export interface Api {
   requeueNotification(id: string): Promise<Notification>;
 }
 
-export const api: Api = {
+const liveApi: Api = {
   me: () => req<Me>("/auth/me"),
   logout: () => req<void>("/auth/logout", { method: "POST" }),
   editions: () => req<EditionsInfo>("/api/v1/editions"),
@@ -1711,6 +1732,21 @@ export const api: Api = {
   markNotificationRead: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/read`),
   requeueNotification: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/requeue`),
 };
+
+/** One stable wrapper per API method keeps normal query function identities
+ * unchanged. In preview, only methods explicitly present in previewData can
+ * resolve; mutations and unmodeled reads fail before liveApi can reach req or
+ * fetch. */
+function createPreviewAwareApi(implementation: Api): Api {
+  const wrapped: Record<string, (...args: unknown[]) => Promise<unknown>> = {};
+  for (const [method, candidate] of Object.entries(implementation)) {
+    const invoke = candidate as (...args: unknown[]) => Promise<unknown>;
+    wrapped[method] = (...args: unknown[]) => (previewTransportIsolated ? previewResponse(method) : invoke(...args));
+  }
+  return wrapped as unknown as Api;
+}
+
+export const api: Api = createPreviewAwareApi(liveApi);
 
 /** loginURL is where the browser is sent to begin the OIDC flow. */
 export const loginURL = "/auth/login";
