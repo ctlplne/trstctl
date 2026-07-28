@@ -70,6 +70,7 @@ import {
   secretApprovalQueueID,
   type SecretApprovalQueueItem,
 } from "./secrets/SecretsPageParts";
+import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
 
 /** The store (tree + table + lifecycle) renders at /secrets; every other
  * workflow is its own route in the Secrets space sidebar (S-C2) instead of
@@ -3007,6 +3008,7 @@ export function Secrets() {
                 )}
               </div>
             )}
+            <SecretSyncWorkloadIdentityPanel />
             <form
               aria-label={translateNow("source.sync.stored.secret.b83b2d0767")}
               onSubmit={(event) => void submitSecretSync(event)}

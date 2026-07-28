@@ -29,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/broker"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/codesign"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
@@ -418,6 +419,9 @@ type Deps struct {
 	// TenantSecretSyncTargets is the production tenant-bound registry. It prevents
 	// target names and upstream credentials from crossing tenant boundaries.
 	TenantSecretSyncTargets SecretSyncTargetRegistry
+	// CloudTokenMinter is the shared locked-memory refresh cache used by
+	// workload-federated secret-sync targets. Server Shutdown owns it.
+	CloudTokenMinter *cloudauth.Minter
 	// SecretScanGitleaksBin points at the pinned Gitleaks binary used by
 	// POST /api/v1/secrets/scans (SEC-07/F39). Empty resolves
 	// TRSTCTL_GITLEAKS_BIN/tools/bin/gitleaks/PATH at request time.
@@ -511,6 +515,7 @@ type Server struct {
 	// complianceSigner is a generated locked key used only when the deployment did
 	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
 	complianceSigner *crypto.LockedSigner
+	cloudTokenMinter *cloudauth.Minter
 
 	signer     SignerProvider
 	caSigner   crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
@@ -732,6 +737,9 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 			notificationOwner.transferToDispatcher()
 			return
 		}
+		if d.CloudTokenMinter != nil {
+			d.CloudTokenMinter.Close()
+		}
 		if s != nil && s.notifications != nil {
 			// The dispatcher was constructed before a later Build step failed.
 			// Hand ownership to it, then close it exactly once here because no
@@ -773,6 +781,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		registry:                  observ.NewRegistry(),
 		egress:                    d.EgressGuard,
 		telemetry:                 d.TelemetryReporter,
+		cloudTokenMinter:          d.CloudTokenMinter,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",
@@ -2848,6 +2857,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if s.complianceSigner != nil {
 		s.complianceSigner.Destroy()
+	}
+	if s.cloudTokenMinter != nil {
+		s.cloudTokenMinter.Close()
 	}
 	if s.otlp != nil {
 		if err := s.otlp.Close(); err != nil {

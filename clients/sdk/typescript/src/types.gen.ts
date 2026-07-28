@@ -3736,6 +3736,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/syncs/workload-identity-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant secret-sync workload-identity sources and honest runtime status */
+        get: operations["listSecretSyncWorkloadIdentitySources"];
+        put?: never;
+        /** Create an AWS workload-identity source for bounded secret-sync delivery */
+        post: operations["createSecretSyncWorkloadIdentitySource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/syncs/workload-identity-sources/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a tenant secret-sync workload-identity source */
+        get: operations["getSecretSyncWorkloadIdentitySource"];
+        /** Replace a tenant secret-sync workload-identity source */
+        put: operations["updateSecretSyncWorkloadIdentitySource"];
+        post?: never;
+        /** Delete a tenant secret-sync workload-identity source */
+        delete: operations["deleteSecretSyncWorkloadIdentitySource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/unvaulted": {
         parameters: {
             query?: never;
@@ -8462,6 +8499,55 @@ export interface components {
             residuals: string[];
             served: boolean;
             targets: components["schemas"]["SecretSyncTarget"][];
+        };
+        SecretSyncWorkloadIdentitySource: {
+            allowed_remote_key_prefixes: string[];
+            audience: string;
+            /** Format: date-time */
+            created_at: string;
+            enabled: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_exchange_at?: string;
+            /** Format: date-time */
+            last_failure_at?: string;
+            name: string;
+            /** @enum {string} */
+            provider: "aws";
+            role_arn: string;
+            /** @enum {string} */
+            status: "ready" | "active" | "disabled" | "offline_disabled" | "exchange_failed";
+            status_reason: string;
+            subject: string;
+            target_id: string;
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            token_expires_at?: string;
+            /** Format: uuid */
+            trust_source_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            workload_proof_ref: string;
+        };
+        SecretSyncWorkloadIdentitySourceList: {
+            items: components["schemas"]["SecretSyncWorkloadIdentitySource"][];
+            next_cursor?: string;
+        };
+        SecretSyncWorkloadIdentitySourceRequest: {
+            allowed_remote_key_prefixes?: string[];
+            audience: string;
+            enabled?: boolean;
+            name: string;
+            /** @enum {string} */
+            provider?: "aws";
+            role_arn: string;
+            subject: string;
+            target_id: string;
+            /** Format: uuid */
+            trust_source_id: string;
+            workload_proof_ref: string;
         };
         SecretValue: {
             name: string;
@@ -19976,6 +20062,217 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SecretSyncTargetCatalog"];
                 };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSecretSyncWorkloadIdentitySources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSyncWorkloadIdentitySourceList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createSecretSyncWorkloadIdentitySource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretSyncWorkloadIdentitySourceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSyncWorkloadIdentitySource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSecretSyncWorkloadIdentitySource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSyncWorkloadIdentitySource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateSecretSyncWorkloadIdentitySource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretSyncWorkloadIdentitySourceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSyncWorkloadIdentitySource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteSecretSyncWorkloadIdentitySource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description client error */
             "4XX": {

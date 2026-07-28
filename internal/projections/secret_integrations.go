@@ -28,6 +28,9 @@ const (
 	EventSecretSyncQueued                      = "secret.sync.queued"
 	EventSecretSyncDelivered                   = "secret.sync.delivered"
 	EventSecretSyncFailed                      = "secret.sync.failed"
+	EventSecretSyncWorkloadIdentityUpserted    = "secret.sync.workload_identity_source.upserted"
+	EventSecretSyncWorkloadIdentityStatus      = "secret.sync.workload_identity_source.status"
+	EventSecretSyncWorkloadIdentityDeleted     = "secret.sync.workload_identity_source.deleted"
 )
 
 // DynamicSecretLeasePending reserves one deterministic lease before the first
@@ -145,6 +148,33 @@ type SecretSyncFailed struct {
 	Error    string `json:"error"`
 }
 
+// SecretSyncWorkloadIdentitySourceUpserted carries reference-only tenant policy.
+// Workload proofs and cloud credentials are forbidden from this event.
+type SecretSyncWorkloadIdentitySourceUpserted struct {
+	ID                       string   `json:"id"`
+	Name                     string   `json:"name"`
+	Provider                 string   `json:"provider"`
+	RoleARN                  string   `json:"role_arn"`
+	Audience                 string   `json:"audience"`
+	Subject                  string   `json:"subject"`
+	TargetID                 string   `json:"target_id"`
+	AllowedRemoteKeyPrefixes []string `json:"allowed_remote_key_prefixes,omitempty"`
+	WorkloadProofRef         string   `json:"workload_proof_ref"`
+	TrustSourceID            string   `json:"trust_source_id"`
+	Enabled                  bool     `json:"enabled"`
+}
+
+type SecretSyncWorkloadIdentitySourceStatus struct {
+	ID        string     `json:"id"`
+	Status    string     `json:"status"`
+	Reason    string     `json:"reason"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+type SecretSyncWorkloadIdentitySourceDeleted struct {
+	ID string `json:"id"`
+}
+
 func init() {
 	for _, eventType := range []string{
 		EventDynamicSecretLeasePending,
@@ -160,6 +190,9 @@ func init() {
 		EventSecretSyncQueued,
 		EventSecretSyncDelivered,
 		EventSecretSyncFailed,
+		EventSecretSyncWorkloadIdentityUpserted,
+		EventSecretSyncWorkloadIdentityStatus,
+		EventSecretSyncWorkloadIdentityDeleted,
 	} {
 		knownSchemaVersions[eventType] = map[int]bool{1: true}
 	}
@@ -304,6 +337,50 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 			return true, err
 		}
 		return true, p.store.ApplySecretSyncJobFailedTx(ctx, tx, e.TenantID, payload.ID, payload.Attempts, payload.Error, e.Time)
+	case EventSecretSyncWorkloadIdentityUpserted:
+		var payload SecretSyncWorkloadIdentitySourceUpserted
+		if err := decode(e, &payload); err != nil {
+			return true, err
+		}
+		if payload.ID == "" || payload.Name == "" || payload.Provider == "" || payload.RoleARN == "" ||
+			payload.Audience == "" || payload.Subject == "" || payload.TargetID == "" ||
+			payload.WorkloadProofRef == "" || payload.TrustSourceID == "" {
+			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
+		}
+		status := store.SecretSyncWorkloadIdentityReady
+		reason := "configured"
+		if !payload.Enabled {
+			status = store.SecretSyncWorkloadIdentityDisabled
+			reason = "disabled_by_operator"
+		}
+		return true, p.store.ApplySecretSyncWorkloadIdentitySourceUpsertedTx(ctx, tx, store.SecretSyncWorkloadIdentitySource{
+			ID: payload.ID, TenantID: e.TenantID, Name: payload.Name, Provider: payload.Provider,
+			RoleARN: payload.RoleARN, Audience: payload.Audience, Subject: payload.Subject,
+			TargetID: payload.TargetID, AllowedRemoteKeyPrefixes: payload.AllowedRemoteKeyPrefixes,
+			WorkloadProofRef: payload.WorkloadProofRef, TrustSourceID: payload.TrustSourceID,
+			Enabled: payload.Enabled, Status: status, StatusReason: reason,
+			CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventSecretSyncWorkloadIdentityStatus:
+		var payload SecretSyncWorkloadIdentitySourceStatus
+		if err := decode(e, &payload); err != nil {
+			return true, err
+		}
+		if payload.ID == "" || payload.Status == "" || payload.Reason == "" {
+			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
+		}
+		return true, p.store.ApplySecretSyncWorkloadIdentitySourceStatusTx(
+			ctx, tx, e.TenantID, payload.ID, payload.Status, payload.Reason, payload.ExpiresAt, e.Time,
+		)
+	case EventSecretSyncWorkloadIdentityDeleted:
+		var payload SecretSyncWorkloadIdentitySourceDeleted
+		if err := decode(e, &payload); err != nil {
+			return true, err
+		}
+		if payload.ID == "" {
+			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
+		}
+		return true, p.store.ApplySecretSyncWorkloadIdentitySourceDeletedTx(ctx, tx, e.TenantID, payload.ID)
 	default:
 		return false, nil
 	}

@@ -39,6 +39,11 @@ func operationIDFromContext(ctx context.Context) string {
 	return value
 }
 
+// OperationID returns the durable outbox identity bound by DeliverOperation.
+// Production cloud-auth adapters use it as the provider session/idempotency
+// identity without minting a second request identifier.
+func OperationID(ctx context.Context) string { return operationIDFromContext(ctx) }
+
 // Pusher delivers a key/value to one external platform.
 type Pusher interface {
 	Push(ctx context.Context, key string, value []byte) error

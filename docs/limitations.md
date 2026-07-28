@@ -849,6 +849,17 @@ independently reads every destination value back. `GET
 /api/v1/secrets/syncs/targets` shows the catalog and this installation's
 configured targets.
 
+AWS targets may explicitly opt into OIDC workload identity instead of static
+keys. The served `/api/v1/secrets/syncs/workload-identity-sources` API, CLI, and
+Secrets console bind a tenant JWT/JWKS trust source, exact audience/subject, IAM
+role, target, and remote-key scope. Proof resolution, STS exchange, locked
+short-lived credential caching, and refresh happen only inside the bounded
+outbox worker; air-gapped mode reports `offline_disabled` before network I/O and
+does not retry forever. This is currently the AWS stage only. GCP RFC 8693 and
+Azure Entra federated-credential stages remain committed follow-up cards and must
+reuse this same `internal/cloudauth` minter behind their existing bearer-token
+paths rather than adding provider-specific auth stacks.
+
 Related read-only posture routes: `GET /api/v1/secrets/cloud-secret-managers`
 (CAP-SEC-04 — read-only `cloud_secret` discovery for AWS/GCP/Azure/Vault, plus
 sealed-outbox sync for AWS/GCP/Azure); `GET /api/v1/secrets/kubernetes-operator`

@@ -106,12 +106,18 @@ type SecretSyncTargetConfig struct {
 	Field          string `json:"field,omitempty"`
 	VaultNamespace string `json:"vault_namespace,omitempty"`
 
-	TokenRef              string   `json:"token_ref,omitempty"`
-	SecretAccessRef       string   `json:"secret_access_key_ref,omitempty"`
-	SessionTokenRef       string   `json:"session_token_ref,omitempty"`
-	AllowPrivate          bool     `json:"allow_private_endpoint,omitempty"`
-	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
-	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
+	TokenRef        string `json:"token_ref,omitempty"`
+	SecretAccessRef string `json:"secret_access_key_ref,omitempty"`
+	SessionTokenRef string `json:"session_token_ref,omitempty"`
+	// AWSWorkloadIdentity explicitly opts this target into tenant-authored
+	// short-lived AWS STS credentials. It is false by default. When true, static
+	// AWS access-key fields are forbidden and the bounded secret-sync outbox
+	// worker is the only component allowed to use WorkloadIdentityEndpoint.
+	AWSWorkloadIdentity      bool     `json:"aws_workload_identity,omitempty"`
+	WorkloadIdentityEndpoint string   `json:"workload_identity_endpoint,omitempty"`
+	AllowPrivate             bool     `json:"allow_private_endpoint,omitempty"`
+	AllowInsecureLoopback    bool     `json:"allow_insecure_loopback,omitempty"`
+	PrivateEgressCIDRs       []string `json:"private_egress_cidrs,omitempty"`
 }
 
 var dynamicSecretTypes = map[string]struct{}{
@@ -280,9 +286,23 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 	switch c.Type {
 	case "aws-secrets-manager":
 		require(c.Region, "region")
-		require(c.AccessKeyID, "access_key_id")
-		ref(c.SecretAccessRef, "secret_access_key_ref", false)
-		ref(c.SessionTokenRef, "session_token_ref", true)
+		if c.AWSWorkloadIdentity {
+			if strings.TrimSpace(c.AccessKeyID) != "" || strings.TrimSpace(c.SecretAccessRef) != "" || strings.TrimSpace(c.SessionTokenRef) != "" {
+				errs = append(errs, fmt.Errorf("%s AWS workload identity forbids static access_key_id, secret_access_key_ref, and session_token_ref", where))
+			}
+			if c.WorkloadIdentityEndpoint != "" {
+				if err := validateSecretIntegrationEndpoint(c.WorkloadIdentityEndpoint, c.AllowInsecureLoopback); err != nil {
+					errs = append(errs, fmt.Errorf("%s workload_identity_endpoint: %w", where, err))
+				}
+			}
+		} else {
+			require(c.AccessKeyID, "access_key_id")
+			ref(c.SecretAccessRef, "secret_access_key_ref", false)
+			ref(c.SessionTokenRef, "session_token_ref", true)
+			if strings.TrimSpace(c.WorkloadIdentityEndpoint) != "" {
+				errs = append(errs, fmt.Errorf("%s workload_identity_endpoint requires aws_workload_identity=true", where))
+			}
+		}
 	case "gcp-secret-manager":
 		require(c.Project, "project")
 		ref(c.TokenRef, "token_ref", false)

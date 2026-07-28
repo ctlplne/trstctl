@@ -463,10 +463,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("dynamic-secret providers: %w", err)
 	}
-	secretSyncTargets, err := secretSyncTargetsFromConfig(ctx, cfg.SecretIntegrations.SyncTargets, st, sec.kek, egressGuard)
+	secretSyncTargets, cloudTokenMinter, err := secretSyncTargetsFromConfig(ctx, cfg.SecretIntegrations.SyncTargets, st, sec.kek, egressGuard, log)
 	if err != nil {
 		return Deps{}, fmt.Errorf("secret-sync targets: %w", err)
 	}
+	defer closeCloudTokenMinterOnError(&err, cloudTokenMinter)
 	telemetryReporter, err := telemetryReporterFromConfig(cfg.Telemetry, st, egressGuard)
 	if err != nil {
 		return Deps{}, fmt.Errorf("telemetry: %w", err)
@@ -512,6 +513,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		ExternalCAs:                  externalCAs,
 		TenantDynamicSecretProviders: dynamicSecretProviders,
 		TenantSecretSyncTargets:      secretSyncTargets,
+		CloudTokenMinter:             cloudTokenMinter,
 		Logger:                       logger, RateLimiter: rateLimiter,
 		OTLPExporter:    otlpExporter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),

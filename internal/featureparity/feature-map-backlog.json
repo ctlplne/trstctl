@@ -10312,10 +10312,10 @@
       "phase": "P2",
       "priority": 79,
       "served_state": "conditional",
-      "backend_status": "served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers, including native Terraform Cloud/OpenTofu Variables API and Vault KV v2 targets, through sealed-outbox delivery",
-      "current_frontend_mapping": "operate: Secrets UI serves configured sync delivery, catalog/status, cloud discovery, Kubernetes/workload injection, unvaulted posture, and provider-specific Terraform/OpenTofu and Vault KV v2 targets",
+      "backend_status": "served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers through sealed-outbox delivery; AWS can explicitly replace static keys with tenant-scoped OIDC workload identity exchanged only inside that bounded outbox worker",
+      "current_frontend_mapping": "operate: Secrets UI serves configured sync delivery, catalog/status, AWS workload-identity source lifecycle and honest offline/failure state, cloud discovery, Kubernetes/workload injection, unvaulted posture, and provider-specific Terraform/OpenTofu and Vault KV v2 targets",
       "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt. Roadmap residual: arbitrary webhook-specific managed forms may add convenience beyond the served generic JSON target without changing the backend boundary.",
-      "acceptance_test": "The secret_sync and secrets_residuals DoD census rows drive all ten configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback.",
+      "acceptance_test": "The secret_sync and secrets_residuals DoD census rows drive all ten configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback. TestServedAWSFederatedOutboxTenantIsolationTokenRedaction additionally proves that an explicit tenant source exchanges a validated OIDC proof at AWS STS only during outbox drain, feeds temporary byte-native SigV4 credentials to the existing pusher, writes the external value, and never crosses tenants or persists/logs the proof or token.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
@@ -10323,24 +10323,33 @@
         "/api/v1/secrets/cloud-secret-managers",
         "/api/v1/secrets/syncs",
         "/api/v1/secrets/syncs/targets",
+        "/api/v1/secrets/syncs/workload-identity-sources",
         "/api/v1/secrets/kubernetes-operator",
         "/api/v1/secrets/workload-injection",
         "/api/v1/secrets/unvaulted",
         "internal/discovery/cloudsecret",
+        "internal/cloudauth",
         "internal/secretsync",
         "internal/secretscan",
         "internal/agent/secretinject",
         "internal/operator",
+        "internal/store/secret_sync_workload_identity.go",
         "deploy/operator"
       ],
       "source_frontend": [
-        "web/src/pages/Secrets.tsx"
+        "web/src/pages/Secrets.tsx",
+        "web/src/pages/secrets/SecretSyncWorkloadIdentityPanel.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071. WIRE-SYNC-000/101-108 add validated tenant target configuration, production buildRunDeps construction, immutable ciphertext-only intent, sealed outbox delivery, and universal external proof for the original eight native targets. COMPLETE-SECRETS-103/104 add provider-specific Terraform Cloud/OpenTofu Variables API and Vault KV v2 pushers to the same production assembly and proof boundary. CAP-SEC-04 exposes GET /api/v1/secrets/cloud-secret-managers and trstctl-cli secrets cloud-secret-managers, combining cloud_secret discovery coverage for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox sync coverage. CAP-SECR-03 exposes GET /api/v1/secrets/syncs/targets and the Secrets UI catalog. CAP-SECR-04/05 serve Kubernetes SecretSync and workload-injection controllers. CAP-SECR-07 combines repository and third-party leaked-secret scan sources, redacted leaked_secret findings, cloud discovery visibility, and configured vault-augmentation targets. Sync remains target-configured and fail-closed; arbitrary webhooks intentionally use the generic JSON target.",
+      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071. WIRE-SYNC-000/101-108 add validated tenant target configuration, production buildRunDeps construction, immutable ciphertext-only intent, sealed outbox delivery, and universal external proof for the original eight native targets. COMPLETE-SECRETS-103/104 add provider-specific Terraform Cloud/OpenTofu Variables API and Vault KV v2 pushers to the same production assembly and proof boundary. I-093b9270 adds the first independently shippable cloud workload-identity stage: an explicitly configured, RLS-scoped AWS source; one HOMEGROWN internal/cloudauth sign/POST/cache/refresh core shared by future GCP and Azure encoders; worker-only OIDC proof resolution and STS exchange; terminal honest air-gap state; byte-native temporary credentials; API, CLI, generated contracts, and console workflow. Zero new modules were added because the existing hand-written REST, cloudhttp, internal/crypto, and secret.Buffer seams supply the entire boundary. Sync remains target-configured and fail-closed; arbitrary webhooks intentionally use the generic JSON target.",
       "api_surface": [
         "getCloudSecretManagerIntegration",
         "listSecretSyncTargets",
+        "createSecretSyncWorkloadIdentitySource",
+        "listSecretSyncWorkloadIdentitySources",
+        "getSecretSyncWorkloadIdentitySource",
+        "updateSecretSyncWorkloadIdentitySource",
+        "deleteSecretSyncWorkloadIdentitySource",
         "syncSecret",
         "getKubernetesSecretOperator",
         "getSecretWorkloadInjection",
@@ -10351,6 +10360,11 @@
         "secrets cloud-secret-managers",
         "secrets syncs run",
         "secrets syncs targets",
+        "secrets syncs workload-identities create",
+        "secrets syncs workload-identities list",
+        "secrets syncs workload-identities get",
+        "secrets syncs workload-identities update",
+        "secrets syncs workload-identities delete",
         "secrets kubernetes-operator",
         "secrets workload-injection",
         "secrets unvaulted"
@@ -10362,9 +10376,10 @@
             "GET /api/v1/secrets/cloud-secret-managers serves read-only discovery posture for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV.",
             "buildRunDeps constructs TenantSecretSyncTargets from tenant-bound operator configuration; GET /api/v1/secrets/syncs/targets marks those concrete targets configured.",
             "POST /api/v1/secrets/syncs reads a tenant secret, appends an immutable ciphertext-only intent, atomically projects a sealed outbox row, and lets only the outbox dispatcher perform the external write.",
+            "POST/GET/PUT/DELETE /api/v1/secrets/syncs/workload-identity-sources serves an RLS-scoped AWS binding without storing a proof or cloud token. Only the bounded secret-sync outbox worker resolves and validates the OIDC proof, calls STS, caches a locked short-lived credential, and feeds it to the existing AWS Secrets Manager pusher; air-gap denial is terminal before transport.",
             "Kubernetes operator, workload-injection, and unvaulted-secret posture remain served independently of outbound native pusher delivery.",
             "served_state=conditional",
-            "backend_status=served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers, including native Terraform Cloud/OpenTofu Variables API and Vault KV v2 targets, through sealed-outbox delivery",
+            "backend_status=served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers and one explicitly configured AWS workload-identity exchange through sealed-outbox delivery",
             "TrstctlSecretSync and TrstctlSecretInjection controller posture is served independently of outbound pusher construction; unvaulted posture returns redacted leaked_secret evidence.",
             "The secret_sync and secrets_residuals DoD proofs require exact vendor authentication and independent external readback for AWS, GCP, Azure, GitHub sealed boxes, GitLab, Vercel, generic CI JSON, Kubernetes, Terraform Cloud/OpenTofu, and Vault KV v2 targets."
           ],
@@ -10374,11 +10389,12 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets serves secret sync target catalog, configured mapping form, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts.",
+            "current_frontend_mapping: operate: Secrets at /secrets serves secret sync target catalog, configured mapping form, AWS workload-identity source wizard and honest runtime state, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts.",
             "target_gui_mapping: Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt."
           ],
           "refs": [
             "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/SecretSyncWorkloadIdentityPanel.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -10387,6 +10403,7 @@
           "evidence": [
             "CLI command: secrets syncs run",
             "CLI command: secrets syncs targets",
+            "CLI commands: secrets syncs workload-identities create/list/get/update/delete",
             "CLI command: secrets cloud-secret-managers",
             "CLI command: secrets kubernetes-operator",
             "CLI command: secrets workload-injection",
@@ -10399,7 +10416,7 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI operationIds: getCloudSecretManagerIntegration, listSecretSyncTargets, syncSecret, getKubernetesSecretOperator, getSecretWorkloadInjection, getUnvaultedSecretPosture"
+            "OpenAPI operationIds: getCloudSecretManagerIntegration, listSecretSyncTargets, createSecretSyncWorkloadIdentitySource, listSecretSyncWorkloadIdentitySources, getSecretSyncWorkloadIdentitySource, updateSecretSyncWorkloadIdentitySource, deleteSecretSyncWorkloadIdentitySource, syncSecret, getKubernetesSecretOperator, getSecretWorkloadInjection, getUnvaultedSecretPosture"
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
@@ -10410,7 +10427,8 @@
           "evidence": [
             "Cloud-secret discovery and Kubernetes/workload posture tests exercise their shipped paths.",
             "Secret-sync unit tests cover vendor create/update semantics, while TestDODSecretSyncProductionAssembly binds every constructor to buildRunDeps and proves authenticated external write/readback.",
-            "Every outbound pusher has a required secret_sync census entry using the same nonce-bound external substrate contract."
+            "Every outbound pusher has a required secret_sync census entry using the same nonce-bound external substrate contract.",
+            "TestServedAWSFederatedOutboxTenantIsolationTokenRedaction proves API configuration makes zero egress, outbox drain performs real STS and SigV4 external writes, cross-tenant reads fail, and durable rows/event/API responses redact OIDC proof and temporary token bytes. TestServedAWSFederatedAirGapIsTerminalWithoutNetwork proves stable offline-disabled state, zero transport, and no infinite retry."
           ],
           "refs": [
             "internal/server/dod_secret_integrations_runtime_test.go",
@@ -10419,12 +10437,15 @@
             "internal/featureparity/feature_facet_coverage_test.go",
             "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/server/secrets_sync_served_test.go",
+            "internal/server/aws_workload_identity_served_test.go",
+            "internal/cloudauth/cloudauth_test.go",
             "internal/server/unvaulted_secret_posture_served_test.go",
             "internal/secretsync/secretsync_test.go",
             "internal/operator/reconcile_test.go",
             "internal/api/feature_parity_test.go",
             "internal/cli/feature_parity_test.go",
             "web/src/__tests__/accept/WIRE-09.test.tsx",
+            "web/src/__tests__/secret_sync_workload_identity.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -10440,9 +10461,9 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listSecretSyncTargets, syncSecret, getKubernetesSecretOperator, getSecretWorkloadInjection, getUnvaultedSecretPosture",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales, including all five workload-identity source operations.",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations.",
-            "listSecretSyncTargets, getKubernetesSecretOperator, getSecretWorkloadInjection, and getUnvaultedSecretPosture require secrets:read; syncSecret requires secrets:write and uses the standard idempotent mutation path."
+            "list/get workload-identity sources and other posture routes require secrets:read; create/update/delete workload-identity sources and syncSecret require secrets:write and use the standard idempotent mutation path."
           ],
           "refs": [
             "internal/featureparity/authz_manifest.go",
@@ -10454,15 +10475,16 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: syncSecret",
+            "mutating served surfaces require audit/event evidence: syncSecret, createSecretSyncWorkloadIdentitySource, updateSecretSyncWorkloadIdentitySource, deleteSecretSyncWorkloadIdentitySource",
             "listSecretSyncTargets, getKubernetesSecretOperator, getSecretWorkloadInjection, and getUnvaultedSecretPosture return provider/operator/detection metadata only.",
-            "syncSecret emits secret.sync.requested plus secretsync enqueued/delivered events without secret values."
+            "syncSecret emits secret.sync.requested plus secretsync enqueued/delivered events without secret values; workload-identity configuration emits immutable upsert/delete events and the worker emits metadata-only status events."
           ],
           "refs": [
             "internal/api/secrets.go",
             "internal/secretsync/secretsync.go",
             "internal/operator/secretsync.go",
-            "internal/server/secrets_sync_served_test.go"
+            "internal/server/secrets_sync_served_test.go",
+            "internal/server/aws_workload_identity_served_test.go"
           ]
         },
         "telemetry": {

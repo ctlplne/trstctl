@@ -16189,6 +16189,175 @@
         ],
         "type": "object"
       },
+      "SecretSyncWorkloadIdentitySource": {
+        "properties": {
+          "allowed_remote_key_prefixes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "audience": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_exchange_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_failure_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "aws"
+            ],
+            "type": "string"
+          },
+          "role_arn": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "active",
+              "disabled",
+              "offline_disabled",
+              "exchange_failed"
+            ],
+            "type": "string"
+          },
+          "status_reason": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "token_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "trust_source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workload_proof_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "provider",
+          "role_arn",
+          "audience",
+          "subject",
+          "target_id",
+          "allowed_remote_key_prefixes",
+          "workload_proof_ref",
+          "trust_source_id",
+          "enabled",
+          "status",
+          "status_reason",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "SecretSyncWorkloadIdentitySourceList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretSyncWorkloadIdentitySource"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SecretSyncWorkloadIdentitySourceRequest": {
+        "properties": {
+          "allowed_remote_key_prefixes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "audience": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "aws"
+            ],
+            "type": "string"
+          },
+          "role_arn": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "trust_source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "workload_proof_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "role_arn",
+          "audience",
+          "subject",
+          "target_id",
+          "workload_proof_ref",
+          "trust_source_id"
+        ],
+        "type": "object"
+      },
       "SecretValue": {
         "properties": {
           "name": {
@@ -33996,6 +34165,310 @@
         ],
         "summary": "List built-in and configured secret-sync targets",
         "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/syncs/workload-identity-sources": {
+      "get": {
+        "operationId": "listSecretSyncWorkloadIdentitySources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSyncWorkloadIdentitySourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List tenant secret-sync workload-identity sources and honest runtime status",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "post": {
+        "operationId": "createSecretSyncWorkloadIdentitySource",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretSyncWorkloadIdentitySourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSyncWorkloadIdentitySource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an AWS workload-identity source for bounded secret-sync delivery",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/syncs/workload-identity-sources/{id}": {
+      "delete": {
+        "operationId": "deleteSecretSyncWorkloadIdentitySource",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete a tenant secret-sync workload-identity source",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "get": {
+        "operationId": "getSecretSyncWorkloadIdentitySource",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSyncWorkloadIdentitySource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a tenant secret-sync workload-identity source",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "put": {
+        "operationId": "updateSecretSyncWorkloadIdentitySource",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretSyncWorkloadIdentitySourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSyncWorkloadIdentitySource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace a tenant secret-sync workload-identity source",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/unvaulted": {

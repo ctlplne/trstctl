@@ -85,7 +85,7 @@ func newStore(t *testing.T) *store.Store {
 		          discovery_findings, notification_channels, notification_reads, notification_threshold_deliveries,
 		          notification_test_operations, notification_delivery_receipts, discovery_runs, discovery_schedules, discovery_sources,
 			          pam_sessions, incident_executions, nhi_access_review_campaigns, nhi_access_review_items,
-			          crypto_assets, credentials, audit_checkpoints, certificate_profiles, workload_attester_trust_sources,
+			          crypto_assets, credentials, audit_checkpoints, certificate_profiles, secret_sync_workload_identity_sources, workload_attester_trust_sources,
 			          notification_routing_policies,
 			          connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs, incident_fleet_reissuance_runs,
 			          secret_store, read_model_snapshots,

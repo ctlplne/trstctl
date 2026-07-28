@@ -312,10 +312,11 @@ func TestSecretIntegrationFactoriesBuildAllTenantBoundRegistrations(t *testing.T
 		{TenantID: tenantA, ID: "vault-kv", Type: "vault-kv-v2", Endpoint: "https://vault.example.test", Mount: "secret", PathPrefix: "trstctl", TokenRef: ref},
 		{TenantID: tenantB, ID: "generic-b", Type: "generic-ci-json", Endpoint: "https://ci-b.example.test", Provider: "build"},
 	}
-	syncRegistry, err := secretSyncTargetsFromConfig(context.Background(), syncEntries, nil, nil, nil)
+	syncRegistry, minter, err := secretSyncTargetsFromConfig(context.Background(), syncEntries, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(minter.Close)
 	if got := len(syncRegistry.ForTenant(tenantA)); got != 10 {
 		t.Fatalf("tenant A sync targets = %d, want 10", got)
 	}
@@ -345,7 +346,8 @@ func TestSecretIntegrationFactoriesRejectUnsafeHTTPAtStartup(t *testing.T) {
 		},
 	}
 	for _, entry := range tests {
-		if _, err := secretSyncTargetsFromConfig(context.Background(), []config.SecretSyncTargetConfig{entry}, nil, nil, nil); err == nil {
+		if _, minter, err := secretSyncTargetsFromConfig(context.Background(), []config.SecretSyncTargetConfig{entry}, nil, nil, nil, nil); err == nil {
+			minter.Close()
 			t.Fatalf("cleartext HTTP secret-sync endpoint %q was accepted", entry.Endpoint)
 		}
 	}

@@ -128,11 +128,13 @@ func WithStatusMapper(mapper StatusMapper) Option {
 	return func(o *options) { o.mapStatus = mapper }
 }
 
-// JSON sends req through doer and decodes a 2xx JSON response into out (out may be nil
-// to drain and discard the body). A non-2xx response yields a status-only
-// *StatusError after its bounded byte body is optionally classified and wiped.
-// Options configure the timeout floor, request signer, and closed status mapper.
-func JSON(doer Doer, req *http.Request, out any, opts ...Option) error {
+// Bytes sends req through doer and returns a bounded 2xx response body as mutable
+// bytes. The caller owns the returned slice and must wipe it when it may contain
+// authority-bearing material. A non-2xx response yields a status-only
+// *StatusError after its bounded body is optionally classified and wiped. This is
+// the shared non-JSON seam used by form/XML token exchanges without teaching the
+// transport package any provider wire format.
+func Bytes(doer Doer, req *http.Request, opts ...Option) ([]byte, error) {
 	var cfg options
 	for _, o := range opts {
 		o(&cfg)
@@ -150,13 +152,13 @@ func JSON(doer Doer, req *http.Request, out any, opts ...Option) error {
 		// The signer reads the body bytes the caller stashed for it; req.Body itself
 		// remains the unconsumed stream the doer will send.
 		if err := cfg.sign(req, signedBody(req)); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	resp, err := doer.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -165,19 +167,32 @@ func JSON(doer Doer, req *http.Request, out any, opts ...Option) error {
 		defer secret.Wipe(msg)
 		if cfg.mapStatus != nil {
 			if mapped := cfg.mapStatus(resp.StatusCode, msg); mapped != nil {
-				return mapped
+				return nil, mapped
 			}
 		}
-		return &StatusError{StatusCode: resp.StatusCode}
+		return nil, &StatusError{StatusCode: resp.StatusCode}
 	}
 	raw, err := secret.ReadBounded(resp.Body, MaxBodyBytes+1)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > MaxBodyBytes {
+		secret.Wipe(raw)
+		return nil, fmt.Errorf("cloudhttp: response exceeds %d-byte limit", MaxBodyBytes)
+	}
+	return raw, nil
+}
+
+// JSON sends req through doer and decodes a 2xx JSON response into out (out may be nil
+// to drain and discard the body). A non-2xx response yields a status-only
+// *StatusError after its bounded byte body is optionally classified and wiped.
+// Options configure the timeout floor, request signer, and closed status mapper.
+func JSON(doer Doer, req *http.Request, out any, opts ...Option) error {
+	raw, err := Bytes(doer, req, opts...)
 	if err != nil {
 		return err
 	}
 	defer secret.Wipe(raw)
-	if len(raw) > MaxBodyBytes {
-		return fmt.Errorf("cloudhttp: response exceeds %d-byte limit", MaxBodyBytes)
-	}
 	if out == nil || len(raw) == 0 {
 		return nil
 	}

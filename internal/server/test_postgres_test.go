@@ -92,7 +92,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
-		          workload_attester_trust_sources,
+		          secret_sync_workload_identity_sources, workload_attester_trust_sources,
 		          discovery_sources, discovery_schedules, discovery_runs, discovery_findings,
 		          notification_channels, notification_reads, notification_threshold_deliveries, notification_test_operations,
 		          notification_delivery_receipts, notification_routing_policies,

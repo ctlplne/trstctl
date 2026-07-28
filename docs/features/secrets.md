@@ -305,6 +305,35 @@ holder, never sent as plaintext. Sync endpoints follow the dynamic-provider tran
 rule: HTTPS by default, `allow_private_endpoint` is only an address grant, plaintext
 needs the explicit loopback-only switch.
 
+#### AWS workload identity for secret sync
+
+AWS Secrets Manager targets can replace long-lived access keys with an explicitly
+configured workload identity. Set `aws_workload_identity: true` on that target and
+leave `access_key_id`, `secret_access_key_ref`, and `session_token_ref` empty.
+`workload_identity_endpoint` is optional and defaults to the AWS STS endpoint; it is
+primarily useful for an approved private endpoint or test substrate. The default is
+still off, so existing static-credential targets do not change and a fresh install
+makes no token-exchange egress.
+
+An operator then creates a tenant source at
+`/api/v1/secrets/syncs/workload-identity-sources` (or with
+`trstctl-cli secrets syncs workload-identities create --body-file ...`). The source
+binds exactly one configured AWS target to an IAM role ARN, expected OIDC issuer
+trust source, audience, subject, allowed remote-key prefixes, and a `file:` or
+`secret://` proof reference. The API stores only this configuration and honest
+`ready`, `active`, `disabled`, `offline_disabled`, or `exchange_failed` status; it
+never accepts or stores an inline proof or AWS token. The console under **Secrets**
+serves create, list, edit, delete, expiry, and failure-state workflows.
+
+Only the bounded secret-sync outbox worker resolves the proof, validates its signature
+and exact issuer/audience/subject/expiry against the tenant's JWT/JWKS trust source,
+and performs `AssumeRoleWithWebIdentity`. The shared `internal/cloudauth` minter
+caches the short-lived result until its refresh window, keeps secret bytes locked and
+wipeable, and passes them into the existing hand-written AWS SigV4 pusher. No vendor
+SDK or parallel AWS integration is involved. When air-gap policy is enabled, the
+worker records `offline_disabled` before opening a connection, marks that delivery
+failed once with a stable reason, and does not retry forever.
+
 `GET /api/v1/secrets/cloud-secret-managers` / `trstctl-cli secrets
 cloud-secret-managers`: read-only `cloud_secret` discovery for AWS Secrets Manager, GCP
 Secret Manager, Azure Key Vault, and HashiCorp Vault KV, plus sealed-outbox sync

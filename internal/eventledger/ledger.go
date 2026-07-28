@@ -69,6 +69,8 @@ const (
 	EventWorkloadAttesterTrustSourceRotated       = "workload.attester_trust_source.rotated"
 	EventWorkloadAttesterTrustSourceRevoked       = "workload.attester_trust_source.revoked"
 	EventWorkloadAttesterTrustSourceDeleted       = "workload.attester_trust_source.deleted"
+	EventSecretSyncWorkloadIdentityUpserted       = "secret.sync.workload_identity_source.upserted"
+	EventSecretSyncWorkloadIdentityDeleted        = "secret.sync.workload_identity_source.deleted"
 	EventComplianceReportScheduleUpserted         = "compliance.report_schedule.upserted"
 	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
 	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
@@ -177,6 +179,13 @@ var ledger = []FeatureEvent{
 	{"F30", "Workload attestation chain", "rotate_trust_source", "rotateWorkloadAttesterTrustSource", []string{EventWorkloadAttesterTrustSourceRotated}},
 	{"F30", "Workload attestation chain", "revoke_trust_source", "revokeWorkloadAttesterTrustSource", []string{EventWorkloadAttesterTrustSourceRevoked}},
 	{"F30", "Workload attestation chain", "offboard_trust_source", "deleteWorkloadAttesterTrustSource", []string{EventWorkloadAttesterTrustSourceDeleted}},
+
+	// F68 — tenant-authored AWS workload federation for the existing bounded
+	// secret-sync outbox. Runtime status events are worker evidence, while these
+	// two API mutations own the configuration lifecycle.
+	{"F68", "Secret sync / platform integrations", "configure_workload_identity", "createSecretSyncWorkloadIdentitySource", []string{EventSecretSyncWorkloadIdentityUpserted}},
+	{"F68", "Secret sync / platform integrations", "update_workload_identity", "updateSecretSyncWorkloadIdentitySource", []string{EventSecretSyncWorkloadIdentityUpserted}},
+	{"F68", "Secret sync / platform integrations", "offboard_workload_identity", "deleteSecretSyncWorkloadIdentitySource", []string{EventSecretSyncWorkloadIdentityDeleted}},
 
 	// F4/F6 — CA-agnostic issuance and lifecycle automation, driven by the lifecycle
 	// state machine (internal/orchestrator/lifecycle.go). Each transition emits one

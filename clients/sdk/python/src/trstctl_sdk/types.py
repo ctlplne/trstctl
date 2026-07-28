@@ -5902,6 +5902,58 @@ SecretSyncTargetCatalog = TypedDict(
     total=False,
 )
 
+SecretSyncWorkloadIdentitySource = TypedDict(
+    'SecretSyncWorkloadIdentitySource',
+    {
+        'allowed_remote_key_prefixes': list[str],
+        'audience': str,
+        'created_at': str,
+        'enabled': bool,
+        'id': str,
+        'last_exchange_at': str,
+        'last_failure_at': str,
+        'name': str,
+        'provider': str,
+        'role_arn': str,
+        'status': str,
+        'status_reason': str,
+        'subject': str,
+        'target_id': str,
+        'tenant_id': str,
+        'token_expires_at': str,
+        'trust_source_id': str,
+        'updated_at': str,
+        'workload_proof_ref': str,
+    },
+    total=False,
+)
+
+SecretSyncWorkloadIdentitySourceList = TypedDict(
+    'SecretSyncWorkloadIdentitySourceList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+SecretSyncWorkloadIdentitySourceRequest = TypedDict(
+    'SecretSyncWorkloadIdentitySourceRequest',
+    {
+        'allowed_remote_key_prefixes': list[str],
+        'audience': str,
+        'enabled': bool,
+        'name': str,
+        'provider': str,
+        'role_arn': str,
+        'subject': str,
+        'target_id': str,
+        'trust_source_id': str,
+        'workload_proof_ref': str,
+    },
+    total=False,
+)
+
 SecretValue = TypedDict(
     'SecretValue',
     {

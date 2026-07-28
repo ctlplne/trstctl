@@ -48,6 +48,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventWorkloadAttesterTrustSourceRotated:       "EventWorkloadAttesterTrustSourceRotated",
 	projections.EventWorkloadAttesterTrustSourceRevoked:       "EventWorkloadAttesterTrustSourceRevoked",
 	projections.EventWorkloadAttesterTrustSourceDeleted:       "EventWorkloadAttesterTrustSourceDeleted",
+	projections.EventSecretSyncWorkloadIdentityUpserted:       "EventSecretSyncWorkloadIdentityUpserted",
+	projections.EventSecretSyncWorkloadIdentityDeleted:        "EventSecretSyncWorkloadIdentityDeleted",
 	projections.EventComplianceReportScheduleUpserted:         "EventComplianceReportScheduleUpserted",
 	projections.EventSecretRotationScheduleUpserted:           "EventSecretRotationScheduleUpserted",
 	projections.EventSecretRotationScheduleRan:                "EventSecretRotationScheduleRan",

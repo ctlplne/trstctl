@@ -89,6 +89,7 @@ var TenantScopedTables = []string{
 	"crypto_assets",
 	"credentials",
 	"certificate_profiles",
+	"secret_sync_workload_identity_sources",
 	"workload_attester_trust_sources",
 	"acme_dns01_provider_configs",
 	"mdm_scep_policies",

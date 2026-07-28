@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -429,6 +430,19 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 	}
 	defer locked.Destroy()
 	if err := target.DeliverOperation(ctx, payload.ID, payload.Key, locked.Bytes()); err != nil {
+		if errors.Is(err, cloudauth.ErrOfflineDisabled) {
+			attempts := m.Attempts
+			if attempts < 1 {
+				attempts = 1
+			}
+			return d.appendAndProjectID(ctx,
+				"secret-sync-failed-"+uuid.NewSHA1(secretSyncEventNamespace, []byte(m.TenantID+"\x00"+payload.ID)).String(),
+				m.TenantID, projections.EventSecretSyncFailed,
+				projections.SecretSyncFailed{
+					ID: payload.ID, Attempts: attempts,
+					Error: "AWS workload identity disabled by air-gap policy",
+				})
+		}
 		return fmt.Errorf("server: deliver secret-sync job %s to %s: %w", payload.ID, targetID, err)
 	}
 	if d.afterSecretSyncDelivery != nil {

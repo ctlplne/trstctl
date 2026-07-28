@@ -4188,6 +4188,46 @@ export interface SecretSyncTargetCatalog {
   targets: SecretSyncTarget[];
 }
 
+export interface SecretSyncWorkloadIdentitySource {
+  allowed_remote_key_prefixes: string[];
+  audience: string;
+  created_at: string;
+  enabled: boolean;
+  id: string;
+  last_exchange_at?: string;
+  last_failure_at?: string;
+  name: string;
+  provider: "aws";
+  role_arn: string;
+  status: "ready" | "active" | "disabled" | "offline_disabled" | "exchange_failed";
+  status_reason: string;
+  subject: string;
+  target_id: string;
+  tenant_id: string;
+  token_expires_at?: string;
+  trust_source_id: string;
+  updated_at: string;
+  workload_proof_ref: string;
+}
+
+export interface SecretSyncWorkloadIdentitySourceList {
+  items: SecretSyncWorkloadIdentitySource[];
+  next_cursor?: string;
+}
+
+export interface SecretSyncWorkloadIdentitySourceRequest {
+  allowed_remote_key_prefixes?: string[];
+  audience: string;
+  enabled?: boolean;
+  name: string;
+  provider?: "aws";
+  role_arn: string;
+  subject: string;
+  target_id: string;
+  trust_source_id: string;
+  workload_proof_ref: string;
+}
+
 export interface SecretValue {
   name: string;
   value: string;

@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,13 +12,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/egress"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -502,32 +508,53 @@ func secretSyncTargetsFromConfig(
 	st *store.Store,
 	kek seal.KeyWrapper,
 	guard *egress.Guard,
-) (SecretSyncTargetRegistry, error) {
+	log *events.Log,
+) (SecretSyncTargetRegistry, *cloudauth.Minter, error) {
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{SyncTargets: entries}, true); err != nil {
-		return nil, fmt.Errorf("server: invalid secret-sync target config: %w", err)
+		return nil, nil, fmt.Errorf("server: invalid secret-sync target config: %w", err)
 	}
 	registry := SecretSyncTargetRegistry{}
+	minter := cloudauth.NewMinter(2 * time.Minute)
 	resolver := integrationCredentialResolver{store: st, kek: kek}
 	seen := map[string]bool{}
 	for _, entry := range entries {
 		key := entry.TenantID + "\x00" + entry.ID
 		if seen[key] {
-			return nil, fmt.Errorf("server: duplicate secret-sync target %s/%s", entry.TenantID, entry.ID)
+			minter.Close()
+			return nil, nil, fmt.Errorf("server: duplicate secret-sync target %s/%s", entry.TenantID, entry.ID)
 		}
 		seen[key] = true
 		if entry.TenantID == "" || entry.ID == "" {
-			return nil, errors.New("server: secret-sync target requires tenant and id")
+			minter.Close()
+			return nil, nil, errors.New("server: secret-sync target requires tenant and id")
+		}
+		if entry.AWSWorkloadIdentity && (st == nil || kek == nil || log == nil) {
+			minter.Close()
+			return nil, nil, fmt.Errorf("server: AWS workload identity target %s/%s requires store, event log, and KEK", entry.TenantID, entry.ID)
 		}
 		if _, err := secretIntegrationHTTPClient(entry.Endpoint, entry.AllowPrivate, entry.AllowInsecureLoopback, entry.PrivateEgressCIDRs, guard); err != nil {
-			return nil, fmt.Errorf("server: secret-sync target %s/%s endpoint: %w", entry.TenantID, entry.ID, err)
+			minter.Close()
+			return nil, nil, fmt.Errorf("server: secret-sync target %s/%s endpoint: %w", entry.TenantID, entry.ID, err)
+		}
+		if entry.AWSWorkloadIdentity {
+			if _, err := secretIntegrationHTTPClient(awsWorkloadIdentityEndpoint(entry), entry.AllowPrivate, entry.AllowInsecureLoopback, entry.PrivateEgressCIDRs, guard); err != nil {
+				minter.Close()
+				return nil, nil, fmt.Errorf("server: secret-sync target %s/%s workload identity endpoint: %w", entry.TenantID, entry.ID, err)
+			}
 		}
 		if _, ok := registry[entry.TenantID]; !ok {
 			registry[entry.TenantID] = map[string]*secretsync.Target{}
 		}
-		pusher := newConfiguredSyncPusher(entry, resolver, guard)
+		pusher := newConfiguredSyncPusher(entry, resolver, guard, st, log, minter)
 		registry[entry.TenantID][entry.ID] = secretsync.NewTarget(entry.ID, pusher)
 	}
-	return registry, nil
+	return registry, minter, nil
+}
+
+func closeCloudTokenMinterOnError(err *error, minter *cloudauth.Minter) {
+	if err != nil && *err != nil {
+		minter.Close()
+	}
 }
 
 type configuredSyncPusher struct {
@@ -535,6 +562,9 @@ type configuredSyncPusher struct {
 	cfg         config.SecretSyncTargetConfig
 	credentials integrationCredentialResolver
 	guard       *egress.Guard
+	store       *store.Store
+	log         *events.Log
+	minter      *cloudauth.Minter
 	push        func(context.Context, string, []byte) error
 }
 
@@ -549,8 +579,11 @@ func (p *configuredSyncPusher) Push(ctx context.Context, key string, value []byt
 // buildRunDeps. Tokens remain references until each outbox delivery, but every
 // advertised constructor is now statically and operationally tied to the returned
 // TenantSecretSyncTargets field.
-func newConfiguredSyncPusher(cfg config.SecretSyncTargetConfig, credentials integrationCredentialResolver, guard *egress.Guard) *configuredSyncPusher {
-	pusher := &configuredSyncPusher{tenantID: cfg.TenantID, cfg: cfg, credentials: credentials, guard: guard}
+func newConfiguredSyncPusher(cfg config.SecretSyncTargetConfig, credentials integrationCredentialResolver, guard *egress.Guard, st *store.Store, log *events.Log, minter *cloudauth.Minter) *configuredSyncPusher {
+	pusher := &configuredSyncPusher{
+		tenantID: cfg.TenantID, cfg: cfg, credentials: credentials, guard: guard,
+		store: st, log: log, minter: minter,
+	}
 	pusher.push = func(ctx context.Context, key string, value []byte) error {
 		return pushConfiguredSecretSync(ctx, pusher, key, value)
 	}
@@ -584,17 +617,14 @@ func pushConfiguredSecretSync(ctx context.Context, p *configuredSyncPusher, key 
 	cfg := p.cfg
 	switch cfg.Type {
 	case "aws-secrets-manager":
-		secretKey, resolveErr := resolve(cfg.SecretAccessRef)
-		if resolveErr != nil {
-			return resolveErr
+		accessKeyID, secretKey, session, cleanup, credentialErr := p.awsSyncCredentials(ctx, key, resolve)
+		if credentialErr != nil {
+			return credentialErr
 		}
-		session, resolveErr := resolve(cfg.SessionTokenRef)
-		if resolveErr != nil {
-			return resolveErr
-		}
+		defer cleanup()
 		concrete, err = secretsync.NewAWSSecretsManagerPusher(secretsync.AWSSecretsManagerConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, Region: cfg.Region,
-			AccessKeyID: cfg.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session,
+			AccessKeyID: accessKeyID, SecretAccessKey: secretKey, SessionToken: session,
 		})
 	case "gcp-secret-manager":
 		token, resolveErr := resolve(cfg.TokenRef)
@@ -682,6 +712,167 @@ func pushConfiguredSecretSync(ctx context.Context, p *configuredSyncPusher, key 
 		defer closer.Close()
 	}
 	return concrete.Push(ctx, key, value)
+}
+
+func (p *configuredSyncPusher) awsSyncCredentials(
+	ctx context.Context,
+	remoteKey string,
+	resolve func(string) ([]byte, error),
+) (string, []byte, []byte, func(), error) {
+	if !p.cfg.AWSWorkloadIdentity {
+		secretKey, err := resolve(p.cfg.SecretAccessRef)
+		if err != nil {
+			return "", nil, nil, func() {}, err
+		}
+		session, err := resolve(p.cfg.SessionTokenRef)
+		if err != nil {
+			return "", nil, nil, func() {}, err
+		}
+		return p.cfg.AccessKeyID, secretKey, session, func() {}, nil
+	}
+	credential, err := p.mintAWSWorkloadIdentity(ctx, remoteKey)
+	if err != nil {
+		return "", nil, nil, func() {}, err
+	}
+	var session []byte
+	if credential.Secondary != nil {
+		session = credential.Secondary.Bytes()
+	}
+	return credential.Identifier, credential.Primary.Bytes(), session, credential.Destroy, nil
+}
+
+const defaultAWSWorkloadIdentityEndpoint = "https://sts.amazonaws.com"
+
+func awsWorkloadIdentityEndpoint(cfg config.SecretSyncTargetConfig) string {
+	if endpoint := strings.TrimSpace(cfg.WorkloadIdentityEndpoint); endpoint != "" {
+		return endpoint
+	}
+	return defaultAWSWorkloadIdentityEndpoint
+}
+
+func (p *configuredSyncPusher) mintAWSWorkloadIdentity(ctx context.Context, remoteKey string) (*cloudauth.Credential, error) {
+	if p.store == nil || p.log == nil || p.minter == nil {
+		return nil, errors.New("server: AWS workload identity is not fully assembled")
+	}
+	source, err := p.store.FindSecretSyncWorkloadIdentitySourceForTarget(ctx, p.tenantID, "aws", p.cfg.ID, remoteKey)
+	if err != nil {
+		if errors.Is(err, store.ErrSecretSyncWorkloadIdentitySourceNotFound) {
+			return nil, errors.New("server: no enabled AWS workload identity source authorizes this target and remote key")
+		}
+		return nil, fmt.Errorf("server: load AWS workload identity source: %w", err)
+	}
+	operationID := secretsync.OperationID(ctx)
+	if operationID == "" {
+		return nil, errors.New("server: AWS workload identity exchange requires a durable outbox operation id")
+	}
+	if p.guard != nil && p.guard.Enabled() {
+		if err := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityOfflineDisabled, "air_gap_enabled", nil); err != nil {
+			return nil, fmt.Errorf("server: record AWS workload identity offline state: %w", err)
+		}
+		return nil, cloudauth.ErrOfflineDisabled
+	}
+	trust, err := p.store.GetWorkloadAttesterTrustSource(ctx, p.tenantID, source.TrustSourceID)
+	if err != nil || !trust.Enabled || trust.RevokedAt != nil || trust.Audience != source.Audience {
+		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityExchangeFailed, "trust_source_invalid", nil); statusErr != nil {
+			return nil, fmt.Errorf("server: record AWS workload identity trust failure: %w", statusErr)
+		}
+		return nil, errors.New("server: AWS workload identity trust source is unavailable")
+	}
+	// Configuration updated_at changes only on operator upsert, not on runtime
+	// status. Trust rotation/version changes likewise force a fresh exchange.
+	cacheKey := fmt.Sprintf("%s\x00%s\x00%d\x00%d\x00%d",
+		p.tenantID, source.ID, source.UpdatedAt.UnixNano(), trust.RotationVersion, trust.UpdatedAt.UnixNano())
+	credential, cacheHit, err := p.minter.Mint(ctx, cacheKey, func(exchangeCtx context.Context) (cloudauth.Material, error) {
+		proof, resolveErr := p.credentials.resolve(exchangeCtx, p.tenantID, source.WorkloadProofRef)
+		if resolveErr != nil {
+			return cloudauth.Material{}, errors.New("cloudauth: workload proof reference could not be resolved")
+		}
+		defer proof.Destroy()
+		if validateErr := cloudauth.ValidateOIDCProof(
+			proof.Bytes(), trust.JWKS, trust.Issuer, source.Audience, source.Subject, time.Now().UTC(),
+		); validateErr != nil {
+			return cloudauth.Material{}, validateErr
+		}
+		client, clientErr := secretIntegrationHTTPClient(
+			awsWorkloadIdentityEndpoint(p.cfg), p.cfg.AllowPrivate, p.cfg.AllowInsecureLoopback,
+			p.cfg.PrivateEgressCIDRs, p.guard,
+		)
+		if clientErr != nil {
+			return cloudauth.Material{}, errors.New("cloudauth: AWS STS client is unavailable")
+		}
+		return cloudauth.ExchangeAWSWebIdentity(exchangeCtx, client, cloudauth.AWSExchangeRequest{
+			Endpoint: awsWorkloadIdentityEndpoint(p.cfg), RoleARN: source.RoleARN,
+			RoleSessionName:  awsWorkloadIdentitySessionName(operationID),
+			WebIdentityToken: proof.Bytes(), DurationSeconds: 900,
+		})
+	})
+	if err != nil {
+		reason := "exchange_failed"
+		if errors.Is(err, cloudauth.ErrInvalidWorkloadProof) {
+			reason = "proof_invalid"
+		}
+		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityExchangeFailed, reason, nil); statusErr != nil {
+			return nil, fmt.Errorf("server: record AWS workload identity failure: %w", statusErr)
+		}
+		return nil, fmt.Errorf("server: AWS workload identity exchange failed: %w", err)
+	}
+	reason := "credential_exchanged"
+	if cacheHit {
+		reason = "credential_cache_hit"
+	}
+	expiresAt := credential.ExpiresAt
+	if err := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+		store.SecretSyncWorkloadIdentityActive, reason, &expiresAt); err != nil {
+		credential.Destroy()
+		return nil, fmt.Errorf("server: record AWS workload identity active state: %w", err)
+	}
+	return credential, nil
+}
+
+func awsWorkloadIdentitySessionName(operationID string) string {
+	const prefix = "trstctl-"
+	var out strings.Builder
+	out.Grow(64)
+	out.WriteString(prefix)
+	for _, r := range operationID {
+		if out.Len() >= 64 {
+			break
+		}
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '_', r == '+', r == '=', r == ',', r == '.', r == '@', r == '-':
+			out.WriteRune(r)
+		default:
+			out.WriteByte('-')
+		}
+	}
+	return strings.TrimRight(out.String(), "-")
+}
+
+var secretSyncWorkloadIdentityEventNamespace = uuid.MustParse("cf6b81b1-8665-5ca2-b31b-b807d1070172")
+
+func (p *configuredSyncPusher) recordWorkloadIdentityStatus(ctx context.Context, sourceID, operationID, status, reason string, expiresAt *time.Time) error {
+	data, err := json.Marshal(projections.SecretSyncWorkloadIdentitySourceStatus{
+		ID: sourceID, Status: status, Reason: reason, ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		return err
+	}
+	eventID := "secret-sync-wif-status-" + uuid.NewSHA1(
+		secretSyncWorkloadIdentityEventNamespace,
+		[]byte(p.tenantID+"\x00"+sourceID+"\x00"+operationID+"\x00"+status+"\x00"+reason),
+	).String()
+	event, err := p.log.Append(ctx, events.Event{
+		ID: eventID, Type: projections.EventSecretSyncWorkloadIdentityStatus,
+		TenantID: p.tenantID, Data: data,
+	})
+	if err != nil {
+		return err
+	}
+	return projections.New(p.store).Apply(ctx, event)
 }
 
 func secretIntegrationHTTPClient(endpoint string, allowPrivate, allowInsecureLoopback bool, privateCIDRs []string, guard *egress.Guard) (*http.Client, error) {

@@ -42,6 +42,31 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 	}
 }
 
+func TestValidateSecretIntegrationsAWSFederatedIsExplicitAndRejectsStaticFallback(t *testing.T) {
+	base := SecretSyncTargetConfig{
+		TenantID: "11111111-1111-1111-1111-111111111111",
+		ID:       "aws-federated", Type: "aws-secrets-manager",
+		Endpoint: "https://secretsmanager.us-east-1.amazonaws.com",
+		Region:   "us-east-1", AWSWorkloadIdentity: true,
+	}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{base}}, true); err != nil {
+		t.Fatalf("explicit AWS workload identity target rejected: %v", err)
+	}
+	withStatic := base
+	withStatic.AccessKeyID = "AKID"
+	withStatic.SecretAccessRef = "file:/run/secrets/aws"
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{withStatic}}, true); err == nil ||
+		!strings.Contains(err.Error(), "forbids static") {
+		t.Fatalf("AWS workload identity with static fallback error = %v", err)
+	}
+	implicit := base
+	implicit.AWSWorkloadIdentity = false
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{implicit}}, true); err == nil ||
+		!strings.Contains(err.Error(), "access_key_id") {
+		t.Fatalf("implicit AWS workload identity target error = %v", err)
+	}
+}
+
 func TestValidateSecretIntegrationsFailsClosed(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	tests := []struct {
