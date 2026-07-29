@@ -1737,18 +1737,11 @@ const liveApi: Api = {
   syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
   cloudSecretManagers: () => req<CloudSecretManagerIntegration>("/api/v1/secrets/cloud-secret-managers"),
   secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),
-  secretSyncWorkloadIdentitySources: () =>
-    req<SecretSyncWorkloadIdentitySourceList>("/api/v1/secrets/syncs/workload-identity-sources"),
-  createSecretSyncWorkloadIdentitySource: (input) =>
-    mutate<SecretSyncWorkloadIdentitySource>("POST", "/api/v1/secrets/syncs/workload-identity-sources", input),
+  secretSyncWorkloadIdentitySources: () => req<SecretSyncWorkloadIdentitySourceList>("/api/v1/secrets/syncs/workload-identity-sources"),
+  createSecretSyncWorkloadIdentitySource: (input) => mutate<SecretSyncWorkloadIdentitySource>("POST", "/api/v1/secrets/syncs/workload-identity-sources", input),
   updateSecretSyncWorkloadIdentitySource: (id, input) =>
-    mutate<SecretSyncWorkloadIdentitySource>(
-      "PUT",
-      `/api/v1/secrets/syncs/workload-identity-sources/${encodeURIComponent(id)}`,
-      input,
-    ),
-  deleteSecretSyncWorkloadIdentitySource: (id) =>
-    mutate<void>("DELETE", `/api/v1/secrets/syncs/workload-identity-sources/${encodeURIComponent(id)}`),
+    mutate<SecretSyncWorkloadIdentitySource>("PUT", `/api/v1/secrets/syncs/workload-identity-sources/${encodeURIComponent(id)}`, input),
+  deleteSecretSyncWorkloadIdentitySource: (id) => mutate<void>("DELETE", `/api/v1/secrets/syncs/workload-identity-sources/${encodeURIComponent(id)}`),
   kubernetesCSRSupport: () => req<KubernetesCSRSupport>("/api/v1/kubernetes/certificate-signing-requests"),
   kubernetesTrustBundles: () => req<KubernetesTrustBundleDistribution>("/api/v1/kubernetes/trust-bundles"),
   kubernetesSecretOperator: () => req<KubernetesSecretOperator>("/api/v1/secrets/kubernetes-operator"),

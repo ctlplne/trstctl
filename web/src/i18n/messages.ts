@@ -1874,8 +1874,7 @@ export const messages = {
     description: "Checkbox label that explicitly enables TPM device attestation.",
   },
   "profiles.deviceAttestation.help": {
-    defaultMessage:
-      "Default off. A device must prove a fresh TPM key that chains to an operator root; HTTP-01, DNS-01, and TLS-ALPN-01 stay available.",
+    defaultMessage: "Default off. A device must prove a fresh TPM key that chains to an operator root; HTTP-01, DNS-01, and TLS-ALPN-01 stay available.",
     description: "Fail-closed behavior summary for TPM device attestation.",
   },
   "profiles.deviceAttestation.roots": {

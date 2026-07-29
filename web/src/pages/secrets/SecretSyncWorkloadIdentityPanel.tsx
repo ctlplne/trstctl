@@ -54,11 +54,7 @@ function buildSourceSchema(translate: (id: ValidationMessage) => string) {
       if (value.provider === "aws" && !/^arn:aws:iam::[0-9]{12}:role\/.+$/.test(value.roleArn)) {
         context.addIssue({ code: "custom", path: ["roleArn"], message: translate("secrets.wif.roleArnInvalid") });
       }
-      if (
-        value.provider === "gcp" &&
-        value.serviceAccount !== "" &&
-        !/^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/.test(value.serviceAccount)
-      ) {
+      if (value.provider === "gcp" && value.serviceAccount !== "" && !/^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/.test(value.serviceAccount)) {
         context.addIssue({ code: "custom", path: ["serviceAccount"], message: translate("secrets.wif.serviceAccountInvalid") });
       }
       if (value.provider === "azure") {
@@ -129,9 +125,7 @@ export function SecretSyncWorkloadIdentityPanel() {
   const providerTargets = useMemo(
     () =>
       (targets.data?.targets ?? []).filter(
-        (target) =>
-          target.configured &&
-          (target.id.toLowerCase().includes(selectedProvider) || target.platform.toLowerCase().includes(selectedProvider)),
+        (target) => target.configured && (target.id.toLowerCase().includes(selectedProvider) || target.platform.toLowerCase().includes(selectedProvider)),
       ),
     [selectedProvider, targets.data],
   );
@@ -374,29 +368,15 @@ export function SecretSyncWorkloadIdentityPanel() {
                   description={t("secrets.wif.serviceAccountHint")}
                   error={form.formState.errors.serviceAccount?.message}
                 >
-                  {(control) => (
-                    <Input
-                      {...control}
-                      {...form.register("serviceAccount")}
-                      placeholder={t("secrets.wif.serviceAccountPlaceholder")}
-                    />
-                  )}
+                  {(control) => <Input {...control} {...form.register("serviceAccount")} placeholder={t("secrets.wif.serviceAccountPlaceholder")} />}
                 </Field>
               ) : (
                 <>
                   <Field label={t("secrets.wif.azureTenantID")} error={form.formState.errors.azureTenantId?.message} required>
-                    {(control) => (
-                      <Input
-                        {...control}
-                        {...form.register("azureTenantId")}
-                        placeholder={t("secrets.wif.azureTenantIDPlaceholder")}
-                      />
-                    )}
+                    {(control) => <Input {...control} {...form.register("azureTenantId")} placeholder={t("secrets.wif.azureTenantIDPlaceholder")} />}
                   </Field>
                   <Field label={t("secrets.wif.clientID")} error={form.formState.errors.clientId?.message} required>
-                    {(control) => (
-                      <Input {...control} {...form.register("clientId")} placeholder={t("secrets.wif.clientIDPlaceholder")} />
-                    )}
+                    {(control) => <Input {...control} {...form.register("clientId")} placeholder={t("secrets.wif.clientIDPlaceholder")} />}
                   </Field>
                   <Field
                     label={t("secrets.wif.targetScope")}
@@ -404,13 +384,7 @@ export function SecretSyncWorkloadIdentityPanel() {
                     error={form.formState.errors.targetScope?.message}
                     required
                   >
-                    {(control) => (
-                      <Input
-                        {...control}
-                        {...form.register("targetScope")}
-                        placeholder={t("secrets.wif.targetScopePlaceholder")}
-                      />
-                    )}
+                    {(control) => <Input {...control} {...form.register("targetScope")} placeholder={t("secrets.wif.targetScopePlaceholder")} />}
                   </Field>
                 </>
               )}
