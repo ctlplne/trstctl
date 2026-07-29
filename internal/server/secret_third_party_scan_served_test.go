@@ -73,11 +73,24 @@ func TestServedThirdPartySecretScanningCAPSCAN04EndToEnd(t *testing.T) {
 	}
 
 	for provider, runID := range runIDs {
-		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+runID, tok, nil)
-		if status != http.StatusOK {
-			t.Fatalf("%s findings status = %d body %s", provider, status, body)
+		findingsURL := "/api/v1/discovery/findings?run_id=" + runID
+		deadline := time.After(5 * time.Second)
+		var text string
+		for {
+			status, body := secretsReq(t, h, http.MethodGet, findingsURL, tok, nil)
+			if status != http.StatusOK {
+				t.Fatalf("%s findings status = %d body %s", provider, status, body)
+			}
+			text = string(body)
+			if strings.Contains(text, `"kind":"leaked_secret"`) {
+				break
+			}
+			select {
+			case <-deadline:
+				t.Fatalf("%s findings were not projected: %s", provider, body)
+			case <-time.After(50 * time.Millisecond):
+			}
 		}
-		text := string(body)
 		for _, want := range []string{`"kind":"leaked_secret"`, `"capability":"CAP-SCAN-04"`, `"provider":"` + provider + `"`, "token@"} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s findings missing %q: %s", provider, want, text)
