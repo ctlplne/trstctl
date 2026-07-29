@@ -3484,7 +3484,7 @@
             "internal/server/protocols_served_test.go",
             "internal/server/acme_device_attestation_test.go",
             "internal/protocols/acme/device_attest_internal_test.go",
-            "internal/crypto/device_attest_tpm_test.go",
+            "internal/crypto/deviceattest/tpm_test.go",
             "internal/server/protect_correct102_guard_test.go",
             "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",

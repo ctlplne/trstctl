@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/jose"
 )
 
@@ -127,7 +128,7 @@ func (s *Server) validateDeviceAttestation(
 	if err != nil {
 		return nil, fmt.Errorf("decode device attestation CSR: %w", err)
 	}
-	csrDigest, err := crypto.CSRPublicKeySHA256(csrDER)
+	csrDigest, err := deviceattest.CSRPublicKeySHA256(csrDER)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +146,7 @@ func (s *Server) validateDeviceAttestation(
 	if err != nil {
 		return nil, err
 	}
-	result, err := crypto.ParseAndVerifyTPMDeviceAttestation(
+	result, err := deviceattest.ParseAndVerifyTPMDeviceAttestation(
 		response.Attestation,
 		challenge,
 		policy.TrustedRootsPEM,

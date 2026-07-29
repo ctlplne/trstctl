@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package crypto_test
+package deviceattest_test
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/deviceattesttest"
 )
 
@@ -23,7 +24,7 @@ func TestDeviceAttestTPMParserVerifiesChallengeKeyAlgorithmAndRoot(t *testing.T)
 		t.Fatalf("build TPM credential response: %v", err)
 	}
 
-	got, err := trstcrypto.ParseAndVerifyTPMDeviceAttestation(
+	got, err := deviceattest.ParseAndVerifyTPMDeviceAttestation(
 		credentialJSON,
 		challenge,
 		[][]byte{identity.RootPEM()},
@@ -33,7 +34,7 @@ func TestDeviceAttestTPMParserVerifiesChallengeKeyAlgorithmAndRoot(t *testing.T)
 	if err != nil {
 		t.Fatalf("verify TPM device attestation: %v", err)
 	}
-	csrDigest, err := trstcrypto.CSRPublicKeySHA256(identity.CSRDER())
+	csrDigest, err := deviceattest.CSRPublicKeySHA256(identity.CSRDER())
 	if err != nil {
 		t.Fatalf("digest CSR public key: %v", err)
 	}
@@ -47,7 +48,7 @@ func TestDeviceAttestTPMParserVerifiesChallengeKeyAlgorithmAndRoot(t *testing.T)
 		t.Fatalf("attestation certificate digest length = %d, want 32", len(got.AttestationCertificateSHA256))
 	}
 
-	if _, err := trstcrypto.ParseAndVerifyTPMDeviceAttestation(
+	if _, err := deviceattest.ParseAndVerifyTPMDeviceAttestation(
 		credentialJSON,
 		trstcrypto.SHA256Sum([]byte("other challenge")),
 		[][]byte{identity.RootPEM()},
@@ -56,7 +57,7 @@ func TestDeviceAttestTPMParserVerifiesChallengeKeyAlgorithmAndRoot(t *testing.T)
 	); err == nil {
 		t.Fatal("TPM attestation accepted a mismatched challenge")
 	}
-	if _, err := trstcrypto.ParseAndVerifyTPMDeviceAttestation(
+	if _, err := deviceattest.ParseAndVerifyTPMDeviceAttestation(
 		credentialJSON,
 		challenge,
 		[][]byte{identity.RootPEM()},
@@ -69,7 +70,7 @@ func TestDeviceAttestTPMParserVerifiesChallengeKeyAlgorithmAndRoot(t *testing.T)
 	if err != nil {
 		t.Fatalf("create second TPM identity fixture: %v", err)
 	}
-	if _, err := trstcrypto.ParseAndVerifyTPMDeviceAttestation(
+	if _, err := deviceattest.ParseAndVerifyTPMDeviceAttestation(
 		credentialJSON,
 		challenge,
 		[][]byte{other.RootPEM()},
@@ -87,7 +88,7 @@ func FuzzParseAndVerifyTPMDeviceAttestation(f *testing.F) {
 		if len(credentialJSON) > 1<<20 || len(challenge) > 1024 || len(rootPEM) > 1<<20 {
 			t.Skip()
 		}
-		_, _ = trstcrypto.ParseAndVerifyTPMDeviceAttestation(
+		_, _ = deviceattest.ParseAndVerifyTPMDeviceAttestation(
 			credentialJSON,
 			challenge,
 			[][]byte{rootPEM},

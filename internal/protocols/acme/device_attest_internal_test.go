@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	trstcrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/deviceattesttest"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
@@ -123,7 +123,7 @@ func TestDeviceAttestTPMBindsOrderNonceCSRAndSurvivesStateReplay(t *testing.T) {
 	if order.status != statusReady || ch.status != statusValid {
 		t.Fatalf("validated state order=%q challenge=%q, want ready/valid", order.status, ch.status)
 	}
-	csrDigest, err := trstcrypto.CSRPublicKeySHA256(identity.CSRDER())
+	csrDigest, err := deviceattest.CSRPublicKeySHA256(identity.CSRDER())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func deviceAttestMessage(
 	nonce string,
 ) *jose.ACMEMessage {
 	t.Helper()
-	csrDigest, err := trstcrypto.CSRPublicKeySHA256(csrDER)
+	csrDigest, err := deviceattest.CSRPublicKeySHA256(csrDER)
 	if err != nil {
 		t.Fatalf("digest CSR: %v", err)
 	}

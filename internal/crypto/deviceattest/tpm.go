@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package crypto
+// Package deviceattest isolates reviewed, high-dependency attestation parsers
+// below the crypto boundary without adding them to the sacred signer's lean
+// internal/crypto dependency closure.
+package deviceattest
 
 import (
 	"crypto/rsa"

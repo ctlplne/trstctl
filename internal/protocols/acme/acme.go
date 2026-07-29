@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/profile"
@@ -1128,7 +1129,7 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		return
 	}
 	if o.attestedKeySHA256 != "" {
-		digest, err := crypto.CSRPublicKeySHA256(csr)
+		digest, err := deviceattest.CSRPublicKeySHA256(csr)
 		if err != nil {
 			s.problem(w, r, http.StatusBadRequest, "badCSR", err.Error())
 			return
