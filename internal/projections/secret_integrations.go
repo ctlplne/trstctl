@@ -156,6 +156,9 @@ type SecretSyncWorkloadIdentitySourceUpserted struct {
 	Provider                 string   `json:"provider"`
 	RoleARN                  string   `json:"role_arn"`
 	ServiceAccount           string   `json:"service_account,omitempty"`
+	AzureTenantID            string   `json:"azure_tenant_id,omitempty"`
+	ClientID                 string   `json:"client_id,omitempty"`
+	TargetScope              string   `json:"target_scope,omitempty"`
 	Audience                 string   `json:"audience"`
 	Subject                  string   `json:"subject"`
 	TargetID                 string   `json:"target_id"`
@@ -348,8 +351,16 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 			payload.WorkloadProofRef == "" || payload.TrustSourceID == "" {
 			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
 		}
-		if (payload.Provider == "aws" && payload.RoleARN == "") ||
-			(payload.Provider == "gcp" && payload.RoleARN != "") {
+		validProviderConfig := (payload.Provider == "aws" &&
+			payload.RoleARN != "" && payload.ServiceAccount == "" &&
+			payload.AzureTenantID == "" && payload.ClientID == "" && payload.TargetScope == "") ||
+			(payload.Provider == "gcp" &&
+				payload.RoleARN == "" && payload.AzureTenantID == "" &&
+				payload.ClientID == "" && payload.TargetScope == "") ||
+			(payload.Provider == "azure" &&
+				payload.RoleARN == "" && payload.ServiceAccount == "" &&
+				payload.AzureTenantID != "" && payload.ClientID != "" && payload.TargetScope != "")
+		if !validProviderConfig {
 			return true, fmt.Errorf("projections: %s provider configuration is invalid", e.Type)
 		}
 		status := store.SecretSyncWorkloadIdentityReady
@@ -361,6 +372,7 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		return true, p.store.ApplySecretSyncWorkloadIdentitySourceUpsertedTx(ctx, tx, store.SecretSyncWorkloadIdentitySource{
 			ID: payload.ID, TenantID: e.TenantID, Name: payload.Name, Provider: payload.Provider,
 			RoleARN: payload.RoleARN, ServiceAccount: payload.ServiceAccount,
+			AzureTenantID: payload.AzureTenantID, ClientID: payload.ClientID, TargetScope: payload.TargetScope,
 			Audience: payload.Audience, Subject: payload.Subject,
 			TargetID: payload.TargetID, AllowedRemoteKeyPrefixes: payload.AllowedRemoteKeyPrefixes,
 			WorkloadProofRef: payload.WorkloadProofRef, TrustSourceID: payload.TrustSourceID,

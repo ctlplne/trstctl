@@ -3746,7 +3746,7 @@ export interface paths {
         /** List tenant secret-sync workload-identity sources and honest runtime status */
         get: operations["listSecretSyncWorkloadIdentitySources"];
         put?: never;
-        /** Create an AWS workload-identity source for bounded secret-sync delivery */
+        /** Create a cloud workload-identity source for bounded secret-sync delivery */
         post: operations["createSecretSyncWorkloadIdentitySource"];
         delete?: never;
         options?: never;
@@ -8530,6 +8530,8 @@ export interface components {
         SecretSyncWorkloadIdentitySource: {
             allowed_remote_key_prefixes: string[];
             audience: string;
+            azure_tenant_id: string;
+            client_id: string;
             /** Format: date-time */
             created_at: string;
             enabled: boolean;
@@ -8541,7 +8543,7 @@ export interface components {
             last_failure_at?: string;
             name: string;
             /** @enum {string} */
-            provider: "aws" | "gcp";
+            provider: "aws" | "gcp" | "azure";
             role_arn: string;
             service_account: string;
             /** @enum {string} */
@@ -8549,6 +8551,7 @@ export interface components {
             status_reason: string;
             subject: string;
             target_id: string;
+            target_scope: string;
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
@@ -8566,14 +8569,19 @@ export interface components {
         SecretSyncWorkloadIdentitySourceRequest: {
             allowed_remote_key_prefixes?: string[];
             audience: string;
+            /** Format: uuid */
+            azure_tenant_id?: string;
+            /** Format: uuid */
+            client_id?: string;
             enabled?: boolean;
             name: string;
             /** @enum {string} */
-            provider?: "aws" | "gcp";
+            provider?: "aws" | "gcp" | "azure";
             role_arn?: string;
             service_account?: string;
             subject: string;
             target_id: string;
+            target_scope?: string;
             /** Format: uuid */
             trust_source_id: string;
             workload_proof_ref: string;

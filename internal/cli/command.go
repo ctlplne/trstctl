@@ -377,7 +377,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "unvaulted"}, Method: "GET", Path: "/api/v1/secrets/unvaulted", Summary: "Show unvaulted-secret detection and multi-vault visibility"},
 	{Name: []string{"secrets", "syncs", "run"}, Method: "POST", Path: "/api/v1/secrets/syncs", Body: bodyFile, Summary: "Push a stored secret to a configured external sync target"},
 	{Name: []string{"secrets", "syncs", "targets"}, Method: "GET", Path: "/api/v1/secrets/syncs/targets", Summary: "List supported and configured external secret-sync targets"},
-	{Name: []string{"secrets", "syncs", "workload-identities", "create"}, Method: "POST", Path: "/api/v1/secrets/syncs/workload-identity-sources", Body: bodyFile, Summary: "Create an AWS workload-identity source for bounded secret-sync delivery"},
+	{Name: []string{"secrets", "syncs", "workload-identities", "create"}, Method: "POST", Path: "/api/v1/secrets/syncs/workload-identity-sources", Body: bodyFile, Summary: "Create a cloud workload-identity source for bounded secret-sync delivery"},
 	{Name: []string{"secrets", "syncs", "workload-identities", "list"}, Method: "GET", Path: "/api/v1/secrets/syncs/workload-identity-sources", Summary: "List secret-sync workload-identity sources and runtime status"},
 	{Name: []string{"secrets", "syncs", "workload-identities", "get"}, Method: "GET", Path: "/api/v1/secrets/syncs/workload-identity-sources/{id}", Summary: "Get a secret-sync workload-identity source"},
 	{Name: []string{"secrets", "syncs", "workload-identities", "update"}, Method: "PUT", Path: "/api/v1/secrets/syncs/workload-identity-sources/{id}", Body: bodyFile, Summary: "Replace a secret-sync workload-identity source"},

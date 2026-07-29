@@ -4218,19 +4218,22 @@ export interface SecretSyncTargetCatalog {
 export interface SecretSyncWorkloadIdentitySource {
   allowed_remote_key_prefixes: string[];
   audience: string;
+  azure_tenant_id: string;
+  client_id: string;
   created_at: string;
   enabled: boolean;
   id: string;
   last_exchange_at?: string;
   last_failure_at?: string;
   name: string;
-  provider: "aws" | "gcp";
+  provider: "aws" | "gcp" | "azure";
   role_arn: string;
   service_account: string;
   status: "ready" | "active" | "disabled" | "offline_disabled" | "exchange_failed";
   status_reason: string;
   subject: string;
   target_id: string;
+  target_scope: string;
   tenant_id: string;
   token_expires_at?: string;
   trust_source_id: string;
@@ -4246,13 +4249,16 @@ export interface SecretSyncWorkloadIdentitySourceList {
 export interface SecretSyncWorkloadIdentitySourceRequest {
   allowed_remote_key_prefixes?: string[];
   audience: string;
+  azure_tenant_id?: string;
+  client_id?: string;
   enabled?: boolean;
   name: string;
-  provider?: "aws" | "gcp";
+  provider?: "aws" | "gcp" | "azure";
   role_arn?: string;
   service_account?: string;
   subject: string;
   target_id: string;
+  target_scope?: string;
   trust_source_id: string;
   workload_proof_ref: string;
 }

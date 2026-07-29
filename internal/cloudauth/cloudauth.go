@@ -5,9 +5,9 @@
 // locked, non-dumpable buffers, caches them only until a refresh-before-expiry
 // boundary, and destroys every cached or caller-owned copy explicitly.
 //
-// Provider packages contribute only thin HTTP request/response encoders. AWS
-// and GCP are served encoders; Azure must instantiate this same cache and
-// exchange seam rather than grow a parallel authentication stack.
+// Provider packages contribute only thin HTTP request/response encoders. AWS,
+// GCP, and Azure instantiate this same cache and exchange seam rather than
+// growing parallel authentication stacks.
 package cloudauth
 
 import (

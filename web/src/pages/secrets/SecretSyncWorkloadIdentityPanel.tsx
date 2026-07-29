@@ -20,6 +20,9 @@ type ValidationMessage =
   | "secrets.wif.nameRequired"
   | "secrets.wif.roleArnInvalid"
   | "secrets.wif.serviceAccountInvalid"
+  | "secrets.wif.azureTenantInvalid"
+  | "secrets.wif.clientIDInvalid"
+  | "secrets.wif.targetScopeInvalid"
   | "secrets.wif.audienceRequired"
   | "secrets.wif.subjectRequired"
   | "secrets.wif.targetRequired"
@@ -30,9 +33,12 @@ function buildSourceSchema(translate: (id: ValidationMessage) => string) {
   return z
     .object({
       name: z.string().trim().min(1, translate("secrets.wif.nameRequired")),
-      provider: z.enum(["aws", "gcp"]),
+      provider: z.enum(["aws", "gcp", "azure"]),
       roleArn: z.string().trim(),
       serviceAccount: z.string().trim(),
+      azureTenantId: z.string().trim(),
+      clientId: z.string().trim(),
+      targetScope: z.string().trim(),
       audience: z.string().trim().min(1, translate("secrets.wif.audienceRequired")),
       subject: z.string().trim().min(1, translate("secrets.wif.subjectRequired")),
       targetId: z.string().trim().min(1, translate("secrets.wif.targetRequired")),
@@ -55,12 +61,31 @@ function buildSourceSchema(translate: (id: ValidationMessage) => string) {
       ) {
         context.addIssue({ code: "custom", path: ["serviceAccount"], message: translate("secrets.wif.serviceAccountInvalid") });
       }
+      if (value.provider === "azure") {
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuid.test(value.azureTenantId)) {
+          context.addIssue({ code: "custom", path: ["azureTenantId"], message: translate("secrets.wif.azureTenantInvalid") });
+        }
+        if (!uuid.test(value.clientId)) {
+          context.addIssue({ code: "custom", path: ["clientId"], message: translate("secrets.wif.clientIDInvalid") });
+        }
+        if (
+          ![
+            "https://vault.azure.net/.default",
+            "https://vault.azure.cn/.default",
+            "https://vault.usgovcloudapi.net/.default",
+            "https://vault.microsoftazure.de/.default",
+          ].includes(value.targetScope)
+        ) {
+          context.addIssue({ code: "custom", path: ["targetScope"], message: translate("secrets.wif.targetScopeInvalid") });
+        }
+      }
     });
 }
 type SourceValues = z.infer<ReturnType<typeof buildSourceSchema>>;
 
 const wizardFields: Record<number, Array<keyof SourceValues>> = {
-  1: ["name", "provider", "roleArn", "serviceAccount", "audience", "subject"],
+  1: ["name", "provider", "roleArn", "serviceAccount", "azureTenantId", "clientId", "targetScope", "audience", "subject"],
   2: ["targetId", "prefixes"],
   3: ["proofRef", "trustSourceId", "enabled"],
 };
@@ -87,6 +112,9 @@ export function SecretSyncWorkloadIdentityPanel() {
       provider: "aws",
       roleArn: "",
       serviceAccount: "",
+      azureTenantId: "",
+      clientId: "",
+      targetScope: "https://vault.azure.net/.default",
       audience: "",
       subject: "",
       targetId: "",
@@ -131,6 +159,9 @@ export function SecretSyncWorkloadIdentityPanel() {
       provider: source.provider,
       roleArn: source.role_arn,
       serviceAccount: source.service_account,
+      azureTenantId: source.azure_tenant_id,
+      clientId: source.client_id,
+      targetScope: source.target_scope || "https://vault.azure.net/.default",
       audience: source.audience,
       subject: source.subject,
       targetId: source.target_id,
@@ -158,6 +189,13 @@ export function SecretSyncWorkloadIdentityPanel() {
       provider: values.provider,
       role_arn: values.provider === "aws" ? values.roleArn.trim() : "",
       ...(values.provider === "gcp" ? { service_account: values.serviceAccount.trim() } : {}),
+      ...(values.provider === "azure"
+        ? {
+            azure_tenant_id: values.azureTenantId.trim(),
+            client_id: values.clientId.trim(),
+            target_scope: values.targetScope.trim(),
+          }
+        : {}),
       audience: values.audience.trim(),
       subject: values.subject.trim(),
       target_id: values.targetId.trim(),
@@ -316,12 +354,13 @@ export function SecretSyncWorkloadIdentityPanel() {
                     {...form.register("provider", {
                       onChange: () => {
                         form.setValue("targetId", "");
-                        form.clearErrors(["roleArn", "serviceAccount", "targetId"]);
+                        form.clearErrors(["roleArn", "serviceAccount", "azureTenantId", "clientId", "targetScope", "targetId"]);
                       },
                     })}
                   >
                     <option value="aws">{t("secrets.wif.providerAWS")}</option>
                     <option value="gcp">{t("secrets.wif.providerGCP")}</option>
+                    <option value="azure">{t("secrets.wif.providerAzure")}</option>
                   </Select>
                 )}
               </Field>
@@ -329,7 +368,7 @@ export function SecretSyncWorkloadIdentityPanel() {
                 <Field label={t("secrets.wif.roleArn")} error={form.formState.errors.roleArn?.message} required>
                   {(control) => <Input {...control} {...form.register("roleArn")} placeholder={t("secrets.wif.roleArnPlaceholder")} />}
                 </Field>
-              ) : (
+              ) : selectedProvider === "gcp" ? (
                 <Field
                   label={t("secrets.wif.serviceAccount")}
                   description={t("secrets.wif.serviceAccountHint")}
@@ -343,6 +382,37 @@ export function SecretSyncWorkloadIdentityPanel() {
                     />
                   )}
                 </Field>
+              ) : (
+                <>
+                  <Field label={t("secrets.wif.azureTenantID")} error={form.formState.errors.azureTenantId?.message} required>
+                    {(control) => (
+                      <Input
+                        {...control}
+                        {...form.register("azureTenantId")}
+                        placeholder={t("secrets.wif.azureTenantIDPlaceholder")}
+                      />
+                    )}
+                  </Field>
+                  <Field label={t("secrets.wif.clientID")} error={form.formState.errors.clientId?.message} required>
+                    {(control) => (
+                      <Input {...control} {...form.register("clientId")} placeholder={t("secrets.wif.clientIDPlaceholder")} />
+                    )}
+                  </Field>
+                  <Field
+                    label={t("secrets.wif.targetScope")}
+                    description={t("secrets.wif.targetScopeHint")}
+                    error={form.formState.errors.targetScope?.message}
+                    required
+                  >
+                    {(control) => (
+                      <Input
+                        {...control}
+                        {...form.register("targetScope")}
+                        placeholder={t("secrets.wif.targetScopePlaceholder")}
+                      />
+                    )}
+                  </Field>
+                </>
               )}
               <Field label={t("secrets.wif.audience")} error={form.formState.errors.audience?.message} required>
                 {(control) => <Input {...control} {...form.register("audience")} />}

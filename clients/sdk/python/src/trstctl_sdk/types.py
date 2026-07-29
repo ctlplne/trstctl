@@ -5942,6 +5942,8 @@ SecretSyncWorkloadIdentitySource = TypedDict(
     {
         'allowed_remote_key_prefixes': list[str],
         'audience': str,
+        'azure_tenant_id': str,
+        'client_id': str,
         'created_at': str,
         'enabled': bool,
         'id': str,
@@ -5955,6 +5957,7 @@ SecretSyncWorkloadIdentitySource = TypedDict(
         'status_reason': str,
         'subject': str,
         'target_id': str,
+        'target_scope': str,
         'tenant_id': str,
         'token_expires_at': str,
         'trust_source_id': str,
@@ -5978,6 +5981,8 @@ SecretSyncWorkloadIdentitySourceRequest = TypedDict(
     {
         'allowed_remote_key_prefixes': list[str],
         'audience': str,
+        'azure_tenant_id': str,
+        'client_id': str,
         'enabled': bool,
         'name': str,
         'provider': str,
@@ -5985,6 +5990,7 @@ SecretSyncWorkloadIdentitySourceRequest = TypedDict(
         'service_account': str,
         'subject': str,
         'target_id': str,
+        'target_scope': str,
         'trust_source_id': str,
         'workload_proof_ref': str,
     },

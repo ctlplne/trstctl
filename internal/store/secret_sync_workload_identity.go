@@ -30,6 +30,9 @@ type SecretSyncWorkloadIdentitySource struct {
 	Provider                 string
 	RoleARN                  string
 	ServiceAccount           string
+	AzureTenantID            string
+	ClientID                 string
+	TargetScope              string
 	Audience                 string
 	Subject                  string
 	TargetID                 string
@@ -59,16 +62,20 @@ func (s *Store) ApplySecretSyncWorkloadIdentitySourceUpsertedTx(ctx context.Cont
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO secret_sync_workload_identity_sources
-		    (tenant_id, id, name, provider, role_arn, service_account, audience, subject, target_id,
+		    (tenant_id, id, name, provider, role_arn, service_account, azure_tenant_id, client_id,
+		     target_scope, audience, subject, target_id,
 		     allowed_remote_key_prefixes, workload_proof_ref, trust_source_id,
 		     enabled, status, status_reason, created_at, updated_at)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-		         $12::uuid, $13, $14, $15, $16, $17)
+		         $12, $13, $14, $15::uuid, $16, $17, $18, $19, $20)
 		 ON CONFLICT (tenant_id, id) DO UPDATE SET
 		     name = EXCLUDED.name,
 		     provider = EXCLUDED.provider,
 		     role_arn = EXCLUDED.role_arn,
 		     service_account = EXCLUDED.service_account,
+		     azure_tenant_id = EXCLUDED.azure_tenant_id,
+		     client_id = EXCLUDED.client_id,
+		     target_scope = EXCLUDED.target_scope,
 		     audience = EXCLUDED.audience,
 		     subject = EXCLUDED.subject,
 		     target_id = EXCLUDED.target_id,
@@ -84,7 +91,8 @@ func (s *Store) ApplySecretSyncWorkloadIdentitySourceUpsertedTx(ctx context.Cont
 		     created_at = secret_sync_workload_identity_sources.created_at,
 		     updated_at = EXCLUDED.updated_at`,
 		source.TenantID, source.ID, source.Name, source.Provider, source.RoleARN, source.ServiceAccount,
-		source.Audience, source.Subject, source.TargetID, source.AllowedRemoteKeyPrefixes,
+		source.AzureTenantID, source.ClientID, source.TargetScope, source.Audience, source.Subject,
+		source.TargetID, source.AllowedRemoteKeyPrefixes,
 		source.WorkloadProofRef, source.TrustSourceID, source.Enabled, source.Status,
 		source.StatusReason, source.CreatedAt, source.UpdatedAt)
 	return err
@@ -192,7 +200,8 @@ func (s *Store) FindSecretSyncWorkloadIdentitySourceForTarget(ctx context.Contex
 }
 
 const secretSyncWorkloadIdentitySourceSelect = `
-	SELECT id::text, tenant_id::text, name, provider, role_arn, service_account, audience, subject,
+	SELECT id::text, tenant_id::text, name, provider, role_arn, service_account,
+	       azure_tenant_id, client_id, target_scope, audience, subject,
 	       target_id, allowed_remote_key_prefixes, workload_proof_ref,
 	       trust_source_id::text, enabled, status, status_reason, last_exchange_at,
 	       token_expires_at, last_failure_at, created_at, updated_at
@@ -202,6 +211,7 @@ const secretSyncWorkloadIdentitySourceSelect = `
 func scanSecretSyncWorkloadIdentitySource(row pgx.Row, source *SecretSyncWorkloadIdentitySource) error {
 	return row.Scan(
 		&source.ID, &source.TenantID, &source.Name, &source.Provider, &source.RoleARN, &source.ServiceAccount,
+		&source.AzureTenantID, &source.ClientID, &source.TargetScope,
 		&source.Audience, &source.Subject, &source.TargetID, &source.AllowedRemoteKeyPrefixes,
 		&source.WorkloadProofRef, &source.TrustSourceID, &source.Enabled, &source.Status,
 		&source.StatusReason, &source.LastExchangeAt, &source.TokenExpiresAt,

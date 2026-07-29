@@ -91,6 +91,36 @@ func TestValidateSecretIntegrationsGCPFederatedIsExplicitAndRejectsStaticFallbac
 	}
 }
 
+func TestValidateSecretIntegrationsAzureFederatedIsExplicitAndRejectsStaticFallback(t *testing.T) {
+	base := SecretSyncTargetConfig{
+		TenantID: "11111111-1111-1111-1111-111111111111",
+		ID:       "azure-federated", Type: "azure-key-vault",
+		Endpoint: "https://payments.vault.azure.net", AzureWorkloadIdentity: true,
+	}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{base}}, true); err != nil {
+		t.Fatalf("explicit Azure workload identity target rejected: %v", err)
+	}
+	withStatic := base
+	withStatic.TokenRef = "file:/run/secrets/azure-token"
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{withStatic}}, true); err == nil ||
+		!strings.Contains(err.Error(), "forbids static token_ref") {
+		t.Fatalf("Azure workload identity with static fallback error = %v", err)
+	}
+	implicit := base
+	implicit.AzureWorkloadIdentity = false
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{implicit}}, true); err == nil ||
+		!strings.Contains(err.Error(), "token_ref") {
+		t.Fatalf("implicit Azure workload identity target error = %v", err)
+	}
+	wrongProvider := base
+	wrongProvider.Type = "gcp-secret-manager"
+	wrongProvider.Project = "payments-production"
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{wrongProvider}}, true); err == nil ||
+		!strings.Contains(err.Error(), "only valid for azure-key-vault") {
+		t.Fatalf("Azure workload identity on a non-Azure target error = %v", err)
+	}
+}
+
 func TestValidateSecretIntegrationsFailsClosed(t *testing.T) {
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	tests := []struct {

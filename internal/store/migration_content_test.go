@@ -36,6 +36,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	82: true,
 	83: true,
 	89: true,
+	90: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -289,6 +290,7 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0082_connector_right_size_operation_defaults", testMigration0082ConnectorRightSizeOperationDefaults)
 	t.Run("0083_outbox_effect_lane_default", testMigration0083OutboxEffectLaneDefault)
 	t.Run("0089_gcp_workload_identity_default", testMigration0089GCPWorkloadIdentityDefault)
+	t.Run("0090_azure_workload_identity_defaults", testMigration0090AzureWorkloadIdentityDefaults)
 }
 
 func testMigration0072ConnectorTargetRevisionBackfill(t *testing.T) {
@@ -898,6 +900,80 @@ func testMigration0089GCPWorkloadIdentityDefault(t *testing.T) {
 			}
 			if rows != want || !empty || !nonnull {
 				t.Fatalf("0089 defaults rows=%d want=%d empty=%t nonnull=%t",
+					rows, want, empty, nonnull)
+			}
+		})
+}
+
+func testMigration0090AzureWorkloadIdentityDefaults(t *testing.T) {
+	stable := `
+		SELECT tenant_id::text, id::text, name, provider, role_arn, service_account,
+		       audience, subject, target_id, array_to_string(allowed_remote_key_prefixes, ','),
+		       workload_proof_ref, trust_source_id::text, enabled::text, status,
+		       status_reason, created_at::text, updated_at::text
+		  FROM secret_sync_workload_identity_sources
+		 ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 90, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				trustID := uuid(tenantID, 9000+index)
+				sourceID := uuid(tenantID, 9010+index)
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO tenants (tenant_id, name)
+					VALUES ($1, $2)
+					ON CONFLICT (tenant_id) DO NOTHING`, tenantID, fmt.Sprintf("pre-0090-tenant-%d", index)); err != nil {
+					t.Fatalf("seed pre-0090 tenant %s: %v", tenantID, err)
+				}
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO workload_attester_trust_sources
+					       (id, tenant_id, name, method, issuer, audience, jwks,
+					        enabled, created_at, updated_at)
+					VALUES ($1, $2, $3, 'k8s_sat', 'https://issuer.example.test',
+					        'trstctl', '{"keys":[]}'::jsonb, true,
+					        '2026-07-28T11:00:00Z'::timestamptz,
+					        '2026-07-28T11:00:01Z'::timestamptz)`,
+					trustID, tenantID, fmt.Sprintf("pre-0090-trust-%d", index)); err != nil {
+					t.Fatalf("seed pre-0090 trust source %s: %v", tenantID, err)
+				}
+				provider := "aws"
+				roleARN := fmt.Sprintf("arn:aws:iam::12345678901%d:role/sync", index)
+				serviceAccount := ""
+				if index == 1 {
+					provider = "gcp"
+					roleARN = ""
+					serviceAccount = "sync@example.iam.gserviceaccount.com"
+				}
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO secret_sync_workload_identity_sources
+					       (tenant_id, id, name, provider, role_arn, service_account,
+					        audience, subject, target_id, allowed_remote_key_prefixes,
+					        workload_proof_ref, trust_source_id, enabled, status,
+					        status_reason, created_at, updated_at)
+					VALUES ($1, $2, $3, $4, $5, $6, 'trstctl', $7, $8, ARRAY['prod/'],
+					        $9, $10, true, 'ready', 'configured',
+					        '2026-07-28T11:01:00Z'::timestamptz,
+					        '2026-07-28T11:01:01Z'::timestamptz)`,
+					tenantID, sourceID, fmt.Sprintf("pre-0090-source-%d", index),
+					provider, roleARN, serviceAccount,
+					fmt.Sprintf("system:serviceaccount:sync:worker-%d", index),
+					fmt.Sprintf("%s-target-%d", provider, index),
+					fmt.Sprintf("secret://sync/proof-%d", index), trustID); err != nil {
+					t.Fatalf("seed pre-0090 workload identity source %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var empty, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*),
+				       bool_and(azure_tenant_id = '' AND client_id = '' AND target_scope = ''),
+				       bool_and(azure_tenant_id IS NOT NULL AND client_id IS NOT NULL AND target_scope IS NOT NULL)
+				  FROM secret_sync_workload_identity_sources`).Scan(&rows, &empty, &nonnull); err != nil {
+				t.Fatalf("inspect 0090 Azure field defaults: %v", err)
+			}
+			if rows != want || !empty || !nonnull {
+				t.Fatalf("0090 defaults rows=%d want=%d empty=%t nonnull=%t",
 					rows, want, empty, nonnull)
 			}
 		})

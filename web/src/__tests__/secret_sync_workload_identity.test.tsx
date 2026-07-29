@@ -28,6 +28,9 @@ const source = {
   provider: "aws" as const,
   role_arn: "arn:aws:iam::123456789012:role/payments-sync",
   service_account: "",
+  azure_tenant_id: "",
+  client_id: "",
+  target_scope: "",
   audience: "trstctl-secrets",
   subject: "system:serviceaccount:security:trstctl",
   target_id: "aws-secretsmanager-primary",
@@ -117,6 +120,17 @@ describe("AWS workload identity secret sync", () => {
           secret_handling: "byte-native",
           wire_format: "gcp-json",
         },
+        {
+          id: "azure-keyvault-primary",
+          name: "Azure Key Vault primary",
+          platform: "Azure Key Vault",
+          configured: true,
+          capabilities: ["write"],
+          auth_mode: "workload_identity",
+          delivery_mode: "outbox",
+          secret_handling: "byte-native",
+          wire_format: "azure-json",
+        },
       ],
     });
     apiMock.createSecretSyncWorkloadIdentitySource.mockResolvedValue(source);
@@ -191,6 +205,43 @@ describe("AWS workload identity secret sync", () => {
         target_id: "gcp-secretmanager-primary",
         allowed_remote_key_prefixes: ["gcp/"],
         workload_proof_ref: "secret://sync/gcp-proof",
+        trust_source_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        enabled: true,
+      }),
+    );
+  });
+
+  it("creates an Azure federated-credential source without certificate custody", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await screen.findByText("Payments delivery");
+    await user.type(screen.getByLabelText("Source name"), "Azure delivery");
+    await user.selectOptions(screen.getByLabelText("Cloud provider"), "azure");
+    await user.type(screen.getByLabelText("Entra tenant ID"), "33333333-3333-4333-8333-333333333333");
+    await user.type(screen.getByLabelText("Entra application client ID"), "44444444-4444-4444-8444-444444444444");
+    expect(screen.getByLabelText("Azure Key Vault scope")).toHaveValue("https://vault.azure.net/.default");
+    await user.type(screen.getByLabelText("Token audience"), "trstctl-secrets");
+    await user.type(screen.getByLabelText("Token subject"), "system:serviceaccount:security:azure");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.selectOptions(screen.getByLabelText("Cloud sync target"), "azure-keyvault-primary");
+    await user.type(screen.getByLabelText("Allowed remote-key prefixes"), "azure/");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(screen.getByLabelText("Workload proof reference"), "secret://sync/azure-proof");
+    await user.selectOptions(screen.getByLabelText("JWT trust source"), "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    await user.click(screen.getByRole("button", { name: "Save source" }));
+    await waitFor(() =>
+      expect(apiMock.createSecretSyncWorkloadIdentitySource).toHaveBeenCalledWith({
+        name: "Azure delivery",
+        provider: "azure",
+        role_arn: "",
+        azure_tenant_id: "33333333-3333-4333-8333-333333333333",
+        client_id: "44444444-4444-4444-8444-444444444444",
+        target_scope: "https://vault.azure.net/.default",
+        audience: "trstctl-secrets",
+        subject: "system:serviceaccount:security:azure",
+        target_id: "azure-keyvault-primary",
+        allowed_remote_key_prefixes: ["azure/"],
+        workload_proof_ref: "secret://sync/azure-proof",
         trust_source_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         enabled: true,
       }),

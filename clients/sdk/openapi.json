@@ -16310,6 +16310,12 @@
           "audience": {
             "type": "string"
           },
+          "azure_tenant_id": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
@@ -16335,7 +16341,8 @@
           "provider": {
             "enum": [
               "aws",
-              "gcp"
+              "gcp",
+              "azure"
             ],
             "type": "string"
           },
@@ -16362,6 +16369,9 @@
             "type": "string"
           },
           "target_id": {
+            "type": "string"
+          },
+          "target_scope": {
             "type": "string"
           },
           "tenant_id": {
@@ -16391,6 +16401,9 @@
           "provider",
           "role_arn",
           "service_account",
+          "azure_tenant_id",
+          "client_id",
+          "target_scope",
           "audience",
           "subject",
           "target_id",
@@ -16433,6 +16446,14 @@
           "audience": {
             "type": "string"
           },
+          "azure_tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "client_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -16442,7 +16463,8 @@
           "provider": {
             "enum": [
               "aws",
-              "gcp"
+              "gcp",
+              "azure"
             ],
             "type": "string"
           },
@@ -16456,6 +16478,9 @@
             "type": "string"
           },
           "target_id": {
+            "type": "string"
+          },
+          "target_scope": {
             "type": "string"
           },
           "trust_source_id": {
@@ -34394,7 +34419,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Create an AWS workload-identity source for bounded secret-sync delivery",
+        "summary": "Create a cloud workload-identity source for bounded secret-sync delivery",
         "x-trstctl-permission": "secrets:write"
       }
     },

@@ -10315,10 +10315,10 @@
       "phase": "P2",
       "priority": 79,
       "served_state": "conditional",
-      "backend_status": "served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers through sealed-outbox delivery; AWS and GCP can explicitly replace static credentials with tenant-scoped OIDC workload identity exchanged only inside that bounded outbox worker",
-      "current_frontend_mapping": "operate: Secrets UI serves configured sync delivery, catalog/status, AWS/GCP workload-identity source lifecycle and honest offline/failure state, cloud discovery, Kubernetes/workload injection, unvaulted posture, and provider-specific Terraform/OpenTofu and Vault KV v2 targets",
+      "backend_status": "served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers through sealed-outbox delivery; AWS, GCP, and Azure can explicitly replace static credentials with tenant-scoped OIDC workload identity exchanged only inside that bounded outbox worker",
+      "current_frontend_mapping": "operate: Secrets UI serves configured sync delivery, catalog/status, AWS/GCP/Azure workload-identity source lifecycle and honest offline/failure state, cloud discovery, Kubernetes/workload injection, unvaulted posture, and provider-specific Terraform/OpenTofu and Vault KV v2 targets",
       "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt. Roadmap residual: arbitrary webhook-specific managed forms may add convenience beyond the served generic JSON target without changing the backend boundary.",
-      "acceptance_test": "The secret_sync and secrets_residuals DoD census rows drive all ten configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback. TestServedAWSFederatedOutboxTenantIsolationTokenRedaction and TestServedGCPFederatedOutboxTenantIsolationTokenRedaction prove explicit tenant sources exchange validated OIDC proofs only during outbox drain, feed temporary byte-native credentials to the existing AWS/GCP pushers, write the external value, and never cross tenants or persist/log proof or token bytes.",
+      "acceptance_test": "The secret_sync and secrets_residuals DoD census rows drive all ten configured pushers from production buildRunDeps through the authenticated sync route and sealed outbox, requiring exact target authentication plus independent external value readback. TestServedAWSFederatedOutboxTenantIsolationTokenRedaction, TestServedGCPFederatedOutboxTenantIsolationTokenRedaction, and TestServedAzureFederatedOutboxTenantIsolationTokenRedaction prove explicit tenant sources exchange validated OIDC proofs only during outbox drain, feed temporary byte-native credentials to the existing AWS/GCP/Azure pushers, write the external value, and never cross tenants or persist/log proof or token bytes.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
@@ -10344,7 +10344,7 @@
         "web/src/pages/secrets/SecretSyncWorkloadIdentityPanel.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071. WIRE-SYNC-000/101-108 add validated tenant target configuration, production buildRunDeps construction, immutable ciphertext-only intent, sealed outbox delivery, and universal external proof for the original eight native targets. COMPLETE-SECRETS-103/104 add provider-specific Terraform Cloud/OpenTofu Variables API and Vault KV v2 pushers to the same production assembly and proof boundary. I-093b9270 adds the first independently shippable cloud workload-identity stage: an explicitly configured, RLS-scoped AWS source and one HOMEGROWN internal/cloudauth cache/refresh core. I-5e993f53 instantiates that core with a thin RFC 8693 GCP encoder and optional service-account impersonation behind the existing GCP bearer path. Both stages keep proof resolution and exchange worker-only, report a terminal honest air-gap state, keep temporary credentials byte-native, and serve API, CLI, generated contracts, and console workflow. Zero new modules were added because the existing hand-written REST, cloudhttp, internal/crypto, and secret.Buffer seams supply the entire boundary. Sync remains target-configured and fail-closed; arbitrary webhooks intentionally use the generic JSON target.",
+      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071. WIRE-SYNC-000/101-108 add validated tenant target configuration, production buildRunDeps construction, immutable ciphertext-only intent, sealed outbox delivery, and universal external proof for the original eight native targets. COMPLETE-SECRETS-103/104 add provider-specific Terraform Cloud/OpenTofu Variables API and Vault KV v2 pushers to the same production assembly and proof boundary. I-093b9270 adds the first independently shippable cloud workload-identity stage: an explicitly configured, RLS-scoped AWS source and one HOMEGROWN internal/cloudauth cache/refresh core. I-5e993f53 instantiates that core with a thin RFC 8693 GCP encoder and optional service-account impersonation behind the existing GCP bearer path. I-c439e0bb completes the owner-committed three-cloud scope with a thin Azure Entra federated-credential encoder behind the existing Azure bearer path. Azure reuses the already validated OIDC proof as client_assertion, so no certificate signer or parallel auth stack is added. All three stages keep proof resolution and exchange worker-only, report a terminal honest air-gap state, keep temporary credentials byte-native, and serve API, CLI, generated contracts, and console workflow. Zero new modules were added because the existing hand-written REST, cloudhttp, internal/crypto, and secret.Buffer seams supply the entire boundary. Sync remains target-configured and fail-closed; arbitrary webhooks intentionally use the generic JSON target.",
       "api_surface": [
         "getCloudSecretManagerIntegration",
         "listSecretSyncTargets",
@@ -10379,10 +10379,10 @@
             "GET /api/v1/secrets/cloud-secret-managers serves read-only discovery posture for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV.",
             "buildRunDeps constructs TenantSecretSyncTargets from tenant-bound operator configuration; GET /api/v1/secrets/syncs/targets marks those concrete targets configured.",
             "POST /api/v1/secrets/syncs reads a tenant secret, appends an immutable ciphertext-only intent, atomically projects a sealed outbox row, and lets only the outbox dispatcher perform the external write.",
-            "POST/GET/PUT/DELETE /api/v1/secrets/syncs/workload-identity-sources serves RLS-scoped AWS and GCP bindings without storing a proof or cloud token. Only the bounded secret-sync outbox worker resolves and validates the OIDC proof, calls provider STS, caches a locked short-lived credential, and feeds it to the existing AWS or GCP pusher; GCP may optionally impersonate a service account and air-gap denial is terminal before transport.",
+            "POST/GET/PUT/DELETE /api/v1/secrets/syncs/workload-identity-sources serves RLS-scoped AWS, GCP, and Azure bindings without storing a proof or cloud token. Only the bounded secret-sync outbox worker resolves and validates the OIDC proof, calls the provider exchange, caches a locked short-lived credential, and feeds it to the existing provider pusher; GCP may optionally impersonate a service account, Azure uses an Entra federated credential accepting the existing OIDC proof as client_assertion, and air-gap denial is terminal before transport.",
             "Kubernetes operator, workload-injection, and unvaulted-secret posture remain served independently of outbound native pusher delivery.",
             "served_state=conditional",
-            "backend_status=served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers and explicitly configured AWS/GCP workload-identity exchanges through sealed-outbox delivery",
+            "backend_status=served when configured: buildRunDeps production-assembles ten tenant-bound outbound pushers and explicitly configured AWS/GCP/Azure workload-identity exchanges through sealed-outbox delivery",
             "TrstctlSecretSync and TrstctlSecretInjection controller posture is served independently of outbound pusher construction; unvaulted posture returns redacted leaked_secret evidence.",
             "The secret_sync and secrets_residuals DoD proofs require exact vendor authentication and independent external readback for AWS, GCP, Azure, GitHub sealed boxes, GitLab, Vercel, generic CI JSON, Kubernetes, Terraform Cloud/OpenTofu, and Vault KV v2 targets."
           ],
@@ -10392,7 +10392,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets serves secret sync target catalog, configured mapping form, AWS/GCP workload-identity source wizard and honest runtime state, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts.",
+            "current_frontend_mapping: operate: Secrets at /secrets serves secret sync target catalog, configured mapping form, AWS/GCP/Azure workload-identity source wizard and honest runtime state, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts.",
             "target_gui_mapping: Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt."
           ],
           "refs": [
@@ -10431,7 +10431,7 @@
             "Cloud-secret discovery and Kubernetes/workload posture tests exercise their shipped paths.",
             "Secret-sync unit tests cover vendor create/update semantics, while TestDODSecretSyncProductionAssembly binds every constructor to buildRunDeps and proves authenticated external write/readback.",
             "Every outbound pusher has a required secret_sync census entry using the same nonce-bound external substrate contract.",
-            "TestServedAWSFederatedOutboxTenantIsolationTokenRedaction proves API configuration makes zero egress, outbox drain performs real STS and SigV4 external writes, cross-tenant reads fail, and durable rows/event/API responses redact OIDC proof and temporary token bytes. TestServedAWSFederatedAirGapIsTerminalWithoutNetwork proves stable offline-disabled state, zero transport, and no infinite retry."
+            "The AWS, GCP, and Azure TestServed*FederatedOutboxTenantIsolationTokenRedaction tests prove API configuration makes zero egress, outbox drain performs each real token exchange and authenticated external write, cross-tenant reads fail, and durable rows/event/API responses redact OIDC proof and temporary token bytes. Their matching AirGapIsTerminalWithoutNetwork tests prove stable offline-disabled state, zero transport, and no infinite retry."
           ],
           "refs": [
             "internal/server/dod_secret_integrations_runtime_test.go",
@@ -10441,6 +10441,8 @@
             "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/server/secrets_sync_served_test.go",
             "internal/server/aws_workload_identity_served_test.go",
+            "internal/server/gcp_workload_identity_served_test.go",
+            "internal/server/azure_workload_identity_served_test.go",
             "internal/cloudauth/cloudauth_test.go",
             "internal/server/unvaulted_secret_posture_served_test.go",
             "internal/secretsync/secretsync_test.go",
@@ -10487,7 +10489,9 @@
             "internal/secretsync/secretsync.go",
             "internal/operator/secretsync.go",
             "internal/server/secrets_sync_served_test.go",
-            "internal/server/aws_workload_identity_served_test.go"
+            "internal/server/aws_workload_identity_served_test.go",
+            "internal/server/gcp_workload_identity_served_test.go",
+            "internal/server/azure_workload_identity_served_test.go"
           ]
         },
         "telemetry": {

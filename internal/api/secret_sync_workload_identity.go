@@ -22,6 +22,9 @@ type secretSyncWorkloadIdentitySourceRequest struct {
 	Provider                 string   `json:"provider,omitempty"`
 	RoleARN                  string   `json:"role_arn"`
 	ServiceAccount           string   `json:"service_account,omitempty"`
+	AzureTenantID            string   `json:"azure_tenant_id,omitempty"`
+	ClientID                 string   `json:"client_id,omitempty"`
+	TargetScope              string   `json:"target_scope,omitempty"`
 	Audience                 string   `json:"audience"`
 	Subject                  string   `json:"subject"`
 	TargetID                 string   `json:"target_id"`
@@ -38,6 +41,9 @@ type secretSyncWorkloadIdentitySourceResponse struct {
 	Provider                 string   `json:"provider"`
 	RoleARN                  string   `json:"role_arn"`
 	ServiceAccount           string   `json:"service_account"`
+	AzureTenantID            string   `json:"azure_tenant_id"`
+	ClientID                 string   `json:"client_id"`
+	TargetScope              string   `json:"target_scope"`
 	Audience                 string   `json:"audience"`
 	Subject                  string   `json:"subject"`
 	TargetID                 string   `json:"target_id"`
@@ -161,6 +167,9 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 	}
 	req.RoleARN = strings.TrimSpace(req.RoleARN)
 	req.ServiceAccount = strings.TrimSpace(req.ServiceAccount)
+	req.AzureTenantID = strings.TrimSpace(req.AzureTenantID)
+	req.ClientID = strings.TrimSpace(req.ClientID)
+	req.TargetScope = strings.TrimSpace(req.TargetScope)
 	req.Audience = strings.TrimSpace(req.Audience)
 	req.Subject = strings.TrimSpace(req.Subject)
 	req.TargetID = strings.TrimSpace(req.TargetID)
@@ -179,12 +188,12 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 		if !strings.HasPrefix(req.RoleARN, "arn:aws:iam::") || !strings.Contains(req.RoleARN, ":role/") {
 			return req, errStatus(http.StatusBadRequest, "role_arn must be an AWS IAM role ARN")
 		}
-		if req.ServiceAccount != "" {
-			return req, errStatus(http.StatusBadRequest, "service_account is only valid for GCP")
+		if req.ServiceAccount != "" || req.AzureTenantID != "" || req.ClientID != "" || req.TargetScope != "" {
+			return req, errStatus(http.StatusBadRequest, "AWS sources forbid service_account and Azure-only fields")
 		}
 	case "gcp":
-		if req.RoleARN != "" {
-			return req, errStatus(http.StatusBadRequest, "role_arn is only valid for AWS")
+		if req.RoleARN != "" || req.AzureTenantID != "" || req.ClientID != "" || req.TargetScope != "" {
+			return req, errStatus(http.StatusBadRequest, "GCP sources forbid role_arn and Azure-only fields")
 		}
 		if req.ServiceAccount != "" &&
 			(!strings.HasSuffix(req.ServiceAccount, ".iam.gserviceaccount.com") ||
@@ -192,8 +201,26 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 				strings.ContainsAny(req.ServiceAccount, " \t\r\n")) {
 			return req, errStatus(http.StatusBadRequest, "service_account must be a GCP IAM service-account email")
 		}
+	case "azure":
+		if req.RoleARN != "" || req.ServiceAccount != "" {
+			return req, errStatus(http.StatusBadRequest, "Azure sources forbid role_arn and service_account")
+		}
+		if id, err := googleuuid.Parse(req.AzureTenantID); err != nil || id == googleuuid.Nil {
+			return req, errStatus(http.StatusBadRequest, "azure_tenant_id must be a non-nil UUID")
+		}
+		if id, err := googleuuid.Parse(req.ClientID); err != nil || id == googleuuid.Nil {
+			return req, errStatus(http.StatusBadRequest, "client_id must be a non-nil UUID")
+		}
+		switch req.TargetScope {
+		case "https://vault.azure.net/.default",
+			"https://vault.azure.cn/.default",
+			"https://vault.usgovcloudapi.net/.default",
+			"https://vault.microsoftazure.de/.default":
+		default:
+			return req, errStatus(http.StatusBadRequest, "target_scope must be an allowed Azure Key Vault resource scope")
+		}
 	default:
-		return req, errStatus(http.StatusBadRequest, "provider must be aws or gcp")
+		return req, errStatus(http.StatusBadRequest, "provider must be aws, gcp, or azure")
 	}
 	if !strings.HasPrefix(req.WorkloadProofRef, "file:") && !strings.HasPrefix(req.WorkloadProofRef, "secret://") {
 		return req, errStatus(http.StatusBadRequest, "workload_proof_ref must use file: or secret://; inline proofs are forbidden")
@@ -239,7 +266,8 @@ func (a *API) emitSecretSyncWorkloadIdentitySource(ctx context.Context, tenantID
 	data, err := json.Marshal(projections.SecretSyncWorkloadIdentitySourceUpserted{
 		ID: id, Name: req.Name, Provider: req.Provider, RoleARN: req.RoleARN,
 		ServiceAccount: req.ServiceAccount,
-		Audience:       req.Audience, Subject: req.Subject, TargetID: req.TargetID,
+		AzureTenantID:  req.AzureTenantID, ClientID: req.ClientID, TargetScope: req.TargetScope,
+		Audience: req.Audience, Subject: req.Subject, TargetID: req.TargetID,
 		AllowedRemoteKeyPrefixes: req.AllowedRemoteKeyPrefixes,
 		WorkloadProofRef:         req.WorkloadProofRef, TrustSourceID: req.TrustSourceID,
 		Enabled: *req.Enabled,
@@ -265,6 +293,7 @@ func toSecretSyncWorkloadIdentitySourceResponse(source store.SecretSyncWorkloadI
 	out := secretSyncWorkloadIdentitySourceResponse{
 		ID: source.ID, TenantID: source.TenantID, Name: source.Name, Provider: source.Provider,
 		RoleARN: source.RoleARN, ServiceAccount: source.ServiceAccount,
+		AzureTenantID: source.AzureTenantID, ClientID: source.ClientID, TargetScope: source.TargetScope,
 		Audience: source.Audience, Subject: source.Subject,
 		TargetID: source.TargetID, AllowedRemoteKeyPrefixes: append([]string(nil), source.AllowedRemoteKeyPrefixes...),
 		WorkloadProofRef: source.WorkloadProofRef, TrustSourceID: source.TrustSourceID,

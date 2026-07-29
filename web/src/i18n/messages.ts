@@ -5308,9 +5308,27 @@ export const messages = {
   "secrets.wif.actions": { defaultMessage: "Actions", description: "Workload-identity source actions column." },
   "secrets.wif.audience": { defaultMessage: "Token audience", description: "Expected workload proof audience." },
   "secrets.wif.audienceRequired": { defaultMessage: "Audience is required.", description: "Missing audience validation." },
+  "secrets.wif.azureTenantID": { defaultMessage: "Entra tenant ID", description: "Azure Entra tenant UUID." },
+  "secrets.wif.azureTenantIDPlaceholder": {
+    defaultMessage: "33333333-3333-4333-8333-333333333333",
+    description: "Example Azure Entra tenant UUID.",
+  },
+  "secrets.wif.azureTenantInvalid": {
+    defaultMessage: "Use a non-nil Entra tenant UUID.",
+    description: "Invalid Azure Entra tenant validation.",
+  },
   "secrets.wif.back": { defaultMessage: "Back", description: "Workload-identity wizard back action." },
   "secrets.wif.binding": { defaultMessage: "Workload binding", description: "Workload subject and audience column." },
   "secrets.wif.cancel": { defaultMessage: "Cancel edit", description: "Cancel workload-identity source editing." },
+  "secrets.wif.clientID": { defaultMessage: "Entra application client ID", description: "Azure Entra application client UUID." },
+  "secrets.wif.clientIDInvalid": {
+    defaultMessage: "Use a non-nil Entra application client UUID.",
+    description: "Invalid Azure Entra client validation.",
+  },
+  "secrets.wif.clientIDPlaceholder": {
+    defaultMessage: "44444444-4444-4444-8444-444444444444",
+    description: "Example Azure Entra application client UUID.",
+  },
   "secrets.wif.createHeading": { defaultMessage: "Add cloud workload identity", description: "Create wizard heading." },
   "secrets.wif.created": { defaultMessage: "Cloud workload identity source created.", description: "Create success notice." },
   "secrets.wif.delete": { defaultMessage: "Delete", description: "Delete workload-identity source action." },
@@ -5318,7 +5336,7 @@ export const messages = {
   "secrets.wif.deleting": { defaultMessage: "Deleting…", description: "Delete progress label." },
   "secrets.wif.description": {
     defaultMessage:
-      "Bind an OIDC workload proof to one AWS or GCP sync target. trstctl exchanges it for a short-lived credential only while the bounded outbox worker delivers a secret.",
+      "Bind an OIDC workload proof to one AWS, GCP, or Azure sync target. trstctl exchanges it for a short-lived credential only while the bounded outbox worker delivers a secret.",
     description: "Worker-only workload-identity exchange explanation.",
   },
   "secrets.wif.edit": { defaultMessage: "Edit", description: "Edit workload-identity source action." },
@@ -5354,6 +5372,7 @@ export const messages = {
   },
   "secrets.wif.provider": { defaultMessage: "Cloud provider", description: "Cloud workload-identity provider selector." },
   "secrets.wif.providerAWS": { defaultMessage: "AWS", description: "AWS workload-identity provider option." },
+  "secrets.wif.providerAzure": { defaultMessage: "Azure", description: "Azure workload-identity provider option." },
   "secrets.wif.providerGCP": { defaultMessage: "GCP", description: "GCP workload-identity provider option." },
   "secrets.wif.proofRef": { defaultMessage: "Workload proof reference", description: "OIDC proof reference field." },
   "secrets.wif.proofRefHint": {
@@ -5403,6 +5422,19 @@ export const messages = {
   "secrets.wif.subjectRequired": { defaultMessage: "Subject is required.", description: "Missing subject validation." },
   "secrets.wif.target": { defaultMessage: "Cloud sync target", description: "Cloud secret-sync target field." },
   "secrets.wif.targetRequired": { defaultMessage: "Target is required.", description: "Missing target validation." },
+  "secrets.wif.targetScope": { defaultMessage: "Azure Key Vault scope", description: "Allowed Azure Key Vault resource scope." },
+  "secrets.wif.targetScopeHint": {
+    defaultMessage: "Use the exact Key Vault .default scope for the target cloud.",
+    description: "Azure target resource scope guidance.",
+  },
+  "secrets.wif.targetScopeInvalid": {
+    defaultMessage: "Use an allowed Azure Key Vault .default scope.",
+    description: "Invalid Azure target resource scope validation.",
+  },
+  "secrets.wif.targetScopePlaceholder": {
+    defaultMessage: "https://vault.azure.net/.default",
+    description: "Example Azure Key Vault target scope.",
+  },
   "secrets.wif.trustSource": { defaultMessage: "JWT trust source", description: "Workload trust-source field." },
   "secrets.wif.trustSourceRequired": {
     defaultMessage: "Select a workload trust source.",

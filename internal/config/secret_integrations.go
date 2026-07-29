@@ -115,6 +115,7 @@ type SecretSyncTargetConfig struct {
 	// worker is the only component allowed to use WorkloadIdentityEndpoint.
 	AWSWorkloadIdentity                   bool     `json:"aws_workload_identity,omitempty"`
 	GCPWorkloadIdentity                   bool     `json:"gcp_workload_identity,omitempty"`
+	AzureWorkloadIdentity                 bool     `json:"azure_workload_identity,omitempty"`
 	WorkloadIdentityEndpoint              string   `json:"workload_identity_endpoint,omitempty"`
 	WorkloadIdentityImpersonationEndpoint string   `json:"workload_identity_impersonation_endpoint,omitempty"`
 	AllowPrivate                          bool     `json:"allow_private_endpoint,omitempty"`
@@ -272,6 +273,15 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 
 func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 	var errs []error
+	if c.AWSWorkloadIdentity && c.Type != "aws-secrets-manager" {
+		errs = append(errs, fmt.Errorf("%s aws_workload_identity is only valid for aws-secrets-manager", where))
+	}
+	if c.GCPWorkloadIdentity && c.Type != "gcp-secret-manager" {
+		errs = append(errs, fmt.Errorf("%s gcp_workload_identity is only valid for gcp-secret-manager", where))
+	}
+	if c.AzureWorkloadIdentity && c.Type != "azure-key-vault" {
+		errs = append(errs, fmt.Errorf("%s azure_workload_identity is only valid for azure-key-vault", where))
+	}
 	require := func(value, name string) {
 		if strings.TrimSpace(value) == "" {
 			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
@@ -296,6 +306,9 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 				if err := validateSecretIntegrationEndpoint(c.WorkloadIdentityEndpoint, c.AllowInsecureLoopback); err != nil {
 					errs = append(errs, fmt.Errorf("%s workload_identity_endpoint: %w", where, err))
 				}
+			}
+			if strings.TrimSpace(c.WorkloadIdentityImpersonationEndpoint) != "" {
+				errs = append(errs, fmt.Errorf("%s workload_identity_impersonation_endpoint is only valid for GCP", where))
 			}
 		} else {
 			require(c.AccessKeyID, "access_key_id")
@@ -329,7 +342,24 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 			}
 		}
 	case "azure-key-vault":
-		ref(c.TokenRef, "token_ref", false)
+		if c.AzureWorkloadIdentity {
+			if strings.TrimSpace(c.TokenRef) != "" {
+				errs = append(errs, fmt.Errorf("%s Azure workload identity forbids static token_ref", where))
+			}
+			if c.WorkloadIdentityEndpoint != "" {
+				if err := validateSecretIntegrationEndpoint(c.WorkloadIdentityEndpoint, c.AllowInsecureLoopback); err != nil {
+					errs = append(errs, fmt.Errorf("%s workload_identity_endpoint: %w", where, err))
+				}
+			}
+			if strings.TrimSpace(c.WorkloadIdentityImpersonationEndpoint) != "" {
+				errs = append(errs, fmt.Errorf("%s workload_identity_impersonation_endpoint is only valid for GCP", where))
+			}
+		} else {
+			ref(c.TokenRef, "token_ref", false)
+			if strings.TrimSpace(c.WorkloadIdentityEndpoint) != "" {
+				errs = append(errs, fmt.Errorf("%s workload_identity_endpoint requires azure_workload_identity=true", where))
+			}
+		}
 	case "github-actions":
 		require(c.Owner, "owner")
 		require(c.Repo, "repo")

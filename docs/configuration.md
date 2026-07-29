@@ -863,11 +863,53 @@ Both are copied into locked, non-dumpable memory and destroyed after the provide
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
 `azure-entra`, `kubernetes`, and `redis`. Sync `type` values are
 `aws-secrets-manager`, `gcp-secret-manager`, `azure-key-vault`, `github-actions`,
-`gitlab-ci`, `vercel`, `generic-ci-json`, and `kubernetes-secrets`. Startup validates
-each provider's required native fields, role bindings, endpoint scheme, private-egress
-CIDRs, and credential-reference form before accepting traffic. An absent tenant target
-or provider fails its served mutation closed; it never falls back to another tenant or
+`gitlab-ci`, `vercel`, `generic-ci-json`, `kubernetes-secrets`,
+`terraform-cloud-opentofu`, and `vault-kv-v2`. Startup validates each provider's
+required native fields, role bindings, endpoint scheme, private-egress CIDRs, and
+credential-reference form before accepting traffic. An absent tenant target or
+provider fails its served mutation closed; it never falls back to another tenant or
 to a test registry.
+
+AWS, GCP, and Azure sync targets can explicitly replace their static target
+credential with tenant-owned workload identity. Set exactly the provider switch
+(`aws_workload_identity`, `gcp_workload_identity`, or
+`azure_workload_identity`) on the matching target. The switch is false by default
+and forbids the corresponding static credential fields when true. The workload
+proof itself stays behind a `file:` or tenant-scoped `secret://` reference.
+Only the bounded secret-sync outbox worker opens and validates that proof, POSTs the
+provider exchange, caches the locked short-lived token until its refresh boundary,
+and feeds it into the existing hand-written target client. The request handler never
+performs that egress. Air-gapped mode records `offline_disabled`, fails that queued
+delivery once, and makes no token or target request.
+
+Azure uses an Entra federated credential that accepts the already validated OIDC
+proof directly as the OAuth `client_assertion`. This is simpler than a
+certificate-signed assertion: it adds no private key or certificate custody. Create
+the matching federated-credential binding on the Entra application, then configure
+the Key Vault target:
+
+```yaml
+secret_integrations:
+  sync_targets:
+    - tenant_id: 11111111-1111-4111-8111-111111111111
+      id: payments-azure-key-vault
+      type: azure-key-vault
+      endpoint: https://payments.vault.azure.net
+      azure_workload_identity: true
+      # Optional. When omitted, the source's azure_tenant_id selects:
+      # https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+      # workload_identity_endpoint: https://login.microsoftonline.com/.../oauth2/v2.0/token
+```
+
+Create the tenant-scoped source through the console or
+`trstctl-cli secrets syncs workload-identities create --body-file source.json`.
+For Azure, the request sets `provider: "azure"`, `azure_tenant_id`, the Entra
+application `client_id`, and an allowed Key Vault `target_scope` such as
+`https://vault.azure.net/.default`. It also binds the exact OIDC `audience` and
+`subject`, `target_id`, allowed remote-key prefixes, `workload_proof_ref`, and a
+JWT/JWKS `trust_source_id`. Those routing fields are stored under PostgreSQL RLS;
+proof bytes and minted bearer tokens are never stored in the source row, event, job,
+or API response.
 
 Every dynamic-provider and sync-target HTTP endpoint must use HTTPS in production.
 `allow_private_endpoint` grants a named private destination; it never grants plaintext.

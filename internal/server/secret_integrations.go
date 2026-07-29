@@ -530,7 +530,8 @@ func secretSyncTargetsFromConfig(
 			minter.Close()
 			return nil, nil, errors.New("server: secret-sync target requires tenant and id")
 		}
-		if (entry.AWSWorkloadIdentity || entry.GCPWorkloadIdentity) && (st == nil || kek == nil || log == nil) {
+		if (entry.AWSWorkloadIdentity || entry.GCPWorkloadIdentity || entry.AzureWorkloadIdentity) &&
+			(st == nil || kek == nil || log == nil) {
 			minter.Close()
 			return nil, nil, fmt.Errorf("server: workload identity target %s/%s requires store, event log, and KEK", entry.TenantID, entry.ID)
 		}
@@ -554,6 +555,15 @@ func secretSyncTargetsFromConfig(
 					minter.Close()
 					return nil, nil, fmt.Errorf("server: secret-sync target %s/%s GCP impersonation endpoint: %w", entry.TenantID, entry.ID, err)
 				}
+			}
+		}
+		if entry.AzureWorkloadIdentity && strings.TrimSpace(entry.WorkloadIdentityEndpoint) != "" {
+			if _, err := secretIntegrationHTTPClient(
+				entry.WorkloadIdentityEndpoint, entry.AllowPrivate, entry.AllowInsecureLoopback,
+				entry.PrivateEgressCIDRs, guard,
+			); err != nil {
+				minter.Close()
+				return nil, nil, fmt.Errorf("server: secret-sync target %s/%s Azure workload identity endpoint: %w", entry.TenantID, entry.ID, err)
 			}
 		}
 		if _, ok := registry[entry.TenantID]; !ok {
@@ -650,10 +660,11 @@ func pushConfiguredSecretSync(ctx context.Context, p *configuredSyncPusher, key 
 			Endpoint: cfg.Endpoint, HTTPClient: client, Project: cfg.Project, BearerToken: token,
 		})
 	case "azure-key-vault":
-		token, resolveErr := resolve(cfg.TokenRef)
-		if resolveErr != nil {
-			return resolveErr
+		token, cleanup, credentialErr := p.azureSyncCredentials(ctx, key, resolve)
+		if credentialErr != nil {
+			return credentialErr
 		}
+		defer cleanup()
 		concrete, err = secretsync.NewAzureKeyVaultPusher(secretsync.AzureKeyVaultConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, APIVersion: cfg.APIVersion, BearerToken: token,
 		})
@@ -990,6 +1001,109 @@ func (p *configuredSyncPusher) mintGCPWorkloadIdentity(ctx context.Context, remo
 		store.SecretSyncWorkloadIdentityActive, reason, &expiresAt); err != nil {
 		credential.Destroy()
 		return nil, fmt.Errorf("server: record GCP workload identity active state: %w", err)
+	}
+	return credential, nil
+}
+
+func (p *configuredSyncPusher) azureSyncCredentials(
+	ctx context.Context,
+	remoteKey string,
+	resolve func(string) ([]byte, error),
+) ([]byte, func(), error) {
+	if !p.cfg.AzureWorkloadIdentity {
+		token, err := resolve(p.cfg.TokenRef)
+		return token, func() {}, err
+	}
+	credential, err := p.mintAzureWorkloadIdentity(ctx, remoteKey)
+	if err != nil {
+		return nil, func() {}, err
+	}
+	return credential.Primary.Bytes(), credential.Destroy, nil
+}
+
+func azureWorkloadIdentityEndpoint(cfg config.SecretSyncTargetConfig, tenantID string) string {
+	if endpoint := strings.TrimSpace(cfg.WorkloadIdentityEndpoint); endpoint != "" {
+		return endpoint
+	}
+	return "https://login.microsoftonline.com/" + url.PathEscape(tenantID) + "/oauth2/v2.0/token"
+}
+
+func (p *configuredSyncPusher) mintAzureWorkloadIdentity(ctx context.Context, remoteKey string) (*cloudauth.Credential, error) {
+	if p.store == nil || p.log == nil || p.minter == nil {
+		return nil, errors.New("server: Azure workload identity is not fully assembled")
+	}
+	source, err := p.store.FindSecretSyncWorkloadIdentitySourceForTarget(ctx, p.tenantID, "azure", p.cfg.ID, remoteKey)
+	if err != nil {
+		if errors.Is(err, store.ErrSecretSyncWorkloadIdentitySourceNotFound) {
+			return nil, errors.New("server: no enabled Azure workload identity source authorizes this target and remote key")
+		}
+		return nil, fmt.Errorf("server: load Azure workload identity source: %w", err)
+	}
+	operationID := secretsync.OperationID(ctx)
+	if operationID == "" {
+		return nil, errors.New("server: Azure workload identity exchange requires a durable outbox operation id")
+	}
+	if p.guard != nil && p.guard.Enabled() {
+		if err := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityOfflineDisabled, "air_gap_enabled", nil); err != nil {
+			return nil, fmt.Errorf("server: record Azure workload identity offline state: %w", err)
+		}
+		return nil, cloudauth.OfflineDisabled("Azure")
+	}
+	trust, err := p.store.GetWorkloadAttesterTrustSource(ctx, p.tenantID, source.TrustSourceID)
+	if err != nil || !trust.Enabled || trust.RevokedAt != nil || trust.Audience != source.Audience {
+		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityExchangeFailed, "trust_source_invalid", nil); statusErr != nil {
+			return nil, fmt.Errorf("server: record Azure workload identity trust failure: %w", statusErr)
+		}
+		return nil, errors.New("server: Azure workload identity trust source is unavailable")
+	}
+	cacheKey := fmt.Sprintf("%s\x00%s\x00%d\x00%d\x00%d",
+		p.tenantID, source.ID, source.UpdatedAt.UnixNano(), trust.RotationVersion, trust.UpdatedAt.UnixNano())
+	credential, cacheHit, err := p.minter.Mint(ctx, cacheKey, func(exchangeCtx context.Context) (cloudauth.Material, error) {
+		proof, resolveErr := p.credentials.resolve(exchangeCtx, p.tenantID, source.WorkloadProofRef)
+		if resolveErr != nil {
+			return cloudauth.Material{}, errors.New("cloudauth: workload proof reference could not be resolved")
+		}
+		defer proof.Destroy()
+		if validateErr := cloudauth.ValidateOIDCProof(
+			proof.Bytes(), trust.JWKS, trust.Issuer, source.Audience, source.Subject, time.Now().UTC(),
+		); validateErr != nil {
+			return cloudauth.Material{}, validateErr
+		}
+		endpoint := azureWorkloadIdentityEndpoint(p.cfg, source.AzureTenantID)
+		client, clientErr := secretIntegrationHTTPClient(
+			endpoint, p.cfg.AllowPrivate, p.cfg.AllowInsecureLoopback,
+			p.cfg.PrivateEgressCIDRs, p.guard,
+		)
+		if clientErr != nil {
+			return cloudauth.Material{}, errors.New("cloudauth: Azure token client is unavailable")
+		}
+		return cloudauth.ExchangeAzureFederatedCredential(exchangeCtx, client, cloudauth.AzureExchangeRequest{
+			Endpoint: endpoint, ClientID: source.ClientID, Scope: source.TargetScope,
+			SubjectToken: proof.Bytes(),
+		})
+	})
+	if err != nil {
+		reason := "exchange_failed"
+		if errors.Is(err, cloudauth.ErrInvalidWorkloadProof) {
+			reason = "proof_invalid"
+		}
+		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+			store.SecretSyncWorkloadIdentityExchangeFailed, reason, nil); statusErr != nil {
+			return nil, fmt.Errorf("server: record Azure workload identity failure: %w", statusErr)
+		}
+		return nil, fmt.Errorf("server: Azure workload identity exchange failed: %w", err)
+	}
+	reason := "credential_exchanged"
+	if cacheHit {
+		reason = "credential_cache_hit"
+	}
+	expiresAt := credential.ExpiresAt
+	if err := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
+		store.SecretSyncWorkloadIdentityActive, reason, &expiresAt); err != nil {
+		credential.Destroy()
+		return nil, fmt.Errorf("server: record Azure workload identity active state: %w", err)
 	}
 	return credential, nil
 }
