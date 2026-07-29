@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { useCan } from "@/components/rbac";
@@ -124,7 +124,7 @@ export function SecretSyncWorkloadIdentityPanel() {
       enabled: true,
     },
   });
-  const selectedProvider = form.watch("provider");
+  const selectedProvider = useWatch({ control: form.control, name: "provider" });
 
   const providerTargets = useMemo(
     () =>
@@ -237,7 +237,7 @@ export function SecretSyncWorkloadIdentityPanel() {
     }
   }
 
-  const columns = useMemo<Array<DataGridColumn<SecretSyncWorkloadIdentitySource>>>(() => {
+  const columns: Array<DataGridColumn<SecretSyncWorkloadIdentitySource>> = (() => {
     const allColumns: Array<DataGridColumn<SecretSyncWorkloadIdentitySource>> = [
       {
         id: "name",
@@ -291,7 +291,7 @@ export function SecretSyncWorkloadIdentityPanel() {
       },
     ];
     return allColumns.filter((column) => canWrite || column.id !== "actions");
-  }, [busy, canWrite, t]);
+  })();
 
   let gridState: DataGridState = "ready";
   let stateTitle: string | undefined;
