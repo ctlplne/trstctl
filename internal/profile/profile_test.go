@@ -296,3 +296,55 @@ func TestACMEAuthModeJSONRoundTrip(t *testing.T) {
 		t.Fatalf("acme_auth_mode round-trip = %q", got.ACMEAuthMode)
 	}
 }
+
+func TestDeviceAttestTPMProfileRequiresExplicitRootsIdentifiersAlgorithmsAndFreshness(t *testing.T) {
+	valid := profile.CertificateProfile{
+		Name:    "tpm-devices",
+		Version: 1,
+		ACMEDeviceAttestation: profile.ACMEDeviceAttestationPolicy{
+			Enabled:             true,
+			Format:              "tpm",
+			AttestationRootsPEM: []string{"-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----"},
+			AllowedIdentifiers:  []string{"*.devices.example.test"},
+			AllowedAlgorithms:   []int64{-7},
+			MaxAge:              profile.Duration(5 * time.Minute),
+		},
+	}
+	if err := valid.ValidateDefinition(); err != nil {
+		t.Fatalf("valid TPM device-attestation profile: %v", err)
+	}
+	if !valid.ACMEDeviceAttestation.AllowsIdentifier("host-01.devices.example.test") {
+		t.Fatal("allowed TPM device identifier was rejected")
+	}
+	if valid.ACMEDeviceAttestation.AllowsIdentifier("host-01.other.test") {
+		t.Fatal("out-of-policy TPM device identifier was accepted")
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*profile.CertificateProfile)
+	}{
+		{name: "format", mutate: func(p *profile.CertificateProfile) { p.ACMEDeviceAttestation.Format = "apple" }},
+		{name: "roots", mutate: func(p *profile.CertificateProfile) { p.ACMEDeviceAttestation.AttestationRootsPEM = nil }},
+		{name: "identifiers", mutate: func(p *profile.CertificateProfile) { p.ACMEDeviceAttestation.AllowedIdentifiers = nil }},
+		{name: "algorithms", mutate: func(p *profile.CertificateProfile) { p.ACMEDeviceAttestation.AllowedAlgorithms = nil }},
+		{name: "freshness", mutate: func(p *profile.CertificateProfile) { p.ACMEDeviceAttestation.MaxAge = 0 }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := valid
+			tc.mutate(&got)
+			if err := got.ValidateDefinition(); err == nil {
+				t.Fatalf("profile missing explicit %s policy unexpectedly passed", tc.name)
+			}
+		})
+	}
+
+	disabled := profile.CertificateProfile{
+		Name:    "ordinary-acme",
+		Version: 1,
+	}
+	if err := disabled.ValidateDefinition(); err != nil {
+		t.Fatalf("default-disabled profile rejected: %v", err)
+	}
+}

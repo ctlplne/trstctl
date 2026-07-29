@@ -92,6 +92,15 @@ export interface ACMEDNS01ProviderConfigRequest {
   zone?: string;
 }
 
+export interface ACMEDeviceAttestationPolicy {
+  allowed_algorithms?: number[];
+  allowed_identifiers?: string[];
+  attestation_roots_pem?: string[];
+  enabled?: boolean;
+  format?: "tpm";
+  max_age?: string;
+}
+
 export interface AIAnswer {
   citations?: string[];
   grounded?: boolean;
@@ -957,6 +966,24 @@ export interface CertificateIngest {
 export interface CertificateList {
   items: Certificate[];
   next_cursor?: string;
+}
+
+export interface CertificateProfileSpec {
+  acme_auth_mode?: "public_trust" | "trust_authenticated";
+  acme_device_attestation?: ACMEDeviceAttestationPolicy;
+  allowed_dns_suffixes?: string[];
+  allowed_ekus?: string[];
+  allowed_email_domains?: string[];
+  allowed_ip_cidrs?: string[];
+  allowed_key_algorithms?: string[];
+  allowed_protocols?: string[];
+  allowed_uri_prefixes?: string[];
+  max_validity?: string;
+  min_ecdsa_bits?: number;
+  min_rsa_bits?: number;
+  name?: string;
+  requires_approval?: boolean;
+  version?: number;
 }
 
 export interface CertificateSourceHealth {
@@ -3469,7 +3496,7 @@ export interface Profile {
   created_by?: string;
   id: string;
   name: string;
-  spec?: Record<string, unknown>;
+  spec?: CertificateProfileSpec;
   version: number;
 }
 
@@ -3480,7 +3507,7 @@ export interface ProfileList {
 
 export interface ProfileRequest {
   name: string;
-  spec: Record<string, unknown>;
+  spec: CertificateProfileSpec;
 }
 
 export interface ProtocolProfileStatus {

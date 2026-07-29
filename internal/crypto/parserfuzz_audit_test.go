@@ -92,7 +92,8 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		// fuzzed (FuzzInspect) did not cover it. Pin FuzzInspectCSR by name so the
 		// CSR-inspection + EKU-decode boundary stays fuzzed and dropping its harness
 		// trips this guard (FUZZ-002).
-		"FuzzInspectCSR": "profile-validation CSR inspection + EKU ASN.1 decode (csr.go InspectCSR, eku.go)",
+		"FuzzInspectCSR":                         "profile-validation CSR inspection + EKU ASN.1 decode (csr.go InspectCSR, eku.go)",
+		"FuzzParseAndVerifyTPMDeviceAttestation": "ACME device-attest-01 WebAuthn/CBOR/COSE/TPM envelope (device_attest_tpm.go)",
 	})
 
 	// The cloud instance-identity attesters parse the same untrusted CMS family at

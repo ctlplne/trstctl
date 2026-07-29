@@ -13,9 +13,10 @@ import (
 
 // Challenge types this server offers (RFC 8555 §8).
 const (
-	ChallengeHTTP01    = "http-01"
-	ChallengeDNS01     = "dns-01"
-	ChallengeTLSALPN01 = "tls-alpn-01"
+	ChallengeHTTP01         = "http-01"
+	ChallengeDNS01          = "dns-01"
+	ChallengeTLSALPN01      = "tls-alpn-01"
+	ChallengeDeviceAttest01 = "device-attest-01"
 )
 
 // Validator proves a client controls an identifier by completing a challenge.

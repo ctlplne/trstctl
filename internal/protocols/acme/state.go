@@ -42,15 +42,16 @@ type acmeAccountEvent struct {
 }
 
 type acmeOrderState struct {
-	ID         string    `json:"id"`
-	AccountURL string    `json:"account_url"`
-	Domains    []string  `json:"domains"`
-	AuthzIDs   []string  `json:"authz_ids"`
-	Status     string    `json:"status"`
-	AuthMode   string    `json:"auth_mode,omitempty"`
-	CertID     string    `json:"cert_id,omitempty"`
-	Replaces   string    `json:"replaces,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID                string    `json:"id"`
+	AccountURL        string    `json:"account_url"`
+	Domains           []string  `json:"domains"`
+	AuthzIDs          []string  `json:"authz_ids"`
+	Status            string    `json:"status"`
+	AuthMode          string    `json:"auth_mode,omitempty"`
+	CertID            string    `json:"cert_id,omitempty"`
+	Replaces          string    `json:"replaces,omitempty"`
+	AttestedKeySHA256 string    `json:"attested_key_sha256,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type acmeAuthorizationState struct {
@@ -77,12 +78,13 @@ type acmeOrderCreatedEvent struct {
 }
 
 type acmeChallengeValidatedEvent struct {
-	ChallengeID     string `json:"challenge_id"`
-	AuthzID         string `json:"authz_id"`
-	OrderID         string `json:"order_id"`
-	ChallengeStatus string `json:"challenge_status"`
-	AuthzStatus     string `json:"authz_status"`
-	OrderStatus     string `json:"order_status,omitempty"`
+	ChallengeID       string `json:"challenge_id"`
+	AuthzID           string `json:"authz_id"`
+	OrderID           string `json:"order_id"`
+	ChallengeStatus   string `json:"challenge_status"`
+	AuthzStatus       string `json:"authz_status"`
+	OrderStatus       string `json:"order_status,omitempty"`
+	AttestedKeySHA256 string `json:"attested_key_sha256,omitempty"`
 }
 
 type acmeIssuedState struct {
@@ -241,15 +243,16 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 		return errors.New("acme: malformed order event")
 	}
 	o := &order{
-		id:         payload.Order.ID,
-		accountURL: payload.Order.AccountURL,
-		domains:    append([]string(nil), payload.Order.Domains...),
-		authzIDs:   append([]string(nil), payload.Order.AuthzIDs...),
-		status:     payload.Order.Status,
-		authMode:   profileACMEAuthMode(payload.Order.AuthMode),
-		certID:     payload.Order.CertID,
-		replaces:   payload.Order.Replaces,
-		createdAt:  payload.Order.CreatedAt,
+		id:                payload.Order.ID,
+		accountURL:        payload.Order.AccountURL,
+		domains:           append([]string(nil), payload.Order.Domains...),
+		authzIDs:          append([]string(nil), payload.Order.AuthzIDs...),
+		status:            payload.Order.Status,
+		authMode:          profileACMEAuthMode(payload.Order.AuthMode),
+		certID:            payload.Order.CertID,
+		replaces:          payload.Order.Replaces,
+		attestedKeySHA256: payload.Order.AttestedKeySHA256,
+		createdAt:         payload.Order.CreatedAt,
 	}
 	if o.status == "" {
 		o.status = statusPending
@@ -309,6 +312,9 @@ func (s *Server) applyChallengeValidatedEventLocked(payload acmeChallengeValidat
 	if payload.OrderID != "" && payload.OrderStatus != "" {
 		if o := s.orders[payload.OrderID]; o != nil {
 			o.status = payload.OrderStatus
+			if payload.AttestedKeySHA256 != "" {
+				o.attestedKeySHA256 = payload.AttestedKeySHA256
+			}
 		}
 	}
 	return nil
@@ -371,15 +377,16 @@ func orderCreatedEventFrom(o *order, authzs []*authorization, seq int) acmeOrder
 	payload := acmeOrderCreatedEvent{
 		Seq: seq,
 		Order: acmeOrderState{
-			ID:         o.id,
-			AccountURL: o.accountURL,
-			Domains:    append([]string(nil), o.domains...),
-			AuthzIDs:   append([]string(nil), o.authzIDs...),
-			Status:     o.status,
-			AuthMode:   string(o.authMode),
-			CertID:     o.certID,
-			Replaces:   o.replaces,
-			CreatedAt:  o.createdAt,
+			ID:                o.id,
+			AccountURL:        o.accountURL,
+			Domains:           append([]string(nil), o.domains...),
+			AuthzIDs:          append([]string(nil), o.authzIDs...),
+			Status:            o.status,
+			AuthMode:          string(o.authMode),
+			CertID:            o.certID,
+			Replaces:          o.replaces,
+			AttestedKeySHA256: o.attestedKeySHA256,
+			CreatedAt:         o.createdAt,
 		},
 	}
 	for _, az := range authzs {

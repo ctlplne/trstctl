@@ -1853,6 +1853,47 @@ export const messages = {
     defaultMessage: "Certificate profiles",
     description: "Primary navigation item.",
   },
+  "profiles.deviceAttestation.column": {
+    defaultMessage: "Device attestation",
+    description: "Certificate profile table column for ACME device attestation status.",
+  },
+  "profiles.deviceAttestation.status.enabled": {
+    defaultMessage: "TPM enabled",
+    description: "Certificate profile status when TPM device-attest-01 is explicitly enabled.",
+  },
+  "profiles.deviceAttestation.status.disabled": {
+    defaultMessage: "Disabled",
+    description: "Certificate profile status when device-attest-01 is not enabled.",
+  },
+  "profiles.deviceAttestation.legend": {
+    defaultMessage: "ACME TPM device attestation",
+    description: "Legend for TPM device-attest-01 profile controls.",
+  },
+  "profiles.deviceAttestation.enable": {
+    defaultMessage: "Enable device-attest-01 for this profile",
+    description: "Checkbox label that explicitly enables TPM device attestation.",
+  },
+  "profiles.deviceAttestation.help": {
+    defaultMessage:
+      "Default off. A device must prove a fresh TPM key that chains to an operator root; HTTP-01, DNS-01, and TLS-ALPN-01 stay available.",
+    description: "Fail-closed behavior summary for TPM device attestation.",
+  },
+  "profiles.deviceAttestation.roots": {
+    defaultMessage: "Operator attestation roots (PEM)",
+    description: "Label for TPM attestation trust roots.",
+  },
+  "profiles.deviceAttestation.identifiers": {
+    defaultMessage: "Allowed device identifiers",
+    description: "Label for the TPM device identifier allowlist.",
+  },
+  "profiles.deviceAttestation.algorithms": {
+    defaultMessage: "Allowed COSE algorithms",
+    description: "Label for allowed TPM credential COSE algorithm numbers.",
+  },
+  "profiles.deviceAttestation.maxAge": {
+    defaultMessage: "Maximum proof age",
+    description: "Label for the maximum TPM proof freshness duration.",
+  },
   "nav.item.issuance": {
     defaultMessage: "Issuance",
     description: "Primary navigation item.",

@@ -2682,9 +2682,9 @@
       "priority": 5,
       "served_state": "served",
       "backend_status": "served",
-      "current_frontend_mapping": "basic: Profiles page creates JSON profile",
+      "current_frontend_mapping": "operate: Profiles page serves a guided and JSON profile workflow, including explicit default-off TPM device-attest-01 roots, identifiers, algorithms, freshness, enabled/disabled status, and fail-closed validation errors",
       "target_gui_mapping": "Profile builder with schema-aware form, JSON editor, validation preview, version diff, active state, RA policy binding, and served-path impact preview.",
-      "acceptance_test": "Vitest covers valid profile create, invalid JSON, server validation error, version display, and identity issuance using selected profile.",
+      "acceptance_test": "Vitest covers valid profile create, invalid JSON, server validation error, version display, TPM device-attest-01 config/status/failure, and identity issuance using selected profile.",
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/guides/profile-authoring.md"
@@ -2721,7 +2721,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: basic: Profiles page creates JSON profile",
+            "current_frontend_mapping: operate: Profiles page serves a guided and JSON profile workflow, including explicit default-off TPM device-attest-01 roots, identifiers, algorithms, freshness, enabled/disabled status, and fail-closed validation errors",
             "target_gui_mapping: Profile builder with schema-aware form, JSON editor, validation preview, version diff, active state, RA policy binding, and served-path impact preview."
           ],
           "refs": [
@@ -2754,7 +2754,7 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Vitest covers valid profile create, invalid JSON, server validation error, version display, and identity issuance using selected profile.",
+            "acceptance_test: Vitest covers valid profile create, invalid JSON, server validation error, version display, TPM device-attest-01 config/status/failure, and identity issuance using selected profile.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
             "TestProfileGatedIssuanceAndAudit is a named acceptance test executed by the CI make test package set."
@@ -3422,10 +3422,10 @@
       "phase": "P1",
       "priority": 22,
       "served_state": "conditional",
-      "backend_status": "conditional: served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert state rebuilds after restart, and missing issuing CA returns a fail closed no-protocol mount",
+      "backend_status": "conditional: served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert/device-attested-key state rebuilds after restart, an explicitly configured tenant profile adds TPM device-attest-01 without replacing the three DV methods, and missing issuing CA returns a fail closed no-protocol mount",
       "current_frontend_mapping": "operate: Protocols at /protocols serves ACME directory/account/order/challenge workflow evidence with tenant-binding requirements, auth/profile gates, DNS-01 provider/config tables, live responder status, and copy-safe client setup snippets.",
       "target_gui_mapping": "Roadmap residual: dedicated ACME admin console for account/order/challenge drilldown, revocation/ARI operations, and richer client setup controls beyond the served Protocols workflow.",
-      "acceptance_test": "Served GA acceptance is TestServedACMEEndToEnd plus TestServedACMEStateRebuildsAfterServerRestart on the assembled control-plane handler; roadmap residual is the dedicated ACME admin console beyond the served Protocols workflow.",
+      "acceptance_test": "Served GA acceptance is TestServedACMEEndToEnd plus TestServedACMEStateRebuildsAfterServerRestart on the assembled control-plane handler; TPM device-attest-01 additionally requires TestDeviceAttestTPMProfileRootsAndIdentifiersAreCrossTenantIsolated plus its protocol and crypto parser suites; roadmap residual is the dedicated ACME admin console beyond the served Protocols workflow.",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ],
@@ -3446,7 +3446,7 @@
         "served": {
           "evidence": [
             "served_state=conditional",
-            "backend_status=conditional: served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert state rebuilds after restart, and missing issuing CA returns a fail closed no-protocol mount"
+            "backend_status=conditional: served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert/device-attested-key state rebuilds after restart, an explicitly configured tenant profile adds TPM device-attest-01 without replacing the three DV methods, and missing issuing CA returns a fail closed no-protocol mount"
           ],
           "commands": [
             "make test"
@@ -3471,7 +3471,7 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served GA acceptance is TestServedACMEEndToEnd plus TestServedACMEStateRebuildsAfterServerRestart on the assembled control-plane handler; roadmap residual is the dedicated ACME admin console beyond the served Protocols workflow.",
+            "acceptance_test: Served GA acceptance is TestServedACMEEndToEnd plus TestServedACMEStateRebuildsAfterServerRestart on the assembled control-plane handler; TPM device-attest-01 additionally requires TestDeviceAttestTPMProfileRootsAndIdentifiersAreCrossTenantIsolated plus its protocol and crypto parser suites; roadmap residual is the dedicated ACME admin console beyond the served Protocols workflow.",
             "TRACE-019 guard: TestTRACE019ACMERowSplitsServedGAFromRoadmapResidual keeps F5 in the served GA denominator only when the served protocol workflow and explicit admin-console roadmap residual are both present.",
             "TestServedACMEEndToEnd drives /directory and /acme/* with a stock ACME client through new-account, new-order, http-01, finalize, signer-issued certificate verification, revokeCert, OCSP revoked state, CRL generation, and event evidence.",
             "TestServedACMEStateRebuildsAfterServerRestart proves account/order/cert/ARI state rebuilds on the served control-plane path before /directory and /acme/* serve after restart.",
@@ -3482,6 +3482,9 @@
           ],
           "refs": [
             "internal/server/protocols_served_test.go",
+            "internal/server/acme_device_attestation_test.go",
+            "internal/protocols/acme/device_attest_internal_test.go",
+            "internal/crypto/device_attest_tpm_test.go",
             "internal/server/protect_correct102_guard_test.go",
             "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",

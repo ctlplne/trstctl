@@ -39,18 +39,55 @@ type CertificateProfile struct {
 	Name    string `json:"name"`
 	Version int    `json:"version"`
 
-	RequiresApproval     bool         `json:"requires_approval,omitempty"` // profile create/edit and future issuance require dual control
-	AllowedKeyAlgorithms []string     `json:"allowed_key_algorithms"`      // e.g. ["ECDSA","RSA"]; empty = any
-	MinRSABits           int          `json:"min_rsa_bits"`                // floor for RSA keys; 0 = no floor
-	MinECDSABits         int          `json:"min_ecdsa_bits"`              // floor for ECDSA curve size
-	AllowedEKUs          []string     `json:"allowed_ekus"`                // e.g. ["serverAuth","clientAuth"]; empty = any
-	MaxValidity          Duration     `json:"max_validity"`                // validity ceiling; 0 = no ceiling
-	AllowedProtocols     []string     `json:"allowed_protocols"`           // enrollment protocols permitted; empty = any
-	ACMEAuthMode         ACMEAuthMode `json:"acme_auth_mode,omitempty"`    // public_trust (default) or trust_authenticated
-	AllowedDNSSuffixes   []string     `json:"allowed_dns_suffixes"`        // name constraint; empty = unconstrained
-	AllowedIPCIDRs       []string     `json:"allowed_ip_cidrs"`            // IP SAN ranges; set to permit IP SANs under a SAN policy
-	AllowedEmailDomains  []string     `json:"allowed_email_domains"`       // rfc822Name domains; set to permit email SANs under a SAN policy
-	AllowedURIPrefixes   []string     `json:"allowed_uri_prefixes"`        // URI string prefixes; set to permit URI SANs under a SAN policy
+	RequiresApproval      bool                        `json:"requires_approval,omitempty"`       // profile create/edit and future issuance require dual control
+	AllowedKeyAlgorithms  []string                    `json:"allowed_key_algorithms"`            // e.g. ["ECDSA","RSA"]; empty = any
+	MinRSABits            int                         `json:"min_rsa_bits"`                      // floor for RSA keys; 0 = no floor
+	MinECDSABits          int                         `json:"min_ecdsa_bits"`                    // floor for ECDSA curve size
+	AllowedEKUs           []string                    `json:"allowed_ekus"`                      // e.g. ["serverAuth","clientAuth"]; empty = any
+	MaxValidity           Duration                    `json:"max_validity"`                      // validity ceiling; 0 = no ceiling
+	AllowedProtocols      []string                    `json:"allowed_protocols"`                 // enrollment protocols permitted; empty = any
+	ACMEAuthMode          ACMEAuthMode                `json:"acme_auth_mode,omitempty"`          // public_trust (default) or trust_authenticated
+	AllowedDNSSuffixes    []string                    `json:"allowed_dns_suffixes"`              // name constraint; empty = unconstrained
+	AllowedIPCIDRs        []string                    `json:"allowed_ip_cidrs"`                  // IP SAN ranges; set to permit IP SANs under a SAN policy
+	AllowedEmailDomains   []string                    `json:"allowed_email_domains"`             // rfc822Name domains; set to permit email SANs under a SAN policy
+	AllowedURIPrefixes    []string                    `json:"allowed_uri_prefixes"`              // URI string prefixes; set to permit URI SANs under a SAN policy
+	ACMEDeviceAttestation ACMEDeviceAttestationPolicy `json:"acme_device_attestation,omitempty"` // explicit, default-off device-attest-01 policy
+}
+
+// ACMEDeviceAttestationPolicy is the tenant profile's fail-closed
+// device-attest-01 trust policy. TPM is the only first-stage format. The roots
+// are public certificates, not secret key material; they remain operator
+// supplied so a Community deployment never phones a manufacturer service.
+type ACMEDeviceAttestationPolicy struct {
+	Enabled             bool     `json:"enabled"`
+	Format              string   `json:"format,omitempty"`
+	AttestationRootsPEM []string `json:"attestation_roots_pem,omitempty"`
+	AllowedIdentifiers  []string `json:"allowed_identifiers,omitempty"`
+	AllowedAlgorithms   []int64  `json:"allowed_algorithms,omitempty"`
+	MaxAge              Duration `json:"max_age,omitempty"`
+}
+
+// AllowsIdentifier reports whether identifier is explicitly covered by the
+// profile. A "*.example.test" entry matches one or more labels below that
+// suffix, but never the bare suffix itself.
+func (p ACMEDeviceAttestationPolicy) AllowsIdentifier(identifier string) bool {
+	identifier = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(identifier)), ".")
+	if identifier == "" {
+		return false
+	}
+	for _, raw := range p.AllowedIdentifiers {
+		allowed := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(raw)), ".")
+		switch {
+		case allowed == identifier:
+			return true
+		case strings.HasPrefix(allowed, "*."):
+			suffix := strings.TrimPrefix(allowed, "*")
+			if strings.HasSuffix(identifier, suffix) && len(identifier) > len(suffix) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // NormalizeACMEAuthMode returns the explicit mode, defaulting empty to
@@ -84,6 +121,9 @@ func (p CertificateProfile) ValidateDefinition() error {
 	if _, err := NormalizeACMEAuthMode(p.ACMEAuthMode); err != nil {
 		return fmt.Errorf("%s: %w", id, err)
 	}
+	if err := p.ACMEDeviceAttestation.validate(id); err != nil {
+		return err
+	}
 	for _, label := range p.AllowedKeyAlgorithms {
 		classification, err := crypto.ClassifyAlgorithmLabel(label)
 		if err != nil {
@@ -94,6 +134,60 @@ func (p CertificateProfile) ValidateDefinition() error {
 		}
 	}
 	return nil
+}
+
+func (p ACMEDeviceAttestationPolicy) validate(profileID string) error {
+	if !p.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(p.Format) != "tpm" {
+		return fmt.Errorf("%s acme_device_attestation: enabled format must be %q", profileID, "tpm")
+	}
+	if len(p.AttestationRootsPEM) == 0 {
+		return fmt.Errorf("%s acme_device_attestation: at least one operator attestation root is required", profileID)
+	}
+	for i, root := range p.AttestationRootsPEM {
+		root = strings.TrimSpace(root)
+		if !strings.Contains(root, "-----BEGIN CERTIFICATE-----") || !strings.Contains(root, "-----END CERTIFICATE-----") {
+			return fmt.Errorf("%s acme_device_attestation: root %d is not PEM certificate data", profileID, i)
+		}
+	}
+	if len(p.AllowedIdentifiers) == 0 {
+		return fmt.Errorf("%s acme_device_attestation: allowed_identifiers must be explicit", profileID)
+	}
+	for _, identifier := range p.AllowedIdentifiers {
+		identifier = strings.TrimSpace(identifier)
+		if identifier == "" || strings.ContainsAny(identifier, "\x00/") || (strings.Contains(identifier, "*") && !strings.HasPrefix(identifier, "*.")) {
+			return fmt.Errorf("%s acme_device_attestation: invalid allowed identifier %q", profileID, identifier)
+		}
+	}
+	if len(p.AllowedAlgorithms) == 0 {
+		return fmt.Errorf("%s acme_device_attestation: allowed_algorithms must be explicit", profileID)
+	}
+	seen := make(map[int64]bool, len(p.AllowedAlgorithms))
+	for _, algorithm := range p.AllowedAlgorithms {
+		if !supportedTPMCOSEAlgorithm(algorithm) {
+			return fmt.Errorf("%s acme_device_attestation: unsupported TPM COSE algorithm %d", profileID, algorithm)
+		}
+		if seen[algorithm] {
+			return fmt.Errorf("%s acme_device_attestation: duplicate TPM COSE algorithm %d", profileID, algorithm)
+		}
+		seen[algorithm] = true
+	}
+	maxAge := time.Duration(p.MaxAge)
+	if maxAge <= 0 || maxAge > 24*time.Hour {
+		return fmt.Errorf("%s acme_device_attestation: max_age must be greater than zero and no more than 24h", profileID)
+	}
+	return nil
+}
+
+func supportedTPMCOSEAlgorithm(algorithm int64) bool {
+	switch algorithm {
+	case -7, -35, -36, -37, -38, -39, -257, -258, -259:
+		return true
+	default:
+		return false
+	}
 }
 
 // Request is the backend-agnostic view of an issuance request to validate.

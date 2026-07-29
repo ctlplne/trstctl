@@ -211,15 +211,16 @@ type authorization struct {
 }
 
 type order struct {
-	id         string
-	accountURL string
-	domains    []string
-	authzIDs   []string
-	status     string
-	authMode   profile.ACMEAuthMode
-	certID     string
-	replaces   string // ARI: the certificate identifier this order renews (RFC 9773)
-	createdAt  time.Time
+	id                string
+	accountURL        string
+	domains           []string
+	authzIDs          []string
+	status            string
+	authMode          profile.ACMEAuthMode
+	certID            string
+	replaces          string // ARI: the certificate identifier this order renews (RFC 9773)
+	attestedKeySHA256 string
+	createdAt         time.Time
 }
 
 // ariWindow is the validity span the server derives a renewal window from.
@@ -277,13 +278,15 @@ type Server struct {
 	sources    map[string]*sourceBudget
 	seq        int
 
-	revokeHook      RevocationHook
-	accountLimiter  AccountOrderLimiter
-	dns01Automation DNS01Automation
-	dvPolicy        DomainValidationPolicy
-	stateLog        eventLog
-	stateTenantID   string
-	eabKeys         map[string]*secret.Buffer
+	revokeHook              RevocationHook
+	accountLimiter          AccountOrderLimiter
+	dns01Automation         DNS01Automation
+	dvPolicy                DomainValidationPolicy
+	deviceAttestationPolicy DeviceAttestationPolicySource
+	deviceAttestNow         func() time.Time
+	stateLog                eventLog
+	stateTenantID           string
+	eabKeys                 map[string]*secret.Buffer
 
 	mux *http.ServeMux
 }
@@ -300,8 +303,9 @@ func New(ca ca.CA, validator Validator) *Server {
 		challenges: map[string]*challenge{}, certs: map[string][]byte{},
 		issued: map[string]*issuedCert{}, revoked: map[string]revocation{},
 		ariWindows: map[string]ariWindow{}, earlyRenew: map[string]bool{},
-		sources:        map[string]*sourceBudget{},
-		accountLimiter: newMemoryAccountOrderLimiter(),
+		sources:         map[string]*sourceBudget{},
+		accountLimiter:  newMemoryAccountOrderLimiter(),
+		deviceAttestNow: time.Now,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /directory", s.directory)
@@ -351,6 +355,14 @@ func (s *Server) WithDNS01Automation(a DNS01Automation) *Server {
 // every public-trust order offers HTTP-01, DNS-01, and TLS-ALPN-01.
 func (s *Server) WithDomainValidationPolicy(p DomainValidationPolicy) *Server {
 	s.dvPolicy = p
+	return s
+}
+
+// WithDeviceAttestationPolicy opts this ACME mount into profile-scoped
+// device-attest-01. Nil/default construction offers only the existing DV
+// challenges.
+func (s *Server) WithDeviceAttestationPolicy(p DeviceAttestationPolicySource) *Server {
+	s.deviceAttestationPolicy = p
 	return s
 }
 
@@ -449,35 +461,42 @@ func defaultChallengeTypes() []string {
 }
 
 func (s *Server) challengeTypesForDomain(ctx context.Context, domain string) ([]string, error) {
+	var challengeTypes []string
 	if s.dvPolicy == nil {
-		return defaultChallengeTypes(), nil
-	}
-	methods, constrained, err := s.dvPolicy.AllowedMethods(ctx, s.stateTenantID, domain)
-	if err != nil {
-		return nil, fmt.Errorf("acme: domain-validation policy lookup for %q: %w", domain, err)
-	}
-	if !constrained {
-		return defaultChallengeTypes(), nil
-	}
-	allowed := make(map[string]bool, len(methods))
-	for _, method := range methods {
-		method = strings.TrimSpace(method)
-		if method == "" {
-			continue
+		challengeTypes = defaultChallengeTypes()
+	} else {
+		methods, constrained, err := s.dvPolicy.AllowedMethods(ctx, s.stateTenantID, domain)
+		if err != nil {
+			return nil, fmt.Errorf("acme: domain-validation policy lookup for %q: %w", domain, err)
 		}
-		if !knownMethod(method) {
-			return nil, fmt.Errorf("acme: domain-validation policy for %q returned unknown method %q", domain, method)
+		if !constrained {
+			challengeTypes = defaultChallengeTypes()
+		} else {
+			allowed := make(map[string]bool, len(methods))
+			for _, method := range methods {
+				method = strings.TrimSpace(method)
+				if method == "" {
+					continue
+				}
+				if !knownMethod(method) {
+					return nil, fmt.Errorf("acme: domain-validation policy for %q returned unknown method %q", domain, method)
+				}
+				allowed[method] = true
+			}
+			for _, method := range defaultChallengeTypes() {
+				if allowed[method] {
+					challengeTypes = append(challengeTypes, method)
+				}
+			}
+			if len(challengeTypes) == 0 {
+				return nil, fmt.Errorf("%w for %q", errDVMethodNotAllowed, domain)
+			}
 		}
-		allowed[method] = true
 	}
-	challengeTypes := make([]string, 0, len(allowed))
-	for _, method := range defaultChallengeTypes() {
-		if allowed[method] {
-			challengeTypes = append(challengeTypes, method)
-		}
-	}
-	if len(challengeTypes) == 0 {
-		return nil, fmt.Errorf("%w for %q", errDVMethodNotAllowed, domain)
+	if _, enabled, err := s.lookupDeviceAttestationPolicy(ctx, domain); err != nil {
+		return nil, err
+	} else if enabled {
+		challengeTypes = append(challengeTypes, ChallengeDeviceAttest01)
 	}
 	return challengeTypes, nil
 }
@@ -940,7 +959,7 @@ func (s *Server) getAuthz(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMe
 	writeJSON(w, http.StatusOK, s.authzJSON(base, az))
 }
 
-func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, acct *account) {
+func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, acct *account) {
 	base := baseURL(r)
 	s.mu.Lock()
 	ch := s.challenges[r.PathValue("id")]
@@ -955,6 +974,12 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such authorization")
 		return
 	}
+	o := s.orders[az.orderID]
+	if o == nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
+		return
+	}
 	s.mu.Unlock()
 
 	if err := s.challengeAllowed(r.Context(), az.domain, ch.typ); err != nil {
@@ -962,25 +987,33 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 		return
 	}
 
-	keyAuth := ch.token + "." + acct.key.Thumbprint()
+	var attestedKeyDigest []byte
 	var cleanup func(context.Context) error
-	if ch.typ == ChallengeDNS01 && s.dns01Automation != nil {
+	if ch.typ == ChallengeDeviceAttest01 {
 		var err error
-		cleanup, err = s.dns01Automation.Present(r.Context(), s.stateTenantID, az.domain, ch.token, keyAuth)
+		attestedKeyDigest, err = s.validateDeviceAttestation(r.Context(), msg, acct, ch, az, o)
 		if err != nil {
 			s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+err.Error())
 			return
 		}
-	}
-	validateErr := s.validator.Validate(r.Context(), ch.typ, az.domain, ch.token, keyAuth)
-	if cleanup != nil {
-		if validateErr != nil {
+	} else {
+		keyAuth := ch.token + "." + acct.key.Thumbprint()
+		if ch.typ == ChallengeDNS01 && s.dns01Automation != nil {
+			var err error
+			cleanup, err = s.dns01Automation.Present(r.Context(), s.stateTenantID, az.domain, ch.token, keyAuth)
+			if err != nil {
+				s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+err.Error())
+				return
+			}
+		}
+		validateErr := s.validator.Validate(r.Context(), ch.typ, az.domain, ch.token, keyAuth)
+		if cleanup != nil && validateErr != nil {
 			_ = cleanup(context.WithoutCancel(r.Context()))
 		}
-	}
-	if validateErr != nil {
-		s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+validateErr.Error())
-		return
+		if validateErr != nil {
+			s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+validateErr.Error())
+			return
+		}
 	}
 
 	s.mu.Lock()
@@ -990,13 +1023,18 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such challenge")
 		return
 	}
+	if ch.status != statusPending {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge is not pending")
+		return
+	}
 	az = s.authzs[ch.authzID]
 	if az == nil {
 		s.mu.Unlock()
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such authorization")
 		return
 	}
-	o := s.orders[az.orderID]
+	o = s.orders[az.orderID]
 	orderStatus := ""
 	if o != nil {
 		orderStatus = o.status
@@ -1014,15 +1052,24 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 			orderStatus = statusReady
 		}
 	}
-	if err := s.appendStateEventLocked(r.Context(), acmeEventChallengeValidated, challengeValidatedEventFrom(ch, az, o, orderStatus)); err != nil {
+	event := challengeValidatedEventFrom(ch, az, o, orderStatus)
+	if len(attestedKeyDigest) > 0 {
+		event.AttestedKeySHA256 = base64.RawURLEncoding.EncodeToString(attestedKeyDigest)
+	}
+	if err := s.appendStateEventLocked(r.Context(), acmeEventChallengeValidated, event); err != nil {
 		s.mu.Unlock()
 		s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
 		return
 	}
 	ch.status = statusValid
 	az.status = statusValid
-	if o := s.orders[az.orderID]; o != nil && s.allAuthzValid(o) {
-		o.status = statusReady
+	if o := s.orders[az.orderID]; o != nil {
+		if event.AttestedKeySHA256 != "" {
+			o.attestedKeySHA256 = event.AttestedKeySHA256
+		}
+		if s.allAuthzValid(o) {
+			o.status = statusReady
+		}
 	}
 	s.mu.Unlock()
 
@@ -1079,6 +1126,17 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	if err != nil {
 		s.problem(w, r, http.StatusBadRequest, "badCSR", err.Error())
 		return
+	}
+	if o.attestedKeySHA256 != "" {
+		digest, err := crypto.CSRPublicKeySHA256(csr)
+		if err != nil {
+			s.problem(w, r, http.StatusBadRequest, "badCSR", err.Error())
+			return
+		}
+		if base64.RawURLEncoding.EncodeToString(digest) != o.attestedKeySHA256 {
+			s.problem(w, r, http.StatusBadRequest, "badCSR", "finalize CSR does not contain the attested key")
+			return
+		}
 	}
 
 	cert, err := s.ca.Issue(r.Context(), ca.IssueRequest{CSR: csr, DNSNames: o.domains, TTL: 90 * 24 * time.Hour})

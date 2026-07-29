@@ -4271,6 +4271,15 @@ export interface components {
             provider: string;
             zone?: string;
         };
+        ACMEDeviceAttestationPolicy: {
+            allowed_algorithms?: number[];
+            allowed_identifiers?: string[];
+            attestation_roots_pem?: string[];
+            enabled?: boolean;
+            /** @enum {string} */
+            format?: "tpm";
+            max_age?: string;
+        };
         AIAnswer: {
             citations?: string[];
             grounded?: boolean;
@@ -5154,6 +5163,24 @@ export interface components {
         CertificateList: {
             items: components["schemas"]["Certificate"][];
             next_cursor?: string;
+        };
+        CertificateProfileSpec: {
+            /** @enum {string} */
+            acme_auth_mode?: "public_trust" | "trust_authenticated";
+            acme_device_attestation?: components["schemas"]["ACMEDeviceAttestationPolicy"];
+            allowed_dns_suffixes?: string[];
+            allowed_ekus?: string[];
+            allowed_email_domains?: string[];
+            allowed_ip_cidrs?: string[];
+            allowed_key_algorithms?: string[];
+            allowed_protocols?: string[];
+            allowed_uri_prefixes?: string[];
+            max_validity?: string;
+            min_ecdsa_bits?: number;
+            min_rsa_bits?: number;
+            name?: string;
+            requires_approval?: boolean;
+            version?: number;
         };
         CertificateSourceHealth: {
             count: number;
@@ -7781,7 +7808,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-            spec?: Record<string, never>;
+            spec?: components["schemas"]["CertificateProfileSpec"];
             version: number;
         };
         ProfileList: {
@@ -7790,7 +7817,7 @@ export interface components {
         };
         ProfileRequest: {
             name: string;
-            spec: Record<string, never>;
+            spec: components["schemas"]["CertificateProfileSpec"];
         };
         ProtocolProfileStatus: {
             active: boolean;

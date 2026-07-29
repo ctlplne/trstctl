@@ -38,7 +38,7 @@ and downloading the signed certificate.
 
 trstctl implements all of it (RFC 8555). Every mutating request is a signed JWS whose
 signature is verified through the single isolated cryptography path; each order offers
-three challenge types (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the one
+three challenge types by default (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the one
 [issuance path](issuance-and-cas.md) to mint the certificate. Account registration is
 idempotent by key thumbprint, per the spec. **Served** endpoints start at
 `GET /directory`; challenge and order endpoints live under `/acme/...`.
@@ -55,6 +55,20 @@ ACME account can move an order straight to ready without a DV challenge, while
 unauthenticated orders still fail closed. trstctl also applies an account-keyed
 order/hour limiter plus a concurrent-order cap, so many clients behind one NAT do not
 share a single coarse source-IP budget and one noisy account cannot starve the ACME lane.
+
+An explicitly configured, default-off certificate profile may also offer TPM
+`device-attest-01` as a fourth alternative. The running ACME server loads the
+active profile through the tenant-scoped PostgreSQL/RLS store, checks the
+operator trust roots, identifier allowlist, allowed COSE algorithms, freshness,
+and TPM/WebAuthn proof, then records the attested public-key digest in its
+event-sourced order state. The proof binds tenant, account, order, challenge,
+token, nonce, identifier, CSR key, and timestamp; replay, cross-order,
+cross-tenant, stale, untrusted-root, and CSR-key substitutions fail closed.
+Finalization must use the same attested key. The parser is the reviewed
+BSD-3-Clause `go-webauthn` implementation routed through `internal/crypto`;
+trstctl does not hand-roll ASN.1, CBOR, COSE, TPM, or X.509 parsers. Operator
+roots are local inputs: there is no manufacturer metadata fetch and no other
+phone-home call. The three existing DV methods remain unchanged and available.
 
 ### Proving control without a web server: DNS-01 (F69)
 

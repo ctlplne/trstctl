@@ -121,6 +121,72 @@ describe("operational console surface", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("max_validity exceeds the tenant profile ceiling");
   });
 
+  it("configures and shows explicit TPM device-attest-01 profile status", async () => {
+    apiMock.profiles
+      .mockResolvedValueOnce([
+        {
+          id: "p1",
+          name: "devices",
+          version: 1,
+          active: true,
+          created_by: "ra",
+          spec: {
+            acme_device_attestation: {
+              enabled: true,
+              format: "tpm",
+              attestation_roots_pem: ["-----BEGIN CERTIFICATE-----\nold\n-----END CERTIFICATE-----"],
+              allowed_identifiers: ["host-01.example.com"],
+              allowed_algorithms: [-7],
+              max_age: "5m",
+            },
+          },
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    apiMock.createProfile.mockResolvedValue({ id: "p2", name: "devices", version: 2, active: true });
+    const user = userEvent.setup();
+    renderAt("/profiles");
+
+    expect(await screen.findByText("TPM enabled")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /New profile/i }));
+    await user.type(screen.getByLabelText(/Profile name/i), "devices");
+    await user.click(screen.getByLabelText("Enable device-attest-01 for this profile"));
+    fireEvent.change(screen.getByLabelText("Operator attestation roots (PEM)"), {
+      target: { value: "-----BEGIN CERTIFICATE-----\nnew-root\n-----END CERTIFICATE-----" },
+    });
+    await user.click(screen.getByRole("button", { name: /Create profile/i }));
+
+    await waitFor(() =>
+      expect(apiMock.createProfile).toHaveBeenCalledWith({
+        name: "devices",
+        spec: expect.objectContaining({
+          acme_device_attestation: {
+            enabled: true,
+            format: "tpm",
+            attestation_roots_pem: ["-----BEGIN CERTIFICATE-----\nnew-root\n-----END CERTIFICATE-----"],
+            allowed_identifiers: ["host-01.example.com"],
+            allowed_algorithms: [-7],
+            max_age: "5m",
+          },
+        }),
+      }),
+    );
+  });
+
+  it("fails closed in the profile console when TPM roots are missing", async () => {
+    apiMock.profiles.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderAt("/profiles");
+
+    await user.click(await screen.findByRole("button", { name: /New profile/i }));
+    await user.type(screen.getByLabelText(/Profile name/i), "devices");
+    await user.click(screen.getByLabelText("Enable device-attest-01 for this profile"));
+    await user.click(screen.getByRole("button", { name: /Create profile/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("requires at least one PEM trust root");
+    expect(apiMock.createProfile).not.toHaveBeenCalled();
+  });
+
   it("loads concrete profile versions and diffs selected rules against the active version", async () => {
     const versionOne = {
       id: "p1",

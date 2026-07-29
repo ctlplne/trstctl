@@ -322,6 +322,41 @@
         ],
         "type": "object"
       },
+      "ACMEDeviceAttestationPolicy": {
+        "properties": {
+          "allowed_algorithms": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "allowed_identifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "attestation_roots_pem": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "format": {
+            "enum": [
+              "tpm"
+            ],
+            "type": "string"
+          },
+          "max_age": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AIAnswer": {
         "properties": {
           "citations": {
@@ -3539,6 +3574,81 @@
         "required": [
           "items"
         ],
+        "type": "object"
+      },
+      "CertificateProfileSpec": {
+        "properties": {
+          "acme_auth_mode": {
+            "enum": [
+              "public_trust",
+              "trust_authenticated"
+            ],
+            "type": "string"
+          },
+          "acme_device_attestation": {
+            "$ref": "#/components/schemas/ACMEDeviceAttestationPolicy"
+          },
+          "allowed_dns_suffixes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_ekus": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_email_domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_ip_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_key_algorithms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_protocols": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_uri_prefixes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_validity": {
+            "type": "string"
+          },
+          "min_ecdsa_bits": {
+            "type": "integer"
+          },
+          "min_rsa_bits": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "requires_approval": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "CertificateSourceHealth": {
@@ -13472,7 +13582,7 @@
             "type": "string"
           },
           "spec": {
-            "type": "object"
+            "$ref": "#/components/schemas/CertificateProfileSpec"
           },
           "version": {
             "type": "integer"
@@ -13508,7 +13618,7 @@
             "type": "string"
           },
           "spec": {
-            "type": "object"
+            "$ref": "#/components/schemas/CertificateProfileSpec"
           }
         },
         "required": [

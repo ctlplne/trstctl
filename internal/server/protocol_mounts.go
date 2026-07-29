@@ -243,7 +243,11 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 		validators = *acmeValidators
 	}
 	acmeSrv := acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
-		WithQuota(acmeQuotaConfig(cfg.ACMEQuota))
+		WithQuota(acmeQuotaConfig(cfg.ACMEQuota)).
+		WithDeviceAttestationPolicy(acmeDeviceAttestationProfiles{
+			store:       s.store,
+			profileName: s.defaultProfile,
+		})
 	if s.acmeDNS01 != nil {
 		acmeSrv = acmeSrv.WithDNS01Automation(s.acmeDNS01).WithDomainValidationPolicy(s.acmeDNS01)
 	}

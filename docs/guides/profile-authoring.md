@@ -38,6 +38,28 @@ A profile spec is JSON:
 | `max_validity` | validity ceiling as a duration, e.g. `"2160h"` (0 = no ceiling) |
 | `allowed_protocols` | enrollment protocols that may use this profile, e.g. `["api","acme"]` |
 | `allowed_dns_suffixes` | name constraint on SAN dNSNames (empty = unconstrained) |
+| `acme_device_attestation` | explicit, default-off TPM `device-attest-01` policy: operator roots, device identifier allowlist, COSE algorithms, and maximum proof age |
+
+## TPM device-attest-01
+
+An ACME profile may add TPM-backed device identity as a fourth challenge without
+removing or weakening `http-01`, `dns-01`, or `tls-alpn-01`. The feature is
+default-off. Enabling it requires all of the following:
+
+- `format: "tpm"` (the first and only supported attestation format);
+- one or more operator-controlled X.509 trust roots in
+  `attestation_roots_pem`;
+- an explicit exact-name or `*.suffix` device identifier allowlist;
+- allowed COSE signature algorithm numbers, such as ES256 `-7`; and
+- a positive `max_age` no greater than 24 hours.
+
+The device submits a fresh TPM WebAuthn attestation through `internal/crypto`.
+trstctl binds that proof to
+the tenant, ACME account, order, challenge, token, outer JWS nonce, device
+identifier, CSR public key, and issuance time. The validated key digest is stored
+in the ACME event stream and replayed after restart; finalization fails if the
+CSR changes. Trust is entirely operator-supplied and no manufacturer metadata
+service is contacted.
 
 ## Creating and listing profiles
 
@@ -54,7 +76,15 @@ echo '{
     "allowed_ekus": ["serverAuth"],
     "max_validity": "2160h",
     "allowed_protocols": ["api","acme"],
-    "allowed_dns_suffixes": ["example.com"]
+    "allowed_dns_suffixes": ["example.com"],
+    "acme_device_attestation": {
+      "enabled": true,
+      "format": "tpm",
+      "attestation_roots_pem": ["-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"],
+      "allowed_identifiers": ["*.devices.example.com"],
+      "allowed_algorithms": [-7],
+      "max_age": "5m"
+    }
   }
 }' | trstctl-cli profiles create -f -
 

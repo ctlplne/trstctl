@@ -118,6 +118,19 @@ ACMEDNS01ProviderConfigRequest = TypedDict(
     total=False,
 )
 
+ACMEDeviceAttestationPolicy = TypedDict(
+    'ACMEDeviceAttestationPolicy',
+    {
+        'allowed_algorithms': list[int],
+        'allowed_identifiers': list[str],
+        'attestation_roots_pem': list[str],
+        'enabled': bool,
+        'format': str,
+        'max_age': str,
+    },
+    total=False,
+)
+
 AIAnswer = TypedDict(
     'AIAnswer',
     {
@@ -1389,6 +1402,28 @@ CertificateList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+CertificateProfileSpec = TypedDict(
+    'CertificateProfileSpec',
+    {
+        'acme_auth_mode': str,
+        'acme_device_attestation': dict[str, Any],
+        'allowed_dns_suffixes': list[str],
+        'allowed_ekus': list[str],
+        'allowed_email_domains': list[str],
+        'allowed_ip_cidrs': list[str],
+        'allowed_key_algorithms': list[str],
+        'allowed_protocols': list[str],
+        'allowed_uri_prefixes': list[str],
+        'max_validity': str,
+        'min_ecdsa_bits': int,
+        'min_rsa_bits': int,
+        'name': str,
+        'requires_approval': bool,
+        'version': int,
     },
     total=False,
 )

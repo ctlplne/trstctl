@@ -2883,12 +2883,37 @@ func componentSchemas() map[string]*Schema {
 		"report":             ref("CBOMReport"),
 		"migration_progress": ref("CBOMMigrationProgress"),
 	}, "report", "migration_progress")
+	acmeDeviceAttestationPolicy := object(map[string]*Schema{
+		"enabled":               {Type: "boolean"},
+		"format":                {Type: "string", Enum: []string{"tpm"}},
+		"attestation_roots_pem": {Type: "array", Items: str()},
+		"allowed_identifiers":   {Type: "array", Items: str()},
+		"allowed_algorithms":    {Type: "array", Items: &Schema{Type: "integer"}},
+		"max_age":               str(),
+	})
+	certificateProfileSpec := object(map[string]*Schema{
+		"name":                    str(),
+		"version":                 {Type: "integer"},
+		"requires_approval":       {Type: "boolean"},
+		"allowed_key_algorithms":  {Type: "array", Items: str()},
+		"min_rsa_bits":            {Type: "integer"},
+		"min_ecdsa_bits":          {Type: "integer"},
+		"allowed_ekus":            {Type: "array", Items: str()},
+		"max_validity":            str(),
+		"allowed_protocols":       {Type: "array", Items: str()},
+		"acme_auth_mode":          {Type: "string", Enum: []string{"public_trust", "trust_authenticated"}},
+		"allowed_dns_suffixes":    {Type: "array", Items: str()},
+		"allowed_ip_cidrs":        {Type: "array", Items: str()},
+		"allowed_email_domains":   {Type: "array", Items: str()},
+		"allowed_uri_prefixes":    {Type: "array", Items: str()},
+		"acme_device_attestation": ref("ACMEDeviceAttestationPolicy"),
+	})
 	profile := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "version": {Type: "integer"},
-		"active": {Type: "boolean"}, "created_by": str(), "spec": {Type: "object"},
+		"active": {Type: "boolean"}, "created_by": str(), "spec": ref("CertificateProfileSpec"),
 	}, "id", "name", "version")
 	profileReq := object(map[string]*Schema{
-		"name": str(), "spec": {Type: "object"},
+		"name": str(), "spec": ref("CertificateProfileSpec"),
 	}, "name", "spec")
 
 	// Served secrets/identity surface (GAP-006). The metadata view never carries a
@@ -3757,6 +3782,8 @@ func componentSchemas() map[string]*Schema {
 		"Profile":                                  profile,
 		"ProfileRequest":                           profileReq,
 		"ProfileList":                              list("Profile"),
+		"CertificateProfileSpec":                   certificateProfileSpec,
+		"ACMEDeviceAttestationPolicy":              acmeDeviceAttestationPolicy,
 		"Issuer":                                   issuer,
 		"IssuerRequest":                            issuerReq,
 		"IssuerList":                               list("Issuer"),

@@ -7,6 +7,40 @@ import (
 	"testing"
 )
 
+func TestACMEDeviceAttestationDocumentationMatchesServedProfileSeam(t *testing.T) {
+	acmeServer := read(t, "../internal/server/protocol_mounts.go")
+	acmeProof := read(t, "../internal/protocols/acme/device_attest.go")
+	profileModel := read(t, "../internal/profile/profile.go")
+	for source, want := range map[string]string{
+		acmeServer:   "WithDeviceAttestationPolicy",
+		acmeProof:    "ParseAndVerifyTPMDeviceAttestation",
+		profileModel: "ACMEDeviceAttestationPolicy",
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("served TPM device-attest-01 seam no longer contains %q; revisit its docs", want)
+		}
+	}
+	for _, page := range []string{"features/acme-and-dns.md", "guides/profile-authoring.md"} {
+		low := strings.ToLower(read(t, page))
+		for _, want := range []string{
+			"device-attest-01",
+			"default-off",
+			"operator",
+			"tpm",
+			"csr",
+			"internal/crypto",
+			"no manufacturer metadata",
+			"http-01",
+			"dns-01",
+			"tls-alpn-01",
+		} {
+			if !strings.Contains(low, want) {
+				t.Errorf("%s must document TPM device attestation reality (missing %q)", page, want)
+			}
+		}
+	}
+}
+
 // TestEnrollRenewalDocumentedAsServed binds enrollment-protocols.md to the served
 // /enroll route set. Bootstrap stays on the primary control-plane mux; renewal is
 // served through the dedicated agent-CA mTLS listener, so the old

@@ -19,6 +19,11 @@ interface BuilderFields {
   maxValidity: string;
   allowedProtocols: string[];
   allowedDnsSuffixes: string;
+  deviceAttestationEnabled: boolean;
+  deviceAttestationRootsPEM: string;
+  deviceAttestationIdentifiers: string;
+  deviceAttestationAlgorithms: string;
+  deviceAttestationMaxAge: string;
 }
 
 const keyAlgorithms = ["ECDSA", "RSA", "Ed25519", "Hybrid-ML-DSA-44-ECDSA-P256", "ML-DSA-65", "SLH-DSA-SHA2-128s"] as const;
@@ -33,6 +38,11 @@ const defaultBuilder: BuilderFields = {
   maxValidity: "2160h",
   allowedProtocols: ["api", "acme"],
   allowedDnsSuffixes: "example.com",
+  deviceAttestationEnabled: false,
+  deviceAttestationRootsPEM: "",
+  deviceAttestationIdentifiers: "host-01.example.com",
+  deviceAttestationAlgorithms: "-7",
+  deviceAttestationMaxAge: "5m",
 };
 
 export function Profiles() {
@@ -109,6 +119,14 @@ export function Profiles() {
       ),
     },
     { id: "active", header: "Active version", cell: (group) => `v${group.active.version}` },
+    {
+      id: "device-attestation",
+      header: translateNow("profiles.deviceAttestation.column"),
+      cell: (group) =>
+        deviceAttestationEnabled(group.active.spec)
+          ? translateNow("profiles.deviceAttestation.status.enabled")
+          : translateNow("profiles.deviceAttestation.status.disabled"),
+    },
     { id: "createdby", header: "Created by", cell: (group) => group.active.created_by ?? "-" },
     {
       id: "evidence",
@@ -336,6 +354,55 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
           onToggle={(value) => onChange({ ...fields, allowedProtocols: toggleValue(fields.allowedProtocols, value) })}
         />
       </div>
+      <fieldset className="space-y-3 border-y border-border py-3 md:col-span-2">
+        <legend className="text-sm font-medium">{translateNow("profiles.deviceAttestation.legend")}</legend>
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={fields.deviceAttestationEnabled}
+            onChange={(e) => onChange({ ...fields, deviceAttestationEnabled: e.target.checked })}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span>{translateNow("profiles.deviceAttestation.enable")}</span>
+        </label>
+        <p className="text-xs text-muted-foreground">{translateNow("profiles.deviceAttestation.help")}</p>
+        {fields.deviceAttestationEnabled && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm font-medium md:col-span-2">
+              <span>{translateNow("profiles.deviceAttestation.roots")}</span>
+              <textarea
+                value={fields.deviceAttestationRootsPEM}
+                onChange={(e) => onChange({ ...fields, deviceAttestationRootsPEM: e.target.value })}
+                className="min-h-32 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>{translateNow("profiles.deviceAttestation.identifiers")}</span>
+              <input
+                value={fields.deviceAttestationIdentifiers}
+                onChange={(e) => onChange({ ...fields, deviceAttestationIdentifiers: e.target.value })}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>{translateNow("profiles.deviceAttestation.algorithms")}</span>
+              <input
+                value={fields.deviceAttestationAlgorithms}
+                onChange={(e) => onChange({ ...fields, deviceAttestationAlgorithms: e.target.value })}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>{translateNow("profiles.deviceAttestation.maxAge")}</span>
+              <input
+                value={fields.deviceAttestationMaxAge}
+                onChange={(e) => onChange({ ...fields, deviceAttestationMaxAge: e.target.value })}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+        )}
+      </fieldset>
     </div>
   );
 }
@@ -488,6 +555,16 @@ function buildProfileSpec(fields: BuilderFields): ProfileSpec {
   if (fields.allowedProtocols.length > 0) spec.allowed_protocols = fields.allowedProtocols;
   const suffixes = splitList(fields.allowedDnsSuffixes);
   if (suffixes.length > 0) spec.allowed_dns_suffixes = suffixes;
+  if (fields.deviceAttestationEnabled) {
+    spec.acme_device_attestation = {
+      enabled: true,
+      format: "tpm",
+      attestation_roots_pem: splitPEMCertificates(fields.deviceAttestationRootsPEM),
+      allowed_identifiers: splitList(fields.deviceAttestationIdentifiers),
+      allowed_algorithms: splitList(fields.deviceAttestationAlgorithms).map(Number),
+      max_age: fields.deviceAttestationMaxAge.trim(),
+    };
+  }
   return spec;
 }
 
@@ -501,6 +578,21 @@ function validateBuilder(fields: BuilderFields): string | null {
   }
   if (!/^\d+(ns|us|ms|s|m|h)$/.test(fields.maxValidity.trim())) {
     return "Maximum validity must be a Go-style duration such as 2160h.";
+  }
+  if (fields.deviceAttestationEnabled) {
+    if (splitPEMCertificates(fields.deviceAttestationRootsPEM).length === 0) {
+      return "TPM device attestation requires at least one PEM trust root.";
+    }
+    if (splitList(fields.deviceAttestationIdentifiers).length === 0) {
+      return "TPM device attestation requires an explicit identifier allowlist.";
+    }
+    const algorithms = splitList(fields.deviceAttestationAlgorithms).map(Number);
+    if (algorithms.length === 0 || algorithms.some((algorithm) => !Number.isInteger(algorithm))) {
+      return "TPM device attestation requires numeric COSE algorithms such as -7.";
+    }
+    if (!/^\d+(ns|us|ms|s|m|h)$/.test(fields.deviceAttestationMaxAge.trim())) {
+      return "TPM device attestation freshness must be a Go-style duration such as 5m.";
+    }
   }
   return null;
 }
@@ -516,6 +608,19 @@ function splitList(value: string): string[] {
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
+}
+
+function splitPEMCertificates(value: string): string[] {
+  return value
+    .split(/(?=-----BEGIN CERTIFICATE-----)/)
+    .map((certificate) => certificate.trim())
+    .filter((certificate) => certificate.startsWith("-----BEGIN CERTIFICATE-----") && certificate.endsWith("-----END CERTIFICATE-----"));
+}
+
+function deviceAttestationEnabled(spec: unknown): boolean {
+  if (!isPlainObject(spec)) return false;
+  const policy = spec.acme_device_attestation;
+  return isPlainObject(policy) && policy.enabled === true && policy.format === "tpm";
 }
 
 function toggleValue(values: string[], value: string): string[] {
@@ -559,7 +664,7 @@ interface DiffRow {
   after: string;
 }
 
-function diffProfileSpecs(before: ProfileSpec, after: ProfileSpec): DiffRow[] {
+function diffProfileSpecs(before: unknown, after: unknown): DiffRow[] {
   const left = flattenSpec(before);
   const right = flattenSpec(after);
   const paths = Array.from(new Set([...left.keys(), ...right.keys()])).sort();
