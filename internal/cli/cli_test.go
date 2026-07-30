@@ -113,6 +113,36 @@ func TestNHIInventoryCommandSendsAuthAndPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestACMEARIPostureCommandSendsAuthAndPrintsJSON(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"served":true,"publication_status":"served","scheduler_status":"enabled","items":[]}`, &cap)
+	env := cli.Env{Server: srv.URL, Token: "tok-ari", Tenant: "tenant-ari", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"acme", "ari", "posture", "--limit", "7", "--cursor", "opaque-next"}, env, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0; stderr=%s", code, stderr)
+	}
+	if cap.Method != http.MethodGet || cap.Path != "/api/v1/acme/ari/posture" || cap.Query != "cursor=opaque-next&limit=7" {
+		t.Errorf("request = %s %s?%s, want paginated GET /api/v1/acme/ari/posture", cap.Method, cap.Path, cap.Query)
+	}
+	if cap.Header.Get("Authorization") != "Bearer tok-ari" {
+		t.Errorf("Authorization = %q, want Bearer tok-ari", cap.Header.Get("Authorization"))
+	}
+	if cap.Header.Get("X-Tenant-ID") != "tenant-ari" {
+		t.Errorf("X-Tenant-ID = %q, want tenant-ari", cap.Header.Get("X-Tenant-ID"))
+	}
+	if len(cap.Body) != 0 || cap.Header.Get("Idempotency-Key") != "" {
+		t.Errorf("read-only ARI command sent mutation material: body=%q idempotency=%q", cap.Body, cap.Header.Get("Idempotency-Key"))
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+	if decoded["publication_status"] != "served" || decoded["scheduler_status"] != "enabled" {
+		t.Fatalf("stdout lost ARI posture: %s", stdout)
+	}
+}
+
 func TestGetSubstitutesPathParam(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"id":"abc-123"}`, &cap)

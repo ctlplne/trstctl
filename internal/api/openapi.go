@@ -1784,6 +1784,57 @@ func componentSchemas() map[string]*Schema {
 		"checks":        {Type: "array", Items: ref("ACMEDNS01PreflightCheck")},
 		"failed_checks": {Type: "array", Items: str()},
 	}, "ready", "config_id", "domain", "record_name", "selected_method", "wildcard", "checks", "failed_checks")
+	acmeARIWindow := object(map[string]*Schema{
+		"start": timestamp(),
+		"end":   timestamp(),
+	}, "start", "end")
+	acmeARIPostureSummary := object(map[string]*Schema{
+		"affected_certificates": {Type: "integer"},
+		"published":             {Type: "integer"},
+		"scheduler_pending":     {Type: "integer"},
+		"scheduler_consumed":    {Type: "integer"},
+		"scheduler_failed":      {Type: "integer"},
+	}, "affected_certificates", "published", "scheduler_pending", "scheduler_consumed", "scheduler_failed")
+	acmeARICertificatePosture := object(map[string]*Schema{
+		"certificate_id":     uuid(),
+		"identity_id":        uuid(),
+		"identity_name":      str(),
+		"ari_certificate_id": str(),
+		"certificate_status": {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
+		"publication_status": {Type: "string", Enum: []string{
+			ACMEARICertificatePublished,
+			ACMEARICertificateNotPublished,
+			ACMEARICertificateIdentifierUnavailable,
+		}},
+		"suggested_window": ref("ACMEARIWindow"),
+		"scheduler_status": {Type: "string", Enum: []string{
+			ACMEARIRunPending,
+			ACMEARIRunRunning,
+			ACMEARIRunSucceeded,
+			ACMEARIRunFailed,
+			ACMEARIRunNotApplicable,
+		}},
+		"scheduler_consumed": {Type: "boolean"},
+		"scheduler_source": {Type: "string", Enum: []string{
+			ACMEARISourceARI,
+			ACMEARISourceFixedThreshold,
+			ACMEARISourceManual,
+			ACMEARISourceNone,
+			ACMEARISourceUnknownScheduler,
+		}},
+		"rotation_run_id": uuid(),
+		"consumed_at":     timestamp(),
+	}, "certificate_id", "certificate_status", "publication_status", "scheduler_status", "scheduler_consumed", "scheduler_source")
+	acmeARIPosture := object(map[string]*Schema{
+		"served":               {Type: "boolean"},
+		"generated_at":         timestamp(),
+		"publication_status":   {Type: "string", Enum: []string{ACMEARIPublicationServed, ACMEARIPublicationNotServed}},
+		"publication_endpoint": str(),
+		"scheduler_status":     {Type: "string", Enum: []string{ACMEARISchedulerEnabled, ACMEARISchedulerDisabled}},
+		"summary":              ref("ACMEARIPostureSummary"),
+		"items":                {Type: "array", Items: ref("ACMEARICertificatePosture")},
+		"next_cursor":          str(),
+	}, "served", "generated_at", "publication_status", "publication_endpoint", "scheduler_status", "summary", "items")
 	mdmSCEPPolicyReq := object(map[string]*Schema{
 		"name": str(), "provider": {Type: "string", Enum: []string{"intune", "jamf"}},
 		"scep_profile": str(), "scep_endpoint": str(), "expected_audience": str(),
@@ -3625,6 +3676,10 @@ func componentSchemas() map[string]*Schema {
 		"ACMEDNS01PreflightRequest":                acmeDNS01PreflightReq,
 		"ACMEDNS01PreflightCheck":                  acmeDNS01PreflightCheck,
 		"ACMEDNS01Preflight":                       acmeDNS01Preflight,
+		"ACMEARIWindow":                            acmeARIWindow,
+		"ACMEARIPostureSummary":                    acmeARIPostureSummary,
+		"ACMEARICertificatePosture":                acmeARICertificatePosture,
+		"ACMEARIPosture":                           acmeARIPosture,
 		"MDMSCEPPolicyRequest":                     mdmSCEPPolicyReq,
 		"MDMSCEPPolicy":                            mdmSCEPPolicy,
 		"MDMSCEPPolicyList":                        mdmSCEPPolicyList,

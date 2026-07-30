@@ -281,10 +281,13 @@ describe("i18n boundary", () => {
       // The independently shippable GCP and Azure stages extend that same
       // wizard with provider-specific validation and status copy. Every added
       // value is present in es/de and preserves the English placeholders.
+      // P-5da72dc3 adds the read-only ARI publication/window/scheduler panel
+      // and its honest loading, empty, permission, unavailable, and error
+      // states in both production catalogs.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "83a7920b58d9d52fc83974bf084f59f4cd7d0d3fdc242133116ffed80ed3dcd3",
-      "de-DE": "dc18a324222fcfda9b8744b0d369ac2dcd1d26a0524ecfc157dc7b514b23cbd4",
+      "es-ES": "11fadeab3e6d1b5e9ebe6be64903a4fdab5352ab8274668d92cc404b46cc834d",
+      "de-DE": "6b5e8fd768a1035ce64b576cf23c1383db09eb5409bfdb7d3cca78fa171f4d6e",
     });
   });
 

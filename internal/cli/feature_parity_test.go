@@ -67,6 +67,12 @@ func TestACMEDNS01ProviderConfigCommandsExist(t *testing.T) {
 	}
 }
 
+func TestACMEARIPostureCommandExists(t *testing.T) {
+	if !cliCommandSet(t)["acme ari posture"] {
+		t.Fatal(`missing CLI command "acme ari posture"`)
+	}
+}
+
 func TestMDMSCEPPolicyCommandsExist(t *testing.T) {
 	commands := cliCommandSet(t)
 	for _, command := range []string{
@@ -129,10 +135,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	}
 	// B-1 (`operations bulkheads`), B-5 (`platform system`), B-2 (`ssh fleet`), B-4
 	// (`code-signing identities`), B-3 (`migration plan`), and the five AWS
-	// workload-identity source commands raised this to 302. Like the OpenAPI count, it is a ratchet: a new command must be
+	// workload-identity source commands plus the ARI posture read raised this to 303.
+	// Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 302 {
-		t.Fatalf("CLI commands = %d, want 302", len(out))
+	if len(out) != 303 {
+		t.Fatalf("CLI commands = %d, want 303", len(out))
 	}
 	return out
 }

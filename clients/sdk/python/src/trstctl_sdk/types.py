@@ -3,6 +3,61 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+ACMEARICertificatePosture = TypedDict(
+    'ACMEARICertificatePosture',
+    {
+        'ari_certificate_id': str,
+        'certificate_id': str,
+        'certificate_status': str,
+        'consumed_at': str,
+        'identity_id': str,
+        'identity_name': str,
+        'publication_status': str,
+        'rotation_run_id': str,
+        'scheduler_consumed': bool,
+        'scheduler_source': str,
+        'scheduler_status': str,
+        'suggested_window': dict[str, Any],
+    },
+    total=False,
+)
+
+ACMEARIPosture = TypedDict(
+    'ACMEARIPosture',
+    {
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+        'publication_endpoint': str,
+        'publication_status': str,
+        'scheduler_status': str,
+        'served': bool,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+ACMEARIPostureSummary = TypedDict(
+    'ACMEARIPostureSummary',
+    {
+        'affected_certificates': int,
+        'published': int,
+        'scheduler_consumed': int,
+        'scheduler_failed': int,
+        'scheduler_pending': int,
+    },
+    total=False,
+)
+
+ACMEARIWindow = TypedDict(
+    'ACMEARIWindow',
+    {
+        'end': str,
+        'start': str,
+    },
+    total=False,
+)
+
 ACMEDNS01Preflight = TypedDict(
     'ACMEDNS01Preflight',
     {

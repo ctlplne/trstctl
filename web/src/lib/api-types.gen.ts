@@ -9,6 +9,45 @@
 // OpenAPI: 3.1.0  API: trstctl API v1
 
 /* eslint-disable */
+export interface ACMEARICertificatePosture {
+  ari_certificate_id?: string;
+  certificate_id: string;
+  certificate_status: "active" | "superseded" | "revoked";
+  consumed_at?: string;
+  identity_id?: string;
+  identity_name?: string;
+  publication_status: "published" | "not_published" | "identifier_unavailable";
+  rotation_run_id?: string;
+  scheduler_consumed: boolean;
+  scheduler_source: "ari" | "fixed_threshold" | "manual" | "none" | "unknown_scheduler";
+  scheduler_status: "pending" | "running" | "succeeded" | "failed" | "not_applicable";
+  suggested_window?: ACMEARIWindow;
+}
+
+export interface ACMEARIPosture {
+  generated_at: string;
+  items: ACMEARICertificatePosture[];
+  next_cursor?: string;
+  publication_endpoint: string;
+  publication_status: "served" | "not_served";
+  scheduler_status: "enabled" | "disabled";
+  served: boolean;
+  summary: ACMEARIPostureSummary;
+}
+
+export interface ACMEARIPostureSummary {
+  affected_certificates: number;
+  published: number;
+  scheduler_consumed: number;
+  scheduler_failed: number;
+  scheduler_pending: number;
+}
+
+export interface ACMEARIWindow {
+  end: string;
+  start: string;
+}
+
 export interface ACMEDNS01Preflight {
   checks: ACMEDNS01PreflightCheck[];
   config_id: string;

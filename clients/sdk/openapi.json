@@ -1,6 +1,177 @@
 {
   "components": {
     "schemas": {
+      "ACMEARICertificatePosture": {
+        "properties": {
+          "ari_certificate_id": {
+            "type": "string"
+          },
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_status": {
+            "enum": [
+              "active",
+              "superseded",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "consumed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "identity_name": {
+            "type": "string"
+          },
+          "publication_status": {
+            "enum": [
+              "published",
+              "not_published",
+              "identifier_unavailable"
+            ],
+            "type": "string"
+          },
+          "rotation_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scheduler_consumed": {
+            "type": "boolean"
+          },
+          "scheduler_source": {
+            "enum": [
+              "ari",
+              "fixed_threshold",
+              "manual",
+              "none",
+              "unknown_scheduler"
+            ],
+            "type": "string"
+          },
+          "scheduler_status": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed",
+              "not_applicable"
+            ],
+            "type": "string"
+          },
+          "suggested_window": {
+            "$ref": "#/components/schemas/ACMEARIWindow"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "certificate_status",
+          "publication_status",
+          "scheduler_status",
+          "scheduler_consumed",
+          "scheduler_source"
+        ],
+        "type": "object"
+      },
+      "ACMEARIPosture": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEARICertificatePosture"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "publication_endpoint": {
+            "type": "string"
+          },
+          "publication_status": {
+            "enum": [
+              "served",
+              "not_served"
+            ],
+            "type": "string"
+          },
+          "scheduler_status": {
+            "enum": [
+              "enabled",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ACMEARIPostureSummary"
+          }
+        },
+        "required": [
+          "served",
+          "generated_at",
+          "publication_status",
+          "publication_endpoint",
+          "scheduler_status",
+          "summary",
+          "items"
+        ],
+        "type": "object"
+      },
+      "ACMEARIPostureSummary": {
+        "properties": {
+          "affected_certificates": {
+            "type": "integer"
+          },
+          "published": {
+            "type": "integer"
+          },
+          "scheduler_consumed": {
+            "type": "integer"
+          },
+          "scheduler_failed": {
+            "type": "integer"
+          },
+          "scheduler_pending": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "affected_certificates",
+          "published",
+          "scheduler_pending",
+          "scheduler_consumed",
+          "scheduler_failed"
+        ],
+        "type": "object"
+      },
+      "ACMEARIWindow": {
+        "properties": {
+          "end": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
       "ACMEDNS01Preflight": {
         "properties": {
           "checks": {
@@ -19043,6 +19214,71 @@
         "summary": "Get a privileged access session",
         "x-trstctl-permission": "access:read",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/acme/ari/posture": {
+      "get": {
+        "operationId": "getACMEARIPosture",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEARIPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get ACME Renewal Information publication and lifecycle-consumption posture",
+        "x-trstctl-permission": "lifecycle:read"
       }
     },
     "/api/v1/acme/dns-01/preflight": {

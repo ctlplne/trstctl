@@ -298,9 +298,11 @@ func (d *issuanceDispatcher) DeliverTerminalFailure(ctx context.Context, m orche
 // and revocation handlers need (the same JSON the orchestrator enqueues on the
 // outbox entry).
 type transitionTrigger struct {
-	IdentityID string `json:"identity_id"`
-	To         string `json:"to"`
-	Reason     string `json:"reason"`
+	IdentityID             string `json:"identity_id"`
+	To                     string `json:"to"`
+	Reason                 string `json:"reason"`
+	Origin                 string `json:"origin,omitempty"`
+	PredecessorFingerprint string `json:"predecessor_fingerprint,omitempty"`
 }
 
 type sealedConnectorDeployPayload struct {
@@ -541,15 +543,18 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 	idemKey := "renew:" + m.IdempotencyKey
 	_, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {
 		run := rotationRunEvidence{
-			ID:             evidenceID("rotation", m.TenantID, m.IdempotencyKey, m.ID),
-			IdentityID:     p.IdentityID,
-			OutboxID:       outboxPtr(m.ID),
-			Trigger:        rotationTrigger(p.Reason),
-			Reason:         p.Reason,
-			IdempotencyKey: m.IdempotencyKey,
+			ID:                     evidenceID("rotation", m.TenantID, m.IdempotencyKey, m.ID),
+			IdentityID:             p.IdentityID,
+			OutboxID:               outboxPtr(m.ID),
+			Trigger:                rotationTrigger(p.Origin, m.IdempotencyKey, p.Reason),
+			Reason:                 p.Reason,
+			IdempotencyKey:         m.IdempotencyKey,
+			PredecessorFingerprint: p.PredecessorFingerprint,
 		}
-		if err := d.recordRotationRun(ctx, m.TenantID, run, "running", ""); err != nil {
-			return nil, err
+		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
+		if err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
 		}
 		recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
 		if err != nil {
@@ -557,32 +562,50 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			return nil, err
 		}
 		if len(recovered) > 0 {
+			recoveredLast := recovered[len(recovered)-1]
+			if recoveredLast.ReplacesID != nil {
+				predecessor, predecessorErr := d.store.GetCertificate(ctx, m.TenantID, *recoveredLast.ReplacesID)
+				if predecessorErr != nil {
+					_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", predecessorErr.Error())
+					return nil, fmt.Errorf("server: load recovered renewal predecessor: %w", predecessorErr)
+				}
+				run.PredecessorFingerprint = predecessor.Fingerprint
+			}
+			if err := d.recordRotationRun(ctx, m.TenantID, run, "running", ""); err != nil {
+				return nil, err
+			}
 			if err := d.completeRecoveredRenewal(ctx, m.TenantID, p.IdentityID, p.Reason); err != nil {
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, fmt.Errorf("server: complete recovered renewal transition: %w", err)
 			}
-			run.SuccessorFingerprint = recovered[len(recovered)-1].Fingerprint
+			run.SuccessorFingerprint = recoveredLast.Fingerprint
 			if err := d.recordRotationRun(ctx, m.TenantID, run, "succeeded", ""); err != nil {
 				return nil, err
 			}
 			return []byte(fmt.Sprintf("renewed:%d", len(recovered))), nil
-		}
-		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
-		if err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
-		}
-		if err := d.admitIssuance(ctx, m, p, ident, "renew"); err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, err
 		}
 		certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
 		if err != nil {
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, fmt.Errorf("server: find issued certs for identity %s: %w", p.IdentityID, err)
 		}
+		certs, err = renewalCertificatesForTrigger(certs, p)
+		if err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, err
+		}
+		if run.PredecessorFingerprint == "" && len(certs) > 0 {
+			run.PredecessorFingerprint = certs[0].Fingerprint
+		}
+		if err := d.recordRotationRun(ctx, m.TenantID, run, "running", ""); err != nil {
+			return nil, err
+		}
 		if len(certs) == 0 {
 			err := fmt.Errorf("server: no active issued certificate to renew for identity %s", p.IdentityID)
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, err
+		}
+		if err := d.admitIssuance(ctx, m, p, ident, "renew"); err != nil {
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, err
 		}
@@ -590,9 +613,6 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 		deployFingerprint := ""
 		defer func() { secret.Wipe(deployKeyPEM) }()
 		for _, old := range certs {
-			if run.PredecessorFingerprint == "" {
-				run.PredecessorFingerprint = old.Fingerprint
-			}
 			dnsNames := old.SANs
 			if len(dnsNames) == 0 {
 				dnsNames = []string{ident.Name}
@@ -1306,11 +1326,49 @@ func outboxPtr(id int64) *int64 {
 	return &id
 }
 
-func rotationTrigger(reason string) string {
-	if strings.Contains(strings.ToLower(reason), "scheduled") {
+func renewalCertificatesForTrigger(certs []store.Certificate, trigger transitionTrigger) ([]store.Certificate, error) {
+	if trigger.Origin != lifecycleTransitionOriginScheduler {
+		return certs, nil
+	}
+	if trigger.PredecessorFingerprint == "" {
+		return nil, fmt.Errorf("server: structured scheduler renewal is missing its selected predecessor for identity %s", trigger.IdentityID)
+	}
+	for _, cert := range certs {
+		if cert.Fingerprint == trigger.PredecessorFingerprint {
+			return []store.Certificate{cert}, nil
+		}
+	}
+	return nil, fmt.Errorf(
+		"server: scheduler-selected predecessor %s is no longer active for identity %s",
+		trigger.PredecessorFingerprint,
+		trigger.IdentityID,
+	)
+}
+
+func rotationTrigger(origin, idempotencyKey, reason string) string {
+	if origin == lifecycleTransitionOriginScheduler {
+		return "scheduler"
+	}
+	if origin != "" || strings.HasPrefix(idempotencyKey, "transition:") || !isEventNUID(idempotencyKey) {
+		return "manual"
+	}
+	if strings.HasPrefix(reason, lifecycleARIRenewalReasonPrefix) ||
+		strings.HasPrefix(reason, lifecycleFixedRenewalReasonPrefix) {
 		return "scheduler"
 	}
 	return "manual"
+}
+
+func isEventNUID(value string) bool {
+	if len(value) != 22 {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+			return false
+		}
+	}
+	return true
 }
 
 func nonempty(v, fallback string) string {

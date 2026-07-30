@@ -66,7 +66,7 @@ exhaustive subcommand list:
 | Group                              | Purpose (representative verbs)                                                                                                                              |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `access`                           | Tenant membership, API tokens, JIT privileged-access sessions, and NHI access-change requests/reviews (`roles` · `oidc-mapping` · `members` · `tokens` · `sessions` · `requests` · `reviews`) |
-| `acme`                             | ACME DNS-01 provider coverage, secret-referenced provider configs, and propagation/CAA/wildcard preflight (`dns-01 providers` · `dns-01 provider-configs` · `dns-01 preflight`) |
+| `acme`                             | ACME ARI publication/scheduler posture plus DNS-01 provider coverage, secret-referenced provider configs, and propagation/CAA/wildcard preflight (`ari posture` · `dns-01 providers` · `dns-01 provider-configs` · `dns-01 preflight`) |
 | `agents`                           | In-network agent inventory, enrollment tokens, cert revocation, offboarding (`list` · `enroll-token` · `revoke-cert` · `offboard`)                          |
 | `ai`                               | AI assistant status, question answering, root-cause analysis (`status` · `query` · `rca`)                                                                   |
 | `audit`                            | Query and export the signed audit log (`events` · `export`)                                                                                                 |
@@ -255,6 +255,10 @@ trstctl token create --tenant <uuid> [--subject <name>] [--scopes a,b,c] [--tena
 ```bash
 export TRSTCTL_SERVER=https://localhost:8443
 export TRSTCTL_TOKEN=trst_...
+
+# Read this tenant's ARI publication windows and scheduler-consumption evidence.
+# The API token needs lifecycle:read; the command is read-only JSON output.
+trstctl-cli acme ari posture
 
 # Create an owner from a JSON body on stdin.
 echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f -

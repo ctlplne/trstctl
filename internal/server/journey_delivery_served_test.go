@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/protocols/ari"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestServedDeployAndRotationPublishReceipts is the JOURNEY-002 proof: the served
@@ -140,7 +142,9 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 }
 
 func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newServedHarness(t, config.Protocols{
+		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+	}, func(d *Deps) {
 		d.LifecycleRenewBefore = time.Hour
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
@@ -228,6 +232,26 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 		t.Fatalf("record ARI validity window: %v", err)
 	}
 
+	before := ariPostureForTenant(t, h, tok)
+	if before.PublicationStatus != "served" || before.SchedulerStatus != "enabled" {
+		t.Fatalf("ARI runtime posture before renewal = publication:%q scheduler:%q, want served/enabled (%s)",
+			before.PublicationStatus, before.SchedulerStatus, before.Raw)
+	}
+	beforeItem, ok := findARIPostureCertificate(before, predecessor.ID)
+	if !ok {
+		t.Fatalf("ARI posture does not contain deployed certificate %s before scheduling: %s", predecessor.ID, before.Raw)
+	}
+	if beforeItem.SchedulerConsumed {
+		t.Fatalf("ARI window was marked consumed before the scheduler ran: %+v", beforeItem)
+	}
+	if !beforeItem.SuggestedWindow.Start.Equal(window.Start) || !beforeItem.SuggestedWindow.End.Equal(window.End) {
+		t.Fatalf("served ARI window = %s..%s, want %s..%s",
+			beforeItem.SuggestedWindow.Start.Format(time.RFC3339Nano),
+			beforeItem.SuggestedWindow.End.Format(time.RFC3339Nano),
+			window.Start.Format(time.RFC3339Nano),
+			window.End.Format(time.RFC3339Nano))
+	}
+
 	queued, err := h.srv.RunLifecycleOnce(t.Context())
 	if err != nil {
 		t.Fatalf("run lifecycle scheduler: %v", err)
@@ -249,6 +273,36 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 	}
 	if run.PredecessorFingerprint != predecessor.Fingerprint || run.SuccessorFingerprint == "" || run.SuccessorFingerprint == predecessor.Fingerprint {
 		t.Fatalf("bad ARI-driven successor linkage: predecessor=%s run=%+v", predecessor.Fingerprint, run)
+	}
+
+	after := ariPostureForTenant(t, h, tok)
+	afterItem, ok := findARIPostureCertificate(after, predecessor.ID)
+	if !ok {
+		t.Fatalf("ARI posture lost consumed predecessor %s: %s", predecessor.ID, after.Raw)
+	}
+	if !afterItem.SchedulerConsumed || afterItem.RotationRunID != run.ID || afterItem.SchedulerStatus != "succeeded" {
+		t.Fatalf("ARI scheduler-consumption evidence = %+v, want consumed run %s succeeded", afterItem, run.ID)
+	}
+	if !afterItem.SuggestedWindow.Start.Equal(beforeItem.SuggestedWindow.Start) ||
+		!afterItem.SuggestedWindow.End.Equal(beforeItem.SuggestedWindow.End) {
+		t.Fatalf("ARI window changed after scheduler consumption: before=%+v after=%+v", beforeItem.SuggestedWindow, afterItem.SuggestedWindow)
+	}
+
+	const tenantB = "22222222-2222-2222-2222-222222222222"
+	if _, err := h.store.CreateOwner(context.Background(), store.Owner{
+		TenantID: tenantB, Kind: store.OwnerWorkload, Name: "ari-posture-tenant-b",
+	}); err != nil {
+		t.Fatalf("seed tenant B: %v", err)
+	}
+	tenantBToken := seedScopedToken(t, h.store, tenantB, "lifecycle:read")
+	tenantBPosture := ariPostureForTenant(t, h, tenantBToken)
+	if tenantBPosture.PublicationStatus != "not_served" {
+		t.Fatalf("tenant B publication posture = %q, want not_served because ACME is bound to tenant A", tenantBPosture.PublicationStatus)
+	}
+	if len(tenantBPosture.Items) != 0 ||
+		strings.Contains(string(tenantBPosture.Raw), predecessor.ID) ||
+		strings.Contains(string(tenantBPosture.Raw), predecessor.Fingerprint) {
+		t.Fatalf("tenant B read tenant A ARI evidence: %s", tenantBPosture.Raw)
 	}
 }
 
@@ -757,4 +811,45 @@ func rotationRunsForIdentity(t *testing.T, h *servedHarness, tok, identityID str
 		t.Fatalf("decode rotation runs: %v (%s)", err, body)
 	}
 	return out
+}
+
+type ariPostureList struct {
+	PublicationStatus string           `json:"publication_status"`
+	SchedulerStatus   string           `json:"scheduler_status"`
+	Items             []ariPostureItem `json:"items"`
+	Raw               []byte           `json:"-"`
+}
+
+type ariPostureItem struct {
+	CertificateID     string     `json:"certificate_id"`
+	ARICertificateID  string     `json:"ari_certificate_id"`
+	CertificateStatus string     `json:"certificate_status"`
+	PublicationStatus string     `json:"publication_status"`
+	SchedulerConsumed bool       `json:"scheduler_consumed"`
+	RotationRunID     string     `json:"rotation_run_id"`
+	SchedulerStatus   string     `json:"scheduler_status"`
+	SuggestedWindow   ari.Window `json:"suggested_window"`
+}
+
+func ariPostureForTenant(t *testing.T, h *servedHarness, token string) ariPostureList {
+	t.Helper()
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/ari/posture", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get ARI posture: status %d body %s", status, body)
+	}
+	var out ariPostureList
+	out.Raw = body
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode ARI posture: %v (%s)", err, body)
+	}
+	return out
+}
+
+func findARIPostureCertificate(posture ariPostureList, certificateID string) (ariPostureItem, bool) {
+	for _, item := range posture.Items {
+		if item.CertificateID == certificateID {
+			return item, true
+		}
+	}
+	return ariPostureItem{}, false
 }

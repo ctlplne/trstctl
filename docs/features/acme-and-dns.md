@@ -222,6 +222,28 @@ trstctl validates in an isolated zone:
 _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.net.
 ```
 
+### Inspect ARI publication and scheduler consumption
+
+The RFC 9773 endpoint `GET /acme/renewal-info/{certid}` is public protocol data for
+an ACME client. Operators use the separate, authenticated
+`GET /api/v1/acme/ari/posture` route, `trstctl-cli acme ari posture`, or the
+**ARI posture** panel on **Protocols**. This read-only surface requires
+`lifecycle:read`; PostgreSQL RLS constrains the certificate and lifecycle evidence
+to the caller's tenant.
+
+The response separates three facts that are easy to confuse:
+
+- `publication_status` says whether ACME renewal information is actually served for
+  this tenant;
+- each affected certificate reports its `suggested_window` and its own publication
+  state; and
+- `scheduler_status`, `scheduler_consumed`, and `rotation_run_id` show whether the
+  lifecycle scheduler used that window and how its durable rotation run ended.
+
+No posture read changes renewal behavior or ACME challenge validation. A tenant
+without a mounted ACME publisher receives the honest `not_served` state, and a
+tenant cannot read another tenant's certificate identifiers or rotation evidence.
+
 ## Pitfalls & limits
 
 - **DNS-01 needs a provider credential** scoped to the (validation) zone; prefer CNAME
@@ -240,6 +262,9 @@ _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.ne
 - **ACME endpoints:** `GET /directory`; `POST /acme/new-account`,
   `/acme/new-order`, `/acme/order/{id}/finalize`, `/acme/cert/{id}`;
   `GET /acme/renewal-info/{certid}` (ARI).
+- **Operator ARI posture:** authenticated `GET /api/v1/acme/ari/posture`
+  (`lifecycle:read`), also exposed as `trstctl-cli acme ari posture` and the
+  Protocols console's ARI posture panel.
 - **Challenge types:** `http-01`, `dns-01`, `tls-alpn-01`.
 - **Auth modes:** `public_trust` (full DV, default) and `trust_authenticated`
   (internal authenticated issuance, explicit profile opt-in).

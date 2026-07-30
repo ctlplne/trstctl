@@ -110,6 +110,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"acme", "dns-01", "provider-configs", "update"}, Method: "PUT", Path: "/api/v1/acme/dns-01/provider-configs/{id}", Body: bodyFile, Summary: "Replace a DNS-01 provider config using secret references"},
 	{Name: []string{"acme", "dns-01", "provider-configs", "delete"}, Method: "DELETE", Path: "/api/v1/acme/dns-01/provider-configs/{id}", Summary: "Delete a DNS-01 provider config"},
 	{Name: []string{"acme", "dns-01", "preflight"}, Method: "POST", Path: "/api/v1/acme/dns-01/preflight", Body: bodyFile, Summary: "Run DNS-01 propagation, CNAME, CAA, method, and wildcard policy preflight"},
+	{Name: []string{"acme", "ari", "posture"}, Method: "GET", Path: "/api/v1/acme/ari/posture", Query: []string{"limit", "cursor"}, Summary: "Show ARI publication and lifecycle scheduler-consumption posture"},
 	{Name: []string{"mdm", "scep", "status"}, Method: "GET", Path: "/api/v1/mdm/scep/status", Summary: "Show MDM SCEP policy and challenge telemetry status"},
 	{Name: []string{"mdm", "scep", "policies", "create"}, Method: "POST", Path: "/api/v1/mdm/scep/policies", Body: bodyFile, Summary: "Create an MDM SCEP enrollment policy"},
 	{Name: []string{"mdm", "scep", "policies", "list"}, Method: "GET", Path: "/api/v1/mdm/scep/policies", Summary: "List MDM SCEP enrollment policies"},

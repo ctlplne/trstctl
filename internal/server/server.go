@@ -10,6 +10,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -1036,6 +1037,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithServiceNowBindings(d.ServiceNowBindings...),
 		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
 		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
+		api.WithACMEARIPosture(s.ACMEARIPosture),
 	}
 }
 
@@ -2477,7 +2479,12 @@ func (s *Server) RunCRLScheduler(ctx context.Context) {
 	})
 }
 
-const defaultLifecycleSchedulerInterval = time.Minute
+const (
+	defaultLifecycleSchedulerInterval  = time.Minute
+	lifecycleARIRenewalReasonPrefix    = "scheduled renewal from ARI window "
+	lifecycleFixedRenewalReasonPrefix  = "scheduled renewal before "
+	lifecycleTransitionOriginScheduler = "lifecycle_scheduler"
+)
 
 // RunLifecycleScheduler runs the leader-only certificate renewal scheduler until
 // ctx is cancelled (JOURNEY-002/F6/NOTIF-01). It does not sign certificates or send
@@ -2542,7 +2549,18 @@ func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
 				if !due {
 					continue
 				}
-				if err := s.orch.Transition(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason); err != nil {
+				payload, err := json.Marshal(transitionTrigger{
+					IdentityID:             ident.ID,
+					To:                     string(orchestrator.StateRenewing),
+					Reason:                 reason,
+					Origin:                 lifecycleTransitionOriginScheduler,
+					PredecessorFingerprint: candidate.Certificate.Fingerprint,
+				})
+				if err != nil {
+					s.observeLifecycleSweep(queued, 0, err)
+					return queued, err
+				}
+				if err := s.orch.TransitionWithSideEffectPayload(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason, payload); err != nil {
 					if errors.Is(err, orchestrator.ErrInvalidTransition) {
 						continue
 					}
@@ -2592,13 +2610,13 @@ func lifecycleRenewalReason(cert store.Certificate, now, fixedCutoff time.Time) 
 		notBefore := cert.NotBefore.UTC()
 		info := ari.RenewalInfo{SuggestedWindow: ari.SuggestWindow(notBefore, notAfter, now, false)}
 		if ari.RenewNow(info, now) {
-			return fmt.Sprintf("scheduled renewal from ARI window %s..%s",
+			return fmt.Sprintf(lifecycleARIRenewalReasonPrefix+"%s..%s",
 				info.SuggestedWindow.Start.Format(time.RFC3339),
 				info.SuggestedWindow.End.Format(time.RFC3339)), true
 		}
 	}
 	if notAfter.Before(fixedCutoff) {
-		return "scheduled renewal before " + fixedCutoff.Format(time.RFC3339), true
+		return lifecycleFixedRenewalReasonPrefix + fixedCutoff.Format(time.RFC3339), true
 	}
 	return "", false
 }

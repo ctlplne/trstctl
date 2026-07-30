@@ -4903,6 +4903,155 @@ export const messages = {
     defaultMessage: "Gate",
     description: "Regional issuance failover table gate column.",
   },
+  "protocols.ari.heading": {
+    defaultMessage: "ACME Renewal Information (ARI)",
+    description: "Heading for the read-only ACME renewal posture panel.",
+  },
+  "protocols.ari.description": {
+    defaultMessage:
+      "Read-only renewal windows published for this tenant and whether the lifecycle scheduler consumed each window. This panel does not change issuance or renewal policy.",
+    description: "Explanation of the ARI publication and scheduler-consumption panel.",
+  },
+  "protocols.ari.listLabel": {
+    defaultMessage: "ARI renewal windows",
+    description: "Accessible label for the ARI certificate posture grid.",
+  },
+  "protocols.ari.certificate": {
+    defaultMessage: "Certificate",
+    description: "ARI posture grid certificate column.",
+  },
+  "protocols.ari.publication": {
+    defaultMessage: "Publication",
+    description: "ARI publication summary and grid label.",
+  },
+  "protocols.ari.scheduler": {
+    defaultMessage: "Lifecycle scheduler",
+    description: "ARI lifecycle scheduler summary and grid label.",
+  },
+  "protocols.ari.suggestedWindow": {
+    defaultMessage: "Suggested renewal window",
+    description: "ARI posture grid suggested renewal window column.",
+  },
+  "protocols.ari.publicationServed": {
+    defaultMessage: "Publishing",
+    description: "Status label when the ACME renewal-info route is publishing.",
+  },
+  "protocols.ari.publicationNotServed": {
+    defaultMessage: "Not publishing",
+    description: "Status label when the ACME renewal-info route is not publishing.",
+  },
+  "protocols.ari.schedulerEnabled": {
+    defaultMessage: "Enabled",
+    description: "Status label when lifecycle renewal scheduling is enabled.",
+  },
+  "protocols.ari.schedulerDisabled": {
+    defaultMessage: "Disabled",
+    description: "Status label when lifecycle renewal scheduling is disabled.",
+  },
+  "protocols.ari.published": {
+    defaultMessage: "Published",
+    description: "Certificate status label when its ARI window is published.",
+  },
+  "protocols.ari.notPublished": {
+    defaultMessage: "Not published",
+    description: "Certificate status label when its ARI window is not published.",
+  },
+  "protocols.ari.identifierUnavailable": {
+    defaultMessage: "ARI identifier unavailable",
+    description: "Certificate status label when no RFC 9773 identifier can be derived.",
+  },
+  "protocols.ari.consumed": {
+    defaultMessage: "Consumed",
+    description: "Scheduler status label when the lifecycle scheduler consumed an ARI window.",
+  },
+  "protocols.ari.pending": {
+    defaultMessage: "Pending",
+    description: "Scheduler status label for a pending renewal.",
+  },
+  "protocols.ari.running": {
+    defaultMessage: "Running",
+    description: "Scheduler status label for a running renewal.",
+  },
+  "protocols.ari.succeeded": {
+    defaultMessage: "Succeeded",
+    description: "Scheduler status label for a successful non-ARI renewal.",
+  },
+  "protocols.ari.failed": {
+    defaultMessage: "Failed",
+    description: "Scheduler status label for a failed renewal.",
+  },
+  "protocols.ari.notApplicable": {
+    defaultMessage: "Not applicable",
+    description: "Scheduler status label when a certificate has no lifecycle identity.",
+  },
+  "protocols.ari.sourceARI": {
+    defaultMessage: "ARI window",
+    description: "Scheduler source label for an ARI-window renewal.",
+  },
+  "protocols.ari.sourceFixedThreshold": {
+    defaultMessage: "Fixed expiry threshold",
+    description: "Scheduler source label for the fixed expiry fallback.",
+  },
+  "protocols.ari.sourceManual": {
+    defaultMessage: "Manual",
+    description: "Scheduler source label for a manually requested renewal.",
+  },
+  "protocols.ari.sourceNone": {
+    defaultMessage: "No scheduler source",
+    description: "Scheduler source label when no renewal run exists.",
+  },
+  "protocols.ari.sourceUnknown": {
+    defaultMessage: "Scheduler source unknown",
+    description: "Scheduler source label when a scheduler run cannot be classified.",
+  },
+  "protocols.ari.noWindow": {
+    defaultMessage: "No suggested window",
+    description: "Fallback when a certificate has no ARI suggested window.",
+  },
+  "protocols.ari.windowRange": {
+    defaultMessage: "{start} to {end}",
+    description: "Localized ARI suggested-window range.",
+  },
+  "protocols.ari.consumedAt": {
+    defaultMessage: "Consumed {at}",
+    description: "Timestamp when the lifecycle scheduler selected an ARI window.",
+  },
+  "protocols.ari.rotationRun": {
+    defaultMessage: "Rotation run {id}",
+    description: "Identifier of the rotation run associated with an ARI posture row.",
+  },
+  "protocols.ari.loading": {
+    defaultMessage: "Loading ARI renewal posture.",
+    description: "Loading message for the ARI posture grid.",
+  },
+  "protocols.ari.emptyTitle": {
+    defaultMessage: "No ARI renewal windows yet",
+    description: "Empty-state title for the ARI posture grid.",
+  },
+  "protocols.ari.emptyBody": {
+    defaultMessage: "No active tenant certificate has ARI renewal information yet.",
+    description: "Empty-state body for the ARI posture grid.",
+  },
+  "protocols.ari.permissionDenied": {
+    defaultMessage: "Your session cannot read this tenant’s ARI renewal posture.",
+    description: "Permission-denied message for the ARI posture grid.",
+  },
+  "protocols.ari.unavailableTitle": {
+    defaultMessage: "ARI posture unavailable",
+    description: "Unavailable-state title for the ARI posture grid.",
+  },
+  "protocols.ari.unavailableBody": {
+    defaultMessage: "This build or configuration does not expose ARI renewal posture.",
+    description: "Unavailable-state body for the ARI posture grid.",
+  },
+  "protocols.ari.loadFailed": {
+    defaultMessage: "ARI posture could not be loaded",
+    description: "Error-state title for the ARI posture grid.",
+  },
+  "protocols.ari.loadFailedBody": {
+    defaultMessage: "The server could not return ARI renewal posture.",
+    description: "Error-state body for the ARI posture grid.",
+  },
   "protocols.dns01.heading": {
     defaultMessage: "DNS-01 providers",
     description: "Heading for the ACME DNS-01 provider catalog section.",

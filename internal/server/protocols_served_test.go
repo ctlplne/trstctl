@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/projections"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -1301,6 +1302,28 @@ func TestServedACMEEndToEnd(t *testing.T) {
 	if !protoContains(info.DNSNames, domain) {
 		t.Errorf("issued cert SANs = %v, want %s", info.DNSNames, domain)
 	}
+	certID, err := certinfo.ARICertID(leafDER)
+	if err != nil {
+		t.Fatalf("derive served ACME ARI identifier: %v", err)
+	}
+	postureToken := seedScopedToken(t, h.store, h.tenant, "lifecycle:read")
+	posture := ariPostureForTenant(t, h, postureToken)
+	var published ariPostureItem
+	for _, item := range posture.Items {
+		if item.ARICertificateID == certID {
+			published = item
+			break
+		}
+	}
+	expectedWindow := ari.SuggestWindow(info.NotBefore, info.NotAfter, time.Now().UTC(), false)
+	if published.CertificateID == "" ||
+		published.CertificateStatus != "active" ||
+		published.PublicationStatus != "published" ||
+		!published.SuggestedWindow.Start.Equal(expectedWindow.Start) ||
+		!published.SuggestedWindow.End.Equal(expectedWindow.End) {
+		t.Fatalf("served ACME certificate missing from actual ARI publication posture: cert_id=%q item=%+v expected_window=%+v raw=%s",
+			certID, published, expectedWindow, posture.Raw)
+	}
 
 	// AN-2: the served mint recorded a certificate.recorded event for the tenant.
 	if !h.hasEvent(t, "certificate.recorded") {
@@ -1326,6 +1349,22 @@ func TestServedACMEEndToEnd(t *testing.T) {
 
 	if st := servedOCSPStatus(t, h.srv, h.tenant, leafDER, h.caPEM); st != "revoked" {
 		t.Fatalf("post-revoke OCSP status = %q, want revoked", st)
+	}
+	posture = ariPostureForTenant(t, h, postureToken)
+	published = ariPostureItem{}
+	for _, item := range posture.Items {
+		if item.ARICertificateID == certID {
+			published = item
+			break
+		}
+	}
+	if published.CertificateID == "" ||
+		published.CertificateStatus != "revoked" ||
+		published.PublicationStatus != "published" ||
+		!published.SuggestedWindow.Start.Equal(expectedWindow.Start) ||
+		!published.SuggestedWindow.End.Equal(expectedWindow.End) {
+		t.Fatalf("revoked certificate diverged from live ARI publication truth: cert_id=%q item=%+v raw=%s",
+			certID, published, posture.Raw)
 	}
 
 	crlDER, err := h.srv.GenerateCRL(ctx, h.tenant)

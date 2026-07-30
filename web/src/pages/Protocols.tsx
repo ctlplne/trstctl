@@ -9,6 +9,7 @@ import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { ARIPosturePanel } from "@/pages/protocols/ARIPosturePanel";
 import {
   api,
   ApiError,
@@ -361,6 +362,8 @@ export function Protocols() {
           {statusError && <ErrorState title={translateNow("source.protocol.status.check.failed.d6b8e1268d")}>{statusError}</ErrorState>}
         </div>
       </section>
+
+      <ARIPosturePanel />
 
       <section aria-labelledby="dns-provider-heading">
         <h2 id="dns-provider-heading" className="mb-3 text-title font-semibold">

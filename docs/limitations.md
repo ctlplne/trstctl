@@ -1077,10 +1077,11 @@ This is a deliberate, documented trust boundary, not an accident.
   `keyChange` resources, and the server accepts ECDSA and Ed25519 account
   keys (not only RSA). Enable it with `protocols.acme.enabled` plus
   `protocols.acme.tenant_id`; it activates only when an issuing CA is
-  provisioned and fails closed otherwise. Roadmap residual: a dedicated ACME
-  admin console for account/order/challenge drilldown, revocation/ARI
-  operations, and richer client setup controls remains outside the F5
-  GA-served protocol denominator.
+  provisioned and fails closed otherwise. The Protocols console now exposes the
+  tenant-scoped, read-only ARI publication and scheduler-consumption posture.
+  Roadmap residual: a dedicated ACME admin console for account/order/challenge
+  drilldown, revocation operations, and richer client setup controls remains
+  outside the F5 GA-served protocol denominator.
 - EST (RFC 7030), SCEP (RFC 8894), CMP (RFC 4210/6712), the SPIFFE Workload
   API, and the SSH CA issuance servers are served end-to-end by the running
   binary, each behind the same issuance seam as the API mint: signed in the

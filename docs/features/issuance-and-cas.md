@@ -232,6 +232,24 @@ Served by the ACME server at `GET /acme/renewal-info/{certid}` and consumed by t
 served lifecycle scheduler for trstctl-issued deployed X.509 identities — certificates
 can renew when their ARI window opens, even before the fixed `renew_before` fallback.
 
+Operators inspect the same chain through the read-only
+`GET /api/v1/acme/ari/posture` route, the `trstctl-cli acme ari posture` command,
+or the **ARI posture** panel on **Protocols**. The authenticated route requires
+`lifecycle:read` and PostgreSQL RLS limits every certificate and rotation-run row to
+the caller's tenant. It reports whether ARI publication is served for that tenant,
+the exact suggested window for each affected certificate, and whether the lifecycle
+scheduler is pending, running, succeeded, or failed for that window. It never returns
+certificate bytes, fingerprints, tenant IDs, account/order data, or private-key
+material.
+
+The public ACME route and the operator route answer different questions:
+`/acme/renewal-info/{certid}` tells an ACME client *when it should renew*;
+`/api/v1/acme/ari/posture` tells an authenticated operator *what is being published
+and whether trstctl's scheduler consumed it*. If ACME is not mounted for the tenant,
+the posture says `not_served` rather than pretending the certificate is published.
+An empty `items` array honestly means that the tenant has no affected deployed
+certificate rows.
+
 ### Revocation: OCSP and CRLs (F47)
 
 When a certificate must stop being trusted before it expires, you **revoke** it and
@@ -409,10 +427,12 @@ external CA registry API, each of which calls the one issuance path with an
 
 ## Reference
 
-- **CLI groups:** `profiles`, `issuers`, `external-cas`, `certificates`.
+- **CLI groups:** `profiles`, `issuers`, `external-cas`, `certificates`, and
+  `acme ari posture`.
 - **Served routes:** `POST|GET /api/v1/profiles`,
   `GET /api/v1/profiles/{name}/versions/{version}`, `POST /api/v1/certificates`,
   `GET /api/v1/external-cas`, `POST /api/v1/external-cas/{id}/issue`,
+  `GET /api/v1/acme/ari/posture` (`lifecycle:read`),
   `POST /api/v1/ca/authorities/{id}/rotate`,
   `POST /api/v1/ca/authorities/{id}/rekey`,
   `POST /api/v1/certificates/bulk-revoke`,

@@ -2840,63 +2840,109 @@
       "phase": "P2",
       "priority": 53,
       "served_state": "served",
-      "backend_status": "served via ACME renewal-info plus lifecycle scheduler consumption for trstctl-issued deployed X.509 identities",
-      "current_frontend_mapping": "observe: Protocols at /protocols - ARI renewal-window disclosure plus protocol-status gate",
-      "target_gui_mapping": "ACME/ARI panel showing renewal windows, affected orders/certs, client recommendations, and scheduler consumption state.",
-      "acceptance_test": "Served lifecycle test proves a deployed short-lived certificate renews on its ARI window even when outside the fixed renew_before threshold.",
+      "backend_status": "served via public ACME renewal-info plus tenant-scoped GET /api/v1/acme/ari/posture over actual publication state and durable lifecycle scheduler-consumption evidence",
+      "current_frontend_mapping": "observe: Protocols at /protocols - ARI posture panel backed by the tenant-scoped served API, with affected certificate windows and honest loading, empty, error, permission, and unavailable states",
+      "target_gui_mapping": "Delivered: Protocols ARI posture panel shows actual publication state, affected certificate windows, and lifecycle scheduler consumption without mutation controls.",
+      "acceptance_test": "TestServedLifecycleSchedulerUsesARIWindowForRenewal proves the served posture window matches the scheduler-consumed window outside renew_before and its tenant-B read proves cross-tenant certificate and rotation evidence stays hidden.",
       "source_docs": [
         "docs/features/issuance-and-cas.md",
-        "docs/features/acme-and-dns.md"
+        "docs/features/acme-and-dns.md",
+        "docs/cli.md",
+        "docs/web-console.md"
       ],
       "source_backend": [
-        "internal/protocols/acme",
-        "internal/protocols/ari",
+        "internal/api/acme_ari_posture.go",
+        "internal/store/acme_ari_posture.go",
+        "internal/server/acme_ari_posture.go",
+        "internal/protocols/acme/acme.go",
+        "internal/protocols/ari/ari.go",
         "internal/crypto/certinfo/ari.go",
-        "internal/server/server.go"
+        "internal/server/server.go",
+        "internal/server/journey_delivery_served_test.go"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/protocols/ARIPosturePanel.tsx",
+        "web/src/pages/Protocols.tsx",
+        "web/src/lib/api.ts",
+        "web/src/__tests__/protocols.test.tsx"
+      ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence; CLM-01 adds served lifecycle scheduler consumption of ARI windows. Test evidence: internal/server/journey_delivery_served_test.go proves ARI-window renewal outside the fixed threshold; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage.",
-      "api_surface": [],
-      "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
-      "cli_surface": [],
-      "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
+      "notes": "F46 is closed by literal operator surfaces, not route-only inference: authenticated lifecycle:read callers use GET /api/v1/acme/ari/posture, trstctl-cli acme ari posture, or the Protocols ARI posture panel. TestServedLifecycleSchedulerUsesARIWindowForRenewal proves the returned suggested window is the one consumed by the durable scheduler run and proves a tenant-B token cannot read tenant-A certificate identifiers or rotation evidence.",
+      "api_surface": [
+        "getACMEARIPosture"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "acme ari posture"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
+            "GET /api/v1/acme/ari/posture is an authenticated, read-only, tenant-scoped view of actual ACME publication state, suggested certificate windows, and durable lifecycle scheduler-consumption evidence.",
+            "GET /acme/renewal-info/{certid} remains the public RFC 9773 client endpoint; the operator posture route does not change ACME validation or renewal behavior.",
             "served_state=served",
-            "backend_status=served via ACME renewal-info plus lifecycle scheduler consumption for trstctl-issued deployed X.509 identities"
+            "backend_status=served via public ACME renewal-info plus tenant-scoped GET /api/v1/acme/ari/posture over actual publication state and durable lifecycle scheduler-consumption evidence"
+          ],
+          "refs": [
+            "internal/api/acme_ari_posture.go",
+            "internal/store/acme_ari_posture.go",
+            "internal/server/acme_ari_posture.go",
+            "internal/protocols/acme/acme.go",
+            "internal/server/journey_delivery_served_test.go"
           ],
           "commands": [
-            "make test"
+            "make test",
+            "go test ./internal/server -run '^TestServedLifecycleSchedulerUsesARIWindowForRenewal$' -count=1"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - ARI renewal-window disclosure plus protocol-status gate",
-            "target_gui_mapping: ACME/ARI panel showing renewal windows, affected orders/certs, client recommendations, and scheduler consumption state."
+            "Protocols at /protocols renders an ARI posture panel from api.acmeARIPosture(), including actual publication state, affected certificate windows, and scheduler-consumption state.",
+            "The panel distinguishes loading, empty, error, lifecycle:read permission denial, and unavailable-provider states and exposes no mutation control."
           ],
           "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/App.tsx"
+            "web/src/pages/protocols/ARIPosturePanel.tsx",
+            "web/src/pages/Protocols.tsx",
+            "web/src/lib/api.ts",
+            "web/src/__tests__/protocols.test.tsx"
           ]
         },
         "cli": {
-          "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
+          "evidence": [
+            "CLI command `trstctl-cli acme ari posture` performs the read-only GET /api/v1/acme/ari/posture request and prints the tenant-scoped JSON response."
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/cli_test.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "OpenAPI operationId getACMEARIPosture serves GET /api/v1/acme/ari/posture with lifecycle:read and the ACMEARIPosture schema."
+          ],
+          "refs": [
+            "internal/api/acme_ari_posture.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
+          ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served lifecycle test proves a deployed short-lived certificate renews on its ARI window even when outside the fixed renew_before threshold.",
+            "acceptance_test: TestServedLifecycleSchedulerUsesARIWindowForRenewal proves the served suggested window exactly matches the scheduler-consumed window outside renew_before, then uses a tenant-B lifecycle:read token to prove tenant-A certificate identifiers and rotation evidence remain hidden.",
+            "Focused API tests cover tenant propagation, pagination, empty items, validation, and unavailable-provider responses; the CLI test proves the command sends authenticated tenant context and prints JSON.",
+            "Protocols tests cover ready, loading, empty, error, permission-denied, and unavailable states without mutation controls.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
-            "TestServedLifecycleSchedulerUsesARIWindowForRenewal is a named acceptance test executed by the CI make test package set."
+            "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
-            "internal/featureparity/feature_facet_coverage_test.go",
             "internal/server/journey_delivery_served_test.go",
+            "internal/api/acme_ari_posture_test.go",
+            "internal/cli/cli_test.go",
+            "internal/featureparity/feature_facet_coverage_test.go",
+            "web/src/__tests__/protocols.test.tsx",
             "web/src/__tests__/feature_coverage.test.tsx",
             "web/src/__tests__/route_parity.test.ts"
           ]
@@ -2904,19 +2950,27 @@
         "docs": {
           "evidence": [
             "documented in docs/features/issuance-and-cas.md",
-            "documented in docs/features/acme-and-dns.md"
+            "documented in docs/features/acme-and-dns.md",
+            "documented in docs/cli.md",
+            "documented in docs/web-console.md"
           ],
           "refs": [
             "docs/features/issuance-and-cas.md",
-            "docs/features/acme-and-dns.md"
+            "docs/features/acme-and-dns.md",
+            "docs/cli.md",
+            "docs/web-console.md",
+            "docs/limitations.md"
           ]
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps getACMEARIPosture to lifecycle:read; the route also requires authenticated tenant context before the tenant-scoped provider runs.",
             "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "The public ACME renewal-info endpoint and authenticated operator posture route retain separate, explicit authorization rationales."
           ],
           "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
             "internal/server/protocol_authz.go",
             "internal/server/protocol_authz_test.go",
             "internal/server/protocols_served_test.go"
@@ -2924,16 +2978,19 @@
         },
         "audit": {
           "evidence": [
-            "protocol-served feature: protocol issuance/revocation paths emit protocol audit events or expose an explicit status gate."
+            "The posture operation is read-only: it combines tenant-scoped certificate projections, actual ACME publication state, and immutable lifecycle.rotation.recorded projection evidence without emitting a fake mutation event.",
+            "Protocol issuance and lifecycle rotation continue to append their existing audit/event evidence; the posture response excludes certificate bytes, fingerprints, tenant ids, account/order data, and rotation reasons."
           ],
           "refs": [
-            "internal/server/protocols.go",
-            "internal/server/protocol_mounts.go"
+            "internal/store/acme_ari_posture.go",
+            "internal/server/acme_ari_posture.go",
+            "internal/projections/projections.go",
+            "internal/eventledger/ledger.go"
           ]
         },
         "telemetry": {
           "evidence": [
-            "served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."
+            "The authenticated ARI posture route and public renewal-info endpoint are covered by normalized HTTP metrics and tracing without certificate, tenant, or secret labels."
           ],
           "refs": [
             "internal/observ/middleware.go",
@@ -2942,21 +2999,21 @@
         },
         "a11y": {
           "evidence": [
-            "feature-specific a11y receipt: ACME Renewal Information (ARI) is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx, which renders the registered route surface, runs axe, and verifies keyboard focus reaches the workflow."
+            "feature-specific a11y receipt: the Protocols ARI posture panel exposes semantic publication and scheduler status, a keyboard-reachable certificate table, and distinct loading, empty, error, permission, and unavailable states; web/src/__tests__/feature_a11y_receipts.test.tsx renders the registered workflow and runs axe."
           ],
           "refs": [
             "web/src/__tests__/feature_a11y_receipts.test.tsx",
-            "web/src/lib/navigation.ts",
-            "web/src/App.tsx"
+            "web/src/pages/protocols/ARIPosturePanel.tsx",
+            "web/src/__tests__/protocols.test.tsx"
           ]
         },
         "i18n": {
           "evidence": [
-            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+            "ARI posture labels and all loading, empty, error, permission, and unavailable messages live in the typed message catalog and are checked by npm run i18n:check."
           ],
           "refs": [
-            "web/scripts/extract-i18n-messages.mjs",
-            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/pages/protocols/ARIPosturePanel.tsx",
+            "web/src/i18n/messages.ts",
             "web/src/__tests__/i18n.test.tsx"
           ]
         }

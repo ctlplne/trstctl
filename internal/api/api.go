@@ -117,6 +117,7 @@ type API struct {
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
 	acmeCAAResolver           acmesrv.CAAResolver
+	acmeARIPosture            ACMEARIPostureProvider
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
 	kubernetesCSRPosture      KubernetesPostureReader
@@ -193,6 +194,7 @@ type config struct {
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
 	acmeCAAResolver           acmesrv.CAAResolver
+	acmeARIPosture            ACMEARIPostureProvider
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
 	kubernetesCSRPosture      KubernetesPostureReader
@@ -445,6 +447,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
 		acmeCAAResolver:           cfg.acmeCAAResolver,
+		acmeARIPosture:            cfg.acmeARIPosture,
 		featureObserver:           cfg.featureObserver,
 		privacyRetentionPolicy:    policy.WithDefaults(),
 		privacyRetentionSource:    cfg.privacyRetentionSource,
@@ -1034,6 +1037,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/lifecycle/endpoint-bindings", opID: "createEndpointBinding", summary: "Create an automated enrollment-to-endpoint binding", handler: a.createEndpointBinding, reqSchema: "EndpointBindingRequest", resSchema: "EndpointBinding", successCode: "201", mutation: true, perm: authz.ConnectorsWrite},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
+		{method: "GET", path: "/api/v1/acme/ari/posture", opID: "getACMEARIPosture", summary: "Get ACME Renewal Information publication and lifecycle-consumption posture", handler: a.getACMEARIPosture, query: page, resSchema: "ACMEARIPosture", successCode: "200", perm: authz.LifecycleRead},
 
 		{method: "POST", path: "/api/v1/incidents/executions", opID: "executeIncident", summary: "Execute a credential-compromise incident remediation", handler: a.executeIncident, reqSchema: "IncidentExecutionRequest", resSchema: "IncidentExecution", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
 		{method: "POST", path: "/api/v1/incidents/fleet-reissuance-runs", opID: "startFleetReissuance", summary: "Run compromised-issuer fleet reissuance", handler: a.startFleetReissuance, reqSchema: "FleetReissuanceRequest", resSchema: "FleetReissuanceRun", successCode: "201", mutation: true, perm: authz.IncidentsWrite},

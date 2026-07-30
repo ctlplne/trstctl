@@ -1372,19 +1372,33 @@ func (s *Server) renewalInfo(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, http.StatusBadRequest, "malformed", "invalid certificate identifier")
 		return
 	}
-	s.mu.Lock()
-	win, ok := s.ariWindows[certid]
-	early := s.earlyRenew[certid]
-	s.mu.Unlock()
+	info, ok := s.LookupRenewalInfo(certid, time.Now())
 	if !ok {
 		s.problem(w, r, http.StatusNotFound, "malformed", "no renewal information for this certificate")
 		return
 	}
-	info := ari.RenewalInfo{SuggestedWindow: ari.SuggestWindow(win.notBefore, win.notAfter, time.Now(), early)}
 	w.Header().Set("Retry-After", strconv.Itoa(ariRetryAfterSeconds))
 	w.Header().Set("Cache-Control", "no-store")
 	addIndexLink(w, r)
 	writeJSON(w, http.StatusOK, info)
+}
+
+// LookupRenewalInfo returns exactly the renewal information the public
+// renewalInfo handler would publish for certID at the supplied time. It is a
+// read-only operator-observability seam: callers can distinguish an actually
+// published window from one they could merely compute from certificate dates.
+func (s *Server) LookupRenewalInfo(certID string, at time.Time) (ari.RenewalInfo, bool) {
+	if !ari.ValidCertID(certID) {
+		return ari.RenewalInfo{}, false
+	}
+	s.mu.Lock()
+	win, ok := s.ariWindows[certID]
+	early := s.earlyRenew[certID]
+	s.mu.Unlock()
+	if !ok {
+		return ari.RenewalInfo{}, false
+	}
+	return ari.RenewalInfo{SuggestedWindow: ari.SuggestWindow(win.notBefore, win.notAfter, at, early)}, true
 }
 
 // MarkEarlyRenewal flags a certificate (by its ARI certificate identifier) for

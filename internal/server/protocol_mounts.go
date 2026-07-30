@@ -70,6 +70,7 @@ type servedProtocols struct {
 	spiffe *spiffeProtocol
 
 	estTenant  string
+	acmeTenant string
 	scepTenant string
 	cmpTenant  string
 	tsaTenant  string
@@ -142,6 +143,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			return nil, err
 		}
 		sp.acme = acmeSrv
+		sp.acmeTenant = firstNonEmpty(cfg.ACME.TenantID, tenantFallback)
 		sp.names = append(sp.names, "acme")
 	}
 

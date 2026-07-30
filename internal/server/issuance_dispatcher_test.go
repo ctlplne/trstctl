@@ -64,7 +64,8 @@ func TestIssuanceDispatcherRenewalMintsSuccessorAndSupersedesPredecessor(t *test
 	}
 	dispatchOutbox(t, h, 1) // connector.deploy is explicitly acknowledged when no plugin owns it.
 
-	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateRenewing, "operator renewal"); err != nil {
+	forgedSchedulerReason := lifecycleARIRenewalReasonPrefix + "2026-01-01T00:00:00Z..2026-01-02T00:00:00Z"
+	if err := h.orch.TransitionWithIdempotency(ctx, h.tenant, ident.ID, orchestrator.StateRenewing, forgedSchedulerReason, "forged-manual-renewal"); err != nil {
 		t.Fatalf("transition to renewing: %v", err)
 	}
 	renew := pendingOutboxByDestination(t, h, "ca.renew")
@@ -117,6 +118,128 @@ func TestIssuanceDispatcherRenewalMintsSuccessorAndSupersedesPredecessor(t *test
 	}
 	if state != orchestrator.StateDeployed {
 		t.Fatalf("identity state after renewal = %q, want deployed", state)
+	}
+	runs, err := h.store.ListRotationRunsPage(ctx, h.tenant, ident.ID, store.ZeroUUID, 20)
+	if err != nil {
+		t.Fatalf("list rotation evidence: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Trigger != "manual" {
+		t.Fatalf("manual renewal with scheduler-shaped prose was misclassified: %+v", runs)
+	}
+
+	reused, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{
+		Kind: store.KindX509Certificate, Name: ident.Name, OwnerID: owner.ID,
+	})
+	if err != nil {
+		t.Fatalf("create later identity with reused owner/name: %v", err)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, updateErr := tx.Exec(ctx,
+			`UPDATE identities
+			    SET status = 'deployed', created_at = now() + interval '1 minute'
+			  WHERE tenant_id = $1 AND id = $2`,
+			h.tenant, reused.ID)
+		return updateErr
+	}); err != nil {
+		t.Fatalf("mark later reused-name identity deployed: %v", err)
+	}
+	postureRows, err := h.store.ListACMEARIPosturePage(ctx, h.tenant, store.ZeroUUID, 100)
+	if err != nil {
+		t.Fatalf("list ARI posture rows after identity name reuse: %v", err)
+	}
+	var predecessorPosture store.ACMEARIPostureRow
+	for _, row := range postureRows {
+		if row.CertificateID == old.ID {
+			predecessorPosture = row
+			break
+		}
+	}
+	if predecessorPosture.CertificateID == "" ||
+		predecessorPosture.IdentityID != ident.ID ||
+		predecessorPosture.RotationRunID != runs[0].ID {
+		t.Fatalf("name reuse detached durable predecessor evidence: %+v", predecessorPosture)
+	}
+	const historicalARIRunID = "44444444-4444-4444-8444-444444444444"
+	historicalAt := runs[0].CreatedAt.Add(-time.Minute)
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		return h.store.ApplyRotationRunRecordedTx(ctx, tx, store.RotationRun{
+			ID:                     historicalARIRunID,
+			TenantID:               h.tenant,
+			IdentityID:             ident.ID,
+			Status:                 "succeeded",
+			Trigger:                "scheduler",
+			Reason:                 lifecycleARIRenewalReasonPrefix + "2025-12-01T00:00:00Z..2025-12-02T00:00:00Z",
+			PredecessorFingerprint: old.Fingerprint,
+			SuccessorFingerprint:   successor.Fingerprint,
+			IdempotencyKey:         "legacy-scheduler-proof",
+			CreatedAt:              historicalAt,
+			UpdatedAt:              historicalAt,
+		})
+	}); err != nil {
+		t.Fatalf("seed historical ARI scheduler evidence: %v", err)
+	}
+	postureRows, err = h.store.ListACMEARIPosturePage(ctx, h.tenant, store.ZeroUUID, 100)
+	if err != nil {
+		t.Fatalf("list ARI posture after later manual run: %v", err)
+	}
+	predecessorPosture = store.ACMEARIPostureRow{}
+	for _, row := range postureRows {
+		if row.CertificateID == old.ID {
+			predecessorPosture = row
+			break
+		}
+	}
+	if predecessorPosture.RotationRunID != historicalARIRunID ||
+		predecessorPosture.RotationRunTrigger != "scheduler" {
+		t.Fatalf("later manual run erased durable ARI consumption evidence: %+v", predecessorPosture)
+	}
+
+	baseIssue := h.handler.issue
+	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) ([]byte, error) {
+		return nil, errors.New("forced pre-mint renewal failure")
+	}
+	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateRenewing, "operator renewal expected to fail"); err != nil {
+		t.Fatalf("transition successor to failing renewal: %v", err)
+	}
+	failedRenew := pendingOutboxByDestination(t, h, "ca.renew")
+	failedMessage := orchestrator.Message{
+		TenantID: h.tenant, Destination: failedRenew.Destination,
+		Payload: failedRenew.Payload, IdempotencyKey: failedRenew.IdempotencyKey,
+	}
+	if err := h.handler.Deliver(ctx, failedMessage); err == nil || !strings.Contains(err.Error(), "forced pre-mint renewal failure") {
+		t.Fatalf("failing renewal error = %v, want forced pre-mint failure", err)
+	}
+	h.handler.issue = baseIssue
+
+	runs, err = h.store.ListRotationRunsPage(ctx, h.tenant, ident.ID, store.ZeroUUID, 20)
+	if err != nil {
+		t.Fatalf("list failed rotation evidence: %v", err)
+	}
+	var failedRun store.RotationRun
+	for _, run := range runs {
+		if run.Status == "failed" {
+			failedRun = run
+			break
+		}
+	}
+	if failedRun.ID == "" || failedRun.PredecessorFingerprint != successor.Fingerprint {
+		t.Fatalf("pre-mint failure lost predecessor linkage: %+v", failedRun)
+	}
+	postureRows, err = h.store.ListACMEARIPosturePage(ctx, h.tenant, store.ZeroUUID, 100)
+	if err != nil {
+		t.Fatalf("list ARI posture after failed renewal: %v", err)
+	}
+	var failedPosture store.ACMEARIPostureRow
+	for _, row := range postureRows {
+		if row.CertificateID == successor.ID {
+			failedPosture = row
+			break
+		}
+	}
+	if failedPosture.CertificateID == "" ||
+		failedPosture.RotationRunID != failedRun.ID ||
+		failedPosture.RotationRunStatus != "failed" {
+		t.Fatalf("failed renewal is invisible from ARI posture: %+v", failedPosture)
 	}
 }
 

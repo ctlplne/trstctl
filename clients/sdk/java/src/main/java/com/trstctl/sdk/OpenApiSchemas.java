@@ -11,6 +11,10 @@ public final class OpenApiSchemas {
   private OpenApiSchemas() {}
 
   public static final List<String> NAMES = List.of(
+      "ACMEARICertificatePosture",
+      "ACMEARIPosture",
+      "ACMEARIPostureSummary",
+      "ACMEARIWindow",
       "ACMEDNS01Preflight",
       "ACMEDNS01PreflightCheck",
       "ACMEDNS01PreflightRequest",

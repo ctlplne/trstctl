@@ -18,6 +18,7 @@ import type {
   AccessChangeRequest,
   AccessChangeRequestCreateRequest,
   AccessChangeRequestList,
+  ACMEARIPosture,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
   ACMEDNS01ProviderCatalog,
@@ -478,6 +479,7 @@ export type {
   AccessChangeRequest,
   AccessChangeRequestCreateRequest,
   AccessChangeRequestList,
+  ACMEARIPosture,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
   ACMEDNS01ProviderCatalog,
@@ -1153,6 +1155,7 @@ export interface Api {
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
   ctMonitoring(): Promise<CTMonitoring>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
+  acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   acmeDNS01ProviderConfigs(): Promise<ACMEDNS01ProviderConfigList>;
   getCertificate(id: string): Promise<Certificate>;
@@ -1456,6 +1459,13 @@ const liveApi: Api = {
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
   ctMonitoring: () => req<CTMonitoring>("/api/v1/discovery/ct-monitoring"),
   updateCTMonitoring: (input) => mutate<CTMonitoring>("PUT", "/api/v1/discovery/ct-monitoring", input),
+  acmeARIPosture: (options) => {
+    const qs = new URLSearchParams();
+    if (options?.limit != null) qs.set("limit", String(options.limit));
+    if (options?.cursor) qs.set("cursor", options.cursor);
+    const suffix = qs.toString();
+    return req<ACMEARIPosture>(`/api/v1/acme/ari/posture${suffix ? `?${suffix}` : ""}`);
+  },
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
   mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),

@@ -244,11 +244,19 @@ SPIFFE, SSH CA, and TSA, each backed by a read-only, same-origin probe of the re
 responder plus tenant-binding and profile-gate requirements. A DNS-01 provider
 catalog and provider-config table (preflight, edit, delete; configs are provisioned
 outside the console) support ACME's DNS-01 challenge; an MDM/SCEP panel does the same
-for Intune-style SCEP, plus challenge rotation and allow/deny telemetry. A
-client-setup section gives copy-paste commands per protocol, with links to SSH Trust
-and Code Signing. Backed by `/api/v1/acme/dns-01/providers`,
-`/api/v1/acme/dns-01/provider-configs`, `/api/v1/mdm/scep/status`, and
-`/api/v1/mdm/scep/policies`.
+for Intune-style SCEP, plus challenge rotation and allow/deny telemetry.
+
+The read-only **ARI posture** panel calls `GET /api/v1/acme/ari/posture` with
+`lifecycle:read`. It shows whether renewal information is really published for the
+current tenant, each affected certificate's suggested renewal window, and the
+durable lifecycle scheduler state that consumed that window. Loading, no affected
+certificates, permission denied, API error, and ACME-not-served are distinct states;
+the panel never turns an unavailable publisher into a success-looking empty table.
+
+A client-setup section gives copy-paste commands per protocol, with links to SSH
+Trust and Code Signing. Backed by `/api/v1/acme/ari/posture`,
+`/api/v1/acme/dns-01/providers`, `/api/v1/acme/dns-01/provider-configs`,
+`/api/v1/mdm/scep/status`, and `/api/v1/mdm/scep/policies`.
 
 ### SSH trust (`/ssh`)
 

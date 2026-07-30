@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { Protocols } from "@/pages/Protocols";
+import { RbacProvider } from "@/components/rbac";
 import { ToastProvider } from "@/components/ToastProvider";
+import { ApiError } from "@/lib/api";
+import { AppQueryProvider } from "@/lib/query";
+import { Protocols } from "@/pages/Protocols";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
+    acmeARIPosture: vi.fn(),
     acmeDNS01Providers: vi.fn(),
     acmeDNS01ProviderConfigs: vi.fn(),
     mdmSCEPStatus: vi.fn(),
@@ -25,19 +29,24 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-function mountProtocols() {
+function mountProtocols(permissions: readonly string[] | null = null) {
   return render(
-    <MemoryRouter>
-      <ToastProvider>
-        <Protocols />
-      </ToastProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <RbacProvider permissions={permissions}>
+        <MemoryRouter>
+          <ToastProvider>
+            <Protocols />
+          </ToastProvider>
+        </MemoryRouter>
+      </RbacProvider>
+    </AppQueryProvider>,
   );
 }
 
 async function renderProtocols() {
   const result = mountProtocols();
   await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(apiMock.acmeARIPosture).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01ProviderConfigs).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.mdmSCEPStatus).toHaveBeenCalledTimes(1));
@@ -63,6 +72,7 @@ describe("protocol surface", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
+    apiMock.acmeARIPosture.mockReset();
     apiMock.acmeDNS01Providers.mockReset();
     apiMock.acmeDNS01ProviderConfigs.mockReset();
     apiMock.mdmSCEPStatus.mockReset();
@@ -72,6 +82,7 @@ describe("protocol surface", () => {
     apiMock.updateACMEDNS01ProviderConfig.mockReset();
     apiMock.deleteACMEDNS01ProviderConfig.mockReset();
     apiMock.acmeDNS01Preflight.mockReset();
+    apiMock.acmeARIPosture.mockResolvedValue(ariPosture());
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:00:00Z",
@@ -270,13 +281,128 @@ describe("protocol surface", () => {
     expect(screen.getByText("mdm: malformed challenge")).toBeInTheDocument();
     expect(screen.queryByText("secret://mdm/intune/root-ca")).not.toBeInTheDocument();
     expect(screen.queryByText("Status unknown to console")).not.toBeInTheDocument();
-    expect(screen.queryByText(/^active$/i)).not.toBeInTheDocument();
+    const mdmPanel = screen.getByRole("region", { name: "Intune / MDM SCEP policies" });
+    expect(within(mdmPanel).queryByText(/^active$/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Copy ACME certbot command" }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--server https://trstctl.example.test/directory")));
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/Bearer|token|password/i));
     expect(screen.getByText("Copied command without token material.")).toBeInTheDocument();
+  });
+
+  it("renders ARI publication and scheduler-consumption truth without mutation controls", async () => {
+    await renderProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(within(panel).getByText("Publishing")).toBeInTheDocument();
+    expect(within(panel).getByText("payments-api")).toBeInTheDocument();
+    expect(within(panel).getByText("01900000-0000-7000-8000-000000000046")).toBeInTheDocument();
+    expect(within(panel).getByText("Consumed")).toBeInTheDocument();
+    expect(within(panel).getByText("ARI window")).toBeInTheDocument();
+    expect(within(panel).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("follows ARI cursors so certificates after the first page are not hidden", async () => {
+    const firstItems = Array.from({ length: 100 }, (_, index) => ({
+      ...ariPosture().items[0],
+      certificate_id: `01900000-0000-7000-8000-${String(index).padStart(12, "0")}`,
+      identity_name: `first-page-${index}`,
+    }));
+    apiMock.acmeARIPosture
+      .mockResolvedValueOnce(
+        ariPosture({
+          summary: { affected_certificates: 100, published: 100, scheduler_pending: 0, scheduler_consumed: 100, scheduler_failed: 0 },
+          items: firstItems,
+          next_cursor: "page-two",
+        }),
+      )
+      .mockResolvedValueOnce(
+        ariPosture({
+          summary: { affected_certificates: 1, published: 1, scheduler_pending: 0, scheduler_consumed: 1, scheduler_failed: 0 },
+          items: [{ ...ariPosture().items[0], certificate_id: "01900000-0000-7000-8000-999999999999", identity_name: "second-page-cert" }],
+        }),
+      );
+    mountProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(await within(panel).findByText("second-page-cert")).toBeInTheDocument();
+    expect(apiMock.acmeARIPosture).toHaveBeenNthCalledWith(1, { limit: 100, cursor: undefined });
+    expect(apiMock.acmeARIPosture).toHaveBeenNthCalledWith(2, { limit: 100, cursor: "page-two" });
+  });
+
+  it("shows an ARI-consumed execution failure as failed, not green", async () => {
+    const failed = ariPosture();
+    apiMock.acmeARIPosture.mockResolvedValueOnce(
+      ariPosture({
+        summary: { affected_certificates: 1, published: 1, scheduler_pending: 0, scheduler_consumed: 1, scheduler_failed: 1 },
+        items: [{ ...failed.items[0], scheduler_status: "failed", scheduler_consumed: true }],
+      }),
+    );
+    mountProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(await within(panel).findByText("Failed")).toBeInTheDocument();
+    expect(within(panel).queryByText("Consumed")).not.toBeInTheDocument();
+  });
+
+  it("renders the ARI loading state before the read contract resolves", async () => {
+    let resolvePosture!: (value: ReturnType<typeof ariPosture>) => void;
+    apiMock.acmeARIPosture.mockReturnValueOnce(
+      new Promise<ReturnType<typeof ariPosture>>((resolve) => {
+        resolvePosture = resolve;
+      }),
+    );
+    mountProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(await within(panel).findByText("Loading ARI renewal posture.")).toBeInTheDocument();
+
+    resolvePosture(ariPosture());
+    expect(await within(panel).findByText("payments-api")).toBeInTheDocument();
+  });
+
+  it("renders an honest empty ARI posture", async () => {
+    apiMock.acmeARIPosture.mockResolvedValueOnce(
+      ariPosture({
+        summary: { affected_certificates: 0, published: 0, scheduler_pending: 0, scheduler_consumed: 0, scheduler_failed: 0 },
+        items: [],
+      }),
+    );
+    mountProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(await within(panel).findByText("No ARI renewal windows yet")).toBeInTheDocument();
+    expect(panel.querySelector('[data-state-primitive="empty"]')).toBeInTheDocument();
+  });
+
+  it("denies ARI posture without lifecycle:read and does not call the endpoint", async () => {
+    mountProtocols(["issuers:read"]);
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(await within(panel).findByText("Your session cannot read this tenant’s ARI renewal posture.")).toBeInTheDocument();
+    expect(panel.querySelector('[data-state-primitive="permission-denied"]')).toBeInTheDocument();
+    expect(apiMock.acmeARIPosture).not.toHaveBeenCalled();
+  });
+
+  it("renders unavailable when the ARI posture provider is not assembled", async () => {
+    apiMock.acmeARIPosture.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "ACME ARI posture is not assembled" })));
+    mountProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(await within(panel).findByText("ARI posture unavailable")).toBeInTheDocument();
+    expect(panel.querySelector('[data-state-primitive="unavailable"]')).toBeInTheDocument();
+  });
+
+  it("renders a mutation-free ARI failure state", async () => {
+    apiMock.acmeARIPosture.mockRejectedValue(new ApiError(500, JSON.stringify({ detail: "tenant t2 exists" })));
+    mountProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(await within(panel).findByText("ARI posture could not be loaded", {}, { timeout: 3_000 })).toBeInTheDocument();
+    expect(panel.querySelector('[data-state-primitive="error"]')).toBeInTheDocument();
+    expect(within(panel).queryByText("tenant t2 exists")).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("fails closed with the served responder error instead of stale status", async () => {
@@ -422,10 +548,9 @@ describe("protocol surface", () => {
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/PRIVATE KEY|password/i));
   });
 
-  it("hides ARI, DNS validation, CAA, wildcard, and MDM fixture sections", async () => {
+  it("hides DNS validation, CAA, wildcard, and MDM fixture sections", async () => {
     await renderProtocols();
 
-    expect(screen.queryByRole("heading", { name: "ACME Renewal Information (ARI)" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "ACME DNS validation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Intune / MDM enrollment" })).not.toBeInTheDocument();
     expect(screen.queryByText("ACME responder")).not.toBeInTheDocument();
@@ -440,12 +565,10 @@ describe("protocol surface", () => {
     expect(screen.queryByText("challenge-required")).not.toBeInTheDocument();
     expect(screen.queryByText("challenge-missing")).not.toBeInTheDocument();
     expect(screen.queryByText("scep-disabled")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Renewal-window publishing stays read-only/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Raw DNS provider tokens are never typed into this console/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Wildcard issuance requires explicit operator acknowledgement/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/run outside this console today/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Challenge rotation and enrollment failures stay in fixture form/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /enable ari|publish ari|set renewal window/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /token|api token|provider token/i })).not.toBeInTheDocument();
     // Preflight is now a real console feature (CLI parity), so it is intentionally present.
     expect(screen.queryByRole("button", { name: /activate|save provider/i })).not.toBeInTheDocument();
@@ -665,6 +788,43 @@ function provider(
     capabilities,
     provider_package: `internal/dns/${name}`,
     notes: "served DNS-01 provider",
+    ...overrides,
+  };
+}
+
+function ariPosture(overrides: Record<string, unknown> = {}) {
+  return {
+    served: true,
+    generated_at: "2026-07-30T08:00:00Z",
+    publication_status: "served",
+    publication_endpoint: "/acme/renewal-info/{certid}",
+    scheduler_status: "enabled",
+    summary: {
+      affected_certificates: 1,
+      published: 1,
+      scheduler_pending: 0,
+      scheduler_consumed: 1,
+      scheduler_failed: 0,
+    },
+    items: [
+      {
+        certificate_id: "01900000-0000-7000-8000-000000000046",
+        identity_id: "01900000-0000-7000-8000-000000000047",
+        identity_name: "payments-api",
+        ari_certificate_id: "ari-cert-payments",
+        certificate_status: "active",
+        publication_status: "published",
+        suggested_window: {
+          start: "2026-07-30T09:00:00Z",
+          end: "2026-07-31T09:00:00Z",
+        },
+        scheduler_status: "succeeded",
+        scheduler_consumed: true,
+        scheduler_source: "ari",
+        rotation_run_id: "01900000-0000-7000-8000-000000000048",
+        consumed_at: "2026-07-30T09:15:00Z",
+      },
+    ],
     ...overrides,
   };
 }
