@@ -91,7 +91,7 @@ func TestRuntimeRunnerScratchMountsBoundedTmpfsAndShortReceiptAlias(t *testing.T
 	want := []string{
 		"--mount", "type=bind,src=" + receiptDir + ",dst=" + receiptDir,
 		"--mount", "type=bind,src=" + receiptDir + ",dst=/dod-tmp",
-		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777",
+		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=2g,mode=1777",
 		"--env", "HOME=/dod-tmp",
 		"--env", "TMPDIR=/dod-tmp",
 		"--env", "TRSTCTL_DOD_HOST_RECEIPT_ROOT=" + receiptDir,
@@ -368,7 +368,7 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		"short runtime path does not share receipt bytes",
 		`system_tmp = pathlib.Path("/tmp")`,
 		"stat.S_IMODE(metadata.st_mode) != 0o1777",
-		"capacity > 64 * 1024 * 1024",
+		"capacity != 2 * 1024 * 1024 * 1024",
 		"TRSTCTL_DOD_PREFLIGHT_CACHE",
 		"TRSTCTL_DOD_PREFLIGHT_RECEIPTS",
 		"TRSTCTL_DOD_PREFLIGHT_BROKER",

@@ -329,7 +329,7 @@ short_probe.unlink()
 system_tmp = pathlib.Path("/tmp")
 metadata = os.stat(system_tmp)
 capacity = os.statvfs(system_tmp).f_blocks * os.statvfs(system_tmp).f_frsize
-if not stat.S_ISDIR(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o1777 or capacity <= 0 or capacity > 64 * 1024 * 1024:
+if not stat.S_ISDIR(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o1777 or capacity != 2 * 1024 * 1024 * 1024:
     raise RuntimeError("/tmp is not the bounded private 01777 tmpfs")
 tmp_probe = system_tmp / ".trstctl-dod-tmpfs-preflight"
 descriptor = os.open(tmp_probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -549,7 +549,7 @@ func runtimeRunnerScratchArgs(receiptDir string) []string {
 	return []string{
 		"--mount", "type=bind,src=" + receiptDir + ",dst=" + receiptDir,
 		"--mount", "type=bind,src=" + receiptDir + ",dst=" + dodproof.RuntimeTempDir,
-		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777",
+		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=2g,mode=1777",
 		"--env", "HOME=" + dodproof.RuntimeTempDir,
 		"--env", "TMPDIR=" + dodproof.RuntimeTempDir,
 		"--env", dodproof.HostReceiptRootEnv + "=" + receiptDir,

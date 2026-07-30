@@ -239,11 +239,8 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 	if err != nil {
 		return shippedBuild{}, err
 	}
-	goCache := filepath.Join(receiptDir, "shipped-gocache-"+cacheKey[:16])
-	if err := os.Mkdir(goCache, 0o700); err != nil {
-		return shippedBuild{}, fmt.Errorf("create exclusive launched Go cache: %w", err)
-	}
-	if err := validatePrivateDirectory(goCache); err != nil {
+	goCache, err := ensureShippedGoCache(receiptDir)
+	if err != nil {
 		return shippedBuild{}, err
 	}
 	ldflags := "-X trstctl.com/trstctl/internal/license.builtinPubKeysB64=" + base64.StdEncoding.EncodeToString(publicKey)
@@ -260,11 +257,7 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 			return shippedBuild{}, err
 		}
 		output := filepath.Join(binDir, name)
-		args := []string{"build", "-trimpath", "-buildvcs=false", "-mod=readonly"}
-		if len(expected.LaunchedTags) > 0 {
-			args = append(args, "-tags="+strings.Join(expected.LaunchedTags, ","))
-		}
-		args = append(args, "-ldflags", ldflags, "-o", output, packagePath)
+		args := shippedBuildArguments(expected, ldflags, output, packagePath)
 		command := exec.Command(goTool, args...)
 		command.Dir = expected.Repo
 		command.Env = shippedBuildEnvironment(expected, goCache, runtimeTempDir)
@@ -305,6 +298,30 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 	}
 	shippedBuilds.items[cacheKey] = result
 	return result, nil
+}
+
+func ensureShippedGoCache(receiptDir string) (string, error) {
+	// The whole census owns one private receipt root and buildShippedProcess
+	// serializes every build under shippedBuilds. Reuse Go's content-addressed
+	// package cache across those builds so per-proof license linker values do not
+	// recompile the same thousand packages. The final binary remains per-key and
+	// is revalidated byte-for-byte before launch.
+	goCache := filepath.Join(receiptDir, "shipped-gocache")
+	if err := os.Mkdir(goCache, 0o700); err != nil && !os.IsExist(err) {
+		return "", fmt.Errorf("create exclusive launched Go cache: %w", err)
+	}
+	if err := validatePrivateDirectory(goCache); err != nil {
+		return "", err
+	}
+	return goCache, nil
+}
+
+func shippedBuildArguments(expected expectation, ldflags, output, packagePath string) []string {
+	args := []string{"build", "-p=1", "-trimpath", "-buildvcs=false", "-mod=readonly"}
+	if len(expected.LaunchedTags) > 0 {
+		args = append(args, "-tags="+strings.Join(expected.LaunchedTags, ","))
+	}
+	return append(args, "-ldflags", ldflags, "-o", output, packagePath)
 }
 
 func validateRuntimePrivilegeDropper() (executableIdentity, error) {
@@ -1020,6 +1037,7 @@ func shippedBuildEnvironment(expected expectation, goCache, runtimeTempDir strin
 	values := map[string]string{
 		"GOCACHE":    goCache,
 		"GOMODCACHE": "/go/pkg/mod",
+		"GOTMPDIR":   "/tmp",
 		"GOPROXY":    "off",
 		"GOSUMDB":    "off",
 		"GOPRIVATE":  "",

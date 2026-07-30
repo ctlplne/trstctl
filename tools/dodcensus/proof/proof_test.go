@@ -639,7 +639,7 @@ func TestLaunchedResponseStatusCodeExposesOnlyGateOwnedStatus(t *testing.T) {
 	}
 }
 
-func TestShippedBuildEnvironmentUsesShortRuntimeAlias(t *testing.T) {
+func TestShippedBuildEnvironmentUsesPrivateContainerWorkDirectory(t *testing.T) {
 	expected := expectation{LaunchedCGOEnabled: "0", LaunchedGOOS: "linux", LaunchedGOARCH: "amd64"}
 	environment := shippedBuildEnvironment(expected, "/long/host/receipt/shipped-cache", RuntimeTempDir)
 	values := map[string]string{}
@@ -652,11 +652,56 @@ func TestShippedBuildEnvironmentUsesShortRuntimeAlias(t *testing.T) {
 	if values["HOME"] != "/dod-tmp" || values["TMPDIR"] != "/dod-tmp" {
 		t.Fatalf("shipped build HOME/TMPDIR = %q/%q", values["HOME"], values["TMPDIR"])
 	}
+	if values["GOTMPDIR"] != "/tmp" {
+		t.Fatalf("shipped build GOTMPDIR = %q, want private container tmpfs", values["GOTMPDIR"])
+	}
 	if values["GOCACHE"] != "/long/host/receipt/shipped-cache" {
 		t.Fatalf("shipped build GOCACHE = %q", values["GOCACHE"])
 	}
-	if len(filepath.Join(RuntimeTempDir, "go-build1234567890", "b001", "importcfg.link")) >= 108 {
-		t.Fatal("short shipped-build temporary path no longer leaves Unix-socket headroom")
+	if len(filepath.Join(values["GOTMPDIR"], "go-build1234567890", "b001", "importcfg.link")) >= 108 {
+		t.Fatal("private shipped-build temporary path no longer leaves Unix-socket headroom")
+	}
+}
+
+func TestShippedBuildArgumentsBoundPackageParallelism(t *testing.T) {
+	expected := expectation{LaunchedTags: []string{"integration", "trstctl_test_signer"}}
+	got := shippedBuildArguments(expected, "linker flags", "/receipt/trstctl", "./cmd/trstctl")
+	want := []string{
+		"build",
+		"-p=1",
+		"-trimpath",
+		"-buildvcs=false",
+		"-mod=readonly",
+		"-tags=integration,trstctl_test_signer",
+		"-ldflags",
+		"linker flags",
+		"-o",
+		"/receipt/trstctl",
+		"./cmd/trstctl",
+	}
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("shipped build arguments = %#v, want %#v", got, want)
+	}
+}
+
+func TestShippedBuildsReuseOneGatePrivateGoCache(t *testing.T) {
+	receiptDir := t.TempDir()
+	first, err := ensureShippedGoCache(receiptDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := ensureShippedGoCache(receiptDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("shipped builds use separate gate-private caches %q and %q", first, second)
+	}
+	if err := os.Chmod(first, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ensureShippedGoCache(receiptDir); err == nil {
+		t.Fatal("shared shipped-build cache accepted a non-private existing directory")
 	}
 }
 
