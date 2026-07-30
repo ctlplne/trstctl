@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -209,8 +210,12 @@ export function PQCCampaigns({ assets }: { assets: CBOMAsset[] }) {
         <fieldset className="grid gap-2">
           <legend className="text-sm font-medium">{t("posture.pqcCampaign.findings")}</legend>
           {vulnerableAssets.map((asset) => (
-            <label key={asset.id} className="flex items-start gap-2 rounded-control border border-border p-2 text-sm">
-              <input type="checkbox" value={asset.id} {...createForm.register("findingIds")} />
+            <label
+              key={asset.id}
+              htmlFor={`pqc-campaign-finding-${asset.id}`}
+              className="flex items-start gap-2 rounded-control border border-border p-2 text-sm"
+            >
+              <Checkbox id={`pqc-campaign-finding-${asset.id}`} value={asset.id} {...createForm.register("findingIds")} />
               <span>
                 <span className="block font-medium">{asset.location}</span>
                 <span className="text-xs text-muted-foreground">{asset.algorithm || asset.protocol || asset.kind}</span>

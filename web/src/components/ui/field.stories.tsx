@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -63,6 +64,16 @@ export const TextareaField: Story = {
     <div className="max-w-md">
       <Field label="Business purpose">{(control) => <Textarea {...control} className="min-h-24" placeholder="Service TLS for staging" />}</Field>
     </div>
+  ),
+};
+
+export const CheckboxField: Story = {
+  args: { label: "Credential delivery", children: noop },
+  render: () => (
+    <label htmlFor="storybook-automatic-delivery" className="inline-flex items-center gap-2 text-body font-medium">
+      <Checkbox id="storybook-automatic-delivery" defaultChecked />
+      Enable automatic delivery
+    </label>
   ),
 };
 

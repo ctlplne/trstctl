@@ -165,8 +165,9 @@
   }
 
   /* Native checkboxes and radios ride the OS accent — browser blue, the one
-     hue the palette reserves for status-info. Tint them gold ("act") until a
-     real Checkbox primitive lands with the R-02 form set (design review R-03). */
+     hue the palette reserves for status-info. Tint them gold ("act"); the
+     Checkbox primitive owns their shared React/size seam while the browser
+     keeps the accessible checked and indeterminate behavior. */
   input[type="checkbox"],
   input[type="radio"] {
     accent-color: hsl(var(--primary));

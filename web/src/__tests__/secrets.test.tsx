@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "@/lib/api";
+import { AppQueryProvider } from "@/lib/query";
 import { Secrets } from "@/pages/Secrets";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -59,10 +60,12 @@ vi.mock("@/lib/api", async (orig) => {
 function renderSecrets(path = "/secrets") {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/secrets" element={<Secrets />} />
-        <Route path="/secrets/:workspace" element={<Secrets />} />
-      </Routes>
+      <AppQueryProvider>
+        <Routes>
+          <Route path="/secrets" element={<Secrets />} />
+          <Route path="/secrets/:workspace" element={<Secrets />} />
+        </Routes>
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }

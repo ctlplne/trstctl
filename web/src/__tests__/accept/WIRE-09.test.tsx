@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { AppQueryProvider } from "@/lib/query";
 import { Secrets } from "@/pages/Secrets";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -48,10 +49,12 @@ vi.mock("@/lib/api", async (orig) => {
 function renderSecrets(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/secrets" element={<Secrets />} />
-        <Route path="/secrets/:workspace" element={<Secrets />} />
-      </Routes>
+      <AppQueryProvider>
+        <Routes>
+          <Route path="/secrets" element={<Secrets />} />
+          <Route path="/secrets/:workspace" element={<Secrets />} />
+        </Routes>
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -491,6 +494,9 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     expect(screen.getByText("GitLab CI")).toBeInTheDocument();
     expect(screen.getByText("Vercel")).toBeInTheDocument();
     expect(screen.getByText("Generic CI secret endpoint")).toBeInTheDocument();
+    expect(screen.getByText("Workload identity is unavailable in this build")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save source" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Source name")).not.toBeInTheDocument();
 
     cleanup();
     renderSecrets("/secrets/scanning");

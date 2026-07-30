@@ -2,6 +2,10 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import { Eye, GitCompare, Plus } from "lucide-react";
 import { api, ApiError, type Profile } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -356,50 +360,50 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
       </div>
       <fieldset className="space-y-3 border-y border-border py-3 md:col-span-2">
         <legend className="text-sm font-medium">{translateNow("profiles.deviceAttestation.legend")}</legend>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+        <label htmlFor="profile-device-attestation-enabled" className="inline-flex items-center gap-2 text-sm">
+          <Checkbox
+            id="profile-device-attestation-enabled"
             checked={fields.deviceAttestationEnabled}
             onChange={(e) => onChange({ ...fields, deviceAttestationEnabled: e.target.checked })}
-            className="h-4 w-4 rounded border-border"
           />
           <span>{translateNow("profiles.deviceAttestation.enable")}</span>
         </label>
         <p className="text-xs text-muted-foreground">{translateNow("profiles.deviceAttestation.help")}</p>
         {fields.deviceAttestationEnabled && (
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1 text-sm font-medium md:col-span-2">
-              <span>{translateNow("profiles.deviceAttestation.roots")}</span>
-              <textarea
-                value={fields.deviceAttestationRootsPEM}
-                onChange={(e) => onChange({ ...fields, deviceAttestationRootsPEM: e.target.value })}
-                className="min-h-32 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-              />
-            </label>
-            <label className="space-y-1 text-sm font-medium">
-              <span>{translateNow("profiles.deviceAttestation.identifiers")}</span>
-              <input
-                value={fields.deviceAttestationIdentifiers}
-                onChange={(e) => onChange({ ...fields, deviceAttestationIdentifiers: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm font-medium">
-              <span>{translateNow("profiles.deviceAttestation.algorithms")}</span>
-              <input
-                value={fields.deviceAttestationAlgorithms}
-                onChange={(e) => onChange({ ...fields, deviceAttestationAlgorithms: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm font-medium">
-              <span>{translateNow("profiles.deviceAttestation.maxAge")}</span>
-              <input
-                value={fields.deviceAttestationMaxAge}
-                onChange={(e) => onChange({ ...fields, deviceAttestationMaxAge: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              />
-            </label>
+            <Field label={translateNow("profiles.deviceAttestation.roots")} className="md:col-span-2">
+              {(control) => (
+                <Textarea
+                  {...control}
+                  value={fields.deviceAttestationRootsPEM}
+                  onChange={(e) => onChange({ ...fields, deviceAttestationRootsPEM: e.target.value })}
+                  className="min-h-32 font-mono text-xs"
+                />
+              )}
+            </Field>
+            <Field label={translateNow("profiles.deviceAttestation.identifiers")}>
+              {(control) => (
+                <Input
+                  {...control}
+                  value={fields.deviceAttestationIdentifiers}
+                  onChange={(e) => onChange({ ...fields, deviceAttestationIdentifiers: e.target.value })}
+                />
+              )}
+            </Field>
+            <Field label={translateNow("profiles.deviceAttestation.algorithms")}>
+              {(control) => (
+                <Input
+                  {...control}
+                  value={fields.deviceAttestationAlgorithms}
+                  onChange={(e) => onChange({ ...fields, deviceAttestationAlgorithms: e.target.value })}
+                />
+              )}
+            </Field>
+            <Field label={translateNow("profiles.deviceAttestation.maxAge")}>
+              {(control) => (
+                <Input {...control} value={fields.deviceAttestationMaxAge} onChange={(e) => onChange({ ...fields, deviceAttestationMaxAge: e.target.value })} />
+              )}
+            </Field>
           </div>
         )}
       </fieldset>

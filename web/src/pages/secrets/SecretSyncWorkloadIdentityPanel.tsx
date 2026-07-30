@@ -6,6 +6,7 @@ import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/
 import { useCan } from "@/components/rbac";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -91,9 +92,10 @@ export function SecretSyncWorkloadIdentityPanel() {
   const canRead = useCan("secrets:read");
   const canWrite = useCan("secrets:write");
   const queryClient = useQueryClient();
-  const sources = useApiQuery(["secret-sync-workload-identities"], api.secretSyncWorkloadIdentitySources, { enabled: canRead });
-  const trustSources = useApiQuery(["workload-attester-trust-sources"], api.workloadAttesterTrustSources, { enabled: canRead });
-  const targets = useApiQuery(["secret-sync-targets"], api.secretSyncTargets, { enabled: canRead });
+  const available = typeof api.secretSyncWorkloadIdentitySources === "function";
+  const sources = useApiQuery(["secret-sync-workload-identities"], api.secretSyncWorkloadIdentitySources, { enabled: canRead && available });
+  const trustSources = useApiQuery(["workload-attester-trust-sources"], api.workloadAttesterTrustSources, { enabled: canRead && available });
+  const targets = useApiQuery(["secret-sync-targets"], api.secretSyncTargets, { enabled: canRead && available });
   const [step, setStep] = useState(1);
   const [editingID, setEditingID] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -293,7 +295,7 @@ export function SecretSyncWorkloadIdentityPanel() {
   if (!canRead) {
     gridState = "permission-denied";
     stateTitle = t("secrets.wif.permissionDenied");
-  } else if (typeof api.secretSyncWorkloadIdentitySources !== "function") {
+  } else if (!available) {
     gridState = "unavailable";
     stateTitle = t("secrets.wif.unavailable");
   } else if (sources.loading) {
@@ -303,7 +305,7 @@ export function SecretSyncWorkloadIdentityPanel() {
     gridState = "error";
     stateTitle = t("secrets.wif.loadFailed");
     stateMessage = sources.error;
-  } else if ((sources.data?.items.length ?? 0) === 0) {
+  } else if ((sources.data?.items?.length ?? 0) === 0) {
     gridState = "empty";
     stateTitle = t("secrets.wif.empty");
     stateMessage = t("secrets.wif.emptyBody");
@@ -329,7 +331,7 @@ export function SecretSyncWorkloadIdentityPanel() {
         virtualization={false}
       />
 
-      {canWrite ? (
+      {canRead && canWrite && available ? (
         <form className="grid gap-4 rounded-control border border-border p-3" onSubmit={save}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="font-medium">{editingID ? t("secrets.wif.editHeading") : t("secrets.wif.createHeading")}</h4>
@@ -434,8 +436,8 @@ export function SecretSyncWorkloadIdentityPanel() {
                   </Select>
                 )}
               </Field>
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <input type="checkbox" {...form.register("enabled")} />
+              <label htmlFor="secret-sync-wif-enabled" className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox id="secret-sync-wif-enabled" {...form.register("enabled")} />
                 {t("secrets.wif.enabled")}
               </label>
               <p className="rounded-control border border-border bg-muted/30 p-3 text-sm text-muted-foreground" role="note">

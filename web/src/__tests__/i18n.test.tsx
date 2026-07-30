@@ -278,10 +278,13 @@ describe("i18n boundary", () => {
       // preserving placeholders and technical identifiers in every locale.
       // I-093b9270 adds the AWS workload-identity source wizard, honest
       // air-gap/failure state, validation, and status copy in both catalogs.
+      // The independently shippable GCP and Azure stages extend that same
+      // wizard with provider-specific validation and status copy. Every added
+      // value is present in es/de and preserves the English placeholders.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "fc52ad5bde5f825ba48b690193a1a6b86901975d84f2f1e83708f7e6297e4d3d",
-      "de-DE": "491d9a154881299e062eed662e10e0c0ad0ea5edf747ac9ddefadd535d1ded44",
+      "es-ES": "83a7920b58d9d52fc83974bf084f59f4cd7d0d3fdc242133116ffed80ed3dcd3",
+      "de-DE": "dc18a324222fcfda9b8744b0d369ac2dcd1d26a0524ecfc157dc7b514b23cbd4",
     });
   });
 
