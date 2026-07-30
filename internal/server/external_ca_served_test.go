@@ -103,6 +103,156 @@ func TestServedExternalCARegistryIssuesViaConfiguredBackends(t *testing.T) {
 	}
 }
 
+func TestExternalCAResponseWaitsForIssueRecordCommit(t *testing.T) {
+	dc, err := digicertfake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(dc.Close)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		d.ExternalCAs = []ExternalCA{{
+			ID:   "digicert",
+			Type: "digicert",
+			CA: digicert.New(
+				"digicert",
+				dc.URL(),
+				[]byte(dc.APIKey()),
+				digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}),
+			),
+		}}
+	})
+
+	const advisoryLockKey int64 = 728662
+	ctx := context.Background()
+	lockConn, err := h.store.SystemPool().Acquire(ctx)
+	if err != nil {
+		t.Fatalf("acquire advisory-lock connection: %v", err)
+	}
+	var unlockOnce sync.Once
+	unlock := func() {
+		unlockOnce.Do(func() {
+			if _, err := lockConn.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, advisoryLockKey); err != nil {
+				t.Errorf("unlock ca.issue insert barrier: %v", err)
+			}
+			lockConn.Release()
+		})
+	}
+	t.Cleanup(func() {
+		// The issue transaction can be waiting inside the trigger below. Release
+		// its advisory lock before dropping the trigger, or a failed assertion
+		// can deadlock cleanup while DROP waits for that transaction to finish.
+		unlock()
+		_, err := h.store.SystemPool().Exec(context.Background(), `
+			DROP TRIGGER IF EXISTS trstctl_test_block_ca_issue_insert ON outbox;
+			DROP FUNCTION IF EXISTS trstctl_test_block_ca_issue_insert()
+		`)
+		if err != nil {
+			t.Errorf("remove ca.issue insert barrier: %v", err)
+		}
+	})
+	if _, err := lockConn.Exec(ctx, `SELECT pg_advisory_lock($1)`, advisoryLockKey); err != nil {
+		t.Fatalf("lock ca.issue insert barrier: %v", err)
+	}
+	if _, err := h.store.SystemPool().Exec(ctx, fmt.Sprintf(`
+		CREATE OR REPLACE FUNCTION trstctl_test_block_ca_issue_insert()
+		RETURNS trigger
+		LANGUAGE plpgsql
+		AS $$
+		BEGIN
+			IF NEW.destination = 'ca.issue' THEN
+				PERFORM pg_advisory_xact_lock(%d);
+			END IF;
+			RETURN NEW;
+		END
+		$$;
+		DROP TRIGGER IF EXISTS trstctl_test_block_ca_issue_insert ON outbox;
+		CREATE TRIGGER trstctl_test_block_ca_issue_insert
+		BEFORE INSERT ON outbox
+		FOR EACH ROW
+		EXECUTE FUNCTION trstctl_test_block_ca_issue_insert()
+	`, advisoryLockKey)); err != nil {
+		t.Fatalf("install ca.issue insert barrier: %v", err)
+	}
+
+	const rawKey = "external-ca-record-ordering"
+	serviceKey := rawKey + ":external-ca:digicert"
+	body, err := json.Marshal(externalCAIssueRequestBody(t, "ordering.digicert.served.test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/external-cas/digicert/issue", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Tenant-ID", h.tenant)
+	req.Header.Set("X-Roles", "admin")
+	req.Header.Set("X-Subject", "clm-03-admin")
+	req.Header.Set("Idempotency-Key", rawKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	type issueResult struct {
+		status int
+		body   []byte
+		err    error
+	}
+	result := make(chan issueResult, 1)
+	startServedExternalCADispatcher(t, h)
+	go func() {
+		resp, err := h.ts.Client().Do(req)
+		if err != nil {
+			result <- issueResult{err: err}
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+		responseBody, readErr := io.ReadAll(resp.Body)
+		result <- issueResult{status: resp.StatusCode, body: responseBody, err: readErr}
+	}()
+
+	projectionDeadline := time.NewTimer(5 * time.Second)
+	defer projectionDeadline.Stop()
+	projectionPoll := time.NewTicker(5 * time.Millisecond)
+	defer projectionPoll.Stop()
+	for {
+		_, err := h.store.GetIssuedCertificateRecovery(ctx, h.tenant, serviceKey)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatalf("read durable external-CA result: %v", err)
+		}
+		select {
+		case got := <-result:
+			t.Fatalf("served response escaped before durable projection was observable: status=%d err=%v body=%s", got.status, got.err, got.body)
+		case <-projectionPoll.C:
+		case <-projectionDeadline.C:
+			t.Fatal("timed out waiting for durable external-CA projection")
+		}
+	}
+
+	select {
+	case got := <-result:
+		t.Fatalf("served response escaped before ca.issue record commit: status=%d err=%v body=%s", got.status, got.err, got.body)
+	case <-time.After(250 * time.Millisecond):
+	}
+
+	unlock()
+	select {
+	case got := <-result:
+		if got.err != nil {
+			t.Fatalf("issue request after ca.issue record commit: %v", got.err)
+		}
+		if got.status != http.StatusCreated {
+			t.Fatalf("issue request after ca.issue record commit = %d, want 201; body=%s", got.status, got.body)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("issue request did not complete after ca.issue record commit")
+	}
+	if got := externalCAOutboxCount(t, h, serviceKey); got != 1 {
+		t.Fatalf("ca.issue rows after served response = %d, want 1", got)
+	}
+}
+
 func TestServedDirectCADiscoveryInventoryCAPDISC04(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
@@ -386,6 +536,8 @@ func TestExternalCAReplaySurvivesResponseAndOutboxGCAndRejectsChangedCaller(t *t
 	if upstream.calls != 1 || upstream.mints != 1 {
 		t.Fatalf("initial provider calls=%d mints=%d, want 1/1", upstream.calls, upstream.mints)
 	}
+	intentID := externalCAIntentOutboxID(t, h, idemKey+":external-ca:"+caID)
+	waitForOutboxStatus(t, h.srv.outbox, h.tenant, intentID, "delivered")
 	purgeExternalCAWorkerResult(t, h, idemKey, caID)
 	forceExternalCAOutboxDue(t, h, idemKey+":external-ca:"+caID)
 	if err := h.srv.Drain(t.Context()); err != nil {
@@ -792,9 +944,10 @@ func externalCAOutboxCount(t *testing.T, h *servedHarness, key string) int {
 		return tx.QueryRow(context.Background(), `
 			SELECT count(*)
 			FROM outbox
-			WHERE destination = 'ca.issue'
-			  AND idempotency_key = $1
-		`, ca.IssueRecordIdempotencyKey(key)).Scan(&count)
+			WHERE tenant_id = $1
+			  AND destination = 'ca.issue'
+			  AND idempotency_key = $2
+		`, h.tenant, ca.IssueRecordIdempotencyKey(key)).Scan(&count)
 	})
 	if err != nil {
 		t.Fatalf("count ca.issue outbox rows: %v", err)
@@ -809,14 +962,33 @@ func externalCAIntentOutboxCount(t *testing.T, h *servedHarness, key string) int
 		return tx.QueryRow(context.Background(), `
 			SELECT count(*)
 			FROM outbox
-			WHERE destination = 'external-ca.issue'
-			  AND idempotency_key = $1
-		`, key).Scan(&count)
+			WHERE tenant_id = $1
+			  AND destination = 'external-ca.issue'
+			  AND idempotency_key = $2
+		`, h.tenant, key).Scan(&count)
 	})
 	if err != nil {
 		t.Fatalf("count external CA intent outbox rows: %v", err)
 	}
 	return count
+}
+
+func externalCAIntentOutboxID(t *testing.T, h *servedHarness, key string) int64 {
+	t.Helper()
+	var id int64
+	err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(), `
+			SELECT id
+			FROM outbox
+			WHERE tenant_id = $1
+			  AND destination = 'external-ca.issue'
+			  AND idempotency_key = $2
+		`, h.tenant, key).Scan(&id)
+	})
+	if err != nil {
+		t.Fatalf("read external CA intent outbox id: %v", err)
+	}
+	return id
 }
 
 func forceExternalCAOutboxDue(t *testing.T, h *servedHarness, key string) {
@@ -825,9 +997,10 @@ func forceExternalCAOutboxDue(t *testing.T, h *servedHarness, key string) {
 		tag, err := tx.Exec(context.Background(), `
 			UPDATE outbox
 			SET status = 'pending', next_attempt_at = now(), worker_id = NULL, lease_until = NULL
-			WHERE destination = 'external-ca.issue'
-			  AND idempotency_key = $1
-		`, key)
+			WHERE tenant_id = $1
+			  AND destination = 'external-ca.issue'
+			  AND idempotency_key = $2
+		`, h.tenant, key)
 		if err != nil {
 			return err
 		}

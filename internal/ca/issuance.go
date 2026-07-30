@@ -389,20 +389,29 @@ func (s *IssuanceService) recoverExternalIssue(ctx context.Context, tenantID, id
 	if len(recovered.CertificatePEM) == 0 || recovered.Serial == "" || recovered.NotAfter == nil {
 		return Certificate{}, false, errors.New("ca: durable external CA result is incomplete")
 	}
+	var cert Certificate
 	if len(recovered.Response) > 0 {
-		var exact Certificate
-		if err := json.Unmarshal(recovered.Response, &exact); err != nil {
+		if err := json.Unmarshal(recovered.Response, &cert); err != nil {
 			return Certificate{}, false, errors.New("ca: durable external CA response is invalid")
 		}
-		if !bytes.Equal(exact.CertificatePEM, recovered.CertificatePEM) || exact.Serial != recovered.Serial || exact.NotAfter.IsZero() || exact.Issuer == "" {
+		if !bytes.Equal(cert.CertificatePEM, recovered.CertificatePEM) || cert.Serial != recovered.Serial || cert.NotAfter.IsZero() || cert.Issuer == "" {
 			return Certificate{}, false, errors.New("ca: durable external CA response does not match certificate inventory")
 		}
-		return exact, true, nil
+	} else {
+		cert = Certificate{
+			CertificatePEM: append([]byte(nil), recovered.CertificatePEM...),
+			Serial:         recovered.Serial, Issuer: recovered.Issuer, NotAfter: recovered.NotAfter.UTC(),
+		}
 	}
-	return Certificate{
-		CertificatePEM: append([]byte(nil), recovered.CertificatePEM...),
-		Serial:         recovered.Serial, Issuer: recovered.Issuer, NotAfter: recovered.NotAfter.UTC(),
-	}, true, nil
+	// The certificate projection is committed immediately before the sibling
+	// ca.issue observability row. A request poll can therefore see the projection
+	// while the worker is still inside that final outbox transaction. Repairing
+	// the idempotent sibling here closes both that live ordering window and a
+	// crash-after-projection window before any served caller observes success.
+	if err := s.recordIssueNotification(ctx, tenantID, idempotencyKey, cert); err != nil {
+		return Certificate{}, false, err
+	}
+	return cert, true, nil
 }
 
 // enforceProfile resolves the request's bound profile (if any) and validates the
@@ -558,6 +567,10 @@ func (s *IssuanceService) record(ctx context.Context, tenantID, key, requestBind
 		}
 	}
 
+	return s.recordIssueNotification(ctx, tenantID, key, cert)
+}
+
+func (s *IssuanceService) recordIssueNotification(ctx context.Context, tenantID, key string, cert Certificate) error {
 	payload, err := json.Marshal(struct {
 		Serial string `json:"serial"`
 		Issuer string `json:"issuer"`
