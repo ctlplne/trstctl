@@ -133,11 +133,9 @@ func TestNewLocalKEKRejectsWrongSize(t *testing.T) {
 
 // TestOpenDispatchesOnVersionByte is the SCHEMA-005 acceptance: Open reads the
 // version byte and dispatches to that version's reader, rather than hard-rejecting
-// anything that is not the single current version. The v1 blob round-trips; a blob
-// whose version byte is mutated to an unknown value is rejected with ErrFormat (the
-// reader does not guess a layout). When a future v2 is added, the unknown-version
-// rows here become the v2 round-trip and the table extends — proving Open is
-// version-DISPATCHED, not version-gated.
+// anything that is not the single current version. Both the legacy v1 and
+// domain-aware v2 layouts round-trip; an unknown version is rejected with
+// ErrFormat because the reader never guesses a layout.
 func TestOpenDispatchesOnVersionByte(t *testing.T) {
 	kek := newKEK(t)
 	plaintext := []byte("dispatch-me-by-version")
@@ -150,41 +148,52 @@ func TestOpenDispatchesOnVersionByte(t *testing.T) {
 	if v1[versionOffset] != 1 {
 		t.Fatalf("expected v1 blob to carry version byte 1, got %d", v1[versionOffset])
 	}
+	v2, err := seal.SealDomain(kek, plaintext, nil, []byte("tenant:dispatch:generation:1"))
+	if err != nil {
+		t.Fatalf("SealDomain: %v", err)
+	}
+	if v2[versionOffset] != 2 {
+		t.Fatalf("expected v2 blob to carry version byte 2, got %d", v2[versionOffset])
+	}
 
 	cases := []struct {
 		name       string
-		version    byte
+		blob       []byte
 		wantOpenOK bool
 	}{
-		{"v1 round-trips", 1, true},
-		{"unknown v2 rejected", 2, false},
-		{"unknown v0 rejected", 0, false},
-		{"unknown v255 rejected", 255, false},
+		{"v1 round-trips", v1, true},
+		{"v2 round-trips", v2, true},
+		{"unknown v0 rejected", withVersion(v1, 0), false},
+		{"unknown v255 rejected", withVersion(v1, 255), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			blob := append([]byte(nil), v1...)
-			blob[versionOffset] = tc.version
-			got, err := seal.Open(kek, blob, nil)
+			got, err := seal.Open(kek, tc.blob, nil)
 			if tc.wantOpenOK {
 				if err != nil {
-					t.Fatalf("Open(v%d) failed: %v", tc.version, err)
+					t.Fatalf("Open failed: %v", err)
 				}
 				if !bytes.Equal(got, plaintext) {
-					t.Fatalf("Open(v%d) = %q, want %q", tc.version, got, plaintext)
+					t.Fatalf("Open = %q, want %q", got, plaintext)
 				}
 				return
 			}
 			// Unknown version: must be rejected as a format error (fail closed), and
 			// must NOT be silently decoded against the v1 layout.
 			if err == nil {
-				t.Fatalf("Open(v%d) accepted an unknown version; want ErrFormat", tc.version)
+				t.Fatal("Open accepted an unknown version; want ErrFormat")
 			}
 			if !errors.Is(err, seal.ErrFormat) {
-				t.Fatalf("Open(v%d) error = %v, want ErrFormat", tc.version, err)
+				t.Fatalf("Open error = %v, want ErrFormat", err)
 			}
 		})
 	}
+}
+
+func withVersion(sealed []byte, version byte) []byte {
+	out := append([]byte(nil), sealed...)
+	out[4] = version
+	return out
 }
 
 // TestOpenRejectsTruncatedVersionedHeader: a blob too short to even carry the
@@ -194,4 +203,156 @@ func TestOpenRejectsTruncatedVersionedHeader(t *testing.T) {
 	if _, err := seal.Open(kek, []byte("CSL1"), nil); !errors.Is(err, seal.ErrFormat) {
 		t.Fatalf("Open of a magic-only blob = %v, want ErrFormat", err)
 	}
+}
+
+// TestTenantDomainSealRoundTrip proves the v2 container is self-describing and
+// that callers must name the domain they expect. This lets a partially migrated
+// tenant select one wrapper deterministically instead of trying the deployment
+// KEK and silently falling back.
+func TestTenantDomainSealRoundTrip(t *testing.T) {
+	kek := newKEK(t)
+	domain := []byte("tenant:2f1da31b-2142-45df-897f-f42fd573a9ef:generation:7")
+	aad := []byte("tenant:2f1da31b-2142-45df-897f-f42fd573a9ef/secret:db")
+	plaintext := []byte("tenant-controlled-secret")
+
+	sealed, err := seal.SealDomain(kek, plaintext, aad, domain)
+	if err != nil {
+		t.Fatalf("SealDomain: %v", err)
+	}
+	gotDomain, err := seal.Domain(sealed)
+	if err != nil {
+		t.Fatalf("Domain: %v", err)
+	}
+	if !bytes.Equal(gotDomain, domain) {
+		t.Fatalf("Domain = %q, want %q", gotDomain, domain)
+	}
+	got, err := seal.OpenDomain(kek, sealed, aad, domain)
+	if err != nil {
+		t.Fatalf("OpenDomain: %v", err)
+	}
+	if !bytes.Equal(got, plaintext) {
+		t.Fatalf("OpenDomain = %q, want %q", got, plaintext)
+	}
+
+	gotDomain[0] ^= 0xff
+	again, err := seal.Domain(sealed)
+	if err != nil {
+		t.Fatalf("Domain after caller mutation: %v", err)
+	}
+	if !bytes.Equal(again, domain) {
+		t.Fatal("Domain returned a slice aliased to the stored blob")
+	}
+}
+
+func TestTenantDomainSealRejectsWrongOrTamperedDomain(t *testing.T) {
+	kek := newKEK(t)
+	domain := []byte("tenant:a:generation:1")
+	aad := []byte("tenant:a/secret:db")
+	sealed, err := seal.SealDomain(kek, []byte("credential"), aad, domain)
+	if err != nil {
+		t.Fatalf("SealDomain: %v", err)
+	}
+
+	if _, err := seal.OpenDomain(kek, sealed, aad, []byte("tenant:b:generation:1")); !errors.Is(err, seal.ErrDomain) {
+		t.Fatalf("OpenDomain wrong domain = %v, want ErrDomain", err)
+	}
+
+	tampered := append([]byte(nil), sealed...)
+	const firstDomainByte = 4 + 1 + 2
+	tampered[firstDomainByte] ^= 0x01
+	if _, err := seal.OpenDomain(kek, tampered, aad, domain); !errors.Is(err, seal.ErrDomain) {
+		t.Fatalf("OpenDomain tampered public domain = %v, want ErrDomain", err)
+	}
+}
+
+func TestTenantDomainRewrapPreservesPayloadCiphertext(t *testing.T) {
+	deploymentKEK := newKEK(t)
+	tenantKEK := newKEK(t)
+	tenantDomain := []byte("tenant:75d970a1-7083-402e-bbea-0ef93e455210:generation:1")
+	aad := []byte("tenant:75d970a1-7083-402e-bbea-0ef93e455210/secret:db")
+	plaintext := []byte("rewrap-without-plaintext-persistence")
+
+	before, err := seal.Seal(deploymentKEK, plaintext, aad)
+	if err != nil {
+		t.Fatalf("Seal legacy v1: %v", err)
+	}
+	legacyDomain, err := seal.Domain(before)
+	if err != nil {
+		t.Fatalf("Domain legacy v1: %v", err)
+	}
+	if legacyDomain != nil {
+		t.Fatalf("legacy v1 Domain = %q, want nil", legacyDomain)
+	}
+	beforePayload, err := seal.PayloadCiphertext(before)
+	if err != nil {
+		t.Fatalf("PayloadCiphertext before: %v", err)
+	}
+
+	after, err := seal.RewrapDomain(deploymentKEK, tenantKEK, before, tenantDomain)
+	if err != nil {
+		t.Fatalf("RewrapDomain: %v", err)
+	}
+	afterPayload, err := seal.PayloadCiphertext(after)
+	if err != nil {
+		t.Fatalf("PayloadCiphertext after: %v", err)
+	}
+	if !bytes.Equal(afterPayload, beforePayload) {
+		t.Fatal("RewrapDomain changed the nonce or payload ciphertext")
+	}
+	if _, err := seal.OpenDomain(deploymentKEK, after, aad, tenantDomain); err == nil {
+		t.Fatal("rewrapped blob still opens with deployment KEK")
+	}
+	got, err := seal.OpenDomain(tenantKEK, after, aad, tenantDomain)
+	if err != nil {
+		t.Fatalf("OpenDomain with tenant KEK: %v", err)
+	}
+	if !bytes.Equal(got, plaintext) {
+		t.Fatalf("OpenDomain = %q, want %q", got, plaintext)
+	}
+}
+
+func TestTenantDomainRewrapZeroizesUnwrappedDEK(t *testing.T) {
+	source := &capturingWrapper{}
+	destination := &copyingWrapper{}
+	domain := []byte("tenant:a:generation:1")
+	sealed, err := seal.SealDomain(source, []byte("credential"), nil, domain)
+	if err != nil {
+		t.Fatalf("SealDomain: %v", err)
+	}
+	source.unwrapped = nil
+
+	if _, err := seal.RewrapDomain(source, destination, sealed, []byte("tenant:a:generation:2")); err != nil {
+		t.Fatalf("RewrapDomain: %v", err)
+	}
+	if len(source.unwrapped) == 0 {
+		t.Fatal("test wrapper did not capture an unwrapped DEK")
+	}
+	if !bytes.Equal(source.unwrapped, make([]byte, len(source.unwrapped))) {
+		t.Fatal("RewrapDomain did not zeroize the unwrapped DEK")
+	}
+}
+
+type capturingWrapper struct {
+	wrapped   []byte
+	unwrapped []byte
+}
+
+func (w *capturingWrapper) WrapDEK(dek []byte) ([]byte, error) {
+	w.wrapped = append([]byte(nil), dek...)
+	return append([]byte(nil), dek...), nil
+}
+
+func (w *capturingWrapper) UnwrapDEK(wrapped []byte) ([]byte, error) {
+	w.unwrapped = append([]byte(nil), wrapped...)
+	return w.unwrapped, nil
+}
+
+type copyingWrapper struct{}
+
+func (*copyingWrapper) WrapDEK(dek []byte) ([]byte, error) {
+	return append([]byte(nil), dek...), nil
+}
+
+func (*copyingWrapper) UnwrapDEK(wrapped []byte) ([]byte, error) {
+	return append([]byte(nil), wrapped...), nil
 }

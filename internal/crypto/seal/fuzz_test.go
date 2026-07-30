@@ -51,6 +51,11 @@ func FuzzOpenSeal(f *testing.F) {
 		f.Fatalf("seed Seal: %v", err)
 	}
 	f.Add(good)
+	goodV2, err := seal.SealDomain(w, plaintext, nil, []byte("tenant:fuzz:generation:1"))
+	if err != nil {
+		f.Fatalf("seed SealDomain: %v", err)
+	}
+	f.Add(goodV2)
 
 	// Truncations of a valid blob at several boundaries (magic, version, wrappedLen,
 	// inside the wrapped DEK).
@@ -59,12 +64,25 @@ func FuzzOpenSeal(f *testing.F) {
 			f.Add(append([]byte{}, good[:n]...))
 		}
 	}
+	for _, n := range []int{5, 6, 7, 8, len(goodV2) - 1} {
+		if n >= 0 && n <= len(goodV2) {
+			f.Add(append([]byte{}, goodV2[:n]...))
+		}
+	}
 
 	// Same length as a valid blob but a wrong (unknown) version byte.
 	if len(good) > len(magicBytes) {
 		wrongVer := append([]byte{}, good...)
 		wrongVer[len(magicBytes)] = 0xFF
 		f.Add(wrongVer)
+	}
+
+	// V2 domainLen points past the available body.
+	if len(goodV2) > len(magicBytes)+2 {
+		bigDomain := append([]byte{}, goodV2...)
+		bigDomain[len(magicBytes)+1] = 0xFF
+		bigDomain[len(magicBytes)+2] = 0xFF
+		f.Add(bigDomain)
 	}
 
 	// A mutated wrappedLen that points well past the buffer (the 2 bytes after
