@@ -305,7 +305,16 @@ holder, never sent as plaintext. Sync endpoints follow the dynamic-provider tran
 rule: HTTPS by default, `allow_private_endpoint` is only an address grant, plaintext
 needs the explicit loopback-only switch.
 
-#### AWS and GCP workload identity for secret sync
+#### AWS, GCP, and Azure workload identity for secret sync
+
+Each cloud is configured independently on its matching sync target:
+`aws_workload_identity`, `gcp_workload_identity`, or
+`azure_workload_identity`. Every switch is false by default. Enabling one forbids
+that target's static credential fields, so a missing workload-identity source fails
+closed instead of falling back to a long-lived token or access key. The three
+provider exchanges are thin, hand-written REST encoders over one shared
+`internal/cloudauth` cache and refresh-before-expiry seam; there is no cloud vendor
+SDK or parallel authentication stack.
 
 AWS Secrets Manager targets can replace long-lived access keys with an explicitly
 configured workload identity. Set `aws_workload_identity: true` on that target and
@@ -345,6 +354,36 @@ IAM Credentials `generateAccessToken` step at the configured
 OIDC proof, exchange it, cache it, and refresh it through the same
 `internal/cloudauth` minter used by AWS. The API, CLI, generated clients, and
 console expose the same tenant-scoped source and honest runtime status.
+
+Azure Key Vault targets use that same boundary with
+`azure_workload_identity: true` and no `token_ref`.
+`workload_identity_endpoint` is optional; when absent, the source's
+`azure_tenant_id` selects
+`https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`. The Azure source
+sets `provider: "azure"`, the Entra application `client_id`, and a Key Vault
+`target_scope`, normally `https://vault.azure.net/.default`, in addition to the
+same trust source, exact audience/subject, target, allowed remote-key prefixes, and
+proof reference used by the other clouds.
+
+After the outbox worker validates the referenced OIDC proof, the thin Entra
+exchange sends `grant_type=client_credentials`, the application client ID, target
+scope, and that existing proof unchanged in the JWT-bearer `client_assertion`
+field. This is the Entra federated-credential flow: trstctl does not mint a second
+JWT, sign an assertion with a certificate, or hold an Entra certificate/private
+key. The returned short-lived bearer goes through the existing hand-written
+`internal/secretsync` Azure Key Vault pusher. It replaces this sync target's
+static `token_ref`; the similarly named
+`TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN(_FILE)` settings and
+`internal/kms/azurekv` are a separate managed-key child-signer path.
+
+Like the other two providers, Azure exchanges only during a bounded secret-sync
+outbox delivery. The request handler merely journals the work. Air-gapped mode records
+`offline_disabled` before any Entra or Key Vault network request, fails the queued
+delivery once with a stable reason, and does not retry forever. The served Azure
+proofs also verify tenant isolation and that neither the OIDC proof nor minted bearer
+reaches the API response, event log, outbox payload, job error, or source status.
+See [Secrets configuration](../configuration.md#secrets-credentials-at-rest) for
+the complete target and source fields.
 
 `GET /api/v1/secrets/cloud-secret-managers` / `trstctl-cli secrets
 cloud-secret-managers`: read-only `cloud_secret` discovery for AWS Secrets Manager, GCP

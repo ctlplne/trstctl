@@ -849,17 +849,37 @@ independently reads every destination value back. `GET
 /api/v1/secrets/syncs/targets` shows the catalog and this installation's
 configured targets.
 
-AWS and GCP targets may explicitly opt into OIDC workload identity instead of
-static credentials. The served
+AWS, GCP, and Azure targets independently opt into OIDC workload identity instead
+of their static target credential. The matching
+`aws_workload_identity`, `gcp_workload_identity`, or
+`azure_workload_identity` switch is false by default, and workload-identity mode
+rejects the provider's static credential fields rather than keeping a quiet fallback.
+The served
 `/api/v1/secrets/syncs/workload-identity-sources` API, CLI, and Secrets console
 bind a tenant JWT/JWKS trust source, exact audience/subject, provider target, and
-remote-key scope. AWS uses an IAM role; GCP uses RFC 8693 directly or optionally
-impersonates one service account. Proof resolution, exchange, locked short-lived
-credential caching, and refresh happen only inside the bounded outbox worker;
-air-gapped mode reports `offline_disabled` before network I/O and does not retry
-forever. Azure Entra remains a committed follow-up card and must reuse this same
-`internal/cloudauth` minter behind its existing bearer-token path rather than
-adding a provider-specific auth stack.
+remote-key scope. Three thin, hand-written REST exchanges use one shared
+`internal/cloudauth` minter: AWS calls `AssumeRoleWithWebIdentity`; GCP calls the
+RFC 8693 STS endpoint and may then impersonate one service account; Azure calls the
+Entra v2 token endpoint with the configured application client ID and Key Vault
+scope. Azure's federated-credential binding accepts the already validated OIDC proof,
+which the form sends unchanged in its JWT-bearer `client_assertion` field. trstctl
+does not create another assertion, sign one with a certificate, or take custody of
+an Entra certificate/private key.
+
+Proof resolution, signature and exact-claim validation, exchange, locked
+short-lived credential caching, and refresh happen only inside the bounded
+secret-sync outbox worker. Air-gapped mode records `offline_disabled` before either
+the token endpoint or target can receive a request, fails that delivery once, and
+does not retry forever. The resulting GCP or Azure bearer is passed to the existing
+hand-written `internal/secretsync` pusher; no vendor SDK or provider-specific cache
+is added. For Azure this replaces the `azure-key-vault` sync target's static
+`token_ref`. It does **not** replace
+`TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN(_FILE)`: those settings and
+`internal/kms/azurekv` belong to the separate managed-key child-signer path.
+`TestServedAzureFederatedOutboxTenantIsolationTokenRedaction` and
+`TestServedAzureFederatedAirGapIsTerminalWithoutNetwork` prove the served Azure
+exchange, target readback, tenant isolation, token redaction, and zero-network
+air-gap result.
 
 Related read-only posture routes: `GET /api/v1/secrets/cloud-secret-managers`
 (CAP-SEC-04 — read-only `cloud_secret` discovery for AWS/GCP/Azure/Vault, plus
