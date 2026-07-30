@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 15 # TEST-004
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # scan full history, not just the tip
 
@@ -66,7 +66,7 @@ jobs:
     timeout-minutes: 25 # TEST-004 (builds the image, then Trivy-scans it)
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Resolve the distroless runtime base by digest (pin, not tag)
         id: base
