@@ -328,6 +328,7 @@ export function SecretSyncWorkloadIdentityPanel() {
         state={gridState}
         stateTitle={stateTitle}
         stateMessage={stateMessage}
+        emptyStateHeadingAs="h4"
         virtualization={false}
       />
 

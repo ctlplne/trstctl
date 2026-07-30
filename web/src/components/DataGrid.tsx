@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronsUpDown, ChevronUp, Columns3 } from "lucide-react";
-import { EmptyState } from "@/components/EmptyState";
+import { EmptyState, type EmptyStateHeadingTag } from "@/components/EmptyState";
 import { ErrorState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +57,7 @@ export type DataGridProps<Row> = {
   state?: DataGridState;
   stateMessage?: ReactNode;
   stateTitle?: string;
+  emptyStateHeadingAs?: EmptyStateHeadingTag;
   sort?: DataGridSort;
   onSort?: (sort: DataGridSort) => void;
   onRowOpen?: (row: Row) => void;
@@ -86,6 +87,7 @@ export function DataGrid<Row>({
   state = rows.length === 0 ? "empty" : "ready",
   stateMessage,
   stateTitle,
+  emptyStateHeadingAs,
   sort,
   onSort,
   onRowOpen,
@@ -325,7 +327,7 @@ export function DataGrid<Row>({
       </div>
 
       {state !== "ready" ? (
-        <GridState state={state} title={stateTitle}>
+        <GridState state={state} title={stateTitle} emptyStateHeadingAs={emptyStateHeadingAs}>
           {stateMessage}
         </GridState>
       ) : (
@@ -450,7 +452,17 @@ function columnLabel<Row>(column: DataGridColumn<Row>): string {
   return typeof column.header === "string" ? column.header : column.id;
 }
 
-function GridState({ state, title, children }: { state: DataGridState; title?: string; children?: ReactNode }) {
+function GridState({
+  state,
+  title,
+  children,
+  emptyStateHeadingAs,
+}: {
+  state: DataGridState;
+  title?: string;
+  children?: ReactNode;
+  emptyStateHeadingAs?: EmptyStateHeadingTag;
+}) {
   const { t } = useTranslation();
 
   switch (state) {
@@ -475,7 +487,11 @@ function GridState({ state, title, children }: { state: DataGridState; title?: s
     case "unavailable":
       return <UnavailableState title={title ?? t("grid.state.unavailable")}>{children}</UnavailableState>;
     case "empty":
-      return <EmptyState title={title ?? t("grid.state.empty")}>{children}</EmptyState>;
+      return (
+        <EmptyState title={title ?? t("grid.state.empty")} headingAs={emptyStateHeadingAs}>
+          {children}
+        </EmptyState>
+      );
     default:
       return null;
   }

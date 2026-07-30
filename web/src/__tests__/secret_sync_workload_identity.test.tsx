@@ -146,6 +146,16 @@ describe("AWS workload identity secret sync", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  it("keeps the empty list and create form below the workload-identity panel heading", async () => {
+    apiMock.secretSyncWorkloadIdentitySources.mockResolvedValue({ items: [], next_cursor: "" });
+    const { container } = renderPanel();
+
+    expect(await screen.findByRole("heading", { level: 3, name: "Cloud workload identity federation" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 4, name: "No workload identities configured" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 4, name: "Add cloud workload identity" })).toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
   it("creates an explicitly configured source through the three-step workflow", async () => {
     const user = userEvent.setup();
     renderPanel();

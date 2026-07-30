@@ -9,6 +9,8 @@ export interface EmptyStateAction {
   icon?: ReactNode;
 }
 
+export type EmptyStateHeadingTag = "h2" | "h3" | "h4" | "h5" | "h6";
+
 /** EmptyState is a guiding placeholder shown when a view has no data yet. It
  * points the user at the next concrete action rather than leaving a blank
  * screen — a core part of the sub-15-minute first-run target (F12). */
@@ -21,6 +23,7 @@ export function EmptyState({
   primaryAction,
   secondaryAction,
   className,
+  headingAs: Heading = "h2",
 }: {
   title: string;
   children?: ReactNode;
@@ -30,6 +33,7 @@ export function EmptyState({
   primaryAction?: EmptyStateAction;
   secondaryAction?: EmptyStateAction;
   className?: string;
+  headingAs?: EmptyStateHeadingTag;
 }) {
   const primary = primaryAction ?? (ctaTo && ctaLabel ? { label: ctaLabel, to: ctaTo } : undefined);
   return (
@@ -44,7 +48,7 @@ export function EmptyState({
       {icon ? (
         <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-control border border-border bg-muted/60 text-brand-accent">{icon}</div>
       ) : null}
-      <h2 className="mb-1 text-lg font-semibold">{title}</h2>
+      <Heading className="mb-1 text-lg font-semibold">{title}</Heading>
       {children && <p className="mx-auto mb-5 max-w-md text-sm text-muted-foreground">{children}</p>}
       {(primary || secondaryAction) && (
         <div className="flex flex-wrap items-center justify-center gap-2">
