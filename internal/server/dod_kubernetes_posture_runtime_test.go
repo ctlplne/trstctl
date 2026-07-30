@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -19,7 +20,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -40,6 +43,9 @@ const (
 	dodKubernetesTenant          = "d0d00000-0000-4000-8000-000000000084"
 	dodKubernetesAgentServerName = "agent.trstctl.local"
 	dodKubernetesNodeImage       = "kindest/node:v1.31.14@sha256:6f86cf509dbb42767b6e79debc3f2c32e4ee01386f0489b3b2be24b0a55aac2b"
+	dodKindConfigReadyTimeout    = 6 * time.Minute
+	dodKindConfigAttemptTimeout  = 30 * time.Second
+	dodKindConfigRetryDelay      = 500 * time.Millisecond
 )
 
 // TestDODKubernetesPostureRoutesProductionAssembly proves both former static
@@ -303,51 +309,34 @@ type dodKindClient struct {
 	namespace string
 }
 
+type dodKindConfigHTTPClient interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+type dodKindConfigPollClock struct {
+	now   func() time.Time
+	sleep func(time.Duration)
+}
+
 func dodKindClientFromSubstrate(t *testing.T, external *proof.ExternalSubstrate) dodKindClient {
 	t.Helper()
 	endpoint, err := url.Parse(external.Endpoint())
 	if err != nil || endpoint == nil || (endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "host.docker.internal") {
 		t.Fatalf("kind substrate endpoint is not a gate-owned loopback bridge: %q", external.Endpoint())
 	}
-	var fixture dodKindConfig
-	deadline := time.Now().Add(6 * time.Minute)
-	for {
-		request, requestErr := http.NewRequest(http.MethodGet, external.Endpoint()+"/dod/config", nil)
-		if requestErr != nil {
-			t.Fatal(requestErr)
-		}
-		clientTransport := http.DefaultTransport.(*http.Transport).Clone()
-		clientTransport.Proxy = nil
-		client := &http.Client{Transport: clientTransport, Timeout: 30 * time.Second}
-		response, requestErr := client.Do(request)
-		if requestErr != nil {
-			t.Fatalf("poll real-kind fixture: %v", requestErr)
-		}
-		body, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-		_ = response.Body.Close()
-		clientTransport.CloseIdleConnections()
-		if readErr != nil {
-			t.Fatalf("read real-kind fixture: %v", readErr)
-		}
-		switch response.StatusCode {
-		case http.StatusOK:
-			decoder := json.NewDecoder(bytes.NewReader(body))
-			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&fixture); err != nil {
-				t.Fatalf("decode real-kind fixture config: %v; body=%s", err, body)
-			}
-			goto configured
-		case http.StatusAccepted:
-			if time.Now().After(deadline) {
-				t.Fatalf("real-kind fixture did not become ready within six minutes: %s", body)
-			}
-			time.Sleep(500 * time.Millisecond)
-		default:
-			t.Fatalf("real-kind fixture status=%d body=%s", response.StatusCode, body)
-		}
+	clientTransport := http.DefaultTransport.(*http.Transport).Clone()
+	clientTransport.Proxy = nil
+	defer clientTransport.CloseIdleConnections()
+	fixture, err := dodPollKindConfig(
+		external.Endpoint()+"/dod/config",
+		&http.Client{Transport: clientTransport},
+		time.Now().Add(dodKindConfigReadyTimeout),
+		dodKindConfigPollClock{now: time.Now, sleep: time.Sleep},
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-configured:
 	if fixture.SchemaVersion != 1 || fixture.APIPort < 1 || fixture.APIPort > 65535 || fixture.Namespace == "" || fixture.ClusterName == "" || fixture.NodeImage != dodKubernetesNodeImage {
 		t.Fatalf("real-kind fixture config is incomplete or unpinned: %+v", fixture)
 	}
@@ -372,6 +361,122 @@ configured:
 	apiURL := "https://" + net.JoinHostPort(endpoint.Hostname(), strconv.Itoa(fixture.APIPort))
 	client := agentk8s.New(apiURL, secrettext.String(token), fixture.Namespace, &http.Client{Transport: kubernetesTransport, Timeout: 30 * time.Second})
 	return dodKindClient{client: client, caPEM: caPEM, namespace: fixture.Namespace}
+}
+
+func dodPollKindConfig(endpoint string, client dodKindConfigHTTPClient, deadline time.Time, clock dodKindConfigPollClock) (dodKindConfig, error) {
+	if clock.now == nil {
+		clock.now = time.Now
+	}
+	if clock.sleep == nil {
+		clock.sleep = time.Sleep
+	}
+	var lastReadinessFailure error
+	for {
+		attemptStarted := clock.now()
+		if !attemptStarted.Before(deadline) {
+			if lastReadinessFailure == nil {
+				return dodKindConfig{}, errors.New("real-kind fixture readiness deadline elapsed before the first request")
+			}
+			return dodKindConfig{}, fmt.Errorf("real-kind fixture did not become ready before its deadline: %w", lastReadinessFailure)
+		}
+		attemptDeadline := attemptStarted.Add(dodKindConfigAttemptTimeout)
+		if deadline.Before(attemptDeadline) {
+			attemptDeadline = deadline
+		}
+		requestContext, cancel := context.WithDeadline(context.Background(), attemptDeadline)
+		request, requestErr := http.NewRequestWithContext(requestContext, http.MethodGet, endpoint, nil)
+		if requestErr != nil {
+			cancel()
+			return dodKindConfig{}, fmt.Errorf("create real-kind fixture request: %w", requestErr)
+		}
+		response, requestErr := client.Do(request)
+		if requestErr != nil {
+			if response != nil && response.Body != nil {
+				_ = response.Body.Close()
+			}
+			cancel()
+			if dodRetryableKindConfigTransport(requestErr) {
+				lastReadinessFailure = fmt.Errorf("poll real-kind fixture: %w", requestErr)
+				dodWaitKindConfigRetry(deadline, clock)
+				continue
+			}
+			return dodKindConfig{}, fmt.Errorf("poll real-kind fixture: %w", requestErr)
+		}
+		if response == nil || response.Body == nil {
+			cancel()
+			return dodKindConfig{}, errors.New("poll real-kind fixture returned no response body")
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		closeErr := response.Body.Close()
+		cancel()
+		if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusAccepted {
+			return dodKindConfig{}, fmt.Errorf("real-kind fixture status=%d body=%s read_err=%v close_err=%v", response.StatusCode, body, readErr, closeErr)
+		}
+		if readErr != nil {
+			if !dodRetryableKindConfigTransport(readErr) {
+				return dodKindConfig{}, fmt.Errorf("read real-kind fixture: %w", readErr)
+			}
+			lastReadinessFailure = fmt.Errorf("read real-kind fixture: %w", readErr)
+			dodWaitKindConfigRetry(deadline, clock)
+			continue
+		}
+		if closeErr != nil {
+			return dodKindConfig{}, fmt.Errorf("close real-kind fixture response: %w", closeErr)
+		}
+		switch response.StatusCode {
+		case http.StatusOK:
+			var fixture dodKindConfig
+			decoder := json.NewDecoder(bytes.NewReader(body))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&fixture); err != nil {
+				return dodKindConfig{}, fmt.Errorf("decode real-kind fixture config: %w; body=%s", err, body)
+			}
+			if err := decoder.Decode(&struct{}{}); err != io.EOF {
+				return dodKindConfig{}, fmt.Errorf("decode real-kind fixture config: trailing JSON; body=%s", body)
+			}
+			return fixture, nil
+		case http.StatusAccepted:
+			lastReadinessFailure = fmt.Errorf("real-kind fixture is not ready: %s", body)
+			dodWaitKindConfigRetry(deadline, clock)
+		}
+	}
+}
+
+func dodRetryableKindConfigTransport(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.ECONNABORTED) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ETIMEDOUT) ||
+		errors.Is(err, syscall.ENETUNREACH) ||
+		errors.Is(err, syscall.EHOSTUNREACH) {
+		return true
+	}
+	var dnsError *net.DNSError
+	if errors.As(err, &dnsError) && (dnsError.IsTimeout || dnsError.IsTemporary) {
+		return true
+	}
+	var networkError net.Error
+	return errors.As(err, &networkError) && networkError.Timeout()
+}
+
+func dodWaitKindConfigRetry(deadline time.Time, clock dodKindConfigPollClock) {
+	remaining := deadline.Sub(clock.now())
+	if remaining <= 0 {
+		return
+	}
+	delay := dodKindConfigRetryDelay
+	if remaining < delay {
+		delay = remaining
+	}
+	clock.sleep(delay)
 }
 
 func dodReconcileAndReportKubernetesPosture(t *testing.T, srv *Server, agentAddress string, external *proof.ExternalSubstrate) (agentk8s.ControllerPostureReport, *transport.KubernetesPostureResponse, []byte) {
@@ -546,4 +651,251 @@ func dodKubernetesPostureContract(t *testing.T) []byte {
 		t.Fatalf("read Kubernetes posture substrate contract: %v", err)
 	}
 	return contract
+}
+
+func TestDODKindConfigPollRecoversWithinReadinessWall(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	client := &dodKindConfigPollClient{steps: []dodKindConfigPollStep{
+		{err: syscall.ETIMEDOUT},
+		{status: http.StatusAccepted, body: `{"status":"starting"}`},
+		{status: http.StatusOK, body: dodValidKindConfigJSON()},
+	}}
+	config, err := dodPollKindConfig(
+		"http://host.docker.internal:61443/dod/config",
+		client,
+		now.Add(6*time.Minute),
+		dodKindConfigPollClock{
+			now: func() time.Time { return now },
+			sleep: func(delay time.Duration) {
+				now = now.Add(delay)
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("poll after recoverable transport failure: %v", err)
+	}
+	if config.SchemaVersion != 1 || config.ClusterName != "dod-kind" {
+		t.Fatalf("decoded config = %+v", config)
+	}
+	if client.calls != 3 {
+		t.Fatalf("requests = %d, want 3", client.calls)
+	}
+	if client.closedBodies != 2 {
+		t.Fatalf("closed response bodies = %d, want 2", client.closedBodies)
+	}
+	for _, deadline := range client.requestDeadlines {
+		if deadline.After(now.Add(30 * time.Second)) {
+			t.Fatalf("request deadline %s exceeds per-attempt bound from %s", deadline, now)
+		}
+	}
+}
+
+func TestDODKindConfigPollRecoversFromReadFailure(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	client := &dodKindConfigPollClient{steps: []dodKindConfigPollStep{
+		{status: http.StatusOK, readErr: io.ErrUnexpectedEOF},
+		{status: http.StatusOK, body: dodValidKindConfigJSON()},
+	}}
+	if _, err := dodPollKindConfig(
+		"http://host.docker.internal:61443/dod/config",
+		client,
+		now.Add(time.Minute),
+		dodKindConfigPollClock{
+			now: func() time.Time { return now },
+			sleep: func(delay time.Duration) {
+				now = now.Add(delay)
+			},
+		},
+	); err != nil {
+		t.Fatalf("poll after recoverable read failure: %v", err)
+	}
+	if client.calls != 2 || client.closedBodies != 2 {
+		t.Fatalf("requests/closed bodies = %d/%d, want 2/2", client.calls, client.closedBodies)
+	}
+}
+
+func TestDODKindConfigPollReportsLastTransportFailureAtDeadline(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	readinessDeadline := now.Add(750 * time.Millisecond)
+	client := &dodKindConfigPollClient{steps: []dodKindConfigPollStep{
+		{err: fmt.Errorf("bridge timeout one: %w", syscall.ETIMEDOUT)},
+		{err: fmt.Errorf("bridge timeout two: %w", syscall.ETIMEDOUT)},
+	}}
+	_, err := dodPollKindConfig(
+		"http://host.docker.internal:61443/dod/config",
+		client,
+		readinessDeadline,
+		dodKindConfigPollClock{
+			now: func() time.Time { return now },
+			sleep: func(delay time.Duration) {
+				now = now.Add(delay)
+			},
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "bridge timeout two") {
+		t.Fatalf("deadline error = %v, want last transport failure", err)
+	}
+	if client.calls != 2 {
+		t.Fatalf("requests = %d, want 2", client.calls)
+	}
+	for _, requestDeadline := range client.requestDeadlines {
+		if !requestDeadline.Equal(readinessDeadline) {
+			t.Fatalf("request deadline = %s, want remaining-wall cap %s", requestDeadline, readinessDeadline)
+		}
+	}
+}
+
+func TestDODKindConfigPollFailsFastOnSemanticResponses(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		step dodKindConfigPollStep
+		want string
+	}{
+		{
+			name: "substrate setup failure",
+			step: dodKindConfigPollStep{status: http.StatusServiceUnavailable, body: "kind setup failed"},
+			want: "status=503",
+		},
+		{
+			name: "unexpected status",
+			step: dodKindConfigPollStep{status: http.StatusTeapot, body: "unexpected"},
+			want: "status=418",
+		},
+		{
+			name: "malformed complete response",
+			step: dodKindConfigPollStep{status: http.StatusOK, body: `{"schema_version":1,"unknown":true}`},
+			want: "decode real-kind fixture config",
+		},
+		{
+			name: "substrate setup failure with truncated body",
+			step: dodKindConfigPollStep{status: http.StatusServiceUnavailable, readErr: io.ErrUnexpectedEOF},
+			want: "status=503",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			now := time.Now()
+			client := &dodKindConfigPollClient{steps: []dodKindConfigPollStep{test.step}}
+			_, err := dodPollKindConfig(
+				"http://host.docker.internal:61443/dod/config",
+				client,
+				now.Add(6*time.Minute),
+				dodKindConfigPollClock{
+					now:   func() time.Time { return now },
+					sleep: func(time.Duration) { t.Fatal("semantic response was retried") },
+				},
+			)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want %q", err, test.want)
+			}
+			if client.calls != 1 || client.closedBodies != 1 {
+				t.Fatalf("requests/closed bodies = %d/%d, want 1/1", client.calls, client.closedBodies)
+			}
+		})
+	}
+}
+
+func TestDODKindConfigPollFailsFastOnPermanentRequestError(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	client := &dodKindConfigPollClient{steps: []dodKindConfigPollStep{
+		{err: errors.New("unsupported protocol scheme")},
+	}}
+	_, err := dodPollKindConfig(
+		"http://host.docker.internal:61443/dod/config",
+		client,
+		now.Add(6*time.Minute),
+		dodKindConfigPollClock{
+			now:   func() time.Time { return now },
+			sleep: func(time.Duration) { t.Fatal("permanent request error was retried") },
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "unsupported protocol scheme") {
+		t.Fatalf("error = %v, want permanent request failure", err)
+	}
+	if client.calls != 1 {
+		t.Fatalf("requests = %d, want 1", client.calls)
+	}
+}
+
+type dodKindConfigPollStep struct {
+	status  int
+	body    string
+	err     error
+	readErr error
+}
+
+type dodKindConfigPollClient struct {
+	steps            []dodKindConfigPollStep
+	calls            int
+	closedBodies     int
+	requestDeadlines []time.Time
+}
+
+func (c *dodKindConfigPollClient) Do(request *http.Request) (*http.Response, error) {
+	if deadline, ok := request.Context().Deadline(); ok {
+		c.requestDeadlines = append(c.requestDeadlines, deadline)
+	}
+	index := c.calls
+	c.calls++
+	if index >= len(c.steps) {
+		index = len(c.steps) - 1
+	}
+	step := c.steps[index]
+	if step.err != nil {
+		return nil, step.err
+	}
+	reader := io.Reader(strings.NewReader(step.body))
+	if step.readErr != nil {
+		reader = dodKindConfigErrorReader{err: step.readErr}
+	}
+	return &http.Response{
+		StatusCode: step.status,
+		Body: &dodKindConfigTrackedBody{
+			Reader:     reader,
+			contextErr: request.Context().Err,
+			closed:     func() { c.closedBodies++ },
+		},
+	}, nil
+}
+
+type dodKindConfigTrackedBody struct {
+	io.Reader
+	contextErr func() error
+	closed     func()
+}
+
+func (b *dodKindConfigTrackedBody) Read(buffer []byte) (int, error) {
+	if err := b.contextErr(); err != nil {
+		return 0, err
+	}
+	return b.Reader.Read(buffer)
+}
+
+func (b *dodKindConfigTrackedBody) Close() error {
+	b.closed()
+	return nil
+}
+
+type dodKindConfigErrorReader struct {
+	err error
+}
+
+func (r dodKindConfigErrorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+func dodValidKindConfigJSON() string {
+	return `{"schema_version":1,"api_port":6443,"ca_pem":"Y2E=","token":"dG9rZW4=","namespace":"trstctl-dod","cluster_name":"dod-kind","node_image":"` + dodKubernetesNodeImage + `"}`
 }
