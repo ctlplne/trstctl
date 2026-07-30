@@ -7257,67 +7257,130 @@
       "phase": "P2",
       "priority": 68,
       "served_state": "partial",
-      "backend_status": "partial: served when licensed from ee/",
-      "current_frontend_mapping": "observe: Posture at /posture - PQC migration posture disclosure backed by served CBOM inventory; proprietary PQC controls attach from ee/ when licensed",
-      "target_gui_mapping": "PQC migration planner with candidate assets, migration waves, dry-run, rollback, resume, and policy sign-off.",
-      "acceptance_test": "ee/pqcmigration tests scan a CBOM RSA certificate-key estate, queue licensed ACME PQC re-issuance through the outbox, verify migration progress, and exercise rollback.",
+      "backend_status": "partial: core campaign ownership/readiness/disposition/signed closure is served standalone; automated fleet planning/start/progress/rollback attaches from ee/ when licensed",
+      "current_frontend_mapping": "served split on Posture at /posture: PQCCampaigns is the standalone core ownership/evidence workflow; PQCMigrationWorkflow is the licence-aware fleet plan/start/progress/rollback workflow",
+      "target_gui_mapping": "Keep the useful standalone core campaign workflow and the licensed fleet-execution workflow visibly separate on Posture.",
+      "acceptance_test": "TestPQCMigrationCampaignServedManualClosureSignedEvidence proves manual or external work can close with signed evidence in core; TestPQCMigrationCampaignTenantIsolation proves the campaign path is tenant-scoped; ee/pqcmigration tests prove licensed planning, execution, progress, and rollback.",
       "source_docs": [
-        "docs/features/lifecycle-and-pqc.md"
+        "docs/features/lifecycle-and-pqc.md",
+        "docs/cli.md",
+        "docs/web-console.md",
+        "docs/limitations.md"
       ],
       "source_backend": [
+        "internal/api/pqc_migration_campaign.go",
+        "internal/orchestrator/pqc_migration_campaign.go",
+        "internal/store/pqc_migration_campaign.go",
+        "internal/projections/projections.go",
         "ee/pqcmigration"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Posture.tsx",
+        "web/src/pages/posture/PQCCampaigns.tsx",
+        "web/src/components/PQCMigrationWorkflow.tsx",
+        "web/src/__tests__/pqc_campaigns.test.tsx",
+        "web/src/__tests__/posture.test.tsx"
+      ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "PQC migration API attaches only from proprietary ee/ when licensed; it is intentionally absent from the MPL-core OpenAPI golden.",
-      "cli_surface": [],
-      "cli_na": "No MPL-core PQC migration CLI command; any PQC operator command belongs in proprietary ee/.",
+      "notes": "Owner edition decision: campaign seeing, ownership, assignment, readiness, manual or external disposition, and signed closure evidence are CORE and remain genuinely useful without a licence; automated fleet execution remains EE. Community can find, own, track, and prove closure over core CBOM findings by any execution means. The separate licence-aware workflow may plan/start/read/rollback fleet execution only when ee/pqcmigration is attached.",
+      "api_surface": [
+        "startPQCMigrationCampaign",
+        "listPQCMigrationCampaigns",
+        "getPQCMigrationCampaign",
+        "updatePQCMigrationCampaign",
+        "setPQCMigrationCampaignReadiness",
+        "dispositionPQCMigrationFinding",
+        "closePQCMigrationCampaign",
+        "getPQCMigrationCampaignEvidence"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "pqc campaigns create",
+        "pqc campaigns list",
+        "pqc campaigns get",
+        "pqc campaigns update",
+        "pqc campaigns readiness",
+        "pqc campaigns disposition",
+        "pqc campaigns close",
+        "pqc campaigns evidence"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "Proprietary ee/pqcmigration attaches POST /api/v1/pqc/migrations to queue CBOM asset re-issuance through the outbox when licensed.",
-            "Proprietary ee/pqcmigration attaches POST /api/v1/pqc/migrations/{run_id}/rollback for evented rollback when licensed.",
+            "Core serves tenant-scoped PQC campaigns for owner, deadline, wave, readiness, manual or external finding disposition, and signed closure evidence over core CBOM findings.",
+            "The core campaign remains useful without a licence and never requires the EE engine to record operator work or prove closure.",
+            "ee/pqcmigration attaches planPQCMigration, startPQCMigration, getPQCMigrationProgress, and rollbackPQCMigration only when licensed; the core-only dependency graph links zero ee/ packages.",
             "served_state=partial",
-            "backend_status=partial: served when licensed from ee/"
+            "backend_status=partial: core campaign ownership/readiness/disposition/signed closure is served standalone; automated fleet planning/start/progress/rollback attaches from ee/ when licensed"
           ],
           "refs": [
-            "ee/pqcmigration"
+            "internal/api/pqc_migration_campaign.go",
+            "internal/orchestrator/pqc_migration_campaign.go",
+            "internal/store/pqc_migration_campaign.go",
+            "internal/server/pqc_migration_campaign_served_test.go",
+            "ee/pqcmigration/api.go",
+            "cmd/trstctl/ee_attach.go",
+            "cmd/trstctl/ee_attach_core.go"
           ],
           "commands": [
-            "make test"
+            "go test ./internal/server -run '^TestPQCMigrationCampaign' -count=1",
+            "go test ./ee/pqcmigration -count=1",
+            "make editions-gate"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Posture at /posture - PQC migration posture disclosure backed by served CBOM inventory; proprietary PQC controls attach from ee/ when licensed",
-            "target_gui_mapping: PQC migration planner with candidate assets, migration waves, dry-run, rollback, resume, and policy sign-off."
+            "Posture at /posture mounts PQCCampaigns for the core create/list/detail/readiness/disposition/close/export workflow.",
+            "The same page mounts PQCMigrationWorkflow for licensed plan/start/status/rollback and honestly says fleet execution is unavailable when the edition does not attach it."
           ],
           "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/App.tsx"
+            "web/src/pages/Posture.tsx",
+            "web/src/pages/posture/PQCCampaigns.tsx",
+            "web/src/components/PQCMigrationWorkflow.tsx",
+            "web/src/__tests__/pqc_campaigns.test.tsx",
+            "web/src/__tests__/posture.test.tsx"
           ]
         },
         "cli": {
-          "na": "N/A: no MPL-core CLI command; PQC operator commands belong under ee/.",
+          "evidence": [
+            "Core CLI serves pqc campaigns create, list, get, update, readiness, disposition, close, and evidence against the eight core campaign operations.",
+            "Separate migration plan/start/status/rollback entries are thin HTTP-client commands for attach-time licensed routes; they carry no core execution engine and receive 404 when EE is not attached."
+          ],
           "refs": [
-            "ee/pqcmigration"
+            "internal/cli/command.go",
+            "internal/cli/command_licensed.go",
+            "internal/cli/cli_test.go",
+            "internal/cli/feature_parity_test.go",
+            "docs/cli.md"
           ]
         },
         "api": {
-          "na": "N/A: PQC migration operationIds attach only from proprietary ee/ when licensed.",
+          "evidence": [
+            "The core OpenAPI contract contains startPQCMigrationCampaign, listPQCMigrationCampaigns, getPQCMigrationCampaign, updatePQCMigrationCampaign, setPQCMigrationCampaignReadiness, dispositionPQCMigrationFinding, closePQCMigrationCampaign, and getPQCMigrationCampaignEvidence.",
+            "Licensed attach-time evidence contains getPQCMigrationProgress, planPQCMigration, startPQCMigration, and rollbackPQCMigration; those four operations are not in the core-only OpenAPI golden."
+          ],
           "refs": [
-            "ee/pqcmigration"
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json",
+            "internal/api/pqc_migration_campaign.go",
+            "ee/pqcmigration/api.go"
           ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: ee/pqcmigration tests scan a CBOM RSA certificate-key estate, queue licensed ACME PQC re-issuance through the outbox, verify migration progress, and exercise rollback.",
+            "TestPQCMigrationCampaignServedManualClosureSignedEvidence proves a core campaign can track manually performed work and close with independently verifiable signed evidence.",
+            "TestPQCMigrationCampaignTenantIsolation and TestPQCMigrationCampaignConcurrentCloseSerializesSignedEvidence prove tenant isolation and serialized closure.",
+            "pqc_campaigns.test.tsx proves the core operator workflow; posture.test.tsx proves the licence-aware execution plan/start/status/rollback workflow and honest Community degradation.",
+            "ee/pqcmigration tests prove the licensed engine plans from CBOM findings, queues execution through the outbox, reports progress, and rolls back.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/pqc_migration_campaign_served_test.go",
+            "web/src/__tests__/pqc_campaigns.test.tsx",
+            "web/src/__tests__/posture.test.tsx",
             "ee/pqcmigration",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
@@ -7326,57 +7389,74 @@
         },
         "docs": {
           "evidence": [
-            "documented in docs/features/lifecycle-and-pqc.md"
+            "docs/features/lifecycle-and-pqc.md separates core campaign tracking/evidence from licensed automated fleet execution.",
+            "docs/cli.md lists all eight core campaign verbs and the separate licensed migration client workflow.",
+            "docs/web-console.md and docs/limitations.md document the Posture edition boundary and honest Community behavior."
           ],
           "refs": [
-            "docs/features/lifecycle-and-pqc.md"
+            "docs/features/lifecycle-and-pqc.md",
+            "docs/cli.md",
+            "docs/web-console.md",
+            "docs/limitations.md"
           ]
         },
         "rbac": {
           "evidence": [
-            "PQC migration API authz lives in the proprietary ee/ route bundle and uses certs:issue when attached.",
-            "The MPL core intentionally has no PQC migration route to guard."
+            "Core campaign list/get/evidence operations require risk:read; create/update/readiness/disposition/close require discovery:write and the mutating routes retain idempotency keys.",
+            "The feature authz manifest and internal/api/feature_authz_test.go bind every claimed core campaign operation to that registered route permission.",
+            "Licensed plan/progress require certs:read; licensed start/rollback require certs:issue."
           ],
           "refs": [
             "internal/api/api.go",
-            "internal/authz/authz.go",
-            "internal/api/feature_authz_test.go"
+            "internal/api/feature_authz_test.go",
+            "internal/featureparity/authz_manifest.go",
+            "ee/pqcmigration/api.go"
           ]
         },
         "audit": {
           "evidence": [
-            "Events: licensed_crypto.migration.started, licensed_crypto.migration.asset_completed, licensed_crypto.migration.rollback_completed, protocol.issued."
+            "Core campaign mutations append pqc.migration_campaign.started, pqc.migration_campaign.updated, pqc.migration_campaign.finding_dispositioned, and pqc.migration_campaign.closed; closure carries signer-produced JWS and public JWKS evidence.",
+            "Licensed execution appends licensed_crypto.migration.started, licensed_crypto.migration.asset_completed, licensed_crypto.migration.rollback_completed, and protocol.issued."
           ],
           "refs": [
             "internal/projections/projections.go",
+            "internal/orchestrator/pqc_migration_campaign.go",
+            "internal/api/pqc_migration_campaign.go",
             "ee/pqcmigration"
           ]
         },
         "telemetry": {
           "evidence": [
-            "PQC migration telemetry belongs to the proprietary ee/ route bundle when licensed."
+            "Core campaign HTTP operations are covered by normalized request metrics and tracing without tenant or finding labels.",
+            "Licensed plan/start/progress/rollback calls ObserveFeature for pqc_migration inside the EE route bundle."
           ],
           "refs": [
-            "ee/pqcmigration"
+            "internal/observ/middleware.go",
+            "ee/pqcmigration/api.go",
+            "docs/observability.md"
           ]
         },
         "a11y": {
           "evidence": [
-            "feature-specific a11y receipt: PQC migration orchestration is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx, which renders the registered route surface, runs axe, and verifies keyboard focus reaches the workflow."
+            "feature-specific a11y receipt: Posture exposes semantic, keyboard-reachable core campaign forms and the separate licence-aware migration workflow; the registered route is rendered under axe by feature_a11y_receipts.test.tsx."
           ],
           "refs": [
             "web/src/__tests__/feature_a11y_receipts.test.tsx",
-            "web/src/lib/navigation.ts",
-            "web/src/App.tsx"
+            "web/src/pages/Posture.tsx",
+            "web/src/pages/posture/PQCCampaigns.tsx",
+            "web/src/components/PQCMigrationWorkflow.tsx",
+            "web/src/__tests__/pqc_campaigns.test.tsx",
+            "web/src/__tests__/posture.test.tsx"
           ]
         },
         "i18n": {
           "evidence": [
-            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+            "Core campaign and licensed migration labels, edition-unavailable copy, loading/error states, and action text live in the typed message catalog with Spanish and German catalogs and npm run i18n:check coverage."
           ],
           "refs": [
-            "web/scripts/extract-i18n-messages.mjs",
-            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/i18n/messages.ts",
+            "web/src/i18n/catalog.es-ES.ts",
+            "web/src/i18n/catalog.de-DE.ts",
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
