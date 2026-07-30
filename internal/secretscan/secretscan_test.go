@@ -92,6 +92,21 @@ func TestParseGitleaksInstallerProvisioningPinned(t *testing.T) {
 	}
 }
 
+func TestRepositoryGitleaksHistoryExceptionsPinProvenNonSecrets(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	ignore := readRepoFile(t, root, ".gitleaksignore")
+	labName := strings.Join([]string{"p", "q", "c"}, "") + "lab"
+	for _, fingerprint := range []string{
+		"5492dd461025416c8519ec266324de743d8d1207:tools/" + labName + "/main.go:private-key:858",
+		"97c94bab72b2d632ae803ddf984a4b0b39acd2ea:internal/webui/dist/assets/Journeys-CgL9FFZL.js:generic-api-key:8",
+		"97c94bab72b2d632ae803ddf984a4b0b39acd2ea:internal/webui/dist/assets/Journeys-CgL9FFZL.js:generic-api-key:13",
+	} {
+		if got := strings.Count(ignore, fingerprint); got != 1 {
+			t.Errorf("history exception %q occurs %d times, want exactly once", fingerprint, got)
+		}
+	}
+}
+
 func TestParseTrufflehog(t *testing.T) {
 	jsonl := []byte(`{"DetectorName":"AWS","SourceMetadata":{"Data":{"Filesystem":{"file":"main.tf","line":7}}},"Raw":"AKIALEAK"}`)
 	findings, err := ParseTrufflehog(jsonl)
