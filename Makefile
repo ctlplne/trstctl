@@ -135,7 +135,7 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> go test (race + merged first-party coverage)"
 	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
-	$(GO) test -race -count=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
+	$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
 	@echo ">> go test live perf packages (serial)"
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
 	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
@@ -401,7 +401,7 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 	fi
 	@echo ">> trstctl_core tests over non-ee packages"
 	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
-	$(GO) test -tags trstctl_core $$pkgs
+	$(GO) test -tags trstctl_core -p=1 $$pkgs
 	@echo ">> trstctl_core live perf packages (serial)"
 	@$(GO) test -tags trstctl_core -p=1 $(LIVE_PERF_PACKAGES)
 

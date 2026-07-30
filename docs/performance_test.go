@@ -218,7 +218,9 @@ func TestMakeTestSerializesRealPerformancePackages(t *testing.T) {
 	for _, want := range []string{
 		"LIVE_PERF_PACKAGES := ./internal/perf ",
 		"LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/",
+		"$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs",
 		"$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
+		"$(GO) test -tags trstctl_core -p=1 $$pkgs",
 		"$(GO) test -tags trstctl_core -p=1 $(LIVE_PERF_PACKAGES)",
 		"tail -n +2 $(COVERPROFILE_LIVE_PERF)",
 	} {
