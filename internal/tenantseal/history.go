@@ -85,6 +85,163 @@ func (r *HistoryRewrapper) Transform(_ string, _ int, data []byte) ([]byte, bool
 	return next, true, nil
 }
 
+// ValidatePair proves that one staged event rewrite changed only CSL wrapper
+// metadata. The payload nonce+ciphertext must remain byte-identical, every new
+// container must authenticate under the exact destination domain, and all JSON
+// keys, array positions, scalar values, and non-container base64 bytes must be
+// unchanged. No record plaintext or row-specific AAD is opened.
+func (r *HistoryRewrapper) ValidatePair(
+	_ string,
+	_ int,
+	before, after []byte,
+) error {
+	if bytes.Equal(before, after) {
+		return errors.New("tenantseal: rewritten history pair is byte-identical")
+	}
+	if bytes.HasPrefix(before, []byte("CSL1")) {
+		return r.validateContainerPair(before, after)
+	}
+	if !json.Valid(before) || !json.Valid(after) {
+		return errors.New("tenantseal: rewritten non-JSON history changed")
+	}
+	beforeValue, err := decodeHistoryJSON(before)
+	if err != nil {
+		return err
+	}
+	afterValue, err := decodeHistoryJSON(after)
+	if err != nil {
+		return err
+	}
+	changed, err := r.validateValuePair(beforeValue, afterValue, 0)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return errors.New("tenantseal: rewritten history pair contains no tenant-domain rewrap")
+	}
+	return nil
+}
+
+func (r *HistoryRewrapper) validateValuePair(before, after any, depth int) (bool, error) {
+	if depth > maxNestedHistoryDepth {
+		return false, errors.New("tenantseal: nested event payload exceeds rewrite depth")
+	}
+	switch beforeTyped := before.(type) {
+	case map[string]any:
+		afterTyped, ok := after.(map[string]any)
+		if !ok || len(beforeTyped) != len(afterTyped) {
+			return false, errors.New("tenantseal: history rewrite changed JSON object shape")
+		}
+		changed := false
+		for key, beforeChild := range beforeTyped {
+			afterChild, exists := afterTyped[key]
+			if !exists {
+				return false, errors.New("tenantseal: history rewrite changed JSON object keys")
+			}
+			childChanged, err := r.validateValuePair(beforeChild, afterChild, depth+1)
+			if err != nil {
+				return false, err
+			}
+			changed = changed || childChanged
+		}
+		return changed, nil
+	case []any:
+		afterTyped, ok := after.([]any)
+		if !ok || len(beforeTyped) != len(afterTyped) {
+			return false, errors.New("tenantseal: history rewrite changed JSON array shape")
+		}
+		changed := false
+		for index := range beforeTyped {
+			childChanged, err := r.validateValuePair(beforeTyped[index], afterTyped[index], depth+1)
+			if err != nil {
+				return false, err
+			}
+			changed = changed || childChanged
+		}
+		return changed, nil
+	case string:
+		afterTyped, ok := after.(string)
+		if !ok {
+			return false, errors.New("tenantseal: history rewrite changed JSON scalar type")
+		}
+		beforeDecoded, beforeErr := base64.StdEncoding.DecodeString(beforeTyped)
+		afterDecoded, afterErr := base64.StdEncoding.DecodeString(afterTyped)
+		if beforeErr == nil && bytes.HasPrefix(beforeDecoded, []byte("CSL1")) {
+			if afterErr != nil {
+				return false, errors.New("tenantseal: history rewrite corrupted base64 container")
+			}
+			return true, r.validateContainerPair(beforeDecoded, afterDecoded)
+		}
+		if beforeErr == nil && afterErr == nil && json.Valid(beforeDecoded) && json.Valid(afterDecoded) {
+			beforeNested, err := decodeHistoryJSON(beforeDecoded)
+			if err != nil {
+				return false, err
+			}
+			afterNested, err := decodeHistoryJSON(afterDecoded)
+			if err != nil {
+				return false, err
+			}
+			return r.validateValuePair(beforeNested, afterNested, depth+1)
+		}
+		if beforeTyped != afterTyped {
+			return false, errors.New("tenantseal: history rewrite changed a non-container string")
+		}
+		return false, nil
+	default:
+		if !scalarValuesEqual(before, after) {
+			return false, errors.New("tenantseal: history rewrite changed a non-container scalar")
+		}
+		return false, nil
+	}
+}
+
+func (r *HistoryRewrapper) validateContainerPair(before, after []byte) error {
+	beforeDomain, err := seal.Domain(before)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrCorruptContainer, err)
+	}
+	if beforeDomain != nil {
+		return errors.New("tenantseal: rewrite pair source is not a legacy deployment container")
+	}
+	afterDomain, err := seal.Domain(after)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrCorruptContainer, err)
+	}
+	if !bytes.Equal(afterDomain, r.domain) {
+		return ErrUnexpectedDomain
+	}
+	if err := seal.ValidateDomain(r.tenant, after, r.domain); err != nil {
+		return err
+	}
+	beforePayload, err := seal.PayloadCiphertext(before)
+	if err != nil {
+		return err
+	}
+	afterPayload, err := seal.PayloadCiphertext(after)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(beforePayload, afterPayload) {
+		return errors.New("tenantseal: history rewrap changed payload ciphertext")
+	}
+	return nil
+}
+
+func scalarValuesEqual(before, after any) bool {
+	switch beforeTyped := before.(type) {
+	case nil:
+		return after == nil
+	case bool:
+		afterTyped, ok := after.(bool)
+		return ok && beforeTyped == afterTyped
+	case json.Number:
+		afterTyped, ok := after.(json.Number)
+		return ok && beforeTyped.String() == afterTyped.String()
+	default:
+		return false
+	}
+}
+
 func (r *HistoryRewrapper) rewriteValue(value *any, depth int) (bool, error) {
 	if depth > maxNestedHistoryDepth {
 		return false, errors.New("tenantseal: nested event payload exceeds rewrite depth")

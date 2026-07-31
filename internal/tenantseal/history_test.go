@@ -76,6 +76,9 @@ func TestTenantKeyDomainHistoryRewrapsNestedContainersWithoutPlaintext(t *testin
 	if !bytes.Equal(payloadAfter, payloadBefore) {
 		t.Fatal("history rewrap changed the encrypted payload")
 	}
+	if err := rewriter.ValidatePair("identity.deployed", 3, eventData, rewritten); err != nil {
+		t.Fatalf("ValidatePair: %v", err)
+	}
 
 	again, changed, err := rewriter.Transform("identity.deployed", 3, rewritten)
 	if err != nil {
@@ -86,6 +89,44 @@ func TestTenantKeyDomainHistoryRewrapsNestedContainersWithoutPlaintext(t *testin
 	}
 	if !bytes.Equal(again, rewritten) {
 		t.Fatal("resumed transform changed canonical event bytes")
+	}
+}
+
+func TestTenantKeyDomainHistoryPairValidationRejectsSurroundingOrPayloadChanges(t *testing.T) {
+	deployment := testKEK(t, 0x18)
+	tenant := testKEK(t, 0x28)
+	domain := []byte("tenant:11111111-1111-1111-1111-111111111111:generation:1")
+	legacy, err := seal.Seal(deployment, []byte("payload"), []byte("aad"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewriter, err := NewHistoryRewrapper(deployment, tenant, domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := mustJSON(t, map[string]any{"sealed": legacy, "public": "same", "count": 7})
+	after, changed, err := rewriter.Transform("secret.version.written", 1, before)
+	if err != nil || !changed {
+		t.Fatalf("Transform changed=%v err=%v", changed, err)
+	}
+
+	var altered map[string]any
+	if err := json.Unmarshal(after, &altered); err != nil {
+		t.Fatal(err)
+	}
+	altered["public"] = "changed"
+	if err := rewriter.ValidatePair("secret.version.written", 1, before, mustJSON(t, altered)); err == nil {
+		t.Fatal("ValidatePair accepted changed non-container JSON")
+	}
+
+	resealed, err := seal.SealDomain(tenant, []byte("different payload"), []byte("aad"), domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	altered["public"] = "same"
+	altered["sealed"] = resealed
+	if err := rewriter.ValidatePair("secret.version.written", 1, before, mustJSON(t, altered)); err == nil {
+		t.Fatal("ValidatePair accepted changed payload ciphertext")
 	}
 }
 

@@ -734,6 +734,26 @@ func TestLocalWrapperRegistryRequiresExactKindAndID(t *testing.T) {
 		t.Fatalf("OpenDomainKEK exact ref: %v", err)
 	}
 	opened.Destroy()
+
+	createdByRegistry, registryWrapped, err := registry.CreateDomainKEK(
+		context.Background(),
+		tenantseal.WrapperRef{Kind: tenantseal.WrapperKindLocalFile, ID: "only-this-id"},
+		binding,
+	)
+	if err != nil {
+		t.Fatalf("CreateDomainKEK exact ref: %v", err)
+	}
+	createdByRegistry.Destroy()
+	reopened, err := registry.OpenDomainKEK(
+		context.Background(),
+		tenantseal.WrapperRef{Kind: tenantseal.WrapperKindLocalFile, ID: "only-this-id"},
+		registryWrapped,
+		binding,
+	)
+	if err != nil {
+		t.Fatalf("OpenDomainKEK registry-created key: %v", err)
+	}
+	reopened.Destroy()
 }
 
 func readyDomain(t *testing.T, tenantID, domainID, wrapperPath string) store.TenantKeyDomain {

@@ -51,6 +51,17 @@ type DomainKEKRegistry interface {
 	) (TransientDomainKEK, error)
 }
 
+// DomainKEKCreator creates a fresh tenant-domain KEK through one exact local
+// wrapper reference. The returned key is callback-scoped secret material owned
+// by the caller; wrapped contains only the authenticated persisted container.
+type DomainKEKCreator interface {
+	CreateDomainKEK(
+		ctx context.Context,
+		ref WrapperRef,
+		binding []byte,
+	) (TransientDomainKEK, []byte, error)
+}
+
 // LocalWrapper names one existing operator-provisioned local wrapper file. Path
 // is configuration metadata, never key material; tenant rows persist only ID.
 type LocalWrapper struct {
@@ -101,4 +112,29 @@ func (r *LocalWrapperRegistry) OpenDomainKEK(
 		return nil, fmt.Errorf("%w: wrapper kind/id has no exact match", ErrWrapperNotConfigured)
 	}
 	return tenantwrap.OpenDomainKEK(path, wrapped, binding)
+}
+
+// CreateDomainKEK creates a domain only through an exact configured
+// local_file kind/ID pair. It never creates the operator wrapper file and never
+// falls back to the deployment KEK.
+func (r *LocalWrapperRegistry) CreateDomainKEK(
+	ctx context.Context,
+	ref WrapperRef,
+	binding []byte,
+) (TransientDomainKEK, []byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if r == nil || ref.Kind != WrapperKindLocalFile {
+		return nil, nil, fmt.Errorf("%w: wrapper kind/id has no exact match", ErrWrapperNotConfigured)
+	}
+	path, ok := r.pathsByID[ref.ID]
+	if !ok {
+		return nil, nil, fmt.Errorf("%w: wrapper kind/id has no exact match", ErrWrapperNotConfigured)
+	}
+	key, wrapped, err := tenantwrap.CreateDomainKEK(path, binding)
+	if err != nil {
+		return nil, nil, err
+	}
+	return key, wrapped, nil
 }
