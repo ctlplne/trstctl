@@ -3,6 +3,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -75,6 +76,48 @@ func TestRestorePostgresStateRejectsBadManifestBeforeStoreUse(t *testing.T) {
 	}
 	if summary.Records != 0 || len(summary.Tables) != 0 {
 		t.Fatalf("summary = %+v, want zero summary before store use", summary)
+	}
+}
+
+func TestNormalizeLegacyPostgresStateRowsAddsRawIdempotencyCodec(t *testing.T) {
+	legacy := []json.RawMessage{
+		json.RawMessage(`{"tenant_id":"11111111-1111-1111-1111-111111111111","key":"legacy","status":"completed","result":"\\x736563726574"}`),
+		json.RawMessage(`{"tenant_id":"22222222-2222-2222-2222-222222222222","key":"already-sealed","status":"completed","result":"\\x43534c31","result_codec":"sealed-row-v1"}`),
+	}
+	normalized, err := normalizePostgresStateRows("idempotency_keys", legacy)
+	if err != nil {
+		t.Fatalf("normalize legacy idempotency rows: %v", err)
+	}
+	if len(normalized) != len(legacy) {
+		t.Fatalf("normalized rows=%d, want %d", len(normalized), len(legacy))
+	}
+	for index, wantCodec := range []string{"raw-v0", "sealed-row-v1"} {
+		var row map[string]json.RawMessage
+		if err := json.Unmarshal(normalized[index], &row); err != nil {
+			t.Fatalf("decode normalized row %d: %v", index, err)
+		}
+		var gotCodec string
+		if err := json.Unmarshal(row["result_codec"], &gotCodec); err != nil {
+			t.Fatalf("decode normalized codec %d: %v", index, err)
+		}
+		if gotCodec != wantCodec {
+			t.Fatalf("row %d result_codec=%q, want %q", index, gotCodec, wantCodec)
+		}
+	}
+
+	other := []json.RawMessage{json.RawMessage(`{"tenant_id":"11111111-1111-1111-1111-111111111111","name":"untouched"}`)}
+	untouched, err := normalizePostgresStateRows("secret_store", other)
+	if err != nil {
+		t.Fatalf("normalize unrelated rows: %v", err)
+	}
+	if len(untouched) != 1 || !bytes.Equal(untouched[0], other[0]) {
+		t.Fatalf("unrelated backup row changed: got=%s want=%s", untouched[0], other[0])
+	}
+}
+
+func TestNormalizeLegacyPostgresStateRowsRejectsNullObject(t *testing.T) {
+	if _, err := normalizePostgresStateRows("idempotency_keys", []json.RawMessage{json.RawMessage(`null`)}); err == nil {
+		t.Fatal("normalize accepted a null idempotency row; want a typed error instead of a nil-map panic")
 	}
 }
 

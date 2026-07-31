@@ -37,6 +37,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	83: true,
 	89: true,
 	90: true,
+	92: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -291,6 +292,7 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0083_outbox_effect_lane_default", testMigration0083OutboxEffectLaneDefault)
 	t.Run("0089_gcp_workload_identity_default", testMigration0089GCPWorkloadIdentityDefault)
 	t.Run("0090_azure_workload_identity_defaults", testMigration0090AzureWorkloadIdentityDefaults)
+	t.Run("0092_idempotency_result_codec_classification", testMigration0092IdempotencyResultCodecClassification)
 }
 
 func testMigration0072ConnectorTargetRevisionBackfill(t *testing.T) {
@@ -977,6 +979,107 @@ func testMigration0090AzureWorkloadIdentityDefaults(t *testing.T) {
 					rows, want, empty, nonnull)
 			}
 		})
+}
+
+func testMigration0092IdempotencyResultCodecClassification(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 92)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	type historicalRow struct {
+		tenantID        string
+		key             string
+		binding         string
+		result          []byte
+		operationTenant string
+		operationKey    string
+		operationBind   string
+		wantCodec       string
+	}
+	v1 := func(payload string) []byte {
+		return append([]byte{'C', 'S', 'L', '1', 1}, []byte(payload)...)
+	}
+	rows := []historicalRow{
+		{tenantA, "exact-a", "sha256:exact-a", v1("a"), tenantA, "exact-a", "sha256:exact-a", "sealed-dynamic-lease-v1"},
+		{tenantB, "exact-b", "sha256:exact-b", v1("b"), tenantB, "exact-b", "sha256:exact-b", "sealed-dynamic-lease-v1"},
+		{tenantA, "wrong-tenant", "sha256:wrong-tenant", v1("tenant"), tenantB, "wrong-tenant", "sha256:wrong-tenant", "raw-v0"},
+		{tenantA, "wrong-key", "sha256:wrong-key", v1("key"), tenantA, "different-operation-key", "sha256:wrong-key", "raw-v0"},
+		{tenantB, "wrong-binding", "sha256:idempotency-binding", v1("binding"), tenantB, "wrong-binding", "sha256:operation-binding", "raw-v0"},
+		{tenantB, "wrong-header", "sha256:wrong-header", append([]byte{'C', 'S', 'L', '1', 2}, []byte("future")...), tenantB, "wrong-header", "sha256:wrong-header", "raw-v0"},
+	}
+	for index, row := range rows {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO idempotency_keys
+			       (tenant_id, key, status, result, request_binding, created_at, completed_at)
+			VALUES ($1, $2, 'completed', $3, $4,
+			        '2026-07-30T10:00:00Z'::timestamptz,
+			        '2026-07-30T10:00:01Z'::timestamptz)`,
+			row.tenantID, row.key, row.result, row.binding); err != nil {
+			t.Fatalf("seed pre-0092 idempotency row %d: %v", index, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO dynamic_secret_operations
+			       (tenant_id, operation_id, idempotency_key, request_binding, action,
+			        lease_id, response, status, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, 'issue', $5, '{}'::jsonb, 'completed',
+			        '2026-07-30T10:00:00Z'::timestamptz,
+			        '2026-07-30T10:00:01Z'::timestamptz)`,
+			row.operationTenant, fmt.Sprintf("issue:codec-%d", index), row.operationKey,
+			row.operationBind, fmt.Sprintf("lease-codec-%d", index)); err != nil {
+			t.Fatalf("seed pre-0092 dynamic operation %d: %v", index, err)
+		}
+	}
+
+	stable := `
+		SELECT tenant_id::text, key, status, encode(result, 'hex'), request_binding,
+		       created_at::text, completed_at::text
+		  FROM idempotency_keys
+		 ORDER BY tenant_id, key`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0092 changed historical idempotency bytes: count %d/%d checksum %s/%s",
+			beforeCount, afterCount, beforeChecksum, afterChecksum)
+	}
+
+	for _, row := range rows {
+		var codec string
+		if err := pool.QueryRow(ctx, `
+			SELECT result_codec
+			  FROM idempotency_keys
+			 WHERE tenant_id = $1 AND key = $2`,
+			row.tenantID, row.key).Scan(&codec); err != nil {
+			t.Fatalf("read classified codec for %s/%s: %v", row.tenantID, row.key, err)
+		}
+		if codec != row.wantCodec {
+			t.Errorf("%s/%s result_codec=%q, want %q", row.tenantID, row.key, codec, row.wantCodec)
+		}
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO idempotency_keys (tenant_id, key, status, result, request_binding)
+		VALUES ($1, 'post-0092-default', 'completed', 'new-result'::bytea, '')`,
+		tenantA); err != nil {
+		t.Fatalf("insert post-0092 default row: %v", err)
+	}
+	var codec string
+	if err := pool.QueryRow(ctx, `
+		SELECT result_codec
+		  FROM idempotency_keys
+		 WHERE tenant_id = $1 AND key = 'post-0092-default'`,
+		tenantA).Scan(&codec); err != nil {
+		t.Fatalf("read post-0092 default: %v", err)
+	}
+	if codec != "raw-v0" {
+		t.Fatalf("post-0092 default codec=%q, want raw-v0", codec)
+	}
 }
 
 // TestMigration0071HistoricalLifecycleCompositePKContent is the SCHEMA-007

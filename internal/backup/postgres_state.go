@@ -4,6 +4,7 @@ package backup
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -228,6 +229,10 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 		if len(rows) == 0 {
 			continue
 		}
+		rows, err = normalizePostgresStateRows(table, rows)
+		if err != nil {
+			return summary, err
+		}
 		payload, err := json.Marshal(rows)
 		if err != nil {
 			return summary, fmt.Errorf("backup: encode rows for %s: %w", table, err)
@@ -254,6 +259,41 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 		return summary, fmt.Errorf("backup: commit postgres state restore: %w", err)
 	}
 	return summary, nil
+}
+
+// normalizePostgresStateRows upgrades rows from an older artifact to the
+// current table shape after the artifact digest has been verified but before
+// jsonb_populate_recordset types it. PostgreSQL fills a missing JSON field with
+// NULL, not the column default, so a pre-result_codec idempotency row would
+// otherwise violate the new NOT NULL wall during restore.
+func normalizePostgresStateRows(table string, rows []json.RawMessage) ([]json.RawMessage, error) {
+	if table != "idempotency_keys" {
+		return rows, nil
+	}
+	normalized := make([]json.RawMessage, 0, len(rows))
+	for index, raw := range rows {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return nil, fmt.Errorf("backup: normalize idempotency_keys row %d: %w", index+1, err)
+		}
+		if fields == nil {
+			return nil, fmt.Errorf("backup: normalize idempotency_keys row %d: row must be a JSON object", index+1)
+		}
+		codec, exists := fields["result_codec"]
+		if !exists || bytes.Equal(bytes.TrimSpace(codec), []byte("null")) {
+			encoded, err := json.Marshal("raw-v0")
+			if err != nil {
+				return nil, fmt.Errorf("backup: encode legacy idempotency result codec: %w", err)
+			}
+			fields["result_codec"] = encoded
+		}
+		encoded, err := json.Marshal(fields)
+		if err != nil {
+			return nil, fmt.Errorf("backup: encode normalized idempotency_keys row %d: %w", index+1, err)
+		}
+		normalized = append(normalized, encoded)
+	}
+	return normalized, nil
 }
 
 func readAndVerifyPostgresState(r io.Reader) (postgresStateHeader, map[string][]json.RawMessage, postgresStateTrailer, error) {
