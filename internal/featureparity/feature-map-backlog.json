@@ -13053,14 +13053,16 @@
         "internal/auth",
         "internal/orchestrator/managed_offering.go",
         "internal/api/managed_offering.go",
-        "internal/api/enterprise_support.go"
+        "internal/api/enterprise_support.go",
+        "internal/tenantseal/lifecycle.go",
+        "internal/api/tenant_key_domain.go"
       ],
       "source_frontend": [
         "web/src/components/AppShell.tsx",
         "web/src/pages/Platform.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence, COMPETE-006, and COMPETE-016. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. internal/server/enterprise_support_served_test.go proves CAP-MODEL-04 by serving the enterprise support posture, support tiers, P1/P2/P3 SLA targets, professional-services packages, license mode, and contract boundary. UI evidence: Platform at /platform calls the served managed-offering status/provision endpoints and the enterprise support endpoint.",
+      "notes": "Closed by route-level feature-map evidence, COMPETE-006, and COMPETE-016. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. internal/server/enterprise_support_served_test.go proves CAP-MODEL-04 by serving the enterprise support posture, support tiers, P1/P2/P3 SLA targets, professional-services packages, license mode, and contract boundary. I-aa8623a3 adds tenant-scoped key-domain status, local-wrapper migration, and unseal operations to the default binary; the seal transition remains intentionally absent until its result can be persisted before the tenant becomes cryptographically unavailable. UI evidence: Platform at /platform calls the served managed-offering status/provision endpoints and the enterprise support endpoint.",
       "api_surface": [
         "listOwners",
         "listCertificates",
@@ -13068,7 +13070,10 @@
         "searchAudit",
         "getEnterpriseSupportStatus",
         "getManagedOfferingStatus",
-        "provisionManagedTenant"
+        "provisionManagedTenant",
+        "getTenantKeyDomain",
+        "migrateTenantKeyDomain",
+        "unsealTenantKeyDomain"
       ],
       "api_na": "",
       "cli_surface": [
@@ -13126,7 +13131,10 @@
             "OpenAPI operationId: searchAudit",
             "OpenAPI operationId: getEnterpriseSupportStatus",
             "OpenAPI operationId: getManagedOfferingStatus",
-            "OpenAPI operationId: provisionManagedTenant"
+            "OpenAPI operationId: provisionManagedTenant",
+            "OpenAPI operationId: getTenantKeyDomain",
+            "OpenAPI operationId: migrateTenantKeyDomain",
+            "OpenAPI operationId: unsealTenantKeyDomain"
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
@@ -13159,7 +13167,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit, getEnterpriseSupportStatus, getManagedOfferingStatus, provisionManagedTenant",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit, getEnterpriseSupportStatus, getManagedOfferingStatus, provisionManagedTenant, getTenantKeyDomain, migrateTenantKeyDomain, unsealTenantKeyDomain",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [

@@ -2104,6 +2104,23 @@ func componentSchemas() map[string]*Schema {
 		"sealed_results": {Type: "integer"}, "pending_results": {Type: "integer"},
 		"indeterminate_results": {Type: "integer"}, "failure": str(), "recovery": str(),
 	}, "state", "fleet_ready", "sealed_only_floor", "raw_v0_remaining", "legacy_dynamic_remaining", "sealed_results", "pending_results", "indeterminate_results", "recovery")
+	tenantKeyDomainMigrateRequest := object(map[string]*Schema{
+		"wrapper_kind": {Type: "string", Enum: []string{"local_file"}},
+		"wrapper_id":   str(),
+	}, "wrapper_id")
+	tenantKeyDomainStatus := object(map[string]*Schema{
+		"served": {Type: "boolean"}, "protection_mode": str(), "state": str(),
+		"domain_id": uuid(), "generation": {Type: "integer"},
+		"wrapper_kind": str(), "wrapper_id": str(), "operation_id": uuid(),
+		"operation_kind": str(), "operation_status": str(), "migration_stage": str(),
+		"progress_completed": {Type: "integer"}, "progress_total": {Type: "integer"},
+		"retryable": {Type: "boolean"}, "failure_code": str(), "failure": str(),
+		"legacy_history_exposure": str(), "last_transition_type": str(),
+		"last_transition_actor": str(), "last_transition_at": timestamp(),
+		"last_transition_evidence_refs": {Type: "array", Items: str()},
+		"local_wrapper_zero_egress":     {Type: "boolean"}, "remote_wrapper_state": str(),
+		"recovery": str(),
+	}, "served", "protection_mode", "state", "progress_completed", "progress_total", "retryable", "legacy_history_exposure", "last_transition_evidence_refs", "local_wrapper_zero_egress", "remote_wrapper_state", "recovery")
 	systemReadout := object(map[string]*Schema{
 		"version": str(), "commit": str(), "build_date": str(), "go_version": str(),
 		"started_at": timestamp(), "uptime_seconds": {Type: "integer"},
@@ -3733,6 +3750,8 @@ func componentSchemas() map[string]*Schema {
 		"SSHFleetInventory":                        sshFleetInventory,
 		"SystemDependency":                         systemDependency,
 		"IdempotencyResultProtectionReadout":       idempotencyResultProtection,
+		"TenantKeyDomainMigrateRequest":            tenantKeyDomainMigrateRequest,
+		"TenantKeyDomainStatus":                    tenantKeyDomainStatus,
 		"SystemReadout":                            systemReadout,
 		"BulkheadPool":                             bulkheadPool,
 		"BulkheadStats":                            bulkheadStats,

@@ -6205,6 +6205,46 @@ SystemReadout = TypedDict(
     total=False,
 )
 
+TenantKeyDomainMigrateRequest = TypedDict(
+    'TenantKeyDomainMigrateRequest',
+    {
+        'wrapper_id': str,
+        'wrapper_kind': str,
+    },
+    total=False,
+)
+
+TenantKeyDomainStatus = TypedDict(
+    'TenantKeyDomainStatus',
+    {
+        'domain_id': str,
+        'failure': str,
+        'failure_code': str,
+        'generation': int,
+        'last_transition_actor': str,
+        'last_transition_at': str,
+        'last_transition_evidence_refs': list[str],
+        'last_transition_type': str,
+        'legacy_history_exposure': str,
+        'local_wrapper_zero_egress': bool,
+        'migration_stage': str,
+        'operation_id': str,
+        'operation_kind': str,
+        'operation_status': str,
+        'progress_completed': int,
+        'progress_total': int,
+        'protection_mode': str,
+        'recovery': str,
+        'remote_wrapper_state': str,
+        'retryable': bool,
+        'served': bool,
+        'state': str,
+        'wrapper_id': str,
+        'wrapper_kind': str,
+    },
+    total=False,
+)
+
 TenantWriteFence = TypedDict(
     'TenantWriteFence',
     {

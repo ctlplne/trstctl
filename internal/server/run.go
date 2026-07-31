@@ -426,10 +426,21 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	}
 	var resultProtector *tenantseal.ResultProtector
 	var resultMigrator *tenantseal.ResultMigrator
+	var tenantKeyDomains *tenantseal.Lifecycle
 	if st != nil {
-		resultProtector, resultMigrator, err = idempotencyResultProtectionFromConfig(cfg.Secrets, st, sec.kek)
+		var registry *tenantseal.LocalWrapperRegistry
+		resultProtector, resultMigrator, registry, err = idempotencyResultProtectionFromConfig(cfg.Secrets, st, sec.kek)
 		if err != nil {
 			return Deps{}, fmt.Errorf("tenant result protection: %w", err)
+		}
+		if log != nil {
+			tenantKeyDomains, err = tenantseal.NewLifecycle(
+				st, log, sec.kek, registry,
+				historyRewriteProofOptions(st, auditKey)...,
+			)
+			if err != nil {
+				return Deps{}, fmt.Errorf("tenant key-domain lifecycle: %w", err)
+			}
 		}
 	}
 	breakglassCACertDER, breakglassPublicKeyDER, err := breakglassVerifierMaterialFromConfig(cfg.Breakglass)
@@ -539,6 +550,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		IdempotencyResultProtector:  resultProtector,
 		IdempotencyResultMigrator:   resultMigrator,
 		IdempotencyResultFleetReady: cfg.Secrets.IdempotencyResultFleetReady,
+		TenantKeyDomains:            tenantKeyDomains,
 		SecretsAuthSecret:           sec.authSecret,
 		MachineAuthMethods:          machineAuthMethods,
 		SecretScanGitleaksBin:       cfg.Secrets.GitleaksBin,
@@ -554,7 +566,7 @@ func idempotencyResultProtectionFromConfig(
 	cfg config.Secrets,
 	st *store.Store,
 	deployment sealKeyWrapper,
-) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, error) {
+) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, *tenantseal.LocalWrapperRegistry, error) {
 	wrappers := make([]tenantseal.LocalWrapper, 0, len(cfg.TenantSealLocalWrappers))
 	for _, wrapper := range cfg.TenantSealLocalWrappers {
 		wrappers = append(wrappers, tenantseal.LocalWrapper{
@@ -563,23 +575,23 @@ func idempotencyResultProtectionFromConfig(
 	}
 	registry, err := tenantseal.NewLocalWrapperRegistry(wrappers)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	access, err := tenantseal.NewAccess(st, deployment, registry)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	protector, err := tenantseal.NewResultProtector(access)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	migrator, err := tenantseal.NewResultMigrator(
 		st, protector, 0, cfg.IdempotencyResultFleetReady,
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return protector, migrator, nil
+	return protector, migrator, registry, nil
 }
 
 func loadRunAuditSigningKey(

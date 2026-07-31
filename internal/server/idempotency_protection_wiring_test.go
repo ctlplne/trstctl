@@ -11,10 +11,12 @@ import (
 )
 
 // TestProductionIdempotencyConstructorsAttachTenantResultProtector is the
-// regression wall for S-3def6339. The two non-test constructors are split
-// across the walking-skeleton app and the served server; both must keep the
-// explicit option, while Run and bootstrap must build the real tenant-aware
-// protector rather than relying on a nil test seam.
+// regression wall for S-3def6339 and I-aa8623a3. The two non-test
+// constructors are split across the walking-skeleton app and the served
+// server; both must keep the explicit option, while Run and bootstrap must
+// build the real tenant-aware protector rather than relying on a nil test
+// seam. The served server must also attach the lifecycle built from that same
+// wrapper registry and the production history-proof chain.
 func TestProductionIdempotencyConstructorsAttachTenantResultProtector(t *testing.T) {
 	t.Parallel()
 	_, current, _, ok := runtime.Caller(0)
@@ -30,6 +32,14 @@ func TestProductionIdempotencyConstructorsAttachTenantResultProtector(t *testing
 		"IdempotencyResultMigrator:   resultMigrator")
 	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
 		"IdempotencyResultFleetReady: cfg.Secrets.IdempotencyResultFleetReady")
+	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
+		"tenantseal.NewLifecycle(")
+	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
+		"historyRewriteProofOptions(st, auditKey)...")
+	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
+		"TenantKeyDomains:            tenantKeyDomains")
+	assertSourceContains(t, filepath.Join(serverDir, "server.go"),
+		"api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains)")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),
 		"idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek)")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),

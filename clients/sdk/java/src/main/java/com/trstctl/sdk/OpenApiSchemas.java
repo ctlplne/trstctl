@@ -462,6 +462,8 @@ public final class OpenApiSchemas {
       "ShareValue",
       "SystemDependency",
       "SystemReadout",
+      "TenantKeyDomainMigrateRequest",
+      "TenantKeyDomainStatus",
       "TenantWriteFence",
       "ThirdPartySecretScanIngestRequest",
       "ThirdPartySecretScanPosture",

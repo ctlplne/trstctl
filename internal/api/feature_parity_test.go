@@ -86,12 +86,12 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 			out[opID] = true
 		}
 	}
-	// The five AWS workload-identity source operations and the ARI posture read
-	// raised this to 293.
+	// The tenant key-domain status, migration, and unseal operations raised this
+	// to 296.
 	// The count is a deliberate ratchet: every new operation must be mapped to
 	// a feature-catalog row in the same change.
-	if len(out) != 293 {
-		t.Fatalf("OpenAPI operationIds = %d, want 293", len(out))
+	if len(out) != 296 {
+		t.Fatalf("OpenAPI operationIds = %d, want 296", len(out))
 	}
 	return out
 }

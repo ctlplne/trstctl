@@ -111,6 +111,7 @@ type API struct {
 	bulkheadStats             func() []bulkhead.Stats
 	systemReadout             SystemReadoutProvider
 	idemProtection            IdempotencyResultProtectionProvider
+	tenantKeyDomains          TenantKeyDomainLifecycle
 	connectorRegistry         *connector.Registry
 	sshFleet                  SSHFleetProvider
 	codeSigningIdentities     CodeSigningIdentityProvider
@@ -189,6 +190,7 @@ type config struct {
 	bulkheadStats             func() []bulkhead.Stats
 	systemReadout             SystemReadoutProvider
 	idemProtection            IdempotencyResultProtectionProvider
+	tenantKeyDomains          TenantKeyDomainLifecycle
 	connectorRegistry         *connector.Registry
 	sshFleet                  SSHFleetProvider
 	codeSigningIdentities     CodeSigningIdentityProvider
@@ -443,6 +445,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		bulkheadStats:             cfg.bulkheadStats,
 		systemReadout:             cfg.systemReadout,
 		idemProtection:            cfg.idemProtection,
+		tenantKeyDomains:          cfg.tenantKeyDomains,
 		connectorRegistry:         cfg.connectorRegistry,
 		sshFleet:                  cfg.sshFleet,
 		codeSigningIdentities:     cfg.codeSigningIdentities,
@@ -873,6 +876,9 @@ func (a *API) routes() []route {
 		// B-5: what is running and is the spine reachable — the readout an
 		// operator wants on /admin/system, which only /healthz answered.
 		{method: "GET", path: "/api/v1/platform/system", opID: "getPlatformSystem", summary: "Running build, uptime, signer topology, and spine reachability", handler: a.getPlatformSystem, resSchema: "SystemReadout", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/platform/tenant-key-domain", opID: "getTenantKeyDomain", summary: "Get this tenant's cryptographic protection and lifecycle status", handler: a.getTenantKeyDomain, resSchema: "TenantKeyDomainStatus", successCode: "200", perm: authz.KeysRead},
+		{method: "POST", path: "/api/v1/platform/tenant-key-domain/migrate", opID: "migrateTenantKeyDomain", summary: "Migrate this tenant into an independently wrapped cryptographic domain", handler: a.migrateTenantKeyDomain, reqSchema: "TenantKeyDomainMigrateRequest", resSchema: "TenantKeyDomainStatus", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/platform/tenant-key-domain/unseal", opID: "unsealTenantKeyDomain", summary: "Unseal this tenant through its configured operator wrapper", handler: a.unsealTenantKeyDomain, resSchema: "TenantKeyDomainStatus", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "GET", path: "/api/v1/platform/distribution", opID: "getPlatformDistribution", summary: "Self-hostable run-anywhere distribution posture", handler: a.getPlatformDistribution, resSchema: "PlatformDistributionStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/support/enterprise", opID: "getEnterpriseSupportStatus", summary: "Enterprise support, SLA, and services posture", handler: a.getEnterpriseSupportStatus, resSchema: "EnterpriseSupportStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/managed-offering/status", opID: "getManagedOfferingStatus", summary: "Managed offering/provider-plane posture", handler: a.getManagedOfferingStatus, resSchema: "ManagedOfferingStatus", successCode: "200", perm: authz.AccessRead},

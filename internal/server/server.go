@@ -407,6 +407,10 @@ type Deps struct {
 	IdempotencyResultProtector  orchestrator.ResultProtector
 	IdempotencyResultMigrator   IdempotencyResultMigrator
 	IdempotencyResultFleetReady bool
+	// TenantKeyDomains is the CORE, tenant-scoped cryptographic custody
+	// lifecycle. Production Run wires it from the same wrapper registry and
+	// result-protection resolver used by every cached mutation response.
+	TenantKeyDomains api.TenantKeyDomainLifecycle
 	// SecretsAuthSecret is the HMAC key the served machine-login token method
 	// (authmethod.TokenMethod) verifies a workload token against (F58). It is []byte and
 	// never logged (AN-8). When empty, the login route reports the method is not
@@ -1076,6 +1080,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
 		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
 		api.WithACMEARIPosture(s.ACMEARIPosture),
+		api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains),
 	}
 }
 

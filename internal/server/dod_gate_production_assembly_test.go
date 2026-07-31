@@ -29,7 +29,7 @@ func TestDODGateProductionAssemblyCanary(t *testing.T) {
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: servedTestTenant, Name: "DoD tenant", EventSeq: 1}); err != nil {
 		t.Fatalf("seed DoD tenant: %v", err)
 	}
-	token := seedScopedToken(t, st, servedTestTenant, "access:read")
+	token := seedScopedToken(t, st, servedTestTenant, "access:read", "keys:read")
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
@@ -99,5 +99,22 @@ func TestDODGateProductionAssemblyCanary(t *testing.T) {
 	}
 	if readout.IdempotencyResults.State != "empty" || readout.IdempotencyResults.RawV0Remaining != 0 {
 		t.Fatalf("default-binary idempotency protection readout = %+v", readout.IdempotencyResults)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/platform/tenant-key-domain", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	recorder = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("assembled GET /api/v1/platform/tenant-key-domain = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	var tenantDomain api.TenantKeyDomainStatus
+	if err := json.NewDecoder(recorder.Body).Decode(&tenantDomain); err != nil {
+		t.Fatalf("decode tenant key-domain status: %v", err)
+	}
+	if !tenantDomain.Served || tenantDomain.State != "legacy" ||
+		tenantDomain.ProtectionMode != "legacy_deployment_kek" ||
+		!tenantDomain.LocalWrapperZeroEgress {
+		t.Fatalf("default-binary tenant key-domain status = %+v", tenantDomain)
 	}
 }

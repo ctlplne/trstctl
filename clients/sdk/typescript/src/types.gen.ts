@@ -2705,6 +2705,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenant-key-domain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get this tenant's cryptographic protection and lifecycle status */
+        get: operations["getTenantKeyDomain"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenant-key-domain/migrate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Migrate this tenant into an independently wrapped cryptographic domain */
+        post: operations["migrateTenantKeyDomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenant-key-domain/unseal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unseal this tenant through its configured operator wrapper */
+        post: operations["unsealTenantKeyDomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/policy/dry-run": {
         parameters: {
             query?: never;
@@ -8749,6 +8800,40 @@ export interface components {
             started_at: string;
             uptime_seconds: number;
             version: string;
+        };
+        TenantKeyDomainMigrateRequest: {
+            wrapper_id: string;
+            /** @enum {string} */
+            wrapper_kind?: "local_file";
+        };
+        TenantKeyDomainStatus: {
+            /** Format: uuid */
+            domain_id?: string;
+            failure?: string;
+            failure_code?: string;
+            generation?: number;
+            last_transition_actor?: string;
+            /** Format: date-time */
+            last_transition_at?: string;
+            last_transition_evidence_refs: string[];
+            last_transition_type?: string;
+            legacy_history_exposure: string;
+            local_wrapper_zero_egress: boolean;
+            migration_stage?: string;
+            /** Format: uuid */
+            operation_id?: string;
+            operation_kind?: string;
+            operation_status?: string;
+            progress_completed: number;
+            progress_total: number;
+            protection_mode: string;
+            recovery: string;
+            remote_wrapper_state: string;
+            retryable: boolean;
+            served: boolean;
+            state: string;
+            wrapper_id?: string;
+            wrapper_kind?: string;
         };
         TenantWriteFence: {
             conflict_outcome: string;
@@ -17118,6 +17203,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemReadout"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getTenantKeyDomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantKeyDomainStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    migrateTenantKeyDomain: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantKeyDomainMigrateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantKeyDomainStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    unsealTenantKeyDomain: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantKeyDomainStatus"];
                 };
             };
             /** @description client error */

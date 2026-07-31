@@ -4407,6 +4407,38 @@ export interface SystemReadout {
   version: string;
 }
 
+export interface TenantKeyDomainMigrateRequest {
+  wrapper_id: string;
+  wrapper_kind?: "local_file";
+}
+
+export interface TenantKeyDomainStatus {
+  domain_id?: string;
+  failure?: string;
+  failure_code?: string;
+  generation?: number;
+  last_transition_actor?: string;
+  last_transition_at?: string;
+  last_transition_evidence_refs: string[];
+  last_transition_type?: string;
+  legacy_history_exposure: string;
+  local_wrapper_zero_egress: boolean;
+  migration_stage?: string;
+  operation_id?: string;
+  operation_kind?: string;
+  operation_status?: string;
+  progress_completed: number;
+  progress_total: number;
+  protection_mode: string;
+  recovery: string;
+  remote_wrapper_state: string;
+  retryable: boolean;
+  served: boolean;
+  state: string;
+  wrapper_id?: string;
+  wrapper_kind?: string;
+}
+
 export interface TenantWriteFence {
   conflict_outcome: string;
   evidence: string;

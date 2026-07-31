@@ -80,6 +80,13 @@ func WithIdempotencyResultProtection(fn IdempotencyResultProtectionProvider) Opt
 	return func(c *config) { c.idemProtection = fn }
 }
 
+// WithTenantKeyDomainLifecycle wires the CORE tenant-scoped cryptographic
+// custody status and lifecycle. A nil service remains an honest unavailable
+// status; it never mounts an edition or licence gate.
+func WithTenantKeyDomainLifecycle(service TenantKeyDomainLifecycle) Option {
+	return func(c *config) { c.tenantKeyDomains = service }
+}
+
 // WithConnectorRegistry wires the native connector registry so the catalog can
 // report each connector's live sandbox grant and replay contract (B-6) instead
 // of a description that could drift from what the process enforces.

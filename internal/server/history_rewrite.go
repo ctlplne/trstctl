@@ -46,14 +46,28 @@ func historyRewriteOrchestratorOptions(
 	st *store.Store,
 	auditKey *jose.SigningKey,
 ) []orchestrator.OrchestratorOption {
-	if st == nil || auditKey == nil {
+	proof := historyRewriteProofOptions(st, auditKey)
+	if len(proof) == 0 {
 		return nil
 	}
 	return []orchestrator.OrchestratorOption{
-		orchestrator.WithTenantDataRewriteOptions(
-			events.WithTenantDataContinuity(historycontinuity.NewReceiptSigner(auditKey)),
-			events.WithTenantDataCutoverPreparation(st.PrepareTenantDataCutover),
-			events.WithTenantDataAuditContinuity(historycontinuity.AuditCheckpointProvider(st)),
-		),
+		orchestrator.WithTenantDataRewriteOptions(proof...),
+	}
+}
+
+// historyRewriteProofOptions is the one production proof chain shared by every
+// served tenant-data generation switch. Privacy erasure and tenant-domain
+// migration must not drift onto different backup, audit, or signing walls.
+func historyRewriteProofOptions(
+	st *store.Store,
+	auditKey *jose.SigningKey,
+) []events.TenantDataRewriteOption {
+	if st == nil || auditKey == nil {
+		return nil
+	}
+	return []events.TenantDataRewriteOption{
+		events.WithTenantDataContinuity(historycontinuity.NewReceiptSigner(auditKey)),
+		events.WithTenantDataCutoverPreparation(st.PrepareTenantDataCutover),
+		events.WithTenantDataAuditContinuity(historycontinuity.AuditCheckpointProvider(st)),
 	}
 }

@@ -17075,6 +17075,119 @@
         ],
         "type": "object"
       },
+      "TenantKeyDomainMigrateRequest": {
+        "properties": {
+          "wrapper_id": {
+            "type": "string"
+          },
+          "wrapper_kind": {
+            "enum": [
+              "local_file"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "wrapper_id"
+        ],
+        "type": "object"
+      },
+      "TenantKeyDomainStatus": {
+        "properties": {
+          "domain_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "failure_code": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "last_transition_actor": {
+            "type": "string"
+          },
+          "last_transition_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_transition_evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "last_transition_type": {
+            "type": "string"
+          },
+          "legacy_history_exposure": {
+            "type": "string"
+          },
+          "local_wrapper_zero_egress": {
+            "type": "boolean"
+          },
+          "migration_stage": {
+            "type": "string"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "operation_kind": {
+            "type": "string"
+          },
+          "operation_status": {
+            "type": "string"
+          },
+          "progress_completed": {
+            "type": "integer"
+          },
+          "progress_total": {
+            "type": "integer"
+          },
+          "protection_mode": {
+            "type": "string"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "remote_wrapper_state": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string"
+          },
+          "wrapper_id": {
+            "type": "string"
+          },
+          "wrapper_kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "served",
+          "protection_mode",
+          "state",
+          "progress_completed",
+          "progress_total",
+          "retryable",
+          "legacy_history_exposure",
+          "last_transition_evidence_refs",
+          "local_wrapper_zero_egress",
+          "remote_wrapper_state",
+          "recovery"
+        ],
+        "type": "object"
+      },
       "TenantWriteFence": {
         "properties": {
           "conflict_outcome": {
@@ -30058,6 +30171,179 @@
         ],
         "summary": "Running build, uptime, signer topology, and spine reachability",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/platform/tenant-key-domain": {
+      "get": {
+        "operationId": "getTenantKeyDomain",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantKeyDomainStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get this tenant's cryptographic protection and lifecycle status",
+        "x-trstctl-permission": "keys:read"
+      }
+    },
+    "/api/v1/platform/tenant-key-domain/migrate": {
+      "post": {
+        "operationId": "migrateTenantKeyDomain",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantKeyDomainMigrateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantKeyDomainStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Migrate this tenant into an independently wrapped cryptographic domain",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/platform/tenant-key-domain/unseal": {
+      "post": {
+        "operationId": "unsealTenantKeyDomain",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantKeyDomainStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Unseal this tenant through its configured operator wrapper",
+        "x-trstctl-permission": "keys:write"
       }
     },
     "/api/v1/policy/dry-run": {

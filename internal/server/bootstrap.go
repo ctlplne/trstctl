@@ -140,7 +140,7 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 		return nil, fmt.Errorf("bootstrap: provision credential KEK: %w", err)
 	}
 	defer kek.Destroy()
-	resultProtector, resultMigrator, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek)
+	resultProtector, resultMigrator, _, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: tenant result protection: %w", err)
 	}
