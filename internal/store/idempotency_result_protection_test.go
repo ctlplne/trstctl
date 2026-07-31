@@ -47,7 +47,7 @@ func TestIdempotencyResultMigrationIsRLSScopedResumableAndLeavesNoPlaintext(t *t
 	if err != nil {
 		t.Fatalf("NewResultProtector: %v", err)
 	}
-	migrator, err := tenantseal.NewResultMigrator(s, protector, 1)
+	migrator, err := tenantseal.NewResultMigrator(s, protector, 1, true)
 	if err != nil {
 		t.Fatalf("NewResultMigrator: %v", err)
 	}
@@ -164,5 +164,38 @@ func TestIdempotencyResultMigrationIsRLSScopedResumableAndLeavesNoPlaintext(t *t
 	}
 	if statusB.RemainingLegacy() != 0 || statusB.SealedRowV1 != 1 {
 		t.Fatalf("tenant B final status = %+v", statusB)
+	}
+
+	insertAfterFloor := func(key, codec string, result []byte, includeCodec bool) error {
+		return s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			if !includeCodec {
+				_, err := tx.Exec(ctx,
+					`INSERT INTO idempotency_keys
+					       (tenant_id, key, status, request_binding, result, completed_at)
+					 VALUES ($1, $2, 'completed', '', $3, now())`,
+					tenantA, key, result)
+				return err
+			}
+			_, err := tx.Exec(ctx,
+				`INSERT INTO idempotency_keys
+				       (tenant_id, key, status, request_binding, result_codec, result, completed_at)
+				 VALUES ($1, $2, 'completed', '', $3, $4, now())`,
+				tenantA, key, codec, result)
+			return err
+		})
+	}
+	if err := insertAfterFloor("blocked-explicit-raw", orchestrator.ResultCodecRawV0, []byte("raw"), true); err == nil {
+		t.Fatal("sealed-only floor accepted an explicit raw-v0 completed result")
+	}
+	if err := insertAfterFloor("blocked-default-raw", "", []byte("raw"), false); err == nil {
+		t.Fatal("sealed-only floor mislabeled raw bytes through the column default")
+	}
+	codec, protected, err := protector.Protect(ctx, tenantA, "allowed-sealed", "", []byte("protected"))
+	if err != nil {
+		t.Fatalf("protect row after floor: %v", err)
+	}
+	defer secret.Wipe(protected)
+	if err := insertAfterFloor("allowed-sealed", codec, protected, true); err != nil {
+		t.Fatalf("sealed-only floor rejected protected result: %v", err)
 	}
 }

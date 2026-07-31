@@ -829,6 +829,7 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_SECRETS_KEK_FILE` | `data/secrets/kek.bin` | Path to the 256-bit KEK that wraps every stored credential. It is **created `0600` on first boot** if absent, and is the root of trust for credentials at rest. |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID` | unset | Stable non-secret ID for one operator-provisioned local tenant-domain wrapper. Both this variable and the file variable below are required together. The database stores this ID, never the path or wrapper key. |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE` | unset | Existing local wrapper-key file for the ID above. trstctl does **not** create it or fall back to the deployment KEK when it is missing/wrong. Configure multiple wrappers with `secrets.tenant_seal_local_wrappers` in JSON/YAML. |
+| `TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY` | `false` | Operator assertion that **every** process writing this PostgreSQL database understands `sealed-row-v1` and durable indeterminate claims. After the legacy drain, startup installs a sealed-only PostgreSQL default/constraint. Never enable it while an older writer is running; the ratchet is deliberately incompatible and is not inferred from one node seeing zero rows. |
 | `TRSTCTL_SECRETS_ENABLE_API` | `false` | Enables the served `/api/v1/secrets/*` surface, including store, dynamic leases, sharing, PKI secret issuance, machine login, sync, and Gitleaks scans. It also enables the Vault/OpenBao-compatible common aliases under `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, and `/v1/pki/issue/*`. |
 | `TRSTCTL_SECRETS_AUTH_SECRET_FILE` | unset | Optional HMAC key file for machine-login token credentials. When unset, the login method fails closed while other secrets routes continue to work. |
 | `TRSTCTL_SECRETS_GITLEAKS_BIN` | auto-detect | Path to the pinned Gitleaks `v8.27.2` binary used by `POST /api/v1/secrets/scans`. Empty resolves `TRSTCTL_GITLEAKS_BIN`, `tools/bin/gitleaks`, then `PATH`. Run `tools/gitleaks/install.sh` during image build or host provisioning to install the supported checksum-verified release tarball. A missing binary makes scan requests fail closed with `503`. |
@@ -845,6 +846,11 @@ batches into the authenticated `sealed-row-v1` envelope. Each replacement is a
 compare-and-swap over tenant, key, binding, codec, and prior bytes. A crash
 therefore resumes safely, while a changed row or unavailable tenant wrapper
 fails readiness without logging or embedding the result bytes in the error.
+The runtime reader rejects both legacy codecs after this drain. When the
+fleet-ready assertion is set, startup also locks the table, proves every
+completed row is a CSL sealed container, changes the database default, and
+validates a permanent sealed-only constraint before readiness. This is a
+one-way compatibility decision: drain or stop all old writers first.
 
 ```json
 {

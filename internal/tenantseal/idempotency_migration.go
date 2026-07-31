@@ -20,6 +20,7 @@ type IdempotencyResultMigrationStore interface {
 	ListUnprotectedIdempotencyResults(context.Context, string, string, int) ([]store.UnprotectedIdempotencyResult, error)
 	ReplaceUnprotectedIdempotencyResult(context.Context, string, store.UnprotectedIdempotencyResult, []byte) (bool, error)
 	IdempotencyResultProtectionStatus(context.Context, string) (store.IdempotencyResultProtectionStatus, error)
+	EnforceSealedIdempotencyResultFloor(context.Context) error
 }
 
 // ResultMigrator drains rolling-upgrade result codecs into sealed-row-v1. It
@@ -28,6 +29,7 @@ type ResultMigrator struct {
 	store     IdempotencyResultMigrationStore
 	protector *ResultProtector
 	batchSize int
+	sealOnly  bool
 }
 
 // NewResultMigrator constructs a resumable tenant-by-tenant migrator.
@@ -35,6 +37,7 @@ func NewResultMigrator(
 	st IdempotencyResultMigrationStore,
 	protector *ResultProtector,
 	batchSize int,
+	sealOnly bool,
 ) (*ResultMigrator, error) {
 	if st == nil || protector == nil {
 		return nil, errors.New("tenantseal: result migration requires store and protector")
@@ -45,7 +48,9 @@ func NewResultMigrator(
 	if batchSize < 1 || batchSize > 1000 {
 		return nil, errors.New("tenantseal: result migration batch must be between 1 and 1000")
 	}
-	return &ResultMigrator{store: st, protector: protector, batchSize: batchSize}, nil
+	return &ResultMigrator{
+		store: st, protector: protector, batchSize: batchSize, sealOnly: sealOnly,
+	}, nil
 }
 
 // MigrateAll enumerates the system tenant registry, then enters RLS separately
@@ -63,6 +68,11 @@ func (m *ResultMigrator) MigrateAll(ctx context.Context) ([]store.IdempotencyRes
 			return nil, fmt.Errorf("tenantseal: migrate idempotency results for tenant %s: %w", tenant.TenantID, err)
 		}
 		statuses = append(statuses, status)
+	}
+	if m.sealOnly {
+		if err := m.store.EnforceSealedIdempotencyResultFloor(ctx); err != nil {
+			return nil, fmt.Errorf("tenantseal: enforce sealed-only idempotency result floor: %w", err)
+		}
 	}
 	return statuses, nil
 }

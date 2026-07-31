@@ -1452,6 +1452,12 @@ type Secrets struct {
 	// for simple deployments through TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID and
 	// TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE.
 	TenantSealLocalWrappers []TenantSealLocalWrapper `json:"tenant_seal_local_wrappers,omitempty"`
+	// IdempotencyResultFleetReady is the operator assertion that every writer
+	// sharing this PostgreSQL database understands sealed-row-v1 and durable
+	// indeterminate claims. Startup then installs the incompatible sealed-only
+	// database floor after draining legacy rows. It is never inferred from one
+	// process seeing zero legacy rows.
+	IdempotencyResultFleetReady bool `json:"idempotency_result_fleet_ready,omitempty"`
 	// EnableAPI turns on the served secrets/identity surface (GAP-006): the secret
 	// store (CRUD + rotation), one-time secret sharing, the dynamic PKI secret, and
 	// machine login under /api/v1/secrets/*. OFF by default (fail closed): an upgrade
@@ -1980,6 +1986,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
+	setBool(getenv, "TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY", &c.Secrets.IdempotencyResultFleetReady)
 	localWrapperID := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID")
 	localWrapperFile := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE")
 	if localWrapperID != "" || localWrapperFile != "" {

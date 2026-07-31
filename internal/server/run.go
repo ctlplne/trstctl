@@ -568,7 +568,9 @@ func idempotencyResultProtectionFromConfig(
 	if err != nil {
 		return nil, nil, err
 	}
-	migrator, err := tenantseal.NewResultMigrator(st, protector, 0)
+	migrator, err := tenantseal.NewResultMigrator(
+		st, protector, 0, cfg.IdempotencyResultFleetReady,
+	)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -66,6 +66,7 @@ func TestTenantSealLocalWrapperEnvOverride(t *testing.T) {
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 		"TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID":        "operator-a",
 		"TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE":      "/custody/operator-a.key",
+		"TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY":      "true",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -76,6 +77,9 @@ func TestTenantSealLocalWrapperEnvOverride(t *testing.T) {
 			ID: "operator-a", File: "/custody/operator-a.key",
 		}) {
 		t.Fatalf("tenant seal wrappers = %#v", cfg.Secrets.TenantSealLocalWrappers)
+	}
+	if !cfg.Secrets.IdempotencyResultFleetReady {
+		t.Fatal("idempotency result fleet-ready assertion was not loaded")
 	}
 }
 

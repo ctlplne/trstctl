@@ -9,19 +9,15 @@ import (
 	"fmt"
 )
 
-const (
-	resultCodecRawV0                = "raw-v0"
-	resultCodecSealedRowV1          = "sealed-row-v1"
-	resultCodecSealedDynamicLeaseV1 = "sealed-dynamic-lease-v1"
-)
+const resultCodecSealedRowV1 = "sealed-row-v1"
 
 // ResultProtector adapts tenant cryptographic Access to the orchestrator's
 // opaque idempotency-result seam. The row identity is authenticated as AAD, so
 // moving a ciphertext across tenant, key, or request-binding columns fails.
 //
-// raw-v0 and sealed-dynamic-lease-v1 remain read-only rolling-upgrade codecs.
-// They still pass through Access.WithTenant so a sealed or corrupt tenant never
-// receives legacy plaintext merely because its row has not migrated yet.
+// raw-v0 and sealed-dynamic-lease-v1 are handled only by the pre-readiness
+// migrator. This runtime reader rejects them: after readiness there is no
+// plaintext compatibility path to bypass a sealed or corrupt tenant.
 type ResultProtector struct {
 	access Access
 }
@@ -56,30 +52,24 @@ func (p *ResultProtector) Protect(
 	return resultCodecSealedRowV1, protected, nil
 }
 
-// Open authenticates sealed-row-v1 and permits the two historical codecs only
-// while the tenant's current access state allows cryptographic reads.
+// Open authenticates sealed-row-v1 and rejects every pre-readiness codec.
 func (p *ResultProtector) Open(
 	ctx context.Context,
 	tenantID, key, binding, codec string,
 	protected []byte,
 ) ([]byte, error) {
+	if codec != resultCodecSealedRowV1 {
+		return nil, fmt.Errorf("tenantseal: idempotency result codec %q is retired after readiness", codec)
+	}
 	aad, err := idempotencyResultAAD(tenantID, key, binding)
 	if err != nil {
 		return nil, err
 	}
 	var plaintext []byte
 	err = p.access.WithTenant(ctx, tenantID, func(cipher Cipher) error {
-		switch codec {
-		case resultCodecSealedRowV1:
-			var err error
-			plaintext, err = cipher.Open(protected, aad)
-			return err
-		case resultCodecRawV0, resultCodecSealedDynamicLeaseV1:
-			plaintext = append([]byte(nil), protected...)
-			return nil
-		default:
-			return fmt.Errorf("tenantseal: unsupported idempotency result codec %q", codec)
-		}
+		var err error
+		plaintext, err = cipher.Open(protected, aad)
+		return err
 	})
 	if err != nil {
 		return nil, err

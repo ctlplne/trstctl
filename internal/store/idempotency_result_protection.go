@@ -147,3 +147,68 @@ func (s *Store) IdempotencyResultProtectionStatus(
 	})
 	return status, err
 }
+
+// EnforceSealedIdempotencyResultFloor installs the post-fleet-readiness write
+// ratchet. It takes an ACCESS EXCLUSIVE table lock, proves every completed row
+// is a CSL sealed-row-v1 container, then changes the default and validates a
+// permanent constraint in the same transaction. Operators must call this only
+// after every writer is on the protected-result implementation: the floor is
+// intentionally incompatible with an old node that still emits raw-v0.
+func (s *Store) EnforceSealedIdempotencyResultFloor(ctx context.Context) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("store: begin idempotency result floor: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `LOCK TABLE idempotency_keys IN ACCESS EXCLUSIVE MODE`); err != nil {
+		return fmt.Errorf("store: lock idempotency result floor: %w", err)
+	}
+	var incompatible int64
+	if err := tx.QueryRow(ctx,
+		//trstctl:system-query — cross-tenant by design: the fleet-wide codec floor is installed only after proving every tenant row is protected.
+		`SELECT count(*)
+		   FROM idempotency_keys
+		  WHERE status = 'completed'
+		    AND (
+		        result_codec <> 'sealed-row-v1'
+		        OR result IS NULL
+		        OR substring(result FROM 1 FOR 4) <> decode('43534c31', 'hex')
+		    )`).Scan(&incompatible); err != nil {
+		return fmt.Errorf("store: inspect idempotency result floor: %w", err)
+	}
+	if incompatible != 0 {
+		return fmt.Errorf("store: refuse sealed idempotency result floor: %d completed rows are not protected", incompatible)
+	}
+	if _, err := tx.Exec(ctx,
+		`ALTER TABLE idempotency_keys
+		     ALTER COLUMN result_codec SET DEFAULT 'sealed-row-v1'`); err != nil {
+		return fmt.Errorf("store: set sealed idempotency result default: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`ALTER TABLE idempotency_keys
+		     DROP CONSTRAINT IF EXISTS idempotency_keys_result_sealed_floor_chk`); err != nil {
+		return fmt.Errorf("store: replace sealed idempotency result floor: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`ALTER TABLE idempotency_keys
+		     ADD CONSTRAINT idempotency_keys_result_sealed_floor_chk
+		     CHECK (
+		         status <> 'completed'
+		         OR (
+		             result_codec = 'sealed-row-v1'
+		             AND result IS NOT NULL
+		             AND substring(result FROM 1 FOR 4) = decode('43534c31', 'hex')
+		         )
+		     ) NOT VALID`); err != nil {
+		return fmt.Errorf("store: add sealed idempotency result floor: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`ALTER TABLE idempotency_keys
+		     VALIDATE CONSTRAINT idempotency_keys_result_sealed_floor_chk`); err != nil {
+		return fmt.Errorf("store: validate sealed idempotency result floor: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("store: commit sealed idempotency result floor: %w", err)
+	}
+	return nil
+}

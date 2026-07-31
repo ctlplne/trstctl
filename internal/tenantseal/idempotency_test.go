@@ -104,10 +104,9 @@ func TestResultProtectorBindsTenantKeyAndRequestBinding(t *testing.T) {
 	}
 }
 
-func TestResultProtectorLegacyCodecsStillObeyTenantAccessState(t *testing.T) {
+func TestResultProtectorRejectsLegacyCodecsAfterReadiness(t *testing.T) {
 	t.Parallel()
-	denied := errors.New("tenant is sealed")
-	access := &fixedCipherAccess{tenant: testTenantA, err: denied}
+	access := &fixedCipherAccess{tenant: testTenantA, cipher: localResultCipher{}}
 	protector, err := tenantseal.NewResultProtector(access)
 	if err != nil {
 		t.Fatalf("NewResultProtector: %v", err)
@@ -119,30 +118,12 @@ func TestResultProtectorLegacyCodecsStillObeyTenantAccessState(t *testing.T) {
 	} {
 		if _, err := protector.Open(
 			context.Background(), testTenantA, "legacy-key", "", codec, []byte("legacy"),
-		); !errors.Is(err, denied) {
-			t.Fatalf("Open codec %q error = %v, want sealed-tenant denial", codec, err)
+		); err == nil {
+			t.Fatalf("Open accepted retired codec %q", codec)
 		}
 	}
-	if access.calls != 2 {
-		t.Fatalf("tenant access calls = %d, want 2", access.calls)
-	}
-
-	access.err = nil
-	access.cipher = localResultCipher{}
-	for _, codec := range []string{
-		orchestrator.ResultCodecRawV0,
-		orchestrator.ResultCodecSealedDynamicLeaseV1,
-	} {
-		input := []byte("legacy")
-		opened, err := protector.Open(
-			context.Background(), testTenantA, "legacy-key", "", codec, input,
-		)
-		if err != nil {
-			t.Fatalf("Open codec %q: %v", codec, err)
-		}
-		if !bytes.Equal(opened, input) || len(opened) == 0 || &opened[0] == &input[0] {
-			t.Fatalf("Open codec %q did not return an owned exact copy", codec)
-		}
+	if access.calls != 0 {
+		t.Fatalf("retired codec reached tenant crypto access %d times, want 0", access.calls)
 	}
 }
 

@@ -58,14 +58,15 @@ const (
 // authenticated row context: implementations must bind all three when sealing,
 // then reject an Open when a protected row is copied to a different context.
 //
-// Open must also understand ResultCodecRawV0 as a migration-only pass-through,
-// plus ResultCodecSealedDynamicLeaseV1 as an already-sealed inner envelope, so
-// an attached protector can replay historical rows while they are being
-// rewritten. Cryptographic implementations live behind internal/crypto (AN-3);
-// this orchestrator interface only moves opaque []byte values across that
-// boundary. Ownership of each returned byte slice transfers to the caller: an
-// implementation must not alias an input, and the caller will wipe the returned
-// storage after copying or consuming it.
+// Production protectors accept only ResultCodecSealedRowV1 at runtime. The
+// pre-readiness migrator consumes raw-v0 and sealed-dynamic-lease-v1 directly
+// and rewrites them before a mutation surface opens; keeping compatibility in
+// Open would silently preserve a plaintext read path after the ratchet.
+// Cryptographic implementations live behind internal/crypto (AN-3); this
+// interface only moves opaque []byte values across that boundary. Ownership of
+// each returned byte slice transfers to the caller: an implementation must not
+// alias an input, and the caller will wipe the returned storage after copying
+// or consuming it.
 type ResultProtector interface {
 	Protect(ctx context.Context, tenantID, key, binding string, plaintext []byte) (codec string, protected []byte, err error)
 	Open(ctx context.Context, tenantID, key, binding, codec string, protected []byte) ([]byte, error)
