@@ -27,6 +27,8 @@ var (
 
 const tenantKeyDomainHistoryStage = "jetstream_hot_history"
 
+var tenantKeyDomainSealOperationNamespace = uuid.MustParse("ebffb468-4321-4d13-8f5f-3b56515744ec")
+
 // DomainKEKManager combines the exact wrapper operations needed by the served
 // lifecycle. LocalWrapperRegistry is the CORE implementation and performs zero
 // egress. A future remote implementation must live behind a bounded outbox
@@ -162,12 +164,156 @@ func (l *Lifecycle) Migrate(
 	return out, err
 }
 
-// Seal waits for every in-flight tenant crypto callback on every replica, then
-// commits the sealed state while holding the matching exclusive advisory fence.
-// Resolver keeps no long-lived domain-key cache, so every borrowed key has been
-// destroyed before this transaction can acquire the fence.
-func (l *Lifecycle) Seal(ctx context.Context, tenantID string) (store.TenantKeyDomain, error) {
-	return l.transition(ctx, tenantID, store.TenantKeyOperationSeal)
+// SealOperationID is the stable receiver identity for one authenticated seal
+// request. A retry on another replica derives the same UUID; a reused raw key
+// with another route/caller binding derives a different UUID and fails closed.
+func SealOperationID(tenantID, idempotencyKey, requestBinding string) (string, error) {
+	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(idempotencyKey) == "" ||
+		strings.TrimSpace(requestBinding) == "" {
+		return "", errors.New("tenantseal: seal request requires tenant, idempotency key, and request binding")
+	}
+	return uuid.NewSHA1(
+		tenantKeyDomainSealOperationNamespace,
+		[]byte(tenantID+"\x00"+idempotencyKey+"\x00"+requestBinding),
+	).String(), nil
+}
+
+// RequestSeal appends the immutable seal request and projects its derived
+// bounded-worker command atomically. The honest seal_queued state still permits
+// tenant crypto: the worker must first prove the accepted idempotency result is
+// complete. Exact retries repair a missing derived outbox row.
+func (l *Lifecycle) RequestSeal(
+	ctx context.Context,
+	tenantID, idempotencyKey, requestBinding string,
+) (store.TenantKeyDomain, error) {
+	if l == nil || l.store == nil || l.log == nil || l.projector == nil {
+		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
+	}
+	operationID, err := SealOperationID(tenantID, idempotencyKey, requestBinding)
+	if err != nil {
+		return store.TenantKeyDomain{}, err
+	}
+	var out store.TenantKeyDomain
+	err = l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
+			return err
+		}
+		domain, err := l.store.GetTenantKeyDomainTx(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		matches := domain.OperationID != nil && *domain.OperationID == operationID &&
+			domain.OperationKind == store.TenantKeyOperationSeal
+		switch {
+		case domain.State == store.TenantKeyDomainStateSealed && matches:
+			out = domain
+			return nil
+		case domain.State == store.TenantKeyDomainStateSealQueued && matches &&
+			domain.OperationStatus == store.TenantKeyOperationPending:
+			if err := l.store.EnsureTenantKeyDomainSealOutboxTx(
+				ctx, tx, tenantID, operationID, idempotencyKey, requestBinding,
+			); err != nil {
+				return err
+			}
+			out = domain
+			return nil
+		case domain.State != store.TenantKeyDomainStatePartial &&
+			domain.State != store.TenantKeyDomainStateUnsealed:
+			return ErrLifecycleConflict
+		}
+
+		domain.OperationID = &operationID
+		domain.OperationKind = store.TenantKeyOperationSeal
+		domain.OperationStatus = store.TenantKeyOperationPending
+		domain.State = store.TenantKeyDomainStateSealQueued
+		domain.Retryable = true
+		domain.LastErrorCode, domain.LastError = "", ""
+		domain.LastTransitionEvidenceRefs = []string{
+			"tenant-domain://seal-request-durable",
+			"tenant-domain://awaiting-idempotency-result-wall",
+		}
+		snapshot := snapshotFromDomain(domain)
+		snapshot.SealIdempotencyKey = idempotencyKey
+		snapshot.SealRequestBinding = requestBinding
+		payload, err := json.Marshal(snapshot)
+		if err != nil {
+			return err
+		}
+		event, err := l.log.Append(ctx, events.Event{
+			Type:     projections.EventTenantKeyDomainSealRequested,
+			TenantID: tenantID, SchemaVersion: 1, Data: payload,
+		})
+		if err != nil {
+			return err
+		}
+		if err := l.projector.ApplyTx(ctx, tx, event); err != nil {
+			return err
+		}
+		out = domain
+		return nil
+	})
+	if err != nil {
+		return store.TenantKeyDomain{}, err
+	}
+	return out, nil
+}
+
+// CompleteSeal is the bounded worker's idempotent receiver. Its caller has
+// already proven the idempotency result is completed. The exclusive fence waits
+// for every shared crypto callback on every replica; new callbacks block until
+// commit and then observe sealed. Resolver keeps no long-lived key cache, so all
+// transient domain keys are destroyed before this transaction can proceed.
+func (l *Lifecycle) CompleteSeal(
+	ctx context.Context,
+	tenantID, operationID string,
+) (store.TenantKeyDomain, error) {
+	if l == nil || l.store == nil || l.log == nil || l.projector == nil ||
+		strings.TrimSpace(tenantID) == "" || strings.TrimSpace(operationID) == "" {
+		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
+	}
+	var out store.TenantKeyDomain
+	err := l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
+			return err
+		}
+		domain, err := l.store.GetTenantKeyDomainTx(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		matches := domain.OperationID != nil && *domain.OperationID == operationID &&
+			domain.OperationKind == store.TenantKeyOperationSeal
+		if domain.State == store.TenantKeyDomainStateSealed && matches &&
+			domain.OperationStatus == store.TenantKeyOperationCompleted {
+			out = domain
+			return nil
+		}
+		if !matches || domain.State != store.TenantKeyDomainStateSealQueued ||
+			domain.OperationStatus != store.TenantKeyOperationPending {
+			return ErrLifecycleConflict
+		}
+
+		now := time.Now().UTC()
+		domain.State = store.TenantKeyDomainStateSealed
+		domain.OperationStatus = store.TenantKeyOperationCompleted
+		domain.Retryable = false
+		domain.SealedAt = &now
+		domain.LastErrorCode, domain.LastError = "", ""
+		domain.LastTransitionEvidenceRefs = []string{
+			"tenant-domain://idempotency-result-completed",
+			"tenant-domain://exclusive-fence-drained",
+		}
+		if err := l.appendSnapshotTx(
+			ctx, tx, tenantID, projections.EventTenantKeyDomainSealed, domain,
+		); err != nil {
+			return err
+		}
+		out = domain
+		return nil
+	})
+	if err != nil {
+		return store.TenantKeyDomain{}, err
+	}
+	return out, nil
 }
 
 // Unseal proves the configured wrapper can authenticate and open the exact
@@ -315,36 +461,6 @@ func (l *Lifecycle) transition(
 			return err
 		}
 		switch operation {
-		case store.TenantKeyOperationSeal:
-			if domain.State == store.TenantKeyDomainStateSealed {
-				return nil
-			}
-			resuming := domain.State == store.TenantKeyDomainStateSealing &&
-				domain.OperationKind == operation &&
-				domain.OperationStatus == store.TenantKeyOperationRunning
-			if !resuming && domain.State != store.TenantKeyDomainStatePartial && domain.State != store.TenantKeyDomainStateUnsealed {
-				return ErrLifecycleConflict
-			}
-			if !resuming {
-				operationID := uuid.NewString()
-				domain.OperationID = &operationID
-				domain.OperationKind = operation
-				domain.OperationStatus = store.TenantKeyOperationRunning
-				domain.State = store.TenantKeyDomainStateSealing
-				domain.Retryable = true
-				if err := l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainSealRequested, domain); err != nil {
-					return err
-				}
-			}
-			now := time.Now().UTC()
-			domain.State = store.TenantKeyDomainStateSealed
-			domain.OperationStatus = store.TenantKeyOperationCompleted
-			domain.Retryable = false
-			domain.SealedAt = &now
-			domain.LastTransitionEvidenceRefs = []string{"tenant-domain://exclusive-fence-drained"}
-			if err := l.appendSnapshotTx(ctx, tx, tenantID, projections.EventTenantKeyDomainSealed, domain); err != nil {
-				return err
-			}
 		case store.TenantKeyOperationUnseal:
 			if domain.State == store.TenantKeyDomainStateUnsealed {
 				return nil

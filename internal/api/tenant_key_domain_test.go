@@ -19,14 +19,18 @@ import (
 )
 
 type fakeTenantKeyDomainLifecycle struct {
-	domain       store.TenantKeyDomain
-	statusErr    error
-	migrateErr   error
-	unsealErr    error
-	migrateCalls int
-	unsealCalls  int
-	tenantIDs    []string
-	refs         []tenantseal.WrapperRef
+	domain           store.TenantKeyDomain
+	statusErr        error
+	migrateErr       error
+	unsealErr        error
+	requestSealErr   error
+	migrateCalls     int
+	unsealCalls      int
+	requestSealCalls int
+	tenantIDs        []string
+	refs             []tenantseal.WrapperRef
+	sealKeys         []string
+	sealBindings     []string
 }
 
 func (f *fakeTenantKeyDomainLifecycle) Status(_ context.Context, tenantID string) (store.TenantKeyDomain, error) {
@@ -41,8 +45,19 @@ func (f *fakeTenantKeyDomainLifecycle) Migrate(_ context.Context, tenantID strin
 	return f.domain, f.migrateErr
 }
 
-func (f *fakeTenantKeyDomainLifecycle) Seal(context.Context, string) (store.TenantKeyDomain, error) {
-	return store.TenantKeyDomain{}, errors.New("seal is intentionally asynchronous and not served by this slice")
+func (f *fakeTenantKeyDomainLifecycle) RequestSeal(
+	_ context.Context,
+	tenantID, idempotencyKey, requestBinding string,
+) (store.TenantKeyDomain, error) {
+	f.requestSealCalls++
+	f.tenantIDs = append(f.tenantIDs, tenantID)
+	f.sealKeys = append(f.sealKeys, idempotencyKey)
+	f.sealBindings = append(f.sealBindings, requestBinding)
+	return f.domain, f.requestSealErr
+}
+
+func (f *fakeTenantKeyDomainLifecycle) CompleteSeal(context.Context, string, string) (store.TenantKeyDomain, error) {
+	return store.TenantKeyDomain{}, errors.New("CompleteSeal belongs to the bounded worker")
 }
 
 func (f *fakeTenantKeyDomainLifecycle) Unseal(_ context.Context, tenantID string) (store.TenantKeyDomain, error) {
@@ -160,6 +175,45 @@ func TestTenantKeyDomainMutationsRequireIdempotencyAndExactLocalWrapper(t *testi
 	))
 	if rec.Code != http.StatusBadRequest || service.migrateCalls != 0 {
 		t.Fatalf("remote wrapper status=%d calls=%d body=%s", rec.Code, service.migrateCalls, rec.Body.String())
+	}
+}
+
+func TestTenantKeyDomainSealQueuesOneStableWorkerOperation(t *testing.T) {
+	operationID := "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+	service := &fakeTenantKeyDomainLifecycle{domain: store.TenantKeyDomain{
+		TenantID: connectorTenantA, DomainID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		Generation: 1, ProtectionMode: store.TenantKeyProtectionTenantDomain,
+		State:       store.TenantKeyDomainStateSealQueued,
+		OperationID: &operationID, OperationKind: store.TenantKeyOperationSeal,
+		OperationStatus: store.TenantKeyOperationPending,
+	}}
+	handler := api.New(nil, orchestrator.NewMemoryIdempotency(), nil,
+		api.WithInsecureHeaderResolver(), api.WithTenantKeyDomainLifecycle(service))
+
+	for range 2 {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, tenantDomainRequest(
+			http.MethodPost, "/api/v1/platform/tenant-key-domain/seal", nil, "tenant-seal-1",
+		))
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("seal status = %d body=%s", rec.Code, rec.Body.String())
+		}
+		var receipt api.TenantKeyDomainSealReceipt
+		if err := json.NewDecoder(rec.Body).Decode(&receipt); err != nil {
+			t.Fatal(err)
+		}
+		if !receipt.Accepted || receipt.OperationID != operationID ||
+			receipt.State != store.TenantKeyDomainStateSealQueued ||
+			receipt.StatusURL != "/api/v1/platform/tenant-key-domain" {
+			t.Fatalf("seal receipt = %+v", receipt)
+		}
+	}
+	if service.requestSealCalls != 1 {
+		t.Fatalf("same Idempotency-Key queued seal %d times, want 1", service.requestSealCalls)
+	}
+	if len(service.sealKeys) != 1 || service.sealKeys[0] != "tenant-seal-1" ||
+		len(service.sealBindings) != 1 || service.sealBindings[0] == "" {
+		t.Fatalf("seal request key/binding = %v/%v", service.sealKeys, service.sealBindings)
 	}
 }
 

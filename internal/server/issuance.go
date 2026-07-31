@@ -173,6 +173,10 @@ type issuanceDispatcher struct {
 	// returns errors for unconfigured targets so those rows are never silently
 	// acknowledged by the generic fallback.
 	secretIntegrations *secretIntegrationOutboxDispatcher
+	// tenantKeyDomains owns the internal tenantseal.seal command. It proves the
+	// accepted HTTP result is durable before the lifecycle makes tenant crypto
+	// unavailable, and runs only on the bounded outbox worker.
+	tenantKeyDomains *tenantKeyDomainSealOutboxDispatcher
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -222,6 +226,12 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
 	default:
+		if d.tenantKeyDomains != nil {
+			handled, err := d.tenantKeyDomains.Deliver(ctx, m)
+			if handled || err != nil {
+				return err
+			}
+		}
 		if d.codeSign != nil {
 			handled, err := d.codeSign.Deliver(ctx, m)
 			if handled || err != nil {

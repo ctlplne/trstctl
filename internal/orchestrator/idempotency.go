@@ -1341,6 +1341,71 @@ func (i *Idempotency) Result(ctx context.Context, tenantID, key string) ([]byte,
 	return i.openResult(ctx, tenantID, key, "", resultCodec, result)
 }
 
+// BoundResultCompleted proves that one authenticated durable result reached the
+// completed wall without selecting or opening its protected bytes. Internal
+// workers use this before an effect (such as tenant seal) that intentionally
+// makes the tenant result key unavailable. A mismatched binding is rejected
+// before any result column is selected.
+func (i *Idempotency) BoundResultCompleted(
+	ctx context.Context,
+	tenantID, key, binding string,
+) (bool, error) {
+	if i == nil || tenantID == "" || key == "" || binding == "" {
+		return false, errors.New("orchestrator: bound completion check requires tenant, key, and request binding")
+	}
+	if i.memory != nil {
+		memoryKey := tenantID + "\x00" + key
+		i.memoryMu.Lock()
+		record, ok := i.boundMemory[memoryKey]
+		if !ok {
+			i.memoryMu.Unlock()
+			return false, ErrIdempotencyNotFound
+		}
+		if !idempotencyBindingEqual(record.binding, binding) {
+			i.memoryMu.Unlock()
+			return false, ErrIdempotencyConflict
+		}
+		if record.indeterminate {
+			i.memoryMu.Unlock()
+			return false, ErrEffectIndeterminate
+		}
+		completed := record.completed
+		i.memoryMu.Unlock()
+		if !completed {
+			return false, ErrInProgress
+		}
+		return true, nil
+	}
+	if i.store == nil {
+		return false, errors.New("orchestrator: idempotency store is not configured")
+	}
+	var status, storedBinding string
+	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`SELECT status, request_binding
+			   FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2`,
+			tenantID, key).Scan(&status, &storedBinding)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrIdempotencyNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("orchestrator: load bound completion wall: %w", err)
+		}
+		if storedBinding == "" || !idempotencyBindingEqual(storedBinding, binding) {
+			return ErrIdempotencyConflict
+		}
+		if status != "completed" {
+			return incompleteResultError(status)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // BoundResult returns a completed durable-effect result only when binding is the
 // exact authenticated command that claimed key. A pending/bound claim remains in
 // progress, and another caller or command receives a conflict. Unlike Result,

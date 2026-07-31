@@ -17092,6 +17092,30 @@
         ],
         "type": "object"
       },
+      "TenantKeyDomainSealReceipt": {
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "status_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted",
+          "operation_id",
+          "state",
+          "status_url"
+        ],
+        "type": "object"
+      },
       "TenantKeyDomainStatus": {
         "properties": {
           "domain_id": {
@@ -30285,6 +30309,64 @@
           }
         ],
         "summary": "Migrate this tenant into an independently wrapped cryptographic domain",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/platform/tenant-key-domain/seal": {
+      "post": {
+        "operationId": "sealTenantKeyDomain",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantKeyDomainSealReceipt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue an independently replayable seal for this tenant's cryptographic domain",
         "x-trstctl-permission": "keys:write"
       }
     },

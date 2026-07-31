@@ -243,6 +243,37 @@ func TestIdempotencyResultProtectorCoversEveryWriterAndReader(t *testing.T) {
 	}
 }
 
+// TestBoundResultCompletedChecksTheWallWithoutOpeningResultBytes pins the seal
+// worker prerequisite. The worker needs to know that the accepted response is
+// durable, but it must not decrypt that response or borrow tenant key material
+// merely to check a status bit.
+func TestBoundResultCompletedChecksTheWallWithoutOpeningResultBytes(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	protector := &ownershipResultProtector{
+		openErr: errors.New("result bytes must not be opened by completion check"),
+	}
+	idem := orchestrator.NewIdempotency(s, orchestrator.WithResultProtector(protector))
+	const key = "seal-result-wall"
+	const binding = "sha256:seal-result-wall"
+	if _, err := idem.DoDurableEffectBound(ctx, tenantA, key, binding, func(context.Context) ([]byte, error) {
+		return []byte(`{"accepted":true}`), nil
+	}); err != nil {
+		t.Fatalf("write completed bound result: %v", err)
+	}
+
+	completed, err := idem.BoundResultCompleted(ctx, tenantA, key, binding)
+	if err != nil || !completed {
+		t.Fatalf("BoundResultCompleted = %v/%v, want true/nil", completed, err)
+	}
+	if _, opens := protector.counts(); opens != 0 {
+		t.Fatalf("completion check opened protected result %d times", opens)
+	}
+	if _, err := idem.BoundResultCompleted(ctx, tenantA, key, binding+"-other"); !errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+		t.Fatalf("mismatched binding error = %v, want conflict", err)
+	}
+}
+
 func TestBoundResultChecksBindingBeforeOpeningProtectedBytes(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()

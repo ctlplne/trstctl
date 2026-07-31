@@ -4,11 +4,15 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -21,13 +25,25 @@ const legacyDeploymentKEKMode = "legacy_deployment_kek"
 type TenantKeyDomainLifecycle interface {
 	Status(context.Context, string) (store.TenantKeyDomain, error)
 	Migrate(context.Context, string, tenantseal.WrapperRef) (store.TenantKeyDomain, error)
-	Seal(context.Context, string) (store.TenantKeyDomain, error)
+	RequestSeal(context.Context, string, string, string) (store.TenantKeyDomain, error)
+	CompleteSeal(context.Context, string, string) (store.TenantKeyDomain, error)
 	Unseal(context.Context, string) (store.TenantKeyDomain, error)
 }
 
 type tenantKeyDomainMigrateRequest struct {
 	WrapperKind string `json:"wrapper_kind"`
 	WrapperID   string `json:"wrapper_id"`
+}
+
+// TenantKeyDomainSealReceipt is deliberately small and stable. It contains no
+// tenant ciphertext or result data, so the seal endpoint can reconstruct the
+// exact accepted response after the tenant key becomes unavailable while still
+// proving the encrypted idempotency row reached completed first.
+type TenantKeyDomainSealReceipt struct {
+	Accepted    bool   `json:"accepted"`
+	OperationID string `json:"operation_id"`
+	State       string `json:"state"`
+	StatusURL   string `json:"status_url"`
 }
 
 // TenantKeyDomainStatus is safe operator metadata. WrappedDomainKEK and local
@@ -130,6 +146,125 @@ func (a *API) unsealTenantKeyDomain(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+//trstctl:mutation
+func (a *API) sealTenantKeyDomain(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	if idempotencyKey == "" {
+		a.writeProblem(w, problem.New(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, err := mutationRouteBinding(principal, r.Method, r.URL.EscapedPath())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if a.tenantKeyDomains == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "tenant key-domain lifecycle is not configured"))
+		return
+	}
+
+	recordResult := func(ctx context.Context) ([]byte, error) {
+		domain, err := a.tenantKeyDomains.RequestSeal(ctx, tenantID, idempotencyKey, binding)
+		if err != nil {
+			return nil, mapTenantKeyDomainError(err)
+		}
+		if domain.OperationID == nil || domain.OperationKind != store.TenantKeyOperationSeal {
+			return nil, errStatus(http.StatusInternalServerError, "tenant key-domain seal request returned no operation identity")
+		}
+		body, err := json.Marshal(tenantKeyDomainSealReceipt(*domain.OperationID))
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(cachedResponse{Status: http.StatusAccepted, Body: body, Binding: binding})
+	}
+	raw, err := a.idem.DoDurableEffectBound(
+		r.Context(), tenantID, idempotencyKey, binding, recordResult,
+	)
+	if err != nil {
+		if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+			err = errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request")
+		} else if recovered, recoveryErr := a.recoverSealedTenantKeyDomainReceipt(
+			r.Context(), tenantID, idempotencyKey, binding, err,
+		); recoveryErr == nil {
+			raw = recovered
+			err = nil
+		} else if !errors.Is(recoveryErr, err) {
+			err = recoveryErr
+		}
+	}
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+
+	var cached cachedResponse
+	if err := json.Unmarshal(raw, &cached); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if !crypto.ConstantTimeEqual([]byte(cached.Binding), []byte(binding)) {
+		a.writeError(w, errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(cached.Status)
+	_, _ = w.Write(cached.Body)
+}
+
+func (a *API) recoverSealedTenantKeyDomainReceipt(
+	ctx context.Context,
+	tenantID, idempotencyKey, binding string,
+	openErr error,
+) ([]byte, error) {
+	status, ok := tenantseal.StatusOf(openErr)
+	if !ok || (status != tenantseal.StatusSealed && status != tenantseal.StatusSealing) {
+		return nil, openErr
+	}
+	completed, err := a.idem.BoundResultCompleted(ctx, tenantID, idempotencyKey, binding)
+	if err != nil || !completed {
+		if err != nil {
+			return nil, err
+		}
+		return nil, orchestrator.ErrInProgress
+	}
+	domain, err := a.tenantKeyDomains.Status(ctx, tenantID)
+	if err != nil {
+		return nil, mapTenantKeyDomainError(err)
+	}
+	expectedID, err := tenantseal.SealOperationID(tenantID, idempotencyKey, binding)
+	if err != nil {
+		return nil, err
+	}
+	if domain.OperationID == nil || *domain.OperationID != expectedID ||
+		domain.OperationKind != store.TenantKeyOperationSeal ||
+		(domain.State != store.TenantKeyDomainStateSealed && domain.State != store.TenantKeyDomainStateSealing) {
+		return nil, errStatus(http.StatusConflict, "the completed seal receipt does not match the tenant's current seal operation")
+	}
+	body, err := json.Marshal(tenantKeyDomainSealReceipt(expectedID))
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(cachedResponse{Status: http.StatusAccepted, Body: body, Binding: binding})
+}
+
+func tenantKeyDomainSealReceipt(operationID string) TenantKeyDomainSealReceipt {
+	return TenantKeyDomainSealReceipt{
+		Accepted: true, OperationID: operationID,
+		State:     store.TenantKeyDomainStateSealQueued,
+		StatusURL: "/api/v1/platform/tenant-key-domain",
+	}
+}
+
 func tenantKeyDomainStatusFromStore(domain store.TenantKeyDomain) TenantKeyDomainStatus {
 	operationID := ""
 	if domain.OperationID != nil {
@@ -190,6 +325,8 @@ func tenantKeyDomainRecovery(domain store.TenantKeyDomain) string {
 			return "Fix the reported local custody or history prerequisite, then retry migration with the same wrapper kind and ID."
 		}
 		return "Hot state is tenant-domain protected. Retire or re-encrypt pre-migration archives, exports, and backups before asserting no legacy exposure."
+	case store.TenantKeyDomainStateSealQueued:
+		return "The seal request is durable. The bounded worker will commit it only after the accepted idempotency result is complete; poll this tenant-scoped status."
 	case store.TenantKeyDomainStateSealed:
 		return "Use the configured operator-controlled wrapper and the unseal mutation to restore tenant cryptographic access."
 	case store.TenantKeyDomainStateWrapperUnavailable:

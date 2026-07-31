@@ -2739,6 +2739,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenant-key-domain/seal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue an independently replayable seal for this tenant's cryptographic domain */
+        post: operations["sealTenantKeyDomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenant-key-domain/unseal": {
         parameters: {
             query?: never;
@@ -8805,6 +8822,13 @@ export interface components {
             wrapper_id: string;
             /** @enum {string} */
             wrapper_kind?: "local_file";
+        };
+        TenantKeyDomainSealReceipt: {
+            accepted: boolean;
+            /** Format: uuid */
+            operation_id: string;
+            state: string;
+            status_url: string;
         };
         TenantKeyDomainStatus: {
             /** Format: uuid */
@@ -17286,6 +17310,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantKeyDomainStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    sealTenantKeyDomain: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantKeyDomainSealReceipt"];
                 };
             };
             /** @description client error */

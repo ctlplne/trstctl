@@ -4412,6 +4412,13 @@ export interface TenantKeyDomainMigrateRequest {
   wrapper_kind?: "local_file";
 }
 
+export interface TenantKeyDomainSealReceipt {
+  accepted: boolean;
+  operation_id: string;
+  state: string;
+  status_url: string;
+}
+
 export interface TenantKeyDomainStatus {
   domain_id?: string;
   failure?: string;

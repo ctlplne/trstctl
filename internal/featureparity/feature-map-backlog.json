@@ -13062,7 +13062,7 @@
         "web/src/pages/Platform.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence, COMPETE-006, and COMPETE-016. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. internal/server/enterprise_support_served_test.go proves CAP-MODEL-04 by serving the enterprise support posture, support tiers, P1/P2/P3 SLA targets, professional-services packages, license mode, and contract boundary. I-aa8623a3 adds tenant-scoped key-domain status, local-wrapper migration, and unseal operations to the default binary; the seal transition remains intentionally absent until its result can be persisted before the tenant becomes cryptographically unavailable. UI evidence: Platform at /platform calls the served managed-offering status/provision endpoints and the enterprise support endpoint.",
+      "notes": "Closed by route-level feature-map evidence, COMPETE-006, and COMPETE-016. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. internal/server/enterprise_support_served_test.go proves CAP-MODEL-04 by serving the enterprise support posture, support tiers, P1/P2/P3 SLA targets, professional-services packages, license mode, and contract boundary. I-aa8623a3 adds tenant-scoped key-domain status, local-wrapper migration, seal, and unseal operations to the default binary. Seal first persists a stable accepted result, then a dedicated bounded outbox worker proves that result completed before taking the cross-replica exclusive fence and making tenant crypto unavailable; an exact retry reconstructs the byte-identical accepted receipt without opening sealed result bytes. UI evidence: Platform at /platform calls the served managed-offering status/provision endpoints and the enterprise support endpoint.",
       "api_surface": [
         "listOwners",
         "listCertificates",
@@ -13073,6 +13073,7 @@
         "provisionManagedTenant",
         "getTenantKeyDomain",
         "migrateTenantKeyDomain",
+        "sealTenantKeyDomain",
         "unsealTenantKeyDomain"
       ],
       "api_na": "",
@@ -13134,6 +13135,7 @@
             "OpenAPI operationId: provisionManagedTenant",
             "OpenAPI operationId: getTenantKeyDomain",
             "OpenAPI operationId: migrateTenantKeyDomain",
+            "OpenAPI operationId: sealTenantKeyDomain",
             "OpenAPI operationId: unsealTenantKeyDomain"
           ],
           "refs": [
@@ -13167,7 +13169,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit, getEnterpriseSupportStatus, getManagedOfferingStatus, provisionManagedTenant, getTenantKeyDomain, migrateTenantKeyDomain, unsealTenantKeyDomain",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit, getEnterpriseSupportStatus, getManagedOfferingStatus, provisionManagedTenant, getTenantKeyDomain, migrateTenantKeyDomain, sealTenantKeyDomain, unsealTenantKeyDomain",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [

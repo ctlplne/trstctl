@@ -19,6 +19,7 @@ const (
 	TenantKeyDomainStateMigrating          = "migrating"
 	TenantKeyDomainStatePartial            = "partial"
 	TenantKeyDomainStateUnsealed           = "unsealed"
+	TenantKeyDomainStateSealQueued         = "seal_queued"
 	TenantKeyDomainStateSealing            = "sealing"
 	TenantKeyDomainStateSealed             = "sealed"
 	TenantKeyDomainStateUnsealing          = "unsealing"

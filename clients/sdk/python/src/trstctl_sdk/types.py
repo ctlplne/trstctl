@@ -6214,6 +6214,17 @@ TenantKeyDomainMigrateRequest = TypedDict(
     total=False,
 )
 
+TenantKeyDomainSealReceipt = TypedDict(
+    'TenantKeyDomainSealReceipt',
+    {
+        'accepted': bool,
+        'operation_id': str,
+        'state': str,
+        'status_url': str,
+    },
+    total=False,
+)
+
 TenantKeyDomainStatus = TypedDict(
     'TenantKeyDomainStatus',
     {

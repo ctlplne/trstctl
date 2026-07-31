@@ -25,6 +25,7 @@ const (
 	SubsystemOutboxTransparency  = "outbox.transparency"
 	SubsystemOutboxCodeSigning   = "outbox.code_signing"
 	SubsystemOutboxNotifications = "outbox.notifications"
+	SubsystemOutboxTenantSeal    = "outbox.tenant_seal"
 	SubsystemSigning             = "signing"
 	// SubsystemQuery is the bounded pool for heavy, per-request O(inventory) read
 	// families — the credential-graph and risk-scoring endpoints (SPINE-005). Routing
@@ -87,6 +88,7 @@ func DefaultConfigs() []Config {
 		{Name: SubsystemOutboxTransparency, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxCodeSigning, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxNotifications, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxTenantSeal, Workers: 4, Queue: 256},
 		{Name: SubsystemSigning, Workers: 4, Queue: 64},
 		// The heavy read pool (SPINE-005) is sized smaller than the CRUD pool: it caps
 		// how many concurrent O(inventory) graph/risk builds run, so they shed fast

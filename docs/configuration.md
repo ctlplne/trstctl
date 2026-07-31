@@ -1485,6 +1485,7 @@ that is actually saturating.
 | `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_QUEUE` | inherits outbox | Override transparency publication (`transparency.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_QUEUE` | inherits outbox | Override code-signing commands (`codesign.*`) without sharing transparency workers. |
 | `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_QUEUE` | inherits outbox | Override operator notifications (`notification.*`). |
+| `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_QUEUE` | inherits outbox | Override the zero-egress tenant seal commit worker (`tenantseal.seal`). It proves the accepted result is durable before acquiring the cross-replica seal fence. |
 | `TRSTCTL_BULKHEAD_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_SIGNING_QUEUE` | `4` / `64` | Control-plane work waiting on signer RPC. Do not set this above signer capacity. |
 | `TRSTCTL_BULKHEAD_QUERY_WORKERS` / `TRSTCTL_BULKHEAD_QUERY_QUEUE` | `4` / `64` | Heavy graph/risk/read queries that scale with inventory size. |
 | `TRSTCTL_BULKHEAD_POLICY_WORKERS` / `TRSTCTL_BULKHEAD_POLICY_QUEUE` | `4` / `64` | OPA/Rego policy gate work. Saturation fails closed rather than blocking issuance. |
@@ -1511,7 +1512,7 @@ through an upstream CA, synchronize a secret, publish code-signing evidence, or 
 an operator. JSON config may override a family with `outbox_external_ca`,
 `outbox_connectors`, `outbox_secrets`, `outbox_secret_sync`,
 `outbox_managed_keys`, `outbox_transparency`, `outbox_code_signing`, or
-`outbox_notifications` inside `bulkheads`.
+`outbox_notifications`, or `outbox_tenant_seal` inside `bulkheads`.
 
 ## Config file
 

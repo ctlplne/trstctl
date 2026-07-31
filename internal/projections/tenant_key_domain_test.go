@@ -127,6 +127,99 @@ func TestTenantKeyDomainProjectionIsReplayableAndMonotonic(t *testing.T) {
 	}
 }
 
+// TestTenantKeyDomainSealRequestProjectsDurableOutboxAndRepairsReplay is the
+// crash wall for the served seal protocol. The immutable request and its
+// tenant-scoped worker command must project in one PostgreSQL transaction. If a
+// crash or operator repair removes only the derived outbox row, replaying the
+// exact same event must reconstruct the same command without inventing another
+// lifecycle operation.
+func TestTenantKeyDomainSealRequestProjectsDurableOutboxAndRepairsReplay(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	p := projections.New(s)
+
+	migrated := tenantKeyDomainSnapshot(
+		store.TenantKeyDomainStatePartial,
+		store.TenantKeyOperationCompleted,
+		10,
+	)
+	migrated.ProgressCompleted = migrated.ProgressTotal
+	migrated.LegacyHistoryExposure = store.TenantKeyLegacyExternalArchivesPossible
+	if err := p.Apply(ctx, tenantKeyDomainEvent(
+		t,
+		projections.EventTenantKeyDomainMigrationCompleted,
+		10,
+		migrated,
+	)); err != nil {
+		t.Fatalf("seed migrated domain: %v", err)
+	}
+
+	operationID := "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	queued := migrated
+	queued.State = store.TenantKeyDomainStateSealQueued
+	queued.OperationID = &operationID
+	queued.OperationKind = store.TenantKeyOperationSeal
+	queued.OperationStatus = store.TenantKeyOperationPending
+	queued.SealIdempotencyKey = "operator-seal-key"
+	queued.SealRequestBinding = strings.Repeat("a", 64)
+	event := tenantKeyDomainEvent(t, projections.EventTenantKeyDomainSealRequested, 11, queued)
+	if err := p.Apply(ctx, event); err != nil {
+		t.Fatalf("apply seal request: %v", err)
+	}
+	assertTenantKeyDomainSealOutbox(t, s, tenantA, operationID, queued.SealIdempotencyKey, queued.SealRequestBinding)
+
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`DELETE FROM outbox
+			  WHERE tenant_id = $1 AND idempotency_key = $2`,
+			tenantA, store.TenantKeyDomainSealOutboxKey(operationID))
+		return err
+	}); err != nil {
+		t.Fatalf("simulate missing derived seal outbox: %v", err)
+	}
+	if err := p.Apply(ctx, event); err != nil {
+		t.Fatalf("replay seal request: %v", err)
+	}
+	assertTenantKeyDomainSealOutbox(t, s, tenantA, operationID, queued.SealIdempotencyKey, queued.SealRequestBinding)
+}
+
+func assertTenantKeyDomainSealOutbox(
+	t *testing.T,
+	s *store.Store,
+	tenantID, operationID, idempotencyKey, requestBinding string,
+) {
+	t.Helper()
+	var destination, effectLane, outboxKey string
+	var payload []byte
+	if err := s.WithTenant(context.Background(), tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(),
+			`SELECT destination, effect_lane, idempotency_key, payload
+			   FROM outbox
+			  WHERE tenant_id = $1 AND idempotency_key = $2`,
+			tenantID, store.TenantKeyDomainSealOutboxKey(operationID)).Scan(
+			&destination, &effectLane, &outboxKey, &payload,
+		)
+	}); err != nil {
+		t.Fatalf("read projected seal outbox: %v", err)
+	}
+	if destination != store.TenantKeyDomainSealDestination ||
+		effectLane != store.TenantKeyDomainSealEffectLane ||
+		outboxKey != store.TenantKeyDomainSealOutboxKey(operationID) {
+		t.Fatalf("seal outbox routing = %q/%q/%q", destination, effectLane, outboxKey)
+	}
+	var command store.TenantKeyDomainSealCommand
+	if err := json.Unmarshal(payload, &command); err != nil {
+		t.Fatalf("decode seal outbox: %v", err)
+	}
+	if command.OperationID != operationID || command.IdempotencyKey != idempotencyKey ||
+		command.RequestBinding != requestBinding {
+		t.Fatalf("seal outbox command = %+v", command)
+	}
+}
+
 // TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract pins the eight
 // immutable names and the one deterministic payload shape. Each event is accepted
 // by schema validation and projects the exact full snapshot it carries.
@@ -146,7 +239,7 @@ func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T)
 		store.TenantKeyDomainStatePartial,
 		store.TenantKeyDomainStatePartial,
 		store.TenantKeyDomainStateWrapperUnavailable,
-		store.TenantKeyDomainStateSealing,
+		store.TenantKeyDomainStateSealQueued,
 		store.TenantKeyDomainStateSealed,
 		store.TenantKeyDomainStateUnsealing,
 		store.TenantKeyDomainStateUnsealed,
@@ -194,6 +287,11 @@ func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T)
 				snapshot.OperationStatus = store.TenantKeyOperationFailed
 				snapshot.LastErrorCode = "wrapper_unavailable"
 				snapshot.LastError = "configured tenant wrapper is unavailable"
+			}
+			if typ == projections.EventTenantKeyDomainSealRequested {
+				snapshot.OperationStatus = store.TenantKeyOperationPending
+				snapshot.SealIdempotencyKey = "projection-seal-request"
+				snapshot.SealRequestBinding = strings.Repeat("c", 64)
 			}
 			if err := p.Apply(ctx, tenantKeyDomainEvent(t, typ, uint64(i+2), snapshot)); err != nil {
 				t.Fatalf("Apply(%s): %v", typ, err)
@@ -386,7 +484,7 @@ func TestTenantKeyDomainProjectionCannotEraseLegacyExposureOnLaterTransitions(t 
 	}{
 		{projections.EventTenantKeyDomainMigrationProgressed, store.TenantKeyDomainStatePartial, store.TenantKeyOperationMigrate, store.TenantKeyOperationRunning},
 		{projections.EventTenantKeyDomainMigrationFailed, store.TenantKeyDomainStatePartial, store.TenantKeyOperationMigrate, store.TenantKeyOperationFailed},
-		{projections.EventTenantKeyDomainSealRequested, store.TenantKeyDomainStateSealing, store.TenantKeyOperationSeal, store.TenantKeyOperationRunning},
+		{projections.EventTenantKeyDomainSealRequested, store.TenantKeyDomainStateSealQueued, store.TenantKeyOperationSeal, store.TenantKeyOperationPending},
 		{projections.EventTenantKeyDomainSealed, store.TenantKeyDomainStateSealed, store.TenantKeyOperationSeal, store.TenantKeyOperationCompleted},
 		{projections.EventTenantKeyDomainUnsealRequested, store.TenantKeyDomainStateUnsealing, store.TenantKeyOperationUnseal, store.TenantKeyOperationRunning},
 		{projections.EventTenantKeyDomainUnsealed, store.TenantKeyDomainStateUnsealed, store.TenantKeyOperationUnseal, store.TenantKeyOperationCompleted},
@@ -416,6 +514,10 @@ func TestTenantKeyDomainProjectionCannotEraseLegacyExposureOnLaterTransitions(t 
 			next := tenantKeyDomainSnapshot(test.state, test.status, 1)
 			next.OperationKind = test.kind
 			next.LegacyHistoryExposure = store.TenantKeyLegacyExternalArchivesPossible
+			if test.typ == projections.EventTenantKeyDomainSealRequested {
+				next.SealIdempotencyKey = "projection-exposure-seal"
+				next.SealRequestBinding = strings.Repeat("d", 64)
+			}
 			if test.typ == projections.EventTenantKeyDomainMigrationFailed {
 				next.LastErrorCode = "wrapper_unavailable"
 				next.LastError = "configured tenant wrapper is unavailable"

@@ -404,31 +404,37 @@ type PQCMigrationCampaignClosed struct {
 // an empty PostgreSQL database. A missing record is not represented here: it is
 // the explicit legacy deployment-KEK mode synthesized by the service/API.
 type TenantKeyDomainSnapshot struct {
-	DomainID               string     `json:"domain_id"`
-	Generation             int64      `json:"generation"`
-	ProtectionMode         string     `json:"protection_mode"`
-	State                  string     `json:"state"`
-	WrapperKind            string     `json:"wrapper_kind"`
-	WrapperID              string     `json:"wrapper_id"`
-	WrappedDomainKEK       []byte     `json:"wrapped_domain_kek"`
-	OperationID            *string    `json:"operation_id,omitempty"`
-	OperationKind          string     `json:"operation_kind"`
-	OperationStatus        string     `json:"operation_status"`
-	MigrationStage         string     `json:"migration_stage,omitempty"`
-	ProgressCompleted      int64      `json:"progress_completed"`
-	ProgressTotal          int64      `json:"progress_total"`
-	ProgressCursor         string     `json:"progress_cursor,omitempty"`
-	Retryable              bool       `json:"retryable"`
-	LastErrorCode          string     `json:"last_error_code,omitempty"`
-	LastError              string     `json:"last_error,omitempty"`
-	LegacyHistoryExposure  string     `json:"legacy_history_exposure"`
-	MigrationStartedAt     *time.Time `json:"migration_started_at,omitempty"`
-	MigrationCompletedAt   *time.Time `json:"migration_completed_at,omitempty"`
-	SealedAt               *time.Time `json:"sealed_at,omitempty"`
-	UnsealedAt             *time.Time `json:"unsealed_at,omitempty"`
-	TransitionEvidenceRefs []string   `json:"transition_evidence_refs,omitempty"`
-	CreatedAt              time.Time  `json:"created_at,omitempty"`
-	UpdatedAt              time.Time  `json:"updated_at,omitempty"`
+	DomainID              string     `json:"domain_id"`
+	Generation            int64      `json:"generation"`
+	ProtectionMode        string     `json:"protection_mode"`
+	State                 string     `json:"state"`
+	WrapperKind           string     `json:"wrapper_kind"`
+	WrapperID             string     `json:"wrapper_id"`
+	WrappedDomainKEK      []byte     `json:"wrapped_domain_kek"`
+	OperationID           *string    `json:"operation_id,omitempty"`
+	OperationKind         string     `json:"operation_kind"`
+	OperationStatus       string     `json:"operation_status"`
+	MigrationStage        string     `json:"migration_stage,omitempty"`
+	ProgressCompleted     int64      `json:"progress_completed"`
+	ProgressTotal         int64      `json:"progress_total"`
+	ProgressCursor        string     `json:"progress_cursor,omitempty"`
+	Retryable             bool       `json:"retryable"`
+	LastErrorCode         string     `json:"last_error_code,omitempty"`
+	LastError             string     `json:"last_error,omitempty"`
+	LegacyHistoryExposure string     `json:"legacy_history_exposure"`
+	MigrationStartedAt    *time.Time `json:"migration_started_at,omitempty"`
+	MigrationCompletedAt  *time.Time `json:"migration_completed_at,omitempty"`
+	SealedAt              *time.Time `json:"sealed_at,omitempty"`
+	UnsealedAt            *time.Time `json:"unsealed_at,omitempty"`
+	// SealIdempotencyKey and SealRequestBinding exist only on
+	// tenant.key_domain.seal_requested. They let exact event replay rebuild the
+	// derived bounded-worker command after a projection/outbox crash. Neither is
+	// key material; RequestBinding is already a non-secret digest.
+	SealIdempotencyKey     string    `json:"seal_idempotency_key,omitempty"`
+	SealRequestBinding     string    `json:"seal_request_binding,omitempty"`
+	TransitionEvidenceRefs []string  `json:"transition_evidence_refs,omitempty"`
+	CreatedAt              time.Time `json:"created_at,omitempty"`
+	UpdatedAt              time.Time `json:"updated_at,omitempty"`
 }
 
 // AccessChangeRequestCreated is the payload of
@@ -3038,7 +3044,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if e.Actor != nil {
 			actor = e.Actor.Subject
 		}
-		return p.store.ApplyTenantKeyDomainSnapshotTx(ctx, tx, store.TenantKeyDomain{
+		if err := p.store.ApplyTenantKeyDomainSnapshotTx(ctx, tx, store.TenantKeyDomain{
 			TenantID: e.TenantID, DomainID: pl.DomainID, Generation: pl.Generation,
 			ProtectionMode: pl.ProtectionMode, State: pl.State,
 			WrapperKind: pl.WrapperKind, WrapperID: pl.WrapperID,
@@ -3055,7 +3061,16 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			LastTransitionAt:           e.Time,
 			LastTransitionEvidenceRefs: pl.TransitionEvidenceRefs,
 			LastTransitionSequence:     e.Sequence, CreatedAt: createdAt, UpdatedAt: updatedAt,
-		})
+		}); err != nil {
+			return err
+		}
+		if e.Type == EventTenantKeyDomainSealRequested {
+			return p.store.EnsureTenantKeyDomainSealOutboxTx(
+				ctx, tx, e.TenantID, *pl.OperationID,
+				pl.SealIdempotencyKey, pl.SealRequestBinding,
+			)
+		}
+		return nil
 	case EventNHIAccessReviewCampaignStarted:
 		var pl NHIAccessReviewCampaignStarted
 		if err := decode(e, &pl); err != nil {
@@ -3192,6 +3207,7 @@ func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapsho
 		store.TenantKeyDomainStateMigrating,
 		store.TenantKeyDomainStatePartial,
 		store.TenantKeyDomainStateUnsealed,
+		store.TenantKeyDomainStateSealQueued,
 		store.TenantKeyDomainStateSealing,
 		store.TenantKeyDomainStateSealed,
 		store.TenantKeyDomainStateUnsealing,
@@ -3267,10 +3283,12 @@ func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapsho
 			return fmt.Errorf("projections: %s must preserve failed migration progress and a visible error", eventType)
 		}
 	case EventTenantKeyDomainSealRequested:
-		if pl.State != store.TenantKeyDomainStateSealing ||
+		if pl.State != store.TenantKeyDomainStateSealQueued ||
 			pl.OperationKind != store.TenantKeyOperationSeal ||
-			!oneOf(pl.OperationStatus, store.TenantKeyOperationPending, store.TenantKeyOperationRunning) {
-			return fmt.Errorf("projections: %s must carry a pending/running seal operation", eventType)
+			pl.OperationStatus != store.TenantKeyOperationPending ||
+			strings.TrimSpace(pl.SealIdempotencyKey) == "" ||
+			strings.TrimSpace(pl.SealRequestBinding) == "" {
+			return fmt.Errorf("projections: %s must carry a queued seal operation with its idempotency key and request binding", eventType)
 		}
 	case EventTenantKeyDomainSealed:
 		if pl.State != store.TenantKeyDomainStateSealed ||

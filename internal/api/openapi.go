@@ -2108,6 +2108,10 @@ func componentSchemas() map[string]*Schema {
 		"wrapper_kind": {Type: "string", Enum: []string{"local_file"}},
 		"wrapper_id":   str(),
 	}, "wrapper_id")
+	tenantKeyDomainSealReceipt := object(map[string]*Schema{
+		"accepted": {Type: "boolean"}, "operation_id": uuid(),
+		"state": str(), "status_url": str(),
+	}, "accepted", "operation_id", "state", "status_url")
 	tenantKeyDomainStatus := object(map[string]*Schema{
 		"served": {Type: "boolean"}, "protection_mode": str(), "state": str(),
 		"domain_id": uuid(), "generation": {Type: "integer"},
@@ -3751,6 +3755,7 @@ func componentSchemas() map[string]*Schema {
 		"SystemDependency":                         systemDependency,
 		"IdempotencyResultProtectionReadout":       idempotencyResultProtection,
 		"TenantKeyDomainMigrateRequest":            tenantKeyDomainMigrateRequest,
+		"TenantKeyDomainSealReceipt":               tenantKeyDomainSealReceipt,
 		"TenantKeyDomainStatus":                    tenantKeyDomainStatus,
 		"SystemReadout":                            systemReadout,
 		"BulkheadPool":                             bulkheadPool,

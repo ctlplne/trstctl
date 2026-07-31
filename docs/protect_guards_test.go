@@ -172,6 +172,7 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 		"{Name: SubsystemOutboxTransparency",
 		"{Name: SubsystemOutboxCodeSigning",
 		"{Name: SubsystemOutboxNotifications",
+		"{Name: SubsystemOutboxTenantSeal",
 		"{Name: SubsystemSigning",
 		"{Name: SubsystemQuery",
 		"{Name: SubsystemPolicy",
@@ -194,6 +195,7 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 		"pool: bulkhead.SubsystemOutboxTransparency",
 		"pool: bulkhead.SubsystemOutboxCodeSigning",
 		"pool: bulkhead.SubsystemOutboxNotifications",
+		"pool: bulkhead.SubsystemOutboxTenantSeal",
 		"s.bulk.Close()",
 		"drain outbox",
 	} {
@@ -3060,6 +3062,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 		"SubsystemOutboxTransparency",
 		"SubsystemOutboxCodeSigning",
 		"SubsystemOutboxNotifications",
+		"SubsystemOutboxTenantSeal",
 		"SubsystemSigning",
 		"SubsystemQuery",
 		"SubsystemProtocols",

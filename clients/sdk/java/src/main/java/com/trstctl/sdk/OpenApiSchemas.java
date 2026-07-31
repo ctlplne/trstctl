@@ -463,6 +463,7 @@ public final class OpenApiSchemas {
       "SystemDependency",
       "SystemReadout",
       "TenantKeyDomainMigrateRequest",
+      "TenantKeyDomainSealReceipt",
       "TenantKeyDomainStatus",
       "TenantWriteFence",
       "ThirdPartySecretScanIngestRequest",

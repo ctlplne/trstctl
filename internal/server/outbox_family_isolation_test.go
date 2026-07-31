@@ -257,6 +257,7 @@ func TestOutboxDispatchFamiliesAreDisjointAndComplete(t *testing.T) {
 		"transparency.rekor":      bulkhead.SubsystemOutboxTransparency,
 		"codesign.command":        bulkhead.SubsystemOutboxCodeSigning,
 		"notification.expiry":     bulkhead.SubsystemOutboxNotifications,
+		"tenantseal.seal":         bulkhead.SubsystemOutboxTenantSeal,
 		"revocation.publish":      bulkhead.SubsystemOutbox,
 		"acme.dns01.present":      bulkhead.SubsystemOutbox,
 		"third-party.destination": bulkhead.SubsystemOutbox,

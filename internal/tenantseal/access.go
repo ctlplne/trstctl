@@ -26,6 +26,7 @@ type Status string
 const (
 	StatusMigrating          Status = store.TenantKeyDomainStateMigrating
 	StatusPartial            Status = store.TenantKeyDomainStatePartial
+	StatusSealQueued         Status = store.TenantKeyDomainStateSealQueued
 	StatusSealing            Status = store.TenantKeyDomainStateSealing
 	StatusSealed             Status = store.TenantKeyDomainStateSealed
 	StatusUnsealing          Status = store.TenantKeyDomainStateUnsealing
@@ -279,6 +280,19 @@ func resolveDomainAccessMode(tenantID string, domain store.TenantKeyDomain) (dom
 			return domainAccessDualMigration, ""
 		}
 		return domainAccessDenied, StatusMigrating
+	case store.TenantKeyDomainStateSealQueued:
+		queuedSeal := domain.OperationID != nil && *domain.OperationID != "" &&
+			domain.OperationKind == store.TenantKeyOperationSeal &&
+			domain.OperationStatus == store.TenantKeyOperationPending &&
+			knownLegacyExposure(domain.LegacyHistoryExposure)
+		if queuedSeal {
+			// The request is durable, but the worker has not yet proven the
+			// idempotency-result completion wall. Crypto remains available and
+			// the worker later acquires the exclusive fence before committing
+			// sealed, so this state never pretends the seal already happened.
+			return domainAccessTenantOnly, ""
+		}
+		return domainAccessDenied, StatusSealQueued
 	case store.TenantKeyDomainStateSealing:
 		return domainAccessDenied, StatusSealing
 	case store.TenantKeyDomainStateSealed:

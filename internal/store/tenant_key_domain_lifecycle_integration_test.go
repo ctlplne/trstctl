@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -183,9 +184,27 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	sealedState, err := lifecycle.Seal(ctx, tenantA)
+	queuedState, err := lifecycle.RequestSeal(
+		ctx, tenantA, "tenant-a-seal-request", strings.Repeat("b", 64),
+	)
+	if err != nil || queuedState.State != store.TenantKeyDomainStateSealQueued ||
+		queuedState.OperationStatus != store.TenantKeyOperationPending ||
+		queuedState.OperationID == nil {
+		t.Fatalf("RequestSeal state=%+v err=%v", queuedState, err)
+	}
+	// A queued request is not a pretend seal. Existing work stays available until
+	// the result-cache wall is complete and the bounded worker owns the exclusive
+	// fence.
+	if err := access.WithTenant(ctx, tenantA, func(cipher tenantseal.Cipher) error {
+		_, err := cipher.Open(migratedA, aadA)
+		return err
+	}); err != nil {
+		t.Fatalf("tenant A stopped before the bounded seal worker: %v", err)
+	}
+
+	sealedState, err := lifecycle.CompleteSeal(ctx, tenantA, *queuedState.OperationID)
 	if err != nil || sealedState.State != store.TenantKeyDomainStateSealed {
-		t.Fatalf("Seal state=%+v err=%v", sealedState, err)
+		t.Fatalf("CompleteSeal state=%+v err=%v", sealedState, err)
 	}
 	if err := access.WithTenant(ctx, tenantA, func(tenantseal.Cipher) error {
 		return errors.New("sealed tenant callback ran")
