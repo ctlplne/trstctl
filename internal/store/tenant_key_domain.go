@@ -159,6 +159,40 @@ func (s *Store) GetTenantKeyDomain(ctx context.Context, tenantID string) (Tenant
 	return out, err
 }
 
+// WithTenantKeyDomainShared runs fn while holding this tenant's shared
+// key-domain advisory fence inside the same RLS-scoped PostgreSQL transaction
+// that reads the domain projection. A migration, seal, or unseal transition
+// cannot acquire its matching exclusive fence until fn returns and this
+// transaction releases the shared fence.
+//
+// A nil domain means the tenant has no key-domain row and therefore still uses
+// legacy deployment-KEK protection. The domain pointer is callback-scoped.
+func (s *Store) WithTenantKeyDomainShared(
+	ctx context.Context,
+	tenantID string,
+	fn func(*TenantKeyDomain) error,
+) error {
+	if tenantID == "" {
+		return fmt.Errorf("store: tenant key-domain access requires a tenant id (AN-1)")
+	}
+	if fn == nil {
+		return errors.New("store: tenant key-domain access callback is required")
+	}
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := s.LockTenantKeyDomainSharedTx(ctx, tx, tenantID); err != nil {
+			return err
+		}
+		domain, err := s.GetTenantKeyDomainTx(ctx, tx, tenantID)
+		if errors.Is(err, ErrTenantKeyDomainNotFound) {
+			return fn(nil)
+		}
+		if err != nil {
+			return fmt.Errorf("store: read tenant key domain under shared fence: %w", err)
+		}
+		return fn(&domain)
+	})
+}
+
 // GetTenantKeyDomainTx reads the domain on an existing tenant transaction. A
 // lifecycle command takes the matching advisory lock first, then calls this
 // method so validation and event append observe one fenced state.

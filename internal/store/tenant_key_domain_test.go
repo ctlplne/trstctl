@@ -62,9 +62,15 @@ func TestTenantKeyDomainRLSAndWrappedKeyBytes(t *testing.T) {
 		t.Fatalf("project tenant A key domain: %v", err)
 	}
 
-	got, err := s.GetTenantKeyDomain(ctx, tenantA)
-	if err != nil {
-		t.Fatalf("GetTenantKeyDomain(A): %v", err)
+	var got store.TenantKeyDomain
+	if err := s.WithTenantKeyDomainShared(ctx, tenantA, func(domain *store.TenantKeyDomain) error {
+		if domain == nil {
+			return errors.New("tenant A projected domain was reported as legacy")
+		}
+		got = *domain
+		return nil
+	}); err != nil {
+		t.Fatalf("WithTenantKeyDomainShared(A): %v", err)
 	}
 	if !bytes.Equal(got.WrappedDomainKEK, want.WrappedDomainKEK) {
 		t.Fatalf("wrapped domain KEK = %x, want %x (must round-trip as bytes)", got.WrappedDomainKEK, want.WrappedDomainKEK)
@@ -106,9 +112,9 @@ func TestTenantKeyDomainSharedLockFencesExclusiveTransition(t *testing.T) {
 	releaseShared := make(chan struct{})
 	sharedDone := make(chan error, 1)
 	go func() {
-		sharedDone <- s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-			if err := s.LockTenantKeyDomainSharedTx(ctx, tx, tenantA); err != nil {
-				return err
+		sharedDone <- s.WithTenantKeyDomainShared(ctx, tenantA, func(domain *store.TenantKeyDomain) error {
+			if domain != nil {
+				return errors.New("missing key-domain row was not represented as legacy deployment protection")
 			}
 			close(sharedHeld)
 			<-releaseShared
