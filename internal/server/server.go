@@ -638,6 +638,7 @@ type Server struct {
 	mRetRuns     *observ.Counter
 	mRetArchived *observ.Counter
 	mRetPruned   *observ.Counter
+	mRetRetained *observ.Counter
 	mRetFailures *observ.Counter
 	mRetLastOK   *observ.Gauge
 
@@ -1524,7 +1525,8 @@ func (s *Server) configureRetentionWorker(d Deps, auditSvc *audit.Service) {
 	s.retention = audit.NewRetentionWorker(auditSvc, d.Log, audit.DirArchiver{Dir: d.AuditArchiveDir}, d.Store, d.AuditRetention)
 	s.mRetRuns = s.registry.CounterVec("trstctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
 	s.mRetArchived = s.registry.CounterVec("trstctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
-	s.mRetPruned = s.registry.CounterVec("trstctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
+	s.mRetPruned = s.registry.CounterVec("trstctl_audit_records_pruned_total", "Compatibility metric; always zero because logical audit retention never deletes the shared AN-2 source.", nil).WithLabelValues()
+	s.mRetRetained = s.registry.CounterVec("trstctl_audit_source_records_retained_total", "Archived audit records whose AN-2 source envelopes were retained for rebuild and DR.", nil).WithLabelValues()
 	s.mRetFailures = s.registry.CounterVec("trstctl_audit_retention_failures_total", "Audit retention runs that failed.", nil).WithLabelValues()
 	s.mRetLastOK = s.registry.Gauge("trstctl_audit_retention_last_success_timestamp_seconds", "Unix timestamp of the last successful audit retention run.")
 }
@@ -2716,7 +2718,7 @@ func (s *Server) metricsHandler() http.Handler {
 
 // RunRetentionOnce performs one audit retention pass and records its outcome as
 // metrics. It is exported so the assembled server can be driven through a single
-// archive/prune cycle in tests. A nil worker (retention not configured) is a
+// archive/checkpoint cycle in tests. A nil worker (retention not configured) is a
 // no-op. Errors are logged, not fatal — the next sweep retries.
 func (s *Server) RunRetentionOnce(ctx context.Context) (audit.Summary, error) {
 	if s.retention == nil {
@@ -2736,12 +2738,13 @@ func (s *Server) RunRetentionOnce(ctx context.Context) (audit.Summary, error) {
 	if s.mRetArchived != nil {
 		s.mRetArchived.Add(float64(sum.RecordsArchived))
 		s.mRetPruned.Add(float64(sum.RecordsPruned))
+		s.mRetRetained.Add(float64(sum.RecordsSourceRetained))
 		if sum.SegmentsArchived > 0 {
 			s.mRetRuns.Inc()
 		}
 	}
 	if sum.RecordsArchived > 0 {
-		s.logger.Info("audit retention archived and pruned records",
+		s.logger.Info("audit retention archived records and retained AN-2 source envelopes",
 			slog.Int("records", sum.RecordsArchived), slog.Int("tenants", sum.TenantsProcessed))
 	}
 	return sum, nil

@@ -536,8 +536,8 @@ you must operate.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_AUDIT_SIGNING_KEY_FILE` | `data/audit/signing-key.pem` | PEM path for the evidence-export signing key. It is **persisted** (created `0600` on first boot) so signed bundles verify across restarts; the key no longer rotates each restart. |
-| `TRSTCTL_AUDIT_RETENTION` | — (indefinite) | Retention window, a Go duration (e.g. `8760h`). Empty means **indefinite** (no pruning, the default). When set **and** `TRSTCTL_AUDIT_ARCHIVE_DIR` is given, a background worker **enforces** it: records older than the window are archived to signed bundles, a checkpoint is sealed, and the records are pruned from the hot event log — the chain stays verifiable across the prune. |
-| `TRSTCTL_AUDIT_ARCHIVE_DIR` | — | Cold-storage directory for the signed archive bundles (`<dir>/<tenant>/audit-<seq>.jws`, `0600`). **Required to enable retention pruning** (without it, retention is documentation only). Point it at WORM-backed storage you protect. See [Audit retention and archive lifecycle](compliance.md#audit-retention-and-archive-lifecycle). |
+| `TRSTCTL_AUDIT_RETENTION` | — (indefinite) | Served audit-view window, a Go duration (e.g. `8760h`). Empty means **indefinite** (the default). When set **and** `TRSTCTL_AUDIT_ARCHIVE_DIR` is given, a background worker archives older records to signed bundles, verifies the bundle, and advances a replayable tenant checkpoint so those records leave the live query view. Their underlying AN-2 event envelopes remain retained for projection rebuild and disaster recovery. |
+| `TRSTCTL_AUDIT_ARCHIVE_DIR` | — | Cold-storage directory for the signed archive bundles (`<dir>/<tenant>/audit-<seq>.jws`, `0600`). **Required to advance the served-view retention floor**; without it the view remains indefinite. Point it at WORM-backed storage you protect. See [Audit retention and archive lifecycle](compliance.md#audit-retention-and-archive-lifecycle). |
 
 The audit query (`/api/v1/audit/events`) and signed export (`/api/v1/audit/export`)
 endpoints are wired into the serving binary, so they return real data — not an

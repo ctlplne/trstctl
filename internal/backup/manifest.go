@@ -18,10 +18,12 @@ import "trstctl.com/trstctl/internal/store"
 //     log is the backup; on restore these are truncated and re-derived by
 //     projections.Rebuild. This set must equal store.ReadModelTables (the manifest
 //     test asserts it), so a projection table can never drift out of the rebuild.
-//   - RecoveredFromPostgresBackup — independent state not derived from the log
-//     (tokens, discovery inventory, attestations, the outbox,
-//     idempotency keys, audit checkpoints, …). Recovered from the PostgreSQL dump
-//     in the backup set.
+//   - RecoveredFromPostgresBackup — independent state plus durable restore
+//     receivers (tokens, discovery inventory, attestations, the outbox,
+//     idempotency keys, logical audit checkpoints, …). Audit checkpoints also
+//     rebuild from audit.archived v2 during event-only recovery; carrying them in
+//     the paired PostgreSQL artifact preserves the exact served-view boundary and
+//     enables retained-source preflight before restore mutation.
 //   - Ephemeral — state that is NOT required to recover and regenerates on its own
 //     (rate-limit token buckets). Captured incidentally by the PostgreSQL dump but
 //     never depended on for a correct restore.

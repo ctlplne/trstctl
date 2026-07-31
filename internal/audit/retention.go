@@ -12,14 +12,22 @@ import (
 	"sort"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 )
 
 // EventTypeArchived is the event appended after a retention run, recording that a
-// segment of audit records was archived to cold storage and pruned from the hot
-// log. It is itself an audit record (a survivor of the prune), so the action is
-// observable in the trail it maintains.
-const EventTypeArchived = "audit.archived"
+// segment of audit records was archived to cold storage and retired from the
+// served audit-query view. The underlying AN-2 event envelopes stay in the log:
+// projection rebuild and disaster recovery still need them.
+const (
+	EventTypeArchived = "audit.archived"
+
+	// ArchivedEventSchemaVersion is version 2 because the original v1 event used
+	// a tenant-local boundary and segment-local count. Those coordinates cannot
+	// reconstruct a global event-log checkpoint after PostgreSQL loss.
+	ArchivedEventSchemaVersion = 2
+)
 
 // Archiver writes a signed, offline-verifiable audit segment to durable cold
 // storage and returns a locator. DirArchiver writes to a local directory
@@ -51,30 +59,32 @@ func (a DirArchiver) Archive(_ context.Context, tenantID string, boundarySeq uin
 	return path, nil
 }
 
-// retentionEvent is the payload of an EventTypeArchived event.
-type retentionEvent struct {
-	Count        int    `json:"count"`
-	BoundarySeq  uint64 `json:"boundary_sequence"`
-	BoundaryHash string `json:"boundary_hash"`
-	ArchiveURI   string `json:"archive_uri"`
+// ArchivedEvent is the durable, replayable payload of EventTypeArchived. It uses
+// the global event-stream boundary and cumulative tenant record count so an
+// event-only restore can reconstruct the exact logical audit checkpoint.
+type ArchivedEvent struct {
+	Count                 int    `json:"count"`
+	BoundarySeq           uint64 `json:"boundary_sequence"`
+	BoundaryHash          string `json:"boundary_hash"`
+	ArchiveURI            string `json:"archive_uri"`
+	SourceHistoryRetained bool   `json:"source_history_retained"`
 }
 
 // Summary reports what a retention run did — surfaced as metrics by the server.
 type Summary struct {
-	TenantsProcessed int
-	SegmentsArchived int
-	RecordsArchived  int
-	RecordsPruned    int
+	TenantsProcessed      int
+	SegmentsArchived      int
+	RecordsArchived       int
+	RecordsSourceRetained int
+	// RecordsPruned remains for metrics/API compatibility. It is always zero:
+	// deleting audit records from the shared AN-2 source makes rebuild lossy.
+	RecordsPruned int
 }
 
-// RetentionWorker archives and prunes audit records older than Retention while
-// keeping the tamper-evident chain verifiable across the prune (R4.4). It is the
-// runtime consumer that makes Audit.Retention/ArchiveDir do real work instead of
-// being inert config. One run, per tenant: take the leading run of records older
-// than the window, sign it as an offline-verifiable bundle, VERIFY it recovers,
-// archive it to cold storage, SEAL a signed checkpoint (the survivors' new chain
-// anchor), then DELETE those events from the hot log and emit an audit event. The
-// archived bundle plus the live log remain the authoritative history.
+// RetentionWorker archives audit records older than Retention and advances the
+// live audit-query floor while preserving the AN-2 source envelopes needed for
+// projection rebuild. Search starts after the checkpoint, so the segment leaves
+// the served hot view; the event log retains it for recovery.
 type RetentionWorker struct {
 	svc       *Service
 	log       *events.Log
@@ -113,7 +123,7 @@ func (w *RetentionWorker) RunOnce(ctx context.Context) (Summary, error) {
 			sum.TenantsProcessed++
 			sum.SegmentsArchived++
 			sum.RecordsArchived += n
-			sum.RecordsPruned += n
+			sum.RecordsSourceRetained += n
 		}
 	}
 	return sum, nil
@@ -137,9 +147,27 @@ func (w *RetentionWorker) liveTenants(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
-// archiveTenant archives+prunes one tenant's records older than cutoff and returns
-// how many were processed (0 if nothing was due).
+// archiveTenant archives one tenant's records older than cutoff, advances the
+// logical live-query floor, and returns how many were processed.
 func (w *RetentionWorker) archiveTenant(ctx context.Context, tenantID string, cutoff time.Time) (int, error) {
+	// An older process may have saved a checkpoint before appending its replayable
+	// event. Repair that crash window only after proving the complete source
+	// prefix is still present; never continue a legacy physical prune.
+	if w.svc.checkpoints != nil {
+		checkpoint, ok, err := w.svc.checkpoints.LatestAuditCheckpoint(ctx, tenantID)
+		if err != nil {
+			return 0, err
+		}
+		if ok {
+			if err := VerifyCheckpointSourceRetained(ctx, w.log, checkpoint); err != nil {
+				return 0, err
+			}
+			if err := w.ensureArchivedEvent(ctx, checkpoint); err != nil {
+				return 0, err
+			}
+		}
+	}
+
 	// Survivors past the last sealed boundary, already hash-linked from it.
 	recs, err := w.svc.Search(ctx, Query{TenantID: tenantID})
 	if err != nil {
@@ -173,42 +201,138 @@ func (w *RetentionWorker) archiveTenant(ctx context.Context, tenantID string, cu
 	if err != nil {
 		return 0, err
 	}
-	// 2) Verify it recovers and its chain checks out BEFORE pruning anything.
+	// 2) Verify it recovers and its chain checks out BEFORE advancing the view.
 	if _, err := VerifyBundle(signed, w.svc.VerificationKeys()); err != nil {
-		return 0, fmt.Errorf("archived segment failed verification — not pruning: %w", err)
+		return 0, fmt.Errorf("archived segment failed verification — checkpoint not advanced: %w", err)
 	}
 	uri, err := w.archiver.Archive(ctx, tenantID, boundary.Sequence, signed)
 	if err != nil {
 		return 0, err
 	}
-	// 3) Seal the checkpoint — the survivors' new chain anchor.
-	if err := w.sink.SaveAuditCheckpoint(ctx, Checkpoint{
+	checkpoint := Checkpoint{
 		TenantID: tenantID, BoundarySeq: boundary.StreamSequence, BoundaryHash: boundary.Hash,
 		RecordCount: int(boundary.Sequence), ArchiveURI: uri,
-	}); err != nil {
+	}
+	// 3) Append the replayable checkpoint event first. If PostgreSQL fails next,
+	// projection or retry reconstructs the row from this deterministic event.
+	if err := w.ensureArchivedEvent(ctx, checkpoint); err != nil {
 		return 0, err
 	}
-	// 4) Prune the archived events from the hot log (the only delete in the system,
-	// and only after archive+verify+seal — AN-2 exception, R4.4).
 	for _, r := range segment {
 		if r.StreamSequence == 0 {
 			return 0, fmt.Errorf("audit: record %d missing stream sequence", r.Sequence)
 		}
-		if err := w.log.Delete(ctx, r.StreamSequence); err != nil {
-			return 0, fmt.Errorf("prune stream seq %d: %w", r.StreamSequence, err)
-		}
 	}
-	// 5) Emit an audit event recording the run (observable and itself auditable).
-	data, err := json.Marshal(retentionEvent{
-		Count: len(segment), BoundarySeq: boundary.Sequence, BoundaryHash: boundary.Hash, ArchiveURI: uri,
-	})
-	if err != nil {
+	// 4) Seal the logical audit-query boundary. The complete event source does not
+	// change, so a rebuild can reproduce every projection.
+	if err := w.sink.SaveAuditCheckpoint(ctx, checkpoint); err != nil {
 		return 0, err
 	}
-	if _, err := w.log.Append(ctx, events.Event{Type: EventTypeArchived, TenantID: tenantID, Data: data}); err != nil {
-		return 0, fmt.Errorf("append archive event: %w", err)
-	}
 	return len(segment), nil
+}
+
+func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint Checkpoint) error {
+	found := false
+	if err := w.log.Replay(ctx, checkpoint.BoundarySeq+1, func(event events.Event) error {
+		if event.TenantID != checkpoint.TenantID || event.Type != EventTypeArchived {
+			return nil
+		}
+		var payload ArchivedEvent
+		if err := json.Unmarshal(event.Data, &payload); err != nil {
+			return fmt.Errorf("decode audit archive event at sequence %d: %w", event.Sequence, err)
+		}
+		if event.SchemaVersion == ArchivedEventSchemaVersion &&
+			payload.SourceHistoryRetained &&
+			payload.BoundarySeq == checkpoint.BoundarySeq &&
+			payload.BoundaryHash == checkpoint.BoundaryHash &&
+			payload.ArchiveURI == checkpoint.ArchiveURI &&
+			payload.Count == checkpoint.RecordCount {
+			found = true
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if found {
+		return nil
+	}
+	payload := ArchivedEvent{
+		Count:                 checkpoint.RecordCount,
+		BoundarySeq:           checkpoint.BoundarySeq,
+		BoundaryHash:          checkpoint.BoundaryHash,
+		ArchiveURI:            checkpoint.ArchiveURI,
+		SourceHistoryRetained: true,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	idDigest := crypto.SHA256Hex([]byte(fmt.Sprintf(
+		"%s\x00%d\x00%s\x00%s",
+		checkpoint.TenantID,
+		checkpoint.BoundarySeq,
+		checkpoint.BoundaryHash,
+		checkpoint.ArchiveURI,
+	)))
+	if _, err := w.log.Append(ctx, events.Event{
+		ID:            "audit-archive-" + idDigest,
+		Type:          EventTypeArchived,
+		TenantID:      checkpoint.TenantID,
+		SchemaVersion: ArchivedEventSchemaVersion,
+		Data:          data,
+	}); err != nil {
+		return fmt.Errorf("append archive event: %w", err)
+	}
+	return nil
+}
+
+// VerifyCheckpointSourceRetained proves that the exact tenant-event cardinality
+// covered by a sealed audit checkpoint is still present in the shared AN-2 event
+// source. The checkpoint hash is intentionally not recomputed: an authorized
+// privacy rewrite may pseudonymize the retained hidden prefix while preserving
+// every stream position and envelope identity.
+func VerifyCheckpointSourceRetained(
+	ctx context.Context,
+	log *events.Log,
+	checkpoint Checkpoint,
+) error {
+	if log == nil {
+		return errors.New("audit: retained-source verification requires an event log")
+	}
+	if checkpoint.TenantID == "" || checkpoint.BoundarySeq == 0 ||
+		checkpoint.RecordCount <= 0 || checkpoint.BoundaryHash == "" ||
+		checkpoint.ArchiveURI == "" {
+		return errors.New("audit: retained-source verification requires a complete checkpoint")
+	}
+	head, err := log.LastSequence(ctx)
+	if err != nil {
+		return fmt.Errorf("audit: read event head for retained-source verification: %w", err)
+	}
+	if checkpoint.BoundarySeq > head {
+		return fmt.Errorf(
+			"audit: checkpoint boundary %d is outside event head %d",
+			checkpoint.BoundarySeq, head,
+		)
+	}
+	count := 0
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Sequence > checkpoint.BoundarySeq {
+			return nil
+		}
+		if event.TenantID == checkpoint.TenantID {
+			count++
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("audit: verify retained checkpoint source: %w", err)
+	}
+	if count != checkpoint.RecordCount {
+		return fmt.Errorf(
+			"audit: checkpoint source history is incomplete for tenant %s: retained %d of %d events through sequence %d; refusing lossy retention/rebuild",
+			checkpoint.TenantID, count, checkpoint.RecordCount, checkpoint.BoundarySeq,
+		)
+	}
+	return nil
 }
 
 // signSegment marshals and signs the segment as a continuation Bundle whose

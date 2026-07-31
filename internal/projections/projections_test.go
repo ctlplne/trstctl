@@ -82,7 +82,7 @@ func newStore(t *testing.T) *store.Store {
 	// Per-test isolation: the whole package shares one database, so reset the
 	// read model and the orchestrator's state/outbox tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits,
+		`TRUNCATE tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits, audit_checkpoints,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,

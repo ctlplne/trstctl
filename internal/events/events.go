@@ -193,10 +193,10 @@ func isNonClusteredReplicaErr(err error) bool {
 // runs with one replica (there is only one server); external (clustered) mode uses
 // the configured Replicas, defaulting to config.DefaultExternalReplicas so a single
 // NATS node loss neither loses an acked event nor takes the log offline. The log
-// itself is intentionally NOT retention-capped here — it is the source of truth, and
-// the only path that shrinks it is the signed archive-then-prune retention worker
-// (Audit.Retention/ArchiveDir), so an operator opts into bounding it rather than the
-// stream silently dropping events.
+// itself is intentionally NOT retention-capped here — it is the source of truth.
+// Audit retention advances a logical served-query floor after writing and
+// verifying a signed archive, but retains every source envelope so rebuild and
+// disaster recovery remain complete.
 func streamConfig(cfg config.NATS) jetstream.StreamConfig {
 	replicas := 1 // embedded is single-node; one replica is the only valid value
 	if cfg.Mode == config.NATSExternal {
@@ -389,12 +389,9 @@ func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) err
 	return nil
 }
 
-// Delete removes a single event by its stream sequence. It is the one exception
-// to the append-only discipline (AN-2), used solely by the audit retention worker
-// (R4.4): an event is deleted only after it has been archived to cold storage as a
-// signed, offline-verifiable bundle and sealed behind a signed checkpoint, so the
-// authoritative history is preserved (archive + live log) and the audit chain
-// stays verifiable across the prune. Replay tolerates the resulting gap.
+// Delete removes a single event by its stream sequence. It exists for explicit
+// repair/migration tooling and tests of legacy gaps; production audit retention
+// never calls it because AN-2 projection rebuild requires the source envelopes.
 func (l *Log) Delete(ctx context.Context, seq uint64) error {
 	if err := l.stream.DeleteMsg(ctx, seq); err != nil {
 		return fmt.Errorf("events: delete seq %d: %w", seq, err)

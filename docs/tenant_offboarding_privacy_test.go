@@ -34,7 +34,7 @@ func TestTenantOffboardingPrivacyBoundaryDocumented(t *testing.T) {
 	}
 
 	compliance := read(t, "compliance.md")
-	for _, want := range []string{"Audit retention and archive lifecycle", "archive", "prune", "WORM", "archive-erasure attestations"} {
+	for _, want := range []string{"Audit retention and archive lifecycle", "archive", "served view", "WORM", "archive-erasure attestations"} {
 		if !strings.Contains(compliance, want) {
 			t.Errorf("compliance.md missing audit retention anchor %q", want)
 		}

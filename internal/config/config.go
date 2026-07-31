@@ -1225,15 +1225,15 @@ func (o OTLP) TimeoutDuration() (time.Duration, error) {
 // its retention lifecycle (R4.4). By default (empty Retention) the event log is
 // retained indefinitely. When Retention is set AND ArchiveDir is given, a
 // background worker enforces it: records older than the window are archived as
-// signed, offline-verifiable bundles under ArchiveDir, a signed checkpoint is
-// sealed, and the records are then pruned from the hot event log — the chain stays
-// verifiable across the prune, and the archive plus the live log remain the
-// authoritative history. SigningKeyFile persists the export/checkpoint signing key
-// so bundles verify across restarts.
+// signed, offline-verifiable bundles under ArchiveDir, then a logical checkpoint
+// retires the prefix from the served audit-query view. The shared AN-2 source
+// envelopes stay present so projection rebuild and event-only DR remain lossless.
+// SigningKeyFile persists the export/checkpoint signing key so bundles verify
+// across restarts.
 type Audit struct {
 	SigningKeyFile string `json:"signing_key_file"` // PEM path; persisted so the export key does not rotate
-	Retention      string `json:"retention"`        // Go duration; empty means indefinite (no pruning, the default)
-	ArchiveDir     string `json:"archive_dir"`      // cold-storage directory for signed archive bundles; required to enable retention pruning
+	Retention      string `json:"retention"`        // Go duration; empty means indefinite (no logical query-floor advance)
+	ArchiveDir     string `json:"archive_dir"`      // cold-storage directory required to enable logical retention
 }
 
 // RetentionDuration parses the retention window. An empty value means indefinite

@@ -143,10 +143,10 @@ trstctl enables the controls below; you operate them:
 - Connect report schedules to your evidence operations — external WORM
   storage, ticketing, email, and webhook dispatch remain operator-run
   until a served runner exists.
-- Set a retention policy. By default the event log is retained
-  indefinitely (no pruning); setting both `TRSTCTL_AUDIT_RETENTION` (e.g.
-  `8760h`) and `TRSTCTL_AUDIT_ARCHIVE_DIR` makes a background worker
-  enforce it: see
+- Set a retention policy. By default the served audit view is retained
+  indefinitely; setting both `TRSTCTL_AUDIT_RETENTION` (e.g. `8760h`) and
+  `TRSTCTL_AUDIT_ARCHIVE_DIR` makes a background worker enforce its logical
+  query floor while preserving the AN-2 source envelopes: see
   [Audit retention and archive lifecycle](#audit-retention-and-archive-lifecycle)
   below. Pointing the archive dir at WORM-backed storage is still your
   call.
@@ -167,32 +167,35 @@ trstctl enables the controls below; you operate them:
 ## Audit retention and archive lifecycle
 
 When `TRSTCTL_AUDIT_RETENTION` and `TRSTCTL_AUDIT_ARCHIVE_DIR` are both
-set, a bounded background worker (per tenant, hourly) enforces the policy
-in four ordered steps:
+set, a bounded background worker (per tenant, hourly) enforces the served
+audit-view policy in four ordered steps:
 
 1. Archive. Records older than the window are signed as a self-contained,
    offline-verifiable bundle and written to
    `ARCHIVE_DIR/<tenant>/audit-<sequence>.jws` (`0600`), verifiable with
    the audit verification key like a live export.
 2. Verify. The worker re-verifies the bundle it just wrote — recovers it
-   and checks the hash chain — before anything is deleted; a failed
-   verification aborts the run and nothing is pruned.
-3. Seal a checkpoint. A signed checkpoint records the boundary (sequence +
-   chain head) in `audit_checkpoints` (tenant-scoped, RLS) — the surviving
-   records' new chain anchor.
-4. Prune. Only now are archived records deleted from the hot event log.
-   Surviving records hash-link onto the checkpoint, so `VerifyChain` still
-   holds across the prune and exported bundles still verify. Each run
-   emits an `audit.archived` event and increments
+   and checks the hash chain — before advancing any served boundary; a
+   failed verification leaves the visible view unchanged.
+3. Record a replayable checkpoint. An `audit.archived` v2 event carries
+   the global event boundary, cumulative tenant record count, chain head,
+   archive locator, and an explicit retained-source assertion. Replaying
+   it reconstructs the tenant-scoped, RLS-protected `audit_checkpoints`
+   receiver after PostgreSQL loss.
+4. Retire from the served view. The checkpoint becomes the visible
+   suffix's chain anchor. Query and export omit the archived prefix, while
+   every underlying AN-2 event envelope stays in JetStream for projection
+   rebuild and disaster recovery. Each run increments
    `trstctl_audit_records_archived_total`,
-   `trstctl_audit_records_pruned_total`, and
+   `trstctl_audit_source_records_retained_total`, and
    `trstctl_audit_retention_runs_total` on `/metrics`.
 
-Each archived segment chains onto the previous one, so the archive bundles
-plus the live log are the authoritative history — a disaster-recovery
-rebuild restores from both together. Archiving to immutable/WORM storage
-remains the operator's responsibility; this is the one place trstctl
-deletes from the event log, and only after archive → verify → seal.
+Each archived segment chains onto the previous one. The complete event log
+remains the AN-2 rebuild source; signed bundles are independently verifiable
+cold evidence, not a substitute event stream. Rebuild verifies that every
+logical checkpoint still has its complete tenant source prefix and fails
+before mutation if legacy or externally damaged history has gaps. Archiving
+to immutable/WORM storage remains the operator's responsibility.
 
 ## Framework mapping — *enables* vs. operator responsibility
 
@@ -204,9 +207,9 @@ meets each control.
 | --- | --- | --- |
 | SOC 2 | CC6 (NHI logical access), CC7.2/7.3 (security event logging/investigation), CC8.1 (change tracking) — *tenant RBAC, NHI posture, attributable event trail, signed evidence* | Trust-services scope, management assertion, effectiveness sampling, subservice carve-outs, the independent CPA SOC 2 examination |
 | ISO 27001 | A.8.15/8.16 (logging, monitoring), A.5.28 (evidence collection) — *event capture + exportable evidence* | Log review cadence, retention schedule, ISMS scope and operation |
-| PCI DSS v4 | Req. 10 (log and monitor access) — *who/what/when trail*; 10.5 — *enforced retention: archive → checkpoint → prune, when configured* | 10.5 the chosen window (≥12 months) + WORM archive storage + 3 available copies, daily review, FIM, key custody |
+| PCI DSS v4 | Req. 10 (log and monitor access) — *who/what/when trail*; 10.5 — *enforced served-view retention: archive → verify → checkpoint, when configured* | 10.5 the chosen window (≥12 months) + WORM archive storage + 3 available copies, daily review, FIM, key custody |
 | HIPAA | §164.312(b) audit controls — *recording and examining activity* | §164.308 review procedures, retention (6 years), BAAs |
-| FedRAMP / NIST 800-53 | AU-2/3 (event content), AU-9 (audit-info protection, via chain + signed export), AU-11 (retention — *enforced archive + prune when configured*), AU-12 (generation) | AU-6 review, AU-11 retention schedule + WORM storage, AU-9 storage hardening (WORM), FIPS-validated crypto (a build caveat) |
+| FedRAMP / NIST 800-53 | AU-2/3 (event content), AU-9 (audit-info protection, via chain + signed export), AU-11 (served-view retention — *enforced archive + checkpoint when configured*), AU-12 (generation) | AU-6 review, AU-11 retention schedule + WORM storage, AU-9 storage hardening (WORM), FIPS-validated crypto (a build caveat) |
 | NIST CSF 2.0 | Govern/Identify/Protect/Detect evidence mappings from NHI inventory, entitlement posture, credential posture, CBOM, and signed audit events | Organizational profile, risk appetite, target profile, and governance acceptance |
 | CMMC 2.0 | AC/IA/AU/CM evidence mappings for NHI access, authenticator lifecycle, configuration accountability, and audit trail | CUI boundary, assessment level, assessor package, and organization policy evidence |
 | eIDAS | Trust-service security, certificate lifecycle, issuer/subject evidence, and audit evidence mappings | Qualified trust-service status, supervisory notification, and conformity assessment |
@@ -218,9 +221,9 @@ meets each control.
 
 **Defensible today:** an attributable, tamper-evident, event-sourced audit
 trail with signed, offline-verifiable evidence export, multi-tenant
-isolation, and enforced retention (archive → checkpoint → prune,
-chain-verifiable across the prune) when a window and an archive directory
-are configured.
+isolation, and enforced logical retention (archive → verify → replayable
+checkpoint → served-view retirement) when a window and an archive directory
+are configured, while retaining the complete AN-2 rebuild source.
 **Explicitly not claimed:** that trstctl is "compliant" or "certified" with
 any framework, that FIPS-validated cryptography is in the *default* build
 (it is a FIPS-*capable* opt-in via `make fips-build` / `--fips`; the trstctl product's own NIST CMVP certificate is a separate, external process — see

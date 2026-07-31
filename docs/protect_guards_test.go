@@ -1347,7 +1347,8 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"VerifyBundle(signed",
 		"SaveAuditCheckpoint",
-		"log.Delete",
+		"VerifyCheckpointSourceRetained",
+		"SourceHistoryRetained",
 		"EventTypeArchived",
 	} {
 		if !strings.Contains(retention, want) {
@@ -1358,7 +1359,7 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 		"TestChainDetectsTampering",
 		"TestEvidenceBundleVerifies",
 		"TestSearchFailsClosedOnEmptyTenant",
-		"TestRetentionWorkerArchivesPrunesAndKeepsChainVerifiable",
+		"TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource",
 	} {
 		if !anyTestDeclaresUnder(t, "../internal/audit", testName) {
 			t.Errorf("PKIGOV-104: internal/audit no longer declares %s; audit evidence guard coverage weakened", testName)

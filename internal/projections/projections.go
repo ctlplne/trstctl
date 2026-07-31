@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
@@ -1555,6 +1557,7 @@ func (p *Projector) rebuildEventProjections(ctx context.Context, log *events.Log
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
+	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
 	EventTenantRegistered:                         {1: true},
 	EventTenantOffboarded:                         {1: true},
 	EventOwnerCreated:                             {1: true},
@@ -1742,6 +1745,19 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return err
 	}
 	switch e.Type {
+	case audit.EventTypeArchived:
+		var pl audit.ArchivedEvent
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if !pl.SourceHistoryRetained {
+			return errors.New("projections: audit.archived does not attest retained AN-2 source history")
+		}
+		return p.store.ApplyAuditCheckpointTx(ctx, tx, audit.Checkpoint{
+			TenantID: e.TenantID, BoundarySeq: pl.BoundarySeq,
+			BoundaryHash: pl.BoundaryHash, RecordCount: pl.Count,
+			ArchiveURI: pl.ArchiveURI,
+		})
 	case EventOwnerCreated:
 		var pl OwnerCreated
 		if err := decode(e, &pl); err != nil {
@@ -3434,6 +3450,71 @@ func (p *Projector) AdvanceCheckpoint(ctx context.Context, seq uint64) error {
 // carries its tenant_id explicitly, so AN-1 holds even with RLS bypassed for this
 // trusted system operation.
 func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
+	eventCheckpoints := map[string]audit.Checkpoint{}
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type != audit.EventTypeArchived {
+			return nil
+		}
+		if err := ValidateSchemaVersion(event); err != nil {
+			return err
+		}
+		var payload audit.ArchivedEvent
+		if err := decode(event, &payload); err != nil {
+			return err
+		}
+		if !payload.SourceHistoryRetained {
+			return errors.New("projections: audit.archived does not attest retained AN-2 source history")
+		}
+		checkpoint := audit.Checkpoint{
+			TenantID: event.TenantID, BoundarySeq: payload.BoundarySeq,
+			BoundaryHash: payload.BoundaryHash, RecordCount: payload.Count,
+			ArchiveURI: payload.ArchiveURI,
+		}
+		if prior, ok := eventCheckpoints[event.TenantID]; !ok ||
+			checkpoint.BoundarySeq > prior.BoundarySeq {
+			eventCheckpoints[event.TenantID] = checkpoint
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("projections: preflight replayable audit checkpoints: %w", err)
+	}
+	eventCheckpointTenants := make([]string, 0, len(eventCheckpoints))
+	for tenantID := range eventCheckpoints {
+		eventCheckpointTenants = append(eventCheckpointTenants, tenantID)
+	}
+	sort.Strings(eventCheckpointTenants)
+	for _, tenantID := range eventCheckpointTenants {
+		if err := audit.VerifyCheckpointSourceRetained(ctx, log, eventCheckpoints[tenantID]); err != nil {
+			return fmt.Errorf("projections: refuse lossy rebuild from audit.archived event: %w", err)
+		}
+	}
+	checkpointTenants, err := p.store.ListAuditCheckpointTenants(ctx)
+	if err != nil {
+		return fmt.Errorf("projections: list audit checkpoints before rebuild: %w", err)
+	}
+	for _, tenantID := range checkpointTenants {
+		checkpoint, ok, err := p.store.LatestAuditCheckpoint(ctx, tenantID)
+		if err != nil {
+			return fmt.Errorf("projections: read audit checkpoint before rebuild: %w", err)
+		}
+		if !ok {
+			return fmt.Errorf("projections: audit checkpoint inventory lost tenant %s", tenantID)
+		}
+		if err := audit.VerifyCheckpointSourceRetained(ctx, log, checkpoint); err != nil {
+			return fmt.Errorf("projections: refuse lossy rebuild: %w", err)
+		}
+		eventCheckpoint, replayable := eventCheckpoints[tenantID]
+		if !replayable ||
+			eventCheckpoint.BoundarySeq != checkpoint.BoundarySeq ||
+			eventCheckpoint.RecordCount != checkpoint.RecordCount ||
+			eventCheckpoint.BoundaryHash != checkpoint.BoundaryHash ||
+			eventCheckpoint.ArchiveURI != checkpoint.ArchiveURI {
+			return fmt.Errorf(
+				"projections: audit checkpoint for tenant %s has no exact replayable audit.archived v%d event; refusing to erase its served-view boundary",
+				tenantID, audit.ArchivedEventSchemaVersion,
+			)
+		}
+	}
 	return p.store.RebuildReadModelTx(ctx, func(tx pgx.Tx) error {
 		if err := p.resetEventProjections(ctx); err != nil {
 			return err

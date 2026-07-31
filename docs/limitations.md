@@ -410,8 +410,9 @@ That is the limit of what tenant offboarding deletes — it is not a promise tha
 the append-only event log or a signed audit archive disappears when a tenant is
 offboarded. Those records are governed by audit/privacy retention policy:
 configure `TRSTCTL_AUDIT_RETENTION` plus `TRSTCTL_AUDIT_ARCHIVE_DIR` for
-archive-then-prune of audit records, and use **Privacy Retention** for non-audit
-personal data pseudonymization. WORM/object-store archive cleanup and legal
+archive-then-served-view retirement while retaining the AN-2 rebuild source, and
+use **Privacy Retention** for non-audit personal data pseudonymization.
+WORM/object-store archive cleanup and legal
 hold decisions remain operator privacy/compliance work, but the product gives
 that work a queryable evidence ledger: record deletion, legal-hold exemption, or
 cryptographic shredding with `POST /api/v1/privacy/archive-erasure-attestations`,

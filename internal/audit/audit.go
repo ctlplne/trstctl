@@ -65,9 +65,9 @@ func (q Query) featureActionTypes() (types []string, set bool) {
 
 // Checkpoint is a sealed retention boundary (R4.4): every audit record up to
 // BoundarySeq has been archived to cold storage as a signed, offline-verifiable
-// bundle and pruned from the hot event log. BoundaryHash is the audit chain head
-// at the boundary — the seed that lets the surviving suffix verify across the
-// prune without re-deriving from genesis.
+// bundle and retired from the served audit-query view. BoundaryHash is the audit
+// chain head at the boundary — the seed that lets the visible suffix verify while
+// the source envelopes remain available for rebuild.
 type Checkpoint struct {
 	TenantID     string
 	BoundarySeq  uint64
@@ -83,7 +83,7 @@ type CheckpointSource interface {
 }
 
 // CheckpointSink persists a sealed retention boundary. The retention worker writes
-// one after it has archived and verified a segment, before pruning.
+// one after it has archived and verified a segment.
 type CheckpointSink interface {
 	SaveAuditCheckpoint(ctx context.Context, cp Checkpoint) error
 }
@@ -109,7 +109,7 @@ type Option func(*Service)
 
 // WithCheckpoints wires the retention checkpoint source so a tenant's queries
 // replay from (and seal onto) its latest sealed boundary instead of genesis —
-// keeping the chain verifiable after archived records are pruned (R4.4).
+// keeping the visible chain anchored after archived records leave the query view.
 func WithCheckpoints(src CheckpointSource) Option {
 	return func(s *Service) { s.checkpoints = src }
 }
@@ -293,9 +293,9 @@ func (s *Service) VerifyChain(ctx context.Context, tenantID string) (string, err
 	if err != nil {
 		return "", err
 	}
-	// Verify from the same sealed boundary Search hashed the survivors onto (R4.4),
-	// so a pruned tenant's chain checks out as a continuation rather than reporting
-	// a false tamper at the first surviving record.
+	// Verify from the same sealed boundary Search hashed the visible suffix onto,
+	// so logical retention checks out as a continuation rather than reporting a
+	// false tamper at the first served record.
 	_, seed, _, err := s.searchSeed(ctx, tenantID)
 	if err != nil {
 		return "", err

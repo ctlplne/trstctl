@@ -63,7 +63,7 @@ func Seal(records []Record) string { return SealFrom("", records) }
 // SealFrom is Seal seeded from a prior chain head: it links the first record to
 // seed instead of to genesis, so a slice that is the *continuation* of an
 // already-archived prefix reproduces the exact hashes it had in the full chain.
-// This is what makes retention pruning hash-stable (R4.4): after the prefix is
+// This is what makes logical retention hash-stable (R4.4): after the prefix is
 // archived behind a signed checkpoint, the surviving suffix is sealed from the
 // checkpoint's boundary hash and verifies unchanged.
 func SealFrom(seed string, records []Record) string {
@@ -99,7 +99,7 @@ func VerifyChain(records []Record) (string, error) { return VerifyChainFrom("", 
 
 // VerifyChainFrom is VerifyChain seeded from a prior chain head: it verifies a
 // continuation slice against the head it chains onto. A retention checkpoint's
-// boundary hash is the seed, so the surviving suffix verifies across the prune
+// boundary hash is the seed, so the visible suffix verifies across the query floor
 // (R4.4); an archived segment whose PrevHash is the previous segment's head
 // verifies the two are contiguous.
 func VerifyChainFrom(seed string, records []Record) (string, error) {

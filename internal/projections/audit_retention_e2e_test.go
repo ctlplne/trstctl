@@ -23,8 +23,8 @@ import (
 // acceptance: server.Build with AuditRetention + AuditArchiveDir set constructs the
 // retention worker; driving it through the assembled server archives audit records
 // older than the window to a signed bundle, seals a checkpoint in the REAL store,
-// prunes the records from the hot log, keeps the chain verifiable across the
-// checkpoint, and exposes the run on /metrics.
+// retires the prefix from the served audit view, retains the AN-2 source for
+// rebuild, keeps the chain verifiable, and exposes the run on /metrics.
 func TestAssembledServerEnforcesAuditRetention(t *testing.T) {
 	st := newStore(t)
 	log := openLog(t)
@@ -73,8 +73,9 @@ func TestAssembledServerEnforcesAuditRetention(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunRetentionOnce: %v", err)
 	}
-	if sum.RecordsArchived != nOld || sum.RecordsPruned != nOld {
-		t.Fatalf("summary = %+v, want archived/pruned=%d", sum, nOld)
+	if sum.RecordsArchived != nOld || sum.RecordsSourceRetained != nOld ||
+		sum.RecordsPruned != 0 {
+		t.Fatalf("summary = %+v, want archived/source-retained=%d and pruned=0", sum, nOld)
 	}
 
 	// The checkpoint is sealed in the REAL store (AN-1 tenant-scoped).
@@ -104,14 +105,15 @@ func TestAssembledServerEnforcesAuditRetention(t *testing.T) {
 	}
 	// 2 recent survivors + the worker's own audit.archived event.
 	if len(post) != nRecent+1 {
-		t.Errorf("post-prune live records = %d, want %d", len(post), nRecent+1)
+		t.Errorf("post-retention served records = %d, want %d", len(post), nRecent+1)
 	}
 
 	// The run is observable on /metrics.
 	body := scrape(t, ts, "/metrics")
 	for _, want := range []string{
 		"trstctl_audit_records_archived_total 3",
-		"trstctl_audit_records_pruned_total 3",
+		"trstctl_audit_source_records_retained_total 3",
+		"trstctl_audit_records_pruned_total 0",
 		"trstctl_audit_retention_runs_total 1",
 	} {
 		if !strings.Contains(body, want) {
