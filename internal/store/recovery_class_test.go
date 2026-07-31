@@ -57,6 +57,9 @@ func TestTenantKeyDomainUsesEventRecoveryAndSnapshots(t *testing.T) {
 	if SnapshotFormatVersion < 8 {
 		t.Errorf("SnapshotFormatVersion = %d; adding tenant key-domain projections must invalidate older snapshots", SnapshotFormatVersion)
 	}
+	if SnapshotFormatVersion < 9 {
+		t.Errorf("SnapshotFormatVersion = %d; adding crypto-asset projection sequence tombstones must invalidate older snapshots", SnapshotFormatVersion)
+	}
 }
 
 func TestPrivacyErasureOperationUsesIndependentPostgresRecovery(t *testing.T) {

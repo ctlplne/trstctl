@@ -2494,7 +2494,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
 			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,
 			Reasons: pl.Reasons,
-		}, e.Time)
+		}, e.Sequence, e.Time)
 	case EventLicensedCryptoMigrationStarted:
 		var pl LicensedCryptoMigrationStarted
 		if err := decode(e, &pl); err != nil {
@@ -2517,7 +2517,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.AssetID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location,
 			Algorithm: pl.EffectiveAlgorithm, KeyBits: pl.EffectiveKeyBits, Library: pl.OriginalLibrary,
 			Strength: "strong", QuantumVulnerable: false, OutOfPolicy: false, Reasons: reasons,
-		}, e.Time)
+		}, e.Sequence, e.Time)
 	case EventLicensedCryptoMigrationRollbackCompleted:
 		var pl LicensedCryptoMigrationRollbackCompleted
 		if err := decode(e, &pl); err != nil {
@@ -2531,7 +2531,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Algorithm: pl.Algorithm, KeyBits: pl.KeyBits, Protocol: pl.Protocol,
 			Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
 			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy, Reasons: pl.Reasons,
-		}, e.Time)
+		}, e.Sequence, e.Time)
 	case EventConnectorDeliveryRecorded:
 		var pl ConnectorDeliveryRecorded
 		if err := decode(e, &pl); err != nil {

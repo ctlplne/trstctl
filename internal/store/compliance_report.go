@@ -109,7 +109,7 @@ func (s *Store) ComplianceInventoryCounts(ctx context.Context, tenantID string) 
 		return tx.QueryRow(ctx,
 			`SELECT
 			    (SELECT count(*)::integer FROM certificates WHERE tenant_id = $1),
-			    (SELECT count(*)::integer FROM crypto_assets WHERE tenant_id = $1),
+			    (SELECT count(*)::integer FROM crypto_assets WHERE tenant_id = $1 AND is_active),
 			    (SELECT count(*)::integer FROM discovery_schedules WHERE tenant_id = $1),
 			    (SELECT count(*)::integer FROM compliance_report_schedules WHERE tenant_id = $1),
 			    (SELECT count(*)::integer FROM compliance_report_schedules WHERE tenant_id = $1 AND enabled)`,

@@ -245,7 +245,7 @@ func (p *ProgressProjection) projectCompleted(ctx context.Context, ev eventspec.
 			Algorithm: intent.Algorithm, KeyBits: intent.KeyBits, Protocol: protocol, Cipher: cipher,
 			Library: intent.Library, Strength: "strong", QuantumVulnerable: false, OutOfPolicy: false,
 			Reasons: []string{"PQC TLS posture read back from " + intent.Connector + " target " + intent.TargetID + " in run " + intent.RunID},
-		}, eventTime(ev))
+		}, ev.Sequence, eventTime(ev))
 	})
 }
 
@@ -278,7 +278,7 @@ func (p *ProgressProjection) projectRollback(ctx context.Context, ev eventspec.E
 				Cipher: restore.Cipher, Library: restore.Library, Strength: restore.Strength,
 				QuantumVulnerable: restore.QuantumVulnerable, OutOfPolicy: restore.OutOfPolicy,
 				Reasons: append([]string(nil), restore.Reasons...),
-			}, eventTime(ev)); err != nil {
+			}, ev.Sequence, eventTime(ev)); err != nil {
 				return err
 			}
 		}

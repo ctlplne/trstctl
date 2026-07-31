@@ -38,6 +38,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	89: true,
 	90: true,
 	92: true,
+	94: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -293,6 +294,44 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0089_gcp_workload_identity_default", testMigration0089GCPWorkloadIdentityDefault)
 	t.Run("0090_azure_workload_identity_defaults", testMigration0090AzureWorkloadIdentityDefaults)
 	t.Run("0092_idempotency_result_codec_classification", testMigration0092IdempotencyResultCodecClassification)
+	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
+}
+
+func testMigration0094CryptoAssetProjectionOrderDefaults(t *testing.T) {
+	stable := `
+		SELECT id::text, tenant_id::text, signature, kind, location, algorithm,
+		       key_bits::text, protocol, cipher, library, strength,
+		       quantum_vulnerable::text, out_of_policy::text, reasons::text, created_at::text
+		  FROM crypto_assets
+		 ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 94, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO crypto_assets
+					       (id, tenant_id, signature, kind, location, protocol, strength,
+					        quantum_vulnerable, out_of_policy, reasons, created_at)
+					VALUES ($1, $2, $3, 'host-config', $4, 'TLSv1.0', 'weak', true, true,
+					        ARRAY['legacy protocol'], '2026-07-31T00:00:00Z'::timestamptz)`,
+					uuid(tenantID, 9400+index), tenantID, "host-config|edge-"+tenantID+"|TLSv1.0",
+					"edge-"+tenantID); err != nil {
+					t.Fatalf("seed pre-0094 crypto asset %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, beforeCount int) {
+			var rows int
+			var zeroSequence, active bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(event_sequence = 0), bool_and(is_active)
+				  FROM crypto_assets`).Scan(&rows, &zeroSequence, &active); err != nil {
+				t.Fatalf("inspect 0094 crypto-asset defaults: %v", err)
+			}
+			if rows != beforeCount || !zeroSequence || !active {
+				t.Fatalf("0094 defaults mismatch: rows=%d want=%d zero_sequence=%t active=%t",
+					rows, beforeCount, zeroSequence, active)
+			}
+		})
 }
 
 func testMigration0072ConnectorTargetRevisionBackfill(t *testing.T) {
