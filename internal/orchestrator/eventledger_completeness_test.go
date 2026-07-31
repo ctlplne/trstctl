@@ -66,6 +66,7 @@ var orchestratorCommandEventTypes = []string{
 	eventledger.EventSecretRotationScheduleUpserted,
 	eventledger.EventSecretRotationScheduleRan,
 	eventledger.EventPrivacySubjectErased,
+	eventledger.EventHistoryTenantDataRewriteContinuity,
 	eventledger.EventPrivacyRetentionEnforced,
 	eventledger.EventNHIAccessReviewCampaignStarted,
 	eventledger.EventNHIAccessReviewItemDecided,

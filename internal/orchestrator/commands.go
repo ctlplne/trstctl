@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -24,7 +25,10 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-var connectorRightSizeIdentityNamespace = uuid.MustParse("64ad96b4-b750-5e90-b55b-baf67c779a4a")
+var (
+	connectorRightSizeIdentityNamespace = uuid.MustParse("64ad96b4-b750-5e90-b55b-baf67c779a4a")
+	errPrivacyErasureEventFound         = errors.New("orchestrator: privacy erasure event found")
+)
 
 // ConnectorRightSizeIdentity is every stable identity derived from the tenant
 // and raw Idempotency-Key. None contains the caller or command in reversible
@@ -50,6 +54,31 @@ func ConnectorRightSizeIdentityFor(tenantID, idempotencyKey string) ConnectorRig
 		RequestedEventID:     derive("requested-event"),
 		OutboxIdempotencyKey: "connector-right-size:" + operationID,
 		TerminalEventID:      derive("terminal-event"),
+	}
+}
+
+// PrivacySubjectErasureIdentity is the durable receiver identity for a served
+// erasure. It is derived from the tenant and raw Idempotency-Key; the separately
+// signed request binding proves which caller/body owns that otherwise opaque ID.
+type PrivacySubjectErasureIdentity struct {
+	OperationID string
+	EventID     string
+}
+
+// PrivacySubjectErasureIdentityFor makes a retry address the same immutable
+// privacy event without persisting the raw Idempotency-Key in the event log.
+// EventID is the raw-key anchor, so changed-body reuse still finds and rejects
+// the first command. OperationID also binds the canonical caller/body digest.
+func PrivacySubjectErasureIdentityFor(tenantID, idempotencyKey, requestBinding string) PrivacySubjectErasureIdentity {
+	derive := func(kind string, fields ...string) string {
+		material := []byte("trstctl.privacy-subject-erasure-identity.v1\x00" +
+			kind + "\x00" + strings.Join(fields, "\x00"))
+		defer secret.Wipe(material)
+		return "sha256:" + crypto.SHA256Hex(material)
+	}
+	return PrivacySubjectErasureIdentity{
+		OperationID: derive("operation", tenantID, idempotencyKey, requestBinding),
+		EventID:     derive("raw-key-event", tenantID, idempotencyKey),
 	}
 }
 
@@ -114,7 +143,13 @@ func (o *Orchestrator) emitVersioned(ctx context.Context, eventType, tenantID st
 	next := events.Event{
 		Type: eventType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload,
 	}
-	if eventType == projections.EventTenantRegistered || eventType == projections.EventTenantOffboarded {
+	return o.emitPrepared(ctx, next)
+}
+
+// emitPrepared is the narrow form used by durable receivers that must supply a
+// stable event ID (and, for self-erasure, an already-sanitized actor).
+func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (events.Event, error) {
+	if next.Type == projections.EventTenantRegistered || next.Type == projections.EventTenantOffboarded {
 		ev, err := o.log.Append(ctx, next)
 		if err != nil {
 			return events.Event{}, err
@@ -126,7 +161,7 @@ func (o *Orchestrator) emitVersioned(ctx context.Context, eventType, tenantID st
 	}
 
 	var ev events.Event
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
 		var err error
 		ev, err = o.log.Append(ctx, next)
 		if err != nil {
@@ -450,37 +485,260 @@ func (o *Orchestrator) DeleteOwner(ctx context.Context, tenantID, id string) err
 	return err
 }
 
-// ErasePrivacySubject records a subject-level erasure using only non-PII
-// selectors in the event. The raw subject is used once to resolve rows, then the
-// immutable event carries a tenant-bound subject_ref and stable row identifiers.
+// ErasePrivacySubject is the one-shot internal form retained for callers that do
+// not sit behind the served Idempotency-Key wall. The served API uses
+// ErasePrivacySubjectBound so retries address one durable event.
 func (o *Orchestrator) ErasePrivacySubject(ctx context.Context, tenantID, subject, reason string) (store.PrivacySubjectErasure, error) {
-	erasure, err := o.store.SelectPrivacySubjectErasure(ctx, tenantID, subject)
+	nonce := events.NewID()
+	return o.erasePrivacySubjectBound(
+		ctx, tenantID, subject, reason,
+		"orchestrator-one-shot:"+nonce,
+		PrivacySubjectErasureIdentityFor(tenantID, nonce, "orchestrator-one-shot:"+nonce),
+	)
+}
+
+// ErasePrivacySubjectBound is a crash-resumable AN-5 receiver. Its immutable
+// event ID is derived from tenant + raw Idempotency-Key, while requestBinding
+// proves the authenticated caller and canonical body that own that key.
+func (o *Orchestrator) ErasePrivacySubjectBound(
+	ctx context.Context,
+	tenantID, subject, reason, idempotencyKey, requestBinding string,
+) (store.PrivacySubjectErasure, error) {
+	if idempotencyKey == "" || requestBinding == "" {
+		return store.PrivacySubjectErasure{}, errors.New("orchestrator: bound privacy erasure requires idempotency key and request binding")
+	}
+	return o.erasePrivacySubjectBound(
+		ctx, tenantID, subject, reason,
+		requestBinding,
+		PrivacySubjectErasureIdentityFor(tenantID, idempotencyKey, requestBinding),
+	)
+}
+
+func (o *Orchestrator) erasePrivacySubjectBound(
+	ctx context.Context,
+	tenantID, subject, reason string,
+	requestBinding string,
+	identity PrivacySubjectErasureIdentity,
+) (store.PrivacySubjectErasure, error) {
+	if err := events.ValidateTenantDataRewriteOptions(o.tenantDataRewrite...); err != nil {
+		return store.PrivacySubjectErasure{}, fmt.Errorf("orchestrator: privacy subject erasure proof preflight: %w", err)
+	}
+	if err := o.log.HistoryRewriteReady(); err != nil {
+		return store.PrivacySubjectErasure{}, fmt.Errorf("orchestrator: privacy subject erasure log preflight: %w", err)
+	}
+
+	if authoritative, found, err := o.recoverPrivacyErasure(
+		ctx, tenantID, subject, identity, requestBinding,
+	); err != nil {
+		return store.PrivacySubjectErasure{}, err
+	} else if found {
+		return authoritative, nil
+	}
+
+	// Keep the durable-state recheck, selector read, and deterministic append
+	// inside the same deployment-wide rewrite-operation lease. A second replica
+	// can neither pass the recheck nor race beyond JetStream's finite dedup window
+	// before this operation projection commits.
+	var authoritative store.PrivacySubjectErasure
+	err := o.log.PseudonymizeSubjectWithCompletion(
+		ctx,
+		tenantID,
+		subject,
+		func(completionCtx context.Context) error {
+			if recovered, found, err := o.recoverPrivacyErasure(
+				completionCtx, tenantID, subject, identity, requestBinding,
+			); err != nil {
+				return err
+			} else if found {
+				authoritative = recovered
+				return nil
+			}
+
+			// The event-log rewrite does not touch PostgreSQL. Selecting here keeps
+			// raw rows available across a post-cutover crash, and prevents a later
+			// different-key request from reusing selectors captured before an
+			// earlier operation projected its erasure.
+			erasure, err := o.store.SelectPrivacySubjectErasure(completionCtx, tenantID, subject)
+			if err != nil {
+				return err
+			}
+			if actor, ok := events.ActorFromContext(completionCtx); ok {
+				erasure.RequestedByRef = privacy.SubjectRef(tenantID, actor.Subject)
+			}
+			erasure.Reason = sanitizePrivacyErasureText(tenantID, subject, reason)
+
+			payload, err := json.Marshal(projections.PrivacySubjectErased{
+				OperationID:    identity.OperationID,
+				RequestBinding: requestBinding,
+				SubjectRef:     erasure.SubjectRef,
+				RequestedByRef: erasure.RequestedByRef,
+				Reason:         erasure.Reason,
+				Selectors:      erasure.Selectors,
+				Counts:         erasure.Counts,
+			})
+			if err != nil {
+				return err
+			}
+			ev, err := o.emitPrepared(completionCtx, events.Event{
+				ID:            identity.EventID,
+				Type:          projections.EventPrivacySubjectErased,
+				TenantID:      tenantID,
+				SchemaVersion: projections.PrivacySubjectErasedEventSchemaVersion,
+				Data:          payload,
+				Actor:         sanitizedPrivacyErasureActor(completionCtx, tenantID, subject),
+			})
+			if err != nil {
+				return err
+			}
+			authoritative, err = privacyErasureFromEvent(
+				ev, tenantID, subject, identity, requestBinding,
+			)
+			return err
+		},
+		o.tenantDataRewrite...,
+	)
 	if err != nil {
 		return store.PrivacySubjectErasure{}, err
 	}
-	if actor, ok := events.ActorFromContext(ctx); ok {
-		erasure.RequestedByRef = privacy.SubjectRef(tenantID, actor.Subject)
+	return authoritative, nil
+}
+
+func (o *Orchestrator) recoverPrivacyErasure(
+	ctx context.Context,
+	tenantID, subject string,
+	identity PrivacySubjectErasureIdentity,
+	requestBinding string,
+) (store.PrivacySubjectErasure, bool, error) {
+	if authoritative, found, err := o.findPrivacyErasureOperation(
+		ctx, tenantID, subject, identity, requestBinding,
+	); err != nil || found {
+		return authoritative, found, err
 	}
-	erasure.Reason = reason
-	payload, err := json.Marshal(projections.PrivacySubjectErased{
-		SubjectRef:     erasure.SubjectRef,
-		RequestedByRef: erasure.RequestedByRef,
-		Reason:         erasure.Reason,
-		Selectors:      erasure.Selectors,
-		Counts:         erasure.Counts,
+
+	// JetStream's Msg-Id deduplication collapses live races, while replay heals
+	// the append-ACK/projection-failure gap. Once healed, the independent
+	// PostgreSQL operation record is the long-window authority even if retention
+	// moves this event from the live stream into the signed archive.
+	canonical, found, err := o.findPrivacyErasureEvent(ctx, identity.EventID)
+	if err != nil || !found {
+		return store.PrivacySubjectErasure{}, false, err
+	}
+	authoritative, err := privacyErasureFromEvent(
+		canonical, tenantID, subject, identity, requestBinding,
+	)
+	if err != nil {
+		return store.PrivacySubjectErasure{}, false, err
+	}
+	if err := o.proj.Apply(ctx, canonical); err != nil {
+		return store.PrivacySubjectErasure{}, false,
+			fmt.Errorf("orchestrator: recover canonical privacy erasure projection: %w", err)
+	}
+	return authoritative, true, nil
+}
+
+func (o *Orchestrator) findPrivacyErasureOperation(
+	ctx context.Context,
+	tenantID, subject string,
+	identity PrivacySubjectErasureIdentity,
+	requestBinding string,
+) (store.PrivacySubjectErasure, bool, error) {
+	op, err := o.store.GetPrivacySubjectErasureOperationByEventID(ctx, tenantID, identity.EventID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.PrivacySubjectErasure{}, false, nil
+	}
+	if err != nil {
+		return store.PrivacySubjectErasure{}, false, err
+	}
+	expectedSubjectRef := privacy.SubjectRef(tenantID, subject)
+	if !crypto.ConstantTimeEqual([]byte(op.OperationID), []byte(identity.OperationID)) ||
+		!crypto.ConstantTimeEqual([]byte(op.RequestBinding), []byte(requestBinding)) ||
+		!crypto.ConstantTimeEqual([]byte(op.EventID), []byte(identity.EventID)) ||
+		!crypto.ConstantTimeEqual([]byte(op.SubjectRef), []byte(expectedSubjectRef)) {
+		return store.PrivacySubjectErasure{}, false,
+			fmt.Errorf("%w: privacy erasure operation belongs to another command", ErrIdempotencyConflict)
+	}
+	return op.PrivacySubjectErasure, true, nil
+}
+
+func (o *Orchestrator) findPrivacyErasureEvent(ctx context.Context, eventID string) (events.Event, bool, error) {
+	var found events.Event
+	err := o.log.Replay(ctx, 1, func(ev events.Event) error {
+		if ev.ID != eventID {
+			return nil
+		}
+		found = ev
+		return errPrivacyErasureEventFound
 	})
+	if errors.Is(err, errPrivacyErasureEventFound) {
+		return found, true, nil
+	}
 	if err != nil {
-		return store.PrivacySubjectErasure{}, err
+		return events.Event{}, false, fmt.Errorf("orchestrator: find canonical privacy erasure event: %w", err)
 	}
-	ev, err := o.emit(ctx, projections.EventPrivacySubjectErased, tenantID, payload)
-	if err != nil {
-		return store.PrivacySubjectErasure{}, err
+	return events.Event{}, false, nil
+}
+
+func privacyErasureFromEvent(
+	ev events.Event,
+	tenantID, subject string,
+	identity PrivacySubjectErasureIdentity,
+	requestBinding string,
+) (store.PrivacySubjectErasure, error) {
+	if ev.ID != identity.EventID ||
+		ev.Type != projections.EventPrivacySubjectErased ||
+		ev.TenantID != tenantID ||
+		ev.SchemaVersion != projections.PrivacySubjectErasedEventSchemaVersion {
+		return store.PrivacySubjectErasure{}, fmt.Errorf("%w: privacy erasure event identity belongs to another command", ErrIdempotencyConflict)
 	}
-	if err := o.log.PseudonymizeSubject(ctx, tenantID, subject); err != nil {
-		return store.PrivacySubjectErasure{}, err
+	var payload projections.PrivacySubjectErased
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		return store.PrivacySubjectErasure{}, fmt.Errorf("orchestrator: decode canonical privacy erasure event: %w", err)
 	}
-	erasure.ErasedAt = ev.Time
-	return erasure, nil
+	expectedSubjectRef := privacy.SubjectRef(tenantID, subject)
+	if !crypto.ConstantTimeEqual([]byte(payload.OperationID), []byte(identity.OperationID)) ||
+		!crypto.ConstantTimeEqual([]byte(payload.RequestBinding), []byte(requestBinding)) ||
+		!crypto.ConstantTimeEqual([]byte(payload.SubjectRef), []byte(expectedSubjectRef)) {
+		return store.PrivacySubjectErasure{}, fmt.Errorf("%w: privacy erasure key belongs to another command", ErrIdempotencyConflict)
+	}
+	return store.PrivacySubjectErasure{
+		TenantID:       tenantID,
+		SubjectRef:     payload.SubjectRef,
+		RequestedByRef: payload.RequestedByRef,
+		Reason:         payload.Reason,
+		Selectors:      payload.Selectors,
+		Counts:         payload.Counts,
+		ErasedAt:       ev.Time,
+	}, nil
+}
+
+func sanitizedPrivacyErasureActor(ctx context.Context, tenantID, subject string) *events.Actor {
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	actor.Roles = append([]string(nil), actor.Roles...)
+	actor.Subject = sanitizePrivacyErasureText(tenantID, subject, actor.Subject)
+	for index := range actor.Roles {
+		actor.Roles[index] = sanitizePrivacyErasureText(tenantID, subject, actor.Roles[index])
+	}
+	return &actor
+}
+
+func sanitizePrivacyErasureText(tenantID, subject, value string) string {
+	if subject == "" || value == "" {
+		return value
+	}
+	placeholder := privacy.Placeholder(privacy.SubjectRef(tenantID, subject))
+	variants := []string{subject, url.QueryEscape(subject), url.PathEscape(subject)}
+	if encoded, err := json.Marshal(subject); err == nil && len(encoded) >= 2 {
+		variants = append(variants, string(encoded[1:len(encoded)-1]))
+	}
+	for _, variant := range variants {
+		if variant != "" {
+			value = strings.ReplaceAll(value, variant, placeholder)
+		}
+	}
+	return value
 }
 
 // EnforcePrivacyRetention records one non-audit PII retention pass for a tenant.

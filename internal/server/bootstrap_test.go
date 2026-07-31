@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
@@ -129,6 +130,7 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	bootCfg := config.Default()
 	bootCfg.Postgres = config.Postgres{Mode: config.PostgresExternal, DSN: dsn}
 	bootCfg.NATS = config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	bootCfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 
 	raw, err := RunTokenCreate(ctx, bootCfg, TokenCreateOptions{TenantID: tenantA, TenantName: "Acme", Subject: "ci-bot"})
 	if err != nil {

@@ -213,6 +213,82 @@ func TestSnapshotRestoreSkipsPoisonBelowOffset(t *testing.T) {
 	}
 }
 
+func TestSnapshotRestoreCheckpointCoversAllGapTail(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	p := projections.New(s)
+
+	mustAppend(t, log, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		Data: tenantRegistered("snapshot-tenant"),
+	})
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("initial catch-up: %v", err)
+	}
+	if _, err := p.Snapshot(ctx); err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	snapshotOffset, err := s.LatestSnapshotOffset(ctx)
+	if err != nil {
+		t.Fatalf("LatestSnapshotOffset: %v", err)
+	}
+
+	pruned, err := log.Append(ctx, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantB,
+		Data: tenantRegistered("gap-only-tail"),
+	})
+	if err != nil {
+		t.Fatalf("append gap-tail event: %v", err)
+	}
+	if pruned.Sequence <= snapshotOffset {
+		t.Fatalf("gap tail sequence = %d, want after snapshot %d", pruned.Sequence, snapshotOffset)
+	}
+	//nolint:staticcheck // Exercise snapshot recovery across a pre-B-3375cb42 physical gap.
+	if err := log.PruneTenantThroughCheckpoint(ctx, tenantB, pruned.Sequence, nil); err != nil {
+		t.Fatalf("prune snapshot tail into gap: %v", err)
+	}
+
+	truncateReadModelAndCheckpoint(t, s)
+	restored, err := p.RestoreFromSnapshot(ctx, log)
+	if err != nil {
+		t.Fatalf("RestoreFromSnapshot: %v", err)
+	}
+	if !restored {
+		t.Fatal("RestoreFromSnapshot returned restored=false for cold snapshot restore")
+	}
+	checkpoint, err := s.ProjectionCheckpoint(ctx)
+	if err != nil {
+		t.Fatalf("ProjectionCheckpoint: %v", err)
+	}
+	if checkpoint != pruned.Sequence {
+		t.Fatalf("snapshot restore checkpoint = %d, want gap-tail head %d", checkpoint, pruned.Sequence)
+	}
+
+	next, err := log.Append(ctx, events.Event{
+		Type: projections.EventOwnerCreated, TenantID: tenantA,
+		Data: ownerCreated("00000000-0000-0000-0000-00000000b0aa", "after-gap"),
+	})
+	if err != nil {
+		t.Fatalf("append after gap tail: %v", err)
+	}
+	if next.Sequence != pruned.Sequence+1 {
+		t.Fatalf("next sequence = %d, want %d", next.Sequence, pruned.Sequence+1)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("catch up after gap tail: %v", err)
+	}
+	if got := ownerCount(t, s, tenantA); got != 1 {
+		t.Fatalf("owners after catch-up = %d, want 1", got)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("second catch-up: %v", err)
+	}
+	if got := ownerCount(t, s, tenantA); got != 1 {
+		t.Fatalf("second catch-up reapplied next event: owners = %d, want 1", got)
+	}
+}
+
 // TestSnapshotWarmBootSkipsRestore pins that the snapshot path does NOT penalize a
 // warm restart: when the checkpoint already covers the snapshot offset (the read model
 // survived the restart in PostgreSQL), RestoreFromSnapshot reports restored=false so

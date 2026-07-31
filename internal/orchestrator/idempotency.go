@@ -402,6 +402,7 @@ func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string
 func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding string, persist bool, fn func(context.Context) ([]byte, error)) ([]byte, error) {
 	memoryKey := tenantID + "\x00" + key
 	for {
+		created := false
 		i.memoryMu.Lock()
 		if i.boundMemory == nil {
 			i.boundMemory = make(map[string]*boundMemoryResult)
@@ -460,6 +461,7 @@ func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding 
 				wait:    make(chan struct{}),
 			}
 			i.boundMemory[memoryKey] = record
+			created = true
 		}
 		i.memoryMu.Unlock()
 
@@ -478,6 +480,13 @@ func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding 
 			record.completed = true
 			record.codec = codec
 			record.result = append([]byte(nil), protected...)
+		} else if created && record.persist && errors.Is(err, ErrIdempotencyConflict) {
+			// A durable receiver can reveal that a fresh cache claim belongs to
+			// the wrong canonical command after generic idempotency GC. That
+			// conflict proves this new claim has no effect to reconcile. Remove
+			// only this call's uncompleted claim so the original command can
+			// recover from the durable receiver.
+			delete(i.boundMemory, memoryKey)
 		} else if !record.persist {
 			delete(i.boundMemory, memoryKey)
 		}
@@ -621,6 +630,7 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 
 	var (
 		completed    bool
+		claimed      bool
 		storedResult []byte
 		resultCodec  string
 	)
@@ -635,6 +645,7 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 			return fmt.Errorf("orchestrator: bind durable key: %w", err)
 		}
 		if tag.RowsAffected() == 1 {
+			claimed = true
 			return nil
 		}
 
@@ -675,6 +686,21 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 	out, err := fn(ctx)
 	if err != nil {
 		secret.Wipe(out)
+		if claimed && errors.Is(err, ErrIdempotencyConflict) {
+			cleanupErr := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+				if _, deleteErr := tx.Exec(ctx,
+					`DELETE FROM idempotency_keys
+					  WHERE tenant_id = $1 AND key = $2
+					    AND request_binding = $3 AND status = 'bound'`,
+					tenantID, key, binding); deleteErr != nil {
+					return fmt.Errorf("orchestrator: release conflicting bound durable key: %w", deleteErr)
+				}
+				return nil
+			})
+			if cleanupErr != nil {
+				return nil, errors.Join(err, cleanupErr)
+			}
+		}
 		return nil, err
 	}
 	defer secret.Wipe(out)

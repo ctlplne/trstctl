@@ -9,11 +9,11 @@ import (
 	"log/slog"
 
 	"trstctl.com/trstctl/internal/app"
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -124,7 +124,11 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 	// is built by a projection of the log, never written directly (AN-2). The fixed
 	// idempotency key makes re-running the bootstrap for the same tenant a no-op
 	// rather than a second registration (AN-5).
-	log, err := events.Open(ctx, cfg.NATS)
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: audit signing key: %w", err)
+	}
+	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: open event log: %w", err)
 	}

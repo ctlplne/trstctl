@@ -6,12 +6,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -59,7 +62,19 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
 		return 0, errors.New("backup requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
 	}
-	log, err := events.Open(ctx, cfg.NATS)
+	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
+		return 0, errors.New("backup requires external Postgres coordination (set TRSTCTL_POSTGRES_MODE=external and TRSTCTL_POSTGRES_DSN); an event-only backup must hold the deployment history read barrier")
+	}
+	st, err := store.Open(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return 0, fmt.Errorf("open store for event backup coordination: %w", err)
+	}
+	defer st.Close()
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		return 0, fmt.Errorf("audit signing key: %w", err)
+	}
+	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
@@ -70,23 +85,101 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 		return 0, err
 	}
 
-	f, err := os.Create(path)
-	if err != nil {
-		return 0, fmt.Errorf("create backup file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
+	var n int
+	err = withRecoveredBackupHistoryRead(ctx, log, st, func(readCtx context.Context) error {
+		cut, err := log.LastSequence(readCtx)
+		if err != nil {
+			return fmt.Errorf("capture event backup cut: %w", err)
+		}
+		f, err := os.Create(path)
+		if err != nil {
+			return fmt.Errorf("create backup file: %w", err)
+		}
+		defer func() { _ = f.Close() }()
 
-	// The stream carries a SHA-256 integrity trailer always, and an HMAC bound to
-	// this deployment's audit key when one is configured (OPS-006), so a tampered
-	// or truncated backup is rejected on restore.
-	n, err := backup.WriteLogWithKey(ctx, log, f, key)
+		// The outer shared history view stays held for the complete export. A
+		// generation cutover therefore cannot move authority between the first
+		// and last exported record.
+		n, err = backup.WriteLogWithKeyThrough(readCtx, log, f, key, cut)
+		if err != nil {
+			return err
+		}
+		if uint64(n) != cut {
+			return fmt.Errorf(
+				"event backup contains %d live records through cut %d; logical audit retention creates no source gaps, so refusing legacy or externally damaged history",
+				n, cut,
+			)
+		}
+		if err := f.Close(); err != nil { // flush before releasing the read view
+			return fmt.Errorf("close backup file: %w", err)
+		}
+		return nil
+	})
+	return n, err
+}
+
+type auditCheckpointInventory interface {
+	audit.CheckpointSource
+	ListAuditCheckpointTenants(context.Context) ([]string, error)
+}
+
+// withRecoveredBackupHistoryRead proves every logical audit checkpoint still has
+// its complete AN-2 source prefix before a backup pins history. Older builds
+// physically pruned that shared source; silently finishing such a prune would
+// make projection rebuild lossy. The outer history-operation lock stays held
+// through validation and export so retention/rewrite cannot move the boundary.
+func withRecoveredBackupHistoryRead(
+	ctx context.Context,
+	log *events.Log,
+	checkpoints auditCheckpointInventory,
+	fn func(context.Context) error,
+) error {
+	if log == nil {
+		return errors.New("backup history recovery requires an event log")
+	}
+	if checkpoints == nil {
+		return errors.New("backup history recovery requires an audit checkpoint source")
+	}
+	if fn == nil {
+		return errors.New("backup history recovery requires an export callback")
+	}
+	return log.WithHistoryOperation(ctx, func(operationCtx context.Context) error {
+		if err := verifyRetainedAuditCheckpointSources(operationCtx, log, checkpoints); err != nil {
+			return err
+		}
+		return log.WithHistoryRead(operationCtx, fn)
+	})
+}
+
+func verifyRetainedAuditCheckpointSources(
+	ctx context.Context,
+	log *events.Log,
+	checkpoints auditCheckpointInventory,
+) error {
+	ordered, err := checkpoints.ListAuditCheckpointTenants(ctx)
 	if err != nil {
-		return n, err
+		return fmt.Errorf("list audit checkpoint tenants before backup: %w", err)
 	}
-	if err := f.Close(); err != nil { // flush to disk before reporting success
-		return n, fmt.Errorf("close backup file: %w", err)
+	sort.Strings(ordered)
+	for _, tenantID := range ordered {
+		checkpoint, ok, err := checkpoints.LatestAuditCheckpoint(ctx, tenantID)
+		if err != nil {
+			return fmt.Errorf("read audit checkpoint for tenant %s: %w", tenantID, err)
+		}
+		if !ok {
+			return fmt.Errorf("audit checkpoint inventory named tenant %s without a checkpoint", tenantID)
+		}
+		if checkpoint.TenantID != tenantID {
+			return fmt.Errorf(
+				"audit checkpoint tenant mismatch: requested %s, got %s",
+				tenantID, checkpoint.TenantID,
+			)
+		}
+		if err := audit.VerifyCheckpointSourceRetained(ctx, log, checkpoint); err != nil {
+			return fmt.Errorf("verify audit checkpoint source before backup: %w", err)
+		}
 	}
-	return n, nil
+	return nil
 }
 
 // RunFullBackup writes a complete trstctl disaster-recovery artifact directory:
@@ -117,54 +210,75 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	}
 	defer st.Close()
 
-	log, err := events.Open(ctx, cfg.NATS)
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("audit signing key: %w", err)
+	}
+	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
 	if err != nil {
 		return backup.FullManifest{}, fmt.Errorf("open event log for full backup: %w", err)
 	}
 	defer func() { _ = log.Close() }()
 
 	var (
-		tx       pgx.Tx
-		eventCut uint64
+		tx            pgx.Tx
+		eventCut      uint64
+		eventArtifact backup.Artifact
 	)
-	if err := st.WithBackupWriteFence(ctx, func(ctx context.Context) error {
-		var err error
-		eventCut, err = log.LastSequence(ctx)
-		if err != nil {
-			return fmt.Errorf("capture full backup event cut: %w", err)
-		}
-		tx, err = backup.BeginPostgresStateSnapshot(ctx, st)
-		if err != nil {
-			return fmt.Errorf("begin full backup postgres snapshot: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return backup.FullManifest{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
 	key, err := backupIntegrityKey(cfg)
 	if err != nil {
 		return backup.FullManifest{}, err
 	}
+	if err := withRecoveredBackupHistoryRead(ctx, log, st, func(readCtx context.Context) error {
+		if err := st.WithBackupWriteFence(readCtx, func(fenceCtx context.Context) error {
+			var err error
+			eventCut, err = log.LastSequence(fenceCtx)
+			if err != nil {
+				return fmt.Errorf("capture full backup event cut: %w", err)
+			}
+			tx, err = backup.BeginPostgresStateSnapshot(fenceCtx, st)
+			if err != nil {
+				return fmt.Errorf("begin full backup postgres snapshot: %w", err)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
 
-	var artifacts []backup.Artifact
-	eventsPath := filepath.Join(dir, "events.jsonl")
-	eventsFile, err := os.Create(eventsPath)
-	if err != nil {
-		return backup.FullManifest{}, fmt.Errorf("create event log backup: %w", err)
-	}
-	if _, err := backup.WriteLogWithKeyThrough(ctx, log, eventsFile, key, eventCut); err != nil {
-		_ = eventsFile.Close()
+		eventsPath := filepath.Join(dir, "events.jsonl")
+		eventsFile, err := os.Create(eventsPath)
+		if err != nil {
+			return fmt.Errorf("create event log backup: %w", err)
+		}
+		eventRecords, err := backup.WriteLogWithKeyThrough(readCtx, log, eventsFile, key, eventCut)
+		if err != nil {
+			_ = eventsFile.Close()
+			return err
+		}
+		if uint64(eventRecords) != eventCut {
+			_ = eventsFile.Close()
+			return fmt.Errorf(
+				"full backup event history contains %d live records through cut %d; refusing legacy or externally damaged source gaps",
+				eventRecords, eventCut,
+			)
+		}
+		if err := eventsFile.Close(); err != nil {
+			return fmt.Errorf("close event log backup: %w", err)
+		}
+		eventArtifact, err = fileArtifact("event-log", "event-log", eventsPath, eventsPath, true, true, false, true, dir, nil)
+		if err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
 		return backup.FullManifest{}, err
 	}
-	if err := eventsFile.Close(); err != nil {
-		return backup.FullManifest{}, fmt.Errorf("close event log backup: %w", err)
-	}
-	a, err := fileArtifact("event-log", "event-log", eventsPath, eventsPath, true, true, false, true, dir, nil)
-	if err != nil {
-		return backup.FullManifest{}, err
-	}
-	artifacts = append(artifacts, a)
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	artifacts := []backup.Artifact{eventArtifact}
 
 	pgPath := filepath.Join(dir, "postgres-state.jsonl")
 	pgFile, err := os.OpenFile(pgPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
@@ -181,12 +295,32 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if err := tx.Commit(ctx); err != nil {
 		return backup.FullManifest{}, fmt.Errorf("finish full backup postgres snapshot: %w", err)
 	}
-	a, err = fileArtifact("postgres-state", "postgres-state", pgPath, pgPath, true, true, false, true, dir, nil)
+	a, err := fileArtifact("postgres-state", "postgres-state", pgPath, pgPath, true, true, false, true, dir, nil)
 	if err != nil {
 		return backup.FullManifest{}, err
 	}
 	artifacts = append(artifacts, a)
 
+	staticArtifacts, err := captureFullBackupFiles(cfg, dir, enc)
+	if err != nil {
+		return backup.FullManifest{}, err
+	}
+	artifacts = append(artifacts, staticArtifacts...)
+
+	manifest := backup.NewFullManifest(artifacts)
+	manifest.Encryption = enc.manifestEncryption()
+	if err := backup.WriteFullManifest(filepath.Join(dir, backup.FullManifestName), manifest); err != nil {
+		return backup.FullManifest{}, err
+	}
+	return manifest, nil
+}
+
+func captureFullBackupFiles(
+	cfg *config.Config,
+	dir string,
+	enc *fullBackupEncryption,
+) ([]backup.Artifact, error) {
+	var artifacts []backup.Artifact
 	for _, spec := range []struct {
 		name      string
 		role      string
@@ -203,22 +337,16 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	} {
 		a, err := fileArtifact(spec.name, spec.role, spec.src, spec.dst, spec.capture, false, spec.sensitive, spec.required, dir, enc)
 		if err != nil {
-			return backup.FullManifest{}, err
+			return nil, err
 		}
 		artifacts = append(artifacts, a)
 	}
 	keyStoreArtifact, err := dirArtifact("signer-keystore", "signer-keystore", cfg.Signer.KeyStoreDir, filepath.Join(dir, "files", "signer-keystore"), true, true, true, dir, enc)
 	if err != nil {
-		return backup.FullManifest{}, err
+		return nil, err
 	}
 	artifacts = append(artifacts, keyStoreArtifact)
-
-	manifest := backup.NewFullManifest(artifacts)
-	manifest.Encryption = enc.manifestEncryption()
-	if err := backup.WriteFullManifest(filepath.Join(dir, backup.FullManifestName), manifest); err != nil {
-		return backup.FullManifest{}, err
-	}
-	return manifest, nil
+	return artifacts, nil
 }
 
 // RunRestore restores the event log from a backup at path and rebuilds the read
@@ -241,6 +369,23 @@ func restoreEventLog(ctx context.Context, cfg *config.Config, path string, resum
 		return 0, fmt.Errorf("open backup file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
+	key, err := backupIntegrityKey(cfg)
+	if err != nil {
+		return 0, err
+	}
+	preflight, err := backup.VerifyEventLogBackupWithKey(f, key)
+	if err != nil {
+		return 0, fmt.Errorf("restore event-log preflight: %w", err)
+	}
+	if preflight.HasGaps {
+		return 0, errors.New(
+			"restore event history contains unexplained deleted positions; " +
+				"logical audit retention retains AN-2 source envelopes, so refusing before datastore mutation",
+		)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("rewind verified event backup: %w", err)
+	}
 
 	st, err := store.Open(ctx, cfg.Postgres.DSN)
 	if err != nil {
@@ -251,7 +396,15 @@ func restoreEventLog(ctx context.Context, cfg *config.Config, path string, resum
 		return 0, fmt.Errorf("migrate: %w", err)
 	}
 
-	log, err := events.Open(ctx, cfg.NATS)
+	// Capture whether this recovery host already possesses the source deployment
+	// key before LoadOrCreate supplies the verifier needed by event-log recovery.
+	// A bare host still verifies the checksum-only portable backup contract; a
+	// pre-provisioned host additionally enforces the deployment-bound HMAC.
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		return 0, fmt.Errorf("audit signing key: %w", err)
+	}
+	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
@@ -262,10 +415,6 @@ func restoreEventLog(ctx context.Context, cfg *config.Config, path string, resum
 	// signing key we additionally require the backup's HMAC to verify under it.
 	// (On a bare recovery host without the key yet, the checksum still guards
 	// against truncation/bit-flips so a corrupt artifact is rejected.)
-	key, err := backupIntegrityKey(cfg)
-	if err != nil {
-		return 0, err
-	}
 	n, err := backup.RestoreLogWithKey(ctx, log, f, key)
 	if err != nil {
 		if resumeIfMatching && errors.Is(err, backup.ErrRestoreTargetNotEmpty) {
@@ -314,6 +463,27 @@ func RunFullRestore(ctx context.Context, cfg *config.Config, dir string) (backup
 	if err := verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl")); err != nil {
 		return backup.PostgresStateSummary{}, err
 	}
+	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl"))
+	if err != nil {
+		return backup.PostgresStateSummary{}, fmt.Errorf("open event log for full-restore preflight: %w", err)
+	}
+	postgresFile, err := os.Open(filepath.Join(dir, "postgres-state.jsonl"))
+	if err != nil {
+		_ = eventFile.Close()
+		return backup.PostgresStateSummary{}, fmt.Errorf("open postgres state for full-restore preflight: %w", err)
+	}
+	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile)
+	eventCloseErr := eventFile.Close()
+	postgresCloseErr := postgresFile.Close()
+	if preflightErr != nil {
+		return backup.PostgresStateSummary{}, preflightErr
+	}
+	if eventCloseErr != nil {
+		return backup.PostgresStateSummary{}, fmt.Errorf("close event log after full-restore preflight: %w", eventCloseErr)
+	}
+	if postgresCloseErr != nil {
+		return backup.PostgresStateSummary{}, fmt.Errorf("close postgres state after full-restore preflight: %w", postgresCloseErr)
+	}
 	for _, spec := range []struct {
 		name string
 		src  string
@@ -344,7 +514,70 @@ func RunFullRestore(ctx context.Context, cfg *config.Config, dir string) (backup
 		return backup.PostgresStateSummary{}, fmt.Errorf("open postgres state backup: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	return backup.RestorePostgresState(ctx, st, f)
+	summary, err := backup.RestorePostgresState(ctx, st, f)
+	if err != nil {
+		return summary, err
+	}
+
+	// restoreEventLog rebuilds once before PostgreSQL state is imported because
+	// independent rows may reference the rebuilt model. Importing that state can
+	// deliberately replace an event-populated durable receiver with the backup
+	// cut's older contents. Rebuild once more after the import so a source event
+	// that survived an append-ACK/projection-failure crash heals the receiver
+	// AFTER the PostgreSQL artifact has finished replacing independent state.
+	//
+	// Rebuild preserves independent tables, so rows present in the PostgreSQL
+	// artifact remain intact while any missing event-derived receiver is restored.
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		return summary, fmt.Errorf("audit signing key for final full-restore rebuild: %w", err)
+	}
+	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
+	if err != nil {
+		return summary, fmt.Errorf("open event log for final full-restore rebuild: %w", err)
+	}
+	defer func() { _ = log.Close() }()
+	if err := projections.New(st).Rebuild(ctx, log); err != nil {
+		return summary, fmt.Errorf("final read-model rebuild after postgres state restore: %w", err)
+	}
+	return summary, nil
+}
+
+// verifyFullRestoreArtifactPair is the mutation-free wall before full restore.
+// Each artifact must be independently integrity/structure valid, and both must
+// name the exact same event cut. Otherwise sequence-bound PostgreSQL evidence
+// could be attached to a different event history even though each file is valid
+// in isolation.
+func verifyFullRestoreArtifactPair(
+	eventArtifact io.Reader,
+	postgresArtifact io.Reader,
+) error {
+	postgresSummary, err := backup.VerifyPostgresState(postgresArtifact)
+	if err != nil {
+		return fmt.Errorf("full restore postgres-state preflight: %w", err)
+	}
+	eventSummary, err := backup.VerifyEventLogBackupWithAuditCheckpoints(
+		eventArtifact,
+		nil,
+		postgresSummary.AuditCheckpoints,
+	)
+	if err != nil {
+		return fmt.Errorf("full restore event-log preflight: %w", err)
+	}
+	if eventSummary.EventCutSequence != postgresSummary.EventCutSequence {
+		return fmt.Errorf(
+			"full restore artifact cut mismatch: event log names cut %d but postgres state names cut %d; refusing before any restore mutation",
+			eventSummary.EventCutSequence,
+			postgresSummary.EventCutSequence,
+		)
+	}
+	if eventSummary.HasGaps {
+		return errors.New(
+			"full restore event history contains unexplained deleted positions; " +
+				"logical audit retention retains AN-2 source envelopes, so this is a legacy or externally damaged artifact; refusing before any restore mutation",
+		)
+	}
+	return nil
 }
 
 // RunRebuild atomically re-derives the read model from the event log already
@@ -371,7 +604,11 @@ func RunRebuild(ctx context.Context, cfg *config.Config) (int, error) {
 		return 0, fmt.Errorf("migrate: %w", err)
 	}
 
-	log, err := events.Open(ctx, cfg.NATS)
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		return 0, fmt.Errorf("audit signing key: %w", err)
+	}
+	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}

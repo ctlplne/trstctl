@@ -860,7 +860,12 @@ func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestra
 			s.mOutboxCircuitTransitions.WithLabelValues(tr.TenantID, tr.Destination, string(tr.From), string(tr.To)).Inc()
 		}),
 	)
-	orch := orchestrator.NewOrchestrator(d.Log, d.Store, s.outbox)
+	orch := orchestrator.NewOrchestrator(
+		d.Log,
+		d.Store,
+		s.outbox,
+		historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)...,
+	)
 	idem := orchestrator.NewIdempotency(d.Store)
 	s.orch, s.idem, s.defaultProfile = orch, idem, d.DefaultProfile
 	if healed, err := orch.ReconcileOutbox(ctx, d.Log); err != nil {

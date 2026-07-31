@@ -82,7 +82,7 @@ func (w *TailWorker) Run(ctx context.Context) error {
 	if w.sampler != nil {
 		go w.sampleLagLoop(runCtx)
 	}
-	return w.log.Tail(runCtx, func(e events.Event) error {
+	return w.log.TailFrom(runCtx, w.proj.store.ProjectionCheckpoint, func(e events.Event) error {
 		if err := w.proj.Apply(runCtx, e); err != nil {
 			return err
 		}

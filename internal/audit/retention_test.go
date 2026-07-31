@@ -3,13 +3,16 @@
 package audit_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +28,81 @@ type memCheckpoints struct {
 	m  map[string]audit.Checkpoint
 }
 
+type retentionHistoryReadKey struct{}
+
+type retentionHistoryCoordinator struct {
+	operation sync.Mutex
+	barrier   sync.RWMutex
+	readDepth atomic.Int64
+}
+
+func (c *retentionHistoryCoordinator) WithRewriteOperation(
+	ctx context.Context,
+	fn func(context.Context) error,
+) error {
+	c.operation.Lock()
+	defer c.operation.Unlock()
+	return fn(ctx)
+}
+
+func (c *retentionHistoryCoordinator) WithCutover(
+	ctx context.Context,
+	fn func(context.Context) error,
+) error {
+	c.barrier.Lock()
+	defer c.barrier.Unlock()
+	return fn(ctx)
+}
+
+func (c *retentionHistoryCoordinator) WithRead(
+	ctx context.Context,
+	fn func(context.Context) error,
+) error {
+	if owner, ok := ctx.Value(retentionHistoryReadKey{}).(*retentionHistoryCoordinator); ok &&
+		owner == c {
+		return fn(ctx)
+	}
+	c.barrier.RLock()
+	c.readDepth.Add(1)
+	defer func() {
+		c.readDepth.Add(-1)
+		c.barrier.RUnlock()
+	}()
+	return fn(context.WithValue(ctx, retentionHistoryReadKey{}, c))
+}
+
+type blockingArchiver struct {
+	coordinator *retentionHistoryCoordinator
+	entered     chan struct{}
+	release     chan struct{}
+	once        sync.Once
+}
+
+func (a *blockingArchiver) Archive(
+	ctx context.Context,
+	_ string,
+	_ uint64,
+	_ string,
+) (string, error) {
+	if a.coordinator.readDepth.Load() == 0 {
+		return "", fmt.Errorf("archive ran outside pinned history read")
+	}
+	a.once.Do(func() { close(a.entered) })
+	select {
+	case <-a.release:
+		return "memory://retention/archive.jws", nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+type blockingCheckpoints struct {
+	*memCheckpoints
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
 type failOnceCheckpoints struct {
 	*memCheckpoints
 	failed bool
@@ -36,6 +114,16 @@ func (c *failOnceCheckpoints) SaveAuditCheckpoint(ctx context.Context, cp audit.
 		return errors.New("injected checkpoint write failure")
 	}
 	return c.memCheckpoints.SaveAuditCheckpoint(ctx, cp)
+}
+
+func (c *blockingCheckpoints) SaveAuditCheckpoint(ctx context.Context, cp audit.Checkpoint) error {
+	c.once.Do(func() { close(c.entered) })
+	select {
+	case <-c.release:
+		return c.memCheckpoints.SaveAuditCheckpoint(ctx, cp)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *memCheckpoints) LatestAuditCheckpoint(_ context.Context, tenantID string) (audit.Checkpoint, bool, error) {
@@ -163,8 +251,8 @@ func TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource(t *testing.T)
 		t.Errorf("raw event count = %d, want %d", rawCount, nOld+nRecent+1)
 	}
 
-	// (c) VerifyChain holds across the checkpoint, and the survivors keep their
-	// original hashes.
+	// (c) VerifyChain holds across the logical checkpoint, and visible survivors
+	// keep their original hashes.
 	if _, err := svc.VerifyChain(ctx, tenant); err != nil {
 		t.Fatalf("VerifyChain across checkpoint failed: %v", err)
 	}
@@ -205,7 +293,7 @@ func TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource(t *testing.T)
 }
 
 // TestRetentionWorkerDoesNothingWithoutWindow confirms an unconfigured worker is a
-// no-op (Retention=0): nothing is archived or retired from the served view.
+// no-op (Retention=0): nothing is archived or pruned.
 func TestRetentionWorkerDoesNothingWithoutWindow(t *testing.T) {
 	ctx := context.Background()
 	log := openTestLog(t)
@@ -227,6 +315,53 @@ func TestRetentionWorkerDoesNothingWithoutWindow(t *testing.T) {
 	}
 	if sum.RecordsArchived != 0 || sum.RecordsPruned != 0 {
 		t.Errorf("no-op worker did work: %+v", sum)
+	}
+}
+
+func TestRetentionWorkerKeepsTenantQueryFloorsIndependent(t *testing.T) {
+	ctx := context.Background()
+	log := openTestLog(t)
+	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "k.pem"), "audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const (
+		tenantA = "66666666-6666-6666-6666-666666666666"
+		tenantB = "77777777-7777-7777-7777-777777777777"
+	)
+	old := time.Now().Add(-48 * time.Hour)
+	for _, event := range []events.Event{
+		{ID: "retention-a-old", Type: "owner.created", TenantID: tenantA, Time: old},
+		{ID: "retention-b-old", Type: "owner.created", TenantID: tenantB, Time: old},
+		{ID: "retention-a-new", Type: "owner.updated", TenantID: tenantA, Time: time.Now()},
+		{ID: "retention-b-new", Type: "owner.updated", TenantID: tenantB, Time: time.Now()},
+	} {
+		if _, err := log.Append(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	checkpoints := &memCheckpoints{}
+	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
+	worker := audit.NewRetentionWorker(
+		svc, log, audit.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour,
+	)
+	summary, err := worker.RunOnce(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.TenantsProcessed != 2 || summary.RecordsArchived != 2 {
+		t.Fatalf("summary = %+v, want one retired record per tenant", summary)
+	}
+	for _, tenantID := range []string{tenantA, tenantB} {
+		visible, err := svc.Search(ctx, audit.Query{TenantID: tenantID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(visible) != 2 ||
+			visible[0].ID != "retention-"+map[string]string{tenantA: "a", tenantB: "b"}[tenantID]+"-new" ||
+			visible[1].Type != audit.EventTypeArchived {
+			t.Fatalf("tenant %s visible records = %+v, want own new event plus own checkpoint event", tenantID, visible)
+		}
 	}
 }
 
@@ -333,4 +468,336 @@ func assertArchivedEventCount(t *testing.T, log *events.Log, tenantID string, wa
 	if got != want {
 		t.Fatalf("audit.archived event count = %d, want %d", got, want)
 	}
+}
+
+func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing.T) {
+	ctx := context.Background()
+	coordinator := &retentionHistoryCoordinator{}
+	log, err := events.Open(
+		ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		events.WithHistoryRewriteCoordinator(coordinator),
+	)
+	if err != nil {
+		t.Fatalf("open event log: %v", err)
+	}
+	defer func() { _ = log.Close() }()
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	if _, err := log.Append(ctx, events.Event{
+		ID: "retention-serialized", Type: "owner.updated", TenantID: tenantID,
+		Time: time.Now().Add(-48 * time.Hour),
+	}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "audit.pem"), "audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseCheckpoints := &memCheckpoints{}
+	checkpoints := &blockingCheckpoints{
+		memCheckpoints: baseCheckpoints,
+		entered:        make(chan struct{}),
+		release:        make(chan struct{}),
+	}
+	archiver := &blockingArchiver{
+		coordinator: coordinator,
+		entered:     make(chan struct{}),
+		release:     make(chan struct{}),
+	}
+	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
+	worker := audit.NewRetentionWorker(svc, log, archiver, checkpoints, time.Hour)
+	retentionDone := make(chan error, 1)
+	go func() {
+		_, err := worker.RunOnce(ctx)
+		retentionDone <- err
+	}()
+	select {
+	case <-archiver.entered:
+		if coordinator.readDepth.Load() == 0 {
+			t.Fatal("signed archive was not protected by a shared history lease")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("retention never reached archive")
+	}
+
+	rewriteEntered := make(chan struct{})
+	rewriteDone := make(chan error, 1)
+	go func() {
+		rewriteDone <- coordinator.WithRewriteOperation(ctx, func(context.Context) error {
+			close(rewriteEntered)
+			return nil
+		})
+	}()
+	select {
+	case <-rewriteEntered:
+		t.Fatal("competing rewrite operation interleaved with pinned retention archive")
+	case <-time.After(75 * time.Millisecond):
+	}
+	close(archiver.release)
+	select {
+	case <-checkpoints.entered:
+		if coordinator.readDepth.Load() != 0 {
+			t.Fatal("retention attempted shared-to-exclusive upgrade without releasing read lease")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("retention never reached checkpoint")
+	}
+	select {
+	case <-rewriteEntered:
+		t.Fatal("competing rewrite entered between archive and checkpoint")
+	default:
+	}
+
+	// Source history is immutable across logical retention, so a backup history
+	// read may proceed while the PostgreSQL checkpoint waits. Its paired PG
+	// snapshot will either include the checkpoint or rebuild it from the already
+	// appended audit.archived event.
+	backupEntered := make(chan struct{})
+	backupDone := make(chan error, 1)
+	go func() {
+		backupDone <- coordinator.WithRead(ctx, func(context.Context) error {
+			close(backupEntered)
+			return nil
+		})
+	}()
+	select {
+	case <-backupEntered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("logical retention unnecessarily blocked an immutable backup history read")
+	}
+	select {
+	case err := <-backupDone:
+		if err != nil {
+			t.Fatalf("backup read: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("backup read did not finish")
+	}
+	close(checkpoints.release)
+	select {
+	case err := <-retentionDone:
+		if err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("retention did not finish")
+	}
+	select {
+	case err := <-rewriteDone:
+		if err != nil {
+			t.Fatalf("queued rewrite: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("queued rewrite did not continue")
+	}
+}
+
+func TestRewriteRealRetentionCheckpointRetainsReceiptAndReopens(t *testing.T) {
+	ctx := context.Background()
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	verifier := func(_ context.Context, evidence events.TenantDataContinuityEvidence) error {
+		report, err := json.Marshal(evidence.Report)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(report, evidence.Receipt.Data) {
+			return fmt.Errorf("receipt does not bind exact report")
+		}
+		return nil
+	}
+	log, err := events.Open(
+		ctx,
+		cfg,
+		events.WithHistoryRewriteContinuityVerifier(verifier),
+	)
+	if err != nil {
+		t.Fatalf("open event log: %v", err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		ID: "rewrite-before-retention", Type: "secret.version.written",
+		TenantID: tenantID, Time: time.Now().Add(-48 * time.Hour),
+		Data: []byte(`{"sealed":"deployment-ciphertext"}`),
+	}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	options := []events.TenantDataRewriteOption{
+		events.WithTenantDataPairValidator(func(_ string, _ int, before, after []byte) error {
+			if bytes.Equal(before, after) {
+				return fmt.Errorf("unchanged rewrite pair")
+			}
+			return nil
+		}),
+		events.WithTenantDataCutoverPreparation(func(
+			ctx context.Context,
+			_ events.TenantDataRewriteReport,
+			proceed func(context.Context) error,
+		) error {
+			return proceed(ctx)
+		}),
+		events.WithTenantDataAuditContinuity(func(
+			context.Context,
+			events.TenantDataAuditView,
+		) (events.TenantDataAuditCheckpoint, error) {
+			return events.TenantDataAuditCheckpoint{IdentityDigest: "test-genesis"}, nil
+		}),
+		events.WithTenantDataContinuity(func(
+			_ context.Context,
+			report events.TenantDataRewriteReport,
+		) (events.Event, error) {
+			payload, err := json.Marshal(report)
+			return events.Event{
+				ID: "rewrite-retention-receipt", Type: "tenant.data.rewrite.receipt",
+				TenantID: tenantID, Time: time.Now().UTC(),
+				SchemaVersion: events.DefaultSchemaVersion, Data: payload,
+			}, err
+		}),
+	}
+	if _, err := log.RewriteTenantData(
+		ctx,
+		tenantID,
+		func(_ string, _ int, data []byte) ([]byte, bool, error) {
+			next := bytes.ReplaceAll(data, []byte("deployment"), []byte("tenant"))
+			return next, !bytes.Equal(next, data), nil
+		},
+		options...,
+	); err != nil {
+		t.Fatalf("RewriteTenantData: %v", err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	checkpoints := &memCheckpoints{}
+	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "audit.pem"), "audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
+	worker := audit.NewRetentionWorker(
+		svc, log, audit.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Nanosecond,
+	)
+	summary, err := worker.RunOnce(ctx)
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if summary.RecordsArchived < 2 || summary.RecordsSourceRetained < 2 ||
+		summary.RecordsPruned != 0 {
+		t.Fatalf("retention summary = %+v, want source event and rewrite receipt archived but retained", summary)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	reopened, err := events.Open(
+		ctx,
+		cfg,
+		events.WithHistoryRewriteContinuityVerifier(verifier),
+	)
+	if err != nil {
+		t.Fatalf("Open after logical retention retained rewrite receipt: %v", err)
+	}
+	_ = reopened.Close()
+}
+
+func TestPrivacyRewriteAfterLogicalRetentionKeepsCheckpointReplayable(t *testing.T) {
+	ctx := context.Background()
+	const tenantID = "55555555-5555-5555-5555-555555555555"
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	verifier := func(_ context.Context, evidence events.TenantDataContinuityEvidence) error {
+		report, err := json.Marshal(evidence.Report)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(report, evidence.Receipt.Data) {
+			return errors.New("receipt does not bind exact rewrite report")
+		}
+		return nil
+	}
+	log, err := events.Open(ctx, cfg, events.WithHistoryRewriteContinuityVerifier(verifier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		ID: "retained-private-source", Type: "owner.updated", TenantID: tenantID,
+		Time: time.Now().Add(-48 * time.Hour),
+		Data: []byte(`{"email":"alice@example.com"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	checkpoints := &memCheckpoints{}
+	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "audit.pem"), "audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
+	worker := audit.NewRetentionWorker(
+		svc, log, audit.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour,
+	)
+	if _, err := worker.RunOnce(ctx); err != nil {
+		t.Fatalf("logical retention: %v", err)
+	}
+	checkpoint, ok, err := checkpoints.LatestAuditCheckpoint(ctx, tenantID)
+	if err != nil || !ok {
+		t.Fatalf("checkpoint: ok=%v err=%v", ok, err)
+	}
+
+	_, err = log.RewriteTenantData(
+		ctx,
+		tenantID,
+		func(_ string, _ int, data []byte) ([]byte, bool, error) {
+			next := bytes.ReplaceAll(data, []byte("alice@example.com"), []byte("erased-subject"))
+			return next, !bytes.Equal(next, data), nil
+		},
+		events.WithTenantDataPairValidator(func(_ string, _ int, before, after []byte) error {
+			if bytes.Equal(before, after) {
+				return errors.New("rewrite pair is unchanged")
+			}
+			return nil
+		}),
+		events.WithTenantDataCutoverPreparation(func(
+			ctx context.Context,
+			_ events.TenantDataRewriteReport,
+			proceed func(context.Context) error,
+		) error {
+			return proceed(ctx)
+		}),
+		events.WithTenantDataAuditContinuity(func(
+			context.Context,
+			events.TenantDataAuditView,
+		) (events.TenantDataAuditCheckpoint, error) {
+			return events.TenantDataAuditCheckpoint{IdentityDigest: checkpoint.BoundaryHash}, nil
+		}),
+		events.WithTenantDataContinuity(func(
+			_ context.Context,
+			report events.TenantDataRewriteReport,
+		) (events.Event, error) {
+			data, err := json.Marshal(report)
+			return events.Event{
+				ID: "retained-private-rewrite-receipt", Type: "tenant.data.rewrite.receipt",
+				TenantID: tenantID, Time: time.Now().UTC(),
+				SchemaVersion: events.DefaultSchemaVersion, Data: data,
+			}, err
+		}),
+	)
+	if err != nil {
+		t.Fatalf("rewrite after logical retention: %v", err)
+	}
+	if err := audit.VerifyCheckpointSourceRetained(ctx, log, checkpoint); err != nil {
+		t.Fatalf("checkpoint after rewrite: %v", err)
+	}
+	var raw bytes.Buffer
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		raw.Write(event.Data)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw.Bytes(), []byte("alice@example.com")) {
+		t.Fatal("retained hidden source still contains erased subject after authorized rewrite")
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := events.Open(ctx, cfg, events.WithHistoryRewriteContinuityVerifier(verifier))
+	if err != nil {
+		t.Fatalf("reopen after retained-prefix rewrite: %v", err)
+	}
+	_ = reopened.Close()
 }

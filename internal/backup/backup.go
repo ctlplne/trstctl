@@ -29,6 +29,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -38,13 +39,29 @@ import (
 const (
 	formatTag  = "trstctl-event-log-backup"
 	trailerTag = "trstctl-event-log-backup-trailer"
-	version    = 1
+	version    = 1 // legacy contiguous format; retained for safe v1 reads
+)
+
+const (
+	exactHistoryVersion = 2
+	exactHistoryLayout  = "exact-sequence-v1"
 )
 
 // ErrRestoreTargetNotEmpty means a restore was pointed at a log that already
 // contains events. Plain --restore keeps failing closed on this error; full DR
 // restore can catch it and perform an explicit byte-for-byte resume check.
 var ErrRestoreTargetNotEmpty = errors.New("backup: restore target log is not empty (restore into a fresh event store)")
+
+// EventLogBackupSummary is the mutation-free structural preflight result for one
+// event artifact. Full restore compares EventCutSequence with the independently
+// verified PostgreSQL artifact before either datastore is changed.
+type EventLogBackupSummary struct {
+	EventCutSequence    uint64
+	Records             int
+	HistoryEntries      int
+	ExactSequenceLayout bool
+	HasGaps             bool
+}
 
 // header is the first line of a backup stream — a self-describing, versioned
 // envelope so a restore can refuse a stranger's file or a future format.
@@ -53,11 +70,21 @@ type header struct {
 	Version          int       `json:"version"`
 	CreatedAt        time.Time `json:"created_at"`
 	EventCutSequence uint64    `json:"event_cut_sequence,omitempty"`
+	HistoryLayout    string    `json:"history_layout,omitempty"`
 }
 
-// record is one event as written to the backup. Sequence is intentionally omitted
-// — it is reassigned contiguously when the events are re-appended on restore.
+// record is one exact event-log position as written to the backup. New backups
+// carry kind+sequence+subject+message_id+stored, while retaining the decoded event
+// fields so an older reader can still safely restore a contiguous stream. A gap
+// record carries sequence..gap_through and no event fields; older readers reject
+// it because type and tenant_id are absent instead of silently renumbering it.
 type record struct {
+	Kind          string          `json:"kind,omitempty"`
+	Sequence      uint64          `json:"sequence,omitempty"`
+	GapThrough    uint64          `json:"gap_through,omitempty"`
+	Subject       string          `json:"subject,omitempty"`
+	MessageID     string          `json:"message_id,omitempty"`
+	Stored        []byte          `json:"stored,omitempty"`
 	ID            string          `json:"id"`
 	Type          string          `json:"type"`
 	TenantID      string          `json:"tenant_id"`
@@ -76,7 +103,9 @@ type trailer struct {
 	SHA256           string `json:"sha256"`
 	HMACSHA256       string `json:"hmac_sha256,omitempty"`
 	Records          int    `json:"records"`
+	Entries          int    `json:"entries,omitempty"`
 	EventCutSequence uint64 `json:"event_cut_sequence,omitempty"`
+	HistoryLayout    string `json:"history_layout,omitempty"`
 }
 
 // WriteLog streams every event in log to w as a versioned, SHA-256-integrity-
@@ -100,6 +129,112 @@ func WriteLogWithKey(ctx context.Context, log *events.Log, w io.Writer, key []by
 	return WriteLogWithKeyThrough(ctx, log, w, key, cut)
 }
 
+// VerifyEventLogBackup verifies a checksum-only event artifact without mutating a
+// target log. A keyed artifact's SHA-256 is checked, but callers that possess the
+// deployment integrity key should use VerifyEventLogBackupWithKey to require its
+// HMAC as well.
+func VerifyEventLogBackup(r io.Reader) (EventLogBackupSummary, error) {
+	return VerifyEventLogBackupWithKey(r, nil)
+}
+
+// VerifyEventLogBackupWithKey performs the same spool-backed integrity,
+// structure, exact-order, and gap validation as RestoreLogWithKey, then returns
+// the declared cut. It never opens or writes NATS.
+func VerifyEventLogBackupWithKey(r io.Reader, key []byte) (EventLogBackupSummary, error) {
+	return VerifyEventLogBackupWithAuditCheckpoints(r, key, nil)
+}
+
+// VerifyEventLogBackupWithAuditCheckpoints performs the normal mutation-free
+// event-artifact verification and additionally proves every logical
+// audit-retention checkpoint still has its complete tenant source prefix. Full
+// restore supplies the independently authenticated PostgreSQL checkpoint
+// summaries here before it changes any file or datastore.
+func VerifyEventLogBackupWithAuditCheckpoints(
+	r io.Reader,
+	key []byte,
+	checkpoints []AuditCheckpointBoundary,
+) (EventLogBackupSummary, error) {
+	h, spool, tr, err := readAndVerify(r, key)
+	if err != nil {
+		return EventLogBackupSummary{}, err
+	}
+	defer spool.cleanup()
+	if err := validateVerifiedStream(h, tr, spool.records, spool.entries); err != nil {
+		return EventLogBackupSummary{}, err
+	}
+	summary := EventLogBackupSummary{
+		EventCutSequence:    h.EventCutSequence,
+		Records:             spool.records,
+		HistoryEntries:      spool.entries,
+		ExactSequenceLayout: h.HistoryLayout == exactHistoryLayout,
+		HasGaps:             h.EventCutSequence > uint64(spool.records),
+	}
+	if err := verifyCheckpointPrefixesInSpool(h, spool, checkpoints); err != nil {
+		return EventLogBackupSummary{}, err
+	}
+	return summary, nil
+}
+
+func verifyCheckpointPrefixesInSpool(
+	h header,
+	spool *restoreSpool,
+	checkpoints []AuditCheckpointBoundary,
+) error {
+	if len(checkpoints) == 0 {
+		return nil
+	}
+	byTenant := make(map[string]AuditCheckpointBoundary, len(checkpoints))
+	for _, checkpoint := range checkpoints {
+		if checkpoint.TenantID == "" || checkpoint.BoundarySeq == 0 ||
+			checkpoint.RecordCount <= 0 || checkpoint.BoundarySeq > h.EventCutSequence {
+			return fmt.Errorf(
+				"backup: audit checkpoint for tenant %q is outside event cut %d or incomplete",
+				checkpoint.TenantID, h.EventCutSequence,
+			)
+		}
+		if prior, ok := byTenant[checkpoint.TenantID]; ok &&
+			prior.BoundarySeq != checkpoint.BoundarySeq {
+			return fmt.Errorf("backup: duplicate latest audit checkpoint for tenant %s", checkpoint.TenantID)
+		}
+		byTenant[checkpoint.TenantID] = checkpoint
+	}
+	if err := spool.rewind(); err != nil {
+		return err
+	}
+	counts := make(map[string]int, len(byTenant))
+	sc := bufio.NewScanner(bufio.NewReader(spool.file))
+	sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+	legacySequence := uint64(0)
+	for sc.Scan() {
+		var rec record
+		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+			return fmt.Errorf("backup: decode retained-source record: %w", err)
+		}
+		sequence := rec.Sequence
+		if h.HistoryLayout == "" {
+			legacySequence++
+			sequence = legacySequence
+		}
+		checkpoint, ok := byTenant[rec.TenantID]
+		if !ok || rec.Kind == "gap" || sequence > checkpoint.BoundarySeq {
+			continue
+		}
+		counts[rec.TenantID]++
+	}
+	if err := sc.Err(); err != nil {
+		return fmt.Errorf("backup: scan retained-source records: %w", err)
+	}
+	for tenantID, checkpoint := range byTenant {
+		if counts[tenantID] != checkpoint.RecordCount {
+			return fmt.Errorf(
+				"backup: audit checkpoint source history is incomplete for tenant %s: artifact retains %d of %d events through sequence %d; refusing before any restore mutation",
+				tenantID, counts[tenantID], checkpoint.RecordCount, checkpoint.BoundarySeq,
+			)
+		}
+	}
+	return nil
+}
+
 // WriteLogThrough writes a log backup bounded to event sequence cut. Events
 // appended after cut are deliberately excluded, giving full DR a single event-log
 // boundary to pair with the PostgreSQL state artifact.
@@ -115,37 +250,84 @@ func WriteLogWithKeyThrough(ctx context.Context, log *events.Log, w io.Writer, k
 	mw := io.MultiWriter(bw, dig)
 	enc := json.NewEncoder(mw)
 
-	if err := enc.Encode(header{Format: formatTag, Version: version, CreatedAt: time.Now().UTC(), EventCutSequence: cut}); err != nil {
+	if err := enc.Encode(header{
+		Format: formatTag, Version: exactHistoryVersion, CreatedAt: time.Now().UTC(),
+		EventCutSequence: cut, HistoryLayout: exactHistoryLayout,
+	}); err != nil {
 		return 0, err
 	}
-	n := 0
-	err := log.Replay(ctx, 0, func(e events.Event) error {
-		if e.Sequence > cut {
-			return nil
+	records := 0
+	entries := 0
+	err := log.ExportBackupHistoryThrough(ctx, cut, func(history events.BackupHistoryRecord) error {
+		rec := record{
+			Sequence:   history.Sequence,
+			GapThrough: history.GapThrough,
 		}
-		if err := enc.Encode(record{
-			ID: e.ID, Type: e.Type, TenantID: e.TenantID, SchemaVersion: e.SchemaVersion, Time: e.Time,
-			Data: json.RawMessage(e.Data), Actor: e.Actor,
-		}); err != nil {
+		if history.IsGap() {
+			rec.Kind = "gap"
+		} else {
+			rec.Kind = "event"
+			rec.Subject = history.Subject
+			rec.MessageID = history.MessageID
+			rec.Stored = append([]byte(nil), history.Stored...)
+			rec.ID = history.Event.ID
+			rec.Type = history.Event.Type
+			rec.TenantID = history.Event.TenantID
+			rec.SchemaVersion = history.Event.SchemaVersion
+			rec.Time = history.Event.Time
+			rec.Data = json.RawMessage(history.Event.Data)
+			rec.Actor = history.Event.Actor
+			records++
+		}
+		if err := writeRecordLine(mw, rec); err != nil {
 			return err
 		}
-		n++
+		entries++
 		return nil
 	})
 	if err != nil {
-		return n, err
+		return records, err
 	}
 
 	// The trailer is written to bw only (NOT into the digest): it carries the hash
 	// of everything before it.
-	tr := trailer{Format: trailerTag, SHA256: dig.sumHex(), Records: n, EventCutSequence: cut}
+	tr := trailer{
+		Format: trailerTag, SHA256: dig.sumHex(), Records: records, Entries: entries,
+		EventCutSequence: cut, HistoryLayout: exactHistoryLayout,
+	}
 	if len(key) > 0 {
 		tr.HMACSHA256 = dig.macHex()
 	}
 	if err := json.NewEncoder(bw).Encode(tr); err != nil {
-		return n, err
+		return records, err
 	}
-	return n, bw.Flush()
+	return records, bw.Flush()
+}
+
+// writeRecordLine keeps the decoded data field byte-identical to the event data
+// inside Stored. encoding/json normally compacts a json.RawMessage returned by a
+// Marshaler, which would make the redundant legacy-compatible fields disagree
+// with the authoritative stored envelope for JSON containing whitespace.
+func writeRecordLine(w io.Writer, rec record) error {
+	data := append(json.RawMessage(nil), rec.Data...)
+	rec.Data = nil
+	line, err := json.Marshal(rec)
+	if err != nil {
+		return err
+	}
+	if len(data) > 0 {
+		if !json.Valid(data) {
+			return errors.New("backup: event data is not valid JSON")
+		}
+		line = append(line[:len(line)-1], []byte(`,"data":`)...)
+		line = append(line, data...)
+		line = append(line, '}')
+	}
+	line = append(line, '\n')
+	if _, err := w.Write(line); err != nil {
+		return err
+	}
+	return nil
 }
 
 // RestoreLog reads a backup stream from r, VERIFIES its integrity trailer, and —
@@ -166,10 +348,6 @@ func RestoreLog(ctx context.Context, log *events.Log, r io.Reader) (int, error) 
 // performed BEFORE any event is appended, so a tampered backup never mutates the
 // target log.
 func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []byte) (int, error) {
-	if !empty(ctx, log) {
-		return 0, ErrRestoreTargetNotEmpty
-	}
-
 	// Parse and verify the stream while spooling record lines to disk. We still
 	// verify integrity BEFORE appending anything, but memory stays bounded by the
 	// largest line rather than the whole backup.
@@ -178,13 +356,31 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 		return 0, err
 	}
 	defer spool.cleanup()
-	if err := validateVerifiedStream(h, tr, spool.records); err != nil {
+	if err := validateVerifiedStream(h, tr, spool.records, spool.entries); err != nil {
 		return 0, err
 	}
 	if err := spool.rewind(); err != nil {
 		return 0, err
 	}
 
+	if h.HistoryLayout == exactHistoryLayout {
+		n, err := restoreExactHistory(ctx, log, h.EventCutSequence, tr.SHA256, spool)
+		if errors.Is(err, events.ErrBackupHistoryPrefixMismatch) {
+			return n, errors.Join(ErrRestoreTargetNotEmpty, err)
+		}
+		return n, err
+	}
+
+	// A legacy backup can be restored safely only after validateVerifiedStream
+	// proved it was contiguous from sequence one through its cut. Append therefore
+	// recreates the same sequence and canonical message identity.
+	pristine, err := log.BackupHistoryPristine(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("backup: inspect restore target history: %w", err)
+	}
+	if !pristine {
+		return 0, ErrRestoreTargetNotEmpty
+	}
 	n := 0
 	sc := bufio.NewScanner(bufio.NewReader(spool.file))
 	sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
@@ -207,6 +403,45 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 	return n, nil
 }
 
+func restoreExactHistory(
+	ctx context.Context,
+	log *events.Log,
+	cut uint64,
+	artifactDigest string,
+	spool *restoreSpool,
+) (int, error) {
+	n, err := log.RestoreBackupHistory(ctx, cut, artifactDigest, func(yield func(events.BackupHistoryRecord) error) error {
+		sc := bufio.NewScanner(bufio.NewReader(spool.file))
+		sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+		entry := 0
+		for sc.Scan() {
+			entry++
+			var rec record
+			if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+				return fmt.Errorf("backup: replay spooled entry %d: %w", entry, err)
+			}
+			history := events.BackupHistoryRecord{
+				Sequence:   rec.Sequence,
+				GapThrough: rec.GapThrough,
+				Subject:    rec.Subject,
+				MessageID:  rec.MessageID,
+				Stored:     append([]byte(nil), rec.Stored...),
+			}
+			if err := yield(history); err != nil {
+				return err
+			}
+		}
+		if err := sc.Err(); err != nil {
+			return fmt.Errorf("backup: replay spooled exact history: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return n, fmt.Errorf("backup: restore exact event history: %w", err)
+	}
+	return n, nil
+}
+
 // VerifyLogMatchesWithKey verifies a backup stream and compares it to a log that
 // is already populated, without appending anything. Full restore uses this as its
 // resume proof after an interrupted first attempt: same backup + same log means it
@@ -218,11 +453,14 @@ func VerifyLogMatchesWithKey(ctx context.Context, log *events.Log, r io.Reader, 
 		return 0, err
 	}
 	defer spool.cleanup()
-	if err := validateVerifiedStream(h, tr, spool.records); err != nil {
+	if err := validateVerifiedStream(h, tr, spool.records, spool.entries); err != nil {
 		return 0, err
 	}
 	if err := spool.rewind(); err != nil {
 		return 0, err
+	}
+	if h.HistoryLayout == exactHistoryLayout {
+		return verifyExactHistoryMatches(ctx, log, h.EventCutSequence, spool, tr)
 	}
 	sc := bufio.NewScanner(bufio.NewReader(spool.file))
 	sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
@@ -258,18 +496,135 @@ func VerifyLogMatchesWithKey(ctx context.Context, log *events.Log, r io.Reader, 
 	return n, nil
 }
 
-func validateVerifiedStream(h header, tr trailer, records int) error {
+func verifyExactHistoryMatches(
+	ctx context.Context,
+	log *events.Log,
+	cut uint64,
+	spool *restoreSpool,
+	tr trailer,
+) (int, error) {
+	head, err := log.LastSequence(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("backup: resume read target head: %w", err)
+	}
+	if head != cut {
+		return 0, fmt.Errorf(
+			"backup: resume mismatch: target head %d differs from backup cut %d",
+			head, cut,
+		)
+	}
+	sc := bufio.NewScanner(bufio.NewReader(spool.file))
+	sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+	entries := 0
+	records := 0
+	err = log.ExportBackupHistoryThrough(ctx, cut, func(history events.BackupHistoryRecord) error {
+		if !sc.Scan() {
+			if err := sc.Err(); err != nil {
+				return fmt.Errorf("backup: resume compare exact stream: %w", err)
+			}
+			return errors.New("backup: resume mismatch: target history has more entries than backup")
+		}
+		entries++
+		var rec record
+		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+			return fmt.Errorf("backup: resume decode entry %d: %w", entries, err)
+		}
+		if !historyMatchesRecord(history, rec) {
+			return fmt.Errorf(
+				"backup: resume mismatch at exact history entry %d (sequence %d)",
+				entries, history.Sequence,
+			)
+		}
+		if !history.IsGap() {
+			records++
+		}
+		return nil
+	})
+	if err != nil {
+		return records, err
+	}
+	if sc.Scan() {
+		return records, errors.New("backup: resume mismatch: backup has more history entries than target")
+	}
+	if err := sc.Err(); err != nil {
+		return records, fmt.Errorf("backup: resume compare exact stream: %w", err)
+	}
+	if records != tr.Records || entries != tr.Entries {
+		return records, fmt.Errorf(
+			"backup: resume mismatch: matched %d records/%d entries but trailer claims %d/%d",
+			records, entries, tr.Records, tr.Entries,
+		)
+	}
+	return records, nil
+}
+
+func historyMatchesRecord(history events.BackupHistoryRecord, rec record) bool {
+	if history.Sequence != rec.Sequence || history.GapThrough != rec.GapThrough {
+		return false
+	}
+	if history.IsGap() {
+		return rec.Kind == "gap"
+	}
+	return rec.Kind == "event" &&
+		history.Subject == rec.Subject &&
+		history.MessageID == rec.MessageID &&
+		bytes.Equal(history.Stored, rec.Stored)
+}
+
+func validateVerifiedStream(h header, tr trailer, records, entries int) error {
 	if h.Format != formatTag {
 		return fmt.Errorf("backup: not a trstctl event-log backup (format %q)", h.Format)
 	}
-	if h.Version != version {
-		return fmt.Errorf("backup: unsupported backup version %d (want %d)", h.Version, version)
+	if h.Version != version && h.Version != exactHistoryVersion {
+		return fmt.Errorf(
+			"backup: unsupported backup version %d (want %d or legacy %d)",
+			h.Version, exactHistoryVersion, version,
+		)
 	}
 	if h.EventCutSequence != tr.EventCutSequence {
 		return fmt.Errorf("backup: integrity: header event cut %d but trailer event cut %d", h.EventCutSequence, tr.EventCutSequence)
 	}
+	if h.HistoryLayout != tr.HistoryLayout {
+		return fmt.Errorf(
+			"backup: integrity: header history layout %q but trailer history layout %q",
+			h.HistoryLayout, tr.HistoryLayout,
+		)
+	}
 	if tr.Records != records {
 		return fmt.Errorf("backup: integrity: trailer claims %d records but stream has %d", tr.Records, records)
+	}
+	switch h.HistoryLayout {
+	case exactHistoryLayout:
+		if h.Version != exactHistoryVersion {
+			return fmt.Errorf(
+				"backup: legacy version %d cannot declare exact history layout %q",
+				h.Version, h.HistoryLayout,
+			)
+		}
+		if tr.Entries != entries {
+			return fmt.Errorf(
+				"backup: integrity: trailer claims %d history entries but stream has %d",
+				tr.Entries, entries,
+			)
+		}
+	case "":
+		if h.Version != version {
+			return fmt.Errorf(
+				"backup: version %d is missing required exact history layout",
+				h.Version,
+			)
+		}
+		// Legacy v1 records did not carry sequence, subject, or gap identity. They
+		// are safe to restore only when the cut proves a contiguous 1..N stream;
+		// otherwise renumbering would detach PostgreSQL checkpoint boundaries.
+		if entries != records || h.EventCutSequence != uint64(records) {
+			return fmt.Errorf(
+				"backup: legacy event history lacks exact sequences/gaps (cut=%d records=%d); refusing unsafe restore",
+				h.EventCutSequence, records,
+			)
+		}
+	default:
+		return fmt.Errorf("backup: unsupported history layout %q", h.HistoryLayout)
 	}
 	return nil
 }
@@ -298,6 +653,127 @@ func rawJSONEqual(a, b []byte) bool {
 	return bytes.Equal(ca.Bytes(), cb.Bytes())
 }
 
+func validateDecodedRecord(h header, rec record, covered *uint64) (bool, error) {
+	if h.HistoryLayout == "" {
+		if rec.Type == "" {
+			return false, errors.New("event type is required")
+		}
+		if rec.TenantID == "" {
+			return false, errors.New("tenant_id is required")
+		}
+		return true, nil
+	}
+	if h.HistoryLayout != exactHistoryLayout {
+		return false, fmt.Errorf("unsupported history layout %q", h.HistoryLayout)
+	}
+	if covered == nil || *covered == ^uint64(0) || rec.Sequence != *covered+1 {
+		var previous uint64
+		if covered != nil {
+			previous = *covered
+		}
+		return false, fmt.Errorf(
+			"exact history ordering: got sequence %d after %d",
+			rec.Sequence, previous,
+		)
+	}
+
+	switch rec.Kind {
+	case "gap":
+		if rec.GapThrough < rec.Sequence || rec.GapThrough > h.EventCutSequence {
+			return false, fmt.Errorf(
+				"malformed exact history gap %d..%d for cut %d",
+				rec.Sequence, rec.GapThrough, h.EventCutSequence,
+			)
+		}
+		if rec.Subject != "" || rec.MessageID != "" || len(rec.Stored) != 0 ||
+			rec.ID != "" || rec.Type != "" || rec.TenantID != "" ||
+			rec.SchemaVersion != 0 || !rec.Time.IsZero() || len(rec.Data) != 0 ||
+			rec.Actor != nil {
+			return false, fmt.Errorf(
+				"malformed exact history gap %d..%d carries live-event fields",
+				rec.Sequence, rec.GapThrough,
+			)
+		}
+		*covered = rec.GapThrough
+		return false, nil
+	case "event":
+		if rec.Sequence > h.EventCutSequence {
+			return false, fmt.Errorf(
+				"exact history event sequence %d is beyond cut %d",
+				rec.Sequence, h.EventCutSequence,
+			)
+		}
+		if rec.GapThrough != 0 {
+			return false, fmt.Errorf("exact history event %d carries a gap boundary", rec.Sequence)
+		}
+		if rec.Subject == "" || strings.TrimSpace(rec.Subject) != rec.Subject ||
+			!strings.HasPrefix(rec.Subject, "events.") ||
+			strings.ContainsAny(rec.Subject, " \t\r\n*>") {
+			return false, fmt.Errorf("exact history event %d has invalid subject %q", rec.Sequence, rec.Subject)
+		}
+		if rec.MessageID == "" {
+			return false, fmt.Errorf("exact history event %d has no canonical message_id", rec.Sequence)
+		}
+		if len(rec.Stored) == 0 {
+			return false, fmt.Errorf("exact history event %d has no stored envelope", rec.Sequence)
+		}
+		if err := validateStoredRecordIdentity(rec); err != nil {
+			return false, err
+		}
+		*covered = rec.Sequence
+		return true, nil
+	default:
+		return false, fmt.Errorf("exact history entry %d has unknown kind %q", rec.Sequence, rec.Kind)
+	}
+}
+
+func validateStoredRecordIdentity(rec record) error {
+	var stored struct {
+		ID            string        `json:"id"`
+		Type          string        `json:"type"`
+		TenantID      string        `json:"tenant_id"`
+		Time          time.Time     `json:"time"`
+		SchemaVersion int           `json:"v,omitempty"`
+		Data          []byte        `json:"data,omitempty"`
+		Actor         *events.Actor `json:"actor,omitempty"`
+	}
+	if err := json.Unmarshal(rec.Stored, &stored); err != nil {
+		return fmt.Errorf("exact history event %d has invalid stored envelope: %w", rec.Sequence, err)
+	}
+	if stored.ID == "" || stored.Type == "" || stored.TenantID == "" {
+		return fmt.Errorf("exact history event %d has an incomplete stored envelope", rec.Sequence)
+	}
+	if rec.MessageID != stored.ID || rec.ID != stored.ID {
+		return fmt.Errorf(
+			"exact history event %d canonical message_id/id does not match stored event id",
+			rec.Sequence,
+		)
+	}
+	schemaVersion := stored.SchemaVersion
+	if schemaVersion == 0 {
+		schemaVersion = events.DefaultSchemaVersion
+	}
+	if rec.Type != stored.Type ||
+		rec.TenantID != stored.TenantID ||
+		rec.SchemaVersion != schemaVersion ||
+		!rec.Time.Equal(stored.Time) ||
+		!bytes.Equal(rec.Data, stored.Data) ||
+		!reflect.DeepEqual(rec.Actor, stored.Actor) {
+		return fmt.Errorf(
+			"exact history event %d decoded fields do not match its stored envelope",
+			rec.Sequence,
+		)
+	}
+	if rec.Subject != "events."+stored.Type &&
+		!strings.HasSuffix(rec.Subject, "."+stored.Type) {
+		return fmt.Errorf(
+			"exact history event %d subject %q does not route stored event type %q",
+			rec.Sequence, rec.Subject, stored.Type,
+		)
+	}
+	return nil
+}
+
 // readAndVerify streams the backup, recomputes the SHA-256 (and, when key is set,
 // the HMAC) over every byte up to the trailer line, and verifies those digests
 // against the trailer. Validated record lines are spooled to a temporary file and
@@ -308,6 +784,7 @@ func readAndVerify(r io.Reader, key []byte) (h header, spool *restoreSpool, tr t
 	var (
 		haveHdr bool
 		haveTr  bool
+		covered uint64
 	)
 	spool, err = newRestoreSpool()
 	if err != nil {
@@ -354,16 +831,20 @@ func readAndVerify(r io.Reader, key []byte) (h header, spool *restoreSpool, tr t
 		default:
 			var rec record
 			if err := json.Unmarshal(line, &rec); err != nil {
-				return h, nil, tr, fmt.Errorf("backup: decode record %d: %w", spool.records+1, err)
+				return h, nil, tr, fmt.Errorf("backup: decode entry %d: %w", spool.entries+1, err)
 			}
-			if rec.Type == "" {
-				return h, nil, tr, fmt.Errorf("backup: decode record %d: event type is required", spool.records+1)
-			}
-			if rec.TenantID == "" {
-				return h, nil, tr, fmt.Errorf("backup: decode record %d: tenant_id is required", spool.records+1)
+			live, err := validateDecodedRecord(h, rec, &covered)
+			if err != nil {
+				if h.HistoryLayout == exactHistoryLayout {
+					return h, nil, tr, fmt.Errorf(
+						"backup: integrity: decode entry %d: %w",
+						spool.entries+1, err,
+					)
+				}
+				return h, nil, tr, fmt.Errorf("backup: decode entry %d: %w", spool.entries+1, err)
 			}
 			feed(dig, line)
-			if err := spool.writeLine(line); err != nil {
+			if err := spool.writeLine(line, live); err != nil {
 				return h, nil, tr, err
 			}
 		}
@@ -378,6 +859,12 @@ func readAndVerify(r io.Reader, key []byte) (h header, spool *restoreSpool, tr t
 		// A backup with no trailer is unverifiable — treat it as corrupt/truncated
 		// and refuse it (fail closed), rather than restoring unchecked bytes.
 		return h, nil, tr, errors.New("backup: integrity trailer missing (stream truncated or not a trstctl backup); refusing to restore")
+	}
+	if h.HistoryLayout == exactHistoryLayout && covered != h.EventCutSequence {
+		return h, nil, tr, fmt.Errorf(
+			"backup: exact history ordering covers through %d, want cut %d",
+			covered, h.EventCutSequence,
+		)
 	}
 
 	// Verify SHA-256 (always) using constant-time comparison.
@@ -442,6 +929,7 @@ func feed(d *digest, line []byte) {
 type restoreSpool struct {
 	file    *os.File
 	records int
+	entries int
 }
 
 func newRestoreSpool() (*restoreSpool, error) {
@@ -452,14 +940,17 @@ func newRestoreSpool() (*restoreSpool, error) {
 	return &restoreSpool{file: f}, nil
 }
 
-func (s *restoreSpool) writeLine(line []byte) error {
+func (s *restoreSpool) writeLine(line []byte, live bool) error {
 	if _, err := s.file.Write(line); err != nil {
 		return fmt.Errorf("backup: write restore spool: %w", err)
 	}
 	if _, err := s.file.Write([]byte{'\n'}); err != nil {
 		return fmt.Errorf("backup: write restore spool: %w", err)
 	}
-	s.records++
+	s.entries++
+	if live {
+		s.records++
+	}
 	return nil
 }
 
@@ -484,17 +975,4 @@ func (s *restoreSpool) cleanup() {
 	name := s.file.Name()
 	_ = s.file.Close()
 	_ = os.Remove(name)
-}
-
-// empty reports whether the log has no events (short-circuiting on the first one).
-func empty(ctx context.Context, log *events.Log) bool {
-	found := false
-	stop := errors.New("stop")
-	err := log.Replay(ctx, 0, func(events.Event) error { found = true; return stop })
-	if err != nil && !errors.Is(err, stop) {
-		// On a replay error, treat the log as non-empty so a restore never appends
-		// into an unknown state.
-		return false
-	}
-	return !found
 }

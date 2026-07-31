@@ -5,8 +5,8 @@
 // high-volume fleet's one-row-per-served-mutation growth cannot accumulate without
 // limit, and so completed keys/results are not retained indefinitely.
 //
-// Like the logical audit retention worker (internal/audit), this is a system
-// maintenance task that operates across all tenants by design, so it runs on the connection
+// Like the audit retention worker (internal/audit), this is a system maintenance
+// task that operates across all tenants by design, so it runs on the connection
 // pool directly rather than under a tenant's row-level-security context — it
 // reclaims every tenant's expired rows in one pass and reads no tenant data into
 // the application. It therefore lives outside the repository layer (internal/store
@@ -38,7 +38,7 @@ const DefaultRetention = 7 * 24 * time.Hour
 
 // Sweeper reclaims expired idempotency keys. It holds the store so it can run the
 // cross-tenant maintenance query on the pool (bypassing RLS, like the audit
-// retention prune).
+// retention tenant inventory).
 type Sweeper struct {
 	store     *store.Store
 	retention time.Duration

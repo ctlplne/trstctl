@@ -152,11 +152,12 @@ trstctl enables the controls below; you operate them:
   call.
 - Schedule periodic signed exports to anchor the log over time (above).
 - Handle privacy-erasure residue in old evidence. A served subject erasure
-  secure-deletes and republishes the hot log with matching subject bytes
-  replaced by an erasure placeholder; signed archives from before the
-  erasure are historical artifacts outside that rewrite — process them
-  under your WORM, legal-hold, or cryptographic-shredding policy, then
-  record archive-erasure attestations through
+  activates a signed, sequence-preserving replacement history generation with
+  matching subject bytes replaced by an erasure placeholder, then securely
+  scrubs the superseded generation. Signed archives from before the erasure are
+  historical artifacts outside that rewrite — process them under your WORM,
+  legal-hold, or cryptographic-shredding policy, then record archive-erasure attestations
+  through
   `POST /api/v1/privacy/archive-erasure-attestations`.
   `GET /api/v1/privacy/archive-erasure-attestations` returns the tenant
   evidence ledger for review.
@@ -176,7 +177,7 @@ audit-view policy in four ordered steps:
    the audit verification key like a live export.
 2. Verify. The worker re-verifies the bundle it just wrote — recovers it
    and checks the hash chain — before advancing any served boundary; a
-   failed verification leaves the visible view unchanged.
+   failed verification aborts the run and the visible view is unchanged.
 3. Record a replayable checkpoint. An `audit.archived` v2 event carries
    the global event boundary, cumulative tenant record count, chain head,
    archive locator, and an explicit retained-source assertion. Replaying
@@ -185,17 +186,19 @@ audit-view policy in four ordered steps:
 4. Retire from the served view. The checkpoint becomes the visible
    suffix's chain anchor. Query and export omit the archived prefix, while
    every underlying AN-2 event envelope stays in JetStream for projection
-   rebuild and disaster recovery. Each run increments
+   rebuild, disaster recovery, and authorized privacy rewrite. Each run
+   increments
    `trstctl_audit_records_archived_total`,
    `trstctl_audit_source_records_retained_total`, and
    `trstctl_audit_retention_runs_total` on `/metrics`.
 
 Each archived segment chains onto the previous one. The complete event log
-remains the AN-2 rebuild source; signed bundles are independently verifiable
-cold evidence, not a substitute event stream. Rebuild verifies that every
-logical checkpoint still has its complete tenant source prefix and fails
-before mutation if legacy or externally damaged history has gaps. Archiving
-to immutable/WORM storage remains the operator's responsibility.
+remains the AN-2 rebuild source; the signed bundles are independently
+verifiable cold evidence, not a substitute event stream. At backup, restore,
+and rebuild, trstctl verifies that every logical checkpoint still has its
+complete tenant source prefix and fails before mutation if a legacy or
+externally damaged source has gaps. Archiving to immutable/WORM storage
+remains the operator's responsibility.
 
 ## Framework mapping — *enables* vs. operator responsibility
 

@@ -18,12 +18,10 @@ import "trstctl.com/trstctl/internal/store"
 //     log is the backup; on restore these are truncated and re-derived by
 //     projections.Rebuild. This set must equal store.ReadModelTables (the manifest
 //     test asserts it), so a projection table can never drift out of the rebuild.
-//   - RecoveredFromPostgresBackup — independent state plus durable restore
-//     receivers (tokens, discovery inventory, attestations, the outbox,
-//     idempotency keys, logical audit checkpoints, …). Audit checkpoints also
-//     rebuild from audit.archived v2 during event-only recovery; carrying them in
-//     the paired PostgreSQL artifact preserves the exact served-view boundary and
-//     enables retained-source preflight before restore mutation.
+//   - RecoveredFromPostgresBackup — independent state plus durable receivers whose
+//     exact rows are needed during restore preflight (tokens, discovery inventory,
+//     attestations, the outbox, idempotency keys, audit checkpoints, …). Recovered
+//     from the PostgreSQL dump in the backup set.
 //   - Ephemeral — state that is NOT required to recover and regenerates on its own
 //     (rate-limit token buckets). Captured incidentally by the PostgreSQL dump but
 //     never depended on for a correct restore.
@@ -38,6 +36,10 @@ var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
 	"agent_bootstrap_tokens",
 	"attestations",
+	// audit_checkpoints is a dual-recovery receiver. The PostgreSQL copy is paired
+	// with the event artifact so full restore can prove hidden tenant prefixes are
+	// complete before mutation; audit.archived v2 also reconstructs the row during
+	// an event-only projection rebuild.
 	"audit_checkpoints",
 	"credentials",
 	"ct_log_checkpoints",
@@ -55,6 +57,10 @@ var RecoveredFromPostgresBackup = []string{
 	"notification_routing_policies",
 	"outbox",
 	"policy_bindings",
+	// This event-populated AN-5 receiver deliberately survives read-model rebuild:
+	// a pending raw Idempotency-Key still needs the exact canonical erasure
+	// response and request binding even before or independently of projection.
+	"privacy_subject_erasure_operations",
 	"secret_shares",
 	"secret_store",
 	"secret_store_versions",

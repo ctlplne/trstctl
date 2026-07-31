@@ -56,6 +56,7 @@ var TenantScopedTables = []string{
 	"pqc_migration_campaigns",
 	"privacy_archive_erasure_attestations",
 	"privacy_retention_runs",
+	"privacy_subject_erasure_operations",
 	"privacy_subject_erasures",
 	"connector_delivery_receipts",
 	"lifecycle_rotation_runs",

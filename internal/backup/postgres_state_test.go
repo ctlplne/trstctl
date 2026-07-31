@@ -60,6 +60,19 @@ func TestDeploymentTargetRestoreOrderIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestPrivacyErasureOperationIsInPostgresRestoreOrder(t *testing.T) {
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatalf("postgresStateRestoreOrder: %v", err)
+	}
+	for _, table := range order {
+		if table == "privacy_subject_erasure_operations" {
+			return
+		}
+	}
+	t.Fatalf("privacy_subject_erasure_operations missing from restore order: %v", order)
+}
+
 func TestRestorePostgresStateRejectsBadManifestBeforeStoreUse(t *testing.T) {
 	tables := postgresStateTables()
 	if len(tables) == 0 {
@@ -76,6 +89,22 @@ func TestRestorePostgresStateRejectsBadManifestBeforeStoreUse(t *testing.T) {
 	}
 	if summary.Records != 0 || len(summary.Tables) != 0 {
 		t.Fatalf("summary = %+v, want zero summary before store use", summary)
+	}
+}
+
+func TestVerifyPostgresStateExposesPairedEventCutWithoutStore(t *testing.T) {
+	const cut = uint64(37)
+	stream := postgresStateManifestOnlyStreamAtCut(t, postgresStateTables(), cut)
+
+	summary, err := VerifyPostgresState(strings.NewReader(stream))
+	if err != nil {
+		t.Fatalf("VerifyPostgresState: %v", err)
+	}
+	if summary.EventCutSequence != cut {
+		t.Fatalf("verified event cut = %d, want %d", summary.EventCutSequence, cut)
+	}
+	if summary.Records != 0 || len(summary.Tables) != 0 {
+		t.Fatalf("verified summary = %+v, want empty artifact at cut %d", summary, cut)
 	}
 }
 
@@ -122,19 +151,23 @@ func TestNormalizeLegacyPostgresStateRowsRejectsNullObject(t *testing.T) {
 }
 
 func postgresStateManifestOnlyStream(t *testing.T, tables []string) string {
+	return postgresStateManifestOnlyStreamAtCut(t, tables, 0)
+}
+
+func postgresStateManifestOnlyStreamAtCut(t *testing.T, tables []string, cut uint64) string {
 	t.Helper()
 	var b strings.Builder
 	dig := newDigest(nil)
 	enc := json.NewEncoder(io.MultiWriter(&b, dig))
 	if err := enc.Encode(postgresStateHeader{
 		Format: postgresStateFormatTag, Version: postgresStateVersion,
-		CreatedAt: time.Unix(0, 0).UTC(), Tables: tables,
+		CreatedAt: time.Unix(0, 0).UTC(), Tables: tables, EventCutSequence: cut,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := json.NewEncoder(&b).Encode(postgresStateTrailer{
 		Format: postgresStateTrailerTag, SHA256: dig.sumHex(),
-		Records: 0, Tables: map[string]int{},
+		Records: 0, Tables: map[string]int{}, EventCutSequence: cut,
 	}); err != nil {
 		t.Fatal(err)
 	}

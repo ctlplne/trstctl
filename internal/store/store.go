@@ -41,6 +41,10 @@ const appRole = "trstctl_app"
 // projections) use the pool directly.
 type Store struct {
 	pool *pgxpool.Pool
+	// historyRewriteOperationGate admits only one local contender to the
+	// deployment-wide PostgreSQL operation lock. Without it, maxConns local
+	// waiters can each pin a session and starve the elected callback's cutover.
+	historyRewriteOperationGate chan struct{}
 	// acquireTimeout bounds how long begin() waits for a pooled connection.
 	acquireTimeout time.Duration
 	// extraMigrations are additional migration sources registered through the
@@ -121,7 +125,11 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("store: ping: %w", err)
 	}
-	return &Store{pool: pool, acquireTimeout: options.acquireTimeout}, nil
+	return &Store{
+		pool:                        pool,
+		acquireTimeout:              options.acquireTimeout,
+		historyRewriteOperationGate: make(chan struct{}, 1),
+	}, nil
 }
 
 // begin starts a transaction with a bounded pool-acquire window: when the pool
@@ -179,14 +187,45 @@ func (s *Store) Pool() *pgxpool.Pool { return s.SystemPool() }
 // role and sets the trstctl.tenant_id session variable, so row-level security
 // confines every query in fn to that tenant.
 func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error {
-	tx, err := s.begin(ctx)
+	// An exclusive backup-fence callback owns one exact PostgreSQL session. A
+	// nested tenant read must use that same session: asking a second session for
+	// the shared side of the fence would self-deadlock. The private lease is
+	// store-bound, single-user, and revoked before the exclusive lock releases;
+	// every ordinary caller still takes the shared transaction lock below.
+	fenceLease, ownsExclusiveFence := backupWriteFenceLeaseFromContext(ctx, s)
+	if ownsExclusiveFence {
+		defer fenceLease.releaseUse()
+	}
+
+	var (
+		tx  pgx.Tx
+		err error
+	)
+	if ownsExclusiveFence {
+		tx, err = fenceLease.conn.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("store: begin tenant transaction under backup write fence: %w", err)
+		}
+	} else {
+		tx, err = s.begin(ctx)
+	}
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		// Rollback must still reach PostgreSQL after the request context is
+		// cancelled. This is especially important when tx reuses the session
+		// holding the exclusive backup fence: returning with an open transaction
+		// would make the later advisory unlock ambiguous and poison that session.
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = tx.Rollback(rollbackCtx)
+		cancel()
+	}()
 
-	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared($1)", BackupWriteFenceAdvisoryLockKey); err != nil {
-		return fmt.Errorf("store: acquire backup write fence: %w", err)
+	if !ownsExclusiveFence {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared($1)", BackupWriteFenceAdvisoryLockKey); err != nil {
+			return fmt.Errorf("store: acquire backup write fence: %w", err)
+		}
 	}
 	if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
 		return fmt.Errorf("store: set role: %w", err)

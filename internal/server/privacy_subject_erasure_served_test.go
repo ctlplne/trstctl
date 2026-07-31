@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -47,14 +48,18 @@ func TestServedPrivacySubjectErasureRedactsAuditAndExports(t *testing.T) {
 		string(authz.OwnersRead), string(authz.PrivacyRead), string(authz.AuditRead),
 	})
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
-	if err != nil {
-		t.Fatalf("open event log: %v", err)
-	}
 	auditKey, err := jose.GenerateRSASigningKey("privacy-001-audit")
 	if err != nil {
-		_ = log.Close()
 		t.Fatalf("generate audit key: %v", err)
+	}
+	log, err := openHistoryAwareEventLog(
+		ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		st,
+		auditKey,
+	)
+	if err != nil {
+		t.Fatalf("open event log: %v", err)
 	}
 	srv, err := Build(ctx, Deps{Store: st, Log: log, AuditSigningKey: auditKey})
 	if err != nil {
@@ -196,14 +201,18 @@ func TestServedPrivacySubjectErasureRedactsDiscoveryJSONReadSurfaces(t *testing.
 		string(authz.PrivacyRead), string(authz.PrivacyWrite), string(authz.AuditRead),
 	})
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
-	if err != nil {
-		t.Fatalf("open event log: %v", err)
-	}
 	auditKey, err := jose.GenerateRSASigningKey("privacy-004-discovery-audit")
 	if err != nil {
-		_ = log.Close()
 		t.Fatalf("generate audit key: %v", err)
+	}
+	log, err := openHistoryAwareEventLog(
+		ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		st,
+		auditKey,
+	)
+	if err != nil {
+		t.Fatalf("open event log: %v", err)
 	}
 	srv, err := Build(ctx, Deps{Store: st, Log: log, AuditSigningKey: auditKey})
 	if err != nil {
@@ -247,6 +256,202 @@ func TestServedPrivacySubjectErasureRedactsDiscoveryJSONReadSurfaces(t *testing.
 			t.Fatalf("served erasure for %q did not write discovery JSON placeholder %q", raw, placeholder)
 		}
 		assertEventLogOmitsRawSubject(t, ctx, log, tenantID, raw)
+	}
+}
+
+func TestServedPrivacyErasureDurableReceiverSurvivesRacesRetentionAndIdempotencyGC(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	ctx := context.Background()
+	const (
+		tenantID = "11111111-1111-1111-1111-111111111111"
+		subject  = "alice+privacy@example.com"
+		key      = "erase-durable-race"
+	)
+	escapedSubject := url.QueryEscape(subject)
+	reason := "erase " + subject + " and escaped " + escapedSubject
+
+	st := newServerTestStore(t)
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "privacy-admin", []string{
+		string(authz.OwnersWrite), string(authz.PrivacyWrite),
+	})
+	auditKey, err := jose.GenerateRSASigningKey("privacy-durable-receiver-audit")
+	if err != nil {
+		t.Fatalf("generate audit key: %v", err)
+	}
+	log, err := openHistoryAwareEventLog(
+		ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		st,
+		auditKey,
+	)
+	if err != nil {
+		t.Fatalf("open event log: %v", err)
+	}
+	srv, err := Build(ctx, Deps{Store: st, Log: log, AuditSigningKey: auditKey})
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("build server: %v", err)
+	}
+	defer func() { _ = srv.Shutdown(context.Background()) }()
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/owners", adminToken, "owner-durable-erasure", map[string]string{
+		"kind": "user", "name": subject, "email": subject,
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("create owner = %d, want 201; body=%s", code, body)
+	}
+
+	command, err := json.Marshal(map[string]string{"subject": subject, "reason": reason})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type result struct {
+		status int
+		body   []byte
+		err    error
+	}
+	invoke := func(payload []byte) result {
+		requestCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(
+			requestCtx,
+			http.MethodPost,
+			ts.URL+"/api/v1/privacy/subject-erasures",
+			bytes.NewReader(payload),
+		)
+		if err != nil {
+			return result{err: err}
+		}
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Idempotency-Key", key)
+		resp, err := ts.Client().Do(req)
+		if err != nil {
+			return result{err: err}
+		}
+		defer func() { _ = resp.Body.Close() }()
+		responseBody, err := io.ReadAll(resp.Body)
+		return result{status: resp.StatusCode, body: responseBody, err: err}
+	}
+
+	start := make(chan struct{})
+	results := make(chan result, 2)
+	for range 2 {
+		go func() {
+			<-start
+			results <- invoke(command)
+		}()
+	}
+	close(start)
+	first := <-results
+	second := <-results
+	for index, got := range []result{first, second} {
+		if got.err != nil || got.status != http.StatusCreated {
+			t.Fatalf("concurrent erasure %d = status %d err %v body=%s",
+				index+1, got.status, got.err, got.body)
+		}
+	}
+	if !bytes.Equal(first.body, second.body) {
+		t.Fatalf("concurrent same-key responses differ:\nfirst=%s\nsecond=%s", first.body, second.body)
+	}
+	for _, raw := range []string{subject, escapedSubject} {
+		if bytes.Contains(first.body, []byte(raw)) {
+			t.Fatalf("canonical erasure response leaked %q: %s", raw, first.body)
+		}
+	}
+
+	changed, err := json.Marshal(map[string]string{
+		"subject": subject,
+		"reason":  reason + " changed",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := invoke(changed); got.err != nil || got.status != http.StatusConflict {
+		t.Fatalf("same key with changed body = status %d err %v body=%s, want 409",
+			got.status, got.err, got.body)
+	}
+
+	var (
+		erasureEvent events.Event
+		eventCount   int
+	)
+	if err := log.Replay(ctx, 1, func(ev events.Event) error {
+		if ev.TenantID == tenantID && ev.Type == projections.EventPrivacySubjectErased {
+			erasureEvent = ev
+			eventCount++
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay canonical erasure event: %v", err)
+	}
+	if eventCount != 1 || erasureEvent.ID == "" || erasureEvent.Sequence == 0 {
+		t.Fatalf("privacy erasure events = %d canonical=%+v, want exactly one", eventCount, erasureEvent)
+	}
+	for _, raw := range []string{subject, escapedSubject} {
+		if bytes.Contains(erasureEvent.Data, []byte(raw)) {
+			t.Fatalf("post-rewrite erasure event leaked %q: %s", raw, erasureEvent.Data)
+		}
+	}
+	operation, err := st.GetPrivacySubjectErasureOperationByEventID(ctx, tenantID, erasureEvent.ID)
+	if err != nil {
+		t.Fatalf("load durable erasure operation: %v", err)
+	}
+	for _, raw := range []string{subject, escapedSubject} {
+		if strings.Contains(operation.Reason, raw) {
+			t.Fatalf("durable operation reason leaked %q: %q", raw, operation.Reason)
+		}
+	}
+
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`,
+			tenantID, key)
+		return err
+	}); err != nil {
+		t.Fatalf("simulate idempotency GC: %v", err)
+	}
+	if err := log.Delete(ctx, erasureEvent.Sequence); err != nil {
+		t.Fatalf("simulate live-event retention: %v", err)
+	}
+	if err := projections.New(st).Rebuild(ctx, log); err != nil {
+		t.Fatalf("full read-model rebuild after live-event retention: %v", err)
+	}
+	if _, err := st.GetPrivacySubjectErasureOperationByEventID(ctx, tenantID, erasureEvent.ID); err != nil {
+		t.Fatalf("independent erasure operation did not survive full rebuild: %v", err)
+	}
+	changedAfterGC := invoke(changed)
+	if changedAfterGC.err != nil || changedAfterGC.status != http.StatusConflict {
+		t.Fatalf("post-GC changed-body retry = status %d err %v body=%s, want 409",
+			changedAfterGC.status, changedAfterGC.err, changedAfterGC.body)
+	}
+	var conflictingClaims int
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT count(*) FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2`,
+			tenantID, key).Scan(&conflictingClaims)
+	}); err != nil {
+		t.Fatalf("count post-conflict idempotency claims: %v", err)
+	}
+	if conflictingClaims != 0 {
+		t.Fatalf("changed-body retry left %d bound claims after receiver conflict, want 0", conflictingClaims)
+	}
+	replayed := invoke(command)
+	if replayed.err != nil || replayed.status != http.StatusCreated {
+		t.Fatalf("post-retention retry = status %d err %v body=%s",
+			replayed.status, replayed.err, replayed.body)
+	}
+	if !bytes.Equal(replayed.body, first.body) {
+		t.Fatalf("post-retention canonical response changed:\nfirst=%s\nreplay=%s",
+			first.body, replayed.body)
 	}
 }
 

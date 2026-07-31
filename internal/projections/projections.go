@@ -111,6 +111,7 @@ const (
 	EventRemediationPlaybookRunRecorded           = "remediation.playbook_run.recorded"
 	EventResponseIntegrationDispatched            = "response.integration.dispatched"
 	EventPrivacySubjectErased                     = "privacy.subject.erased"
+	EventHistoryTenantDataRewriteContinuity       = "history.tenant_data_rewrite.continuity"
 	EventPrivacyRetentionEnforced                 = "privacy.retention.enforced"
 	EventPrivacyArchiveErasureAttested            = "privacy.archive_erasure.attested"
 	EventTenantMemberUpserted                     = "tenant.member.upserted"
@@ -170,6 +171,11 @@ const LifecycleSideEffectEventSchemaVersion = 3
 // that carries the full ca_authorities row. Version 1 events were audit-only
 // breadcrumbs and cannot rebuild the authority read model.
 const CAAuthorityCreatedEventSchemaVersion = 2
+
+// PrivacySubjectErasedEventSchemaVersion is the first privacy.subject.erased
+// shape that binds the durable operation and canonical authenticated command.
+// Version 1 events remain replayable but cannot act as an AN-5 receiver.
+const PrivacySubjectErasedEventSchemaVersion = 2
 
 // Payloads. Each carries everything needed to reconstruct the read-model row
 // (the surrogate id included), so a replay is deterministic. created_at is NOT a
@@ -266,6 +272,8 @@ type CertificateRevoked struct {
 // carries only tenant-bound subject references and stable row selectors, never
 // the raw subject value being erased.
 type PrivacySubjectErased struct {
+	OperationID    string                        `json:"operation_id,omitempty"`
+	RequestBinding string                        `json:"request_binding,omitempty"`
 	SubjectRef     string                        `json:"subject_ref"`
 	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
 	Reason         string                        `json:"reason,omitempty"`
@@ -1637,7 +1645,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIncidentFleetReissuanceRecorded:          {1: true},
 	EventRemediationPlaybookRunRecorded:           {1: true},
 	EventResponseIntegrationDispatched:            {1: true},
-	EventPrivacySubjectErased:                     {1: true},
+	EventPrivacySubjectErased:                     {1: true, PrivacySubjectErasedEventSchemaVersion: true},
+	EventHistoryTenantDataRewriteContinuity:       {1: true},
 	EventPrivacyRetentionEnforced:                 {1: true},
 	EventPrivacyArchiveErasureAttested:            {1: true},
 	EventTenantMemberUpserted:                     {1: true},
@@ -2713,7 +2722,12 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if pl.SubjectRef == "" {
 			return fmt.Errorf("projections: %s requires subject_ref", e.Type)
 		}
-		return p.store.ApplyPrivacySubjectErasedTx(ctx, tx, store.PrivacySubjectErasure{
+		if schemaVersionOf(e) >= PrivacySubjectErasedEventSchemaVersion &&
+			(pl.OperationID == "" || pl.RequestBinding == "") {
+			return fmt.Errorf("projections: %s v%d requires operation_id and request_binding",
+				e.Type, schemaVersionOf(e))
+		}
+		erasure := store.PrivacySubjectErasure{
 			TenantID:       e.TenantID,
 			SubjectRef:     pl.SubjectRef,
 			RequestedByRef: pl.RequestedByRef,
@@ -2721,7 +2735,17 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Selectors:      pl.Selectors,
 			Counts:         pl.Counts,
 			ErasedAt:       e.Time,
-		})
+		}
+		if schemaVersionOf(e) >= PrivacySubjectErasedEventSchemaVersion {
+			return p.store.ApplyPrivacySubjectErasureOperationTx(ctx, tx, store.PrivacySubjectErasureOperation{
+				PrivacySubjectErasure: erasure,
+				OperationID:           pl.OperationID,
+				RequestBinding:        pl.RequestBinding,
+				EventID:               e.ID,
+				EventSequence:         e.Sequence,
+			})
+		}
+		return p.store.ApplyPrivacySubjectErasedTx(ctx, tx, erasure)
 	case EventPrivacyRetentionEnforced:
 		var pl PrivacyRetentionEnforced
 		if err := decode(e, &pl); err != nil {
@@ -3450,102 +3474,98 @@ func (p *Projector) AdvanceCheckpoint(ctx context.Context, seq uint64) error {
 // carries its tenant_id explicitly, so AN-1 holds even with RLS bypassed for this
 // trusted system operation.
 func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
-	eventCheckpoints := map[string]audit.Checkpoint{}
-	if err := log.Replay(ctx, 0, func(event events.Event) error {
-		if event.Type != audit.EventTypeArchived {
-			return nil
-		}
-		if err := ValidateSchemaVersion(event); err != nil {
-			return err
-		}
-		var payload audit.ArchivedEvent
-		if err := decode(event, &payload); err != nil {
-			return err
-		}
-		if !payload.SourceHistoryRetained {
-			return errors.New("projections: audit.archived does not attest retained AN-2 source history")
-		}
-		checkpoint := audit.Checkpoint{
-			TenantID: event.TenantID, BoundarySeq: payload.BoundarySeq,
-			BoundaryHash: payload.BoundaryHash, RecordCount: payload.Count,
-			ArchiveURI: payload.ArchiveURI,
-		}
-		if prior, ok := eventCheckpoints[event.TenantID]; !ok ||
-			checkpoint.BoundarySeq > prior.BoundarySeq {
-			eventCheckpoints[event.TenantID] = checkpoint
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("projections: preflight replayable audit checkpoints: %w", err)
-	}
-	eventCheckpointTenants := make([]string, 0, len(eventCheckpoints))
-	for tenantID := range eventCheckpoints {
-		eventCheckpointTenants = append(eventCheckpointTenants, tenantID)
-	}
-	sort.Strings(eventCheckpointTenants)
-	for _, tenantID := range eventCheckpointTenants {
-		if err := audit.VerifyCheckpointSourceRetained(ctx, log, eventCheckpoints[tenantID]); err != nil {
-			return fmt.Errorf("projections: refuse lossy rebuild from audit.archived event: %w", err)
-		}
-	}
-	checkpointTenants, err := p.store.ListAuditCheckpointTenants(ctx)
-	if err != nil {
-		return fmt.Errorf("projections: list audit checkpoints before rebuild: %w", err)
-	}
-	for _, tenantID := range checkpointTenants {
-		checkpoint, ok, err := p.store.LatestAuditCheckpoint(ctx, tenantID)
+	return log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		replayHead, err := log.LastSequence(readCtx)
 		if err != nil {
-			return fmt.Errorf("projections: read audit checkpoint before rebuild: %w", err)
+			return fmt.Errorf("projections: capture rebuild history head: %w", err)
 		}
-		if !ok {
-			return fmt.Errorf("projections: audit checkpoint inventory lost tenant %s", tenantID)
-		}
-		if err := audit.VerifyCheckpointSourceRetained(ctx, log, checkpoint); err != nil {
-			return fmt.Errorf("projections: refuse lossy rebuild: %w", err)
-		}
-		eventCheckpoint, replayable := eventCheckpoints[tenantID]
-		if !replayable ||
-			eventCheckpoint.BoundarySeq != checkpoint.BoundarySeq ||
-			eventCheckpoint.RecordCount != checkpoint.RecordCount ||
-			eventCheckpoint.BoundaryHash != checkpoint.BoundaryHash ||
-			eventCheckpoint.ArchiveURI != checkpoint.ArchiveURI {
-			return fmt.Errorf(
-				"projections: audit checkpoint for tenant %s has no exact replayable audit.archived v%d event; refusing to erase its served-view boundary",
-				tenantID, audit.ArchivedEventSchemaVersion,
-			)
-		}
-	}
-	return p.store.RebuildReadModelTx(ctx, func(tx pgx.Tx) error {
-		if err := p.resetEventProjections(ctx); err != nil {
-			return err
-		}
-		// A full rebuild re-derives from sequence 0, so the projection checkpoint
-		// (SPINE-007) is reset to 0 in the SAME transaction as the truncate+replay.
-		// This keeps the watermark consistent with the rebuilt read model: a crash
-		// mid-rebuild rolls back both, and after a successful rebuild the next boot's
-		// ProjectCatchUp resumes from the rebuilt head (advanced below).
-		if err := p.store.ResetProjectionCheckpointTx(ctx, tx); err != nil {
-			return err
-		}
-		var last uint64
-		if err := log.Replay(ctx, 0, func(e events.Event) error {
-			if err := p.applyForRebuild(ctx, tx, e); err != nil {
+		eventCheckpoints := map[string]audit.Checkpoint{}
+		if err := log.ReplayThrough(readCtx, 1, replayHead, func(event events.Event) error {
+			if event.Type != audit.EventTypeArchived {
+				return nil
+			}
+			if err := ValidateSchemaVersion(event); err != nil {
 				return err
 			}
-			if err := p.applyEventProjections(ctx, e); err != nil {
+			var payload audit.ArchivedEvent
+			if err := decode(event, &payload); err != nil {
 				return err
 			}
-			last = e.Sequence
+			if !payload.SourceHistoryRetained {
+				return errors.New("projections: audit.archived does not attest retained AN-2 source history")
+			}
+			checkpoint := audit.Checkpoint{
+				TenantID: event.TenantID, BoundarySeq: payload.BoundarySeq,
+				BoundaryHash: payload.BoundaryHash, RecordCount: payload.Count,
+				ArchiveURI: payload.ArchiveURI,
+			}
+			if prior, ok := eventCheckpoints[event.TenantID]; !ok ||
+				checkpoint.BoundarySeq > prior.BoundarySeq {
+				eventCheckpoints[event.TenantID] = checkpoint
+			}
 			return nil
 		}); err != nil {
-			return err
+			return fmt.Errorf("projections: preflight replayable audit checkpoints: %w", err)
 		}
-		if last > 0 {
-			if err := p.store.SetProjectionCheckpointTx(ctx, tx, last); err != nil {
-				return err
+		eventCheckpointTenants := make([]string, 0, len(eventCheckpoints))
+		for tenantID := range eventCheckpoints {
+			eventCheckpointTenants = append(eventCheckpointTenants, tenantID)
+		}
+		sort.Strings(eventCheckpointTenants)
+		for _, tenantID := range eventCheckpointTenants {
+			checkpoint := eventCheckpoints[tenantID]
+			if err := audit.VerifyCheckpointSourceRetained(readCtx, log, checkpoint); err != nil {
+				return fmt.Errorf("projections: refuse lossy rebuild from audit.archived event: %w", err)
 			}
 		}
-		return nil
+		checkpointTenants, err := p.store.ListAuditCheckpointTenants(readCtx)
+		if err != nil {
+			return fmt.Errorf("projections: list audit checkpoints before rebuild: %w", err)
+		}
+		for _, tenantID := range checkpointTenants {
+			checkpoint, ok, err := p.store.LatestAuditCheckpoint(readCtx, tenantID)
+			if err != nil {
+				return fmt.Errorf("projections: read audit checkpoint before rebuild: %w", err)
+			}
+			if !ok {
+				return fmt.Errorf("projections: audit checkpoint inventory lost tenant %s", tenantID)
+			}
+			if err := audit.VerifyCheckpointSourceRetained(readCtx, log, checkpoint); err != nil {
+				return fmt.Errorf("projections: refuse lossy rebuild: %w", err)
+			}
+			eventCheckpoint, replayable := eventCheckpoints[tenantID]
+			if !replayable ||
+				eventCheckpoint.BoundarySeq != checkpoint.BoundarySeq ||
+				eventCheckpoint.RecordCount != checkpoint.RecordCount ||
+				eventCheckpoint.BoundaryHash != checkpoint.BoundaryHash ||
+				eventCheckpoint.ArchiveURI != checkpoint.ArchiveURI {
+				return fmt.Errorf(
+					"projections: audit checkpoint for tenant %s has no exact replayable audit.archived v%d event; refusing to erase its served-view boundary",
+					tenantID, audit.ArchivedEventSchemaVersion,
+				)
+			}
+		}
+		return p.store.RebuildReadModelTx(readCtx, func(tx pgx.Tx) error {
+			if err := p.resetEventProjections(readCtx); err != nil {
+				return err
+			}
+			// A full rebuild re-derives from sequence 0, so the projection checkpoint
+			// (SPINE-007) is reset in the SAME transaction as truncate+replay. The
+			// exact pinned head, not merely the last live callback, becomes the new
+			// watermark: restored history can end in deleted positions or be all gaps.
+			if err := p.store.ResetProjectionCheckpointTx(readCtx, tx); err != nil {
+				return err
+			}
+			if err := log.ReplayThrough(readCtx, 0, replayHead, func(e events.Event) error {
+				if err := p.applyForRebuild(readCtx, tx, e); err != nil {
+					return err
+				}
+				return p.applyEventProjections(readCtx, e)
+			}); err != nil {
+				return err
+			}
+			return p.store.SetProjectionCheckpointTx(readCtx, tx, replayHead)
+		})
 	})
 }
 
@@ -3633,29 +3653,33 @@ func (p *Projector) RestoreFromSnapshot(ctx context.Context, log *events.Log) (r
 		// the read model and reloads every tenant's snapshot rows; we then set the
 		// checkpoint to the snapshot offset and replay the tail after it, advancing the
 		// checkpoint to the new head — all committing or rolling back together.
-		txErr := p.store.RestoreReadModelTx(ctx, func(tx pgx.Tx) error {
-			if _, rerr := p.store.RestoreSnapshotsTx(ctx, tx); rerr != nil {
-				return rerr
+		txErr := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+			replayHead, herr := log.LastSequence(readCtx)
+			if herr != nil {
+				return fmt.Errorf("projections: capture snapshot-tail history head: %w", herr)
 			}
-			if serr := p.store.SetProjectionCheckpointTx(ctx, tx, from); serr != nil {
-				return serr
+			if replayHead < from {
+				return fmt.Errorf(
+					"projections: snapshot offset %d is beyond event history head %d",
+					from, replayHead,
+				)
 			}
-			var last uint64
-			if rerr := log.Replay(ctx, from+1, func(e events.Event) error {
-				if aerr := p.applyForRebuild(ctx, tx, e); aerr != nil {
-					return aerr
+			return p.store.RestoreReadModelTx(readCtx, func(tx pgx.Tx) error {
+				if _, rerr := p.store.RestoreSnapshotsTx(readCtx, tx); rerr != nil {
+					return rerr
 				}
-				last = e.Sequence
-				return nil
-			}); rerr != nil {
-				return rerr
-			}
-			if last > from {
-				if serr := p.store.SetProjectionCheckpointTx(ctx, tx, last); serr != nil {
+				if serr := p.store.SetProjectionCheckpointTx(readCtx, tx, from); serr != nil {
 					return serr
 				}
-			}
-			return nil
+				if rerr := log.ReplayThrough(readCtx, from+1, replayHead, func(e events.Event) error {
+					return p.applyForRebuild(readCtx, tx, e)
+				}); rerr != nil {
+					return rerr
+				}
+				// Advance across every position in the pinned tail, including a
+				// trailing or all-gap range that produced no live callbacks.
+				return p.store.SetProjectionCheckpointTx(readCtx, tx, replayHead)
+			})
 		})
 		if txErr != nil {
 			// The snapshot path failed (e.g. a corrupt payload). The log is the source of

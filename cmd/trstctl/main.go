@@ -115,7 +115,7 @@ func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
 	fs.BoolVar(&flags.checkConfig, "check-config", false, "resolve and print the effective configuration, then exit")
 	fs.BoolVar(&flags.healthCheck, "health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
 	fs.BoolVar(&flags.readyCheck, "ready-check", false, "probe the local control plane's /readyz and exit 0/1 (Kubernetes readiness check)")
-	fs.StringVar(&flags.backupPath, "backup", "", "back up the event log (source of truth) to FILE, then exit")
+	fs.StringVar(&flags.backupPath, "backup", "", "back up the event log using external NATS + PostgreSQL history coordination to FILE, then exit")
 	fs.StringVar(&flags.restorePath, "restore", "", "restore the event log from FILE, rebuild the read model, then exit")
 	fs.StringVar(&flags.fullBackupDir, "full-backup-dir", "", "write a full DR artifact directory (event log, independent PostgreSQL state, key/cert manifest), then exit")
 	fs.StringVar(&flags.fullRestoreDir, "full-restore-dir", "", "restore a full DR artifact directory, rebuild projections, import independent PostgreSQL state, then exit")

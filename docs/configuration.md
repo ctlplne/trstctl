@@ -536,7 +536,7 @@ you must operate.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_AUDIT_SIGNING_KEY_FILE` | `data/audit/signing-key.pem` | PEM path for the evidence-export signing key. It is **persisted** (created `0600` on first boot) so signed bundles verify across restarts; the key no longer rotates each restart. |
-| `TRSTCTL_AUDIT_RETENTION` | — (indefinite) | Served audit-view window, a Go duration (e.g. `8760h`). Empty means **indefinite** (the default). When set **and** `TRSTCTL_AUDIT_ARCHIVE_DIR` is given, a background worker archives older records to signed bundles, verifies the bundle, and advances a replayable tenant checkpoint so those records leave the live query view. Their underlying AN-2 event envelopes remain retained for projection rebuild and disaster recovery. |
+| `TRSTCTL_AUDIT_RETENTION` | — (indefinite) | Served audit-view window, a Go duration (e.g. `8760h`). Empty means **indefinite** (the default). When set **and** `TRSTCTL_AUDIT_ARCHIVE_DIR` is given, a background worker archives older records to signed bundles, verifies the bundle, and advances a replayable tenant checkpoint so those records leave the live query view. Their underlying AN-2 event envelopes remain retained for projection rebuild, disaster recovery, and authorized privacy rewrite. |
 | `TRSTCTL_AUDIT_ARCHIVE_DIR` | — | Cold-storage directory for the signed archive bundles (`<dir>/<tenant>/audit-<seq>.jws`, `0600`). **Required to advance the served-view retention floor**; without it the view remains indefinite. Point it at WORM-backed storage you protect. See [Audit retention and archive lifecycle](compliance.md#audit-retention-and-archive-lifecycle). |
 
 The audit query (`/api/v1/audit/events`) and signed export (`/api/v1/audit/export`)
@@ -554,12 +554,17 @@ free-form evidence. The worker emits `privacy.retention.enforced` and projects t
 anonymization from that event, so rebuilds replay the same result.
 
 Subject erasure also pseudonymizes matching raw subject bytes in the hot JetStream
-event store: the control plane records `privacy.subject.erased`, secure-deletes the
-old hot stream messages, and republishes the same envelopes with the erased subject
-replaced by its tenant-bound `erased:<subject_ref>` placeholder. This keeps future
+event store. The control plane records `privacy.subject.erased`, builds a
+sequence-preserving replacement generation with the erased subject changed to its
+tenant-bound `erased:<subject_ref>` placeholder, and signs the old/new continuity
+evidence before switching authority. The old generation remains authoritative if
+the operation stops before that switch; only after the signed replacement is active
+are its superseded subject bytes securely scrubbed. Replay, projection tailing,
+retention, and backups share a history barrier with that cutover. This keeps future
 hot-log replay, audit queries, and full backups taken after the erasure from carrying
-the raw subject. Backups and signed audit archives created before the erasure are not
-rewritten automatically. Record the outcome of your legal-hold, WORM,
+the raw subject without ever purging and rebuilding the sole authoritative stream.
+Backups and signed audit archives created before the erasure are not rewritten
+automatically. Record the outcome of your legal-hold, WORM,
 backup-deletion, or cryptographic-shredding procedure with
 `POST /api/v1/privacy/archive-erasure-attestations`; inspect the tenant evidence
 ledger with `GET /api/v1/privacy/archive-erasure-attestations` or
@@ -944,7 +949,10 @@ custody.
 
 Event-log backups (`trstctl --backup`) are always integrity-protected (a SHA-256
 trailer, plus an HMAC derived from `TRSTCTL_AUDIT_SIGNING_KEY_FILE` when one is
-configured) and need no extra configuration. A **full** backup
+configured). They require the live deployment's external PostgreSQL DSN as well
+as external NATS: PostgreSQL holds a shared history-generation barrier for the
+complete export, preventing a concurrent privacy rewrite from changing which
+JetStream generation is authoritative mid-backup. A **full** backup
 (`trstctl --full-backup-dir`) additionally captures operational secrets — the audit
 signing key, the signer authorization secret, and the sealed signer key store — so
 production full backups require an operator-held encryption key.

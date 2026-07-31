@@ -66,11 +66,17 @@ type storedEvent struct {
 // in external mode it connects to a NATS cluster by URL. Switching between them
 // is config-only.
 type Log struct {
-	srv    *natsserver.Server // non-nil only in embedded mode
-	nc     *nats.Conn
-	js     jetstream.JetStream
+	srv *natsserver.Server // non-nil only in embedded mode
+	nc  *nats.Conn
+	js  jetstream.JetStream
+	// stream is the currently resolved generation that owns events.>. It remains
+	// for package-local helpers, but production operations resolve by subject
+	// ownership instead of trusting this cached handle across a generation switch.
 	stream jetstream.Stream
-	mode   string
+	// activeName and stream move together under activeMu.
+	activeMu   sync.RWMutex
+	activeName string
+	mode       string
 	// desiredReplicas is the durability contract the control plane was configured
 	// to require for the source-of-truth event stream. Readiness compares it with
 	// the observed JetStream stream config so an under-replicated external stream
@@ -82,23 +88,64 @@ type Log struct {
 	// from a background lag sampler (SPINE-009) concurrently with API/health callers,
 	// so every Info() on the shared handle goes through this lock.
 	infoMu sync.Mutex
-	// rewriteMu serializes appends with the subject-erasure hot-log rewrite. The
-	// rewrite is rare and privacy-driven, but it must not race a concurrent append
-	// while it secure-deletes and republishes the stream.
-	rewriteMu sync.Mutex
+	// history coordinates read views and destructive cutover across control-plane
+	// replicas. Embedded mode installs a process-local implementation. External
+	// mode must be given a deployment-wide implementation before a rewrite is
+	// allowed.
+	history HistoryRewriteCoordinator
+	// continuityVerifier validates the signed receipt both during activation and
+	// during crash recovery before a frozen source may be scrubbed.
+	continuityVerifier TenantDataContinuityVerifier
+
+	// rewriteTestHook is deliberately unexported. Tests use it to leave a durable
+	// stream state at a crash boundary and prove Open recovers by authority, not by
+	// a defer in the same process.
+	rewriteTestHook func(rewritePhase) error
+	// publishAttemptTestHook lets multi-replica tests observe the
+	// no-owner/expected-stream retry window without putting Append behind the
+	// history barrier and inverting the backup-fence lock order.
+	publishAttemptTestHook func()
+	// createRewriteTargetTestHook injects a target-create failure after the
+	// source has been durably marked. It proves that this otherwise narrow
+	// failure window restores the exact pre-operation source config.
+	createRewriteTargetTestHook func() error
+	// pruneTestHook leaves a durable checkpointed prune at a crash boundary so
+	// tests can prove restart/retry removes only the remaining authorized prefix.
+	pruneTestHook func(sequence uint64) error
 }
 
 // streamInfo fetches fresh stream info under infoMu so concurrent callers do not race
 // on the JetStream client's internal info cache. Holding the lock across the (fast)
 // JetStream round-trip is fine: the only contention is the periodic lag sampler.
 func (l *Log) streamInfo(ctx context.Context) (*jetstream.StreamInfo, error) {
+	_, stream, err := l.resolveActiveStream(ctx)
+	if err != nil {
+		return nil, err
+	}
 	l.infoMu.Lock()
 	defer l.infoMu.Unlock()
-	return l.stream.Info(ctx)
+	return stream.Info(ctx)
 }
 
-// Open opens the event log according to cfg and ensures the event stream exists.
-func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
+// OpenOption configures event-log coordination without coupling this package to
+// PostgreSQL or another concrete distributed-lock implementation.
+type OpenOption func(*Log)
+
+// WithHistoryRewriteCoordinator wires the deployment-wide shared/exclusive
+// history barrier required for generation rewrites in external NATS mode.
+func WithHistoryRewriteCoordinator(coordinator HistoryRewriteCoordinator) OpenOption {
+	return func(log *Log) { log.history = coordinator }
+}
+
+// WithHistoryRewriteContinuityVerifier wires the signature/evidence verifier
+// needed before activation recovery can destroy a frozen source generation.
+func WithHistoryRewriteContinuityVerifier(verifier TenantDataContinuityVerifier) OpenOption {
+	return func(log *Log) { log.continuityVerifier = verifier }
+}
+
+// Open opens the event log according to cfg and ensures one active generation
+// owns events.>. opts is variadic to keep existing callers source-compatible.
+func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error) {
 	var (
 		srv *natsserver.Server
 		nc  *nats.Conn
@@ -129,7 +176,16 @@ func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
 		shutdown(srv, nc)
 		return nil, errors.New("events: external JetStream with one replica requires TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true (evaluation only)")
 	}
-	stream, err := js.CreateOrUpdateStream(ctx, scfg)
+	l := &Log{srv: srv, nc: nc, js: js, mode: cfg.Mode, desiredReplicas: scfg.Replicas}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(l)
+		}
+	}
+	if l.history == nil && cfg.Mode == config.NATSEmbedded {
+		l.history = newLocalHistoryRewriteCoordinator()
+	}
+	stream, err := l.recoverOrCreateActiveStream(ctx, scfg)
 	if err != nil && scfg.Replicas > 1 && isNonClusteredReplicaErr(err) {
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: external JetStream requested %d replicas, but the server is not clustered; use a clustered NATS deployment or set TRSTCTL_NATS_REPLICAS=1 with TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true for evaluation: %w", scfg.Replicas, err)
@@ -138,7 +194,7 @@ func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: ensure stream: %w", err)
 	}
-	l := &Log{srv: srv, nc: nc, js: js, stream: stream, mode: cfg.Mode, desiredReplicas: scfg.Replicas}
+	l.setActiveStream(stream)
 	if err := l.checkDurability(ctx); err != nil {
 		shutdown(srv, nc)
 		return nil, err
@@ -162,12 +218,17 @@ func OpenExternalSource(ctx context.Context, url string) (*Log, error) {
 		shutdown(nil, nc)
 		return nil, fmt.Errorf("events: external source jetstream: %w", err)
 	}
-	stream, err := js.Stream(ctx, streamName)
+	name, err := js.StreamNameBySubject(ctx, activeStreamProbeSubject)
 	if err != nil {
 		shutdown(nil, nc)
-		return nil, fmt.Errorf("events: open external source stream %q: %w", streamName, err)
+		return nil, fmt.Errorf("events: resolve external source stream: %w", err)
 	}
-	return &Log{nc: nc, js: js, stream: stream, mode: config.NATSExternal}, nil
+	stream, err := js.Stream(ctx, name)
+	if err != nil {
+		shutdown(nil, nc)
+		return nil, fmt.Errorf("events: open external source stream %q: %w", name, err)
+	}
+	return &Log{nc: nc, js: js, stream: stream, activeName: name, mode: config.NATSExternal}, nil
 }
 
 // jsErrCodeStreamReplicasNotSupported is JetStream's error_code for "replicas > 1
@@ -280,8 +341,6 @@ func (l *Log) Import(ctx context.Context, e Event) (Event, error) {
 }
 
 func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (Event, error) {
-	l.rewriteMu.Lock()
-	defer l.rewriteMu.Unlock()
 	if e.Type == "" {
 		return Event{}, errors.New("events: event type is required")
 	}
@@ -323,16 +382,22 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	if err != nil {
 		return Event{}, err
 	}
-	ack, err := l.js.Publish(ctx, subject, payload, jetstream.WithMsgID(e.ID))
+	ack, err := l.publishToActive(ctx, subject, payload, jetstream.WithMsgID(e.ID))
 	if err != nil {
 		return Event{}, fmt.Errorf("events: append: %w", err)
 	}
 	if ack.Duplicate {
-		// WithMsgID suppressed this retry, so the caller must project the bytes that
-		// are actually authoritative in JetStream, not the retry's freshly-built
-		// payload/time. This matters for sealed commands whose ciphertext is
-		// intentionally randomized on each construction.
-		raw, err := l.stream.GetMsg(ctx, ack.Sequence)
+		// The acknowledged source may finish cutover before this canonical
+		// read. Sequence preservation lets the read fall forward to the active
+		// target without placing Append behind the history/backup lock wall.
+		canonicalStream, streamErr := l.js.Stream(ctx, ack.Stream)
+		if streamErr != nil {
+			_, canonicalStream, streamErr = l.resolveActiveStream(ctx)
+		}
+		if streamErr != nil {
+			return Event{}, fmt.Errorf("events: open duplicate canonical stream %q: %w", ack.Stream, streamErr)
+		}
+		raw, err := canonicalStream.GetMsg(ctx, ack.Sequence)
 		if err != nil {
 			return Event{}, fmt.Errorf("events: read duplicate canonical event: %w", err)
 		}
@@ -353,15 +418,70 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 // beginning), in append order. It is deterministic: replaying the same log
 // twice yields the same events.
 func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) error {
+	return l.withHistoryRead(ctx, func(ctx context.Context) error {
+		return l.replayActive(ctx, from, fn)
+	})
+}
+
+// ReplayThrough is Replay bounded to the inclusive sequence through. The caller
+// can pin one history-generation read, capture its head, and then rebuild exactly
+// that prefix even if a new event is appended while the rebuild is running.
+// Missing/deleted positions are skipped but remain covered by through, allowing a
+// projection checkpoint to advance across a trailing or all-gap restored history.
+func (l *Log) ReplayThrough(
+	ctx context.Context,
+	from, through uint64,
+	fn func(Event) error,
+) error {
+	return l.withHistoryRead(ctx, func(ctx context.Context) error {
+		name, stream, head, err := l.resolveReplayStream(ctx)
+		if err != nil {
+			return err
+		}
+		if through > head {
+			return fmt.Errorf(
+				"events: replay cut %d is beyond active generation head %d",
+				through, head,
+			)
+		}
+		return l.replayResolved(ctx, name, stream, from, through, fn)
+	})
+}
+
+func (l *Log) replayActive(ctx context.Context, from uint64, fn func(Event) error) error {
+	name, stream, head, err := l.resolveReplayStream(ctx)
+	if err != nil {
+		return err
+	}
+	return l.replayResolved(ctx, name, stream, from, head, fn)
+}
+
+func (l *Log) resolveReplayStream(
+	ctx context.Context,
+) (string, jetstream.Stream, uint64, error) {
+	name, stream, err := l.resolveActiveStream(ctx)
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("events: resolve replay stream: %w", err)
+	}
+	info, err := l.infoForStream(ctx, stream)
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("events: stream info: %w", err)
+	}
+	return name, stream, info.State.LastSeq, nil
+}
+
+func (l *Log) replayResolved(
+	ctx context.Context,
+	name string,
+	stream jetstream.Stream,
+	from, through uint64,
+	fn func(Event) error,
+) error {
 	if from == 0 {
 		from = 1
 	}
-	info, err := l.streamInfo(ctx)
-	if err != nil {
-		return fmt.Errorf("events: stream info: %w", err)
-	}
-	for seq := from; seq <= info.State.LastSeq; seq++ {
-		raw, err := l.stream.GetMsg(ctx, seq)
+	for seq := from; seq <= through; seq++ {
+		raw, err := stream.GetMsg(ctx, seq)
 		if err != nil {
 			if errors.Is(err, jetstream.ErrMsgNotFound) {
 				continue // a purged sequence; append-only so this is unexpected but safe
@@ -386,17 +506,136 @@ func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) err
 			return err
 		}
 	}
+	current, err := l.activeStreamName(ctx)
+	if err != nil {
+		return fmt.Errorf("events: verify replay generation: %w", err)
+	}
+	if current != name {
+		return fmt.Errorf("%w: replay started on %s and ended on %s", ErrGenerationChanged, name, current)
+	}
 	return nil
 }
 
-// Delete removes a single event by its stream sequence. It exists for explicit
-// repair/migration tooling and tests of legacy gaps; production audit retention
-// never calls it because AN-2 projection rebuild requires the source envelopes.
+// Delete removes a single event by its stream sequence. Production logical audit
+// retention must not call it: deleting a shared AN-2 envelope makes projection
+// rebuild lossy. It remains as a low-level exact-history/legacy-recovery primitive;
+// callers must coordinate the history cut and accept that Replay will observe a
+// gap.
 func (l *Log) Delete(ctx context.Context, seq uint64) error {
-	if err := l.stream.DeleteMsg(ctx, seq); err != nil {
-		return fmt.Errorf("events: delete seq %d: %w", seq, err)
+	if l.history == nil {
+		return errors.New("events: delete requires a history coordinator")
 	}
-	return nil
+	return l.withHistoryOperationLock(ctx, func(ctx context.Context) error {
+		return l.history.WithCutover(ctx, func(ctx context.Context) error {
+			state, err := l.findRewriteStreams(ctx)
+			if err != nil {
+				return err
+			}
+			if state != nil {
+				if err := l.recoverRewriteStreams(ctx, *state); err != nil {
+					return fmt.Errorf("events: recover unfinished rewrite before delete: %w", err)
+				}
+			}
+			_, stream, err := l.resolveActiveStream(ctx)
+			if err != nil {
+				return fmt.Errorf("events: resolve delete stream: %w", err)
+			}
+			if err := stream.DeleteMsg(ctx, seq); err != nil {
+				return fmt.Errorf("events: delete seq %d: %w", seq, err)
+			}
+			return nil
+		})
+	})
+}
+
+// PruneTenantThroughCheckpoint is the legacy physical-prefix deletion primitive.
+// It remains only for exact-history recovery/conformance tests. Production audit
+// retention must never call it: an archive bundle lacks the exact stored event
+// envelopes needed to rebuild every projection. The method still serializes the
+// historical operation so tests can reproduce and prove fail-closed recovery from
+// data created by an older destructive implementation.
+//
+// Deprecated: use logical audit checkpoints and retain the complete AN-2 source.
+func (l *Log) PruneTenantThroughCheckpoint(
+	ctx context.Context,
+	tenantID string,
+	boundarySequence uint64,
+	checkpoint func(context.Context) error,
+) error {
+	if tenantID == "" {
+		return errors.New("events: legacy prefix delete requires tenant_id (AN-1)")
+	}
+	if boundarySequence == 0 {
+		return errors.New("events: legacy prefix delete requires a non-zero checkpoint boundary")
+	}
+	if l.history == nil {
+		return errors.New("events: legacy prefix delete requires a history coordinator")
+	}
+	return l.withHistoryOperationLock(ctx, func(ctx context.Context) error {
+		return l.history.WithCutover(ctx, func(ctx context.Context) error {
+			state, err := l.findRewriteStreams(ctx)
+			if err != nil {
+				return err
+			}
+			if state != nil {
+				if err := l.recoverRewriteStreams(ctx, *state); err != nil {
+					return fmt.Errorf("events: recover unfinished rewrite before retention prune: %w", err)
+				}
+			}
+			_, stream, err := l.resolveActiveStream(ctx)
+			if err != nil {
+				return fmt.Errorf("events: resolve retention stream: %w", err)
+			}
+			info, err := l.infoForStream(ctx, stream)
+			if err != nil {
+				return fmt.Errorf("events: retention stream info: %w", err)
+			}
+			first := info.State.FirstSeq
+			if first == 0 {
+				first = 1
+			}
+			sequences := make([]uint64, 0)
+			for seq := first; seq <= boundarySequence; seq++ {
+				raw, err := stream.GetMsg(ctx, seq)
+				if errors.Is(err, jetstream.ErrMsgNotFound) {
+					continue
+				}
+				if err != nil {
+					return fmt.Errorf("events: inspect retention seq %d: %w", seq, err)
+				}
+				event, err := decodeStored(raw.Data, raw.Sequence)
+				if err != nil {
+					return fmt.Errorf("events: decode retention seq %d: %w", seq, err)
+				}
+				if event.TenantID == tenantID {
+					sequences = append(sequences, seq)
+				}
+			}
+			if checkpoint != nil {
+				if len(sequences) == 0 || sequences[len(sequences)-1] != boundarySequence {
+					return fmt.Errorf(
+						"events: retention boundary %d is not the last live event for tenant %s",
+						boundarySequence, tenantID,
+					)
+				}
+				if err := checkpoint(ctx); err != nil {
+					return fmt.Errorf("events: save retention checkpoint: %w", err)
+				}
+			}
+			for _, seq := range sequences {
+				if l.pruneTestHook != nil {
+					if err := l.pruneTestHook(seq); err != nil {
+						return err
+					}
+				}
+				if err := stream.SecureDeleteMsg(ctx, seq); err != nil &&
+					!errors.Is(err, jetstream.ErrMsgNotFound) {
+					return fmt.Errorf("events: secure-delete retained seq %d: %w", seq, err)
+				}
+			}
+			return nil
+		})
+	})
 }
 
 // Ping reports whether the event log is reachable — the NATS connection is up and
@@ -407,8 +646,8 @@ func (l *Log) Ping(ctx context.Context) error {
 	if l.nc != nil && !l.nc.IsConnected() {
 		return errors.New("events: nats connection is down")
 	}
-	if l.stream == nil {
-		return nil
+	if _, _, err := l.resolveActiveStream(ctx); err != nil {
+		return fmt.Errorf("events: resolve readiness stream: %w", err)
 	}
 	return l.checkDurability(ctx)
 }
@@ -517,74 +756,262 @@ func decodeStored(data []byte, seq uint64) (Event, error) {
 	}, nil
 }
 
-// tailConsumerName is the durable name of the projection-tailing consumer
-// (SPINE-009). A fixed name makes the consumer durable: its acked position (the
-// cursor) is stored on the server and survives a control-plane restart, so the
-// tailer resumes from the last applied event rather than replaying from the start.
+// tailConsumerName is the legacy generation's durable projection consumer. New
+// generations resume from the relational projection checkpoint because consumer
+// cursors belong to one stream and cannot move across a generation switch.
 const tailConsumerName = "trstctl_projector"
 
-// Tail creates (or resumes) the durable projection consumer over the event stream
-// and invokes fn for each event in order, advancing the durable cursor only after fn
-// returns nil (SPINE-009). It blocks until ctx is cancelled. Because the cursor is
-// server-side and durable, an event appended out of band (not by the in-process
-// orchestrator) is projected promptly without a restart, and a restart resumes from
-// the last applied sequence instead of re-replaying the whole log.
-//
-// It uses a pull consumer drained in small batches: fn applies the event, and only a
-// success acks it (advancing the cursor); a failure leaves the event unacked so the
-// next fetch retries it rather than silently skipping — the read model never diverges
-// past a poison event without an operator signal (the lag metric stops advancing).
+// TailCheckpointSource returns the durable sequence already committed by the
+// callback's read model. TailFrom invokes it when creating a consumer for a stream
+// generation; sequence preservation makes checkpoint+1 the first safe delivery on
+// the replacement generation.
+type TailCheckpointSource func(context.Context) (uint64, error)
+
+// Tail keeps the original source-compatible entry point. The original stream can
+// resume its legacy server-side durable cursor. If this process observes a
+// generation switch, its in-memory last-success sequence is enough to continue;
+// restarting directly on a replacement generation requires TailFrom.
 func (l *Log) Tail(ctx context.Context, fn func(Event) error) error {
-	cons, err := l.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:       tailConsumerName,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		DeliverPolicy: jetstream.DeliverAllPolicy, // first start: from the beginning; later: resumes from the durable cursor
-		FilterSubject: subjectFilter,
-		MaxAckPending: 1, // strict in-order application: one unacked event at a time
-	})
-	if err != nil {
-		return fmt.Errorf("events: create tail consumer: %w", err)
+	return l.tailFrom(ctx, nil, fn)
+}
+
+// TailFrom follows the active stream generation and resumes each new generation
+// from the caller's durable projection checkpoint. It holds the shared history
+// barrier for one bounded fetch/apply/ack cycle, then releases it so a rewrite can
+// cut over without waiting for the lifetime of the tailer.
+func (l *Log) TailFrom(
+	ctx context.Context,
+	checkpoint TailCheckpointSource,
+	fn func(Event) error,
+) error {
+	if checkpoint == nil {
+		return errors.New("events: TailFrom requires a durable checkpoint source")
 	}
+	return l.tailFrom(ctx, checkpoint, fn)
+}
+
+func (l *Log) tailFrom(
+	ctx context.Context,
+	checkpoint TailCheckpointSource,
+	fn func(Event) error,
+) error {
+	if fn == nil {
+		return errors.New("events: tail callback is required")
+	}
+	var (
+		consumer           jetstream.Consumer
+		consumerGeneration string
+		lastApplied        uint64
+		haveLastApplied    bool
+	)
+
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		batch, err := cons.Fetch(64, jetstream.FetchMaxWait(250*time.Millisecond))
+		err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
+			name, stream, err := l.resolveActiveStream(readCtx)
+			if err != nil {
+				return fmt.Errorf("events: resolve tail generation: %w", err)
+			}
+			if consumer == nil || consumerGeneration != name {
+				consumer = nil
+				consumerGeneration = name
+
+				if checkpoint == nil && !haveLastApplied && name == streamName {
+					consumer, err = stream.CreateOrUpdateConsumer(readCtx, jetstream.ConsumerConfig{
+						Durable:       tailConsumerName,
+						AckPolicy:     jetstream.AckExplicitPolicy,
+						DeliverPolicy: jetstream.DeliverAllPolicy,
+						FilterSubject: subjectFilter,
+						MaxAckPending: 1,
+					})
+					if err != nil {
+						return fmt.Errorf("events: create legacy tail consumer: %w", err)
+					}
+					info, err := consumer.Info(readCtx)
+					if err != nil {
+						return fmt.Errorf("events: read legacy tail checkpoint: %w", err)
+					}
+					lastApplied = info.AckFloor.Stream
+					haveLastApplied = true
+				} else {
+					if checkpoint == nil {
+						if !haveLastApplied {
+							return errors.New("events: replacement generation tail requires TailFrom with a durable checkpoint source")
+						}
+					} else {
+						// Re-read PostgreSQL for every generation. Another replica
+						// may have advanced the shared consumer/checkpoint while this
+						// tailer was idle on the previous stream.
+						lastApplied, err = checkpoint(readCtx)
+						if err != nil {
+							return fmt.Errorf("events: read durable tail checkpoint: %w", err)
+						}
+						haveLastApplied = true
+					}
+					consumer, err = l.sharedTailConsumer(
+						readCtx, stream, lastApplied, checkpoint, name == streamName,
+					)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			batch, err := consumer.Fetch(1, jetstream.FetchMaxWait(250*time.Millisecond))
+			if err != nil {
+				if readCtx.Err() != nil {
+					return readCtx.Err()
+				}
+				return fmt.Errorf("events: tail fetch: %w", err)
+			}
+			for msg := range batch.Messages() {
+				md, metadataErr := msg.Metadata()
+				if metadataErr != nil {
+					_ = msg.Nak()
+					return fmt.Errorf("events: tail metadata: %w", metadataErr)
+				}
+				ev, decodeErr := decodeStored(msg.Data(), md.Sequence.Stream)
+				if decodeErr != nil {
+					_ = msg.Nak()
+					return decodeErr
+				}
+				if applyErr := fn(ev); applyErr != nil {
+					_ = msg.Nak()
+					return fmt.Errorf("events: tail apply seq %d: %w", ev.Sequence, applyErr)
+				}
+				if ackErr := msg.Ack(); ackErr != nil {
+					return fmt.Errorf("events: tail ack seq %d: %w", ev.Sequence, ackErr)
+				}
+				lastApplied = ev.Sequence
+				haveLastApplied = true
+			}
+			if batchErr := batch.Error(); batchErr != nil && !errors.Is(batchErr, nats.ErrTimeout) {
+				if readCtx.Err() != nil {
+					return readCtx.Err()
+				}
+				return fmt.Errorf("events: tail batch: %w", batchErr)
+			}
+			return nil
+		})
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return fmt.Errorf("events: tail fetch: %w", err)
-		}
-		for msg := range batch.Messages() {
-			md, mderr := msg.Metadata()
-			if mderr != nil {
-				_ = msg.Nak()
-				return fmt.Errorf("events: tail metadata: %w", mderr)
-			}
-			ev, derr := decodeStored(msg.Data(), md.Sequence.Stream)
-			if derr != nil {
-				_ = msg.Nak()
-				return derr
-			}
-			if aerr := fn(ev); aerr != nil {
-				// Leave the event unacked so the cursor does not advance past a failure;
-				// the next fetch retries it. The caller's lag metric will plateau, which is
-				// the operator signal that the projection is stuck (SPINE-009/SPINE-011).
-				_ = msg.Nak()
-				return fmt.Errorf("events: tail apply seq %d: %w", ev.Sequence, aerr)
-			}
-			if ackErr := msg.Ack(); ackErr != nil {
-				return fmt.Errorf("events: tail ack seq %d: %w", ev.Sequence, ackErr)
-			}
-		}
-		if berr := batch.Error(); berr != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return fmt.Errorf("events: tail batch: %w", berr)
+			return err
 		}
 	}
+}
+
+func (l *Log) sharedTailConsumer(
+	ctx context.Context,
+	stream jetstream.Stream,
+	durableSequence uint64,
+	checkpoint TailCheckpointSource,
+	allowLegacyDeliverAll bool,
+) (jetstream.Consumer, error) {
+	consumer, err := stream.Consumer(ctx, tailConsumerName)
+	if err == nil {
+		return validateSharedTailConsumer(
+			ctx, consumer, durableSequence, checkpoint, allowLegacyDeliverAll,
+		)
+	}
+	if !errors.Is(err, jetstream.ErrConsumerNotFound) {
+		return nil, fmt.Errorf("events: open shared tail consumer: %w", err)
+	}
+	consumer, err = stream.CreateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       tailConsumerName,
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		DeliverPolicy: jetstream.DeliverByStartSequencePolicy,
+		OptStartSeq:   durableSequence + 1,
+		FilterSubject: subjectFilter,
+		MaxAckPending: 1,
+	})
+	if err == nil {
+		return consumer, nil
+	}
+	// Another replica can win the absent/create race. Its durable is the one
+	// shared cursor for this generation; open and validate it rather than trying
+	// to update its immutable start sequence with this replica's newer checkpoint.
+	winner, winnerErr := stream.Consumer(ctx, tailConsumerName)
+	if winnerErr != nil {
+		return nil, fmt.Errorf(
+			"events: create shared tail consumer at seq %d: %w",
+			durableSequence+1, errors.Join(err, winnerErr),
+		)
+	}
+	return validateSharedTailConsumer(
+		ctx, winner, durableSequence, checkpoint, allowLegacyDeliverAll,
+	)
+}
+
+func validateSharedTailConsumer(
+	ctx context.Context,
+	consumer jetstream.Consumer,
+	durableSequence uint64,
+	checkpoint TailCheckpointSource,
+	allowLegacyDeliverAll bool,
+) (jetstream.Consumer, error) {
+	info, err := consumer.Info(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("events: read shared tail consumer: %w", err)
+	}
+	cfg := info.Config
+	if cfg.Durable != tailConsumerName ||
+		cfg.AckPolicy != jetstream.AckExplicitPolicy ||
+		cfg.FilterSubject != subjectFilter ||
+		cfg.MaxAckPending != 1 {
+		return nil, errors.New("events: shared tail consumer has an unsafe configuration")
+	}
+	switch cfg.DeliverPolicy {
+	case jetstream.DeliverAllPolicy:
+		if !allowLegacyDeliverAll {
+			return nil, errors.New("events: replacement generation cannot use a legacy deliver-all tail cursor")
+		}
+	case jetstream.DeliverByStartSequencePolicy:
+		if cfg.OptStartSeq == 0 {
+			return nil, errors.New("events: shared tail consumer has no start sequence")
+		}
+	default:
+		return nil, errors.New("events: shared tail consumer has an unsafe delivery policy")
+	}
+	refreshCheckpoint := func() error {
+		if checkpoint == nil {
+			return nil
+		}
+		refreshed, err := checkpoint(ctx)
+		if err != nil {
+			return fmt.Errorf("events: refresh durable tail checkpoint: %w", err)
+		}
+		durableSequence = refreshed
+		return nil
+	}
+	if cfg.DeliverPolicy == jetstream.DeliverByStartSequencePolicy &&
+		cfg.OptStartSeq > durableSequence+1 {
+		if err := refreshCheckpoint(); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.DeliverPolicy == jetstream.DeliverByStartSequencePolicy &&
+		cfg.OptStartSeq > durableSequence+1 {
+		return nil, fmt.Errorf(
+			"events: shared tail consumer starts at %d beyond durable checkpoint %d",
+			cfg.OptStartSeq, durableSequence,
+		)
+	}
+	if info.AckFloor.Stream > durableSequence {
+		if err := refreshCheckpoint(); err != nil {
+			return nil, err
+		}
+	}
+	if info.AckFloor.Stream > durableSequence {
+		return nil, fmt.Errorf(
+			"events: shared tail cursor %d is ahead of durable projection checkpoint %d",
+			info.AckFloor.Stream, durableSequence,
+		)
+	}
+	return consumer, nil
 }
 
 // Close closes the connection and, in embedded mode, shuts the server down.

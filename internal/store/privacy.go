@@ -3,9 +3,12 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -57,6 +60,18 @@ type PrivacySubjectErasure struct {
 	Selectors      PrivacyErasureSelectors
 	Counts         map[string]int
 	ErasedAt       time.Time
+}
+
+// PrivacySubjectErasureOperation is the durable, tenant-scoped AN-5 receiver
+// populated from a v2 privacy.subject.erased event. Unlike ordinary read models,
+// PostgreSQL backup/rebuild preserves it because the event may already live only
+// in a signed retention archive. It is never overwritten by a later erasure.
+type PrivacySubjectErasureOperation struct {
+	PrivacySubjectErasure
+	OperationID    string
+	RequestBinding string
+	EventID        string
+	EventSequence  uint64
 }
 
 // PRIVACY-004: a data-subject ACCESS/PORTABILITY export. Erasure already enumerates
@@ -650,7 +665,8 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		        reason = EXCLUDED.reason,
 		        selectors = EXCLUDED.selectors,
 		        counts = EXCLUDED.counts,
-		        erased_at = EXCLUDED.erased_at`,
+		        erased_at = EXCLUDED.erased_at
+		  WHERE EXCLUDED.erased_at >= privacy_subject_erasures.erased_at`,
 		e.TenantID, e.SubjectRef, e.RequestedByRef, e.Reason, selectors, counts, e.ErasedAt); err != nil {
 		return err
 	}
@@ -755,6 +771,109 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		return err
 	}
 	return nil
+}
+
+// ApplyPrivacySubjectErasureOperationTx projects a v2 erasure as both the
+// append-only durable receiver and the latest per-subject aggregate. Reapplying
+// the exact event rebuilds/anonymizes the aggregate idempotently; a collision
+// fails closed and cannot overwrite the authoritative response. The operation
+// row and aggregate share this transaction.
+func (s *Store) ApplyPrivacySubjectErasureOperationTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	op PrivacySubjectErasureOperation,
+) error {
+	if op.TenantID == "" || op.OperationID == "" || op.RequestBinding == "" ||
+		op.EventID == "" || op.EventSequence == 0 || op.EventSequence > math.MaxInt64 ||
+		op.SubjectRef == "" || op.ErasedAt.IsZero() {
+		return errors.New("store: privacy subject erasure operation is incomplete")
+	}
+	selectors, err := json.Marshal(op.Selectors)
+	if err != nil {
+		return err
+	}
+	counts := op.Counts
+	if counts == nil {
+		counts = countsForPrivacySelectors(op.Selectors)
+	}
+	countsJSON, err := json.Marshal(counts)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"privacy-subject-erasure-operation\x1f"+op.TenantID+"\x1f"+op.EventID); err != nil {
+		return fmt.Errorf("store: lock privacy erasure operation: %w", err)
+	}
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO privacy_subject_erasure_operations
+		        (tenant_id, operation_id, request_binding, event_id, event_sequence,
+		         subject_ref, requested_by_ref, reason, selectors, counts, erased_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)
+		 ON CONFLICT DO NOTHING`,
+		op.TenantID, op.OperationID, op.RequestBinding, op.EventID, int64(op.EventSequence),
+		op.SubjectRef, op.RequestedByRef, op.Reason, selectors, countsJSON, op.ErasedAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		op.Counts = counts
+		return s.ApplyPrivacySubjectErasedTx(ctx, tx, op.PrivacySubjectErasure)
+	}
+
+	existing, err := scanPrivacySubjectErasureOperation(tx.QueryRow(ctx,
+		`SELECT tenant_id::text, operation_id, request_binding, event_id, event_sequence,
+		        subject_ref, requested_by_ref, reason, selectors, counts, erased_at
+		   FROM privacy_subject_erasure_operations
+		  WHERE tenant_id = $1 AND operation_id = $2`,
+		op.TenantID, op.OperationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		existing, err = scanPrivacySubjectErasureOperation(tx.QueryRow(ctx,
+			`SELECT tenant_id::text, operation_id, request_binding, event_id, event_sequence,
+			        subject_ref, requested_by_ref, reason, selectors, counts, erased_at
+			   FROM privacy_subject_erasure_operations
+			  WHERE tenant_id = $1 AND event_id = $2`,
+			op.TenantID, op.EventID))
+	}
+	if err != nil {
+		return err
+	}
+	equal, err := privacySubjectErasureOperationsEqual(existing, op)
+	if err != nil {
+		return err
+	}
+	if !equal {
+		return fmt.Errorf("%w: privacy erasure operation belongs to another command", ErrIdempotencyConflict)
+	}
+	// Rebuild preserves this independent operation table while truncating the
+	// subject aggregate. Reapplying the exact event must therefore still rebuild
+	// that aggregate; replay order ensures a later subject operation wins again.
+	op.Counts = counts
+	return s.ApplyPrivacySubjectErasedTx(ctx, tx, op.PrivacySubjectErasure)
+}
+
+// GetPrivacySubjectErasureOperationByEventID resolves the raw-key-derived event
+// anchor under RLS. It remains available after the live event or generic
+// idempotency response cache has been retained away.
+func (s *Store) GetPrivacySubjectErasureOperationByEventID(
+	ctx context.Context,
+	tenantID, eventID string,
+) (PrivacySubjectErasureOperation, error) {
+	if tenantID == "" || eventID == "" {
+		return PrivacySubjectErasureOperation{}, errors.New("store: privacy erasure operation lookup requires tenant and event id")
+	}
+	var op PrivacySubjectErasureOperation
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		op, err = scanPrivacySubjectErasureOperation(tx.QueryRow(ctx,
+			`SELECT tenant_id::text, operation_id, request_binding, event_id, event_sequence,
+			        subject_ref, requested_by_ref, reason, selectors, counts, erased_at
+			   FROM privacy_subject_erasure_operations
+			  WHERE tenant_id = $1 AND event_id = $2`,
+			tenantID, eventID))
+		return err
+	})
+	return op, err
 }
 
 // ApplyPrivacyRetentionEnforcedTx projects a privacy.retention.enforced event. It
@@ -1298,6 +1417,7 @@ func scanPrivacySubjectErasure(row pgx.Row) (PrivacySubjectErasure, error) {
 	if err := row.Scan(&r.TenantID, &r.SubjectRef, &r.RequestedByRef, &r.Reason, &selectorsJSON, &countsJSON, &r.ErasedAt); err != nil {
 		return PrivacySubjectErasure{}, err
 	}
+	r.ErasedAt = r.ErasedAt.UTC()
 	if len(selectorsJSON) > 0 {
 		if err := json.Unmarshal(selectorsJSON, &r.Selectors); err != nil {
 			return PrivacySubjectErasure{}, err
@@ -1309,6 +1429,70 @@ func scanPrivacySubjectErasure(row pgx.Row) (PrivacySubjectErasure, error) {
 		}
 	}
 	return r, nil
+}
+
+func scanPrivacySubjectErasureOperation(row pgx.Row) (PrivacySubjectErasureOperation, error) {
+	var (
+		op            PrivacySubjectErasureOperation
+		eventSequence int64
+		selectorsJSON []byte
+		countsJSON    []byte
+	)
+	if err := row.Scan(
+		&op.TenantID, &op.OperationID, &op.RequestBinding, &op.EventID, &eventSequence,
+		&op.SubjectRef, &op.RequestedByRef, &op.Reason, &selectorsJSON, &countsJSON,
+		&op.ErasedAt,
+	); err != nil {
+		return PrivacySubjectErasureOperation{}, err
+	}
+	if eventSequence <= 0 {
+		return PrivacySubjectErasureOperation{}, errors.New("store: privacy erasure operation has invalid event sequence")
+	}
+	op.EventSequence = uint64(eventSequence)
+	op.ErasedAt = op.ErasedAt.UTC()
+	if err := json.Unmarshal(selectorsJSON, &op.Selectors); err != nil {
+		return PrivacySubjectErasureOperation{}, err
+	}
+	if err := json.Unmarshal(countsJSON, &op.Counts); err != nil {
+		return PrivacySubjectErasureOperation{}, err
+	}
+	return op, nil
+}
+
+func privacySubjectErasureOperationsEqual(
+	a, b PrivacySubjectErasureOperation,
+) (bool, error) {
+	aSelectors, err := json.Marshal(a.Selectors)
+	if err != nil {
+		return false, err
+	}
+	bSelectors, err := json.Marshal(b.Selectors)
+	if err != nil {
+		return false, err
+	}
+	aCounts, err := json.Marshal(a.Counts)
+	if err != nil {
+		return false, err
+	}
+	bCounts := b.Counts
+	if bCounts == nil {
+		bCounts = countsForPrivacySelectors(b.Selectors)
+	}
+	bCountsJSON, err := json.Marshal(bCounts)
+	if err != nil {
+		return false, err
+	}
+	return a.TenantID == b.TenantID &&
+		a.OperationID == b.OperationID &&
+		a.RequestBinding == b.RequestBinding &&
+		a.EventID == b.EventID &&
+		a.EventSequence == b.EventSequence &&
+		a.SubjectRef == b.SubjectRef &&
+		a.RequestedByRef == b.RequestedByRef &&
+		a.Reason == b.Reason &&
+		a.ErasedAt.Equal(b.ErasedAt) &&
+		bytes.Equal(aSelectors, bSelectors) &&
+		bytes.Equal(aCounts, bCountsJSON), nil
 }
 
 func scanPrivacyRetentionRun(row pgx.Row) (PrivacyRetentionRun, error) {

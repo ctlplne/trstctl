@@ -17,8 +17,8 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 
 | What | Why | How |
 | --- | --- | --- |
-| **Event log** (NATS JetStream) | The **source of truth**. Restoring it reconstructs all event-sourced state and replays `audit.archived` v2 to recover logical audit query floors. Audit retention never deletes source envelopes. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
-| **PostgreSQL independent state and restore receivers** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, policy bindings, federation cursors, queued outbox work, and logical audit checkpoints. The checkpoint receiver is also recoverable from `audit.archived` v2 during event-only rebuild. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
+| **Event log** (NATS JetStream) | The **source of truth**. Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
+| **PostgreSQL independent state and restore receivers** | The read model is rebuildable from the log, but **independently retained operational state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, outstanding one-time secret-share rows, policy bindings, federation peer import cursors, queued outbox work, and durable privacy-erasure idempotency evidence. The paired artifact also carries logical audit checkpoints so restore can prove every hidden tenant prefix still exists in the event artifact before mutation; `audit.archived` v2 can reconstruct those checkpoint rows during an event-only projection rebuild. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The full backup captures `TRSTCTL_AUDIT_SIGNING_KEY_FILE` as an AES-256-GCM encrypted artifact when `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` is set, and records both ciphertext and plaintext hashes in `manifest.json`. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
 | **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles. Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE` as an encrypted artifact; keep the backup encryption key outside the backup directory. |
@@ -85,10 +85,17 @@ key that opens it out of the same folder.
 ## Event-log-only backup
 
 ```bash
-# Requires the external event store (TRSTCTL_NATS_MODE=external).
+# Requires the external event store and the deployment's external PostgreSQL DSN.
 trstctl --backup=/backups/trstctl-events-$(date +%F).jsonl
 # -> "backed up <N> events to ..."
 ```
+
+The PostgreSQL connection is not backup payload. It supplies the deployment-wide
+shared history-generation barrier for the complete export, so a privacy rewrite
+cannot switch the authoritative JetStream generation between the first and last
+record. Event-only backup therefore fails closed unless both
+`TRSTCTL_POSTGRES_MODE=external` / `TRSTCTL_POSTGRES_DSN` and
+`TRSTCTL_NATS_MODE=external` / `TRSTCTL_NATS_URL` identify the live deployment.
 
 The backup is **newline-delimited JSON** — a self-describing, versioned header
 followed by one record per event (id, type, tenant, time, data, and the recorded
@@ -131,9 +138,21 @@ trstctl \
 `--full-restore-dir` verifies the manifest hashes for captured keys/certs and the
 signer key-store tree, decrypts encrypted sensitive artifacts with the backup
 encryption key, restores the event log, rebuilds the read model from that log,
-verifies `postgres-state.jsonl`, and imports every independent PostgreSQL row. The
-ordering matters: projections are rebuilt before independent rows are imported, so
-any independent rows that reference rebuilt state can resolve normally.
+verifies `postgres-state.jsonl`, imports every independent PostgreSQL row, and then
+performs one final projection rebuild. The ordering matters: the first rebuild lets
+independent rows that reference rebuilt state resolve normally. The final rebuild
+runs only after the PostgreSQL artifact has finished replacing independent state, so
+an event that survived an append-ACK/projection-failure crash can recreate its
+durable receiver instead of having that healed row erased by the later import.
+Before writing any restored file or touching either datastore, a read-only preflight
+fully verifies both state streams and requires their `event_cut_sequence` values to
+match. Two individually valid artifacts from different backup cuts are not one
+coherent recovery point and are rejected without mutation.
+`privacy_subject_erasure_operations` is intentionally restored from this
+PostgreSQL artifact and is never truncated by projection rebuild or snapshot
+restore: it preserves the canonical response for a pending/retried
+`Idempotency-Key` even after audit retention moves the corresponding live event
+into the signed archive.
 
 Full restore is resumable after the event-log phase. If a first run
 restores `events.jsonl` and then fails later, retrying the same full artifact makes

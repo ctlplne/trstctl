@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/events"
 )
 
 // TestDODGateProductionAssemblyCanary is the gate's always-run spine proof. It
@@ -23,23 +23,40 @@ import (
 func TestDODGateProductionAssemblyCanary(t *testing.T) {
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
-	if err != nil {
-		t.Fatalf("open embedded event log: %v", err)
-	}
-
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		t.Fatalf("load audit signing key before event-log recovery: %v", err)
+	}
+	log, err := openHistoryAwareEventLog(
+		ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
+		st,
+		auditKey,
+	)
+	if err != nil {
+		t.Fatalf("open embedded event log: %v", err)
+	}
+	if err := log.HistoryRewriteReady(); err != nil {
+		_ = log.Close()
+		t.Fatalf("production event log lacks history recovery walls: %v", err)
+	}
+
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("build egress guard: %v", err)
 	}
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), guard, auditKey)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("production buildRunDeps: %v", err)
+	}
+	if deps.AuditSigningKey != auditKey {
+		_ = log.Close()
+		t.Fatal("production assembly reloaded a second audit key instead of reusing the recovery verifier key")
 	}
 	srv, err := Build(ctx, deps)
 	if err != nil {

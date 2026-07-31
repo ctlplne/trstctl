@@ -134,3 +134,19 @@ func TestDeploymentTargetsUseOnePostgresRecoveryClass(t *testing.T) {
 		}
 	}
 }
+
+func TestPrivacyErasureOperationsSurviveLogReadModelRebuild(t *testing.T) {
+	const table = "privacy_subject_erasure_operations"
+	class, ok := backup.Classify(table)
+	if !ok {
+		t.Fatalf("%s is missing from the recovery manifest", table)
+	}
+	if class != backup.ClassPostgresBackup {
+		t.Fatalf("%s recovery class = %q, want %q", table, class, backup.ClassPostgresBackup)
+	}
+	for _, rebuilt := range store.ReadModelTables {
+		if rebuilt == table {
+			t.Fatalf("%s is also in store.ReadModelTables; retained events cannot rebuild long-window idempotency evidence", table)
+		}
+	}
+}

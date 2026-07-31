@@ -90,6 +90,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventProfileCreated:                           "EventProfileCreated",
 	projections.EventProfileUpdated:                           "EventProfileUpdated",
 	projections.EventPrivacySubjectErased:                     "EventPrivacySubjectErased",
+	projections.EventHistoryTenantDataRewriteContinuity:       "EventHistoryTenantDataRewriteContinuity",
 	projections.EventPrivacyRetentionEnforced:                 "EventPrivacyRetentionEnforced",
 	projections.EventPrivacyArchiveErasureAttested:            "EventPrivacyArchiveErasureAttested",
 	projections.EventNHIAccessReviewCampaignStarted:           "EventNHIAccessReviewCampaignStarted",

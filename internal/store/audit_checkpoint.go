@@ -86,8 +86,9 @@ func (s *Store) LatestAuditCheckpoint(ctx context.Context, tenantID string) (aud
 }
 
 // ListAuditCheckpointTenants returns every tenant that has a logical audit
-// retention boundary. Rebuild uses this system inventory to prove that even a
-// legacy checkpoint whose tenant has no live suffix cannot disappear.
+// retention boundary. Backup uses this system inventory to prove that even a
+// legacy checkpoint whose tenant has no surviving live event cannot disappear
+// from retained-source validation.
 func (s *Store) ListAuditCheckpointTenants(ctx context.Context) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
 		//trstctl:system-query — cross-tenant by design: backup/DR must inventory every audit checkpoint before selecting each tenant under tenant_id-scoped RLS; this query returns ordered tenant ids only and no checkpoint contents.

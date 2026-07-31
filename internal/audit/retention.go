@@ -17,9 +17,9 @@ import (
 )
 
 // EventTypeArchived is the event appended after a retention run, recording that a
-// segment of audit records was archived to cold storage and retired from the
-// served audit-query view. The underlying AN-2 event envelopes stay in the log:
-// projection rebuild and disaster recovery still need them.
+// segment of audit records was archived to cold storage and retired from the live
+// audit-query view. The underlying AN-2 domain-event envelopes stay in JetStream:
+// projection rebuild, privacy rewrite, and disaster recovery still need them.
 const (
 	EventTypeArchived = "audit.archived"
 
@@ -83,8 +83,10 @@ type Summary struct {
 
 // RetentionWorker archives audit records older than Retention and advances the
 // live audit-query floor while preserving the AN-2 source envelopes needed for
-// projection rebuild. Search starts after the checkpoint, so the segment leaves
-// the served hot view; the event log retains it for recovery.
+// projection rebuild. One run, per tenant: take the leading due records, sign
+// them as an offline-verifiable bundle, VERIFY it, archive it, SEAL the survivors'
+// chain checkpoint, and emit an audit event. Search starts after the checkpoint,
+// so the segment leaves the served hot view; JetStream retains it for recovery.
 type RetentionWorker struct {
 	svc       *Service
 	log       *events.Log
@@ -150,9 +152,24 @@ func (w *RetentionWorker) liveTenants(ctx context.Context) ([]string, error) {
 // archiveTenant archives one tenant's records older than cutoff, advances the
 // logical live-query floor, and returns how many were processed.
 func (w *RetentionWorker) archiveTenant(ctx context.Context, tenantID string, cutoff time.Time) (int, error) {
-	// An older process may have saved a checkpoint before appending its replayable
-	// event. Repair that crash window only after proving the complete source
-	// prefix is still present; never continue a legacy physical prune.
+	var archived int
+	err := w.log.WithHistoryOperation(ctx, func(operationCtx context.Context) error {
+		var err error
+		archived, err = w.archiveTenantUnderOperation(operationCtx, tenantID, cutoff)
+		return err
+	})
+	return archived, err
+}
+
+func (w *RetentionWorker) archiveTenantUnderOperation(
+	ctx context.Context,
+	tenantID string,
+	cutoff time.Time,
+) (int, error) {
+	// A legacy process may have physically pruned the shared source after sealing a
+	// checkpoint. Never finish that destructive operation: prove the complete
+	// tenant prefix is still present before advancing retention. Missing source
+	// history is a rebuild/DR blocker and must remain visible.
 	if w.svc.checkpoints != nil {
 		checkpoint, ok, err := w.svc.checkpoints.LatestAuditCheckpoint(ctx, tenantID)
 		if err != nil {
@@ -168,63 +185,79 @@ func (w *RetentionWorker) archiveTenant(ctx context.Context, tenantID string, cu
 		}
 	}
 
-	// Survivors past the last sealed boundary, already hash-linked from it.
-	recs, err := w.svc.Search(ctx, Query{TenantID: tenantID})
+	var (
+		segment  []Record
+		boundary Record
+		uri      string
+	)
+	// Pin one shared generation from Search through signed archive durability.
+	// The outer operation lock prevents another retention/rewrite operation from
+	// cutting over after this view releases and before the checkpoint is sealed.
+	err := w.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		// Survivors past the last sealed boundary, already hash-linked from it.
+		recs, err := w.svc.Search(readCtx, Query{TenantID: tenantID})
+		if err != nil {
+			return err
+		}
+		// The archivable segment is the leading run older than the cutoff. Taking a
+		// contiguous-by-sequence prefix guarantees the remaining suffix is a clean
+		// continuation whose hashes are unchanged.
+		k := 0
+		for k < len(recs) && !recs[k].Time.After(cutoff) {
+			k++
+		}
+		if k == 0 {
+			return nil
+		}
+		segment = recs[:k]
+		boundary = segment[len(segment)-1]
+
+		// The seed the survivors (and thus this segment) were hashed from — the prior
+		// checkpoint's boundary, or genesis.
+		_, prevSeed, _, err := w.svc.searchSeed(readCtx, tenantID)
+		if err != nil {
+			return err
+		}
+		if boundary.StreamSequence == 0 {
+			return errors.New("audit: retention boundary is missing stream sequence")
+		}
+
+		// 1) Archive: sign the segment as a self-contained, offline-verifiable bundle.
+		signed, err := w.signSegment(tenantID, prevSeed, boundary.Hash, segment)
+		if err != nil {
+			return err
+		}
+		// 2) Verify it recovers and its chain checks out BEFORE advancing the
+		// served-view checkpoint.
+		if _, err := VerifyBundle(signed, w.svc.VerificationKeys()); err != nil {
+			return fmt.Errorf("archived segment failed verification — checkpoint not advanced: %w", err)
+		}
+		uri, err = w.archiver.Archive(readCtx, tenantID, boundary.Sequence, signed)
+		return err
+	})
 	if err != nil {
 		return 0, err
 	}
-	// The archivable segment is the leading run older than the cutoff. Taking a
-	// contiguous-by-sequence prefix guarantees the remaining suffix is a clean
-	// continuation whose hashes are unchanged.
-	k := 0
-	for k < len(recs) && !recs[k].Time.After(cutoff) {
-		k++
-	}
-	if k == 0 {
+	if len(segment) == 0 {
 		return 0, nil
-	}
-	segment := recs[:k]
-	boundary := segment[len(segment)-1]
-
-	// The seed the survivors (and thus this segment) were hashed from — the prior
-	// checkpoint's boundary, or genesis.
-	_, prevSeed, _, err := w.svc.searchSeed(ctx, tenantID)
-	if err != nil {
-		return 0, err
-	}
-	if boundary.StreamSequence == 0 {
-		return 0, errors.New("audit: retention boundary is missing stream sequence")
-	}
-
-	// 1) Archive: sign the segment as a self-contained, offline-verifiable bundle.
-	signed, err := w.signSegment(tenantID, prevSeed, boundary.Hash, segment)
-	if err != nil {
-		return 0, err
-	}
-	// 2) Verify it recovers and its chain checks out BEFORE advancing the view.
-	if _, err := VerifyBundle(signed, w.svc.VerificationKeys()); err != nil {
-		return 0, fmt.Errorf("archived segment failed verification — checkpoint not advanced: %w", err)
-	}
-	uri, err := w.archiver.Archive(ctx, tenantID, boundary.Sequence, signed)
-	if err != nil {
-		return 0, err
 	}
 	checkpoint := Checkpoint{
 		TenantID: tenantID, BoundarySeq: boundary.StreamSequence, BoundaryHash: boundary.Hash,
 		RecordCount: int(boundary.Sequence), ArchiveURI: uri,
-	}
-	// 3) Append the replayable checkpoint event first. If PostgreSQL fails next,
-	// projection or retry reconstructs the row from this deterministic event.
-	if err := w.ensureArchivedEvent(ctx, checkpoint); err != nil {
-		return 0, err
 	}
 	for _, r := range segment {
 		if r.StreamSequence == 0 {
 			return 0, fmt.Errorf("audit: record %d missing stream sequence", r.Sequence)
 		}
 	}
-	// 4) Seal the logical audit-query boundary. The complete event source does not
-	// change, so a rebuild can reproduce every projection.
+	// 3) Append the replayable checkpoint event first. If PostgreSQL fails next,
+	// projection/retry can reconstruct the row from this deterministic event.
+	if err := w.ensureArchivedEvent(ctx, checkpoint); err != nil {
+		return 0, err
+	}
+	// 4) Seal the logical audit-query boundary. SaveAuditCheckpoint takes the
+	// shared backup fence in production, so a full backup includes either the old
+	// checkpoint or this one while the complete event source is identical.
 	if err := w.sink.SaveAuditCheckpoint(ctx, checkpoint); err != nil {
 		return 0, err
 	}
@@ -290,7 +323,9 @@ func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint Ch
 // covered by a sealed audit checkpoint is still present in the shared AN-2 event
 // source. The checkpoint hash is intentionally not recomputed: an authorized
 // privacy rewrite may pseudonymize the retained hidden prefix while preserving
-// every stream position and envelope identity.
+// every stream position and envelope identity. Cardinality through the fixed
+// global boundary still detects any legacy physical prune because no later append
+// can occupy an earlier stream position.
 func VerifyCheckpointSourceRetained(
 	ctx context.Context,
 	log *events.Log,
@@ -315,10 +350,7 @@ func VerifyCheckpointSourceRetained(
 		)
 	}
 	count := 0
-	if err := log.Replay(ctx, 0, func(event events.Event) error {
-		if event.Sequence > checkpoint.BoundarySeq {
-			return nil
-		}
+	if err := log.ReplayThrough(ctx, 1, checkpoint.BoundarySeq, func(event events.Event) error {
 		if event.TenantID == checkpoint.TenantID {
 			count++
 		}

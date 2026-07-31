@@ -271,6 +271,20 @@ carry an `Idempotency-Key`. `GET /api/v1/privacy/catalog` exposes the maintained
 personal-data catalog so operators can see what fields are subject to erasure and
 retention.
 
+Erasure binds the authenticated caller, exact route, subject, and reason to its
+`Idempotency-Key`. A tenant-scoped durable operation record retains the canonical
+event identity and response after the generic response cache expires or the live
+event moves to the signed audit archive. That record is independent PostgreSQL
+backup state, so projection rebuild and snapshot restore do not erase retry
+authority.
+
+When erasure changes bytes in the hot event history, the control plane also emits
+`history.tenant_data_rewrite.continuity`. This is system-signed generation evidence,
+not a second operator API event: its canonical JWS binds the tenant, old/new
+generation and configuration identities, invariant/mapping/content roots, audit-chain
+heads, retention seed, and the disclosure that older external archives, exports, or
+backups may still retain the source bytes.
+
 The CLI exposes the same controls through `privacy erasures erase`, `privacy erasures
 list`, `privacy retention run`, `privacy retention list`, `privacy export`, and `privacy
 catalog`; the web console's `/privacy` screen covers erasure, retention enforcement,
@@ -420,8 +434,9 @@ auth:
   `nhi.access_review.item.decided`.
 - **Privacy controls:** `POST|GET /api/v1/privacy/subject-erasures`,
   `POST|GET /api/v1/privacy/retention-runs`, `POST /api/v1/privacy/subject-exports`,
-  `GET /api/v1/privacy/catalog`; events `privacy.subject.erased` and
-  `privacy.retention.enforced`.
+  `GET /api/v1/privacy/catalog`; operator-command events `privacy.subject.erased` and
+  `privacy.retention.enforced`, plus system-signed generation evidence
+  `history.tenant_data_rewrite.continuity` when hot history bytes change.
 
 ## See also
 

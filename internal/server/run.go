@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
@@ -102,7 +103,12 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	}
 	defer runSecrets.Close()
 
-	log, err := events.Open(ctx, cfg.NATS)
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		return fmt.Errorf("audit signing key: %w", err)
+	}
+
+	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
 	if err != nil {
 		return fmt.Errorf("open event log: %w", err)
 	}
@@ -119,7 +125,7 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	}
 	defer runSigner.Close()
 
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger, egressGuard)
+	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger, egressGuard, auditKey)
 	if err != nil {
 		return err
 	}
@@ -392,10 +398,10 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 	}, nil
 }
 
-func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard) (_ Deps, err error) {
-	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
+	auditKey, err := loadRunAuditSigningKey(cfg, suppliedAuditKey)
 	if err != nil {
-		return Deps{}, fmt.Errorf("audit signing key: %w", err)
+		return Deps{}, err
 	}
 	rateLimiter, err := buildRateLimiter(cfg, st)
 	if err != nil {
@@ -528,6 +534,26 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
+}
+
+func loadRunAuditSigningKey(
+	cfg *config.Config,
+	supplied []*jose.SigningKey,
+) (*jose.SigningKey, error) {
+	if len(supplied) > 1 {
+		return nil, errors.New("audit signing key: multiple supplied keys")
+	}
+	if len(supplied) == 1 {
+		if supplied[0] == nil {
+			return nil, errors.New("audit signing key: supplied key is nil")
+		}
+		return supplied[0], nil
+	}
+	key, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		return nil, fmt.Errorf("audit signing key: %w", err)
+	}
+	return key, nil
 }
 
 // vaultCompatRuntimeFromConfig binds Vault/OpenBao compatibility to the same

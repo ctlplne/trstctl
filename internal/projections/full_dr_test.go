@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -100,6 +101,190 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 		if dstCounts[table] != srcCounts[table] {
 			t.Errorf("%s restored rows = %d, want %d", table, dstCounts[table], srcCounts[table])
 		}
+	}
+}
+
+// TestFullRestoreFinalRebuildHealsPrivacyOperationMissingFromPostgresCut pins
+// the append-ACK/projection-failure recovery boundary. The event log can contain
+// the durable privacy receiver's source event while the paired PostgreSQL
+// snapshot still has no receiver row. A preliminary rebuild heals that row, but
+// restoring the older PostgreSQL artifact replaces it again. Full restore must
+// therefore finish with another rebuild after the PostgreSQL import.
+func TestFullRestoreFinalRebuildHealsPrivacyOperationMissingFromPostgresCut(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration: embedded PostgreSQL + NATS")
+	}
+	ctx := context.Background()
+	src := newStore(t)
+	resetFullDRState(t, src)
+	srcLog := openLog(t)
+
+	const (
+		eventID        = "full-dr-privacy-crash-event"
+		operationID    = "full-dr-privacy-crash-operation"
+		requestBinding = "sha256:full-dr-privacy-crash-command"
+		subjectRef     = "subject:full-dr-crash"
+	)
+	payload, err := json.Marshal(projections.PrivacySubjectErased{
+		OperationID:    operationID,
+		RequestBinding: requestBinding,
+		SubjectRef:     subjectRef,
+		Reason:         "approved erasure",
+		Counts:         map[string]int{"owners": 1},
+	})
+	if err != nil {
+		t.Fatalf("marshal privacy erasure event: %v", err)
+	}
+	sourceEvent, err := srcLog.Append(ctx, events.Event{
+		ID:            eventID,
+		Type:          projections.EventPrivacySubjectErased,
+		TenantID:      tenantA,
+		SchemaVersion: projections.PrivacySubjectErasedEventSchemaVersion,
+		Time:          time.Now().UTC(),
+		Data:          payload,
+	})
+	if err != nil {
+		t.Fatalf("append privacy erasure event: %v", err)
+	}
+	if _, err := src.GetPrivacySubjectErasureOperationByEventID(ctx, tenantA, eventID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("source receiver before projection error = %v, want pgx.ErrNoRows", err)
+	}
+
+	var eventsBuf bytes.Buffer
+	if _, err := backup.WriteLog(ctx, srcLog, &eventsBuf); err != nil {
+		t.Fatalf("WriteLog: %v", err)
+	}
+	var pgBuf bytes.Buffer
+	pgSummary, err := backup.WritePostgresState(ctx, src, &pgBuf)
+	if err != nil {
+		t.Fatalf("WritePostgresState: %v", err)
+	}
+	if got := pgSummary.Tables["privacy_subject_erasure_operations"]; got != 0 {
+		t.Fatalf("crash-shaped PostgreSQL cut has %d privacy receiver rows, want 0", got)
+	}
+
+	dst := newStore(t)
+	resetFullDRState(t, dst)
+	restoredLog := openLog(t)
+	if _, err := backup.RestoreLog(ctx, restoredLog, bytes.NewReader(eventsBuf.Bytes())); err != nil {
+		t.Fatalf("RestoreLog: %v", err)
+	}
+	if err := projections.New(dst).Rebuild(ctx, restoredLog); err != nil {
+		t.Fatalf("preliminary Rebuild: %v", err)
+	}
+	if _, err := dst.GetPrivacySubjectErasureOperationByEventID(ctx, tenantA, eventID); err != nil {
+		t.Fatalf("preliminary rebuild did not heal receiver: %v", err)
+	}
+
+	if _, err := backup.RestorePostgresState(ctx, dst, bytes.NewReader(pgBuf.Bytes())); err != nil {
+		t.Fatalf("RestorePostgresState: %v", err)
+	}
+	if _, err := dst.GetPrivacySubjectErasureOperationByEventID(ctx, tenantA, eventID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("PostgreSQL import receiver error = %v, want pgx.ErrNoRows before final rebuild", err)
+	}
+
+	if err := projections.New(dst).Rebuild(ctx, restoredLog); err != nil {
+		t.Fatalf("final Rebuild after PostgreSQL import: %v", err)
+	}
+	got, err := dst.GetPrivacySubjectErasureOperationByEventID(ctx, tenantA, eventID)
+	if err != nil {
+		t.Fatalf("final rebuild did not heal receiver: %v", err)
+	}
+	if got.OperationID != operationID || got.RequestBinding != requestBinding ||
+		got.SubjectRef != subjectRef || got.EventSequence != sourceEvent.Sequence {
+		t.Fatalf("healed receiver = %+v, want exact event-derived operation", got)
+	}
+}
+
+func TestExactRestoreRebuildCheckpointCoversTrailingAndAllGapHistory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration: embedded PostgreSQL + NATS")
+	}
+	for _, tc := range []struct {
+		name            string
+		keepFirstTenant bool
+		wantTenants     int
+	}{
+		{name: "trailing gap", keepFirstTenant: true, wantTenants: 2},
+		{name: "all gap", wantTenants: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			srcLog := openLog(t)
+			if tc.keepFirstTenant {
+				if _, err := srcLog.Append(ctx, events.Event{
+					Type: projections.EventTenantRegistered, TenantID: tenantA,
+					Data: tenantRegistered("kept-before-gap"),
+				}); err != nil {
+					t.Fatalf("append retained event: %v", err)
+				}
+			}
+			pruned, err := srcLog.Append(ctx, events.Event{
+				Type: projections.EventTenantRegistered, TenantID: tenantB,
+				Data: tenantRegistered("deleted-into-gap"),
+			})
+			if err != nil {
+				t.Fatalf("append event to prune: %v", err)
+			}
+			cut := pruned.Sequence
+			//nolint:staticcheck // Exercise restore compatibility with pre-B-3375cb42 physical gaps.
+			if err := srcLog.PruneTenantThroughCheckpoint(ctx, tenantB, cut, nil); err != nil {
+				t.Fatalf("prune event into exact-history gap: %v", err)
+			}
+
+			var stream bytes.Buffer
+			if _, err := backup.WriteLogThrough(ctx, srcLog, &stream, cut); err != nil {
+				t.Fatalf("WriteLogThrough: %v", err)
+			}
+			restoredLog := openLog(t)
+			if _, err := backup.RestoreLog(ctx, restoredLog, bytes.NewReader(stream.Bytes())); err != nil {
+				t.Fatalf("RestoreLog: %v", err)
+			}
+
+			dst := newStore(t)
+			p := projections.New(dst)
+			if err := p.Rebuild(ctx, restoredLog); err != nil {
+				t.Fatalf("Rebuild exact restored history: %v", err)
+			}
+			checkpoint, err := dst.ProjectionCheckpoint(ctx)
+			if err != nil {
+				t.Fatalf("ProjectionCheckpoint: %v", err)
+			}
+			if checkpoint != cut {
+				t.Fatalf("checkpoint after rebuild = %d, want exact restored cut %d", checkpoint, cut)
+			}
+
+			next, err := restoredLog.Append(ctx, events.Event{
+				Type: projections.EventTenantRegistered, TenantID: tenantB,
+				Data: tenantRegistered("after-restored-gap"),
+			})
+			if err != nil {
+				t.Fatalf("append after restored gap: %v", err)
+			}
+			if next.Sequence != cut+1 {
+				t.Fatalf("next sequence = %d, want %d", next.Sequence, cut+1)
+			}
+			if err := p.ProjectCatchUp(ctx, restoredLog); err != nil {
+				t.Fatalf("catch up event after restored gap: %v", err)
+			}
+			tenants, err := dst.ListTenants(ctx)
+			if err != nil {
+				t.Fatalf("ListTenants: %v", err)
+			}
+			if len(tenants) != tc.wantTenants {
+				t.Fatalf("tenants after catch-up = %d, want %d", len(tenants), tc.wantTenants)
+			}
+			if err := p.ProjectCatchUp(ctx, restoredLog); err != nil {
+				t.Fatalf("second catch up: %v", err)
+			}
+			tenants, err = dst.ListTenants(ctx)
+			if err != nil {
+				t.Fatalf("ListTenants after second catch-up: %v", err)
+			}
+			if len(tenants) != tc.wantTenants {
+				t.Fatalf("second catch-up reapplied next event: tenants = %d, want %d", len(tenants), tc.wantTenants)
+			}
+		})
 	}
 }
 
@@ -303,6 +488,15 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			{`INSERT INTO notification_routing_policies (id, tenant_id, name, channels_by_severity, default_channels, created_at, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)`, []any{"00000000-0000-0000-0000-00000000a012", tenantA, "expiry-default", `{"critical":["pagerduty","slack"],"low":["email"]}`, `["email"]`, now, now}},
 			{`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, attempts, next_attempt_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, []any{tenantA, "webhook", []byte(`{"event":"full-dr"}`), "full-dr-outbox", "pending", 0, now}},
 			{`INSERT INTO policy_bindings (id, tenant_id, name, policy, scope) VALUES ($1, $2, $3, $4, $5::jsonb)`, []any{"00000000-0000-0000-0000-00000000a009", tenantA, "default", "allow", `{"project":"prod"}`}},
+			{`INSERT INTO privacy_subject_erasure_operations
+			        (tenant_id, operation_id, request_binding, event_id, event_sequence,
+			         subject_ref, requested_by_ref, reason, selectors, counts, erased_at)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`,
+				[]any{
+					tenantA, "full-dr-privacy-operation", "sha256:full-dr-request",
+					"full-dr-privacy-event", int64(17), "subject:full-dr",
+					"actor:full-dr", "approved erasure", `{}`, `{"owners":1}`, now,
+				}},
 			{`INSERT INTO secret_shares (tenant_id, token_sha256, share_id, sealed, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "full-dr-token-hash", "full-dr-share", []byte{0xee, 0xff}, now.Add(time.Hour)}},
 			{`INSERT INTO secret_store (id, tenant_id, name, sealed, version) VALUES ($1, $2, $3, $4, $5)`, []any{"00000000-0000-0000-0000-00000000a010", tenantA, "app/db", []byte{0xcc, 0xdd}, 1}},
 			{`INSERT INTO secret_store_versions (tenant_id, name, version, sealed, written_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "app/db", 1, []byte{0xcc, 0xdd}, now}},

@@ -1690,7 +1690,7 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"ProjectionCheckpoint(ctx)",
 		"AdvanceProjectionCheckpoint(ctx, last)",
 		"func (p *Projector) Rebuild(",
-		"RebuildReadModelTx(ctx",
+		"RebuildReadModelTx(readCtx",
 		"ResetProjectionCheckpointTx",
 		"SetProjectionCheckpointTx",
 		"func (p *Projector) Snapshot(",
@@ -2901,13 +2901,23 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 		"AllowDirect: true",
 		"config.DefaultExternalReplicas",
 		"events: tenant_id is required (AN-1)",
-		"ack, err := l.js.Publish",
+		"ack, err := l.publishToActive",
 		"e.Sequence = ack.Sequence",
 		"func (l *Log) Replay(",
 		"stream.GetMsg(ctx, seq)",
 	} {
 		if !strings.Contains(eventsGo, want) {
 			t.Errorf("SPINE-101: events.go no longer contains %q; durable event-log proof weakened", want)
+		}
+	}
+	rewriteGo := read(t, "../internal/events/tenant_data_rewrite.go")
+	for _, want := range []string{
+		"func (l *Log) publishToActive(",
+		"jetstream.WithExpectStream(name)",
+		"ack, publishErr := l.js.Publish",
+	} {
+		if !strings.Contains(rewriteGo, want) {
+			t.Errorf("SPINE-101: generation-aware publish path no longer contains %q; acknowledged appends may target stale authority", want)
 		}
 	}
 	eventSpecGo := read(t, "../internal/eventspec/eventspec.go")
@@ -2949,7 +2959,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 		"func (p *Projector) Rebuild(",
 		"func (p *Projector) Snapshot(",
 		"func (p *Projector) RestoreFromSnapshot(",
-		"p.store.RestoreReadModelTx(ctx, func(tx pgx.Tx) error",
+		"p.store.RestoreReadModelTx(readCtx, func(tx pgx.Tx) error",
 	} {
 		if !strings.Contains(projectionsGo, want) {
 			t.Errorf("SPINE-102: projections.go no longer contains %q; checkpoint/snapshot projection proof weakened", want)

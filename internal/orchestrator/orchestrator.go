@@ -50,18 +50,39 @@ type Orchestrator struct {
 	store                *store.Store
 	outbox               *Outbox
 	proj                 *projections.Projector
+	tenantDataRewrite    []events.TenantDataRewriteOption
 	profileEditApprovals map[string]approvalProfileEditRequest
 	profileEditMu        sync.Mutex
+}
+
+// OrchestratorOption configures served command-side behavior while keeping the
+// long-standing NewOrchestrator call source-compatible.
+type OrchestratorOption func(*Orchestrator)
+
+// WithTenantDataRewriteOptions wires the mandatory history-generation proof
+// walls used by subject erasure. The slice is copied so a caller cannot replace
+// production authority callbacks after assembly.
+func WithTenantDataRewriteOptions(options ...events.TenantDataRewriteOption) OrchestratorOption {
+	copied := append([]events.TenantDataRewriteOption(nil), options...)
+	return func(orchestrator *Orchestrator) {
+		orchestrator.tenantDataRewrite = copied
+	}
 }
 
 // NewOrchestrator returns an Orchestrator over the event log, read store, and
 // outbox. It builds its own projector so a mutation it records is projected with
 // the same logic a rebuild uses.
-func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox) *Orchestrator {
-	return &Orchestrator{
+func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox, options ...OrchestratorOption) *Orchestrator {
+	orch := &Orchestrator{
 		log: log, store: st, outbox: ob, proj: projections.New(st),
 		profileEditApprovals: map[string]approvalProfileEditRequest{},
 	}
+	for _, option := range options {
+		if option != nil {
+			option(orch)
+		}
+	}
+	return orch
 }
 
 // SideEffectPayloadContext is the final outbox boundary for a lifecycle side

@@ -4,15 +4,255 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
 )
+
+func TestRunBackupRequiresExternalPostgresHistoryCoordinator(t *testing.T) {
+	cfg := config.Default()
+	cfg.NATS.Mode = config.NATSExternal
+	cfg.NATS.URL = "nats://127.0.0.1:1"
+	cfg.Postgres.Mode = config.PostgresBundled
+	cfg.Postgres.DSN = ""
+
+	_, err := RunBackup(context.Background(), cfg, filepath.Join(t.TempDir(), "events.jsonl"))
+	if err == nil || !strings.Contains(err.Error(), "external Postgres coordination") {
+		t.Fatalf("RunBackup error = %v, want external Postgres history-barrier failure", err)
+	}
+}
+
+func TestBackupHistoryReadRetainsCheckpointedSourceBeforePinningExport(t *testing.T) {
+	ctx := context.Background()
+	const (
+		tenantA = "11111111-1111-1111-1111-111111111111"
+		tenantB = "22222222-2222-2222-2222-222222222222"
+	)
+	log, err := events.Open(ctx, config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("events.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	pending, err := log.Append(ctx, events.Event{
+		ID: "backup-pending-prune", Type: "owner.created", TenantID: tenantA,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := log.Append(ctx, events.Event{
+		ID: "backup-other-tenant", Type: "owner.created", TenantID: tenantB,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	survivor, err := log.Append(ctx, events.Event{
+		ID: "backup-after-boundary", Type: "owner.updated", TenantID: tenantA,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoints := &backupCheckpointSource{byTenant: map[string]audit.Checkpoint{
+		tenantA: {
+			TenantID: tenantA, BoundarySeq: pending.Sequence,
+			BoundaryHash: "archived-head", RecordCount: 1, ArchiveURI: "memory://archive",
+		},
+	}}
+
+	competingEntered := make(chan struct{})
+	competingDone := make(chan error, 1)
+	err = withRecoveredBackupHistoryRead(ctx, log, checkpoints, func(readCtx context.Context) error {
+		var live []events.Event
+		if err := log.Replay(readCtx, 0, func(event events.Event) error {
+			live = append(live, event)
+			return nil
+		}); err != nil {
+			return err
+		}
+		if len(live) != 3 ||
+			live[0].ID != pending.ID || live[0].Sequence != pending.Sequence ||
+			live[1].ID != other.ID || live[1].Sequence != other.Sequence ||
+			live[2].ID != survivor.ID || live[2].Sequence != survivor.Sequence {
+			return fmt.Errorf("pinned backup history = %+v, want all source records at sequences 1, 2, and 3", live)
+		}
+
+		// The recovery operation must remain held through the pinned export. A
+		// retention/rewrite operation queued here may enter only after fn returns.
+		go func() {
+			competingDone <- log.WithHistoryOperation(ctx, func(context.Context) error {
+				close(competingEntered)
+				return nil
+			})
+		}()
+		select {
+		case <-competingEntered:
+			return errors.New("competing history operation entered during pinned backup export")
+		case <-time.After(100 * time.Millisecond):
+			return nil
+		}
+	})
+	if err != nil {
+		t.Fatalf("withRecoveredBackupHistoryRead: %v", err)
+	}
+	select {
+	case err := <-competingDone:
+		if err != nil {
+			t.Fatalf("competing history operation: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("competing history operation did not continue after backup released")
+	}
+	if strings.Join(checkpoints.queried, ",") != tenantA {
+		t.Fatalf("checkpoint lookup order = %v, want checkpoint tenant A", checkpoints.queried)
+	}
+	var exact []events.BackupHistoryRecord
+	if err := log.ExportBackupHistoryThrough(ctx, survivor.Sequence, func(record events.BackupHistoryRecord) error {
+		exact = append(exact, record)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(exact) != 3 || exact[0].IsGap() ||
+		exact[0].Sequence != pending.Sequence || exact[0].Event.ID != pending.ID {
+		t.Fatalf("pre-backup history = %+v, want retained source event at sequence 1", exact)
+	}
+}
+
+func TestBackupHistoryReadFailsClosedOnCheckpointBeyondEventHead(t *testing.T) {
+	ctx := context.Background()
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	log, err := events.Open(ctx, config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("events.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	event, err := log.Append(ctx, events.Event{
+		ID: "backup-head", Type: "owner.created", TenantID: tenantID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoints := &backupCheckpointSource{byTenant: map[string]audit.Checkpoint{
+		tenantID: {
+			TenantID: tenantID, BoundarySeq: event.Sequence + 1,
+			BoundaryHash: "ahead", RecordCount: 1, ArchiveURI: "memory://ahead",
+		},
+	}}
+	exported := false
+	err = withRecoveredBackupHistoryRead(ctx, log, checkpoints, func(context.Context) error {
+		exported = true
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "outside event head") {
+		t.Fatalf("withRecoveredBackupHistoryRead error = %v, want ahead-of-log rejection", err)
+	}
+	if exported {
+		t.Fatal("backup export started with an incoherent checkpoint boundary")
+	}
+	got, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != event.Sequence {
+		t.Fatalf("failed recovery changed event head to %d, want %d", got, event.Sequence)
+	}
+}
+
+func TestBackupHistoryReadRejectsLegacyCheckpointedPruneWithoutDeletingMore(t *testing.T) {
+	ctx := context.Background()
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	log, err := events.Open(ctx, config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("events.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	first, err := log.Append(ctx, events.Event{
+		ID: "legacy-pruned-one", Type: "tenant.registered", TenantID: tenantID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := log.Append(ctx, events.Event{
+		ID: "legacy-pruned-two", Type: "owner.created", TenantID: tenantID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	//nolint:staticcheck // Model a legacy physical-retention artifact at the served restore boundary.
+	if err := log.PruneTenantThroughCheckpoint(ctx, tenantID, second.Sequence, nil); err != nil {
+		t.Fatalf("simulate legacy physical retention: %v", err)
+	}
+	checkpoints := &backupCheckpointSource{byTenant: map[string]audit.Checkpoint{
+		tenantID: {
+			TenantID: tenantID, BoundarySeq: second.Sequence,
+			BoundaryHash: "legacy-head", RecordCount: 2, ArchiveURI: "memory://legacy",
+		},
+	}}
+	exported := false
+	err = withRecoveredBackupHistoryRead(ctx, log, checkpoints, func(context.Context) error {
+		exported = true
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "retained 0 of 2") {
+		t.Fatalf("legacy prune error = %v, want incomplete retained-source rejection", err)
+	}
+	if exported {
+		t.Fatal("backup export began after legacy retention removed its AN-2 source")
+	}
+	var history []events.BackupHistoryRecord
+	if err := log.ExportBackupHistoryThrough(ctx, second.Sequence, func(record events.BackupHistoryRecord) error {
+		history = append(history, record)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 1 || !history[0].IsGap() ||
+		history[0].Sequence != first.Sequence || history[0].GapThrough != second.Sequence {
+		t.Fatalf("legacy history changed during rejection: %+v", history)
+	}
+}
+
+type backupCheckpointSource struct {
+	byTenant map[string]audit.Checkpoint
+	queried  []string
+}
+
+func (s *backupCheckpointSource) ListAuditCheckpointTenants(context.Context) ([]string, error) {
+	tenants := make([]string, 0, len(s.byTenant))
+	for tenantID := range s.byTenant {
+		tenants = append(tenants, tenantID)
+	}
+	sort.Strings(tenants)
+	return tenants, nil
+}
+
+func (s *backupCheckpointSource) LatestAuditCheckpoint(
+	_ context.Context,
+	tenantID string,
+) (audit.Checkpoint, bool, error) {
+	s.queried = append(s.queried, tenantID)
+	checkpoint, ok := s.byTenant[tenantID]
+	return checkpoint, ok, nil
+}
 
 func TestFullBackupEncryptsSensitiveArtifacts(t *testing.T) {
 	dir := t.TempDir()
@@ -102,6 +342,107 @@ func TestFullRestoreDecryptsEncryptedArtifact(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Fatalf("restored artifact = %q, want %q", got, want)
 	}
+}
+
+func TestFullRestoreArtifactPairPreflightRequiresMatchingCuts(t *testing.T) {
+	eventArtifact := fullRestoreEmptyEventArtifact(t)
+	matchedPostgres := fullRestoreEmptyPostgresArtifact(t, 0)
+	if err := verifyFullRestoreArtifactPair(
+		bytes.NewReader(eventArtifact),
+		bytes.NewReader(matchedPostgres),
+	); err != nil {
+		t.Fatalf("matching full-restore artifacts rejected: %v", err)
+	}
+
+	mismatchedPostgres := fullRestoreEmptyPostgresArtifact(t, 1)
+	err := verifyFullRestoreArtifactPair(
+		bytes.NewReader(eventArtifact),
+		bytes.NewReader(mismatchedPostgres),
+	)
+	if err == nil {
+		t.Fatal("full-restore preflight accepted event cut 0 paired with postgres cut 1")
+	}
+	for _, want := range []string{"cut mismatch", "event log names cut 0", "postgres state names cut 1", "before any restore mutation"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("mismatch error = %v, want %q", err, want)
+		}
+	}
+}
+
+func fullRestoreEmptyEventArtifact(t *testing.T) []byte {
+	t.Helper()
+	type eventHeader struct {
+		Format           string    `json:"format"`
+		Version          int       `json:"version"`
+		CreatedAt        time.Time `json:"created_at"`
+		EventCutSequence uint64    `json:"event_cut_sequence,omitempty"`
+		HistoryLayout    string    `json:"history_layout,omitempty"`
+	}
+	type eventTrailer struct {
+		Format           string `json:"format"`
+		SHA256           string `json:"sha256"`
+		Records          int    `json:"records"`
+		Entries          int    `json:"entries,omitempty"`
+		EventCutSequence uint64 `json:"event_cut_sequence,omitempty"`
+		HistoryLayout    string `json:"history_layout,omitempty"`
+	}
+	var prefix bytes.Buffer
+	if err := json.NewEncoder(&prefix).Encode(eventHeader{
+		Format: "trstctl-event-log-backup", Version: 2,
+		CreatedAt: time.Unix(0, 0).UTC(), HistoryLayout: "exact-sequence-v1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var artifact bytes.Buffer
+	artifact.Write(prefix.Bytes())
+	if err := json.NewEncoder(&artifact).Encode(eventTrailer{
+		Format:        "trstctl-event-log-backup-trailer",
+		SHA256:        crypto.SHA256Hex(prefix.Bytes()),
+		Records:       0,
+		HistoryLayout: "exact-sequence-v1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return artifact.Bytes()
+}
+
+func fullRestoreEmptyPostgresArtifact(t *testing.T, cut uint64) []byte {
+	t.Helper()
+	type postgresHeader struct {
+		Format           string    `json:"format"`
+		Version          int       `json:"version"`
+		CreatedAt        time.Time `json:"created_at"`
+		Tables           []string  `json:"tables"`
+		EventCutSequence uint64    `json:"event_cut_sequence,omitempty"`
+	}
+	type postgresTrailer struct {
+		Format           string         `json:"format"`
+		SHA256           string         `json:"sha256"`
+		Records          int            `json:"records"`
+		Tables           map[string]int `json:"tables"`
+		EventCutSequence uint64         `json:"event_cut_sequence,omitempty"`
+	}
+	tables := append([]string(nil), backup.RecoveredFromPostgresBackup...)
+	sort.Strings(tables)
+	var prefix bytes.Buffer
+	if err := json.NewEncoder(&prefix).Encode(postgresHeader{
+		Format: "trstctl-postgres-state-backup", Version: 1,
+		CreatedAt: time.Unix(0, 0).UTC(), Tables: tables,
+		EventCutSequence: cut,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var artifact bytes.Buffer
+	artifact.Write(prefix.Bytes())
+	if err := json.NewEncoder(&artifact).Encode(postgresTrailer{
+		Format:  "trstctl-postgres-state-backup-trailer",
+		SHA256:  crypto.SHA256Hex(prefix.Bytes()),
+		Records: 0, Tables: map[string]int{},
+		EventCutSequence: cut,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return artifact.Bytes()
 }
 
 func TestFullBackupDirectoryArtifactsRestoreAndVerify(t *testing.T) {

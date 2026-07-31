@@ -1223,17 +1223,18 @@ func (o OTLP) TimeoutDuration() (time.Duration, error) {
 
 // Audit configures the event-sourced audit trail's evidence export (F9 / B5) and
 // its retention lifecycle (R4.4). By default (empty Retention) the event log is
-// retained indefinitely. When Retention is set AND ArchiveDir is given, a
-// background worker enforces it: records older than the window are archived as
-// signed, offline-verifiable bundles under ArchiveDir, then a logical checkpoint
-// retires the prefix from the served audit-query view. The shared AN-2 source
-// envelopes stay present so projection rebuild and event-only DR remain lossless.
-// SigningKeyFile persists the export/checkpoint signing key so bundles verify
-// across restarts.
+// retained indefinitely in the served audit view. When Retention is set AND
+// ArchiveDir is given, a background worker enforces the served-view window:
+// records older than the window are archived as signed, offline-verifiable
+// bundles under ArchiveDir, then a replayable checkpoint advances the query
+// floor. The underlying AN-2 event envelopes remain in the event log because
+// projection rebuild, disaster recovery, and authorized privacy rewrites require
+// the complete source history. SigningKeyFile persists the export signing key so
+// bundles verify across restarts.
 type Audit struct {
 	SigningKeyFile string `json:"signing_key_file"` // PEM path; persisted so the export key does not rotate
-	Retention      string `json:"retention"`        // Go duration; empty means indefinite (no logical query-floor advance)
-	ArchiveDir     string `json:"archive_dir"`      // cold-storage directory required to enable logical retention
+	Retention      string `json:"retention"`        // Go duration; empty means an indefinite served audit view
+	ArchiveDir     string `json:"archive_dir"`      // signed cold-storage bundles; required to advance the served-view retention floor
 }
 
 // RetentionDuration parses the retention window. An empty value means indefinite

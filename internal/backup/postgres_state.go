@@ -51,9 +51,19 @@ type postgresStateTrailer struct {
 // PostgresStateSummary reports the row counts written or restored for the
 // independent PostgreSQL state artifact.
 type PostgresStateSummary struct {
-	Tables           map[string]int `json:"tables"`
-	Records          int            `json:"records"`
-	EventCutSequence uint64         `json:"event_cut_sequence,omitempty"`
+	Tables           map[string]int            `json:"tables"`
+	Records          int                       `json:"records"`
+	EventCutSequence uint64                    `json:"event_cut_sequence,omitempty"`
+	AuditCheckpoints []AuditCheckpointBoundary `json:"audit_checkpoints,omitempty"`
+}
+
+// AuditCheckpointBoundary is the minimum authenticated PostgreSQL evidence
+// needed to prove that a paired event artifact still contains every AN-2 source
+// envelope hidden by a logical audit-retention checkpoint.
+type AuditCheckpointBoundary struct {
+	TenantID    string `json:"tenant_id"`
+	BoundarySeq uint64 `json:"boundary_sequence"`
+	RecordCount int    `json:"record_count"`
 }
 
 // WritePostgresState writes all independent PostgreSQL state classified in the
@@ -161,24 +171,30 @@ func WritePostgresStateTx(ctx context.Context, tx pgx.Tx, w io.Writer, eventCut 
 	return summary, nil
 }
 
-// RestorePostgresState restores the independent PostgreSQL state artifact into a
-// migrated database whose event-sourced read model has already been rebuilt.
-func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (PostgresStateSummary, error) {
+// VerifyPostgresState reads and fully verifies an independent PostgreSQL state
+// artifact without touching a store. Full restore uses this preflight to expose
+// the paired event-log cut before it mutates NATS, PostgreSQL, or restored files.
+func VerifyPostgresState(r io.Reader) (PostgresStateSummary, error) {
+	_, summary, err := readVerifiedPostgresState(r)
+	return summary, err
+}
+
+func readVerifiedPostgresState(r io.Reader) (map[string][]json.RawMessage, PostgresStateSummary, error) {
 	h, rowsByTable, tr, err := readAndVerifyPostgresState(r)
 	if err != nil {
-		return PostgresStateSummary{}, err
+		return nil, PostgresStateSummary{}, err
 	}
 	if h.Format != postgresStateFormatTag {
-		return PostgresStateSummary{}, fmt.Errorf("backup: not a trstctl postgres-state backup (format %q)", h.Format)
+		return nil, PostgresStateSummary{}, fmt.Errorf("backup: not a trstctl postgres-state backup (format %q)", h.Format)
 	}
 	if h.Version != postgresStateVersion {
-		return PostgresStateSummary{}, fmt.Errorf("backup: unsupported postgres-state backup version %d (want %d)", h.Version, postgresStateVersion)
+		return nil, PostgresStateSummary{}, fmt.Errorf("backup: unsupported postgres-state backup version %d (want %d)", h.Version, postgresStateVersion)
 	}
 	if h.EventCutSequence != tr.EventCutSequence {
-		return PostgresStateSummary{}, fmt.Errorf("backup: postgres-state integrity: header event cut %d but trailer event cut %d", h.EventCutSequence, tr.EventCutSequence)
+		return nil, PostgresStateSummary{}, fmt.Errorf("backup: postgres-state integrity: header event cut %d but trailer event cut %d", h.EventCutSequence, tr.EventCutSequence)
 	}
 	if err := validatePostgresStateTables(h.Tables); err != nil {
-		return PostgresStateSummary{}, err
+		return nil, PostgresStateSummary{}, err
 	}
 	allowedTables := map[string]bool{}
 	for _, table := range h.Tables {
@@ -186,12 +202,12 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 	}
 	for table := range rowsByTable {
 		if !allowedTables[table] {
-			return PostgresStateSummary{}, fmt.Errorf("backup: postgres-state row names unclassified table %s", table)
+			return nil, PostgresStateSummary{}, fmt.Errorf("backup: postgres-state row names unclassified table %s", table)
 		}
 	}
 	for table := range tr.Tables {
 		if !allowedTables[table] {
-			return PostgresStateSummary{}, fmt.Errorf("backup: postgres-state trailer names unclassified table %s", table)
+			return nil, PostgresStateSummary{}, fmt.Errorf("backup: postgres-state trailer names unclassified table %s", table)
 		}
 	}
 	summary := PostgresStateSummary{Tables: map[string]int{}, Records: tr.Records, EventCutSequence: tr.EventCutSequence}
@@ -199,12 +215,57 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 		summary.Tables[table] = len(rows)
 	}
 	if summary.Records != sumTableCounts(summary.Tables) {
-		return PostgresStateSummary{}, fmt.Errorf("backup: postgres-state trailer claims %d records but tables contain %d", summary.Records, sumTableCounts(summary.Tables))
+		return nil, PostgresStateSummary{}, fmt.Errorf("backup: postgres-state trailer claims %d records but tables contain %d", summary.Records, sumTableCounts(summary.Tables))
 	}
 	for table, count := range tr.Tables {
 		if summary.Tables[table] != count {
-			return PostgresStateSummary{}, fmt.Errorf("backup: postgres-state trailer count for %s = %d but stream has %d", table, count, summary.Tables[table])
+			return nil, PostgresStateSummary{}, fmt.Errorf("backup: postgres-state trailer count for %s = %d but stream has %d", table, count, summary.Tables[table])
 		}
+	}
+	checkpoints, err := latestAuditCheckpointBoundaries(rowsByTable["audit_checkpoints"])
+	if err != nil {
+		return nil, PostgresStateSummary{}, err
+	}
+	summary.AuditCheckpoints = checkpoints
+	return rowsByTable, summary, nil
+}
+
+func latestAuditCheckpointBoundaries(rows []json.RawMessage) ([]AuditCheckpointBoundary, error) {
+	latest := make(map[string]AuditCheckpointBoundary)
+	for index, raw := range rows {
+		var row struct {
+			TenantID    string `json:"tenant_id"`
+			BoundarySeq int64  `json:"boundary_seq"`
+			RecordCount int64  `json:"record_count"`
+		}
+		if err := json.Unmarshal(raw, &row); err != nil {
+			return nil, fmt.Errorf("backup: decode audit_checkpoints row %d: %w", index+1, err)
+		}
+		if row.TenantID == "" || row.BoundarySeq <= 0 || row.RecordCount <= 0 {
+			return nil, fmt.Errorf("backup: audit_checkpoints row %d is incomplete", index+1)
+		}
+		candidate := AuditCheckpointBoundary{
+			TenantID: row.TenantID, BoundarySeq: uint64(row.BoundarySeq),
+			RecordCount: int(row.RecordCount),
+		}
+		if prior, ok := latest[row.TenantID]; !ok || candidate.BoundarySeq > prior.BoundarySeq {
+			latest[row.TenantID] = candidate
+		}
+	}
+	out := make([]AuditCheckpointBoundary, 0, len(latest))
+	for _, checkpoint := range latest {
+		out = append(out, checkpoint)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].TenantID < out[j].TenantID })
+	return out, nil
+}
+
+// RestorePostgresState restores the independent PostgreSQL state artifact into a
+// migrated database whose event-sourced read model has already been rebuilt.
+func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (PostgresStateSummary, error) {
+	rowsByTable, summary, err := readVerifiedPostgresState(r)
+	if err != nil {
+		return PostgresStateSummary{}, err
 	}
 
 	tx, err := st.SystemPool().Begin(ctx)
@@ -403,6 +464,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"notification_routing_policies",
 		"outbox",
 		"policy_bindings",
+		"privacy_subject_erasure_operations",
 		"secret_shares",
 		"secret_store",
 		"secret_store_versions",

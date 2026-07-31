@@ -59,6 +59,16 @@ func TestTenantKeyDomainUsesEventRecoveryAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestPrivacyErasureOperationUsesIndependentPostgresRecovery(t *testing.T) {
+	const table = "privacy_subject_erasure_operations"
+	if containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is in ReadModelTables; retained-away events cannot rebuild the durable AN-5 receiver", table)
+	}
+	if containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is in snapshotTables; snapshot restore must not erase independent AN-5 evidence", table)
+	}
+}
+
 func containsRecoveryTable(tables []string, want string) bool {
 	for _, table := range tables {
 		if table == want {

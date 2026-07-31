@@ -5,11 +5,14 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -158,22 +161,63 @@ func toPrivacyArchiveErasureAttestationResponse(a store.PrivacyArchiveErasureAtt
 //trstctl:mutation
 func (a *API) erasePrivacySubject(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req privacySubjectErasureRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		req.Subject = strings.TrimSpace(req.Subject)
-		req.Reason = strings.TrimSpace(req.Reason)
-		if req.Subject == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "subject is required")
-		}
-		erasure, err := a.orch.ErasePrivacySubject(ctx, tenantID, req.Subject, req.Reason)
+	var req privacySubjectErasureRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	req.Subject = strings.TrimSpace(req.Subject)
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.Subject == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "subject is required"))
+		return
+	}
+	binding, err := privacySubjectErasureRequestBinding(r, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		erasure, err := a.orch.ErasePrivacySubjectBound(
+			ctx, tenantID, req.Subject, req.Reason, idempotencyKey, binding,
+		)
 		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusCreated, toPrivacySubjectErasureResponse(erasure), nil
 	})
+}
+
+// privacySubjectErasureRequestBinding prevents one raw Idempotency-Key from
+// replaying a successful erasure for another caller, route, subject, or reason.
+// Only the non-secret digest is persisted; the canonical bytes are wiped.
+func privacySubjectErasureRequestBinding(r *http.Request, command privacySubjectErasureRequest) (string, error) {
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		return "", err
+	}
+	escapedPath := ""
+	if r.URL != nil {
+		escapedPath = r.URL.EscapedPath()
+	}
+	material, err := json.Marshal(struct {
+		Domain      string                       `json:"domain"`
+		Principal   string                       `json:"principal"`
+		Method      string                       `json:"method"`
+		EscapedPath string                       `json:"escaped_path"`
+		Command     privacySubjectErasureRequest `json:"command"`
+	}{
+		Domain:      "trstctl.privacy-subject-erasure-command.v1",
+		Principal:   principal,
+		Method:      r.Method,
+		EscapedPath: escapedPath,
+		Command:     command,
+	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(material)
+	return crypto.SHA256Hex(material), nil
 }
 
 //trstctl:mutation
