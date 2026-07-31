@@ -16,6 +16,7 @@ const { apiMock } = vi.hoisted(() => ({
     enterpriseSupportStatus: vi.fn(),
     managedOfferingStatus: vi.fn(),
     scaleOrchestration: vi.fn(),
+    platformSystem: vi.fn(),
     activeActiveIssuance: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
@@ -196,6 +197,28 @@ describe("SIMP-01 Platform served-data reduction", () => {
       signer: { process_model: "separate signer process", transport: "gRPC over UDS", scaling: "scale signer separately" },
       projection_replay: { replay_floor_events_per_second: 500, max_lag_events: 50, rebuild_source: "append-only event log" },
     });
+    apiMock.platformSystem.mockResolvedValue({
+      version: "test",
+      commit: "test",
+      build_date: "2026-07-31T00:00:00Z",
+      go_version: "go1.26",
+      started_at: "2026-07-31T00:00:00Z",
+      uptime_seconds: 1,
+      signer_mode: "child",
+      fips_module_active: false,
+      dependencies: [],
+      idempotency_results: {
+        state: "complete",
+        fleet_ready: true,
+        sealed_only_floor: true,
+        raw_v0_remaining: 0,
+        legacy_dynamic_remaining: 0,
+        sealed_results: 7,
+        pending_results: 0,
+        indeterminate_results: 0,
+        recovery: "no action",
+      },
+    });
     apiMock.activeActiveIssuance.mockResolvedValue({
       capability: "CAP-SCALE-02",
       served: true,
@@ -279,6 +302,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
     expect(apiMock.enterpriseSupportStatus).not.toHaveBeenCalled();
     expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
+    expect(apiMock.platformSystem).not.toHaveBeenCalled();
     expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
     expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
     expect(await screen.findByText("access-admins")).toBeInTheDocument();
@@ -301,6 +325,10 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(screen.getByRole("heading", { name: "Enterprise support" })).toBeInTheDocument();
     expect(screen.getByText("CAP-MODEL-04")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Idempotency result protection" })).toBeInTheDocument();
+    expect(await screen.findByText("Sealed-only enforced")).toBeInTheDocument();
+    expect(screen.getAllByText("7").length).toBeGreaterThan(0);
+    expect(apiMock.platformSystem).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("CAP-SCALE-01 active")).toBeInTheDocument();
     expect(screen.getByText("SCALE-1M")).toBeInTheDocument();
     expect(apiMock.members).not.toHaveBeenCalled();
@@ -316,6 +344,74 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(screen.getByText("idempotency")).toBeInTheDocument();
     expect(apiMock.members).not.toHaveBeenCalled();
     expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
+    expect(apiMock.platformSystem).not.toHaveBeenCalled();
+  });
+
+  it("renders loading, request failure, partial migration, and empty protection states", async () => {
+    apiMock.platformSystem.mockReturnValue(new Promise(() => {}));
+    const loading = renderAdminPage("system");
+    expect(await screen.findByText("Loading result-protection status.")).toBeInTheDocument();
+    loading.unmount();
+
+    apiMock.platformSystem.mockRejectedValue(new Error("database detail must not render"));
+    const failed = renderAdminPage("system");
+    expect(await screen.findByText("Result-protection status is unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/database detail/)).not.toBeInTheDocument();
+    failed.unmount();
+
+    apiMock.platformSystem.mockResolvedValue({
+      version: "test",
+      commit: "test",
+      build_date: "2026-07-31T00:00:00Z",
+      go_version: "go1.26",
+      started_at: "2026-07-31T00:00:00Z",
+      uptime_seconds: 1,
+      signer_mode: "child",
+      fips_module_active: false,
+      dependencies: [],
+      idempotency_results: {
+        state: "partial",
+        fleet_ready: false,
+        sealed_only_floor: false,
+        raw_v0_remaining: 2,
+        legacy_dynamic_remaining: 1,
+        sealed_results: 4,
+        pending_results: 0,
+        indeterminate_results: 0,
+        failure: "backend detail",
+        recovery: "backend guidance",
+      },
+    });
+    const partial = renderAdminPage("system");
+    expect((await screen.findAllByText("Migration incomplete")).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Stop old writers and restart an upgraded node/)).toBeInTheDocument();
+    expect(screen.queryByText("backend detail")).not.toBeInTheDocument();
+    partial.unmount();
+
+    apiMock.platformSystem.mockResolvedValue({
+      version: "test",
+      commit: "test",
+      build_date: "2026-07-31T00:00:00Z",
+      go_version: "go1.26",
+      started_at: "2026-07-31T00:00:00Z",
+      uptime_seconds: 1,
+      signer_mode: "child",
+      fips_module_active: false,
+      dependencies: [],
+      idempotency_results: {
+        state: "empty",
+        fleet_ready: false,
+        sealed_only_floor: false,
+        raw_v0_remaining: 0,
+        legacy_dynamic_remaining: 0,
+        sealed_results: 0,
+        pending_results: 0,
+        indeterminate_results: 0,
+        recovery: "backend guidance",
+      },
+    });
+    renderAdminPage("system");
+    expect(await screen.findByText("This tenant has no cached mutation results yet.")).toBeInTheDocument();
   });
 
   it("removes the static Platform API, CLI, and scope-map fixtures from the module", () => {

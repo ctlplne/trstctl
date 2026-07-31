@@ -22,6 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     enterpriseSupportStatus: vi.fn(),
     managedOfferingStatus: vi.fn(),
     scaleOrchestration: vi.fn(),
+    platformSystem: vi.fn(),
     activeActiveIssuance: vi.fn(),
   },
 }));
@@ -65,6 +66,28 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     apiMock.enterpriseSupportStatus.mockResolvedValue({ served: true, support_mode: "off", support_tiers: [], sla_targets: [], professional_services: [] });
     apiMock.managedOfferingStatus.mockResolvedValue({ served: true, provider_plane_mode: "off" });
     apiMock.scaleOrchestration.mockResolvedValue({ served: false, execution_lanes: [], release_gates: [], target_credential_bands: [], residuals: [] });
+    apiMock.platformSystem.mockResolvedValue({
+      version: "test",
+      commit: "test",
+      build_date: "2026-07-31T00:00:00Z",
+      go_version: "go1.26",
+      started_at: "2026-07-31T00:00:00Z",
+      uptime_seconds: 1,
+      signer_mode: "child",
+      fips_module_active: false,
+      dependencies: [],
+      idempotency_results: {
+        state: "empty",
+        fleet_ready: false,
+        sealed_only_floor: false,
+        raw_v0_remaining: 0,
+        legacy_dynamic_remaining: 0,
+        sealed_results: 0,
+        pending_results: 0,
+        indeterminate_results: 0,
+        recovery: "upgrade the fleet",
+      },
+    });
     apiMock.activeActiveIssuance.mockResolvedValue({
       served: false,
       regions: [],

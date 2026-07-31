@@ -562,7 +562,13 @@ edges and follow-up integration work.
   per-dependency reachability for the database, event log, and signer. It
   reuses the same probes as `/readyz`, so the console and a load balancer
   cannot disagree about whether the spine is up; it reports no addresses,
-  DSNs, or configuration values.
+  DSNs, or configuration values. The same response and the
+  **System posture** console page include `idempotency_results`: RLS-scoped
+  counts of legacy, sealed, pending, and indeterminate mutation responses,
+  plus the explicit fleet-readiness assertion and whether PostgreSQL has the
+  validated sealed-only floor. Result bytes and raw datastore errors never
+  enter this view; partial, failed, empty, recovery-required, and complete
+  states carry concrete operator recovery guidance.
 - Worker-pool backpressure is readable: `GET /api/v1/operations/bulkheads`
   (and `trstctl-cli operations bulkheads`) reports each bounded pool's
   workers, capacity, queue depth, saturation, and its

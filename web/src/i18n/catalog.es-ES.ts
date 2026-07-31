@@ -3799,6 +3799,42 @@ const esESCatalog = {
   "sshTrust.fleet.access": "Acceso",
   "sshTrust.fleet.unknown": "desconocido",
   "sshTrust.fleet.accessSummary": "{standing} permanentes · {orphaned} huérfanas",
+  "platform.idempotency.heading": "Protección de resultados de idempotencia",
+  "platform.idempotency.description": "Recuentos por inquilino de respuestas de mutación almacenadas; esta consulta nunca expone los bytes del resultado.",
+  "platform.idempotency.loading": "Cargando el estado de protección de resultados.",
+  "platform.idempotency.requestFailed": "El estado de protección no está disponible",
+  "platform.idempotency.requestRecovery": "Compruebe PostgreSQL y el envoltorio de sellado del inquilino y vuelva a intentar esta página.",
+  "platform.idempotency.stateUnavailable": "Sin conectar",
+  "platform.idempotency.stateEmpty": "Sin resultados almacenados",
+  "platform.idempotency.stateReady": "Listo para el cierre de flota",
+  "platform.idempotency.statePartial": "Migración incompleta",
+  "platform.idempotency.stateFailed": "Protección fallida",
+  "platform.idempotency.stateRecovery": "Reconciliación necesaria",
+  "platform.idempotency.stateComplete": "Solo sellado aplicado",
+  "platform.idempotency.recoveryUnavailable":
+    "Ejecute el binario predeterminado del plano de control con PostgreSQL y la protección de resultados por inquilino configurados.",
+  "platform.idempotency.recoveryRatchet":
+    "Cuando todos los nodos estén actualizados, confirme la preparación de la flota para instalar la barrera permanente de solo sellado.",
+  "platform.idempotency.recoveryPartial":
+    "Detenga los escritores antiguos y reinicie un nodo actualizado para reanudar la migración del inquilino. Aún no confirme la preparación de la flota.",
+  "platform.idempotency.recoveryFailed":
+    "Mantenga las mutaciones no disponibles, revise el fallo de migración inicial y reinicie cuando PostgreSQL pueda validar la barrera de solo sellado.",
+  "platform.idempotency.recoveryIndeterminate": "Reconcilie cada reclamación indeterminada antes de reintentar su mutación; nunca emita ni rote a ciegas.",
+  "platform.idempotency.recoveryComplete":
+    "No se requiere ninguna acción; los resultados completados están sellados y PostgreSQL rechaza los formatos antiguos.",
+  "platform.idempotency.empty": "Este inquilino aún no tiene resultados de mutación almacenados.",
+  "platform.idempotency.rawRemaining": "raw-v0 restantes",
+  "platform.idempotency.dynamicRemaining": "Sobres dinámicos antiguos",
+  "platform.idempotency.sealed": "Resultados sellados",
+  "platform.idempotency.indeterminate": "Necesitan reconciliación",
+  "platform.idempotency.pending": "En curso",
+  "platform.idempotency.fleetReady": "Preparación de flota confirmada",
+  "platform.idempotency.floor": "Barrera de base de datos",
+  "platform.idempotency.yes": "Sí",
+  "platform.idempotency.no": "No",
+  "platform.idempotency.installed": "Instalada y validada",
+  "platform.idempotency.notInstalled": "No instalada",
+  "platform.idempotency.recoveryHeading": "Recuperación",
   "source.plaintext.local.preview.no.private.cert.ke.e5059d6667":
     "Vista previa local en texto plano. En esta vista del navegador no se expone ningún byte de certificados o claves privadas.",
 } satisfies Record<MessageKey, string>;

@@ -25,6 +25,7 @@ import {
   type PlatformDistributionStatus,
   type RoleList,
   type ScaleOrchestrationPlan,
+  type SystemReadout,
 } from "@/lib/api";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -125,6 +126,120 @@ function AdminHeaderActions() {
   );
 }
 
+function IdempotencyResultProtectionPanel({
+  readout,
+  loading,
+  requestError,
+}: {
+  readout: SystemReadout | null;
+  loading: boolean;
+  requestError: string | null;
+}) {
+  const { t } = useTranslation();
+  const protection = readout?.idempotency_results;
+  const stateLabels: Record<NonNullable<typeof protection>["state"], string> = {
+    unavailable: t("platform.idempotency.stateUnavailable"),
+    empty: t("platform.idempotency.stateEmpty"),
+    ready_for_ratchet: t("platform.idempotency.stateReady"),
+    partial: t("platform.idempotency.statePartial"),
+    failed: t("platform.idempotency.stateFailed"),
+    recovery_required: t("platform.idempotency.stateRecovery"),
+    complete: t("platform.idempotency.stateComplete"),
+  };
+  const recoveryCopy: Record<NonNullable<typeof protection>["state"], string> = {
+    unavailable: t("platform.idempotency.recoveryUnavailable"),
+    empty: t("platform.idempotency.recoveryRatchet"),
+    ready_for_ratchet: t("platform.idempotency.recoveryRatchet"),
+    partial: t("platform.idempotency.recoveryPartial"),
+    failed: t("platform.idempotency.recoveryFailed"),
+    recovery_required: t("platform.idempotency.recoveryIndeterminate"),
+    complete: t("platform.idempotency.recoveryComplete"),
+  };
+  const tone: StatusTone =
+    protection?.state === "complete"
+      ? "success"
+      : protection?.state === "failed" || protection?.state === "recovery_required"
+        ? "critical"
+        : protection?.state === "partial"
+          ? "warning"
+          : protection?.state === "ready_for_ratchet"
+            ? "observe"
+            : "neutral";
+
+  return (
+    <section className="ui-panel p-comfortable" aria-labelledby="idempotency-result-protection-heading">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="idempotency-result-protection-heading" className="text-title font-semibold">
+            {t("platform.idempotency.heading")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("platform.idempotency.description")}</p>
+        </div>
+        {protection ? <StatusBadge value={protection.state} label={stateLabels[protection.state]} tone={tone} /> : null}
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-muted-foreground" role="status">
+          {t("platform.idempotency.loading")}
+        </p>
+      ) : null}
+      {requestError ? (
+        <div className="mt-4 rounded-control border border-destructive/30 bg-destructive/10 p-3 text-sm" role="alert">
+          <p className="font-semibold text-destructive">{t("platform.idempotency.requestFailed")}</p>
+          <p className="mt-1 text-muted-foreground">{t("platform.idempotency.requestRecovery")}</p>
+        </div>
+      ) : null}
+      {protection ? (
+        <div className="mt-4 grid gap-4">
+          {protection.failure ? (
+            <div className="rounded-control border border-status-warning/30 bg-status-warning/10 p-3 text-sm" role="alert">
+              <p className="font-semibold text-status-warning">{stateLabels[protection.state]}</p>
+              <p className="mt-1 text-muted-foreground">{recoveryCopy[protection.state]}</p>
+            </div>
+          ) : null}
+          {protection.state === "empty" ? <p className="text-sm text-muted-foreground">{t("platform.idempotency.empty")}</p> : null}
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.idempotency.rawRemaining")}</dt>
+              <dd className="font-mono">{protection.raw_v0_remaining}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.idempotency.dynamicRemaining")}</dt>
+              <dd className="font-mono">{protection.legacy_dynamic_remaining}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.idempotency.sealed")}</dt>
+              <dd className="font-mono">{protection.sealed_results}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.idempotency.indeterminate")}</dt>
+              <dd className="font-mono">{protection.indeterminate_results}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.idempotency.pending")}</dt>
+              <dd className="font-mono">{protection.pending_results}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.idempotency.fleetReady")}</dt>
+              <dd>{protection.fleet_ready ? t("platform.idempotency.yes") : t("platform.idempotency.no")}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.idempotency.floor")}</dt>
+              <dd>{protection.sealed_only_floor ? t("platform.idempotency.installed") : t("platform.idempotency.notInstalled")}</dd>
+            </div>
+          </dl>
+          {!protection.failure ? (
+            <p className="rounded-control border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{t("platform.idempotency.recoveryHeading")}: </span>
+              {recoveryCopy[protection.state]}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 /** /admin/system — read-only posture disclosures plus the managed-offering
  * provisioning flow. Fetches only what this page renders. */
 export function AdminSystem() {
@@ -137,6 +252,9 @@ export function AdminSystem() {
   const [enterpriseSupport, setEnterpriseSupport] = useState<EnterpriseSupportStatus | null>(null);
   const [managedOffering, setManagedOffering] = useState<ManagedOfferingStatus | null>(null);
   const [scaleOrchestration, setScaleOrchestration] = useState<ScaleOrchestrationPlan | null>(null);
+  const [systemReadout, setSystemReadout] = useState<SystemReadout | null>(null);
+  const [protectionLoading, setProtectionLoading] = useState(true);
+  const [protectionError, setProtectionError] = useState<string | null>(null);
   const [lastManagedTenant, setLastManagedTenant] = useState<ManagedTenant | null>(null);
   const [systemBusy, setSystemBusy] = useState(false);
   const [systemError, setSystemError] = useState<string | null>(null);
@@ -162,6 +280,28 @@ export function AdminSystem() {
       })
       .catch((err) => {
         if (active) setSystemError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setProtectionLoading(true);
+    api
+      .platformSystem()
+      .then((readout) => {
+        if (!active) return;
+        setSystemReadout(readout);
+        setProtectionError(null);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setProtectionError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setProtectionLoading(false);
       });
     return () => {
       active = false;
@@ -214,6 +354,8 @@ export function AdminSystem() {
         </p>
       )}
       <div className="grid gap-6">
+        <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
+
         <div className="grid gap-4 lg:grid-cols-4">
           <section className="ui-panel p-comfortable" aria-labelledby="packaging-heading">
             <h2 id="packaging-heading" className="text-title font-semibold">

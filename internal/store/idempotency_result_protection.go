@@ -148,6 +148,37 @@ func (s *Store) IdempotencyResultProtectionStatus(
 	return status, err
 }
 
+// IdempotencyResultSealedFloorEnabled reports whether the fleet-wide database
+// ratchet is both installed and validated. It reads PostgreSQL catalog metadata
+// only; no tenant row or result bytes cross this system-level boundary.
+func (s *Store) IdempotencyResultSealedFloorEnabled(ctx context.Context) (bool, error) {
+	var enabled bool
+	err := s.pool.QueryRow(ctx,
+		//trstctl:system-query — cross-tenant PostgreSQL system-catalog metadata only; no tenant rows or result bytes are selected.
+		`SELECT
+		    EXISTS (
+		        SELECT 1
+		          FROM pg_constraint
+		         WHERE conrelid = 'idempotency_keys'::regclass
+		           AND conname = 'idempotency_keys_result_sealed_floor_chk'
+		           AND convalidated
+		    )
+		    AND EXISTS (
+		        SELECT 1
+		          FROM pg_attribute a
+		          JOIN pg_attrdef d
+		            ON d.adrelid = a.attrelid
+		           AND d.adnum = a.attnum
+		         WHERE a.attrelid = 'idempotency_keys'::regclass
+		           AND a.attname = 'result_codec'
+		           AND pg_get_expr(d.adbin, d.adrelid) = '''sealed-row-v1''::text'
+		    )`).Scan(&enabled)
+	if err != nil {
+		return false, fmt.Errorf("store: inspect sealed idempotency result floor: %w", err)
+	}
+	return enabled, nil
+}
+
 // EnforceSealedIdempotencyResultFloor installs the post-fleet-readiness write
 // ratchet. It takes an ACCESS EXCLUSIVE table lock, proves every completed row
 // is a CSL sealed-row-v1 container, then changes the default and validates a

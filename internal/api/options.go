@@ -74,6 +74,12 @@ func WithSystemReadout(fn SystemReadoutProvider) Option {
 	return func(c *config) { c.systemReadout = fn }
 }
 
+// WithIdempotencyResultProtection wires tenant-scoped counts and the global
+// sealed-only database ratchet into the existing Platform system readout.
+func WithIdempotencyResultProtection(fn IdempotencyResultProtectionProvider) Option {
+	return func(c *config) { c.idemProtection = fn }
+}
+
 // WithConnectorRegistry wires the native connector registry so the catalog can
 // report each connector's live sandbox grant and replay contract (B-6) instead
 // of a description that could drift from what the process enforces.

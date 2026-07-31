@@ -305,6 +305,7 @@ import type {
   ShareRequest,
   ShareToken,
   ShareValue,
+  SystemReadout,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
   SSHFleetInventory,
@@ -708,6 +709,7 @@ export type {
   ShareRequest,
   ShareToken,
   ShareValue,
+  SystemReadout,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
   SSHFleetInventory,
@@ -1145,6 +1147,7 @@ export interface Api {
   enterpriseSupportStatus(): Promise<EnterpriseSupportStatus>;
   managedOfferingStatus(): Promise<ManagedOfferingStatus>;
   scaleOrchestration(): Promise<ScaleOrchestrationPlan>;
+  platformSystem(): Promise<SystemReadout>;
   activeActiveIssuance(): Promise<ActiveActiveIssuancePlan>;
   provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
@@ -1442,6 +1445,7 @@ const liveApi: Api = {
   enterpriseSupportStatus: () => req<EnterpriseSupportStatus>("/api/v1/support/enterprise"),
   managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),
   scaleOrchestration: () => req<ScaleOrchestrationPlan>("/api/v1/scale/orchestration"),
+  platformSystem: () => req<SystemReadout>("/api/v1/platform/system"),
   activeActiveIssuance: () => req<ActiveActiveIssuancePlan>("/api/v1/scale/ha-issuance"),
   provisionManagedTenant: (input) => mutate<ManagedTenant>("POST", "/api/v1/managed-offering/tenants", input),
   certificatePage: (options) => {

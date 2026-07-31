@@ -2097,13 +2097,21 @@ func componentSchemas() map[string]*Schema {
 	systemDependency := object(map[string]*Schema{
 		"name": str(), "ready": {Type: "boolean"}, "error": str(),
 	}, "name", "ready")
+	idempotencyResultProtection := object(map[string]*Schema{
+		"state":       {Type: "string", Enum: []string{"unavailable", "empty", "ready_for_ratchet", "partial", "failed", "recovery_required", "complete"}},
+		"fleet_ready": {Type: "boolean"}, "sealed_only_floor": {Type: "boolean"},
+		"raw_v0_remaining": {Type: "integer"}, "legacy_dynamic_remaining": {Type: "integer"},
+		"sealed_results": {Type: "integer"}, "pending_results": {Type: "integer"},
+		"indeterminate_results": {Type: "integer"}, "failure": str(), "recovery": str(),
+	}, "state", "fleet_ready", "sealed_only_floor", "raw_v0_remaining", "legacy_dynamic_remaining", "sealed_results", "pending_results", "indeterminate_results", "recovery")
 	systemReadout := object(map[string]*Schema{
 		"version": str(), "commit": str(), "build_date": str(), "go_version": str(),
 		"started_at": timestamp(), "uptime_seconds": {Type: "integer"},
-		"signer_mode":        {Type: "string", Enum: []string{"child", "external", "none"}},
-		"fips_module_active": {Type: "boolean"},
-		"dependencies":       {Type: "array", Items: ref("SystemDependency")},
-	}, "version", "commit", "build_date", "go_version", "started_at", "uptime_seconds", "signer_mode", "fips_module_active", "dependencies")
+		"signer_mode":         {Type: "string", Enum: []string{"child", "external", "none"}},
+		"fips_module_active":  {Type: "boolean"},
+		"dependencies":        {Type: "array", Items: ref("SystemDependency")},
+		"idempotency_results": ref("IdempotencyResultProtectionReadout"),
+	}, "version", "commit", "build_date", "go_version", "started_at", "uptime_seconds", "signer_mode", "fips_module_active", "dependencies", "idempotency_results")
 	// B-1: bounded worker-pool pressure (AN-7) as served telemetry.
 	bulkheadPool := object(map[string]*Schema{
 		"name": str(), "workers": {Type: "integer"}, "capacity": {Type: "integer"},
@@ -3724,6 +3732,7 @@ func componentSchemas() map[string]*Schema {
 		"SSHFleetHost":                             sshFleetHost,
 		"SSHFleetInventory":                        sshFleetInventory,
 		"SystemDependency":                         systemDependency,
+		"IdempotencyResultProtectionReadout":       idempotencyResultProtection,
 		"SystemReadout":                            systemReadout,
 		"BulkheadPool":                             bulkheadPool,
 		"BulkheadStats":                            bulkheadStats,

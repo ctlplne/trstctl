@@ -24,6 +24,7 @@ const { apiMock } = vi.hoisted(() => ({
     enterpriseSupportStatus: vi.fn(),
     managedOfferingStatus: vi.fn(),
     scaleOrchestration: vi.fn(),
+    platformSystem: vi.fn(),
     activeActiveIssuance: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
@@ -274,6 +275,28 @@ describe("app shell accessibility and theme", () => {
       datastore: { postgres: "external HA PostgreSQL", jetstream: "external JetStream", rls: "tenant_id", outbox: "transactional outbox" },
       signer: { process_model: "separate signer process", transport: "gRPC over UDS", scaling: "scale signer separately" },
       projection_replay: { replay_floor_events_per_second: 500, max_lag_events: 50, rebuild_source: "append-only event log" },
+    });
+    apiMock.platformSystem.mockResolvedValue({
+      version: "test",
+      commit: "test",
+      build_date: "2026-07-31T00:00:00Z",
+      go_version: "go1.26",
+      started_at: "2026-07-31T00:00:00Z",
+      uptime_seconds: 1,
+      signer_mode: "child",
+      fips_module_active: false,
+      dependencies: [],
+      idempotency_results: {
+        state: "complete",
+        fleet_ready: true,
+        sealed_only_floor: true,
+        raw_v0_remaining: 0,
+        legacy_dynamic_remaining: 0,
+        sealed_results: 7,
+        pending_results: 0,
+        indeterminate_results: 0,
+        recovery: "no action",
+      },
     });
     apiMock.activeActiveIssuance.mockResolvedValue({
       capability: "CAP-SCALE-02",

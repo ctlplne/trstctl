@@ -5,10 +5,12 @@ package store_test
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -52,7 +54,15 @@ func TestIdempotencyResultMigrationIsRLSScopedResumableAndLeavesNoPlaintext(t *t
 		t.Fatalf("NewResultMigrator: %v", err)
 	}
 
-	rawCanary := []byte("api-token-canary-A")
+	rawCanaries := map[string][]byte{
+		"a-share":      []byte("share-value-token-canary-A"),
+		"b-api-token":  []byte("api-token-canary-A"),
+		"c-enrollment": []byte("enrollment-token-canary-A"),
+		"d-pki-key":    []byte("pki-private-key-canary-A"),
+		"e-pam-dsn":    []byte("postgres://pam-password-canary-A@db.internal"),
+		"f-ephemeral":  []byte("ephemeral-key-canary-A"),
+		"g-vault":      []byte("vault-pki-transit-output-canary-A"),
+	}
 	dynamicPlaintext := []byte("database-password-canary-A")
 	dynamicAAD := []byte("historical-dynamic-lease")
 	dynamicEnvelope, err := seal.Seal(deployment, dynamicPlaintext, dynamicAAD)
@@ -75,16 +85,25 @@ func TestIdempotencyResultMigrationIsRLSScopedResumableAndLeavesNoPlaintext(t *t
 			t.Fatalf("insert %s/%s: %v", tenantID, key, err)
 		}
 	}
-	insert(tenantA, "a-raw", "binding-a", orchestrator.ResultCodecRawV0, rawCanary)
-	insert(tenantA, "b-dynamic", "binding-b", orchestrator.ResultCodecSealedDynamicLeaseV1, dynamicEnvelope)
+	for key, canary := range rawCanaries {
+		insert(tenantA, key, "binding-"+key, orchestrator.ResultCodecRawV0, canary)
+	}
+	insert(tenantA, "h-dynamic", "binding-h-dynamic", orchestrator.ResultCodecSealedDynamicLeaseV1, dynamicEnvelope)
 	insert(tenantB, "a-raw", "binding-a", orchestrator.ResultCodecRawV0, tenantBCanary)
 
 	statusA, err := migrator.MigrateTenant(ctx, tenantA)
 	if err != nil {
 		t.Fatalf("MigrateTenant(A): %v", err)
 	}
-	if statusA.RemainingLegacy() != 0 || statusA.SealedRowV1 != 2 {
-		t.Fatalf("tenant A status = %+v, want 2 sealed and zero legacy", statusA)
+	if statusA.RemainingLegacy() != 0 || statusA.SealedRowV1 != int64(len(rawCanaries)+1) {
+		t.Fatalf("tenant A status = %+v, want %d sealed and zero legacy", statusA, len(rawCanaries)+1)
+	}
+	floorEnabled, err := s.IdempotencyResultSealedFloorEnabled(ctx)
+	if err != nil {
+		t.Fatalf("inspect floor before fleet migration: %v", err)
+	}
+	if floorEnabled {
+		t.Fatal("sealed-only floor enabled before fleet migration completed")
 	}
 	statusB, err := s.IdempotencyResultProtectionStatus(ctx, tenantB)
 	if err != nil {
@@ -119,33 +138,35 @@ func TestIdempotencyResultMigrationIsRLSScopedResumableAndLeavesNoPlaintext(t *t
 	if err := rows.Err(); err != nil {
 		t.Fatalf("read protected rows: %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("tenant A rows = %d, want 2", len(got))
+	if len(got) != len(rawCanaries)+1 {
+		t.Fatalf("tenant A rows = %d, want %d", len(got), len(rawCanaries)+1)
 	}
 	for _, row := range got {
 		defer secret.Wipe(row.result)
 		if row.codec != orchestrator.ResultCodecSealedRowV1 {
 			t.Fatalf("row %s codec = %q", row.key, row.codec)
 		}
-		if bytes.Contains(row.result, rawCanary) || bytes.Contains(row.result, dynamicPlaintext) {
-			t.Fatalf("row %s retains plaintext canary", row.key)
+		for _, canary := range rawCanaries {
+			if bytes.Contains(row.result, canary) {
+				t.Fatalf("row %s retains plaintext canary", row.key)
+			}
 		}
-	}
-	rawOpened, err := protector.Open(ctx, tenantA, got[0].key, got[0].binding, got[0].codec, got[0].result)
-	if err != nil {
-		t.Fatalf("open migrated raw row: %v", err)
-	}
-	defer secret.Wipe(rawOpened)
-	if !bytes.Equal(rawOpened, rawCanary) {
-		t.Fatalf("opened raw = %q", rawOpened)
-	}
-	dynamicOpened, err := protector.Open(ctx, tenantA, got[1].key, got[1].binding, got[1].codec, got[1].result)
-	if err != nil {
-		t.Fatalf("open migrated dynamic row: %v", err)
-	}
-	defer secret.Wipe(dynamicOpened)
-	if !bytes.Equal(dynamicOpened, dynamicEnvelope) {
-		t.Fatal("migrated dynamic row did not preserve its authenticated inner envelope")
+		if bytes.Contains(row.result, dynamicPlaintext) {
+			t.Fatalf("row %s retains dynamic plaintext canary", row.key)
+		}
+		opened, err := protector.Open(ctx, tenantA, row.key, row.binding, row.codec, row.result)
+		if err != nil {
+			t.Fatalf("open migrated row %s: %v", row.key, err)
+		}
+		want, raw := rawCanaries[row.key]
+		if !raw {
+			want = dynamicEnvelope
+		}
+		if !bytes.Equal(opened, want) {
+			secret.Wipe(opened)
+			t.Fatalf("opened row %s did not preserve its exact result", row.key)
+		}
+		secret.Wipe(opened)
 	}
 	if _, err := protector.Open(ctx, tenantB, got[0].key, got[0].binding, got[0].codec, got[0].result); err == nil {
 		t.Fatal("tenant B opened tenant A result copied across the RLS boundary")
@@ -158,12 +179,82 @@ func TestIdempotencyResultMigrationIsRLSScopedResumableAndLeavesNoPlaintext(t *t
 	if len(statuses) != 2 {
 		t.Fatalf("MigrateAll statuses = %d, want 2", len(statuses))
 	}
+	floorEnabled, err = s.IdempotencyResultSealedFloorEnabled(ctx)
+	if err != nil {
+		t.Fatalf("inspect floor after fleet migration: %v", err)
+	}
+	if !floorEnabled {
+		t.Fatal("sealed-only floor not reported after fleet migration")
+	}
 	statusB, err = s.IdempotencyResultProtectionStatus(ctx, tenantB)
 	if err != nil {
 		t.Fatalf("tenant B final status: %v", err)
 	}
 	if statusB.RemainingLegacy() != 0 || statusB.SealedRowV1 != 1 {
 		t.Fatalf("tenant B final status = %+v", statusB)
+	}
+
+	var artifact bytes.Buffer
+	if _, err := backup.WritePostgresState(ctx, s, &artifact); err != nil {
+		t.Fatalf("write PostgreSQL backup: %v", err)
+	}
+	for name, canary := range rawCanaries {
+		if bytes.Contains(artifact.Bytes(), canary) || bytes.Contains(artifact.Bytes(), []byte(hex.EncodeToString(canary))) {
+			t.Fatalf("PostgreSQL backup exposes %s plaintext canary", name)
+		}
+	}
+	if bytes.Contains(artifact.Bytes(), dynamicPlaintext) || bytes.Contains(artifact.Bytes(), []byte(hex.EncodeToString(dynamicPlaintext))) {
+		t.Fatal("PostgreSQL backup exposes historical dynamic-lease plaintext canary")
+	}
+	if _, err := backup.RestorePostgresState(ctx, s, bytes.NewReader(artifact.Bytes())); err != nil {
+		t.Fatalf("restore PostgreSQL backup: %v", err)
+	}
+	statusA, err = s.IdempotencyResultProtectionStatus(ctx, tenantA)
+	if err != nil {
+		t.Fatalf("tenant A status after restore: %v", err)
+	}
+	if statusA.RemainingLegacy() != 0 || statusA.SealedRowV1 != int64(len(rawCanaries)+1) {
+		t.Fatalf("tenant A restored status = %+v", statusA)
+	}
+	restoredRows, err := s.SystemPool().Query(ctx,
+		`SELECT key, request_binding, result_codec, result
+		   FROM idempotency_keys
+		  WHERE tenant_id = $1
+		  ORDER BY key`, tenantA)
+	if err != nil {
+		t.Fatalf("inspect restored tenant A rows: %v", err)
+	}
+	restoredCount := 0
+	for restoredRows.Next() {
+		var row protectedRow
+		if err := restoredRows.Scan(&row.key, &row.binding, &row.codec, &row.result); err != nil {
+			restoredRows.Close()
+			t.Fatalf("scan restored protected row: %v", err)
+		}
+		opened, err := protector.Open(ctx, tenantA, row.key, row.binding, row.codec, row.result)
+		secret.Wipe(row.result)
+		if err != nil {
+			restoredRows.Close()
+			t.Fatalf("open restored row %s: %v", row.key, err)
+		}
+		want, raw := rawCanaries[row.key]
+		if !raw {
+			want = dynamicEnvelope
+		}
+		if !bytes.Equal(opened, want) {
+			secret.Wipe(opened)
+			restoredRows.Close()
+			t.Fatalf("restored row %s did not preserve its exact result", row.key)
+		}
+		secret.Wipe(opened)
+		restoredCount++
+	}
+	restoredRows.Close()
+	if err := restoredRows.Err(); err != nil {
+		t.Fatalf("read restored protected rows: %v", err)
+	}
+	if restoredCount != len(rawCanaries)+1 {
+		t.Fatalf("restored tenant A rows = %d, want %d", restoredCount, len(rawCanaries)+1)
 	}
 
 	insertAfterFloor := func(key, codec string, result []byte, includeCodec bool) error {

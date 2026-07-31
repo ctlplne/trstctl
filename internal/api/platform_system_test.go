@@ -3,10 +3,13 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,6 +51,15 @@ func TestPlatformSystemReadoutReportsBuildAndDependencies(t *testing.T) {
 				},
 			}
 		}),
+		api.WithIdempotencyResultProtection(func(_ context.Context, tenantID string) (api.IdempotencyResultProtectionReadout, error) {
+			if tenantID != connectorTenantA {
+				t.Fatalf("provider tenant = %q, want authenticated tenant", tenantID)
+			}
+			return api.IdempotencyResultProtectionReadout{
+				State: "partial", RawV0Remaining: 2, SealedResults: 7,
+				Failure: "Legacy codecs remain.", Recovery: "Restart the upgraded node.",
+			}, nil
+		}),
 	)
 
 	code, body := getSystemReadout(t, handler, true)
@@ -73,6 +85,32 @@ func TestPlatformSystemReadoutReportsBuildAndDependencies(t *testing.T) {
 	// A healthy one must NOT carry an error string.
 	if body.Dependencies[0].Error != "" {
 		t.Fatalf("healthy dependency carried an error: %+v", body.Dependencies[0])
+	}
+	if body.IdempotencyResults.State != "partial" || body.IdempotencyResults.RawV0Remaining != 2 || body.IdempotencyResults.SealedResults != 7 {
+		t.Fatalf("idempotency result protection = %+v", body.IdempotencyResults)
+	}
+}
+
+func TestPlatformSystemReadoutSanitizesProtectionStatusFailure(t *testing.T) {
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithIdempotencyResultProtection(func(context.Context, string) (api.IdempotencyResultProtectionReadout, error) {
+			return api.IdempotencyResultProtectionReadout{}, errors.New("postgres://secret-user:secret-password@db.internal")
+		}),
+	)
+
+	_, body := getSystemReadout(t, handler, true)
+	if body.IdempotencyResults.State != "failed" {
+		t.Fatalf("protection state = %+v", body.IdempotencyResults)
+	}
+	encoded, err := json.Marshal(body.IdempotencyResults)
+	if err != nil {
+		t.Fatalf("marshal protection status: %v", err)
+	}
+	for _, secretValue := range []string{"secret-user", "secret-password", "db.internal"} {
+		if strings.Contains(string(encoded), secretValue) {
+			t.Fatalf("status leaked provider error: %s", encoded)
+		}
 	}
 }
 

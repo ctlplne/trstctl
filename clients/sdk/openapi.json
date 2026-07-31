@@ -7351,6 +7351,61 @@
         ],
         "type": "object"
       },
+      "IdempotencyResultProtectionReadout": {
+        "properties": {
+          "failure": {
+            "type": "string"
+          },
+          "fleet_ready": {
+            "type": "boolean"
+          },
+          "indeterminate_results": {
+            "type": "integer"
+          },
+          "legacy_dynamic_remaining": {
+            "type": "integer"
+          },
+          "pending_results": {
+            "type": "integer"
+          },
+          "raw_v0_remaining": {
+            "type": "integer"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "sealed_only_floor": {
+            "type": "boolean"
+          },
+          "sealed_results": {
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "unavailable",
+              "empty",
+              "ready_for_ratchet",
+              "partial",
+              "failed",
+              "recovery_required",
+              "complete"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "fleet_ready",
+          "sealed_only_floor",
+          "raw_v0_remaining",
+          "legacy_dynamic_remaining",
+          "sealed_results",
+          "pending_results",
+          "indeterminate_results",
+          "recovery"
+        ],
+        "type": "object"
+      },
       "Identity": {
         "properties": {
           "attributes": {
@@ -16984,6 +17039,9 @@
           "go_version": {
             "type": "string"
           },
+          "idempotency_results": {
+            "$ref": "#/components/schemas/IdempotencyResultProtectionReadout"
+          },
           "signer_mode": {
             "enum": [
               "child",
@@ -17012,7 +17070,8 @@
           "uptime_seconds",
           "signer_mode",
           "fips_module_active",
-          "dependencies"
+          "dependencies",
+          "idempotency_results"
         ],
         "type": "object"
       },

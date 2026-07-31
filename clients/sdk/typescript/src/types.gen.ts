@@ -6161,6 +6161,19 @@ export interface components {
             /** Format: uuid */
             tenant_id: string;
         };
+        IdempotencyResultProtectionReadout: {
+            failure?: string;
+            fleet_ready: boolean;
+            indeterminate_results: number;
+            legacy_dynamic_remaining: number;
+            pending_results: number;
+            raw_v0_remaining: number;
+            recovery: string;
+            sealed_only_floor: boolean;
+            sealed_results: number;
+            /** @enum {string} */
+            state: "unavailable" | "empty" | "ready_for_ratchet" | "partial" | "failed" | "recovery_required" | "complete";
+        };
         Identity: {
             attributes?: Record<string, never>;
             /** Format: date-time */
@@ -8729,6 +8742,7 @@ export interface components {
             dependencies: components["schemas"]["SystemDependency"][];
             fips_module_active: boolean;
             go_version: string;
+            idempotency_results: components["schemas"]["IdempotencyResultProtectionReadout"];
             /** @enum {string} */
             signer_mode: "child" | "external" | "none";
             /** Format: date-time */

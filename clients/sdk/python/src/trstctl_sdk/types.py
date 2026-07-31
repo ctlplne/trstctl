@@ -2737,6 +2737,23 @@ ITSMTicket = TypedDict(
     total=False,
 )
 
+IdempotencyResultProtectionReadout = TypedDict(
+    'IdempotencyResultProtectionReadout',
+    {
+        'failure': str,
+        'fleet_ready': bool,
+        'indeterminate_results': int,
+        'legacy_dynamic_remaining': int,
+        'pending_results': int,
+        'raw_v0_remaining': int,
+        'recovery': str,
+        'sealed_only_floor': bool,
+        'sealed_results': int,
+        'state': str,
+    },
+    total=False,
+)
+
 Identity = TypedDict(
     'Identity',
     {
@@ -6179,6 +6196,7 @@ SystemReadout = TypedDict(
         'dependencies': list[dict[str, Any]],
         'fips_module_active': bool,
         'go_version': str,
+        'idempotency_results': dict[str, Any],
         'signer_mode': str,
         'started_at': str,
         'uptime_seconds': int,

@@ -3810,6 +3810,43 @@ const deDECatalog = {
   "sshTrust.fleet.access": "Zugriff",
   "sshTrust.fleet.unknown": "unbekannt",
   "sshTrust.fleet.accessSummary": "{standing} dauerhaft · {orphaned} verwaist",
+  "platform.idempotency.heading": "Schutz von Idempotenz-Ergebnissen",
+  "platform.idempotency.description":
+    "Mandantenbezogene Zähler für zwischengespeicherte Mutationsergebnisse; Ergebnisbytes werden durch diese Statusabfrage nie offengelegt.",
+  "platform.idempotency.loading": "Ergebnisschutzstatus wird geladen.",
+  "platform.idempotency.requestFailed": "Ergebnisschutzstatus ist nicht verfügbar",
+  "platform.idempotency.requestRecovery": "Prüfen Sie PostgreSQL und den Mandanten-Siegel-Wrapper und laden Sie diese Seite erneut.",
+  "platform.idempotency.stateUnavailable": "Nicht verbunden",
+  "platform.idempotency.stateEmpty": "Keine gespeicherten Ergebnisse",
+  "platform.idempotency.stateReady": "Bereit für Flotten-Sperre",
+  "platform.idempotency.statePartial": "Migration unvollständig",
+  "platform.idempotency.stateFailed": "Schutz fehlgeschlagen",
+  "platform.idempotency.stateRecovery": "Abgleich erforderlich",
+  "platform.idempotency.stateComplete": "Nur versiegelte Werte erzwungen",
+  "platform.idempotency.recoveryUnavailable":
+    "Starten Sie das Standard-Control-Plane-Binary mit PostgreSQL und konfiguriertem mandantenbezogenem Ergebnisschutz.",
+  "platform.idempotency.recoveryRatchet":
+    "Wenn alle Control-Plane-Knoten aktualisiert sind, bestätigen Sie die Flottenbereitschaft, um die dauerhafte Nur-versiegelt-Datenbanksperre zu installieren.",
+  "platform.idempotency.recoveryPartial":
+    "Stoppen Sie alte Writer und starten Sie einen aktualisierten Knoten neu, um die Mandantenmigration fortzusetzen. Bestätigen Sie die Flottenbereitschaft noch nicht.",
+  "platform.idempotency.recoveryFailed":
+    "Lassen Sie Mutationen gesperrt, prüfen Sie den Startmigrationsfehler und starten Sie neu, sobald PostgreSQL die Nur-versiegelt-Sperre validieren kann.",
+  "platform.idempotency.recoveryIndeterminate":
+    "Gleichen Sie jeden unbestimmten Anspruch ab, bevor Sie seine Mutation wiederholen; stellen Sie nie blind neu aus oder rotieren Sie.",
+  "platform.idempotency.recoveryComplete": "Keine Aktion erforderlich; abgeschlossene Ergebnisse sind versiegelt und PostgreSQL lehnt alte Schreibformate ab.",
+  "platform.idempotency.empty": "Dieser Mandant hat noch keine zwischengespeicherten Mutationsergebnisse.",
+  "platform.idempotency.rawRemaining": "Verbleibende raw-v0",
+  "platform.idempotency.dynamicRemaining": "Alte dynamische Umschläge",
+  "platform.idempotency.sealed": "Versiegelte Ergebnisse",
+  "platform.idempotency.indeterminate": "Abgleich erforderlich",
+  "platform.idempotency.pending": "In Bearbeitung",
+  "platform.idempotency.fleetReady": "Flottenbereitschaft bestätigt",
+  "platform.idempotency.floor": "Datenbanksperre",
+  "platform.idempotency.yes": "Ja",
+  "platform.idempotency.no": "Nein",
+  "platform.idempotency.installed": "Installiert und validiert",
+  "platform.idempotency.notInstalled": "Nicht installiert",
+  "platform.idempotency.recoveryHeading": "Wiederherstellung",
   "source.plaintext.local.preview.no.private.cert.ke.e5059d6667":
     "Unverschlüsselte lokale Vorschau. In dieser Browseransicht werden keine Bytes privater Zertifikate oder Schlüssel offengelegt.",
 } satisfies Record<MessageKey, string>;

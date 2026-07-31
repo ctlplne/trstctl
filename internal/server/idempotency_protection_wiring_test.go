@@ -25,9 +25,11 @@ func TestProductionIdempotencyConstructorsAttachTenantResultProtector(t *testing
 	assertSourceContains(t, filepath.Join(serverDir, "server.go"),
 		"orchestrator.WithResultProtector(d.IdempotencyResultProtector)")
 	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
-		"IdempotencyResultProtector: resultProtector")
+		"IdempotencyResultProtector:  resultProtector")
 	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
-		"IdempotencyResultMigrator:  resultMigrator")
+		"IdempotencyResultMigrator:   resultMigrator")
+	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
+		"IdempotencyResultFleetReady: cfg.Secrets.IdempotencyResultFleetReady")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),
 		"idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek)")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),

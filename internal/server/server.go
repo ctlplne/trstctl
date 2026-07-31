@@ -404,8 +404,9 @@ type Deps struct {
 	// cached mutation response. Production Run always sets it before Build. Nil is
 	// retained only for narrow test/library compositions that do not claim the
 	// default-binary readiness contract.
-	IdempotencyResultProtector orchestrator.ResultProtector
-	IdempotencyResultMigrator  IdempotencyResultMigrator
+	IdempotencyResultProtector  orchestrator.ResultProtector
+	IdempotencyResultMigrator   IdempotencyResultMigrator
+	IdempotencyResultFleetReady bool
 	// SecretsAuthSecret is the HMAC key the served machine-login token method
 	// (authmethod.TokenMethod) verifies a workload token against (F58). It is []byte and
 	// never logged (AN-8). When empty, the login route reports the method is not
@@ -1109,6 +1110,11 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	*defaults = append(*defaults, api.WithSystemReadout(func() api.SystemReadout {
 		return s.systemReadout(context.Background())
 	}))
+	if d.Store != nil {
+		*defaults = append(*defaults, api.WithIdempotencyResultProtection(
+			idempotencyResultProtectionReadout(d.Store, d.IdempotencyResultFleetReady),
+		))
+	}
 	if s.plugins != nil {
 		*defaults = append(*defaults, api.WithACMEDNS01Providers(s.acmeDNS01PluginCatalog()...))
 	}

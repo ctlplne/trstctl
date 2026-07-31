@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"runtime"
 	"time"
@@ -34,6 +35,26 @@ type SystemDependency struct {
 // closure rather than its internals.
 type SystemReadoutProvider func() SystemReadout
 
+// IdempotencyResultProtectionProvider reads counts for the authenticated
+// tenant plus the fleet-wide codec ratchet. Result bytes never enter this seam.
+type IdempotencyResultProtectionProvider func(context.Context, string) (IdempotencyResultProtectionReadout, error)
+
+// IdempotencyResultProtectionReadout is the operator-facing custody posture for
+// cached mutation responses. Failure and recovery are deliberately bounded,
+// pre-written guidance: raw database errors can contain deployment details.
+type IdempotencyResultProtectionReadout struct {
+	State                  string `json:"state"`
+	FleetReady             bool   `json:"fleet_ready"`
+	SealedOnlyFloor        bool   `json:"sealed_only_floor"`
+	RawV0Remaining         int64  `json:"raw_v0_remaining"`
+	LegacyDynamicRemaining int64  `json:"legacy_dynamic_remaining"`
+	SealedResults          int64  `json:"sealed_results"`
+	PendingResults         int64  `json:"pending_results"`
+	IndeterminateResults   int64  `json:"indeterminate_results"`
+	Failure                string `json:"failure,omitempty"`
+	Recovery               string `json:"recovery"`
+}
+
 // SystemReadout is the served answer to "what is running, and is it healthy".
 type SystemReadout struct {
 	Version   string `json:"version"`
@@ -50,23 +71,42 @@ type SystemReadout struct {
 	SignerMode string `json:"signer_mode"`
 	// FIPSModuleActive reports whether the Go FIPS 140-3 module is routing
 	// crypto/* in this process (artifact-gated by `make fips-build`).
-	FIPSModuleActive bool               `json:"fips_module_active"`
-	Dependencies     []SystemDependency `json:"dependencies"`
+	FIPSModuleActive   bool                               `json:"fips_module_active"`
+	Dependencies       []SystemDependency                 `json:"dependencies"`
+	IdempotencyResults IdempotencyResultProtectionReadout `json:"idempotency_results"`
 }
 
 // getPlatformSystem returns the readout, or served=false shaped data when no
 // provider is wired — the same discipline as the bulkhead route: answer
 // truthfully rather than 404 on an assembly that does not carry it.
 func (a *API) getPlatformSystem(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.tenant(r); !ok {
+	tenantID, ok := a.tenant(r)
+	if !ok {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	protection := IdempotencyResultProtectionReadout{
+		State:    "unavailable",
+		Failure:  "Idempotency result protection status is not wired.",
+		Recovery: "Run the default control-plane binary with its PostgreSQL store and tenant result protector configured.",
+	}
+	if a.idemProtection != nil {
+		var err error
+		protection, err = a.idemProtection(r.Context(), tenantID)
+		if err != nil {
+			protection = IdempotencyResultProtectionReadout{
+				State:    "failed",
+				Failure:  "Idempotency result protection status could not be read.",
+				Recovery: "Check PostgreSQL readiness and the tenant seal wrapper, then retry this status read.",
+			}
+		}
+	}
 	if a.systemReadout == nil {
-		a.writeJSON(w, http.StatusOK, SystemReadout{GoVersion: runtime.Version(), Dependencies: []SystemDependency{}})
+		a.writeJSON(w, http.StatusOK, SystemReadout{GoVersion: runtime.Version(), Dependencies: []SystemDependency{}, IdempotencyResults: protection})
 		return
 	}
 	readout := a.systemReadout()
+	readout.IdempotencyResults = protection
 	if readout.GoVersion == "" {
 		readout.GoVersion = runtime.Version()
 	}

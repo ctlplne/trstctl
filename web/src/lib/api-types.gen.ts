@@ -1911,6 +1911,19 @@ export interface ITSMTicket {
   tenant_id: string;
 }
 
+export interface IdempotencyResultProtectionReadout {
+  failure?: string;
+  fleet_ready: boolean;
+  indeterminate_results: number;
+  legacy_dynamic_remaining: number;
+  pending_results: number;
+  raw_v0_remaining: number;
+  recovery: string;
+  sealed_only_floor: boolean;
+  sealed_results: number;
+  state: "unavailable" | "empty" | "ready_for_ratchet" | "partial" | "failed" | "recovery_required" | "complete";
+}
+
 export interface Identity {
   attributes?: Record<string, unknown>;
   created_at?: string;
@@ -4387,6 +4400,7 @@ export interface SystemReadout {
   dependencies: SystemDependency[];
   fips_module_active: boolean;
   go_version: string;
+  idempotency_results: IdempotencyResultProtectionReadout;
   signer_mode: "child" | "external" | "none";
   started_at: string;
   uptime_seconds: number;

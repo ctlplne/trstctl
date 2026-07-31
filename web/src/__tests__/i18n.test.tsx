@@ -286,8 +286,8 @@ describe("i18n boundary", () => {
       // states in both production catalogs.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "11fadeab3e6d1b5e9ebe6be64903a4fdab5352ab8274668d92cc404b46cc834d",
-      "de-DE": "6b5e8fd768a1035ce64b576cf23c1383db09eb5409bfdb7d3cca78fa171f4d6e",
+      "es-ES": "9727aefe950fe2c05ba27c26804a3bae162a3f8074e16f79e0457874015f6018",
+      "de-DE": "bfc25eb1f7c725c09b44cead42f5be4fae4b3828da5a57c95698e7f75bce0690",
     });
   });
 

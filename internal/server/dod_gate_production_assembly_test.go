@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,8 +12,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestDODGateProductionAssemblyCanary is the gate's always-run spine proof. It
@@ -23,9 +26,14 @@ import (
 func TestDODGateProductionAssemblyCanary(t *testing.T) {
 	ctx := context.Background()
 	st := newServerTestStore(t)
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: servedTestTenant, Name: "DoD tenant", EventSeq: 1}); err != nil {
+		t.Fatalf("seed DoD tenant: %v", err)
+	}
+	token := seedScopedToken(t, st, servedTestTenant, "access:read")
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek")
 	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
 	if err != nil {
 		t.Fatalf("load audit signing key before event-log recovery: %v", err)
@@ -49,7 +57,13 @@ func TestDODGateProductionAssemblyCanary(t *testing.T) {
 		_ = log.Close()
 		t.Fatalf("build egress guard: %v", err)
 	}
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), guard, auditKey)
+	secrets, err := loadRunSecrets(cfg)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("load production run secrets: %v", err)
+	}
+	t.Cleanup(secrets.Close)
+	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, secrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard, auditKey)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("production buildRunDeps: %v", err)
@@ -70,5 +84,20 @@ func TestDODGateProductionAssemblyCanary(t *testing.T) {
 	srv.Handler().ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("assembled GET /healthz = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/platform/system", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	recorder = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("assembled GET /api/v1/platform/system = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	var readout api.SystemReadout
+	if err := json.NewDecoder(recorder.Body).Decode(&readout); err != nil {
+		t.Fatalf("decode platform system readout: %v", err)
+	}
+	if readout.IdempotencyResults.State != "empty" || readout.IdempotencyResults.RawV0Remaining != 0 {
+		t.Fatalf("default-binary idempotency protection readout = %+v", readout.IdempotencyResults)
 	}
 }

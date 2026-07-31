@@ -219,6 +219,7 @@ public final class OpenApiSchemas {
       "GraphReachable",
       "GraphResponse",
       "ITSMTicket",
+      "IdempotencyResultProtectionReadout",
       "Identity",
       "IdentityConnectorTargetRequest",
       "IdentityList",

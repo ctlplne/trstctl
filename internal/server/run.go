@@ -424,9 +424,13 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("secrets machine auth: %w", err)
 	}
-	resultProtector, resultMigrator, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, sec.kek)
-	if err != nil {
-		return Deps{}, fmt.Errorf("tenant result protection: %w", err)
+	var resultProtector *tenantseal.ResultProtector
+	var resultMigrator *tenantseal.ResultMigrator
+	if st != nil {
+		resultProtector, resultMigrator, err = idempotencyResultProtectionFromConfig(cfg.Secrets, st, sec.kek)
+		if err != nil {
+			return Deps{}, fmt.Errorf("tenant result protection: %w", err)
+		}
 	}
 	breakglassCACertDER, breakglassPublicKeyDER, err := breakglassVerifierMaterialFromConfig(cfg.Breakglass)
 	if err != nil {
@@ -532,12 +536,13 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		Protocols:       protocols, Plugins: pluginCfg,
 		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, SCIM: cfg.Auth.SCIM,
 		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek,
-		IdempotencyResultProtector: resultProtector,
-		IdempotencyResultMigrator:  resultMigrator,
-		SecretsAuthSecret:          sec.authSecret,
-		MachineAuthMethods:         machineAuthMethods,
-		SecretScanGitleaksBin:      cfg.Secrets.GitleaksBin,
-		EnableAISurface:            cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
+		IdempotencyResultProtector:  resultProtector,
+		IdempotencyResultMigrator:   resultMigrator,
+		IdempotencyResultFleetReady: cfg.Secrets.IdempotencyResultFleetReady,
+		SecretsAuthSecret:           sec.authSecret,
+		MachineAuthMethods:          machineAuthMethods,
+		SecretScanGitleaksBin:       cfg.Secrets.GitleaksBin,
+		EnableAISurface:             cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
 		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr,
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),

@@ -110,6 +110,7 @@ type API struct {
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
 	bulkheadStats             func() []bulkhead.Stats
 	systemReadout             SystemReadoutProvider
+	idemProtection            IdempotencyResultProtectionProvider
 	connectorRegistry         *connector.Registry
 	sshFleet                  SSHFleetProvider
 	codeSigningIdentities     CodeSigningIdentityProvider
@@ -187,6 +188,7 @@ type config struct {
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
 	bulkheadStats             func() []bulkhead.Stats
 	systemReadout             SystemReadoutProvider
+	idemProtection            IdempotencyResultProtectionProvider
 	connectorRegistry         *connector.Registry
 	sshFleet                  SSHFleetProvider
 	codeSigningIdentities     CodeSigningIdentityProvider
@@ -440,6 +442,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		outboxCircuits:            cfg.outboxCircuits,
 		bulkheadStats:             cfg.bulkheadStats,
 		systemReadout:             cfg.systemReadout,
+		idemProtection:            cfg.idemProtection,
 		connectorRegistry:         cfg.connectorRegistry,
 		sshFleet:                  cfg.sshFleet,
 		codeSigningIdentities:     cfg.codeSigningIdentities,
