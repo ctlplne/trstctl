@@ -283,6 +283,12 @@ func (d *issuanceDispatcher) DeliverTerminalFailure(ctx context.Context, m orche
 	if m.Destination == orchestrator.DestinationConnectorRightSize {
 		return d.failConnectorRightSizeTerminal(ctx, m)
 	}
+	if d.tenantKeyDomains != nil {
+		handled, err := d.tenantKeyDomains.DeliverTerminalFailure(ctx, m, cause)
+		if handled || err != nil {
+			return err
+		}
+	}
 	if d.codeSign != nil {
 		handled, err := d.codeSign.DeliverTerminalFailure(ctx, m, cause)
 		if handled || err != nil {

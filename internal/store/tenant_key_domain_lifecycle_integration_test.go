@@ -184,13 +184,33 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 		t.Fatal(err)
 	}
 
+	exhaustedState, err := lifecycle.RequestSeal(
+		ctx, tenantA, "tenant-a-seal-exhausted", strings.Repeat("a", 64),
+	)
+	if err != nil || exhaustedState.State != store.TenantKeyDomainStateSealQueued ||
+		exhaustedState.OperationID == nil {
+		t.Fatalf("RequestSeal exhausted fixture state=%+v err=%v", exhaustedState, err)
+	}
+	failedState, err := lifecycle.FailSeal(ctx, tenantA, *exhaustedState.OperationID)
+	if err != nil || failedState.State != store.TenantKeyDomainStatePartial ||
+		failedState.OperationStatus != store.TenantKeyOperationFailed ||
+		!failedState.Retryable || failedState.LastErrorCode != "seal_delivery_exhausted" {
+		t.Fatalf("FailSeal state=%+v err=%v", failedState, err)
+	}
+	if err := access.WithTenant(ctx, tenantA, func(cipher tenantseal.Cipher) error {
+		_, err := cipher.Open(migratedA, aadA)
+		return err
+	}); err != nil {
+		t.Fatalf("tenant A crypto stopped after a seal that never committed: %v", err)
+	}
+
 	queuedState, err := lifecycle.RequestSeal(
-		ctx, tenantA, "tenant-a-seal-request", strings.Repeat("b", 64),
+		ctx, tenantA, "tenant-a-seal-retry", strings.Repeat("b", 64),
 	)
 	if err != nil || queuedState.State != store.TenantKeyDomainStateSealQueued ||
 		queuedState.OperationStatus != store.TenantKeyOperationPending ||
-		queuedState.OperationID == nil {
-		t.Fatalf("RequestSeal state=%+v err=%v", queuedState, err)
+		queuedState.OperationID == nil || *queuedState.OperationID == *exhaustedState.OperationID {
+		t.Fatalf("RequestSeal retry state=%+v err=%v", queuedState, err)
 	}
 	// A queued request is not a pretend seal. Existing work stays available until
 	// the result-cache wall is complete and the bounded worker owns the exclusive

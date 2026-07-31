@@ -137,6 +137,7 @@ const (
 	EventTenantKeyDomainMigrationCompleted        = "tenant.key_domain.migration_completed"
 	EventTenantKeyDomainMigrationFailed           = "tenant.key_domain.migration_failed"
 	EventTenantKeyDomainSealRequested             = "tenant.key_domain.seal_requested"
+	EventTenantKeyDomainSealFailed                = "tenant.key_domain.seal_failed"
 	EventTenantKeyDomainSealed                    = "tenant.key_domain.sealed"
 	EventTenantKeyDomainUnsealRequested           = "tenant.key_domain.unseal_requested"
 	EventTenantKeyDomainUnsealed                  = "tenant.key_domain.unsealed"
@@ -1678,6 +1679,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantKeyDomainMigrationCompleted:        {1: true},
 	EventTenantKeyDomainMigrationFailed:           {1: true},
 	EventTenantKeyDomainSealRequested:             {1: true},
+	EventTenantKeyDomainSealFailed:                {1: true},
 	EventTenantKeyDomainSealed:                    {1: true},
 	EventTenantKeyDomainUnsealRequested:           {1: true},
 	EventTenantKeyDomainUnsealed:                  {1: true},
@@ -3000,6 +3002,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		EventTenantKeyDomainMigrationCompleted,
 		EventTenantKeyDomainMigrationFailed,
 		EventTenantKeyDomainSealRequested,
+		EventTenantKeyDomainSealFailed,
 		EventTenantKeyDomainSealed,
 		EventTenantKeyDomainUnsealRequested,
 		EventTenantKeyDomainUnsealed:
@@ -3289,6 +3292,16 @@ func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapsho
 			strings.TrimSpace(pl.SealIdempotencyKey) == "" ||
 			strings.TrimSpace(pl.SealRequestBinding) == "" {
 			return fmt.Errorf("projections: %s must carry a queued seal operation with its idempotency key and request binding", eventType)
+		}
+	case EventTenantKeyDomainSealFailed:
+		validRestoredState := (pl.State == store.TenantKeyDomainStateUnsealed &&
+			pl.LegacyHistoryExposure == store.TenantKeyLegacyNone) ||
+			(pl.State == store.TenantKeyDomainStatePartial &&
+				pl.LegacyHistoryExposure == store.TenantKeyLegacyExternalArchivesPossible)
+		if !validRestoredState || pl.OperationKind != store.TenantKeyOperationSeal ||
+			pl.OperationStatus != store.TenantKeyOperationFailed || !pl.Retryable ||
+			strings.TrimSpace(pl.LastErrorCode) == "" || strings.TrimSpace(pl.LastError) == "" {
+			return fmt.Errorf("projections: %s must restore an available tenant-only state with a visible retryable seal failure", eventType)
 		}
 	case EventTenantKeyDomainSealed:
 		if pl.State != store.TenantKeyDomainStateSealed ||

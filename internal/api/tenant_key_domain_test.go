@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,6 +61,10 @@ func (f *fakeTenantKeyDomainLifecycle) CompleteSeal(context.Context, string, str
 	return store.TenantKeyDomain{}, errors.New("CompleteSeal belongs to the bounded worker")
 }
 
+func (f *fakeTenantKeyDomainLifecycle) FailSeal(context.Context, string, string) (store.TenantKeyDomain, error) {
+	return store.TenantKeyDomain{}, errors.New("FailSeal belongs to the bounded worker")
+}
+
 func (f *fakeTenantKeyDomainLifecycle) Unseal(_ context.Context, tenantID string) (store.TenantKeyDomain, error) {
 	f.unsealCalls++
 	f.tenantIDs = append(f.tenantIDs, tenantID)
@@ -96,6 +101,33 @@ func TestTenantKeyDomainStatusReportsLegacyAndSanitizesFailures(t *testing.T) {
 		if bytes.Contains(rec.Body.Bytes(), []byte(secretValue)) {
 			t.Fatalf("status leaked provider error: %s", rec.Body.String())
 		}
+	}
+}
+
+func TestTenantKeyDomainStatusExplainsFailedSealRetryIdentity(t *testing.T) {
+	service := &fakeTenantKeyDomainLifecycle{domain: store.TenantKeyDomain{
+		TenantID: connectorTenantA, ProtectionMode: store.TenantKeyProtectionTenantDomain,
+		State: store.TenantKeyDomainStatePartial, OperationKind: store.TenantKeyOperationSeal,
+		OperationStatus: store.TenantKeyOperationFailed, Retryable: true,
+		LastErrorCode: "seal_delivery_exhausted",
+		LastError:     "tenant seal worker exhausted its retry budget before the seal committed",
+	}}
+	handler := api.New(nil, orchestrator.NewMemoryIdempotency(), nil,
+		api.WithInsecureHeaderResolver(), api.WithTenantKeyDomainLifecycle(service))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, tenantDomainRequest(
+		http.MethodGet, "/api/v1/platform/tenant-key-domain", nil, "",
+	))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var status api.TenantKeyDomainStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(status.Recovery, "new Idempotency-Key") ||
+		!strings.Contains(status.Recovery, "crypto remains available") {
+		t.Fatalf("failed seal recovery = %q", status.Recovery)
 	}
 }
 

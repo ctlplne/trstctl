@@ -466,6 +466,36 @@ func TestAccessAllowsOnlyExplicitUsablePostures(t *testing.T) {
 			usable: true,
 		},
 		{
+			name: "partial tenant-only domain after seal failed",
+			change: func(domain *store.TenantKeyDomain) {
+				domain.State = store.TenantKeyDomainStatePartial
+				domain.OperationKind = store.TenantKeyOperationSeal
+				domain.OperationStatus = store.TenantKeyOperationFailed
+				domain.Retryable = true
+				domain.LegacyHistoryExposure = store.TenantKeyLegacyExternalArchivesPossible
+			},
+			usable: true,
+		},
+		{
+			name: "unsealed tenant-only domain after seal failed",
+			change: func(domain *store.TenantKeyDomain) {
+				domain.OperationKind = store.TenantKeyOperationSeal
+				domain.OperationStatus = store.TenantKeyOperationFailed
+				domain.Retryable = true
+			},
+			usable: true,
+		},
+		{
+			name: "seal failure without retryable proof",
+			change: func(domain *store.TenantKeyDomain) {
+				domain.State = store.TenantKeyDomainStatePartial
+				domain.OperationKind = store.TenantKeyOperationSeal
+				domain.OperationStatus = store.TenantKeyOperationFailed
+				domain.LegacyHistoryExposure = store.TenantKeyLegacyExternalArchivesPossible
+			},
+			want: tenantseal.StatusPartial,
+		},
+		{
 			name: "migrating",
 			change: func(domain *store.TenantKeyDomain) {
 				domain.State = store.TenantKeyDomainStateMigrating

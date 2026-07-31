@@ -184,6 +184,29 @@ func TestTenantKeyDomainSealRequestProjectsDurableOutboxAndRepairsReplay(t *test
 		t.Fatalf("replay seal request: %v", err)
 	}
 	assertTenantKeyDomainSealOutbox(t, s, tenantA, operationID, queued.SealIdempotencyKey, queued.SealRequestBinding)
+
+	failed := queued
+	failed.State = store.TenantKeyDomainStatePartial
+	failed.OperationStatus = store.TenantKeyOperationFailed
+	failed.Retryable = true
+	failed.LastErrorCode = "seal_delivery_exhausted"
+	failed.LastError = "tenant seal worker exhausted its retry budget before the seal committed"
+	failed.SealIdempotencyKey = ""
+	failed.SealRequestBinding = ""
+	if err := p.Apply(ctx, tenantKeyDomainEvent(
+		t, projections.EventTenantKeyDomainSealFailed, 12, failed,
+	)); err != nil {
+		t.Fatalf("apply terminal seal failure: %v", err)
+	}
+	got, err := s.GetTenantKeyDomain(ctx, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.State != store.TenantKeyDomainStatePartial ||
+		got.OperationStatus != store.TenantKeyOperationFailed || !got.Retryable ||
+		got.LastErrorCode != "seal_delivery_exhausted" {
+		t.Fatalf("projected seal failure = %+v", got)
+	}
 }
 
 func assertTenantKeyDomainSealOutbox(
@@ -220,7 +243,7 @@ func assertTenantKeyDomainSealOutbox(
 	}
 }
 
-// TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract pins the eight
+// TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract pins the nine
 // immutable names and the one deterministic payload shape. Each event is accepted
 // by schema validation and projects the exact full snapshot it carries.
 func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T) {
@@ -230,6 +253,7 @@ func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T)
 		projections.EventTenantKeyDomainMigrationCompleted,
 		projections.EventTenantKeyDomainMigrationFailed,
 		projections.EventTenantKeyDomainSealRequested,
+		projections.EventTenantKeyDomainSealFailed,
 		projections.EventTenantKeyDomainSealed,
 		projections.EventTenantKeyDomainUnsealRequested,
 		projections.EventTenantKeyDomainUnsealed,
@@ -240,6 +264,7 @@ func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T)
 		store.TenantKeyDomainStatePartial,
 		store.TenantKeyDomainStateWrapperUnavailable,
 		store.TenantKeyDomainStateSealQueued,
+		store.TenantKeyDomainStatePartial,
 		store.TenantKeyDomainStateSealed,
 		store.TenantKeyDomainStateUnsealing,
 		store.TenantKeyDomainStateUnsealed,
@@ -258,9 +283,17 @@ func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T)
 					store.TenantKeyOperationRunning,
 					0,
 				)
+				startType := projections.EventTenantKeyDomainMigrationStarted
+				if typ == projections.EventTenantKeyDomainSealFailed {
+					startType = projections.EventTenantKeyDomainMigrationCompleted
+					start.State = store.TenantKeyDomainStatePartial
+					start.OperationStatus = store.TenantKeyOperationCompleted
+					start.ProgressCompleted = start.ProgressTotal
+					start.LegacyHistoryExposure = store.TenantKeyLegacyExternalArchivesPossible
+				}
 				if err := p.Apply(ctx, tenantKeyDomainEvent(
 					t,
-					projections.EventTenantKeyDomainMigrationStarted,
+					startType,
 					1,
 					start,
 				)); err != nil {
@@ -271,7 +304,7 @@ func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T)
 			snapshot.OperationKind = []string{
 				store.TenantKeyOperationMigrate, store.TenantKeyOperationMigrate,
 				store.TenantKeyOperationMigrate, store.TenantKeyOperationMigrate,
-				store.TenantKeyOperationSeal, store.TenantKeyOperationSeal,
+				store.TenantKeyOperationSeal, store.TenantKeyOperationSeal, store.TenantKeyOperationSeal,
 				store.TenantKeyOperationUnseal, store.TenantKeyOperationUnseal,
 			}[i]
 			if typ == projections.EventTenantKeyDomainMigrationCompleted ||
@@ -287,6 +320,13 @@ func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T)
 				snapshot.OperationStatus = store.TenantKeyOperationFailed
 				snapshot.LastErrorCode = "wrapper_unavailable"
 				snapshot.LastError = "configured tenant wrapper is unavailable"
+			}
+			if typ == projections.EventTenantKeyDomainSealFailed {
+				snapshot.OperationStatus = store.TenantKeyOperationFailed
+				snapshot.ProgressCompleted = snapshot.ProgressTotal
+				snapshot.LegacyHistoryExposure = store.TenantKeyLegacyExternalArchivesPossible
+				snapshot.LastErrorCode = "seal_delivery_exhausted"
+				snapshot.LastError = "tenant seal worker exhausted its retry budget"
 			}
 			if typ == projections.EventTenantKeyDomainSealRequested {
 				snapshot.OperationStatus = store.TenantKeyOperationPending
@@ -485,6 +525,7 @@ func TestTenantKeyDomainProjectionCannotEraseLegacyExposureOnLaterTransitions(t 
 		{projections.EventTenantKeyDomainMigrationProgressed, store.TenantKeyDomainStatePartial, store.TenantKeyOperationMigrate, store.TenantKeyOperationRunning},
 		{projections.EventTenantKeyDomainMigrationFailed, store.TenantKeyDomainStatePartial, store.TenantKeyOperationMigrate, store.TenantKeyOperationFailed},
 		{projections.EventTenantKeyDomainSealRequested, store.TenantKeyDomainStateSealQueued, store.TenantKeyOperationSeal, store.TenantKeyOperationPending},
+		{projections.EventTenantKeyDomainSealFailed, store.TenantKeyDomainStatePartial, store.TenantKeyOperationSeal, store.TenantKeyOperationFailed},
 		{projections.EventTenantKeyDomainSealed, store.TenantKeyDomainStateSealed, store.TenantKeyOperationSeal, store.TenantKeyOperationCompleted},
 		{projections.EventTenantKeyDomainUnsealRequested, store.TenantKeyDomainStateUnsealing, store.TenantKeyOperationUnseal, store.TenantKeyOperationRunning},
 		{projections.EventTenantKeyDomainUnsealed, store.TenantKeyDomainStateUnsealed, store.TenantKeyOperationUnseal, store.TenantKeyOperationCompleted},
@@ -521,6 +562,12 @@ func TestTenantKeyDomainProjectionCannotEraseLegacyExposureOnLaterTransitions(t 
 			if test.typ == projections.EventTenantKeyDomainMigrationFailed {
 				next.LastErrorCode = "wrapper_unavailable"
 				next.LastError = "configured tenant wrapper is unavailable"
+			}
+			if test.typ == projections.EventTenantKeyDomainSealFailed {
+				next.Retryable = true
+				next.ProgressCompleted = next.ProgressTotal
+				next.LastErrorCode = "seal_delivery_exhausted"
+				next.LastError = "tenant seal worker exhausted its retry budget"
 			}
 			err := p.Apply(ctx, tenantKeyDomainEvent(t, test.typ, 11, next))
 			if err == nil || !strings.Contains(err.Error(), "cannot reduce legacy-history exposure") {

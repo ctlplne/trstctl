@@ -14,9 +14,25 @@ import (
 )
 
 type recordingTenantSealCompleter struct {
-	calls       int
-	tenantID    string
-	operationID string
+	calls              int
+	failureCalls       int
+	tenantID           string
+	operationID        string
+	failureTenantID    string
+	failureOperationID string
+}
+
+func (r *recordingTenantSealCompleter) FailSeal(
+	_ context.Context,
+	tenantID, operationID string,
+) (store.TenantKeyDomain, error) {
+	r.failureCalls++
+	r.failureTenantID = tenantID
+	r.failureOperationID = operationID
+	return store.TenantKeyDomain{
+		TenantID: tenantID, State: store.TenantKeyDomainStatePartial,
+		OperationStatus: store.TenantKeyOperationFailed,
+	}, nil
 }
 
 func (r *recordingTenantSealCompleter) CompleteSeal(
@@ -27,6 +43,37 @@ func (r *recordingTenantSealCompleter) CompleteSeal(
 	r.tenantID = tenantID
 	r.operationID = operationID
 	return store.TenantKeyDomain{TenantID: tenantID, State: store.TenantKeyDomainStateSealed}, nil
+}
+
+func TestTenantKeyDomainSealOutboxRecordsClosedTerminalFailure(t *testing.T) {
+	tenantID := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	operationID, err := tenantseal.SealOperationID(
+		tenantID, "tenant-seal-terminal", "sha256:tenant-seal-terminal",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := store.TenantKeyDomainSealCommand{
+		OperationID: operationID, IdempotencyKey: "tenant-seal-terminal",
+		RequestBinding: "sha256:tenant-seal-terminal",
+	}
+	payload, err := json.Marshal(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := orchestrator.Message{
+		TenantID: tenantID, Destination: store.TenantKeyDomainSealDestination,
+		IdempotencyKey: store.TenantKeyDomainSealOutboxKey(operationID), Payload: payload,
+	}
+	completer := &recordingTenantSealCompleter{}
+	dispatcher := &tenantKeyDomainSealOutboxDispatcher{lifecycle: completer}
+	handled, err := dispatcher.DeliverTerminalFailure(
+		context.Background(), message, errors.New("secret-bearing upstream text"),
+	)
+	if !handled || err != nil || completer.failureCalls != 1 ||
+		completer.failureTenantID != tenantID || completer.failureOperationID != operationID {
+		t.Fatalf("terminal delivery = handled %v err %v completer %+v", handled, err, completer)
+	}
 }
 
 func TestTenantKeyDomainSealOutboxWaitsForCompletedIdempotencyResult(t *testing.T) {

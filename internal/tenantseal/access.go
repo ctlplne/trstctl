@@ -240,9 +240,11 @@ func resolveDomainAccessMode(tenantID string, domain store.TenantKeyDomain) (dom
 		validCompletedOperation := domain.OperationStatus == store.TenantKeyOperationCompleted &&
 			(domain.OperationKind == store.TenantKeyOperationMigrate ||
 				domain.OperationKind == store.TenantKeyOperationUnseal)
+		failedSeal := domain.OperationKind == store.TenantKeyOperationSeal &&
+			domain.OperationStatus == store.TenantKeyOperationFailed && domain.Retryable
 		validExposure := domain.LegacyHistoryExposure == store.TenantKeyLegacyNone ||
 			domain.LegacyHistoryExposure == store.TenantKeyLegacyExternalArchivesPossible
-		if !validCompletedOperation || !validExposure {
+		if (!validCompletedOperation && !failedSeal) || !validExposure {
 			return domainAccessDenied, StatusCorrupt
 		}
 		return domainAccessTenantOnly, ""
@@ -256,6 +258,13 @@ func resolveDomainAccessMode(tenantID string, domain store.TenantKeyDomain) (dom
 			domain.ProgressCompleted == domain.ProgressTotal &&
 			domain.LegacyHistoryExposure == store.TenantKeyLegacyExternalArchivesPossible
 		if completedHotMigration {
+			return domainAccessTenantOnly, ""
+		}
+		failedSeal := domain.OperationKind == store.TenantKeyOperationSeal &&
+			domain.OperationStatus == store.TenantKeyOperationFailed && domain.Retryable &&
+			validProgress && domain.ProgressCompleted == domain.ProgressTotal &&
+			domain.LegacyHistoryExposure == store.TenantKeyLegacyExternalArchivesPossible
+		if failedSeal {
 			return domainAccessTenantOnly, ""
 		}
 		retryableMigration := domain.OperationKind == store.TenantKeyOperationMigrate &&

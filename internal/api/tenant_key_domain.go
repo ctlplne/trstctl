@@ -27,6 +27,7 @@ type TenantKeyDomainLifecycle interface {
 	Migrate(context.Context, string, tenantseal.WrapperRef) (store.TenantKeyDomain, error)
 	RequestSeal(context.Context, string, string, string) (store.TenantKeyDomain, error)
 	CompleteSeal(context.Context, string, string) (store.TenantKeyDomain, error)
+	FailSeal(context.Context, string, string) (store.TenantKeyDomain, error)
 	Unseal(context.Context, string) (store.TenantKeyDomain, error)
 }
 
@@ -317,6 +318,10 @@ func legacyTenantKeyDomainStatus() TenantKeyDomainStatus {
 }
 
 func tenantKeyDomainRecovery(domain store.TenantKeyDomain) string {
+	if domain.OperationKind == store.TenantKeyOperationSeal &&
+		domain.OperationStatus == store.TenantKeyOperationFailed {
+		return "The seal did not commit and tenant crypto remains available. Fix the worker failure, then retry with a new Idempotency-Key; the exhausted key continues replaying its original accepted receipt."
+	}
 	switch domain.State {
 	case store.TenantKeyDomainStateMigrating:
 		return "Migration is resumable. Retry with the same wrapper kind and ID after the current operation stops progressing."

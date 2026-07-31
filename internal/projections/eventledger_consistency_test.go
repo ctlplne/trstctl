@@ -102,6 +102,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventTenantKeyDomainMigrationCompleted:        "EventTenantKeyDomainMigrationCompleted",
 	projections.EventTenantKeyDomainMigrationFailed:           "EventTenantKeyDomainMigrationFailed",
 	projections.EventTenantKeyDomainSealRequested:             "EventTenantKeyDomainSealRequested",
+	projections.EventTenantKeyDomainSealFailed:                "EventTenantKeyDomainSealFailed",
 	projections.EventTenantKeyDomainSealed:                    "EventTenantKeyDomainSealed",
 	projections.EventTenantKeyDomainUnsealRequested:           "EventTenantKeyDomainUnsealRequested",
 	projections.EventTenantKeyDomainUnsealed:                  "EventTenantKeyDomainUnsealed",

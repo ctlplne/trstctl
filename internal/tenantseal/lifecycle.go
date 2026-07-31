@@ -217,8 +217,7 @@ func (l *Lifecycle) RequestSeal(
 			}
 			out = domain
 			return nil
-		case domain.State != store.TenantKeyDomainStatePartial &&
-			domain.State != store.TenantKeyDomainStateUnsealed:
+		case !tenantKeyDomainCanQueueSeal(tenantID, domain):
 			return ErrLifecycleConflict
 		}
 
@@ -256,6 +255,11 @@ func (l *Lifecycle) RequestSeal(
 		return store.TenantKeyDomain{}, err
 	}
 	return out, nil
+}
+
+func tenantKeyDomainCanQueueSeal(tenantID string, domain store.TenantKeyDomain) bool {
+	mode, _ := resolveDomainAccessMode(tenantID, domain)
+	return mode == domainAccessTenantOnly
 }
 
 // CompleteSeal is the bounded worker's idempotent receiver. Its caller has
@@ -304,6 +308,74 @@ func (l *Lifecycle) CompleteSeal(
 		}
 		if err := l.appendSnapshotTx(
 			ctx, tx, tenantID, projections.EventTenantKeyDomainSealed, domain,
+		); err != nil {
+			return err
+		}
+		out = domain
+		return nil
+	})
+	if err != nil {
+		return store.TenantKeyDomain{}, err
+	}
+	return out, nil
+}
+
+// FailSeal is the terminal bounded-worker receiver. The seal never committed,
+// so crypto remains available in the exact tenant-only posture that existed
+// before queueing. The failure is an immutable, public-safe fact; a new
+// Idempotency-Key creates a new operation while the exhausted key keeps replaying
+// its original accepted receipt.
+func (l *Lifecycle) FailSeal(
+	ctx context.Context,
+	tenantID, operationID string,
+) (store.TenantKeyDomain, error) {
+	if l == nil || l.store == nil || l.log == nil || l.projector == nil ||
+		strings.TrimSpace(tenantID) == "" || strings.TrimSpace(operationID) == "" {
+		return store.TenantKeyDomain{}, ErrLifecycleNotConfigured
+	}
+	var out store.TenantKeyDomain
+	err := l.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := l.store.LockTenantKeyDomainExclusiveTx(ctx, tx, tenantID); err != nil {
+			return err
+		}
+		domain, err := l.store.GetTenantKeyDomainTx(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		matches := domain.OperationID != nil && *domain.OperationID == operationID &&
+			domain.OperationKind == store.TenantKeyOperationSeal
+		if matches && domain.OperationStatus == store.TenantKeyOperationCompleted &&
+			domain.State == store.TenantKeyDomainStateSealed {
+			out = domain
+			return nil
+		}
+		if matches && domain.OperationStatus == store.TenantKeyOperationFailed &&
+			tenantKeyDomainCanQueueSeal(tenantID, domain) {
+			out = domain
+			return nil
+		}
+		if !matches || domain.State != store.TenantKeyDomainStateSealQueued ||
+			domain.OperationStatus != store.TenantKeyOperationPending {
+			return ErrLifecycleConflict
+		}
+		switch domain.LegacyHistoryExposure {
+		case store.TenantKeyLegacyNone:
+			domain.State = store.TenantKeyDomainStateUnsealed
+		case store.TenantKeyLegacyExternalArchivesPossible:
+			domain.State = store.TenantKeyDomainStatePartial
+		default:
+			return ErrLifecycleConflict
+		}
+		domain.OperationStatus = store.TenantKeyOperationFailed
+		domain.Retryable = true
+		domain.LastErrorCode = "seal_delivery_exhausted"
+		domain.LastError = "tenant seal worker exhausted its retry budget before the seal committed"
+		domain.LastTransitionEvidenceRefs = []string{
+			"tenant-domain://seal-worker-retry-budget-exhausted",
+			"tenant-domain://crypto-remains-available",
+		}
+		if err := l.appendSnapshotTx(
+			ctx, tx, tenantID, projections.EventTenantKeyDomainSealFailed, domain,
 		); err != nil {
 			return err
 		}

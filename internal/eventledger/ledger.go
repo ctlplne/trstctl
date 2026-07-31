@@ -123,6 +123,7 @@ const (
 	EventTenantKeyDomainMigrationCompleted        = "tenant.key_domain.migration_completed"
 	EventTenantKeyDomainMigrationFailed           = "tenant.key_domain.migration_failed"
 	EventTenantKeyDomainSealRequested             = "tenant.key_domain.seal_requested"
+	EventTenantKeyDomainSealFailed                = "tenant.key_domain.seal_failed"
 	EventTenantKeyDomainSealed                    = "tenant.key_domain.sealed"
 	EventTenantKeyDomainUnsealRequested           = "tenant.key_domain.unseal_requested"
 	EventTenantKeyDomainUnsealed                  = "tenant.key_domain.unsealed"
@@ -260,7 +261,7 @@ var ledger = []FeatureEvent{
 
 	// F40 — per-tenant cryptographic custody. The migration operation reports
 	// resumable progress/failure through the same served command, while seal and
-	// unseal each expose their requested and completed evidence transitions.
+	// unseal expose requested, completed, and bounded-worker failure evidence.
 	{"F40", "Multi-tenant deployment topology", "migrate_key_domain", "migrateTenantKeyDomain", []string{
 		EventTenantKeyDomainMigrationStarted,
 		EventTenantKeyDomainMigrationProgressed,
@@ -269,6 +270,7 @@ var ledger = []FeatureEvent{
 	}},
 	{"F40", "Multi-tenant deployment topology", "seal_key_domain", "sealTenantKeyDomain", []string{
 		EventTenantKeyDomainSealRequested,
+		EventTenantKeyDomainSealFailed,
 		EventTenantKeyDomainSealed,
 	}},
 	{"F40", "Multi-tenant deployment topology", "unseal_key_domain", "unsealTenantKeyDomain", []string{
