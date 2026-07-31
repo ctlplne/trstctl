@@ -253,6 +253,10 @@ var coreCommandTable = []Command{
 
 	{Name: []string{"editions", "status"}, Method: "GET", Path: "/api/v1/editions", Summary: "Show edition, license, and FIPS posture"},
 	{Name: []string{"platform", "distribution"}, Method: "GET", Path: "/api/v1/platform/distribution", Summary: "Show self-hostable run-anywhere distribution posture"},
+	{Name: []string{"platform", "tenant-key-domain", "status"}, Method: "GET", Path: "/api/v1/platform/tenant-key-domain", Summary: "Show this tenant's cryptographic custody and lifecycle status"},
+	{Name: []string{"platform", "tenant-key-domain", "migrate"}, Method: "POST", Path: "/api/v1/platform/tenant-key-domain/migrate", Body: bodyFile, Summary: "Migrate this tenant to an independently wrapped cryptographic domain"},
+	{Name: []string{"platform", "tenant-key-domain", "seal"}, Method: "POST", Path: "/api/v1/platform/tenant-key-domain/seal", Body: bodyNone, Summary: "Queue a bounded-worker seal for this tenant's cryptographic domain"},
+	{Name: []string{"platform", "tenant-key-domain", "unseal"}, Method: "POST", Path: "/api/v1/platform/tenant-key-domain/unseal", Body: bodyNone, Summary: "Unseal this tenant through its configured operator wrapper"},
 	{Name: []string{"support", "enterprise"}, Method: "GET", Path: "/api/v1/support/enterprise", Summary: "Show enterprise support, SLA, and services posture"},
 	{Name: []string{"managed-offering", "status"}, Method: "GET", Path: "/api/v1/managed-offering/status", Summary: "Show managed offering and provider-plane posture"},
 	{Name: []string{"managed-offering", "tenants", "provision"}, Method: "POST", Path: "/api/v1/managed-offering/tenants", Body: bodyFile, Summary: "Provision a hosted tenant in the managed offering"},

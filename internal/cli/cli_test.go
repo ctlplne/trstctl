@@ -611,6 +611,66 @@ func TestPlatformDistributionCommandSendsReadOnlyStatusRequest(t *testing.T) {
 	}
 }
 
+func TestTenantKeyDomainCommandsUseServedTenantScopedLifecycle(t *testing.T) {
+	var statusCapture capture
+	statusServer := mockServer(t, http.StatusOK, `{"served":true,"state":"partial"}`, &statusCapture)
+	code, _, stderr := run(t,
+		[]string{"platform", "tenant-key-domain", "status"},
+		cli.Env{Server: statusServer.URL, HTTPClient: statusServer.Client()}, "",
+	)
+	if code != 0 {
+		t.Fatalf("status exit = %d stderr=%s", code, stderr)
+	}
+	if statusCapture.Method != http.MethodGet || statusCapture.Path != "/api/v1/platform/tenant-key-domain" {
+		t.Fatalf("status request = %s %s", statusCapture.Method, statusCapture.Path)
+	}
+	if statusCapture.Header.Get("Idempotency-Key") != "" || len(statusCapture.Body) != 0 {
+		t.Fatalf("read-only status sent mutation material: key=%q body=%q", statusCapture.Header.Get("Idempotency-Key"), statusCapture.Body)
+	}
+
+	var migrateCapture capture
+	migrateServer := mockServer(t, http.StatusOK, `{"served":true,"state":"partial"}`, &migrateCapture)
+	migrateBody := `{"wrapper_kind":"local_file","wrapper_id":"tenant-a-custody"}`
+	code, _, stderr = run(t,
+		[]string{"platform", "tenant-key-domain", "migrate", "-f", "-"},
+		cli.Env{Server: migrateServer.URL, HTTPClient: migrateServer.Client(), IdempotencyKey: "tenant-domain-migrate-cli"},
+		migrateBody,
+	)
+	if code != 0 {
+		t.Fatalf("migrate exit = %d stderr=%s", code, stderr)
+	}
+	if migrateCapture.Method != http.MethodPost || migrateCapture.Path != "/api/v1/platform/tenant-key-domain/migrate" ||
+		strings.TrimSpace(string(migrateCapture.Body)) != migrateBody ||
+		migrateCapture.Header.Get("Idempotency-Key") != "tenant-domain-migrate-cli" {
+		t.Fatalf("migrate request = %s %s key=%q body=%q", migrateCapture.Method, migrateCapture.Path, migrateCapture.Header.Get("Idempotency-Key"), migrateCapture.Body)
+	}
+
+	for _, mutation := range []struct {
+		name string
+		path string
+	}{
+		{name: "seal", path: "/api/v1/platform/tenant-key-domain/seal"},
+		{name: "unseal", path: "/api/v1/platform/tenant-key-domain/unseal"},
+	} {
+		t.Run(mutation.name, func(t *testing.T) {
+			var captured capture
+			server := mockServer(t, http.StatusOK, `{"accepted":true}`, &captured)
+			key := "tenant-domain-" + mutation.name + "-cli"
+			code, _, stderr := run(t,
+				[]string{"platform", "tenant-key-domain", mutation.name},
+				cli.Env{Server: server.URL, HTTPClient: server.Client(), IdempotencyKey: key}, "",
+			)
+			if code != 0 {
+				t.Fatalf("exit = %d stderr=%s", code, stderr)
+			}
+			if captured.Method != http.MethodPost || captured.Path != mutation.path ||
+				captured.Header.Get("Idempotency-Key") != key || len(captured.Body) != 0 {
+				t.Fatalf("request = %s %s key=%q body=%q", captured.Method, captured.Path, captured.Header.Get("Idempotency-Key"), captured.Body)
+			}
+		})
+	}
+}
+
 func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"session_id":"sess-1","principal":"spiffe://example/workload","method":"token","scopes":[],"expires_at":"2026-06-17T12:00:00Z"}`, &cap)

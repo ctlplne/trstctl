@@ -135,11 +135,12 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	}
 	// B-1 (`operations bulkheads`), B-5 (`platform system`), B-2 (`ssh fleet`), B-4
 	// (`code-signing identities`), B-3 (`migration plan`), and the five AWS
-	// workload-identity source commands plus the ARI posture read raised this to 303.
+	// workload-identity source commands, the ARI posture read, and the four tenant
+	// key-domain lifecycle commands raised this to 307.
 	// Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 303 {
-		t.Fatalf("CLI commands = %d, want 303", len(out))
+	if len(out) != 307 {
+		t.Fatalf("CLI commands = %d, want 307", len(out))
 	}
 	return out
 }

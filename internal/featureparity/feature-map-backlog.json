@@ -13084,7 +13084,11 @@
         "audit events",
         "support enterprise",
         "managed-offering status",
-        "managed-offering tenants provision"
+        "managed-offering tenants provision",
+        "platform tenant-key-domain status",
+        "platform tenant-key-domain migrate",
+        "platform tenant-key-domain seal",
+        "platform tenant-key-domain unseal"
       ],
       "cli_na": "",
       "facet_evidence": {
@@ -13117,7 +13121,11 @@
             "CLI command: audit events",
             "CLI command: support enterprise",
             "CLI command: managed-offering status",
-            "CLI command: managed-offering tenants provision"
+            "CLI command: managed-offering tenants provision",
+            "CLI command: platform tenant-key-domain status",
+            "CLI command: platform tenant-key-domain migrate",
+            "CLI command: platform tenant-key-domain seal",
+            "CLI command: platform tenant-key-domain unseal"
           ],
           "refs": [
             "internal/cli/command.go",
