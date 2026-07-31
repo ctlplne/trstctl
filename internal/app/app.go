@@ -32,12 +32,12 @@ type Service struct {
 
 // New returns a Service over the given event log and store. It provisions an
 // isolated, bounded worker pool per subsystem (AN-7); call Close to release them.
-func New(log *events.Log, st *store.Store) *Service {
+func New(log *events.Log, st *store.Store, resultProtector orchestrator.ResultProtector) *Service {
 	return &Service{
 		log:   log,
 		store: st,
 		proj:  projections.New(st),
-		idem:  orchestrator.NewIdempotency(st),
+		idem:  orchestrator.NewIdempotency(st, orchestrator.WithResultProtector(resultProtector)),
 		bulk:  bulkhead.Default(),
 	}
 }

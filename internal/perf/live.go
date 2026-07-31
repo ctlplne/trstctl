@@ -314,7 +314,7 @@ func (s *liveEvalStack) waitReady(ctx context.Context) error {
 }
 
 func registerLiveTenant(ctx context.Context, log *events.Log, st *store.Store) error {
-	svc := app.New(log, st)
+	svc := app.New(log, st, nil)
 	defer svc.Close()
 	return svc.RegisterTenant(ctx, liveTenantID, "perf-live", "perf-live-tenant")
 }

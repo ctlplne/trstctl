@@ -394,6 +394,11 @@ type Deps struct {
 	// endpoints are enabled. These served surfaces need it retained for the process
 	// lifetime. The plaintext secret never touches the store — only sealed blobs do.
 	KEK sealKeyWrapper
+	// IdempotencyResultProtector is the tenant-bound outer envelope for every
+	// cached mutation response. Production Run always sets it before Build. Nil is
+	// retained only for narrow test/library compositions that do not claim the
+	// default-binary readiness contract.
+	IdempotencyResultProtector orchestrator.ResultProtector
 	// SecretsAuthSecret is the HMAC key the served machine-login token method
 	// (authmethod.TokenMethod) verifies a workload token against (F58). It is []byte and
 	// never logged (AN-8). When empty, the login route reports the method is not
@@ -866,7 +871,10 @@ func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestra
 		s.outbox,
 		historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)...,
 	)
-	idem := orchestrator.NewIdempotency(d.Store)
+	idem := orchestrator.NewIdempotency(
+		d.Store,
+		orchestrator.WithResultProtector(d.IdempotencyResultProtector),
+	)
 	s.orch, s.idem, s.defaultProfile = orch, idem, d.DefaultProfile
 	if healed, err := orch.ReconcileOutbox(ctx, d.Log); err != nil {
 		return nil, nil, fmt.Errorf("server: reconcile outbox side effects: %w", err)

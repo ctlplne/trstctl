@@ -17,7 +17,7 @@ import (
 // an unknown subsystem is rejected with a structured error; Close is safe. The
 // pools need no database, so a bare Service suffices.
 func TestServiceSubsystemPoolsWired(t *testing.T) {
-	svc := app.New(nil, nil)
+	svc := app.New(nil, nil, nil)
 	defer svc.Close()
 
 	var wg sync.WaitGroup
@@ -39,7 +39,7 @@ func TestServiceSubsystemPoolsWired(t *testing.T) {
 }
 
 func TestServiceCloseIsIdempotent(t *testing.T) {
-	svc := app.New(nil, nil)
+	svc := app.New(nil, nil, nil)
 	svc.Close()
 	svc.Close() // must not panic
 }

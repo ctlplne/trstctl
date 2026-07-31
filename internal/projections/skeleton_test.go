@@ -18,7 +18,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	s := newStore(t)  // real PostgreSQL (TestMain) + Migrate + truncate
 	log := openLog(t) // embedded NATS JetStream
 	ctx := context.Background()
-	svc := app.New(log, s)
+	svc := app.New(log, s, nil)
 	defer svc.Close()
 
 	const id = tenantA
@@ -92,7 +92,7 @@ func TestRegisterTenantProjectsOnlyAppendedEvent(t *testing.T) {
 		}
 	}
 
-	svc := app.New(log, s)
+	svc := app.New(log, s, nil)
 	defer svc.Close()
 	const id = tenantA
 	if err := svc.RegisterTenant(ctx, id, "Acme", "spine008-key"); err != nil {

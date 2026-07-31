@@ -1445,6 +1445,13 @@ type Migrate struct {
 // absent it is created (random, 0600) on first boot.
 type Secrets struct {
 	KEKFile string `json:"kek_file"`
+	// TenantSealLocalWrappers are operator-provisioned local custody keys that may
+	// independently wrap tenant data-domain KEKs. The database stores only the
+	// stable ID; paths stay in operator configuration. Multiple entries are
+	// configured in the file. The environment overlay exposes one explicit entry
+	// for simple deployments through TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID and
+	// TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE.
+	TenantSealLocalWrappers []TenantSealLocalWrapper `json:"tenant_seal_local_wrappers,omitempty"`
 	// EnableAPI turns on the served secrets/identity surface (GAP-006): the secret
 	// store (CRUD + rotation), one-time secret sharing, the dynamic PKI secret, and
 	// machine login under /api/v1/secrets/*. OFF by default (fail closed): an upgrade
@@ -1469,6 +1476,14 @@ type Secrets struct {
 	// or token-bound with tenant_claim; otherwise a credential could be replayed
 	// across tenant headers.
 	MachineAuth []MachineAuthMethod `json:"machine_auth,omitempty"`
+}
+
+// TenantSealLocalWrapper maps one non-secret stable reference to an existing
+// local wrapper-key file. trstctl never creates this file: independent custody
+// is useful only when the operator provisions and controls it separately.
+type TenantSealLocalWrapper struct {
+	ID   string `json:"id"`
+	File string `json:"file"`
 }
 
 // MachineAuthMethod configures one served workload-login method.
@@ -1965,6 +1980,13 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
+	localWrapperID := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID")
+	localWrapperFile := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE")
+	if localWrapperID != "" || localWrapperFile != "" {
+		c.Secrets.TenantSealLocalWrappers = []TenantSealLocalWrapper{{
+			ID: localWrapperID, File: localWrapperFile,
+		}}
+	}
 	applyManagedKeysEnv(getenv, &c.ManagedKeys)
 	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). OFF by default (fail
 	// closed). The AI model stays air-gapped/opt-in regardless of these flags.
@@ -2946,6 +2968,7 @@ func validateServedSurfaces(c *Config) []error {
 		errs = append(errs, c.Breakglass.validate()...)
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
+	errs = append(errs, validateTenantSealLocalWrappers(c.Secrets.TenantSealLocalWrappers)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
 	// Served enrollment protocols are public protocol endpoints. Resolve the
 	// explicit eval preset before validation so its convenience never bypasses the
@@ -2977,6 +3000,24 @@ func validateServedSurfaces(c *Config) []error {
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
 		}
+	}
+	return errs
+}
+
+func validateTenantSealLocalWrappers(wrappers []TenantSealLocalWrapper) []error {
+	var errs []error
+	seen := make(map[string]struct{}, len(wrappers))
+	for index, wrapper := range wrappers {
+		if wrapper.ID == "" || strings.TrimSpace(wrapper.ID) != wrapper.ID {
+			errs = append(errs, fmt.Errorf("secrets.tenant_seal_local_wrappers[%d].id must be non-empty and trimmed", index))
+		}
+		if wrapper.File == "" {
+			errs = append(errs, fmt.Errorf("secrets.tenant_seal_local_wrappers[%d].file must not be empty", index))
+		}
+		if _, duplicate := seen[wrapper.ID]; duplicate && wrapper.ID != "" {
+			errs = append(errs, fmt.Errorf("secrets.tenant_seal_local_wrappers contains duplicate id %q", wrapper.ID))
+		}
+		seen[wrapper.ID] = struct{}{}
 	}
 	return errs
 }

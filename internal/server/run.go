@@ -43,6 +43,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/telemetry"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // EditionAttach is the single open-core seam. The default cmd/trstctl build
@@ -423,6 +424,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("secrets machine auth: %w", err)
 	}
+	resultProtector, err := idempotencyResultProtectorFromConfig(cfg.Secrets, st, sec.kek)
+	if err != nil {
+		return Deps{}, fmt.Errorf("tenant result protection: %w", err)
+	}
 	breakglassCACertDER, breakglassPublicKeyDER, err := breakglassVerifierMaterialFromConfig(cfg.Breakglass)
 	if err != nil {
 		return Deps{}, fmt.Errorf("break-glass verifier material: %w", err)
@@ -526,14 +531,39 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       protocols, Plugins: pluginCfg,
 		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, SCIM: cfg.Auth.SCIM,
-		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek, SecretsAuthSecret: sec.authSecret, MachineAuthMethods: machineAuthMethods,
-		SecretScanGitleaksBin: cfg.Secrets.GitleaksBin,
-		EnableAISurface:       cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
+		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek,
+		IdempotencyResultProtector: resultProtector,
+		SecretsAuthSecret:          sec.authSecret,
+		MachineAuthMethods:         machineAuthMethods,
+		SecretScanGitleaksBin:      cfg.Secrets.GitleaksBin,
+		EnableAISurface:            cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
 		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr,
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
+}
+
+func idempotencyResultProtectorFromConfig(
+	cfg config.Secrets,
+	st *store.Store,
+	deployment sealKeyWrapper,
+) (*tenantseal.ResultProtector, error) {
+	wrappers := make([]tenantseal.LocalWrapper, 0, len(cfg.TenantSealLocalWrappers))
+	for _, wrapper := range cfg.TenantSealLocalWrappers {
+		wrappers = append(wrappers, tenantseal.LocalWrapper{
+			ID: wrapper.ID, Path: wrapper.File,
+		})
+	}
+	registry, err := tenantseal.NewLocalWrapperRegistry(wrappers)
+	if err != nil {
+		return nil, err
+	}
+	access, err := tenantseal.NewAccess(st, deployment, registry)
+	if err != nil {
+		return nil, err
+	}
+	return tenantseal.NewResultProtector(access)
 }
 
 func loadRunAuditSigningKey(

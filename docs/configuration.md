@@ -827,9 +827,35 @@ cryptography lives behind the platform's single crypto boundary.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_SECRETS_KEK_FILE` | `data/secrets/kek.bin` | Path to the 256-bit KEK that wraps every stored credential. It is **created `0600` on first boot** if absent, and is the root of trust for credentials at rest. |
+| `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID` | unset | Stable non-secret ID for one operator-provisioned local tenant-domain wrapper. Both this variable and the file variable below are required together. The database stores this ID, never the path or wrapper key. |
+| `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE` | unset | Existing local wrapper-key file for the ID above. trstctl does **not** create it or fall back to the deployment KEK when it is missing/wrong. Configure multiple wrappers with `secrets.tenant_seal_local_wrappers` in JSON/YAML. |
 | `TRSTCTL_SECRETS_ENABLE_API` | `false` | Enables the served `/api/v1/secrets/*` surface, including store, dynamic leases, sharing, PKI secret issuance, machine login, sync, and Gitleaks scans. It also enables the Vault/OpenBao-compatible common aliases under `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, and `/v1/pki/issue/*`. |
 | `TRSTCTL_SECRETS_AUTH_SECRET_FILE` | unset | Optional HMAC key file for machine-login token credentials. When unset, the login method fails closed while other secrets routes continue to work. |
 | `TRSTCTL_SECRETS_GITLEAKS_BIN` | auto-detect | Path to the pinned Gitleaks `v8.27.2` binary used by `POST /api/v1/secrets/scans`. Empty resolves `TRSTCTL_GITLEAKS_BIN`, `tools/bin/gitleaks`, then `PATH`. Run `tools/gitleaks/install.sh` during image build or host provisioning to install the supported checksum-verified release tarball. A missing binary makes scan requests fail closed with `503`. |
+
+Every default-binary idempotency result is outer-sealed through the same
+tenant-aware crypto resolver before PostgreSQL retains it. A legacy tenant uses
+the deployment KEK explicitly. An opted-in tenant names exactly one separately
+provisioned wrapper and never trial-decrypts or falls back to the deployment KEK.
+The local wrapper file is opened only inside a tenant-scoped shared database
+fence; its domain key lives in locked memory for that callback and is then wiped.
+
+```json
+{
+  "secrets": {
+    "kek_file": "/run/secrets/deployment-kek",
+    "tenant_seal_local_wrappers": [
+      {"id": "operator-a", "file": "/run/custody/operator-a-wrapper"},
+      {"id": "operator-b", "file": "/run/custody/operator-b-wrapper"}
+    ]
+  }
+}
+```
+
+Wrapper files are operator authority, not ordinary application data. Provision
+them separately with restrictive ownership/mode before configuring a tenant.
+Missing, corrupt, or mismatched custody fails that tenant closed while other
+tenants continue. This local mode makes no outbound call and works air-gapped.
 
 Dynamic-secret providers and outbound sync targets use structured JSON/YAML because
 each entry is bound to exactly one tenant. Authority-bearing values are references,

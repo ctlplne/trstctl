@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -134,7 +135,17 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 	}
 	defer func() { _ = log.Close() }()
 
-	svc := app.New(log, st)
+	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: provision credential KEK: %w", err)
+	}
+	defer kek.Destroy()
+	resultProtector, err := idempotencyResultProtectorFromConfig(cfg.Secrets, st, kek)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: tenant result protection: %w", err)
+	}
+
+	svc := app.New(log, st, resultProtector)
 	defer svc.Close()
 	if err := svc.RegisterTenant(ctx, opts.TenantID, opts.TenantName, "bootstrap-tenant:"+opts.TenantID); err != nil {
 		return nil, fmt.Errorf("bootstrap: register tenant: %w", err)
