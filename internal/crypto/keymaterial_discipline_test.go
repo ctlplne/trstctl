@@ -37,6 +37,7 @@ func TestKeyMaterialFieldsAreNotStrings(t *testing.T) {
 		"kek",        // KEK loader
 		"seal",       // envelope-encryption KEK/DEK
 		"secret",     // the locked secret buffer primitive
+		"tenantwrap", // local tenant-domain wrapper and transient locked KEK
 		"../signing", // the isolated signer (keystore, server)
 	}
 

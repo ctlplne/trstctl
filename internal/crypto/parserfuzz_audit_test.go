@@ -121,6 +121,9 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	requireFuzzFuncByName(t, "seal", map[string]string{
 		"FuzzOpenSeal": "binary seal container decode (seal.go Open) — at-rest/backup bytes, pre-AEAD",
 	})
+	requireFuzzFuncByName(t, "tenantwrap", map[string]string{
+		"FuzzParseWrappedDomainKEK": "tenant-domain wrapped-KEK container (tenantwrap.go parseWrappedDomainKEK) — persisted/event bytes, pre-AEAD",
+	})
 
 	// The served RFC 3161 timestamp endpoint accepts attacker-controlled DER
 	// TimeStampReq bytes at /tsa before minting a TimeStampResp. Pin the exact
