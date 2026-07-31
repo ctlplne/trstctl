@@ -35,8 +35,8 @@ import (
 	cryptosamlsp "trstctl.com/trstctl/internal/crypto/samlsp"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
-	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // maxTokenResponseBytes bounds the IdP token-endpoint response we read, so a
@@ -79,8 +79,8 @@ func buildOIDCAuth(o config.OIDC, secure bool, httpClient *http.Client) (api.Opt
 	return api.WithAuth(*cfg), nil
 }
 
-func buildBrowserAuth(o config.OIDC, s config.SAML, l config.LDAP, secure bool, httpClient *http.Client, st *store.Store, kek sealKeyWrapper) (api.Option, error) {
-	oidcCfg, err := buildOIDCAuthConfig(o, secure, httpClient, st, kek)
+func buildBrowserAuth(o config.OIDC, s config.SAML, l config.LDAP, secure bool, httpClient *http.Client, st *store.Store, kek sealKeyWrapper, tenantCrypto ...tenantseal.Access) (api.Option, error) {
+	oidcCfg, err := buildOIDCAuthConfig(o, secure, httpClient, st, kek, tenantCrypto...)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func buildBrowserAuth(o config.OIDC, s config.SAML, l config.LDAP, secure bool, 
 	return api.WithAuth(*base), nil
 }
 
-func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st *store.Store, kek sealKeyWrapper) (*api.AuthConfig, error) {
+func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st *store.Store, kek sealKeyWrapper, tenantCrypto ...tenantseal.Access) (*api.AuthConfig, error) {
 	if !o.Enabled {
 		return nil, nil
 	}
@@ -154,7 +154,7 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
-	secretSource, err := buildOIDCClientSecretSource(o, st, kek)
+	secretSource, err := buildOIDCClientSecretSource(o, st, kek, tenantCrypto...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st
 	return cfg, nil
 }
 
-func buildOIDCClientSecretSource(o config.OIDC, st *store.Store, kek sealKeyWrapper) (oidcClientSecretSource, error) {
+func buildOIDCClientSecretSource(o config.OIDC, st *store.Store, kek sealKeyWrapper, tenantCrypto ...tenantseal.Access) (oidcClientSecretSource, error) {
 	if strings.TrimSpace(o.ClientSecretRef) == "" {
 		return nil, nil
 	}
@@ -193,8 +193,34 @@ func buildOIDCClientSecretSource(o config.OIDC, st *store.Store, kek sealKeyWrap
 	if kek == nil {
 		return nil, errors.New("server: auth.oidc.client_secret_ref requires a credential KEK")
 	}
-	vault := secrets.NewVault(kek, st)
-	return auth.OIDCClientSecretSource(vault, o.ClientSecretTenant, o.ClientSecretRef), nil
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
+	tenantID := strings.TrimSpace(o.ClientSecretTenant)
+	ref := strings.TrimSpace(o.ClientSecretRef)
+	return func(ctx context.Context) ([]byte, error) {
+		var plaintext []byte
+		err := withTenantCipher(ctx, access, kek, tenantID, func(scoped context.Context, cipher tenantseal.Cipher) (err error) {
+			record, err := st.GetCredential(scoped, tenantID, auth.OIDCClientSecretScope, ref, auth.OIDCClientSecretName)
+			if err != nil {
+				return err
+			}
+			plaintext, err = cipher.Open(record.Sealed, oidcClientSecretAAD(tenantID, ref))
+			return err
+		})
+		if err != nil {
+			secret.Wipe(plaintext)
+			return nil, err
+		}
+		return plaintext, nil
+	}, nil
+}
+
+func oidcClientSecretAAD(tenantID, ref string) []byte {
+	// Keep this exact wire scope compatible with internal/secrets.Vault. The
+	// tenant cipher owns the open after migration; a deployment-only Vault cannot.
+	return []byte(tenantID + "/" + auth.OIDCClientSecretScope + "/" + ref + "/" + auth.OIDCClientSecretName)
 }
 
 func buildSAMLAuthConfig(s config.SAML, secure bool) (*api.AuthConfig, error) {

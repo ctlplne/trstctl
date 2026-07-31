@@ -17,9 +17,13 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
+	authpkg "trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	secretvault "trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal drives
@@ -203,6 +207,18 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 		t.Fatal(err)
 	}
 	t.Cleanup(secrets.Close)
+	vault := secretvault.NewVault(secrets.kek, st)
+	for _, tenant := range []struct {
+		id    string
+		value []byte
+	}{
+		{id: sealedTenant, value: []byte("tenant-a-oidc-secret")},
+		{id: neighborTenant, value: []byte("tenant-b-oidc-secret")},
+	} {
+		if err := authpkg.StoreOIDCClientSecret(ctx, vault, tenant.id, "primary", tenant.value); err != nil {
+			t.Fatalf("store OIDC client secret for %s: %v", tenant.id, err)
+		}
+	}
 	deps, err := buildRunDeps(
 		ctx, cfg, st, log, runSigner{}, secrets,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), guard, auditKey,
@@ -235,6 +251,26 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	if migrate.Code != http.StatusOK {
 		t.Fatalf("migrate tenant A = %d body=%s", migrate.Code, migrate.Body.String())
 	}
+	oidcA, err := buildOIDCClientSecretSource(config.OIDC{ClientSecretTenant: sealedTenant, ClientSecretRef: "primary"}, st, secrets.kek, deps.TenantCrypto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oidcB, err := buildOIDCClientSecretSource(config.OIDC{ClientSecretTenant: neighborTenant, ClientSecretRef: "primary"}, st, secrets.kek, deps.TenantCrypto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	openedOIDCA, err := oidcA(ctx)
+	if err != nil || !bytes.Equal(openedOIDCA, []byte("tenant-a-oidc-secret")) {
+		secret.Wipe(openedOIDCA)
+		t.Fatalf("migrated tenant A OIDC secret did not open: %v", err)
+	}
+	secret.Wipe(openedOIDCA)
+	openedOIDCB, err := oidcB(ctx)
+	if err != nil || !bytes.Equal(openedOIDCB, []byte("tenant-b-oidc-secret")) {
+		secret.Wipe(openedOIDCB)
+		t.Fatalf("legacy neighbor B OIDC secret did not open: %v", err)
+	}
+	secret.Wipe(openedOIDCB)
 	readA := servedTenantSealRequest(t, srv, tokenA, http.MethodGet, "/api/v1/secrets/store/db/password", "", nil)
 	if readA.Code != http.StatusOK || !strings.Contains(readA.Body.String(), "tenant-a-secret") {
 		t.Fatalf("read migrated unsealed tenant A = %d body=%s", readA.Code, readA.Body.String())
@@ -264,6 +300,18 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	if lockedVault.Code != http.StatusLocked || !strings.Contains(lockedVault.Body.String(), "sealed") {
 		t.Fatalf("sealed tenant A Vault-compatible read = %d body=%s", lockedVault.Code, lockedVault.Body.String())
 	}
+	if value, err := oidcA(ctx); err == nil {
+		secret.Wipe(value)
+		t.Fatal("sealed tenant A OIDC client secret opened")
+	} else if status, ok := tenantseal.StatusOf(err); !ok || status != tenantseal.StatusSealed {
+		t.Fatalf("sealed tenant A OIDC status = (%q, %t), want (%q, true): %v", status, ok, tenantseal.StatusSealed, err)
+	}
+	openedOIDCB, err = oidcB(ctx)
+	if err != nil || !bytes.Equal(openedOIDCB, []byte("tenant-b-oidc-secret")) {
+		secret.Wipe(openedOIDCB)
+		t.Fatalf("sealed-neighbor tenant B OIDC secret did not open: %v", err)
+	}
+	secret.Wipe(openedOIDCB)
 	readB := servedTenantSealRequest(t, srv, tokenB, http.MethodGet, "/api/v1/secrets/store/db/password", "", nil)
 	if readB.Code != http.StatusOK || !strings.Contains(readB.Body.String(), "tenant-b-secret") {
 		t.Fatalf("neighbor tenant B read = %d body=%s", readB.Code, readB.Body.String())
@@ -273,6 +321,12 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	if unseal.Code != http.StatusOK {
 		t.Fatalf("unseal tenant A = %d body=%s", unseal.Code, unseal.Body.String())
 	}
+	openedOIDCA, err = oidcA(ctx)
+	if err != nil || !bytes.Equal(openedOIDCA, []byte("tenant-a-oidc-secret")) {
+		secret.Wipe(openedOIDCA)
+		t.Fatalf("unsealed tenant A OIDC secret did not open: %v", err)
+	}
+	secret.Wipe(openedOIDCA)
 	reopened := servedTenantSealRequest(t, srv, tokenA, http.MethodGet, "/api/v1/secrets/store/db/password", "", nil)
 	if reopened.Code != http.StatusOK || !strings.Contains(reopened.Body.String(), "tenant-a-secret") {
 		t.Fatalf("read unsealed tenant A = %d body=%s", reopened.Code, reopened.Body.String())
