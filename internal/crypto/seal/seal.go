@@ -280,6 +280,42 @@ func Domain(sealed []byte) ([]byte, error) {
 	return append([]byte(nil), parts.domain...), nil
 }
 
+// ValidateDomain authenticates a v2 container's wrapper and protection-domain
+// label without decrypting its payload. Migration uses it to recognize an
+// already-rewrapped container idempotently even though the row-specific payload
+// AAD is intentionally unavailable at the bulk-rewrap layer.
+func ValidateDomain(w KeyWrapper, sealed, expectedDomain []byte) error {
+	if err := validateDomain(expectedDomain); err != nil {
+		return err
+	}
+	version, body, err := splitVersion(sealed)
+	if err != nil {
+		return err
+	}
+	if version != version2 {
+		return ErrDomain
+	}
+	parts, err := parseV2(body)
+	if err != nil {
+		return err
+	}
+	if subtle.ConstantTimeCompare(parts.domain, expectedDomain) != 1 {
+		return ErrDomain
+	}
+	dek, err := w.UnwrapDEK(parts.wrapped)
+	if err != nil || len(dek) != dekSize {
+		if len(dek) > 0 {
+			secret.Wipe(dek)
+		}
+		return ErrDecrypt
+	}
+	defer secret.Wipe(dek)
+	if subtle.ConstantTimeCompare(parts.domainTag, domainTag(dek, parts.domain)) != 1 {
+		return ErrDomain
+	}
+	return nil
+}
+
 // RewrapDomain moves a legacy v1 or domain-aware v2 container's DEK from source
 // to destination and binds it to destinationDomain. The payload nonce and
 // ciphertext are copied byte for byte; plaintext is never materialized. V1 is

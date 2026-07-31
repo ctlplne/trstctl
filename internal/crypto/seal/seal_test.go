@@ -332,6 +332,45 @@ func TestTenantDomainRewrapZeroizesUnwrappedDEK(t *testing.T) {
 	}
 }
 
+func TestValidateDomainAuthenticatesWithoutOpeningPayload(t *testing.T) {
+	kek := newKEK(t)
+	otherKEK := newKEK(t)
+	domain := []byte("tenant:a:generation:1")
+	sealed, err := seal.SealDomain(kek, []byte("payload"), []byte("unknown-to-migrator-aad"), domain)
+	if err != nil {
+		t.Fatalf("SealDomain: %v", err)
+	}
+	if err := seal.ValidateDomain(kek, sealed, domain); err != nil {
+		t.Fatalf("ValidateDomain: %v", err)
+	}
+	if err := seal.ValidateDomain(kek, sealed, []byte("tenant:b:generation:1")); !errors.Is(err, seal.ErrDomain) {
+		t.Fatalf("ValidateDomain wrong label = %v, want ErrDomain", err)
+	}
+	if err := seal.ValidateDomain(otherKEK, sealed, domain); !errors.Is(err, seal.ErrDecrypt) {
+		t.Fatalf("ValidateDomain wrong wrapper = %v, want ErrDecrypt", err)
+	}
+	if err := seal.ValidateDomain(kek, withVersion(sealed, 1), domain); !errors.Is(err, seal.ErrDomain) {
+		t.Fatalf("ValidateDomain legacy v1 = %v, want ErrDomain", err)
+	}
+}
+
+func TestValidateDomainZeroizesUnwrappedDEK(t *testing.T) {
+	wrapper := &capturingWrapper{}
+	domain := []byte("tenant:a:generation:1")
+	sealed, err := seal.SealDomain(wrapper, []byte("payload"), nil, domain)
+	if err != nil {
+		t.Fatalf("SealDomain: %v", err)
+	}
+	wrapper.unwrapped = nil
+	if err := seal.ValidateDomain(wrapper, sealed, domain); err != nil {
+		t.Fatalf("ValidateDomain: %v", err)
+	}
+	if len(wrapper.unwrapped) == 0 ||
+		!bytes.Equal(wrapper.unwrapped, make([]byte, len(wrapper.unwrapped))) {
+		t.Fatal("ValidateDomain did not zeroize the unwrapped DEK")
+	}
+}
+
 type capturingWrapper struct {
 	wrapped   []byte
 	unwrapped []byte
