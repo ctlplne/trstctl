@@ -13,7 +13,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	dnsacmedns "trstctl.com/trstctl/internal/dns/acmedns"
 	dnsakamai "trstctl.com/trstctl/internal/dns/akamai"
@@ -30,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -45,6 +45,7 @@ type servedACMEDNS01Automation struct {
 	log     *events.Log
 	outbox  *orchestrator.Outbox
 	kek     sealKeyWrapper
+	crypto  tenantseal.Access
 	plugins *PluginManager
 
 	cnameResolver acme.CNAMEResolver
@@ -72,8 +73,12 @@ type acmeDNS01RecordEvent struct {
 	OutboxID   int64  `json:"outbox_id"`
 }
 
-func newServedACMEDNS01Automation(st *store.Store, log *events.Log, outbox *orchestrator.Outbox, kek sealKeyWrapper, plugins *PluginManager) *servedACMEDNS01Automation {
-	return &servedACMEDNS01Automation{store: st, log: log, outbox: outbox, kek: kek, plugins: plugins}
+func newServedACMEDNS01Automation(st *store.Store, log *events.Log, outbox *orchestrator.Outbox, kek sealKeyWrapper, plugins *PluginManager, tenantCrypto ...tenantseal.Access) *servedACMEDNS01Automation {
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
+	return &servedACMEDNS01Automation{store: st, log: log, outbox: outbox, kek: kek, crypto: access, plugins: plugins}
 }
 
 func (a *servedACMEDNS01Automation) Present(ctx context.Context, tenantID, domain, _ string, keyAuth string) (func(context.Context) error, error) {
@@ -802,7 +807,7 @@ func (a *servedACMEDNS01Automation) secretRef(ctx context.Context, tenantID stri
 	if err != nil {
 		return nil, err
 	}
-	value, err := seal.Open(a.kek, rec.Sealed, []byte(tenantID+"/secret-store/"+name))
+	value, err := openTenantValue(ctx, a.crypto, a.kek, tenantID, rec.Sealed, []byte(tenantID+"/secret-store/"+name))
 	if err != nil {
 		return nil, err
 	}

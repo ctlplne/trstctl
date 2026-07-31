@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/secretjson"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // RightSizeMutation is independently read-back evidence that an entitlement API
@@ -245,7 +246,7 @@ func (d *issuanceDispatcher) appendConnectorRightSizeTerminal(
 // connectorRightSizeHandler is the production constructor reached from
 // buildRunDeps. A binding is tenant-specific, so an outbox row can never select
 // another tenant's entitlement endpoint or token reference.
-func connectorRightSizeHandler(cfg config.Connectors, st *store.Store, kek seal.KeyWrapper, guard *egress.Guard) (RightSizeMutator, error) {
+func connectorRightSizeHandler(cfg config.Connectors, st *store.Store, kek seal.KeyWrapper, guard *egress.Guard, tenantCrypto ...tenantseal.Access) (RightSizeMutator, error) {
 	if len(cfg.RightSize) == 0 {
 		return nil, nil
 	}
@@ -256,11 +257,15 @@ func connectorRightSizeHandler(cfg config.Connectors, st *store.Store, kek seal.
 	if err != nil {
 		return nil, err
 	}
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
 	runtime := &connectorRightSizeRuntime{
 		bindings: make(map[string]config.ConnectorRightSizeBinding, len(cfg.RightSize)),
 		client:   client,
 		credential: func(ctx context.Context, tenantID, ref string) ([]byte, func(), error) {
-			lease := &connectorCredentialLease{store: st, kek: kek, tenantID: tenantID}
+			lease := &connectorCredentialLease{store: st, kek: kek, crypto: access, tenantID: tenantID}
 			value, err := lease.require(ctx, ref)
 			if err != nil {
 				lease.Close()

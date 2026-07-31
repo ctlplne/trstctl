@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -67,6 +68,7 @@ type servedCodeSigningService struct {
 	store  *store.Store
 	log    *events.Log
 	kek    seal.KeyWrapper
+	crypto tenantseal.Access
 	outbox *orchestrator.Outbox
 	wake   func()
 
@@ -144,7 +146,7 @@ func codeSigningExecutionIsTerminal(err error) bool {
 	}
 }
 
-func newServedCodeSigningService(cfg CodeSigningConfig, st *store.Store, log *events.Log, kek seal.KeyWrapper, outbox *orchestrator.Outbox, wake func()) (*servedCodeSigningService, error) {
+func newServedCodeSigningService(cfg CodeSigningConfig, st *store.Store, log *events.Log, kek seal.KeyWrapper, outbox *orchestrator.Outbox, wake func(), tenantCrypto ...tenantseal.Access) (*servedCodeSigningService, error) {
 	if !cfg.enabled() {
 		return nil, nil
 	}
@@ -165,7 +167,11 @@ func newServedCodeSigningService(cfg CodeSigningConfig, st *store.Store, log *ev
 	if cfg.RekorDestination == "" {
 		cfg.RekorDestination = defaultRekorDestination
 	}
-	return &servedCodeSigningService{cfg: cfg, store: st, log: log, kek: kek, outbox: outbox, wake: wake}, nil
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
+	return &servedCodeSigningService{cfg: cfg, store: st, log: log, kek: kek, crypto: access, outbox: outbox, wake: wake}, nil
 }
 
 type codeSigningCommand struct {
@@ -197,6 +203,15 @@ func (s *servedCodeSigningService) SignKeylessCode(ctx context.Context, tenantID
 }
 
 func (s *servedCodeSigningService) submitAndWait(ctx context.Context, tenantID, idempotencyKey string, command codeSigningCommand) (api.CodeSigningResponse, error) {
+	var response api.CodeSigningResponse
+	err := withTenantCipher(ctx, s.crypto, s.kek, tenantID, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
+		response, err = s.submitAndWaitFenced(scoped, tenantID, idempotencyKey, command)
+		return err
+	})
+	return response, err
+}
+
+func (s *servedCodeSigningService) submitAndWaitFenced(ctx context.Context, tenantID, idempotencyKey string, command codeSigningCommand) (api.CodeSigningResponse, error) {
 	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(idempotencyKey) == "" {
 		return api.CodeSigningResponse{}, errors.New("codesign: tenant and idempotency key are required")
 	}
@@ -213,7 +228,7 @@ func (s *servedCodeSigningService) submitAndWait(ctx context.Context, tenantID, 
 		return api.CodeSigningResponse{}, err
 	}
 	if !found {
-		sealed, sealErr := seal.Seal(s.kek, plain, codeSigningCommandAAD(tenantID, operationID, command.Mode, requestHash))
+		sealed, sealErr := sealTenantValue(ctx, s.crypto, s.kek, tenantID, plain, codeSigningCommandAAD(tenantID, operationID, command.Mode, requestHash))
 		if sealErr != nil {
 			return api.CodeSigningResponse{}, fmt.Errorf("codesign: seal command: %w", sealErr)
 		}
@@ -348,7 +363,7 @@ func (s *servedCodeSigningService) deliverCommand(ctx context.Context, message o
 	if op.Status == "completed" || op.Status == "failed" {
 		return nil
 	}
-	plain, err := seal.Open(s.kek, op.SealedCommand,
+	plain, err := openTenantValue(ctx, s.crypto, s.kek, op.TenantID, op.SealedCommand,
 		codeSigningCommandAAD(op.TenantID, op.OperationID, op.Mode, op.RequestHash))
 	if err != nil {
 		return s.recordTerminalFailure(ctx, op, fmt.Errorf("open sealed command: %w", err))

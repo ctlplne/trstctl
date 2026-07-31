@@ -474,11 +474,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("code-signing: %w", err)
 	}
-	connectorRegistry, err := connectorRegistryFromConfig(cfg.Connectors, st, sec.kek, egressGuard)
+	connectorRegistry, err := connectorRegistryFromConfig(cfg.Connectors, st, sec.kek, egressGuard, tenantCrypto)
 	if err != nil {
 		return Deps{}, fmt.Errorf("connectors: %w", err)
 	}
-	connectorRightSize, err := connectorRightSizeHandler(cfg.Connectors, st, sec.kek, egressGuard)
+	connectorRightSize, err := connectorRightSizeHandler(cfg.Connectors, st, sec.kek, egressGuard, tenantCrypto)
 	if err != nil {
 		return Deps{}, fmt.Errorf("connector right-size: %w", err)
 	}
@@ -486,11 +486,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("external CAs: %w", err)
 	}
-	dynamicSecretProviders, err := dynamicSecretProvidersFromConfig(ctx, cfg.SecretIntegrations.DynamicProviders, st, sec.kek, egressGuard)
+	dynamicSecretProviders, err := dynamicSecretProvidersFromConfig(ctx, cfg.SecretIntegrations.DynamicProviders, st, sec.kek, egressGuard, tenantCrypto)
 	if err != nil {
 		return Deps{}, fmt.Errorf("dynamic-secret providers: %w", err)
 	}
-	secretSyncTargets, cloudTokenMinter, err := secretSyncTargetsFromConfig(ctx, cfg.SecretIntegrations.SyncTargets, st, sec.kek, egressGuard, log)
+	secretSyncTargets, cloudTokenMinter, err := secretSyncTargetsFromConfig(ctx, cfg.SecretIntegrations.SyncTargets, st, sec.kek, egressGuard, log, tenantCrypto)
 	if err != nil {
 		return Deps{}, fmt.Errorf("secret-sync targets: %w", err)
 	}

@@ -354,7 +354,7 @@ func TestReconcileOutboxRestoresReplayableLifecycleSideEffectPayload(t *testing.
 		orchestrator.StateDeployed,
 		"deploy credential",
 		[]byte(`{"transient":"credential"}`),
-		func(c orchestrator.SideEffectPayloadContext) ([]byte, error) {
+		func(_ context.Context, c orchestrator.SideEffectPayloadContext) ([]byte, error) {
 			wantPayload = []byte(`{"sealed_for":"` + c.IdempotencyKey + `","body":"credential"}`)
 			return wantPayload, nil
 		},

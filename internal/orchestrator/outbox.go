@@ -172,6 +172,33 @@ type HandlerFunc func(ctx context.Context, m Message) error
 // Deliver calls f.
 func (f HandlerFunc) Deliver(ctx context.Context, m Message) error { return f(ctx, m) }
 
+// DeliveryDeferredError means the worker could not start its receiver effect
+// because a local operator-controlled prerequisite is temporarily closed. ELI5:
+// this is a pause, not a failed attempt. The outbox keeps the row pending and
+// refunds the claim attempt so a long tenant seal cannot consume the dead-letter
+// budget before an operator unseals it.
+type DeliveryDeferredError struct{ cause error }
+
+func (e *DeliveryDeferredError) Error() string { return "outbox delivery deferred" }
+func (e *DeliveryDeferredError) Unwrap() error { return e.cause }
+
+// DeferDelivery marks err as a retry-budget-neutral delivery pause. Callers must
+// use it only before receiver I/O begins; otherwise refunding the attempt could
+// hide an ambiguous external side effect.
+func DeferDelivery(err error) error {
+	if err == nil || IsDeliveryDeferred(err) {
+		return err
+	}
+	return &DeliveryDeferredError{cause: err}
+}
+
+// IsDeliveryDeferred reports whether a handler explicitly proved that receiver
+// I/O did not begin and the claim may be retried without consuming an attempt.
+func IsDeliveryDeferred(err error) bool {
+	var deferred *DeliveryDeferredError
+	return errors.As(err, &deferred)
+}
+
 // Outbox implements AN-6: external calls are recorded in the same transaction as
 // the state change that triggers them (Enqueue), and a separate worker performs
 // them (Dispatch). This gives at-least-once delivery; an idempotent Handler makes
@@ -491,7 +518,7 @@ func (o *Outbox) DispatchScoped(ctx context.Context, h Handler, scope Destinatio
 		seenDestinations[effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)] = true
 		processed++
 		deliverErr := o.deliver(ctx, h, claim)
-		if deliverErr != nil && claim.attempts >= o.maxAttempts {
+		if deliverErr != nil && !IsDeliveryDeferred(deliverErr) && claim.attempts >= o.maxAttempts {
 			if terminal, ok := h.(TerminalFailureHandler); ok {
 				if err := terminal.DeliverTerminalFailure(ctx, claim.msg, deliverErr); err != nil {
 					destroyDeliveryError(deliverErr)
@@ -674,15 +701,17 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if deliverErr != nil {
+		deferred := IsDeliveryDeferred(deliverErr)
 		status := "pending"
-		if claim.attempts >= o.maxAttempts {
+		if !deferred && claim.attempts >= o.maxAttempts {
 			status = "failed"
 		}
 		now := o.clockNow()
 		next := now.Add(o.retryDelay(claim.attempts))
 		tag, err := tx.Exec(ctx,
 			`UPDATE outbox
-			    SET last_error = $4,
+			    SET attempts = CASE WHEN $7 THEN GREATEST(attempts - 1, 0) ELSE attempts END,
+			        last_error = $4,
 			        next_attempt_at = $5,
 			        status = $6,
 			        worker_id = NULL,
@@ -691,7 +720,7 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 			    AND tenant_id = $2
 			    AND status = 'processing'
 			    AND worker_id = $3`,
-			claim.id, claim.msg.TenantID, o.workerID, persistedDeliveryError(deliverErr), next, status)
+			claim.id, claim.msg.TenantID, o.workerID, persistedDeliveryError(deliverErr), next, status, deferred)
 		if err != nil {
 			return fmt.Errorf("orchestrator: record failure: %w", err)
 		}
@@ -701,7 +730,9 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		if err := tx.Commit(ctx); err != nil {
 			return err
 		}
-		o.recordCircuitFailure(claim.msg, deliverErr, now)
+		if !deferred {
+			o.recordCircuitFailure(claim.msg, deliverErr, now)
+		}
 		return nil
 	}
 
@@ -736,6 +767,8 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 // unwipeable Go string and durable PostgreSQL secret leak (AN-8).
 func persistedDeliveryError(err error) string {
 	switch {
+	case IsDeliveryDeferred(err):
+		return "delivery_deferred"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "external_delivery_timeout"
 	case errors.Is(err, context.Canceled):

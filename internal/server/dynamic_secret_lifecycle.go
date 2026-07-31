@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 var (
@@ -44,12 +45,13 @@ type durableDynamicSecretLifecycle struct {
 	store     *store.Store
 	log       *events.Log
 	kek       seal.KeyWrapper
+	crypto    tenantseal.Access
 	outbox    *orchestrator.Outbox
 	wake      func()
 	providers map[string]dynsecret.Provider
 }
 
-func newDurableDynamicSecretLifecycle(tenantID string, providers []dynsecret.Provider, st *store.Store, log *events.Log, kek seal.KeyWrapper, outbox *orchestrator.Outbox, wake func()) (*durableDynamicSecretLifecycle, error) {
+func newDurableDynamicSecretLifecycle(tenantID string, providers []dynsecret.Provider, st *store.Store, log *events.Log, kek seal.KeyWrapper, outbox *orchestrator.Outbox, wake func(), tenantCrypto ...tenantseal.Access) (*durableDynamicSecretLifecycle, error) {
 	if tenantID == "" || st == nil || log == nil || kek == nil || outbox == nil || wake == nil {
 		return nil, errors.New("server: durable dynamic-secret lifecycle requires tenant, store, event log, KEK, outbox, and dispatcher wake")
 	}
@@ -62,7 +64,11 @@ func newDurableDynamicSecretLifecycle(tenantID string, providers []dynsecret.Pro
 	if len(registry) == 0 {
 		return nil, errors.New("server: durable dynamic-secret lifecycle has no tenant providers")
 	}
-	return &durableDynamicSecretLifecycle{tenantID: tenantID, store: st, log: log, kek: kek, outbox: outbox, wake: wake, providers: registry}, nil
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
+	return &durableDynamicSecretLifecycle{tenantID: tenantID, store: st, log: log, kek: kek, crypto: access, outbox: outbox, wake: wake, providers: registry}, nil
 }
 
 func (l *durableDynamicSecretLifecycle) Issue(ctx context.Context, providerID, role string, ttl time.Duration, idempotencyKey string) (dynsecret.Lease, []byte, error) {
@@ -110,7 +116,7 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 			return dynsecret.Lease{}, nil, dynamicSecretIdempotencyConflict()
 		}
 		if record.State == store.DynamicSecretLeaseActive {
-			credential, err := l.openCredential(record)
+			credential, err := l.openCredential(ctx, record)
 			return dynamicLeaseFromStore(record), credential, err
 		}
 		if record.State == store.DynamicSecretLeaseRevoked {
@@ -186,7 +192,7 @@ func (l *durableDynamicSecretLifecycle) waitForIssued(ctx context.Context, lease
 		}
 		switch record.State {
 		case store.DynamicSecretLeaseActive:
-			credential, openErr := l.openCredential(record)
+			credential, openErr := l.openCredential(waitCtx, record)
 			return dynamicLeaseFromStore(record), credential, openErr
 		case store.DynamicSecretLeaseFailed:
 			return dynsecret.Lease{}, nil, fmt.Errorf("dynsecret: provider issuance failed: %s", record.LastError)
@@ -219,11 +225,11 @@ func (l *durableDynamicSecretLifecycle) waitForIssued(ctx context.Context, lease
 	}
 }
 
-func (l *durableDynamicSecretLifecycle) openCredential(record store.DynamicSecretLease) ([]byte, error) {
+func (l *durableDynamicSecretLifecycle) openCredential(ctx context.Context, record store.DynamicSecretLease) ([]byte, error) {
 	if len(record.SealedCredential) == 0 {
 		return nil, errors.New("dynsecret: active lease has no sealed credential result")
 	}
-	value, err := seal.Open(l.kek, record.SealedCredential, dynamicSecretCredentialAAD(l.tenantID, record.ID, record.Provider))
+	value, err := openTenantValue(ctx, l.crypto, l.kek, l.tenantID, record.SealedCredential, dynamicSecretCredentialAAD(l.tenantID, record.ID, record.Provider))
 	if err != nil {
 		return nil, fmt.Errorf("dynsecret: open sealed credential result: %w", err)
 	}

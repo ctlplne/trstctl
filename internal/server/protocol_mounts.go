@@ -490,7 +490,7 @@ func (s *Server) loadMDMSCEPTrustAnchorRef(ctx context.Context, tenantID, key, r
 	if err != nil {
 		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s is not readable", key)
 	}
-	plain, err := seal.Open(keyWrapper, rec.Sealed, secretStoreAADForMDMSCEP(tenantID, name))
+	plain, err := openTenantValue(ctx, s.tenantCrypto, keyWrapper, tenantID, rec.Sealed, secretStoreAADForMDMSCEP(tenantID, name))
 	if err != nil {
 		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s is not openable", key)
 	}

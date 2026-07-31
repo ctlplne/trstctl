@@ -47,12 +47,14 @@ import (
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 type nativeConnectorRuntime struct {
 	cfg        config.Connectors
 	store      *store.Store
 	kek        seal.KeyWrapper
+	crypto     tenantseal.Access
 	httpClient *http.Client
 	guard      *egress.Guard
 }
@@ -60,12 +62,16 @@ type nativeConnectorRuntime struct {
 // connectorRegistryFromConfig is the only production constructor registry for
 // native connectors. It registers stateless one-shot factories; target URLs,
 // paths, and secret references come from the immutable sealed outbox payload.
-func connectorRegistryFromConfig(cfg config.Connectors, st *store.Store, kek seal.KeyWrapper, guard *egress.Guard) (*connector.Registry, error) {
+func connectorRegistryFromConfig(cfg config.Connectors, st *store.Store, kek seal.KeyWrapper, guard *egress.Guard, tenantCrypto ...tenantseal.Access) (*connector.Registry, error) {
 	client, err := connectorHTTPClientFromConfig(cfg, guard)
 	if err != nil {
 		return nil, err
 	}
-	runtime := nativeConnectorRuntime{cfg: cfg, store: st, kek: kek, httpClient: client, guard: guard}
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
+	runtime := nativeConnectorRuntime{cfg: cfg, store: st, kek: kek, crypto: access, httpClient: client, guard: guard}
 	registry := connector.NewRegistry()
 	for _, raw := range cfg.Enabled {
 		name := strings.TrimSpace(raw)
@@ -234,7 +240,7 @@ func buildLocalConnector(r nativeConnectorRuntime, ctx context.Context, name str
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	lease := &connectorCredentialLease{store: r.store, kek: r.kek, tenantID: payload.TenantID}
+	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID}
 	var built connector.Connector
 	switch name {
 	case "nginx":
@@ -298,7 +304,7 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	lease := &connectorCredentialLease{store: r.store, kek: r.kek, tenantID: payload.TenantID}
+	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID}
 	var (
 		built   connector.Connector
 		destroy []interface{ Destroy() }
@@ -485,6 +491,7 @@ func connectorLoopbackHost(host string) bool {
 type connectorCredentialLease struct {
 	store    *store.Store
 	kek      seal.KeyWrapper
+	crypto   tenantseal.Access
 	tenantID string
 	buffers  []*secret.Buffer
 }
@@ -511,7 +518,7 @@ func (l *connectorCredentialLease) require(ctx context.Context, ref string) ([]b
 		}
 		sealed = record.Sealed
 	}
-	plain, err := seal.Open(l.kek, sealed, []byte(l.tenantID+"/secret-store/"+name))
+	plain, err := openTenantValue(ctx, l.crypto, l.kek, l.tenantID, sealed, []byte(l.tenantID+"/secret-store/"+name))
 	if err != nil {
 		return nil, err
 	}

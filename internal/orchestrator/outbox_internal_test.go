@@ -233,6 +233,65 @@ func TestOutboxDeadLettersAtMaxAttempts(t *testing.T) {
 	}
 }
 
+type deferredThenSuccessfulHandler struct {
+	deferredCalls int
+	delivered     int
+	terminal      int
+}
+
+func (h *deferredThenSuccessfulHandler) Deliver(context.Context, orchestrator.Message) error {
+	if h.deferredCalls < 2 {
+		h.deferredCalls++
+		return orchestrator.DeferDelivery(errors.New("operator prerequisite closed"))
+	}
+	h.delivered++
+	return nil
+}
+
+func (h *deferredThenSuccessfulHandler) DeliverTerminalFailure(context.Context, orchestrator.Message, error) error {
+	h.terminal++
+	return nil
+}
+
+func TestOutboxDeferredDeliveryRefundsAttemptAndSurvivesPastDeadLetterCap(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithMaxAttempts(1),
+		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
+	)
+	id := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "secret.sync.test", IdempotencyKey: "deferred-1", Payload: []byte(`{}`),
+	})
+	handler := &deferredThenSuccessfulHandler{}
+
+	for sweep := 0; sweep < 2; sweep++ {
+		if n, err := ob.Dispatch(ctx, handler); err != nil || n != 1 {
+			t.Fatalf("deferred dispatch %d = (%d, %v), want (1, nil)", sweep, n, err)
+		}
+		record, err := ob.Get(ctx, tenantA, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if record.Status != "pending" || record.Attempts != 0 || record.LastError != "delivery_deferred" {
+			t.Fatalf("deferred row %d = status %q attempts %d error %q, want pending/0/delivery_deferred", sweep, record.Status, record.Attempts, record.LastError)
+		}
+	}
+	if handler.terminal != 0 {
+		t.Fatalf("deferred delivery invoked terminal callback %d times", handler.terminal)
+	}
+	if n, err := ob.Dispatch(ctx, handler); err != nil || n != 1 {
+		t.Fatalf("unblocked dispatch = (%d, %v), want (1, nil)", n, err)
+	}
+	record, err := ob.Get(ctx, tenantA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Status != "delivered" || record.Attempts != 1 || handler.delivered != 1 {
+		t.Fatalf("unblocked row = status %q attempts %d deliveries %d, want delivered/1/1", record.Status, record.Attempts, handler.delivered)
+	}
+}
+
 type terminalFailureFixture struct {
 	called bool
 }

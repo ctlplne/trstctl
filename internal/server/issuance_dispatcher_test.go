@@ -28,7 +28,44 @@ import (
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
+
+type fixedTenantDomainStore struct{ domain store.TenantKeyDomain }
+
+func (s fixedTenantDomainStore) WithTenantKeyDomainShared(_ context.Context, tenantID string, fn func(*store.TenantKeyDomain) error) error {
+	if tenantID != s.domain.TenantID {
+		return fn(nil)
+	}
+	domain := s.domain
+	domain.WrappedDomainKEK = append([]byte(nil), s.domain.WrappedDomainKEK...)
+	return fn(&domain)
+}
+
+type passthroughKeyWrapper struct{}
+
+func (passthroughKeyWrapper) WrapDEK(value []byte) ([]byte, error) {
+	return append([]byte(nil), value...), nil
+}
+
+func (passthroughKeyWrapper) UnwrapDEK(value []byte) ([]byte, error) {
+	return append([]byte(nil), value...), nil
+}
+
+type unreachableDomainRegistry struct{}
+
+func (unreachableDomainRegistry) OpenDomainKEK(context.Context, tenantseal.WrapperRef, []byte, []byte) (tenantseal.TransientDomainKEK, error) {
+	return nil, errors.New("test domain registry must not be reached")
+}
+
+type recordingLicensedOutboxHandler struct {
+	tenants []string
+}
+
+func (h *recordingLicensedOutboxHandler) DeliverLicensed(_ context.Context, m orchestrator.Message) (bool, error) {
+	h.tenants = append(h.tenants, m.TenantID)
+	return true, nil
+}
 
 func TestIssuanceDispatcherRenewalMintsSuccessorAndSupersedesPredecessor(t *testing.T) {
 	h := newIssuanceDispatcherHarness(t)
@@ -327,6 +364,48 @@ func TestIssuanceDispatcherFailsUnsupportedFirstPartyDestination(t *testing.T) {
 		if err := d.Deliver(context.Background(), orchestrator.Message{Destination: destination}); err == nil {
 			t.Fatalf("missing handler for %s silently acknowledged the row", destination)
 		}
+	}
+}
+
+func TestIssuanceDispatcherTenantCryptoFenceBlocksSealedTenantWorkerButServesNeighbor(t *testing.T) {
+	const (
+		sealedTenant   = "11111111-1111-1111-1111-111111111111"
+		neighborTenant = "22222222-2222-2222-2222-222222222222"
+	)
+	access, err := tenantseal.NewAccess(fixedTenantDomainStore{domain: store.TenantKeyDomain{
+		TenantID: sealedTenant, DomainID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", Generation: 1,
+		ProtectionMode: store.TenantKeyProtectionTenantDomain, State: store.TenantKeyDomainStateSealed,
+		WrapperKind: tenantseal.WrapperKindLocalFile, WrapperID: "operator-a", WrappedDomainKEK: []byte("wrapped"),
+	}}, passthroughKeyWrapper{}, unreachableDomainRegistry{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	licensed := &recordingLicensedOutboxHandler{}
+	dispatcher := &issuanceDispatcher{
+		tenantCrypto: access,
+		licensed:     licensed,
+	}
+
+	err = dispatcher.Deliver(context.Background(), orchestrator.Message{
+		TenantID: sealedTenant, Destination: "licensed.test",
+	})
+	if !orchestrator.IsDeliveryDeferred(err) {
+		t.Fatalf("sealed tenant delivery error = %v, want retry-budget-neutral deferral", err)
+	}
+	if status, ok := tenantseal.StatusOf(err); !ok || status != tenantseal.StatusSealed {
+		t.Fatalf("sealed tenant delivery status = (%q, %t), want (%q, true)", status, ok, tenantseal.StatusSealed)
+	}
+	if len(licensed.tenants) != 0 {
+		t.Fatalf("sealed tenant reached external worker handler: %v", licensed.tenants)
+	}
+
+	if err := dispatcher.Deliver(context.Background(), orchestrator.Message{
+		TenantID: neighborTenant, Destination: "licensed.test",
+	}); err != nil {
+		t.Fatalf("neighbor tenant delivery: %v", err)
+	}
+	if len(licensed.tenants) != 1 || licensed.tenants[0] != neighborTenant {
+		t.Fatalf("external worker tenants = %v, want only %s", licensed.tenants, neighborTenant)
 	}
 }
 

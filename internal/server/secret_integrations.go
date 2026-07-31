@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // DynamicSecretProviderRegistry is the production registry assembled by
@@ -64,8 +65,9 @@ func (r SecretSyncTargetRegistry) ForTenant(tenantID string) map[string]*secrets
 }
 
 type integrationCredentialResolver struct {
-	store *store.Store
-	kek   seal.KeyWrapper
+	store  *store.Store
+	kek    seal.KeyWrapper
+	crypto tenantseal.Access
 }
 
 // resolve loads one authority-bearing value at operation time. file: refs are
@@ -94,11 +96,15 @@ func (r integrationCredentialResolver) resolve(ctx context.Context, tenantID, re
 		if name == "" {
 			return nil, errors.New("server: empty secret:// credential ref")
 		}
-		rec, err := r.store.GetSecret(ctx, tenantID, name)
-		if err != nil {
-			return nil, fmt.Errorf("load tenant credential %q: %w", name, err)
-		}
-		value, err := seal.Open(r.kek, rec.Sealed, secretIntegrationStoreAAD(tenantID, name))
+		var value []byte
+		err := withTenantCipher(ctx, r.crypto, r.kek, tenantID, func(_ context.Context, cipher tenantseal.Cipher) (err error) {
+			rec, err := r.store.GetSecret(ctx, tenantID, name)
+			if err != nil {
+				return fmt.Errorf("load tenant credential %q: %w", name, err)
+			}
+			value, err = cipher.Open(rec.Sealed, secretIntegrationStoreAAD(tenantID, name))
+			return err
+		})
 		if err != nil {
 			return nil, fmt.Errorf("open tenant credential %q: %w", name, err)
 		}
@@ -129,12 +135,17 @@ func dynamicSecretProvidersFromConfig(
 	st *store.Store,
 	kek seal.KeyWrapper,
 	guard *egress.Guard,
+	tenantCrypto ...tenantseal.Access,
 ) (DynamicSecretProviderRegistry, error) {
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: entries}, true); err != nil {
 		return nil, fmt.Errorf("server: invalid dynamic-secret provider config: %w", err)
 	}
 	registry := DynamicSecretProviderRegistry{}
-	resolver := integrationCredentialResolver{store: st, kek: kek}
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
+	resolver := integrationCredentialResolver{store: st, kek: kek, crypto: access}
 	seen := map[string]bool{}
 	for _, entry := range entries {
 		key := entry.TenantID + "\x00" + entry.ID
@@ -511,13 +522,18 @@ func secretSyncTargetsFromConfig(
 	kek seal.KeyWrapper,
 	guard *egress.Guard,
 	log *events.Log,
+	tenantCrypto ...tenantseal.Access,
 ) (SecretSyncTargetRegistry, *cloudauth.Minter, error) {
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{SyncTargets: entries}, true); err != nil {
 		return nil, nil, fmt.Errorf("server: invalid secret-sync target config: %w", err)
 	}
 	registry := SecretSyncTargetRegistry{}
 	minter := cloudauth.NewMinter(2 * time.Minute)
-	resolver := integrationCredentialResolver{store: st, kek: kek}
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
+	resolver := integrationCredentialResolver{store: st, kek: kek, crypto: access}
 	seen := map[string]bool{}
 	for _, entry := range entries {
 		key := entry.TenantID + "\x00" + entry.ID

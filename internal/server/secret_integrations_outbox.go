@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 var secretSyncEventNamespace = uuid.MustParse("8dfda7f4-9293-55f0-b2fe-642a43276964")
@@ -33,6 +34,7 @@ type secretIntegrationOutboxDispatcher struct {
 	dynamicProviders DynamicSecretProviderRegistry
 	syncTargets      SecretSyncTargetRegistry
 	kek              seal.KeyWrapper
+	tenantCrypto     tenantseal.Access
 	store            *store.Store
 	log              *events.Log
 
@@ -46,7 +48,7 @@ type secretIntegrationOutboxDispatcher struct {
 	afterDynamicSecretDelivery func(error)
 }
 
-func queueSecretSyncEvent(ctx context.Context, st *store.Store, log *events.Log, kek seal.KeyWrapper, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error {
+func queueSecretSyncEvent(ctx context.Context, st *store.Store, log *events.Log, kek seal.KeyWrapper, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte, tenantCrypto ...tenantseal.Access) error {
 	if st == nil || log == nil || kek == nil {
 		return errors.New("server: durable secret sync requires store, event log, and KEK")
 	}
@@ -67,7 +69,11 @@ func queueSecretSyncEvent(ctx context.Context, st *store.Store, log *events.Log,
 	} else if !store.IsNotFound(err) {
 		return err
 	}
-	sealed, err := seal.Seal(kek, value, secretSyncAAD(tenantID, target, jobID, remoteKey))
+	var access tenantseal.Access
+	if len(tenantCrypto) > 0 {
+		access = tenantCrypto[0]
+	}
+	sealed, err := sealTenantValue(ctx, access, kek, tenantID, value, secretSyncAAD(tenantID, target, jobID, remoteKey))
 	if err != nil {
 		return err
 	}
@@ -265,7 +271,7 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 			if lockErr != nil {
 				return fmt.Errorf("server: lock dynamic-secret preparation: %w", lockErr)
 			}
-			sealedPreparation, err = seal.Seal(d.kek, preparedLocked.Bytes(), dynamicSecretPreparationAAD(m.TenantID, command.ID, command.Provider))
+			sealedPreparation, err = sealTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, preparedLocked.Bytes(), dynamicSecretPreparationAAD(m.TenantID, command.ID, command.Provider))
 			preparedLocked.Destroy()
 			if err != nil {
 				return fmt.Errorf("server: seal dynamic-secret preparation: %w", err)
@@ -278,7 +284,7 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		}
 		var preparedLocked *secret.Buffer
 		if len(sealedPreparation) > 0 {
-			prepared, openErr := seal.Open(d.kek, sealedPreparation, dynamicSecretPreparationAAD(m.TenantID, command.ID, command.Provider))
+			prepared, openErr := openTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, sealedPreparation, dynamicSecretPreparationAAD(m.TenantID, command.ID, command.Provider))
 			if openErr != nil {
 				return fmt.Errorf("server: open dynamic-secret preparation: %w", openErr)
 			}
@@ -314,7 +320,7 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		return fmt.Errorf("server: lock generated dynamic-secret credential: %w", err)
 	}
 	defer locked.Destroy()
-	sealedCredential, err := seal.Seal(d.kek, locked.Bytes(), dynamicSecretCredentialAAD(m.TenantID, command.ID, command.Provider))
+	sealedCredential, err := sealTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, locked.Bytes(), dynamicSecretCredentialAAD(m.TenantID, command.ID, command.Provider))
 	if err != nil {
 		return fmt.Errorf("server: seal dynamic-secret credential result: %w", err)
 	}
@@ -415,7 +421,7 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 	if target == nil {
 		return fmt.Errorf("server: secret-sync target %q is not configured for tenant", targetID)
 	}
-	value, err := seal.Open(d.kek, payload.Sealed, secretSyncAAD(m.TenantID, targetID, payload.ID, payload.Key))
+	value, err := openTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, payload.Sealed, secretSyncAAD(m.TenantID, targetID, payload.ID, payload.Key))
 	if err != nil {
 		return fmt.Errorf("server: open secret-sync delivery: %w", err)
 	}

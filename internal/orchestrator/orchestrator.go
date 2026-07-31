@@ -97,7 +97,9 @@ type SideEffectPayloadContext struct {
 }
 
 // SideEffectPayloadTransform returns the payload bytes to store in outbox.payload.
-type SideEffectPayloadTransform func(SideEffectPayloadContext) ([]byte, error)
+// The caller context is carried through so tenant-custody transforms can hold the
+// same cross-replica fence as the surrounding authenticated mutation.
+type SideEffectPayloadTransform func(context.Context, SideEffectPayloadContext) ([]byte, error)
 
 // Transition moves an identity from its current state to "to". It rejects an
 // invalid transition with a *TransitionError before any effect. For a valid
@@ -176,7 +178,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		outboxPayload = sideEffectPayload
 	}
 	if hasSideEffect && len(sideEffectPayload) > 0 && transform != nil {
-		outboxPayload, err = transform(SideEffectPayloadContext{
+		outboxPayload, err = transform(ctx, SideEffectPayloadContext{
 			TenantID:       tenantID,
 			Destination:    sideEffectDest,
 			IdempotencyKey: sideEffectKey,

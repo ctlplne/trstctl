@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // sealKeyWrapper is the envelope-encryption key wrapper the served secret store seals
@@ -140,13 +141,14 @@ type secretSyncOutboxQueue struct {
 	tenantID string
 	target   string
 	kek      seal.KeyWrapper
+	crypto   tenantseal.Access
 }
 
 func (q secretSyncOutboxQueue) Enqueue(ctx context.Context, item secretsync.SyncItem) error {
 	if q.kek == nil {
 		return errors.New("server: secret sync outbox requires a KEK")
 	}
-	sealed, err := seal.Seal(q.kek, item.Value, secretSyncAAD(q.tenantID, q.target, item.ID, item.Key))
+	sealed, err := sealTenantValue(ctx, q.crypto, q.kek, q.tenantID, item.Value, secretSyncAAD(q.tenantID, q.target, item.ID, item.Key))
 	if err != nil {
 		return err
 	}
@@ -184,7 +186,7 @@ func (q secretSyncOutboxQueue) Pending(ctx context.Context) ([]secretsync.SyncIt
 			wipeSyncItems(out)
 			return nil, err
 		}
-		value, err := seal.Open(q.kek, payload.Sealed, secretSyncAAD(q.tenantID, q.target, payload.ID, payload.Key))
+		value, err := openTenantValue(ctx, q.crypto, q.kek, q.tenantID, payload.Sealed, secretSyncAAD(q.tenantID, q.target, payload.ID, payload.Key))
 		if err != nil {
 			wipeSyncItems(out)
 			return nil, err
@@ -322,7 +324,7 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		be.DynamicLifecycleForTenant = func(tenantID string) (dynsecret.Lifecycle, error) {
 			return newDurableDynamicSecretLifecycle(
 				tenantID, d.TenantDynamicSecretProviders.ForTenant(tenantID), d.Store, d.Log, d.KEK, s.outbox,
-				s.wakeOutbox,
+				s.wakeOutbox, d.TenantCrypto,
 			)
 		}
 		be.DynamicLifecycleTenantIDs = d.TenantDynamicSecretProviders.TenantIDs
@@ -330,7 +332,7 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 	if d.TenantSecretSyncTargets != nil {
 		be.SecretSyncTargetsForTenant = d.TenantSecretSyncTargets.ForTenant
 		be.QueueSecretSync = func(ctx context.Context, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error {
-			return queueSecretSyncEvent(ctx, d.Store, d.Log, d.KEK, tenantID, secretName, secretVersion, target, remoteKey, idempotencyKey, requestBinding, value)
+			return queueSecretSyncEvent(ctx, d.Store, d.Log, d.KEK, tenantID, secretName, secretVersion, target, remoteKey, idempotencyKey, requestBinding, value, d.TenantCrypto)
 		}
 	}
 	if s.outbox != nil {
@@ -338,7 +340,7 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 			return dynamicSecretOutboxQueue{store: d.Store, outbox: s.outbox, tenantID: tenantID}
 		}
 		be.SecretSyncOutbox = func(tenantID, target string) secretsync.Outbox {
-			return secretSyncOutboxQueue{store: d.Store, outbox: s.outbox, tenantID: tenantID, target: target, kek: d.KEK}
+			return secretSyncOutboxQueue{store: d.Store, outbox: s.outbox, tenantID: tenantID, target: target, kek: d.KEK, crypto: d.TenantCrypto}
 		}
 	}
 	return be

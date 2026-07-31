@@ -202,7 +202,7 @@ func TestConnectorDeployPayloadSealerHidesKeyAndBindsAAD(t *testing.T) {
 		t.Fatalf("encode connector deploy: %v", err)
 	}
 	handler := &issuanceDispatcher{connectorPayloadKey: kek}
-	sealedPayload, err := handler.sealConnectorDeployBytes("tenant-1", "connector.deploy", "deploy-1", payload)
+	sealedPayload, err := handler.sealConnectorDeployBytes(context.Background(), "tenant-1", "connector.deploy", "deploy-1", payload)
 	if err != nil {
 		t.Fatalf("seal connector deploy: %v", err)
 	}
@@ -591,7 +591,7 @@ func enqueueServedConnectorDeploy(t *testing.T, h *servedHarness, idemKey, conne
 	if !ok {
 		t.Fatal("served outbox handler is not the issuance dispatcher")
 	}
-	payload, err = handler.sealConnectorDeployBytes(h.tenant, "connector.deploy", idemKey, payload)
+	payload, err = handler.sealConnectorDeployBytes(context.Background(), h.tenant, "connector.deploy", idemKey, payload)
 	if err != nil {
 		t.Fatalf("seal connector deploy: %v", err)
 	}

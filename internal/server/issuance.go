@@ -18,7 +18,6 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
-	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
@@ -27,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 	"trstctl.com/trstctl/internal/usage"
 )
 
@@ -145,6 +145,10 @@ type issuanceDispatcher struct {
 	// connectorPayloadKey seals connector.deploy payloads before they are persisted
 	// in outbox.payload and opens them only inside this dispatcher.
 	connectorPayloadKey sealKeyWrapper
+	// tenantCrypto holds one shared tenant-domain fence across a complete worker
+	// delivery. The tenantseal.seal command itself bypasses this shared gate because
+	// it must acquire the matching exclusive fence.
+	tenantCrypto tenantseal.Access
 	// externalCAs owns external-ca.issue rows. Provider-backed issuance is routed
 	// through this registry so upstream CA side effects happen from the outbox
 	// worker, not the request handler.
@@ -194,6 +198,21 @@ type issuanceDispatcher struct {
 // fail closed so the outbox never marks a lifecycle side effect delivered without
 // doing real work.
 func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message) error {
+	if d.tenantCrypto == nil || m.Destination == store.TenantKeyDomainSealDestination {
+		return d.deliver(ctx, m)
+	}
+	err := withTenantCipher(ctx, d.tenantCrypto, d.connectorPayloadKey, m.TenantID, func(scoped context.Context, _ tenantseal.Cipher) error {
+		return d.deliver(scoped, m)
+	})
+	if _, unavailable := tenantseal.StatusOf(err); unavailable {
+		// Access failed before any receiver handler ran, so a seal or custody outage
+		// pauses the row without spending its finite external-delivery retry budget.
+		return orchestrator.DeferDelivery(err)
+	}
+	return err
+}
+
+func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message) error {
 	switch m.Destination {
 	case "ca.issue":
 		return d.handleIssue(ctx, m)
@@ -885,7 +904,7 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 		return nil
 	}
 	idemKey := "credential-deploy:" + identityID + ":" + fingerprint
-	sealedPayload, err := d.sealConnectorDeployBytes(tenantID, "connector.deploy", idemKey, payload)
+	sealedPayload, err := d.sealConnectorDeployBytes(ctx, tenantID, "connector.deploy", idemKey, payload)
 	if err != nil {
 		return err
 	}
@@ -1101,7 +1120,7 @@ type rotationRunEvidence struct {
 }
 
 func (d *issuanceDispatcher) resolveDeployPayload(ctx context.Context, m orchestrator.Message) (connector.DeployPayload, *string, string, error) {
-	if p, identityID, detail, sealed, err := d.openSealedConnectorDeployPayload(m); sealed || err != nil {
+	if p, identityID, detail, sealed, err := d.openSealedConnectorDeployPayload(ctx, m); sealed || err != nil {
 		p.TenantID = m.TenantID
 		return p, identityID, detail, err
 	}
@@ -1151,14 +1170,14 @@ func (d *issuanceDispatcher) resolveDeployPayload(ctx context.Context, m orchest
 	return p, &identityID, "lifecycle transition deploy payload", nil
 }
 
-func (d *issuanceDispatcher) sealConnectorDeploySideEffect(ctx orchestrator.SideEffectPayloadContext) ([]byte, error) {
-	if ctx.Destination != "connector.deploy" {
-		return ctx.Payload, nil
+func (d *issuanceDispatcher) sealConnectorDeploySideEffect(ctx context.Context, payloadCtx orchestrator.SideEffectPayloadContext) ([]byte, error) {
+	if payloadCtx.Destination != "connector.deploy" {
+		return payloadCtx.Payload, nil
 	}
-	return d.sealConnectorDeployBytes(ctx.TenantID, ctx.Destination, ctx.IdempotencyKey, ctx.Payload)
+	return d.sealConnectorDeployBytes(ctx, payloadCtx.TenantID, payloadCtx.Destination, payloadCtx.IdempotencyKey, payloadCtx.Payload)
 }
 
-func (d *issuanceDispatcher) sealConnectorDeployBytes(tenantID, destination, idempotencyKey string, payload []byte) ([]byte, error) {
+func (d *issuanceDispatcher) sealConnectorDeployBytes(ctx context.Context, tenantID, destination, idempotencyKey string, payload []byte) ([]byte, error) {
 	var p connector.DeployPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
 		return nil, fmt.Errorf("server: decode connector deploy payload for sealing: %w", err)
@@ -1172,7 +1191,7 @@ func (d *issuanceDispatcher) sealConnectorDeployBytes(tenantID, destination, ide
 	}
 	identityID := strings.TrimSpace(p.IdentityID)
 	fingerprint := strings.TrimSpace(p.Fingerprint)
-	sealed, err := seal.Seal(d.connectorPayloadKey, payload, connectorDeployAAD(tenantID, destination, idempotencyKey, identityID, fingerprint))
+	sealed, err := sealTenantValue(ctx, d.tenantCrypto, d.connectorPayloadKey, tenantID, payload, connectorDeployAAD(tenantID, destination, idempotencyKey, identityID, fingerprint))
 	if err != nil {
 		return nil, fmt.Errorf("server: seal connector deploy payload: %w", err)
 	}
@@ -1189,7 +1208,7 @@ func (d *issuanceDispatcher) sealConnectorDeployBytes(tenantID, destination, ide
 	return out, nil
 }
 
-func (d *issuanceDispatcher) openSealedConnectorDeployPayload(m orchestrator.Message) (connector.DeployPayload, *string, string, bool, error) {
+func (d *issuanceDispatcher) openSealedConnectorDeployPayload(ctx context.Context, m orchestrator.Message) (connector.DeployPayload, *string, string, bool, error) {
 	var wrapped sealedConnectorDeployPayload
 	if err := json.Unmarshal(m.Payload, &wrapped); err != nil || wrapped.Format == "" {
 		return connector.DeployPayload{}, nil, "", false, nil
@@ -1205,7 +1224,7 @@ func (d *issuanceDispatcher) openSealedConnectorDeployPayload(m orchestrator.Mes
 	}
 	identityIDValue := strings.TrimSpace(wrapped.IdentityID)
 	fingerprintValue := strings.TrimSpace(wrapped.Fingerprint)
-	plaintext, err := seal.Open(d.connectorPayloadKey, wrapped.Sealed, connectorDeployAAD(m.TenantID, m.Destination, m.IdempotencyKey, identityIDValue, fingerprintValue))
+	plaintext, err := openTenantValue(ctx, d.tenantCrypto, d.connectorPayloadKey, m.TenantID, wrapped.Sealed, connectorDeployAAD(m.TenantID, m.Destination, m.IdempotencyKey, identityIDValue, fingerprintValue))
 	if err != nil {
 		return connector.DeployPayload{}, nil, "", true, fmt.Errorf("server: open sealed connector deploy payload: %w", err)
 	}

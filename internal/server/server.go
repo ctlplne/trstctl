@@ -539,6 +539,7 @@ type Server struct {
 	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
 	complianceSigner *crypto.LockedSigner
 	cloudTokenMinter *cloudauth.Minter
+	tenantCrypto     tenantseal.Access
 
 	signer     SignerProvider
 	caSigner   crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
@@ -806,6 +807,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		egress:                    d.EgressGuard,
 		telemetry:                 d.TelemetryReporter,
 		cloudTokenMinter:          d.CloudTokenMinter,
+		tenantCrypto:              d.TenantCrypto,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",
@@ -1020,7 +1022,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if codeSigningConfig.Gate == nil {
 		codeSigningConfig.Gate = s.codeSignGate
 	}
-	if cs, err := newServedCodeSigningService(codeSigningConfig, d.Store, d.Log, d.KEK, s.outbox, s.wakeOutbox); err != nil {
+	if cs, err := newServedCodeSigningService(codeSigningConfig, d.Store, d.Log, d.KEK, s.outbox, s.wakeOutbox, d.TenantCrypto); err != nil {
 		return nil, nil, fmt.Errorf("server: configure code-signing: %w", err)
 	} else if cs != nil {
 		s.codeSign = cs
@@ -1216,7 +1218,7 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 		return err
 	}
 	if d.Store != nil && d.Log != nil && s.outbox != nil {
-		s.acmeDNS01 = newServedACMEDNS01Automation(d.Store, d.Log, s.outbox, d.KEK, s.plugins)
+		s.acmeDNS01 = newServedACMEDNS01Automation(d.Store, d.Log, s.outbox, d.KEK, s.plugins, d.TenantCrypto)
 	}
 	if err := s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL); err != nil {
 		return err
@@ -1312,6 +1314,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		dynamicProviders: d.TenantDynamicSecretProviders,
 		syncTargets:      d.TenantSecretSyncTargets,
 		kek:              d.KEK,
+		tenantCrypto:     d.TenantCrypto,
 		store:            d.Store,
 		log:              d.Log,
 	}
@@ -1325,9 +1328,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	}
 	return nil
 }
