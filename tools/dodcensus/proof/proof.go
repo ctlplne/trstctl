@@ -39,6 +39,10 @@ const RuntimeTempDir = "/dod-tmp"
 const (
 	HostReceiptRootEnv = "TRSTCTL_DOD_HOST_RECEIPT_ROOT"
 	RuntimeTempRootEnv = "TRSTCTL_DOD_RUNTIME_TEMP_ROOT"
+	// ShippedGoCacheEnv is issued by the census runner after it validates the
+	// gate-private cache mount. Keeping compiled packages there prevents every
+	// nonce-bound receipt mount from copying another complete Go cache tree.
+	ShippedGoCacheEnv = "TRSTCTL_DOD_SHIPPED_GOCACHE"
 )
 
 // DockerHostMountSource translates a path under RuntimeTempDir back to the

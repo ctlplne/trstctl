@@ -685,23 +685,76 @@ func TestShippedBuildArgumentsBoundPackageParallelism(t *testing.T) {
 }
 
 func TestShippedBuildsReuseOneGatePrivateGoCache(t *testing.T) {
-	receiptDir := t.TempDir()
-	first, err := ensureShippedGoCache(receiptDir)
+	cacheDir := t.TempDir()
+	if err := os.Chmod(cacheDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	firstReceipt := t.TempDir()
+	secondReceipt := t.TempDir()
+	t.Setenv(ShippedGoCacheEnv, cacheDir)
+	first, err := ensureShippedGoCache(firstReceipt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := ensureShippedGoCache(receiptDir)
+	second, err := ensureShippedGoCache(secondReceipt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first != second {
+	if first != cacheDir || second != cacheDir {
 		t.Fatalf("shipped builds use separate gate-private caches %q and %q", first, second)
 	}
-	if err := os.Chmod(first, 0o755); err != nil {
+	if _, err := os.Stat(filepath.Join(firstReceipt, "shipped-gocache")); !os.IsNotExist(err) {
+		t.Fatalf("receipt root contains a copied shipped cache: %v", err)
+	}
+	if err := os.Chmod(cacheDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ensureShippedGoCache(receiptDir); err == nil {
+	if _, err := ensureShippedGoCache(firstReceipt); err == nil {
 		t.Fatal("shared shipped-build cache accepted a non-private existing directory")
+	}
+}
+
+func TestShippedBuildCacheRejectsAmbientOrReceiptOverlappingPaths(t *testing.T) {
+	receiptDir := t.TempDir()
+	for _, test := range []struct {
+		name  string
+		cache string
+	}{
+		{name: "unset"},
+		{name: "relative", cache: "relative/cache"},
+		{name: "receipt root", cache: receiptDir},
+		{name: "receipt child", cache: filepath.Join(receiptDir, "cache")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(ShippedGoCacheEnv, test.cache)
+			if _, err := ensureShippedGoCache(receiptDir); err == nil {
+				t.Fatal("unsafe shipped-build cache passed")
+			}
+		})
+	}
+	realCache := t.TempDir()
+	if err := os.Chmod(realCache, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "cache-link")
+	if err := os.Symlink(realCache, link); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(ShippedGoCacheEnv, link)
+	if _, err := ensureShippedGoCache(receiptDir); err == nil {
+		t.Fatal("symlinked shipped-build cache passed")
+	}
+	cacheInReceipt := filepath.Join(receiptDir, "cache-via-parent-link")
+	if err := os.Mkdir(cacheInReceipt, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	linkedParent := filepath.Join(t.TempDir(), "receipt-link")
+	if err := os.Symlink(receiptDir, linkedParent); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(ShippedGoCacheEnv, filepath.Join(linkedParent, filepath.Base(cacheInReceipt)))
+	if _, err := ensureShippedGoCache(receiptDir); err == nil {
+		t.Fatal("shipped-build cache inside a symlinked receipt parent passed")
 	}
 }
 

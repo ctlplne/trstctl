@@ -908,6 +908,10 @@ func TestDODCommandEnvironmentPinsArtifactAndRuntimeToShippedPlatform(t *testing
 	if !strings.Contains(host, "TRSTCTL_DOD_EXPECTATIONS=issued") || strings.Contains(host, "forged") {
 		t.Fatalf("gate runtime environment was not isolated: %s", host)
 	}
+	if !strings.Contains(artifact, "TRSTCTL_DOD_SHIPPED_GOCACHE=/tmp/artifact") ||
+		!strings.Contains(host, "TRSTCTL_DOD_SHIPPED_GOCACHE=/tmp/runtime") {
+		t.Fatalf("gate-private shipped caches were not issued: artifact=%s runtime=%s", artifact, host)
+	}
 }
 
 func TestDODGoInvocationAllowsOnlyClosedListAndReceiptTestShapes(t *testing.T) {

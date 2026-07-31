@@ -117,6 +117,7 @@ func TestRuntimeRunnerGoEnvironmentIsClosedAndOffline(t *testing.T) {
 		"--env", "GOOS=linux",
 		"--env", "GOARCH=amd64",
 		"--env", "GOCACHE=/private/cache",
+		"--env", "TRSTCTL_DOD_SHIPPED_GOCACHE=/private/cache",
 		"--env", "GOMODCACHE=/go/pkg/mod",
 		"--env", "GOPROXY=off",
 		"--env", "GOSUMDB=off",

@@ -563,6 +563,7 @@ func runtimeRunnerGoEnvironment(profile BuildProfile, cacheDir string) []string 
 		"GOOS=" + profile.GOOS,
 		"GOARCH=" + profile.GOARCH,
 		"GOCACHE=" + cacheDir,
+		dodproof.ShippedGoCacheEnv + "=" + cacheDir,
 		"GOMODCACHE=/go/pkg/mod",
 		"GOPROXY=off",
 		"GOSUMDB=off",

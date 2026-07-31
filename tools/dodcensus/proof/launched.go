@@ -301,19 +301,38 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 }
 
 func ensureShippedGoCache(receiptDir string) (string, error) {
-	// The whole census owns one private receipt root and buildShippedProcess
-	// serializes every build under shippedBuilds. Reuse Go's content-addressed
-	// package cache across those builds so per-proof license linker values do not
-	// recompile the same thousand packages. The final binary remains per-key and
-	// is revalidated byte-for-byte before launch.
-	goCache := filepath.Join(receiptDir, "shipped-gocache")
-	if err := os.Mkdir(goCache, 0o700); err != nil && !os.IsExist(err) {
-		return "", fmt.Errorf("create exclusive launched Go cache: %w", err)
+	// The runner owns one private content-addressed cache for the entire census.
+	// Receipt roots stay per execution because they contain nonce/MAC-bound
+	// evidence and substrate inputs. Putting the package cache below a receipt
+	// root copies thousands of files into every host bind mount; Docker Desktop's
+	// VirtioFS retains those deleted handles and can exhaust the host file table.
+	goCache := os.Getenv(ShippedGoCacheEnv)
+	for label, path := range map[string]string{"receipt directory": receiptDir, "shipped Go cache": goCache} {
+		if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, "\r\n\x00") {
+			return "", fmt.Errorf("%s is not an exact clean absolute path", label)
+		}
+	}
+	if pathsOverlap(receiptDir, goCache) {
+		return "", fmt.Errorf("shipped Go cache overlaps the nonce-bound receipt directory")
 	}
 	if err := validatePrivateDirectory(goCache); err != nil {
 		return "", err
 	}
 	return goCache, nil
+}
+
+func pathsOverlap(first, second string) bool {
+	inside := func(root, candidate string) bool {
+		relative, err := filepath.Rel(root, candidate)
+		return err == nil && (relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))))
+	}
+	if inside(first, second) || inside(second, first) {
+		return true
+	}
+	resolvedFirst, firstErr := filepath.EvalSymlinks(first)
+	resolvedSecond, secondErr := filepath.EvalSymlinks(second)
+	return firstErr == nil && secondErr == nil &&
+		(inside(resolvedFirst, resolvedSecond) || inside(resolvedSecond, resolvedFirst))
 }
 
 func shippedBuildArguments(expected expectation, ldflags, output, packagePath string) []string {

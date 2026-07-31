@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	dodproof "trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
 const (
@@ -387,7 +389,12 @@ func dodCommandEnvironment(base []string, cacheDir string, profile BuildProfile)
 		}
 		out = append(out, item)
 	}
-	out = append(out, "CGO_ENABLED="+profile.CGOEnabled, "GOCACHE="+cacheDir, "GOFLAGS=")
+	out = append(out,
+		"CGO_ENABLED="+profile.CGOEnabled,
+		"GOCACHE="+cacheDir,
+		dodproof.ShippedGoCacheEnv+"="+cacheDir,
+		"GOFLAGS=",
+	)
 	if !profile.HostRuntime {
 		out = append(out, "GOOS="+profile.GOOS, "GOARCH="+profile.GOARCH)
 	}
