@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -36,9 +37,9 @@ var ErrIdempotencyNotFound = errors.New("orchestrator: idempotent operation not 
 // second effect. The only safe answer is a 409 at the transport boundary.
 var ErrIdempotencyConflict = errors.New("orchestrator: idempotency key was already used for a different authenticated request")
 
-// ErrEffectIndeterminate means a non-replay-safe receiver was claimed before its
-// external call, but no completed result was durably recorded. Retrying the call
-// could duplicate an upstream mutation, so the safe direction is operator
+// ErrEffectIndeterminate means a callback/receiver may have succeeded, but no
+// completed result was durably recorded. Retrying the callback could duplicate a
+// mutation, so the safe direction is a named subsystem reconciler or operator
 // reconciliation rather than blind redelivery.
 var ErrEffectIndeterminate = errors.New("orchestrator: external effect outcome is indeterminate; reconciliation required")
 
@@ -78,11 +79,10 @@ type IdempotencyOption func(*Idempotency)
 //
 // This option is a rollout seam, not permission to enable protected writes on a
 // mixed-version fleet. Every reader must understand result_codec first. Callers
-// must also make a successful callback reconcilable before enabling it: fn does
-// not receive this recorder's SQL transaction, so an independently committed
-// event/effect cannot be rolled back if Protect or the result UPDATE later
-// fails. Production assembly deliberately leaves this option unattached until
-// that post-success failure wall is served.
+// must also make independently committed callback effects reconcilable before
+// enabling it. The recorder durably walls off a key when protection/completion
+// fails after fn succeeds, but it cannot invent the lost successful response;
+// only a named subsystem reconciler can resolve that indeterminate operation.
 func WithResultProtector(protector ResultProtector) IdempotencyOption {
 	return func(idempotency *Idempotency) {
 		idempotency.resultProtector = protector
@@ -102,6 +102,9 @@ type Idempotency struct {
 	memoryMu         sync.Mutex
 	atMostOnceMemory map[string]atMostOnceMemoryResult
 	boundMemory      map[string]*boundMemoryResult
+
+	protectedFlightMu sync.Mutex
+	protectedFlights  map[string]chan struct{}
 }
 
 type atMostOnceMemoryResult struct {
@@ -111,13 +114,14 @@ type atMostOnceMemoryResult struct {
 }
 
 type boundMemoryResult struct {
-	binding   string
-	persist   bool
-	running   bool
-	completed bool
-	codec     string
-	result    []byte
-	wait      chan struct{}
+	binding       string
+	persist       bool
+	running       bool
+	completed     bool
+	indeterminate bool
+	codec         string
+	result        []byte
+	wait          chan struct{}
 }
 
 // NewIdempotency returns an Idempotency backed by the given store.
@@ -199,6 +203,342 @@ func (i *Idempotency) openResult(ctx context.Context, tenantID, key, binding, co
 	return append([]byte(nil), plaintext...), nil
 }
 
+// doProtectedTransactional preserves Do/DoBound's wait-and-replay behavior while
+// adding one durable wall for the new failure point introduced by ResultProtector.
+// The short first transaction commits a pending row before fn can produce an
+// independently durable effect. The execution transaction then locks that row
+// for the whole callback, so an identical concurrent caller still waits and
+// replays the completed bytes. A callback error deletes the preclaim and remains
+// retryable. Once fn succeeds, however, a Protect or completion-store failure
+// leaves pending/indeterminate state. A retry returns ErrInProgress for a pending
+// wall or ErrEffectIndeterminate for an explicit one; neither path guesses that
+// rerunning fn is safe.
+func (i *Idempotency) doProtectedTransactional(
+	ctx context.Context,
+	tenantID, key, binding string,
+	fn func(context.Context) ([]byte, error),
+) ([]byte, error) {
+	releaseFlight, err := i.acquireProtectedFlight(ctx, tenantID, key)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseFlight()
+
+	for {
+		claimed := false
+		err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			tag, err := tx.Exec(ctx,
+				`INSERT INTO idempotency_keys (tenant_id, key, status, request_binding)
+				 VALUES ($1, $2, 'pending', $3)
+				 ON CONFLICT (tenant_id, key) DO NOTHING`,
+				tenantID, key, binding)
+			if err != nil {
+				return fmt.Errorf("orchestrator: preclaim protected idempotency key: %w", err)
+			}
+			claimed = tag.RowsAffected() == 1
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		if claimed {
+			return i.executeProtectedClaim(ctx, tenantID, key, binding, fn)
+		}
+
+		result, codec, retry, err := i.readProtectedClaim(ctx, tenantID, key, binding)
+		if retry {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		return i.openResult(ctx, tenantID, key, binding, codec, result)
+	}
+}
+
+// readProtectedClaim locks an existing key before deciding its outcome. That row
+// lock makes an identical concurrent request wait behind the executing owner,
+// matching the original single-transaction behavior. A pending row is never
+// auto-promoted: merely acquiring its lock does not prove its owner died or that
+// a callback ran. Only the execution owner may write indeterminate after fn has
+// actually returned success.
+func (i *Idempotency) readProtectedClaim(
+	ctx context.Context,
+	tenantID, key, binding string,
+) (result []byte, codec string, retry bool, err error) {
+	var outcome error
+	err = i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var status, storedBinding string
+		scanErr := tx.QueryRow(ctx,
+			`SELECT status, request_binding
+			   FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2
+			  FOR UPDATE`,
+			tenantID, key).Scan(&status, &storedBinding)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			retry = true
+			return nil
+		}
+		if scanErr != nil {
+			return fmt.Errorf("orchestrator: lock protected idempotency key: %w", scanErr)
+		}
+		if !idempotencyBindingEqual(storedBinding, binding) {
+			return ErrIdempotencyConflict
+		}
+		switch status {
+		case "completed":
+			if scanErr := tx.QueryRow(ctx,
+				`SELECT result_codec, result
+				   FROM idempotency_keys
+				  WHERE tenant_id = $1 AND key = $2 AND request_binding = $3`,
+				tenantID, key, binding).Scan(&codec, &result); scanErr != nil {
+				return fmt.Errorf("orchestrator: load protected idempotency result: %w", scanErr)
+			}
+		case "pending":
+			outcome = ErrInProgress
+		case "indeterminate":
+			outcome = ErrEffectIndeterminate
+		default:
+			outcome = ErrInProgress
+		}
+		return nil
+	})
+	if err != nil {
+		secret.Wipe(result)
+		return nil, "", false, err
+	}
+	if outcome != nil {
+		secret.Wipe(result)
+		return nil, "", false, outcome
+	}
+	return result, codec, retry, nil
+}
+
+func (i *Idempotency) executeProtectedClaim(
+	ctx context.Context,
+	tenantID, key, binding string,
+	fn func(context.Context) ([]byte, error),
+) ([]byte, error) {
+	var (
+		result            []byte
+		resultCodec       string
+		replayed          bool
+		callbackErr       error
+		postSuccessErr    error
+		callbackSucceeded bool
+	)
+	defer func() { secret.Wipe(result) }()
+
+	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var status, storedBinding string
+		scanErr := tx.QueryRow(ctx,
+			`SELECT status, request_binding
+			   FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2
+			  FOR UPDATE`,
+			tenantID, key).Scan(&status, &storedBinding)
+		if scanErr != nil {
+			return fmt.Errorf("orchestrator: lock owned protected idempotency key: %w", scanErr)
+		}
+		if !idempotencyBindingEqual(storedBinding, binding) {
+			return ErrIdempotencyConflict
+		}
+		switch status {
+		case "completed":
+			if scanErr := tx.QueryRow(ctx,
+				`SELECT result_codec, result
+				   FROM idempotency_keys
+				  WHERE tenant_id = $1 AND key = $2 AND request_binding = $3`,
+				tenantID, key, binding).Scan(&resultCodec, &result); scanErr != nil {
+				return fmt.Errorf("orchestrator: load raced protected idempotency result: %w", scanErr)
+			}
+			replayed = true
+			return nil
+		case "indeterminate":
+			return ErrEffectIndeterminate
+		case "pending":
+			// This caller inserted the preclaim and owns execution.
+		default:
+			return ErrInProgress
+		}
+
+		out, fnErr := fn(ctx)
+		defer secret.Wipe(out)
+		if fnErr != nil {
+			callbackErr = fnErr
+			tag, deleteErr := tx.Exec(ctx,
+				`DELETE FROM idempotency_keys
+				  WHERE tenant_id = $1 AND key = $2
+				    AND request_binding = $3 AND status = 'pending'`,
+				tenantID, key, binding)
+			if deleteErr != nil {
+				return fmt.Errorf("orchestrator: release failed protected callback claim: %w", deleteErr)
+			}
+			if tag.RowsAffected() != 1 {
+				return errors.New("orchestrator: failed protected callback claim changed while locked")
+			}
+			return nil
+		}
+		callbackSucceeded = true
+
+		codec, protected, protectErr := i.protectResult(ctx, tenantID, key, binding, out)
+		if protectErr != nil {
+			postSuccessErr = protectErr
+			tag, updateErr := tx.Exec(ctx,
+				`UPDATE idempotency_keys
+				    SET status = 'indeterminate'
+				  WHERE tenant_id = $1 AND key = $2
+				    AND request_binding = $3 AND status = 'pending'`,
+				tenantID, key, binding)
+			if updateErr != nil {
+				return fmt.Errorf("orchestrator: persist protection failure wall: %w", updateErr)
+			}
+			if tag.RowsAffected() != 1 {
+				return errors.New("orchestrator: protection failure claim changed while locked")
+			}
+			return nil
+		}
+		defer secret.Wipe(protected)
+
+		tag, updateErr := tx.Exec(ctx,
+			`UPDATE idempotency_keys
+			    SET status = 'completed', result_codec = $4, result = $5, completed_at = now()
+			  WHERE tenant_id = $1 AND key = $2
+			    AND request_binding = $3 AND status = 'pending'`,
+			tenantID, key, binding, codec, protected)
+		if updateErr != nil {
+			return fmt.Errorf("orchestrator: record protected idempotency result: %w", updateErr)
+		}
+		if tag.RowsAffected() != 1 {
+			return errors.New("orchestrator: protected idempotency claim changed while locked")
+		}
+		result = append([]byte(nil), out...)
+		return nil
+	})
+
+	if callbackErr != nil {
+		if err != nil {
+			return nil, fmt.Errorf("%w (release protected callback claim: %v)", callbackErr, err)
+		}
+		return nil, callbackErr
+	}
+	if postSuccessErr != nil {
+		if err != nil {
+			postSuccessErr = errors.Join(postSuccessErr, err)
+			if markErr := i.markProtectedIndeterminate(ctx, tenantID, key, binding); markErr != nil {
+				postSuccessErr = errors.Join(postSuccessErr, markErr)
+			}
+		}
+		return nil, protectedIndeterminateError(postSuccessErr)
+	}
+	if err != nil {
+		if callbackSucceeded {
+			if markErr := i.markProtectedIndeterminate(ctx, tenantID, key, binding); markErr != nil {
+				err = errors.Join(err, markErr)
+			}
+			return nil, protectedIndeterminateError(err)
+		}
+		return nil, err
+	}
+	if replayed {
+		return i.openResult(ctx, tenantID, key, binding, resultCodec, result)
+	}
+	return append([]byte(nil), result...), nil
+}
+
+func (i *Idempotency) markProtectedIndeterminate(ctx context.Context, tenantID, key, binding string) error {
+	repairCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return i.store.WithTenant(repairCtx, tenantID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(repairCtx,
+			`UPDATE idempotency_keys
+			    SET status = 'indeterminate'
+			  WHERE tenant_id = $1 AND key = $2
+			    AND request_binding = $3 AND status = 'pending'`,
+			tenantID, key, binding)
+		if err != nil {
+			return fmt.Errorf("orchestrator: persist indeterminate protected result: %w", err)
+		}
+		if tag.RowsAffected() == 1 {
+			return nil
+		}
+
+		// A lost COMMIT response can mean the completed/indeterminate write
+		// actually committed. Prove that durable wall before treating zero updated
+		// rows as success; a missing or rebound claim is not a safe outcome.
+		var status, storedBinding string
+		if err := tx.QueryRow(repairCtx,
+			`SELECT status, request_binding
+			   FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2`,
+			tenantID, key).Scan(&status, &storedBinding); err != nil {
+			return fmt.Errorf("orchestrator: verify protected result failure wall: %w", err)
+		}
+		if !idempotencyBindingEqual(storedBinding, binding) {
+			return ErrIdempotencyConflict
+		}
+		if status != "completed" && status != "indeterminate" {
+			return fmt.Errorf("orchestrator: protected result failure left unsafe status %q", status)
+		}
+		return nil
+	})
+}
+
+func protectedIndeterminateError(cause error) error {
+	if cause == nil {
+		return ErrEffectIndeterminate
+	}
+	return fmt.Errorf("%w: %w", ErrEffectIndeterminate, cause)
+}
+
+func idempotencyBindingEqual(stored, supplied string) bool {
+	if stored == "" || supplied == "" {
+		return stored == supplied
+	}
+	return crypto.ConstantTimeEqual([]byte(stored), []byte(supplied))
+}
+
+// acquireProtectedFlight closes the preclaim→execution gap for callers sharing
+// this Idempotency instance. PostgreSQL remains the cross-process authority: a
+// different process that reaches a committed pending row fails safely with
+// ErrInProgress rather than inferring that the owner is dead.
+func (i *Idempotency) acquireProtectedFlight(ctx context.Context, tenantID, key string) (func(), error) {
+	flightKey := tenantID + "\x00" + key
+	for {
+		i.protectedFlightMu.Lock()
+		if i.protectedFlights == nil {
+			i.protectedFlights = make(map[string]chan struct{})
+		}
+		if wait, exists := i.protectedFlights[flightKey]; exists {
+			i.protectedFlightMu.Unlock()
+			select {
+			case <-wait:
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		done := make(chan struct{})
+		i.protectedFlights[flightKey] = done
+		i.protectedFlightMu.Unlock()
+		return func() {
+			i.protectedFlightMu.Lock()
+			if current, exists := i.protectedFlights[flightKey]; exists && current == done {
+				delete(i.protectedFlights, flightKey)
+				close(done)
+			}
+			i.protectedFlightMu.Unlock()
+		}, nil
+	}
+}
+
+func incompleteResultError(status string) error {
+	if status == "indeterminate" {
+		return ErrEffectIndeterminate
+	}
+	return ErrInProgress
+}
+
 // Do runs fn at most once per (tenantID, key). The first caller for a key claims
 // it, runs fn, and records the result; every later caller — a retry or a
 // concurrent request — returns that recorded result without running fn again.
@@ -213,15 +553,21 @@ func (i *Idempotency) openResult(ctx context.Context, tenantID, key, binding, co
 // observes the conflict (zero rows affected) and reads the cached result — so
 // only one effect occurs. If fn fails, the transaction rolls back and the claim
 // disappears, so a later retry is free to execute (failures are not cached).
+// With a configured ResultProtector, a short committed preclaim is added before
+// fn; post-success protection/storage failures then remain non-replayable and
+// return ErrEffectIndeterminate.
 func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
 	}
 	if i.memory != nil {
-		return i.doBoundMemory(ctx, tenantID, key, "", false, fn)
+		return i.doBoundMemory(ctx, tenantID, key, "", false, true, fn)
 	}
 	if i.store == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
+	}
+	if i.resultProtector != nil {
+		return i.doProtectedTransactional(ctx, tenantID, key, "", fn)
 	}
 	var (
 		result      []byte
@@ -254,7 +600,7 @@ func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(cont
 				return ErrIdempotencyConflict
 			}
 			if status != "completed" {
-				return ErrInProgress
+				return incompleteResultError(status)
 			}
 			if err := tx.QueryRow(ctx,
 				`SELECT result_codec, result FROM idempotency_keys
@@ -312,10 +658,13 @@ func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string
 		return nil, errors.New("orchestrator: bound idempotency requires tenant, key, and request binding")
 	}
 	if i.memory != nil {
-		return i.doBoundMemory(ctx, tenantID, key, binding, false, fn)
+		return i.doBoundMemory(ctx, tenantID, key, binding, false, true, fn)
 	}
 	if i.store == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
+	}
+	if i.resultProtector != nil {
+		return i.doProtectedTransactional(ctx, tenantID, key, binding, fn)
 	}
 
 	var (
@@ -345,11 +694,11 @@ func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string
 				tenantID, key).Scan(&status, &storedBinding); err != nil {
 				return fmt.Errorf("orchestrator: load bound key: %w", err)
 			}
-			if !crypto.ConstantTimeEqual([]byte(storedBinding), []byte(binding)) {
+			if !idempotencyBindingEqual(storedBinding, binding) {
 				return ErrIdempotencyConflict
 			}
 			if status != "completed" {
-				return ErrInProgress
+				return incompleteResultError(status)
 			}
 			if err := tx.QueryRow(ctx,
 				`SELECT result_codec, result FROM idempotency_keys
@@ -397,9 +746,16 @@ func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string
 // doBoundMemory is the in-process model shared by transactional and durable
 // bound calls. It owns cached result bytes and makes identical concurrent calls
 // wait for one callback. Transactional claims disappear on callback failure,
-// matching a rolled-back DoBound transaction; durable claims persist so only an
-// identical retry may reconcile an independently durable receiver.
-func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding string, persist bool, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+// matching a rolled-back DoBound transaction. A protected transactional claim
+// becomes indeterminate when Protect fails after callback success. Durable
+// claims persist so only an identical retry may reconcile an independently
+// durable receiver.
+func (i *Idempotency) doBoundMemory(
+	ctx context.Context,
+	tenantID, key, binding string,
+	persist, wallProtectFailure bool,
+	fn func(context.Context) ([]byte, error),
+) ([]byte, error) {
 	memoryKey := tenantID + "\x00" + key
 	for {
 		created := false
@@ -413,7 +769,7 @@ func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding 
 		}
 		record, exists := i.boundMemory[memoryKey]
 		if exists {
-			if !crypto.ConstantTimeEqual([]byte(record.binding), []byte(binding)) {
+			if !idempotencyBindingEqual(record.binding, binding) {
 				// A transactional binding is not committed until its callback
 				// succeeds. Wait to learn whether it commits or rolls back before
 				// deciding whether a different command conflicts.
@@ -429,6 +785,10 @@ func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding 
 				}
 				i.memoryMu.Unlock()
 				return nil, ErrIdempotencyConflict
+			}
+			if record.indeterminate {
+				i.memoryMu.Unlock()
+				return nil, ErrEffectIndeterminate
 			}
 			if record.completed {
 				result := append([]byte(nil), record.result...)
@@ -466,6 +826,7 @@ func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding 
 		i.memoryMu.Unlock()
 
 		out, err := fn(ctx)
+		callbackSucceeded := err == nil
 		var (
 			codec     string
 			protected []byte
@@ -480,12 +841,15 @@ func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding 
 			record.completed = true
 			record.codec = codec
 			record.result = append([]byte(nil), protected...)
-		} else if created && record.persist && errors.Is(err, ErrIdempotencyConflict) {
-			// A durable receiver can reveal that a fresh cache claim belongs to
+		} else if callbackSucceeded && wallProtectFailure {
+			record.indeterminate = true
+		} else if !callbackSucceeded && created && record.persist && errors.Is(err, ErrIdempotencyConflict) {
+			// A durable receiver may reveal that a fresh cache claim belongs to
 			// the wrong canonical command after generic idempotency GC. That
-			// conflict proves this new claim has no effect to reconcile. Remove
-			// only this call's uncompleted claim so the original command can
-			// recover from the durable receiver.
+			// conflict proves this newly-created claim has no effect to recover.
+			// Remove only this call's still-uncompleted claim so the original
+			// command can recover from the receiver; every other durable failure
+			// remains bound for reconciliation.
 			delete(i.boundMemory, memoryKey)
 		} else if !record.persist {
 			delete(i.boundMemory, memoryKey)
@@ -495,6 +859,9 @@ func (i *Idempotency) doBoundMemory(ctx context.Context, tenantID, key, binding 
 		secret.Wipe(protected)
 		if err != nil {
 			secret.Wipe(out)
+			if callbackSucceeded && wallProtectFailure {
+				return nil, protectedIndeterminateError(err)
+			}
 			return nil, err
 		}
 		result := append([]byte(nil), out...)
@@ -522,7 +889,7 @@ func (i *Idempotency) DoDurableEffect(ctx context.Context, tenantID, key string,
 	// Keeping its existing single-flight behavior makes assembled-handler tests
 	// deterministic without weakening the production PostgreSQL path below.
 	if i.memory != nil {
-		return i.doBoundMemory(ctx, tenantID, key, "", false, fn)
+		return i.doBoundMemory(ctx, tenantID, key, "", false, false, fn)
 	}
 	if i.store == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
@@ -583,7 +950,7 @@ func (i *Idempotency) DoDurableEffect(ctx context.Context, tenantID, key string,
 			return ErrIdempotencyConflict
 		}
 		if status != "completed" {
-			return ErrInProgress
+			return incompleteResultError(status)
 		}
 		if err := tx.QueryRow(ctx,
 			`SELECT result_codec, result FROM idempotency_keys
@@ -622,7 +989,7 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 		return nil, errors.New("orchestrator: bound durable idempotency requires tenant, key, and request binding")
 	}
 	if i.memory != nil {
-		return i.doBoundMemory(ctx, tenantID, key, binding, true, fn)
+		return i.doBoundMemory(ctx, tenantID, key, binding, true, false, fn)
 	}
 	if i.store == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
@@ -657,7 +1024,7 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 			tenantID, key).Scan(&status, &storedBinding); err != nil {
 			return fmt.Errorf("orchestrator: load bound durable key: %w", err)
 		}
-		if !crypto.ConstantTimeEqual([]byte(storedBinding), []byte(binding)) {
+		if !idempotencyBindingEqual(storedBinding, binding) {
 			return ErrIdempotencyConflict
 		}
 		switch status {
@@ -672,6 +1039,8 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 			}
 			completed = true
 			return nil
+		case "indeterminate":
+			return ErrEffectIndeterminate
 		default:
 			return ErrInProgress
 		}
@@ -732,11 +1101,11 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 			tenantID, key).Scan(&status, &storedBinding); err != nil {
 			return fmt.Errorf("orchestrator: load completed bound durable key: %w", err)
 		}
-		if !crypto.ConstantTimeEqual([]byte(storedBinding), []byte(binding)) {
+		if !idempotencyBindingEqual(storedBinding, binding) {
 			return ErrIdempotencyConflict
 		}
 		if status != "completed" {
-			return ErrInProgress
+			return incompleteResultError(status)
 		}
 		if err := tx.QueryRow(ctx,
 			`SELECT result_codec, result FROM idempotency_keys
@@ -904,6 +1273,10 @@ func (i *Idempotency) Result(ctx context.Context, tenantID, key string) ([]byte,
 				i.memoryMu.Unlock()
 				return nil, ErrIdempotencyConflict
 			}
+			if record.indeterminate {
+				i.memoryMu.Unlock()
+				return nil, ErrEffectIndeterminate
+			}
 			if !record.completed {
 				i.memoryMu.Unlock()
 				return nil, ErrInProgress
@@ -951,7 +1324,7 @@ func (i *Idempotency) Result(ctx context.Context, tenantID, key string) ([]byte,
 			return ErrIdempotencyConflict
 		}
 		if status != "completed" {
-			return ErrInProgress
+			return incompleteResultError(status)
 		}
 		if err := tx.QueryRow(ctx,
 			`SELECT result_codec, result FROM idempotency_keys
@@ -984,9 +1357,13 @@ func (i *Idempotency) BoundResult(ctx context.Context, tenantID, key, binding st
 			i.memoryMu.Unlock()
 			return nil, ErrIdempotencyNotFound
 		}
-		if !crypto.ConstantTimeEqual([]byte(record.binding), []byte(binding)) {
+		if !idempotencyBindingEqual(record.binding, binding) {
 			i.memoryMu.Unlock()
 			return nil, ErrIdempotencyConflict
+		}
+		if record.indeterminate {
+			i.memoryMu.Unlock()
+			return nil, ErrEffectIndeterminate
 		}
 		if !record.completed {
 			i.memoryMu.Unlock()
@@ -1022,11 +1399,11 @@ func (i *Idempotency) BoundResult(ctx context.Context, tenantID, key, binding st
 		if err != nil {
 			return fmt.Errorf("orchestrator: load bound key result: %w", err)
 		}
-		if storedBinding == "" || !crypto.ConstantTimeEqual([]byte(storedBinding), []byte(binding)) {
+		if storedBinding == "" || !idempotencyBindingEqual(storedBinding, binding) {
 			return ErrIdempotencyConflict
 		}
 		if status != "completed" {
-			return ErrInProgress
+			return incompleteResultError(status)
 		}
 		if err := tx.QueryRow(ctx,
 			`SELECT result_codec, result

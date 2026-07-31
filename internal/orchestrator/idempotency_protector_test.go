@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/orchestrator"
 )
@@ -30,6 +32,8 @@ type ownershipResultProtector struct {
 	protectErr   error
 	openErr      error
 	openValue    []byte
+	protects     int
+	opens        int
 
 	lastProtectedOutput []byte
 	lastOpenInput       []byte
@@ -39,6 +43,7 @@ type ownershipResultProtector struct {
 func (p *ownershipResultProtector) Protect(_ context.Context, _, _, _ string, plaintext []byte) (string, []byte, error) {
 	output := append([]byte("owned-protected\x00"), plaintext...)
 	p.mu.Lock()
+	p.protects++
 	p.lastProtectedOutput = output
 	codec := p.protectCodec
 	err := p.protectErr
@@ -51,6 +56,7 @@ func (p *ownershipResultProtector) Protect(_ context.Context, _, _, _ string, pl
 
 func (p *ownershipResultProtector) Open(_ context.Context, _, _, _, _ string, protected []byte) ([]byte, error) {
 	p.mu.Lock()
+	p.opens++
 	output := append([]byte(nil), p.openValue...)
 	p.lastOpenInput = protected
 	p.lastOpenOutput = output
@@ -63,6 +69,12 @@ func (p *ownershipResultProtector) buffers() (protectedOutput, openInput, openOu
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.lastProtectedOutput, p.lastOpenInput, p.lastOpenOutput
+}
+
+func (p *ownershipResultProtector) counts() (protects, opens int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.protects, p.opens
 }
 
 func requireWiped(t *testing.T, name string, value []byte) {
@@ -405,6 +417,406 @@ func TestProtectorFailureWipesPartialOutputsAndCallbackResult(t *testing.T) {
 	requireWiped(t, "failed callback-owned plaintext", callbackResult)
 	protectedOutput, _, _ := protector.buffers()
 	requireWiped(t, "partial protected error output", protectedOutput)
+}
+
+func TestTransactionalProtectFailureLeavesIndeterminateWallInMemoryAndPostgres(t *testing.T) {
+	injected := errors.New("injected protector failure")
+	type operation struct {
+		name    string
+		binding string
+		call    func(*orchestrator.Idempotency, context.Context, string, func(context.Context) ([]byte, error)) ([]byte, error)
+		read    func(*orchestrator.Idempotency, context.Context, string) ([]byte, error)
+	}
+	operations := []operation{
+		{
+			name: "Do",
+			call: func(idem *orchestrator.Idempotency, ctx context.Context, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+				return idem.Do(ctx, tenantA, key, fn)
+			},
+			read: func(idem *orchestrator.Idempotency, ctx context.Context, key string) ([]byte, error) {
+				return idem.Result(ctx, tenantA, key)
+			},
+		},
+		{
+			name:    "DoBound",
+			binding: "sha256:protected-failure-command",
+			call: func(idem *orchestrator.Idempotency, ctx context.Context, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+				return idem.DoBound(ctx, tenantA, key, "sha256:protected-failure-command", fn)
+			},
+			read: func(idem *orchestrator.Idempotency, ctx context.Context, key string) ([]byte, error) {
+				return idem.BoundResult(ctx, tenantA, key, "sha256:protected-failure-command")
+			},
+		},
+	}
+	backends := []struct {
+		name string
+		new  func(*testing.T, *ownershipResultProtector) *orchestrator.Idempotency
+	}{
+		{
+			name: "memory",
+			new: func(_ *testing.T, protector *ownershipResultProtector) *orchestrator.Idempotency {
+				return orchestrator.NewMemoryIdempotency(orchestrator.WithResultProtector(protector))
+			},
+		},
+		{
+			name: "postgres",
+			new: func(t *testing.T, protector *ownershipResultProtector) *orchestrator.Idempotency {
+				return orchestrator.NewIdempotency(newStore(t), orchestrator.WithResultProtector(protector))
+			},
+		},
+	}
+
+	for _, backend := range backends {
+		t.Run(backend.name, func(t *testing.T) {
+			for _, op := range operations {
+				t.Run(op.name, func(t *testing.T) {
+					protector := &ownershipResultProtector{protectErr: injected}
+					idem := backend.new(t, protector)
+					key := "protected-post-success-failure-" + backend.name + "-" + op.name
+					calls := 0
+					callback := func(context.Context) ([]byte, error) {
+						calls++
+						return []byte("effect-already-succeeded"), nil
+					}
+
+					result, err := op.call(idem, context.Background(), key, callback)
+					if !errors.Is(err, orchestrator.ErrEffectIndeterminate) || !errors.Is(err, injected) || len(result) != 0 {
+						t.Fatalf("first result=%q err=%v, want empty ErrEffectIndeterminate wrapping Protect failure", result, err)
+					}
+					result, err = op.call(idem, context.Background(), key, callback)
+					if !errors.Is(err, orchestrator.ErrEffectIndeterminate) || len(result) != 0 {
+						t.Fatalf("retry result=%q err=%v, want empty ErrEffectIndeterminate", result, err)
+					}
+					if calls != 1 {
+						t.Fatalf("callback calls=%d, want exactly one after successful effect + Protect failure", calls)
+					}
+					if result, err = op.read(idem, context.Background(), key); !errors.Is(err, orchestrator.ErrEffectIndeterminate) || len(result) != 0 {
+						t.Fatalf("explicit read result=%q err=%v, want empty ErrEffectIndeterminate", result, err)
+					}
+
+					if op.binding != "" {
+						changedCalled := false
+						result, err = idem.DoBound(context.Background(), tenantA, key, "sha256:different-command", func(context.Context) ([]byte, error) {
+							changedCalled = true
+							return []byte("must-not-run"), nil
+						})
+						if !errors.Is(err, orchestrator.ErrIdempotencyConflict) || changedCalled || len(result) != 0 {
+							t.Fatalf("changed binding result=%q err=%v callback=%v, want conflict before callback/bytes", result, err, changedCalled)
+						}
+					}
+					if protects, opens := protector.counts(); protects != 1 || opens != 0 {
+						t.Fatalf("protector calls Protect/Open=%d/%d, want 1/0 after failed write and blocked retries", protects, opens)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestConfiguredProtectorKeepsCallbackErrorsRetryable(t *testing.T) {
+	backends := []struct {
+		name string
+		new  func(*testing.T, *recordingResultProtector) *orchestrator.Idempotency
+	}{
+		{
+			name: "memory",
+			new: func(_ *testing.T, protector *recordingResultProtector) *orchestrator.Idempotency {
+				return orchestrator.NewMemoryIdempotency(orchestrator.WithResultProtector(protector))
+			},
+		},
+		{
+			name: "postgres",
+			new: func(t *testing.T, protector *recordingResultProtector) *orchestrator.Idempotency {
+				return orchestrator.NewIdempotency(newStore(t), orchestrator.WithResultProtector(protector))
+			},
+		},
+	}
+	for _, backend := range backends {
+		t.Run(backend.name, func(t *testing.T) {
+			protector := &recordingResultProtector{}
+			idem := backend.new(t, protector)
+			key := "protected-callback-retry-" + backend.name
+			calls := 0
+			callback := func(context.Context) ([]byte, error) {
+				calls++
+				if calls == 1 {
+					return []byte("partial-callback-output"), errors.New("transient callback failure")
+				}
+				return []byte("successful-retry"), nil
+			}
+			if result, err := idem.DoBound(context.Background(), tenantA, key, "sha256:retryable-command", callback); err == nil || len(result) != 0 {
+				t.Fatalf("first callback failure result=%q err=%v, want empty error", result, err)
+			}
+			result, err := idem.DoBound(context.Background(), tenantA, key, "sha256:retryable-command", callback)
+			if err != nil || string(result) != "successful-retry" {
+				t.Fatalf("retry result=%q err=%v, want successful-retry", result, err)
+			}
+			replay, err := idem.DoBound(context.Background(), tenantA, key, "sha256:retryable-command", func(context.Context) ([]byte, error) {
+				t.Fatal("completed replay executed callback")
+				return nil, nil
+			})
+			if err != nil || string(replay) != "successful-retry" || calls != 2 {
+				t.Fatalf("replay=%q err=%v callback calls=%d, want cached result and two total attempts", replay, err, calls)
+			}
+		})
+	}
+}
+
+func TestMemoryDurableBoundReceiverConflictReleasesFreshClaim(t *testing.T) {
+	idem := orchestrator.NewMemoryIdempotency()
+	ctx := context.Background()
+	const (
+		tenantID        = "11111111-1111-1111-1111-111111111111"
+		key             = "privacy-erasure-after-generic-cache-gc"
+		changedBinding  = "sha256:changed-command"
+		originalBinding = "sha256:canonical-command"
+	)
+
+	if result, err := idem.DoDurableEffectBound(
+		ctx, tenantID, key, changedBinding,
+		func(context.Context) ([]byte, error) {
+			return nil, orchestrator.ErrIdempotencyConflict
+		},
+	); !errors.Is(err, orchestrator.ErrIdempotencyConflict) || len(result) != 0 {
+		t.Fatalf("changed receiver result=%q err=%v, want empty ErrIdempotencyConflict", result, err)
+	}
+
+	calls := 0
+	result, err := idem.DoDurableEffectBound(
+		ctx, tenantID, key, originalBinding,
+		func(context.Context) ([]byte, error) {
+			calls++
+			return []byte("canonical-response"), nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("canonical recovery after receiver conflict: %v", err)
+	}
+	if string(result) != "canonical-response" || calls != 1 {
+		t.Fatalf("canonical recovery result=%q calls=%d, want canonical-response/1", result, calls)
+	}
+}
+
+// TestProtectedPreclaimExecutionGapBarrierNeverExecutesOrPromotes seeds the
+// exact durable state visible while an owner is between its committed preclaim
+// and execution-row lock. This is a deterministic barrier proof: an observer
+// cannot infer owner death, run the callback, or promote the row.
+func TestProtectedPreclaimExecutionGapBarrierNeverExecutesOrPromotes(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	const (
+		key     = "protected-preclaim-execution-gap"
+		binding = "sha256:gap-command"
+	)
+	if _, err := s.SystemPool().Exec(ctx, `
+		INSERT INTO idempotency_keys (tenant_id, key, status, request_binding)
+		VALUES ($1, $2, 'pending', $3)`,
+		tenantA, key, binding); err != nil {
+		t.Fatalf("seed committed preclaim: %v", err)
+	}
+	protector := &recordingResultProtector{}
+	idem := orchestrator.NewIdempotency(s, orchestrator.WithResultProtector(protector))
+	called := false
+	result, err := idem.DoBound(ctx, tenantA, key, binding, func(context.Context) ([]byte, error) {
+		called = true
+		return []byte("must-not-run"), nil
+	})
+	if !errors.Is(err, orchestrator.ErrInProgress) || called || len(result) != 0 {
+		t.Fatalf("pending-gap result=%q err=%v callback=%v, want unchanged ErrInProgress wall", result, err, called)
+	}
+	var status string
+	if err := s.SystemPool().QueryRow(ctx,
+		`SELECT status FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`,
+		tenantA, key).Scan(&status); err != nil {
+		t.Fatalf("read gap status: %v", err)
+	}
+	if status != "pending" {
+		t.Fatalf("gap status=%q, want pending; observer must not infer owner death", status)
+	}
+	if protects, opens := protector.counts(); protects != 0 || opens != 0 {
+		t.Fatalf("pending gap called Protect/Open=%d/%d, want 0/0", protects, opens)
+	}
+}
+
+func TestProtectedCompletionStoreFailureLeavesIndeterminateWall(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	const (
+		triggerName  = "test_fail_protected_idempotency_completion"
+		functionName = "test_fail_protected_idempotency_completion_fn"
+		keyPrefix    = "test-protected-completion-failure-"
+	)
+	dropFailureTrigger := func() {
+		_, _ = s.SystemPool().Exec(context.Background(), "DROP TRIGGER IF EXISTS "+triggerName+" ON idempotency_keys")
+		_, _ = s.SystemPool().Exec(context.Background(), "DROP FUNCTION IF EXISTS "+functionName+"()")
+	}
+	dropFailureTrigger()
+	t.Cleanup(dropFailureTrigger)
+	if _, err := s.SystemPool().Exec(ctx, `
+		CREATE FUNCTION `+functionName+`() RETURNS trigger
+		LANGUAGE plpgsql AS $$
+		BEGIN
+			IF NEW.status = 'completed' AND NEW.key LIKE '`+keyPrefix+`%' THEN
+				RAISE EXCEPTION 'injected protected result completion failure';
+			END IF;
+			RETURN NEW;
+		END
+		$$`); err != nil {
+		t.Fatalf("create completion failure function: %v", err)
+	}
+	if _, err := s.SystemPool().Exec(ctx,
+		"CREATE TRIGGER "+triggerName+" BEFORE UPDATE ON idempotency_keys FOR EACH ROW EXECUTE FUNCTION "+functionName+"()"); err != nil {
+		t.Fatalf("create completion failure trigger: %v", err)
+	}
+
+	type operation struct {
+		name    string
+		binding string
+		call    func(*orchestrator.Idempotency, string, func(context.Context) ([]byte, error)) ([]byte, error)
+		read    func(*orchestrator.Idempotency, string) ([]byte, error)
+	}
+	operations := []operation{
+		{
+			name: "Do",
+			call: func(idem *orchestrator.Idempotency, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+				return idem.Do(context.Background(), tenantA, key, fn)
+			},
+			read: func(idem *orchestrator.Idempotency, key string) ([]byte, error) {
+				return idem.Result(context.Background(), tenantA, key)
+			},
+		},
+		{
+			name:    "DoBound",
+			binding: "sha256:completion-failure-command",
+			call: func(idem *orchestrator.Idempotency, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+				return idem.DoBound(context.Background(), tenantA, key, "sha256:completion-failure-command", fn)
+			},
+			read: func(idem *orchestrator.Idempotency, key string) ([]byte, error) {
+				return idem.BoundResult(context.Background(), tenantA, key, "sha256:completion-failure-command")
+			},
+		},
+	}
+	protector := &recordingResultProtector{}
+	idem := orchestrator.NewIdempotency(s, orchestrator.WithResultProtector(protector))
+	for _, op := range operations {
+		t.Run(op.name, func(t *testing.T) {
+			key := keyPrefix + op.name
+			calls := 0
+			callback := func(context.Context) ([]byte, error) {
+				calls++
+				return []byte("effect-committed-before-result-store"), nil
+			}
+			result, err := op.call(idem, key, callback)
+			if !errors.Is(err, orchestrator.ErrEffectIndeterminate) || len(result) != 0 {
+				t.Fatalf("completion failure result=%q err=%v, want ErrEffectIndeterminate", result, err)
+			}
+			var status string
+			if err := s.SystemPool().QueryRow(ctx,
+				`SELECT status FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`,
+				tenantA, key).Scan(&status); err != nil {
+				t.Fatalf("read completion failure status: %v", err)
+			}
+			if status != "indeterminate" {
+				t.Fatalf("completion failure status=%q, want indeterminate", status)
+			}
+			if result, err = op.call(idem, key, callback); !errors.Is(err, orchestrator.ErrEffectIndeterminate) || len(result) != 0 {
+				t.Fatalf("completion failure retry result=%q err=%v, want ErrEffectIndeterminate", result, err)
+			}
+			if calls != 1 {
+				t.Fatalf("callback calls=%d, want one across failed completion + retry", calls)
+			}
+			if result, err = op.read(idem, key); !errors.Is(err, orchestrator.ErrEffectIndeterminate) || len(result) != 0 {
+				t.Fatalf("completion failure read result=%q err=%v, want ErrEffectIndeterminate", result, err)
+			}
+			if op.binding != "" {
+				changedCalled := false
+				result, err = idem.DoBound(context.Background(), tenantA, key, "sha256:different-completion-command", func(context.Context) ([]byte, error) {
+					changedCalled = true
+					return []byte("must-not-run"), nil
+				})
+				if !errors.Is(err, orchestrator.ErrIdempotencyConflict) || changedCalled || len(result) != 0 {
+					t.Fatalf("completion failure binding collision result=%q err=%v callback=%v", result, err, changedCalled)
+				}
+			}
+		})
+	}
+	if protects, opens := protector.counts(); protects != len(operations) || opens != 0 {
+		t.Fatalf("completion failures Protect/Open=%d/%d, want %d/0", protects, opens, len(operations))
+	}
+}
+
+func TestProtectedDoBoundConcurrentSameBindingStillWaitsAndReplays(t *testing.T) {
+	backends := []struct {
+		name string
+		new  func(*testing.T, *recordingResultProtector) *orchestrator.Idempotency
+	}{
+		{
+			name: "memory",
+			new: func(_ *testing.T, protector *recordingResultProtector) *orchestrator.Idempotency {
+				return orchestrator.NewMemoryIdempotency(orchestrator.WithResultProtector(protector))
+			},
+		},
+		{
+			name: "postgres",
+			new: func(t *testing.T, protector *recordingResultProtector) *orchestrator.Idempotency {
+				return orchestrator.NewIdempotency(newStore(t), orchestrator.WithResultProtector(protector))
+			},
+		},
+	}
+	type outcome struct {
+		result []byte
+		err    error
+	}
+	for _, backend := range backends {
+		t.Run(backend.name, func(t *testing.T) {
+			protector := &recordingResultProtector{}
+			idem := backend.new(t, protector)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			var calls atomic.Int32
+			entered := make(chan struct{})
+			release := make(chan struct{})
+			callback := func(context.Context) ([]byte, error) {
+				if calls.Add(1) == 1 {
+					close(entered)
+					<-release
+				}
+				return []byte("protected-single-flight-result"), nil
+			}
+			firstDone := make(chan outcome, 1)
+			go func() {
+				result, err := idem.DoBound(ctx, tenantA, "protected-single-flight-"+backend.name, "sha256:same-command", callback)
+				firstDone <- outcome{result: result, err: err}
+			}()
+			select {
+			case <-entered:
+			case <-ctx.Done():
+				t.Fatalf("protected owner did not enter callback: %v", ctx.Err())
+			}
+			secondDone := make(chan outcome, 1)
+			go func() {
+				result, err := idem.DoBound(ctx, tenantA, "protected-single-flight-"+backend.name, "sha256:same-command", callback)
+				secondDone <- outcome{result: result, err: err}
+			}()
+			select {
+			case early := <-secondDone:
+				close(release)
+				t.Fatalf("concurrent retry returned before owner completed: result=%q err=%v", early.result, early.err)
+			case <-time.After(100 * time.Millisecond):
+			}
+			close(release)
+			first := <-firstDone
+			second := <-secondDone
+			if first.err != nil || second.err != nil ||
+				string(first.result) != "protected-single-flight-result" ||
+				string(second.result) != "protected-single-flight-result" {
+				t.Fatalf("single-flight first=%q/%v second=%q/%v", first.result, first.err, second.result, second.err)
+			}
+			if calls.Load() != 1 {
+				t.Fatalf("protected concurrent callback calls=%d, want 1", calls.Load())
+			}
+		})
+	}
 }
 
 func TestOpenFailureWipesProtectedInputAndPartialPlaintext(t *testing.T) {
