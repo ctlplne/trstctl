@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -44,6 +45,7 @@ type pqcMigrationService struct {
 	deployer     connector.TLSPostureDeployer
 	progress     *ProgressProjection
 	integrityKey seal.KeyWrapper
+	tenantCrypto tenantseal.Access
 }
 
 func NewOutboxFactory(projection *ProgressProjection) editionseam.LicensedOutboxFactory {
@@ -54,7 +56,7 @@ func NewOutboxFactory(projection *ProgressProjection) editionseam.LicensedOutbox
 		return &outboxHandler{
 			store: d.Store, log: d.Log, idem: d.Idempotency, issue: d.IssueProtocolLeaf,
 			deployer: d.TLSPostureDeployer, progress: projection,
-			integrityKey: d.OutboxIntegrityKey,
+			integrityKey: d.OutboxIntegrityKey, tenantCrypto: d.TenantCrypto,
 		}, nil
 	}
 }
@@ -67,6 +69,7 @@ type outboxHandler struct {
 	deployer     connector.TLSPostureDeployer
 	progress     *ProgressProjection
 	integrityKey seal.KeyWrapper
+	tenantCrypto tenantseal.Access
 	// These hooks are package-private crash/retry seams used by adversarial
 	// tests. Production factories always leave them nil and use the durable
 	// idempotency ledger plus event log/store projector.
@@ -89,6 +92,23 @@ func (h *outboxHandler) doIdempotent(ctx context.Context, tenantID, key string, 
 
 func (h *outboxHandler) DeliverLicensed(ctx context.Context, m orchestrator.Message) (bool, error) {
 	switch m.Destination {
+	case licensedCryptoMigrationReissueDestination,
+		licensedCryptoMigrationRollbackDestination,
+		licensedCryptoMigrationTLSPostureDestination,
+		licensedCryptoMigrationTLSRollbackDestination:
+		var handled bool
+		err := withTLSPostureTenantCipher(ctx, h.tenantCrypto, h.integrityKey, m.TenantID, func(scoped context.Context, _ tlsPostureCipher) (err error) {
+			handled, err = h.deliverLicensed(scoped, m)
+			return err
+		})
+		return handled, err
+	default:
+		return false, nil
+	}
+}
+
+func (h *outboxHandler) deliverLicensed(ctx context.Context, m orchestrator.Message) (bool, error) {
+	switch m.Destination {
 	case licensedCryptoMigrationReissueDestination:
 		return true, h.handlePQCReissue(ctx, m)
 	case licensedCryptoMigrationRollbackDestination:
@@ -107,9 +127,23 @@ func (h *outboxHandler) DeliverLicensed(ctx context.Context, m orchestrator.Mess
 // identifiers; receiver errors and target config never enter the event.
 func (h *outboxHandler) DeliverLicensedTerminalFailure(ctx context.Context, m orchestrator.Message, _ error) (bool, error) {
 	switch m.Destination {
+	case licensedCryptoMigrationTLSPostureDestination, licensedCryptoMigrationTLSRollbackDestination:
+		var handled bool
+		err := withTLSPostureTenantCipher(ctx, h.tenantCrypto, h.integrityKey, m.TenantID, func(scoped context.Context, _ tlsPostureCipher) (err error) {
+			handled, err = h.deliverLicensedTerminalFailure(scoped, m)
+			return err
+		})
+		return handled, err
+	default:
+		return false, nil
+	}
+}
+
+func (h *outboxHandler) deliverLicensedTerminalFailure(ctx context.Context, m orchestrator.Message) (bool, error) {
+	switch m.Destination {
 	case licensedCryptoMigrationTLSPostureDestination:
 		var payload pqcMigrationTLSPosturePayload
-		wrapped, err := openTLSPostureOutbox(h.integrityKey, m.TenantID, m.Destination, m.IdempotencyKey, m.Payload, &payload)
+		wrapped, err := openTLSPostureOutboxForTenant(ctx, h.tenantCrypto, h.integrityKey, m.TenantID, m.Destination, m.IdempotencyKey, m.Payload, &payload)
 		if err != nil {
 			return true, err
 		}
@@ -123,7 +157,7 @@ func (h *outboxHandler) DeliverLicensedTerminalFailure(ctx context.Context, m or
 		})
 	case licensedCryptoMigrationTLSRollbackDestination:
 		var payload pqcMigrationTLSRollbackPayload
-		wrapped, err := openTLSPostureOutbox(h.integrityKey, m.TenantID, m.Destination, m.IdempotencyKey, m.Payload, &payload)
+		wrapped, err := openTLSPostureOutboxForTenant(ctx, h.tenantCrypto, h.integrityKey, m.TenantID, m.Destination, m.IdempotencyKey, m.Payload, &payload)
 		if err != nil {
 			return true, err
 		}
@@ -236,6 +270,15 @@ func (s *pqcMigrationService) PlanPreview(ctx context.Context, tenantID string, 
 }
 
 func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req APIRequest) (Response, error) {
+	var response Response
+	err := withTLSPostureTenantCipher(ctx, s.tenantCrypto, s.integrityKey, tenantID, func(scoped context.Context, _ tlsPostureCipher) (err error) {
+		response, err = s.start(scoped, tenantID, req)
+		return err
+	})
+	return response, err
+}
+
+func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req APIRequest) (Response, error) {
 	if s.store == nil || s.log == nil || s.outbox == nil {
 		return Response{}, errors.New("server: PQC migration requires store, event log, and outbox")
 	}
@@ -306,8 +349,8 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req AP
 	for i := range tlsPayloads {
 		payload := tlsPayloads[i]
 		idempotencyKey := "licensed-crypto-migration-tls:" + payload.RunID + ":" + payload.AssetID
-		sealedPayload, err := sealTLSPostureOutbox(
-			s.integrityKey, tenantID, licensedCryptoMigrationTLSPostureDestination, idempotencyKey,
+		sealedPayload, err := sealTLSPostureOutboxForTenant(
+			ctx, s.tenantCrypto, s.integrityKey, tenantID, licensedCryptoMigrationTLSPostureDestination, idempotencyKey,
 			payload.RunID, payload.AssetID, payload.TargetRevision, payload,
 		)
 		if err != nil {
@@ -440,6 +483,15 @@ type tlsRollbackGroup struct {
 }
 
 func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID string, req RollbackRequest) (RollbackResponse, error) {
+	var response RollbackResponse
+	err := withTLSPostureTenantCipher(ctx, s.tenantCrypto, s.integrityKey, tenantID, func(scoped context.Context, _ tlsPostureCipher) (err error) {
+		response, err = s.rollback(scoped, tenantID, runID, req)
+		return err
+	})
+	return response, err
+}
+
+func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID string, req RollbackRequest) (RollbackResponse, error) {
 	if s.store == nil || s.log == nil || s.outbox == nil {
 		return RollbackResponse{}, errors.New("server: PQC rollback requires store, event log, and outbox")
 	}
@@ -588,7 +640,7 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 			!connector.EqualTLSPosture(prepared.Previous, first.Receipt.Previous) {
 			return RollbackResponse{}, fmt.Errorf("pqcmigration: target %s has no matching durable pre-mutation posture", targetID)
 		}
-		forwardIntent, err := openCompletedTLSForwardIntent(s.integrityKey, tenantID, first)
+		forwardIntent, err := openCompletedTLSForwardIntentForTenant(ctx, s.tenantCrypto, s.integrityKey, tenantID, first)
 		if err != nil {
 			return RollbackResponse{}, err
 		}
@@ -635,8 +687,8 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 			return RollbackResponse{}, errors.New("pqcmigration: TLS rollback payload has no asset restores")
 		}
 		idempotencyKey := "licensed-crypto-migration-tls-rollback:" + runID + ":" + payload.Mutation.TargetID
-		body, err := sealTLSPostureOutbox(
-			s.integrityKey, tenantID, licensedCryptoMigrationTLSRollbackDestination, idempotencyKey,
+		body, err := sealTLSPostureOutboxForTenant(
+			ctx, s.tenantCrypto, s.integrityKey, tenantID, licensedCryptoMigrationTLSRollbackDestination, idempotencyKey,
 			payload.RunID, payload.Restores[0].AssetID, payload.Mutation.TargetRevision, payload,
 		)
 		if err != nil {
@@ -708,14 +760,36 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 }
 
 func openCompletedTLSForwardIntent(key seal.KeyWrapper, tenantID string, completed TLSFindingCompleted) (pqcMigrationTLSPosturePayload, error) {
+	return openCompletedTLSForwardIntentWith(
+		tenantID, completed,
+		func(destination, idempotencyKey string, payload []byte, out any) (sealedTLSPostureOutbox, error) {
+			return openTLSPostureOutbox(key, tenantID, destination, idempotencyKey, payload, out)
+		},
+	)
+}
+
+func openCompletedTLSForwardIntentForTenant(ctx context.Context, access tenantseal.Access, key seal.KeyWrapper, tenantID string, completed TLSFindingCompleted) (pqcMigrationTLSPosturePayload, error) {
+	return openCompletedTLSForwardIntentWith(
+		tenantID, completed,
+		func(destination, idempotencyKey string, payload []byte, out any) (sealedTLSPostureOutbox, error) {
+			return openTLSPostureOutboxForTenant(ctx, access, key, tenantID, destination, idempotencyKey, payload, out)
+		},
+	)
+}
+
+func openCompletedTLSForwardIntentWith(
+	tenantID string,
+	completed TLSFindingCompleted,
+	open func(destination, idempotencyKey string, payload []byte, out any) (sealedTLSPostureOutbox, error),
+) (pqcMigrationTLSPosturePayload, error) {
 	intent := completed.Intent
 	if len(intent.SealedOutboxPayload) == 0 {
 		return pqcMigrationTLSPosturePayload{}, errors.New("pqcmigration: applied TLS finding is missing its sealed forward intent")
 	}
 	idempotencyKey := "licensed-crypto-migration-tls:" + intent.RunID + ":" + intent.AssetID
 	var opened pqcMigrationTLSPosturePayload
-	wrapper, err := openTLSPostureOutbox(
-		key, tenantID, licensedCryptoMigrationTLSPostureDestination, idempotencyKey,
+	wrapper, err := open(
+		licensedCryptoMigrationTLSPostureDestination, idempotencyKey,
 		intent.SealedOutboxPayload, &opened,
 	)
 	if err != nil {
@@ -809,7 +883,7 @@ func (h *outboxHandler) handleTLSPosture(ctx context.Context, m orchestrator.Mes
 		return errors.New("pqcmigration: TLS posture handler requires store, event log, idempotency, and deployer")
 	}
 	var payload pqcMigrationTLSPosturePayload
-	wrapped, err := openTLSPostureOutbox(h.integrityKey, m.TenantID, m.Destination, m.IdempotencyKey, m.Payload, &payload)
+	wrapped, err := openTLSPostureOutboxForTenant(ctx, h.tenantCrypto, h.integrityKey, m.TenantID, m.Destination, m.IdempotencyKey, m.Payload, &payload)
 	if err != nil {
 		return err
 	}
@@ -963,7 +1037,7 @@ func (h *outboxHandler) handleTLSPostureRollback(ctx context.Context, m orchestr
 		return errors.New("pqcmigration: TLS posture rollback requires store, event log, idempotency, and deployer")
 	}
 	var payload pqcMigrationTLSRollbackPayload
-	wrapped, err := openTLSPostureOutbox(h.integrityKey, m.TenantID, m.Destination, m.IdempotencyKey, m.Payload, &payload)
+	wrapped, err := openTLSPostureOutboxForTenant(ctx, h.tenantCrypto, h.integrityKey, m.TenantID, m.Destination, m.IdempotencyKey, m.Payload, &payload)
 	if err != nil {
 		return err
 	}

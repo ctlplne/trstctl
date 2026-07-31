@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 	"trstctl.com/trstctl/internal/transit"
 )
 
@@ -43,6 +44,7 @@ type LicensedAPIOptionsDeps struct {
 	Outbox             *orchestrator.Outbox
 	TLSPostureDeployer connector.TLSPostureDeployer
 	OutboxIntegrityKey seal.KeyWrapper
+	TenantCrypto       tenantseal.Access
 	SignerKeyStoreDir  string
 	KEMCustody         KEMCustody
 }
@@ -102,6 +104,7 @@ type LicensedOutboxDeps struct {
 	IssueProtocolLeaf  ProtocolLeafIssuer
 	TLSPostureDeployer connector.TLSPostureDeployer
 	OutboxIntegrityKey seal.KeyWrapper
+	TenantCrypto       tenantseal.Access
 	// FeatureObserver records low-cardinality feature/action/outcome/duration signals
 	// on served licensed outbox hot paths. Labels must be closed, non-tenant, and
 	// non-secret so the shared metrics endpoint never leaks AN-1/AN-8 material.

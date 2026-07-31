@@ -972,6 +972,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
 			KEMCustody: s.kemCustody(), TLSPostureDeployer: d.ConnectorRegistry,
 			OutboxIntegrityKey: d.KEK,
+			TenantCrypto:       d.TenantCrypto,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -1298,6 +1299,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			IssueProtocolLeaf:  s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
 			TLSPostureDeployer: d.ConnectorRegistry,
 			OutboxIntegrityKey: d.KEK,
+			TenantCrypto:       d.TenantCrypto,
 			FeatureObserver:    s.featureObserver(),
 			SignerKeyStoreDir:  d.SignerKeyStoreDir,
 			Minter:             s.successionMinter(),

@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -49,6 +50,31 @@ func testTLSIntent() pqcMigrationTLSPosturePayload {
 			KeyExchangeGroups: []string{HybridTLSGroup, "X25519"},
 		},
 	}
+}
+
+type fixedTLSPostureCipherAccess struct {
+	tenantID string
+	cipher   tenantseal.Cipher
+}
+
+func (a fixedTLSPostureCipherAccess) WithTenant(_ context.Context, tenantID string, fn func(tenantseal.Cipher) error) error {
+	if tenantID != a.tenantID {
+		return errors.New("test tenant cipher refused cross-tenant selection")
+	}
+	return fn(a.cipher)
+}
+
+type domainTLSPostureCipher struct {
+	key     seal.KeyWrapper
+	binding []byte
+}
+
+func (c domainTLSPostureCipher) Seal(plaintext, aad []byte) ([]byte, error) {
+	return seal.SealDomain(c.key, plaintext, aad, c.binding)
+}
+
+func (c domainTLSPostureCipher) Open(container, aad []byte) ([]byte, error) {
+	return seal.OpenDomain(c.key, container, aad, c.binding)
 }
 
 func TestTLSPostureExternalEffectsUseConnectorBulkheadDestinations(t *testing.T) {
@@ -144,6 +170,64 @@ func TestTLSPostureOutboxSealRejectsTamperAndAADSubstitution(t *testing.T) {
 				t.Fatalf("sealed intent opened after %s substitution", name)
 			}
 		})
+	}
+}
+
+func TestTLSPostureTenantCipherCreatesAndOpensMigratedOutboxWithoutDeploymentFallback(t *testing.T) {
+	deployment := testIntegrityKey(t)
+	domainKey, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x6b}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(domainKey.Destroy)
+	binding := []byte("tenant-a/domain-a/generation-1")
+	access := fixedTLSPostureCipherAccess{
+		tenantID: sealedTestTenant,
+		cipher:   domainTLSPostureCipher{key: domainKey, binding: binding},
+	}
+	intent := testTLSIntent()
+
+	created, err := sealTLSPostureOutboxForTenant(
+		context.Background(), access, deployment,
+		sealedTestTenant, licensedCryptoMigrationTLSPostureDestination, sealedTestKey,
+		intent.RunID, intent.AssetID, intent.TargetRevision, intent,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var createdWrapper sealedTLSPostureOutbox
+	if err := json.Unmarshal(created, &createdWrapper); err != nil {
+		t.Fatal(err)
+	}
+	if domain, err := seal.Domain(createdWrapper.Sealed); err != nil || !bytes.Equal(domain, binding) {
+		t.Fatalf("new outbox domain = %q/%v, want exact tenant binding", domain, err)
+	}
+	var opened pqcMigrationTLSPosturePayload
+	if _, err := openTLSPostureOutbox(deployment, sealedTestTenant, licensedCryptoMigrationTLSPostureDestination, sealedTestKey, created, &opened); err == nil {
+		t.Fatal("deployment KEK opened tenant-domain TLS posture payload")
+	}
+	if _, err := openTLSPostureOutboxForTenant(context.Background(), access, deployment, sealedTestTenant, licensedCryptoMigrationTLSPostureDestination, sealedTestKey, created, &opened); err != nil {
+		t.Fatalf("open new tenant-domain payload: %v", err)
+	}
+
+	legacy := sealTestIntent(t, deployment, intent)
+	var migrated sealedTLSPostureOutbox
+	if err := json.Unmarshal(legacy, &migrated); err != nil {
+		t.Fatal(err)
+	}
+	migrated.Sealed, err = seal.RewrapDomain(deployment, domainKey, migrated.Sealed, binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	migratedBytes, err := json.Marshal(migrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openTLSPostureOutboxForTenant(context.Background(), access, deployment, sealedTestTenant, licensedCryptoMigrationTLSPostureDestination, sealedTestKey, migratedBytes, &opened); err != nil {
+		t.Fatalf("open migrated tenant-domain payload: %v", err)
+	}
+	if _, err := openTLSPostureOutboxForTenant(context.Background(), access, deployment, "tenant-b", licensedCryptoMigrationTLSPostureDestination, sealedTestKey, migratedBytes, &opened); err == nil {
+		t.Fatal("tenant B selected tenant A TLS posture cipher")
 	}
 }
 
