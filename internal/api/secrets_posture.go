@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/secretsync"
@@ -287,7 +286,7 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 			}
 			return 0, nil, err
 		}
-		value, err := seal.Open(a.secrets.be.KEK, rec.Sealed, sealAAD(tenantID, req.Name))
+		value, err := a.secrets.open(ctx, tenantID, rec.Sealed, sealAAD(tenantID, req.Name))
 		if err != nil {
 			return 0, nil, err
 		}

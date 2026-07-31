@@ -38,8 +38,14 @@ func TestProductionIdempotencyConstructorsAttachTenantResultProtector(t *testing
 		"historyRewriteProofOptions(st, auditKey)...")
 	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
 		"TenantKeyDomains:            tenantKeyDomains")
+	assertSourceContains(t, filepath.Join(serverDir, "run.go"),
+		"TenantCrypto:                tenantCrypto")
 	assertSourceContains(t, filepath.Join(serverDir, "server.go"),
 		"api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains)")
+	assertSourceContains(t, filepath.Join(serverDir, "secrets.go"),
+		"TenantCrypto:       d.TenantCrypto")
+	assertSourceContains(t, filepath.Join(serverDir, "..", "api", "secrets.go"),
+		"TenantCrypto tenantseal.Access")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),
 		"idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek)")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),

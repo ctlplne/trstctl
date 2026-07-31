@@ -56,6 +56,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/telemetry"
+	"trstctl.com/trstctl/internal/tenantseal"
 	transitpkg "trstctl.com/trstctl/internal/transit"
 	"trstctl.com/trstctl/internal/webui"
 )
@@ -400,6 +401,10 @@ type Deps struct {
 	// endpoints are enabled. These served surfaces need it retained for the process
 	// lifetime. The plaintext secret never touches the store — only sealed blobs do.
 	KEK sealKeyWrapper
+	// TenantCrypto routes every tenant-owned secret-bearing value through the
+	// RLS-scoped tenant key-domain fence. Production Run always supplies it;
+	// narrow embed tests may retain the legacy KEK-only composition.
+	TenantCrypto tenantseal.Access
 	// IdempotencyResultProtector is the tenant-bound outer envelope for every
 	// cached mutation response. Production Run always sets it before Build. Nil is
 	// retained only for narrow test/library compositions that do not claim the

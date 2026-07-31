@@ -12,7 +12,6 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/leaseworker"
@@ -155,7 +154,7 @@ func (a *API) mutateSealedDynamicLease(w http.ResponseWriter, r *http.Request, i
 			return nil, marshalErr
 		}
 		defer secret.Wipe(plaintext)
-		return seal.Seal(a.secrets.be.KEK, plaintext, aad)
+		return a.secrets.seal(ctx, tenantID, plaintext, aad)
 	})
 	if err != nil {
 		if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
@@ -164,7 +163,7 @@ func (a *API) mutateSealedDynamicLease(w http.ResponseWriter, r *http.Request, i
 		a.writeError(w, err)
 		return
 	}
-	plaintext, err := seal.Open(a.secrets.be.KEK, sealedResult, aad)
+	plaintext, err := a.secrets.open(r.Context(), tenantID, sealedResult, aad)
 	if err != nil {
 		a.writeError(w, err)
 		return

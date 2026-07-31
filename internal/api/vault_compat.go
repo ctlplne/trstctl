@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
-	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -231,7 +231,24 @@ func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerF
 		}
 		ctx := context.WithValue(r.Context(), principalCtxKey, principal)
 		ctx = events.ContextWithActor(ctx, events.Actor{Subject: principal.Subject, Roles: principalRoles(principal)})
-		h(w, r.WithContext(ctx))
+		request := r.WithContext(ctx)
+		if a.secrets == nil || a.secrets.be.TenantCrypto == nil {
+			h(w, request)
+			return
+		}
+		err = a.secrets.withTenantCipher(ctx, principal.TenantID, func(cipher tenantseal.Cipher) error {
+			requestCtx := context.WithValue(ctx, tenantCipherCtxKey, cipher)
+			h(w, request.WithContext(requestCtx))
+			return nil
+		})
+		if err == nil {
+			return
+		}
+		if status, ok := tenantseal.StatusOf(err); ok {
+			writeVaultError(w, http.StatusLocked, "tenant cryptographic access is unavailable: "+string(status))
+			return
+		}
+		writeVaultError(w, http.StatusInternalServerError, "tenant cryptographic access is unavailable")
 	}
 }
 
@@ -407,7 +424,7 @@ func (a *API) vaultKVWrite(w http.ResponseWriter, r *http.Request) {
 		}
 		value := append([]byte(nil), req.Data...)
 		defer secret.Wipe(value)
-		sealed, err := seal.Seal(a.secrets.be.KEK, value, sealAAD(tenantID, name))
+		sealed, err := a.secrets.seal(ctx, tenantID, value, sealAAD(tenantID, name))
 		if err != nil {
 			return 0, nil, err
 		}
@@ -477,7 +494,7 @@ func (a *API) vaultKVRead(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	value, err := seal.Open(a.secrets.be.KEK, rec.Sealed, sealAAD(tenantID, name))
+	value, err := a.secrets.open(r.Context(), tenantID, rec.Sealed, sealAAD(tenantID, name))
 	if err != nil {
 		writeVaultError(w, http.StatusInternalServerError, "internal error")
 		return

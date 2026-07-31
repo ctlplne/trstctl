@@ -18,7 +18,6 @@ import (
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
@@ -104,7 +103,7 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 		shareID := hex.EncodeToString(shareRaw)
 		secret.Wipe(shareRaw)
-		sealed, err := seal.Seal(a.secrets.be.KEK, []byte(req.Value), secretShareAAD(tenantID, shareID, tokenHash))
+		sealed, err := a.secrets.seal(ctx, tenantID, []byte(req.Value), secretShareAAD(tenantID, shareID, tokenHash))
 		req.Value.wipe()
 		if err != nil {
 			return 0, nil, err
@@ -155,7 +154,7 @@ func (a *API) redeemShare(w http.ResponseWriter, r *http.Request) {
 			}
 			return 0, nil, err
 		}
-		value, err := seal.Open(a.secrets.be.KEK, share.Sealed, secretShareAAD(tenantID, share.ShareID, share.TokenHash))
+		value, err := a.secrets.open(ctx, tenantID, share.Sealed, secretShareAAD(tenantID, share.ShareID, share.TokenHash))
 		if err != nil {
 			return 0, nil, err
 		}
@@ -747,7 +746,7 @@ func (s *secretsService) secretFetcher(tenantID string) secretsdk.Fetcher {
 		if err != nil {
 			return nil, time.Time{}, err
 		}
-		plain, err := seal.Open(s.be.KEK, rec.Sealed, sealAAD(tenantID, path))
+		plain, err := s.open(ctx, tenantID, rec.Sealed, sealAAD(tenantID, path))
 		if err != nil {
 			return nil, time.Time{}, err
 		}

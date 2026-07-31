@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/secretsdk"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // This file is the SERVED secrets/identity surface (GAP-006 / EXC-WIRE secrets):
@@ -60,8 +61,13 @@ import (
 // it in via WithSecrets, so the api package owns the surface while the composition
 // stays in internal/server.
 type SecretsBackend struct {
-	// KEK wraps each stored secret's data key (envelope encryption at rest). A
-	// LocalKEK or an HSM/KMS seal.KeyWrapper satisfies it. Required.
+	// TenantCrypto resolves the authenticated tenant's deployment or independent
+	// key domain under the shared PostgreSQL fence. Production always wires it;
+	// it is the wall that makes an opted-in tenant fail closed while sealed.
+	TenantCrypto tenantseal.Access
+	// KEK is the legacy embed/test fallback for compositions that do not serve
+	// tenant key-domain lifecycle. The default binary never uses it directly for
+	// tenant secret values because buildRunDeps always supplies TenantCrypto.
 	KEK seal.KeyWrapper
 	// Store is the relational backing for the secret store (sealed rows) and the
 	// pkisecret revocation records, all under RLS (AN-1). Required.
@@ -172,6 +178,81 @@ func (s *secretsService) syncTargets(tenantID string) map[string]*secretsync.Tar
 		out[id] = target
 	}
 	return out
+}
+
+func (s *secretsService) withTenantCipher(ctx context.Context, tenantID string, fn func(tenantseal.Cipher) error) error {
+	if cipher, ok := ctx.Value(tenantCipherCtxKey).(tenantseal.Cipher); ok {
+		return fn(cipher)
+	}
+	if s.be.TenantCrypto != nil {
+		return s.be.TenantCrypto.WithTenant(ctx, tenantID, fn)
+	}
+	if s.be.KEK == nil {
+		return errors.New("api: tenant cryptographic access is not configured")
+	}
+	return fn(legacySecretsCipher{wrapper: s.be.KEK})
+}
+
+// guardTenantCrypto holds one shared tenant-domain fence across the complete
+// authenticated secrets request, including its store work and idempotency-result
+// commit. A concurrent seal therefore either waits for this request to finish or
+// rejects the request before its handler can observe or mutate tenant state.
+func (a *API) guardTenantCrypto(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if a.secrets == nil || a.secrets.be.TenantCrypto == nil {
+			next(w, r)
+			return
+		}
+		tenantID, ok := a.tenant(r)
+		if !ok {
+			a.writeProblem(w, problemUnauthorized())
+			return
+		}
+		err := a.secrets.withTenantCipher(r.Context(), tenantID, func(cipher tenantseal.Cipher) error {
+			ctx := context.WithValue(r.Context(), tenantCipherCtxKey, cipher)
+			next(w, r.WithContext(ctx))
+			return nil
+		})
+		if err != nil {
+			a.writeError(w, err)
+		}
+	}
+}
+
+func (s *secretsService) seal(ctx context.Context, tenantID string, plaintext, aad []byte) ([]byte, error) {
+	var sealed []byte
+	err := s.withTenantCipher(ctx, tenantID, func(cipher tenantseal.Cipher) (err error) {
+		sealed, err = cipher.Seal(plaintext, aad)
+		return err
+	})
+	if err != nil {
+		secret.Wipe(sealed)
+		return nil, err
+	}
+	return sealed, err
+}
+
+func (s *secretsService) open(ctx context.Context, tenantID string, container, aad []byte) ([]byte, error) {
+	var plaintext []byte
+	err := s.withTenantCipher(ctx, tenantID, func(cipher tenantseal.Cipher) (err error) {
+		plaintext, err = cipher.Open(container, aad)
+		return err
+	})
+	if err != nil {
+		secret.Wipe(plaintext)
+		return nil, err
+	}
+	return plaintext, err
+}
+
+type legacySecretsCipher struct{ wrapper seal.KeyWrapper }
+
+func (c legacySecretsCipher) Seal(plaintext, aad []byte) ([]byte, error) {
+	return seal.Seal(c.wrapper, plaintext, aad)
+}
+
+func (c legacySecretsCipher) Open(container, aad []byte) ([]byte, error) {
+	return seal.Open(c.wrapper, container, aad)
 }
 
 // WithSecrets mounts the served secrets/identity surface (GAP-006). The KEK, store,
@@ -362,7 +443,7 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		if len(req.Value) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "value is required")
 		}
-		sealed, err := seal.Seal(a.secrets.be.KEK, []byte(req.Value), sealAAD(tenantID, req.Name))
+		sealed, err := a.secrets.seal(ctx, tenantID, []byte(req.Value), sealAAD(tenantID, req.Name))
 		req.Value.wipe() // wipe the transient plaintext; the store only sees ciphertext (AN-8)
 		if err != nil {
 			return 0, nil, err
@@ -455,7 +536,7 @@ func (a *API) getSecretVersion(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	value, err := seal.Open(a.secrets.be.KEK, rec.Sealed, sealAAD(tenantID, name))
+	value, err := a.secrets.open(r.Context(), tenantID, rec.Sealed, sealAAD(tenantID, name))
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -488,7 +569,7 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 			req.Value.wipe()
 			return 0, nil, err
 		}
-		sealed, err := seal.Seal(a.secrets.be.KEK, []byte(req.Value), sealAAD(tenantID, name))
+		sealed, err := a.secrets.seal(ctx, tenantID, []byte(req.Value), sealAAD(tenantID, name))
 		req.Value.wipe()
 		if err != nil {
 			return 0, nil, err
@@ -859,7 +940,7 @@ func (r *connectorSecretRotator) Cutover(ctx context.Context, key, newRef string
 	if state == nil {
 		return rotation.ErrCredentialNotFound
 	}
-	sealed, err := seal.Seal(r.api.secrets.be.KEK, state.newValue, sealAAD(r.tenantID, key))
+	sealed, err := r.api.secrets.seal(ctx, r.tenantID, state.newValue, sealAAD(r.tenantID, key))
 	if err != nil {
 		return err
 	}
@@ -903,13 +984,13 @@ func (r *connectorSecretRotator) Rollback(ctx context.Context, key, oldRef strin
 		r.cleanup(key)
 		return err
 	}
-	value, err := seal.Open(r.api.secrets.be.KEK, rec.Sealed, sealAAD(r.tenantID, key))
+	value, err := r.api.secrets.open(ctx, r.tenantID, rec.Sealed, sealAAD(r.tenantID, key))
 	if err != nil {
 		r.cleanup(key)
 		return err
 	}
 	defer secret.Wipe(value)
-	sealed, err := seal.Seal(r.api.secrets.be.KEK, value, sealAAD(r.tenantID, key))
+	sealed, err := r.api.secrets.seal(ctx, r.tenantID, value, sealAAD(r.tenantID, key))
 	if err != nil {
 		r.cleanup(key)
 		return err
@@ -1175,7 +1256,7 @@ func (a *API) importSecrets(w http.ResponseWriter, r *http.Request) {
 			if len(value) == 0 {
 				return 0, nil, errStatus(http.StatusBadRequest, "value is required for "+name)
 			}
-			sealed, err := seal.Seal(a.secrets.be.KEK, []byte(value), sealAAD(tenantID, name))
+			sealed, err := a.secrets.seal(ctx, tenantID, []byte(value), sealAAD(tenantID, name))
 			value.wipe()
 			if err != nil {
 				return 0, nil, err
@@ -1316,7 +1397,7 @@ func (a *API) resolveSecretValue(ctx context.Context, tenantID, name string, sta
 	if err != nil {
 		return nil, 0, err
 	}
-	plain, err := seal.Open(a.secrets.be.KEK, rec.Sealed, sealAAD(tenantID, name))
+	plain, err := a.secrets.open(ctx, tenantID, rec.Sealed, sealAAD(tenantID, name))
 	if err != nil {
 		return nil, 0, err
 	}

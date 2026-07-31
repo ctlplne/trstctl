@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/privacy"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -480,7 +481,11 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		if !a.routeEnabled(r) {
 			continue
 		}
-		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, r.handler))
+		handler := r.handler
+		if strings.HasPrefix(r.path, "/api/v1/secrets/") && r.opID != "machineLogin" {
+			handler = a.guardTenantCrypto(handler)
+		}
+		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, handler))
 	}
 	// Compatibility alias for the probectl editions surface. The canonical,
 	// generated trstctl REST path is /api/v1/editions; this exact public read
@@ -1290,7 +1295,10 @@ func tenantFromHeader(r *http.Request) (string, error) {
 // ctxKey is the type for request-context keys owned by this package.
 type ctxKey int
 
-const principalCtxKey ctxKey = iota
+const (
+	principalCtxKey ctxKey = iota
+	tenantCipherCtxKey
+)
 
 // tenant returns the tenant the request operates in. For a guarded route the
 // authenticated principal (placed in the context by guard) is authoritative —
@@ -1770,6 +1778,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case a.writeEphemeralError(w, err):
 	case a.writePAMError(w, err):
 	case a.writeSSHWorkflowError(w, err):
+	case writeTenantCryptoError(a, w, err):
 	case store.IsBusy(err):
 		// Bounded-latency datastore failure (pool saturation or server-side
 		// statement deadline): a structured 503 tells the caller to retry
@@ -1787,6 +1796,16 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	default:
 		a.writeProblem(w, problem.New(http.StatusInternalServerError, "internal error"))
 	}
+}
+
+func writeTenantCryptoError(a *API, w http.ResponseWriter, err error) bool {
+	status, ok := tenantseal.StatusOf(err)
+	if !ok {
+		return false
+	}
+	a.writeProblem(w, problem.New(http.StatusLocked, "tenant cryptographic access is unavailable").
+		WithExtension("tenant_key_domain_status", string(status)))
+	return true
 }
 
 func (a *API) writeProblem(w http.ResponseWriter, p *problem.Problem) {

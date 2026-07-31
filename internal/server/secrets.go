@@ -291,6 +291,7 @@ func (s *Server) apiSecretsServed() bool { return s.api != nil && s.api.SecretsS
 func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 	be := api.SecretsBackend{
 		KEK:                d.KEK,
+		TenantCrypto:       d.TenantCrypto,
 		Store:              d.Store,
 		Audit:              audit.NewAuditor(s.log),
 		AuthSecret:         d.SecretsAuthSecret,
