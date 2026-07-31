@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -127,6 +129,14 @@ const (
 	EventPQCMigrationCampaignClosed               = "pqc.migration_campaign.closed"
 	EventAccessChangeRequestCreated               = "access.change_request.created"
 	EventAccessChangeRequestDecided               = "access.change_request.decided"
+	EventTenantKeyDomainMigrationStarted          = "tenant.key_domain.migration_started"
+	EventTenantKeyDomainMigrationProgressed       = "tenant.key_domain.migration_progressed"
+	EventTenantKeyDomainMigrationCompleted        = "tenant.key_domain.migration_completed"
+	EventTenantKeyDomainMigrationFailed           = "tenant.key_domain.migration_failed"
+	EventTenantKeyDomainSealRequested             = "tenant.key_domain.seal_requested"
+	EventTenantKeyDomainSealed                    = "tenant.key_domain.sealed"
+	EventTenantKeyDomainUnsealRequested           = "tenant.key_domain.unseal_requested"
+	EventTenantKeyDomainUnsealed                  = "tenant.key_domain.unsealed"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -376,6 +386,39 @@ type PQCMigrationCampaignClosed struct {
 	PublicJWKS json.RawMessage `json:"public_jwks"`
 	ClosedBy   string          `json:"closed_by"`
 	ClosedAt   time.Time       `json:"closed_at,omitempty"`
+}
+
+// TenantKeyDomainSnapshot is the one complete payload contract shared by every
+// tenant.key_domain.* lifecycle event. Each event carries the wrapped domain KEK
+// as bytes plus all resumable state required to rebuild tenant_key_domains from
+// an empty PostgreSQL database. A missing record is not represented here: it is
+// the explicit legacy deployment-KEK mode synthesized by the service/API.
+type TenantKeyDomainSnapshot struct {
+	DomainID               string     `json:"domain_id"`
+	Generation             int64      `json:"generation"`
+	ProtectionMode         string     `json:"protection_mode"`
+	State                  string     `json:"state"`
+	WrapperKind            string     `json:"wrapper_kind"`
+	WrapperID              string     `json:"wrapper_id"`
+	WrappedDomainKEK       []byte     `json:"wrapped_domain_kek"`
+	OperationID            *string    `json:"operation_id,omitempty"`
+	OperationKind          string     `json:"operation_kind"`
+	OperationStatus        string     `json:"operation_status"`
+	MigrationStage         string     `json:"migration_stage,omitempty"`
+	ProgressCompleted      int64      `json:"progress_completed"`
+	ProgressTotal          int64      `json:"progress_total"`
+	ProgressCursor         string     `json:"progress_cursor,omitempty"`
+	Retryable              bool       `json:"retryable"`
+	LastErrorCode          string     `json:"last_error_code,omitempty"`
+	LastError              string     `json:"last_error,omitempty"`
+	LegacyHistoryExposure  string     `json:"legacy_history_exposure"`
+	MigrationStartedAt     *time.Time `json:"migration_started_at,omitempty"`
+	MigrationCompletedAt   *time.Time `json:"migration_completed_at,omitempty"`
+	SealedAt               *time.Time `json:"sealed_at,omitempty"`
+	UnsealedAt             *time.Time `json:"unsealed_at,omitempty"`
+	TransitionEvidenceRefs []string   `json:"transition_evidence_refs,omitempty"`
+	CreatedAt              time.Time  `json:"created_at,omitempty"`
+	UpdatedAt              time.Time  `json:"updated_at,omitempty"`
 }
 
 // AccessChangeRequestCreated is the payload of
@@ -1612,6 +1655,14 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPQCMigrationCampaignClosed:               {1: true},
 	EventAccessChangeRequestCreated:               {1: true},
 	EventAccessChangeRequestDecided:               {1: true},
+	EventTenantKeyDomainMigrationStarted:          {1: true},
+	EventTenantKeyDomainMigrationProgressed:       {1: true},
+	EventTenantKeyDomainMigrationCompleted:        {1: true},
+	EventTenantKeyDomainMigrationFailed:           {1: true},
+	EventTenantKeyDomainSealRequested:             {1: true},
+	EventTenantKeyDomainSealed:                    {1: true},
+	EventTenantKeyDomainUnsealRequested:           {1: true},
+	EventTenantKeyDomainUnsealed:                  {1: true},
 }
 
 func init() {
@@ -2898,6 +2949,73 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			CampaignID: pl.CampaignID, SignedJWS: pl.SignedJWS, PublicJWKS: pl.PublicJWKS,
 			ClosedBy: pl.ClosedBy, ClosedAt: closedAt,
 		})
+	case EventTenantKeyDomainMigrationStarted,
+		EventTenantKeyDomainMigrationProgressed,
+		EventTenantKeyDomainMigrationCompleted,
+		EventTenantKeyDomainMigrationFailed,
+		EventTenantKeyDomainSealRequested,
+		EventTenantKeyDomainSealed,
+		EventTenantKeyDomainUnsealRequested,
+		EventTenantKeyDomainUnsealed:
+		var pl TenantKeyDomainSnapshot
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if e.ID == "" || e.Time.IsZero() || e.Sequence == 0 {
+			return fmt.Errorf("projections: %s requires immutable event id, time, and positive stream-sequence evidence", e.Type)
+		}
+		if err := validateTenantKeyDomainSnapshot(e.Type, pl); err != nil {
+			return err
+		}
+		if err := p.validateTenantKeyDomainExposureTransitionTx(ctx, tx, e, pl); err != nil {
+			return err
+		}
+		createdAt := pl.CreatedAt
+		if createdAt.IsZero() {
+			createdAt = e.Time
+		}
+		updatedAt := pl.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = e.Time
+		}
+		if e.Type == EventTenantKeyDomainMigrationStarted && pl.MigrationStartedAt == nil {
+			at := e.Time
+			pl.MigrationStartedAt = &at
+		}
+		if e.Type == EventTenantKeyDomainMigrationCompleted && pl.MigrationCompletedAt == nil {
+			at := e.Time
+			pl.MigrationCompletedAt = &at
+		}
+		if e.Type == EventTenantKeyDomainSealed && pl.SealedAt == nil {
+			at := e.Time
+			pl.SealedAt = &at
+		}
+		if e.Type == EventTenantKeyDomainUnsealed && pl.UnsealedAt == nil {
+			at := e.Time
+			pl.UnsealedAt = &at
+		}
+		actor := ""
+		if e.Actor != nil {
+			actor = e.Actor.Subject
+		}
+		return p.store.ApplyTenantKeyDomainSnapshotTx(ctx, tx, store.TenantKeyDomain{
+			TenantID: e.TenantID, DomainID: pl.DomainID, Generation: pl.Generation,
+			ProtectionMode: pl.ProtectionMode, State: pl.State,
+			WrapperKind: pl.WrapperKind, WrapperID: pl.WrapperID,
+			WrappedDomainKEK: pl.WrappedDomainKEK, OperationID: pl.OperationID,
+			OperationKind: pl.OperationKind, OperationStatus: pl.OperationStatus,
+			MigrationStage: pl.MigrationStage, ProgressCompleted: pl.ProgressCompleted,
+			ProgressTotal: pl.ProgressTotal, ProgressCursor: pl.ProgressCursor,
+			Retryable: pl.Retryable, LastErrorCode: pl.LastErrorCode,
+			LastError: pl.LastError, LegacyHistoryExposure: pl.LegacyHistoryExposure,
+			MigrationStartedAt:   pl.MigrationStartedAt,
+			MigrationCompletedAt: pl.MigrationCompletedAt, SealedAt: pl.SealedAt,
+			UnsealedAt: pl.UnsealedAt, LastTransitionEventID: e.ID,
+			LastTransitionType: e.Type, LastTransitionActor: actor,
+			LastTransitionAt:           e.Time,
+			LastTransitionEvidenceRefs: pl.TransitionEvidenceRefs,
+			LastTransitionSequence:     e.Sequence, CreatedAt: createdAt, UpdatedAt: updatedAt,
+		})
 	case EventNHIAccessReviewCampaignStarted:
 		var pl NHIAccessReviewCampaignStarted
 		if err := decode(e, &pl); err != nil {
@@ -3013,6 +3131,189 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return nil
 	}
+}
+
+func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapshot) error {
+	if pl.DomainID == "" || pl.Generation <= 0 ||
+		pl.ProtectionMode != store.TenantKeyProtectionTenantDomain ||
+		pl.WrapperKind == "" || pl.WrapperID == "" || len(pl.WrappedDomainKEK) == 0 {
+		return fmt.Errorf("projections: %s requires domain_id, positive generation, tenant_domain protection, wrapper kind/id, and wrapped domain KEK", eventType)
+	}
+	if pl.OperationID == nil {
+		return fmt.Errorf("projections: %s requires an operation_id UUID", eventType)
+	}
+	if _, err := uuid.Parse(*pl.OperationID); err != nil {
+		return fmt.Errorf("projections: %s requires a valid operation_id UUID", eventType)
+	}
+	if pl.ProgressCompleted < 0 || pl.ProgressTotal < 0 || pl.ProgressCompleted > pl.ProgressTotal {
+		return fmt.Errorf("projections: %s has invalid migration progress %d/%d", eventType, pl.ProgressCompleted, pl.ProgressTotal)
+	}
+	if !oneOf(pl.State,
+		store.TenantKeyDomainStateMigrating,
+		store.TenantKeyDomainStatePartial,
+		store.TenantKeyDomainStateUnsealed,
+		store.TenantKeyDomainStateSealing,
+		store.TenantKeyDomainStateSealed,
+		store.TenantKeyDomainStateUnsealing,
+		store.TenantKeyDomainStateWrapperUnavailable,
+		store.TenantKeyDomainStateWrongWrapper,
+		store.TenantKeyDomainStateCorrupt) {
+		return fmt.Errorf("projections: %s has unsupported tenant key-domain state %q", eventType, pl.State)
+	}
+	if !oneOf(pl.OperationKind,
+		store.TenantKeyOperationMigrate,
+		store.TenantKeyOperationSeal,
+		store.TenantKeyOperationUnseal) {
+		return fmt.Errorf("projections: %s has unsupported operation kind %q", eventType, pl.OperationKind)
+	}
+	if !oneOf(pl.OperationStatus,
+		store.TenantKeyOperationPending,
+		store.TenantKeyOperationRunning,
+		store.TenantKeyOperationCompleted,
+		store.TenantKeyOperationFailed) {
+		return fmt.Errorf("projections: %s has unsupported operation status %q", eventType, pl.OperationStatus)
+	}
+	if !oneOf(pl.LegacyHistoryExposure,
+		store.TenantKeyLegacyNone,
+		store.TenantKeyLegacyHotHistoryPending,
+		store.TenantKeyLegacyExternalArchivesPossible) {
+		return fmt.Errorf("projections: %s has unsupported legacy-history exposure %q", eventType, pl.LegacyHistoryExposure)
+	}
+
+	switch eventType {
+	case EventTenantKeyDomainMigrationStarted:
+		if pl.State != store.TenantKeyDomainStateMigrating ||
+			pl.OperationKind != store.TenantKeyOperationMigrate ||
+			!oneOf(pl.OperationStatus, store.TenantKeyOperationPending, store.TenantKeyOperationRunning) ||
+			pl.LegacyHistoryExposure != store.TenantKeyLegacyHotHistoryPending {
+			return fmt.Errorf("projections: %s must start a pending/running migration with hot history pending", eventType)
+		}
+	case EventTenantKeyDomainMigrationProgressed:
+		if !oneOf(pl.State, store.TenantKeyDomainStateMigrating, store.TenantKeyDomainStatePartial) ||
+			pl.OperationKind != store.TenantKeyOperationMigrate ||
+			pl.OperationStatus != store.TenantKeyOperationRunning {
+			return fmt.Errorf("projections: %s must carry running migration progress", eventType)
+		}
+	case EventTenantKeyDomainMigrationCompleted:
+		if pl.OperationKind != store.TenantKeyOperationMigrate ||
+			pl.OperationStatus != store.TenantKeyOperationCompleted ||
+			pl.ProgressCompleted != pl.ProgressTotal {
+			return fmt.Errorf("projections: %s must carry completed migration progress", eventType)
+		}
+		switch {
+		case pl.State == store.TenantKeyDomainStateUnsealed &&
+			pl.LegacyHistoryExposure == store.TenantKeyLegacyNone:
+			// Strong independence is honest only after both hot and external history
+			// are proven clean.
+			if !hasNonBlankTenantKeyDomainEvidence(pl.TransitionEvidenceRefs) {
+				return fmt.Errorf("projections: %s requires evidence before clearing legacy-history exposure", eventType)
+			}
+		case pl.State == store.TenantKeyDomainStatePartial &&
+			pl.LegacyHistoryExposure == store.TenantKeyLegacyExternalArchivesPossible:
+			// Hot state is migrated, but old backups/archives may still be
+			// deployment-KEK decryptable, so the row remains explicitly partial.
+		default:
+			return fmt.Errorf("projections: %s may be unsealed only with no legacy exposure, or partial while external archives may remain", eventType)
+		}
+	case EventTenantKeyDomainMigrationFailed:
+		if pl.OperationKind != store.TenantKeyOperationMigrate ||
+			pl.OperationStatus != store.TenantKeyOperationFailed ||
+			!oneOf(pl.State,
+				store.TenantKeyDomainStatePartial,
+				store.TenantKeyDomainStateWrapperUnavailable,
+				store.TenantKeyDomainStateWrongWrapper,
+				store.TenantKeyDomainStateCorrupt) ||
+			pl.LastErrorCode == "" || pl.LastError == "" {
+			return fmt.Errorf("projections: %s must preserve failed migration progress and a visible error", eventType)
+		}
+	case EventTenantKeyDomainSealRequested:
+		if pl.State != store.TenantKeyDomainStateSealing ||
+			pl.OperationKind != store.TenantKeyOperationSeal ||
+			!oneOf(pl.OperationStatus, store.TenantKeyOperationPending, store.TenantKeyOperationRunning) {
+			return fmt.Errorf("projections: %s must carry a pending/running seal operation", eventType)
+		}
+	case EventTenantKeyDomainSealed:
+		if pl.State != store.TenantKeyDomainStateSealed ||
+			pl.OperationKind != store.TenantKeyOperationSeal ||
+			pl.OperationStatus != store.TenantKeyOperationCompleted {
+			return fmt.Errorf("projections: %s must carry a completed sealed state", eventType)
+		}
+	case EventTenantKeyDomainUnsealRequested:
+		if pl.State != store.TenantKeyDomainStateUnsealing ||
+			pl.OperationKind != store.TenantKeyOperationUnseal ||
+			!oneOf(pl.OperationStatus, store.TenantKeyOperationPending, store.TenantKeyOperationRunning) {
+			return fmt.Errorf("projections: %s must carry a pending/running unseal operation", eventType)
+		}
+	case EventTenantKeyDomainUnsealed:
+		if pl.State != store.TenantKeyDomainStateUnsealed ||
+			pl.OperationKind != store.TenantKeyOperationUnseal ||
+			pl.OperationStatus != store.TenantKeyOperationCompleted {
+			return fmt.Errorf("projections: %s must carry a completed unsealed state", eventType)
+		}
+	}
+	return nil
+}
+
+func (p *Projector) validateTenantKeyDomainExposureTransitionTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	e events.Event,
+	pl TenantKeyDomainSnapshot,
+) error {
+	switch e.Type {
+	case EventTenantKeyDomainMigrationStarted, EventTenantKeyDomainMigrationCompleted:
+		return nil
+	}
+
+	current, err := p.store.GetTenantKeyDomainTx(ctx, tx, e.TenantID)
+	if errors.Is(err, store.ErrTenantKeyDomainNotFound) {
+		return fmt.Errorf("projections: %s requires an existing tenant key-domain transition", e.Type)
+	}
+	if err != nil {
+		return fmt.Errorf("projections: read tenant key-domain transition guard: %w", err)
+	}
+	if e.Sequence <= current.LastTransitionSequence {
+		return nil
+	}
+	if tenantKeyDomainExposureRank(pl.LegacyHistoryExposure) <
+		tenantKeyDomainExposureRank(current.LegacyHistoryExposure) {
+		return fmt.Errorf(
+			"projections: %s cannot reduce legacy-history exposure from %q to %q",
+			e.Type, current.LegacyHistoryExposure, pl.LegacyHistoryExposure,
+		)
+	}
+	return nil
+}
+
+func tenantKeyDomainExposureRank(exposure string) int {
+	switch exposure {
+	case store.TenantKeyLegacyNone:
+		return 0
+	case store.TenantKeyLegacyExternalArchivesPossible:
+		return 1
+	case store.TenantKeyLegacyHotHistoryPending:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func hasNonBlankTenantKeyDomainEvidence(refs []string) bool {
+	for _, ref := range refs {
+		if strings.TrimSpace(ref) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func oneOf(value string, allowed ...string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 // discoveryMetadataBool accepts both the server scanner's JSON booleans and

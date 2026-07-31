@@ -100,6 +100,7 @@ var TenantScopedTables = []string{
 	"secret_store_versions",
 	"secret_store",
 	"read_model_snapshots",
+	"tenant_key_domains",
 	// Operational/system tenant-scoped tables.
 	"idempotency_keys",
 	"outbox",

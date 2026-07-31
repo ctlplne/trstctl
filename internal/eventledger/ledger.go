@@ -117,6 +117,14 @@ const (
 	EventNHIAccessReviewItemDecided               = "nhi.access_review.item.decided"
 	EventAccessChangeRequestCreated               = "access.change_request.created"
 	EventAccessChangeRequestDecided               = "access.change_request.decided"
+	EventTenantKeyDomainMigrationStarted          = "tenant.key_domain.migration_started"
+	EventTenantKeyDomainMigrationProgressed       = "tenant.key_domain.migration_progressed"
+	EventTenantKeyDomainMigrationCompleted        = "tenant.key_domain.migration_completed"
+	EventTenantKeyDomainMigrationFailed           = "tenant.key_domain.migration_failed"
+	EventTenantKeyDomainSealRequested             = "tenant.key_domain.seal_requested"
+	EventTenantKeyDomainSealed                    = "tenant.key_domain.sealed"
+	EventTenantKeyDomainUnsealRequested           = "tenant.key_domain.unseal_requested"
+	EventTenantKeyDomainUnsealed                  = "tenant.key_domain.unsealed"
 )
 
 // FeatureEvent is one row of the event-name ledger: the immutable AN-2 event types
@@ -248,6 +256,24 @@ var ledger = []FeatureEvent{
 	{"F8", "RBAC", "offboard_member", "offboardMember", []string{EventTenantMemberOffboarded}},
 	{"F8", "RBAC", "create_api_token", "createAPIToken", []string{EventAPITokenCreated}},
 	{"F8", "RBAC", "revoke_api_token", "revokeAPIToken", []string{EventAPITokenRevoked}},
+
+	// F40 — per-tenant cryptographic custody. The migration operation reports
+	// resumable progress/failure through the same served command, while seal and
+	// unseal each expose their requested and completed evidence transitions.
+	{"F40", "Multi-tenant deployment topology", "migrate_key_domain", "migrateTenantKeyDomain", []string{
+		EventTenantKeyDomainMigrationStarted,
+		EventTenantKeyDomainMigrationProgressed,
+		EventTenantKeyDomainMigrationCompleted,
+		EventTenantKeyDomainMigrationFailed,
+	}},
+	{"F40", "Multi-tenant deployment topology", "seal_key_domain", "sealTenantKeyDomain", []string{
+		EventTenantKeyDomainSealRequested,
+		EventTenantKeyDomainSealed,
+	}},
+	{"F40", "Multi-tenant deployment topology", "unseal_key_domain", "unsealTenantKeyDomain", []string{
+		EventTenantKeyDomainUnsealRequested,
+		EventTenantKeyDomainUnsealed,
+	}},
 
 	// F33 — Just-in-time privileged access sessions.
 	{"F33", "Just-in-time issuance with approval flows", "open_pam_session", "openPAMSession", []string{EventPAMSessionStarted}},

@@ -46,6 +46,19 @@ func TestWorkloadIdentityReadModelsUseEventRecoveryAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestTenantKeyDomainUsesEventRecoveryAndSnapshots(t *testing.T) {
+	const table = "tenant_key_domains"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is event-derived but missing from ReadModelTables", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is event-derived but missing from snapshotTables", table)
+	}
+	if SnapshotFormatVersion < 8 {
+		t.Errorf("SnapshotFormatVersion = %d; adding tenant key-domain projections must invalidate older snapshots", SnapshotFormatVersion)
+	}
+}
+
 func containsRecoveryTable(tables []string, want string) bool {
 	for _, table := range tables {
 		if table == want {

@@ -96,6 +96,14 @@ var projectionEventConstants = map[string]string{
 	projections.EventNHIAccessReviewItemDecided:               "EventNHIAccessReviewItemDecided",
 	projections.EventAccessChangeRequestCreated:               "EventAccessChangeRequestCreated",
 	projections.EventAccessChangeRequestDecided:               "EventAccessChangeRequestDecided",
+	projections.EventTenantKeyDomainMigrationStarted:          "EventTenantKeyDomainMigrationStarted",
+	projections.EventTenantKeyDomainMigrationProgressed:       "EventTenantKeyDomainMigrationProgressed",
+	projections.EventTenantKeyDomainMigrationCompleted:        "EventTenantKeyDomainMigrationCompleted",
+	projections.EventTenantKeyDomainMigrationFailed:           "EventTenantKeyDomainMigrationFailed",
+	projections.EventTenantKeyDomainSealRequested:             "EventTenantKeyDomainSealRequested",
+	projections.EventTenantKeyDomainSealed:                    "EventTenantKeyDomainSealed",
+	projections.EventTenantKeyDomainUnsealRequested:           "EventTenantKeyDomainUnsealRequested",
+	projections.EventTenantKeyDomainUnsealed:                  "EventTenantKeyDomainUnsealed",
 }
 
 // TestEventLedgerConstantsMatchProjector asserts every event type the ledger
