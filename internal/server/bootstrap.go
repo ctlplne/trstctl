@@ -140,9 +140,12 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 		return nil, fmt.Errorf("bootstrap: provision credential KEK: %w", err)
 	}
 	defer kek.Destroy()
-	resultProtector, err := idempotencyResultProtectorFromConfig(cfg.Secrets, st, kek)
+	resultProtector, resultMigrator, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: tenant result protection: %w", err)
+	}
+	if _, err := resultMigrator.MigrateAll(ctx); err != nil {
+		return nil, fmt.Errorf("bootstrap: migrate historical idempotency results before mutation: %w", err)
 	}
 
 	svc := app.New(log, st, resultProtector)

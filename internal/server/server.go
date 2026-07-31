@@ -96,6 +96,12 @@ type BackgroundWorker interface {
 
 // Deps are the wired dependencies of the serving control plane. Tests inject an
 // embedded store/log and an in-process signer; production wires the real ones.
+// IdempotencyResultMigrator is the readiness wall that drains historical
+// migration-only result codecs before the default HTTP surface opens.
+type IdempotencyResultMigrator interface {
+	MigrateAll(context.Context) ([]store.IdempotencyResultProtectionStatus, error)
+}
+
 type Deps struct {
 	Store             *store.Store
 	Log               *events.Log
@@ -399,6 +405,7 @@ type Deps struct {
 	// retained only for narrow test/library compositions that do not claim the
 	// default-binary readiness contract.
 	IdempotencyResultProtector orchestrator.ResultProtector
+	IdempotencyResultMigrator  IdempotencyResultMigrator
 	// SecretsAuthSecret is the HMAC key the served machine-login token method
 	// (authmethod.TokenMethod) verifies a workload token against (F58). It is []byte and
 	// never logged (AN-8). When empty, the login route reports the method is not
@@ -846,6 +853,22 @@ func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, erro
 }
 
 func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestrator.Orchestrator, *orchestrator.Idempotency, error) {
+	if d.IdempotencyResultMigrator != nil {
+		statuses, err := d.IdempotencyResultMigrator.MigrateAll(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("server: migrate historical idempotency results before readiness: %w", err)
+		}
+		if d.Logger != nil {
+			var sealed int64
+			for _, status := range statuses {
+				sealed += status.SealedRowV1
+			}
+			d.Logger.Info("historical idempotency results satisfy tenant protection readiness",
+				slog.Int("tenants", len(statuses)),
+				slog.Int64("sealed_results", sealed),
+			)
+		}
+	}
 	s.mOutboxDeliveryTimeouts = s.registry.CounterVec(
 		"trstctl_outbox_delivery_timeouts_total",
 		"Outbox deliveries that exceeded their per-message deadline.",

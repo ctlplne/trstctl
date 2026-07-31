@@ -839,6 +839,12 @@ the deployment KEK explicitly. An opted-in tenant names exactly one separately
 provisioned wrapper and never trial-decrypts or falls back to the deployment KEK.
 The local wrapper file is opened only inside a tenant-scoped shared database
 fence; its domain key lives in locked memory for that callback and is then wiped.
+Before the HTTP mutation surface becomes ready, startup drains historical
+`raw-v0` and `sealed-dynamic-lease-v1` cache rows in key-ordered, RLS-scoped
+batches into the authenticated `sealed-row-v1` envelope. Each replacement is a
+compare-and-swap over tenant, key, binding, codec, and prior bytes. A crash
+therefore resumes safely, while a changed row or unavailable tenant wrapper
+fails readiness without logging or embedding the result bytes in the error.
 
 ```json
 {

@@ -424,7 +424,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("secrets machine auth: %w", err)
 	}
-	resultProtector, err := idempotencyResultProtectorFromConfig(cfg.Secrets, st, sec.kek)
+	resultProtector, resultMigrator, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, sec.kek)
 	if err != nil {
 		return Deps{}, fmt.Errorf("tenant result protection: %w", err)
 	}
@@ -533,6 +533,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, SCIM: cfg.Auth.SCIM,
 		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek,
 		IdempotencyResultProtector: resultProtector,
+		IdempotencyResultMigrator:  resultMigrator,
 		SecretsAuthSecret:          sec.authSecret,
 		MachineAuthMethods:         machineAuthMethods,
 		SecretScanGitleaksBin:      cfg.Secrets.GitleaksBin,
@@ -544,11 +545,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	}, nil
 }
 
-func idempotencyResultProtectorFromConfig(
+func idempotencyResultProtectionFromConfig(
 	cfg config.Secrets,
 	st *store.Store,
 	deployment sealKeyWrapper,
-) (*tenantseal.ResultProtector, error) {
+) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, error) {
 	wrappers := make([]tenantseal.LocalWrapper, 0, len(cfg.TenantSealLocalWrappers))
 	for _, wrapper := range cfg.TenantSealLocalWrappers {
 		wrappers = append(wrappers, tenantseal.LocalWrapper{
@@ -557,13 +558,21 @@ func idempotencyResultProtectorFromConfig(
 	}
 	registry, err := tenantseal.NewLocalWrapperRegistry(wrappers)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	access, err := tenantseal.NewAccess(st, deployment, registry)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return tenantseal.NewResultProtector(access)
+	protector, err := tenantseal.NewResultProtector(access)
+	if err != nil {
+		return nil, nil, err
+	}
+	migrator, err := tenantseal.NewResultMigrator(st, protector, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	return protector, migrator, nil
 }
 
 func loadRunAuditSigningKey(
