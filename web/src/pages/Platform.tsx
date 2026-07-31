@@ -26,6 +26,7 @@ import {
   type RoleList,
   type ScaleOrchestrationPlan,
   type SystemReadout,
+  type TenantKeyDomainStatus,
 } from "@/lib/api";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -240,8 +241,300 @@ function IdempotencyResultProtectionPanel({
   );
 }
 
-/** /admin/system — read-only posture disclosures plus the managed-offering
- * provisioning flow. Fetches only what this page renders. */
+function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<TenantKeyDomainStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [wrapperID, setWrapperID] = useState("");
+  const [sealConfirmOpen, setSealConfirmOpen] = useState(false);
+
+  async function refreshStatus() {
+    setLoading(true);
+    setRequestError(null);
+    try {
+      const next = await api.tenantKeyDomain();
+      setStatus(next);
+      if (!wrapperID && next.wrapper_id) setWrapperID(next.wrapper_id);
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    api
+      .tenantKeyDomain()
+      .then((next) => {
+        if (!active) return;
+        setStatus(next);
+        setWrapperID((current) => current || next.wrapper_id || "");
+        setRequestError(null);
+      })
+      .catch((err) => {
+        if (active) setRequestError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function migrate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const exactWrapperID = wrapperID.trim();
+    if (!exactWrapperID) return;
+    setBusy(true);
+    setRequestError(null);
+    setNotice(null);
+    try {
+      const next = await api.migrateTenantKeyDomain({ wrapper_kind: "local_file", wrapper_id: exactWrapperID });
+      setStatus(next);
+      setNotice(t("platform.tenantSeal.noticeMigrated"));
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function seal() {
+    setSealConfirmOpen(false);
+    setBusy(true);
+    setRequestError(null);
+    setNotice(null);
+    try {
+      await api.sealTenantKeyDomain();
+      setNotice(t("platform.tenantSeal.noticeQueued"));
+      const next = await api.tenantKeyDomain();
+      setStatus(next);
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unseal() {
+    setBusy(true);
+    setRequestError(null);
+    setNotice(null);
+    try {
+      const next = await api.unsealTenantKeyDomain();
+      setStatus(next);
+      setNotice(t("platform.tenantSeal.noticeUnsealed"));
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const labels: Record<string, string> = {
+    legacy: t("platform.tenantSeal.stateLegacy"),
+    migrating: t("platform.tenantSeal.stateMigrating"),
+    partial: t("platform.tenantSeal.statePartial"),
+    unsealed: t("platform.tenantSeal.stateUnsealed"),
+    seal_queued: t("platform.tenantSeal.stateSealQueued"),
+    sealing: t("platform.tenantSeal.stateSealing"),
+    sealed: t("platform.tenantSeal.stateSealed"),
+    unsealing: t("platform.tenantSeal.stateUnsealing"),
+    wrapper_unavailable: t("platform.tenantSeal.stateWrapperUnavailable"),
+    wrong_wrapper: t("platform.tenantSeal.stateWrongWrapper"),
+    corrupt: t("platform.tenantSeal.stateCorrupt"),
+    unavailable: t("platform.tenantSeal.stateUnavailable"),
+  };
+  const label = status ? (labels[status.state] ?? status.state) : "";
+  const failed = status?.operation_status === "failed" || Boolean(status?.failure);
+  const tone: StatusTone =
+    failed || status?.state === "corrupt" || status?.state === "wrong_wrapper" || status?.state === "wrapper_unavailable"
+      ? "critical"
+      : status?.state === "unsealed"
+        ? "success"
+        : status?.state === "partial" || status?.state === "seal_queued" || status?.state === "migrating"
+          ? "warning"
+          : status?.state === "sealed"
+            ? "observe"
+            : "neutral";
+  const canMigrate = status?.state === "legacy" || (status?.operation_kind === "migrate" && status.operation_status !== "completed");
+  const canSeal =
+    status?.state === "unsealed" ||
+    (status?.state === "partial" && (status.operation_status === "completed" || (status.operation_kind === "seal" && status.operation_status === "failed")));
+  const canUnseal = status?.state === "sealed";
+
+  return (
+    <section className="ui-panel p-comfortable" aria-labelledby="tenant-key-domain-heading">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="tenant-key-domain-heading" className="text-title font-semibold">
+            {t("platform.tenantSeal.heading")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("platform.tenantSeal.description")}</p>
+        </div>
+        {status ? <StatusBadge value={status.state} label={label} tone={tone} /> : null}
+      </div>
+
+      {loading ? (
+        <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          {t("platform.tenantSeal.loading")}
+        </p>
+      ) : null}
+      {requestError ? (
+        <div className="mt-4 rounded-control border border-destructive/30 bg-destructive/10 p-3 text-sm" role="alert">
+          <p className="font-semibold text-destructive">{t("platform.tenantSeal.requestFailed")}</p>
+          <p className="mt-1 break-words text-muted-foreground">{requestError}</p>
+          <Button type="button" variant="outline" className="mt-3" onClick={() => void refreshStatus()} disabled={loading || busy}>
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            {t("platform.tenantSeal.refresh")}
+          </Button>
+        </div>
+      ) : null}
+      {notice ? (
+        <p className="mt-4 rounded-control border border-status-success/30 bg-status-success/10 p-3 text-sm text-status-success" role="status">
+          {notice}
+        </p>
+      ) : null}
+
+      {status ? (
+        <div className="mt-4 grid gap-4">
+          {status.failure ? (
+            <div className="rounded-control border border-destructive/30 bg-destructive/10 p-3 text-sm" role="alert">
+              <p className="font-semibold text-destructive">{status.failure}</p>
+              <p className="mt-1 text-muted-foreground">{status.recovery}</p>
+            </div>
+          ) : null}
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.protectionMode")}</dt>
+              <dd className="font-mono text-xs">{status.protection_mode}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.wrapper")}</dt>
+              <dd className="font-mono text-xs">{status.wrapper_id || t("platform.tenantSeal.notConfigured")}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.progress")}</dt>
+              <dd>
+                {status.progress_total > 0
+                  ? t("platform.tenantSeal.progressValue", {
+                      completed: status.progress_completed,
+                      total: status.progress_total,
+                    })
+                  : t("platform.tenantSeal.notStarted")}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.legacyExposure")}</dt>
+              <dd className="font-mono text-xs">{status.legacy_history_exposure}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.zeroEgress")}</dt>
+              <dd>{status.local_wrapper_zero_egress ? t("platform.tenantSeal.yes") : t("platform.tenantSeal.no")}</dd>
+            </div>
+            <div className="sm:col-span-2 xl:col-span-3">
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.lastTransition")}</dt>
+              <dd className="break-all font-mono text-xs">{status.last_transition_type || t("platform.tenantSeal.none")}</dd>
+            </div>
+          </dl>
+          <div className="rounded-control border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{t("platform.tenantSeal.recovery")}: </span>
+            {status.recovery}
+          </div>
+          {status.last_transition_evidence_refs.length > 0 ? (
+            <div>
+              <h3 className="text-sm font-semibold">{t("platform.tenantSeal.evidence")}</h3>
+              <ul className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                {status.last_transition_evidence_refs.map((ref) => (
+                  <li key={ref} className="break-all font-mono">
+                    {ref}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {canWrite && canMigrate ? (
+            <form className="grid gap-3 rounded-control border border-border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={migrate}>
+              <label className="grid gap-1 text-sm" htmlFor="tenant-key-domain-wrapper-id">
+                <span className="font-medium">{t("platform.tenantSeal.wrapperID")}</span>
+                <input
+                  id="tenant-key-domain-wrapper-id"
+                  className="min-h-10 rounded-control border border-border bg-background px-3 py-2"
+                  value={wrapperID}
+                  onChange={(event) => setWrapperID(event.target.value)}
+                  required
+                  autoComplete="off"
+                  aria-describedby="tenant-key-domain-wrapper-help"
+                />
+                <span id="tenant-key-domain-wrapper-help" className="text-xs text-muted-foreground">
+                  {t("platform.tenantSeal.wrapperHelp")}
+                </span>
+              </label>
+              <Button type="submit" disabled={busy || !wrapperID.trim()}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                {t("platform.tenantSeal.migrate")}
+              </Button>
+            </form>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            {canWrite && canSeal ? (
+              <Button type="button" variant="destructive" onClick={() => setSealConfirmOpen(true)} disabled={busy}>
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+                {status.operation_kind === "seal" && status.operation_status === "failed" ? t("platform.tenantSeal.retrySeal") : t("platform.tenantSeal.seal")}
+              </Button>
+            ) : null}
+            {canWrite && canUnseal ? (
+              <Button type="button" onClick={() => void unseal()} disabled={busy}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                {t("platform.tenantSeal.unseal")}
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" onClick={() => void refreshStatus()} disabled={loading || busy}>
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              {t("platform.tenantSeal.refresh")}
+            </Button>
+          </div>
+          {!canWrite ? <p className="text-sm text-muted-foreground">{t("platform.tenantSeal.readOnly")}</p> : null}
+        </div>
+      ) : null}
+
+      <Dialog
+        open={sealConfirmOpen}
+        onClose={() => setSealConfirmOpen(false)}
+        titleId="tenant-key-domain-seal-confirm-title"
+        descriptionId="tenant-key-domain-seal-confirm-description"
+        role="alertdialog"
+        panelClassName="fixed left-1/2 top-1/2 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-panel border border-border bg-background p-5 shadow-2xl"
+      >
+        <h2 id="tenant-key-domain-seal-confirm-title" className="text-title font-semibold">
+          {t("platform.tenantSeal.confirmHeading")}
+        </h2>
+        <p id="tenant-key-domain-seal-confirm-description" className="mt-2 text-sm text-muted-foreground">
+          {t("platform.tenantSeal.confirmDescription")}
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setSealConfirmOpen(false)}>
+            {t("platform.tenantSeal.cancel")}
+          </Button>
+          <Button type="button" variant="destructive" onClick={() => void seal()}>
+            {t("platform.tenantSeal.confirm")}
+          </Button>
+        </div>
+      </Dialog>
+    </section>
+  );
+}
+
+/** /admin/system — system posture plus the tenant key-domain lifecycle.
+ * Fetches only what this page renders. */
 export function AdminSystem() {
   const { user, preview } = useAuth();
   const { locale, timeZone, t } = useTranslation();
@@ -354,6 +647,7 @@ export function AdminSystem() {
         </p>
       )}
       <div className="grid gap-6">
+        <TenantKeyDomainPanel canWrite={Boolean(user?.permissions?.includes("keys:write"))} />
         <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
 
         <div className="grid gap-4 lg:grid-cols-4">

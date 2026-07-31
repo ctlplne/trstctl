@@ -708,7 +708,13 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     kind: "observe",
     evidence: "secret scanning source/detector/fingerprint/owner/rotation disclosure with redacted snippets only",
   },
-  { featureId: "F40", routes: ["/admin/system"], component: "Platform", kind: "observe", evidence: "active tenant from authenticated session" },
+  {
+    featureId: "F40",
+    routes: ["/admin/system"],
+    component: "Platform",
+    kind: "operate",
+    evidence: "active tenant plus tenant key-domain migration, confirmed seal, terminal-failure recovery, and unseal",
+  },
   {
     featureId: "F41",
     routes: ["/admin/editions"],

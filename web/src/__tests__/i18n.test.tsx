@@ -284,10 +284,13 @@ describe("i18n boundary", () => {
       // P-5da72dc3 adds the read-only ARI publication/window/scheduler panel
       // and its honest loading, empty, permission, unavailable, and error
       // states in both production catalogs.
+      // I-aa8623a3 adds the tenant key-domain migration, seal, failure,
+      // recovery, and unseal workflow in both production catalogs while
+      // preserving the completed/total progress placeholders.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "9727aefe950fe2c05ba27c26804a3bae162a3f8074e16f79e0457874015f6018",
-      "de-DE": "bfc25eb1f7c725c09b44cead42f5be4fae4b3828da5a57c95698e7f75bce0690",
+      "es-ES": "0f94ce1be78eca36d78368e86e9e172add95f15f5759ff0df351498e1f49b558",
+      "de-DE": "1c1afd05e92698bef79009c40cf5be1939cbb05b54f119e9c3e5106e50c23258",
     });
   });
 

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { axe } from "vitest-axe";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
@@ -23,6 +25,10 @@ const { apiMock } = vi.hoisted(() => ({
     managedOfferingStatus: vi.fn(),
     scaleOrchestration: vi.fn(),
     platformSystem: vi.fn(),
+    tenantKeyDomain: vi.fn(),
+    migrateTenantKeyDomain: vi.fn(),
+    sealTenantKeyDomain: vi.fn(),
+    unsealTenantKeyDomain: vi.fn(),
     activeActiveIssuance: vi.fn(),
   },
 }));
@@ -88,6 +94,19 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
         recovery: "upgrade the fleet",
       },
     });
+    apiMock.tenantKeyDomain.mockResolvedValue({
+      served: true,
+      protection_mode: "legacy_deployment_kek",
+      state: "legacy",
+      progress_completed: 0,
+      progress_total: 0,
+      retryable: false,
+      legacy_history_exposure: "hot_history_pending",
+      last_transition_evidence_refs: [],
+      local_wrapper_zero_egress: true,
+      remote_wrapper_state: "disabled_in_core_local_custody",
+      recovery: "Configure a local wrapper and migrate.",
+    });
     apiMock.activeActiveIssuance.mockResolvedValue({
       served: false,
       regions: [],
@@ -142,5 +161,123 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     await screen.findByRole("heading", { level: 1, name: "System posture" });
     expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Upgrade to Enterprise|Contact sales/i);
+  });
+
+  it("operates tenant migration, confirmed seal, and unseal from the system console", async () => {
+    apiMock.me.mockResolvedValue({
+      subject: "custody-operator",
+      tenant_id: "t1",
+      email: "custody@example.test",
+      permissions: ["access:read", "keys:read", "keys:write"],
+    });
+    const legacy = {
+      served: true,
+      protection_mode: "legacy_deployment_kek",
+      state: "legacy",
+      progress_completed: 0,
+      progress_total: 0,
+      retryable: false,
+      legacy_history_exposure: "hot_history_pending",
+      last_transition_evidence_refs: [],
+      local_wrapper_zero_egress: true,
+      remote_wrapper_state: "disabled_in_core_local_custody",
+      recovery: "Configure a local wrapper and migrate.",
+    };
+    const partial = {
+      ...legacy,
+      protection_mode: "tenant_domain",
+      state: "partial",
+      wrapper_id: "tenant-a-custody",
+      wrapper_kind: "local_file",
+      operation_kind: "migrate",
+      operation_status: "completed",
+      progress_completed: 10,
+      progress_total: 10,
+      legacy_history_exposure: "external_archives_possible",
+      last_transition_type: "tenant.key_domain.migration_completed",
+      last_transition_evidence_refs: ["tenant-history://signed-continuity"],
+      recovery: "Retire pre-migration archives.",
+    };
+    const sealed = {
+      ...partial,
+      state: "sealed",
+      operation_kind: "seal",
+      operation_status: "completed",
+      recovery: "Use the configured wrapper to unseal.",
+    };
+    const unsealed = {
+      ...sealed,
+      state: "unsealed",
+      operation_kind: "unseal",
+      recovery: "Tenant-domain protection is available.",
+    };
+    apiMock.tenantKeyDomain.mockReset();
+    apiMock.tenantKeyDomain.mockResolvedValueOnce(legacy).mockResolvedValueOnce(sealed);
+    apiMock.migrateTenantKeyDomain.mockResolvedValue(partial);
+    apiMock.sealTenantKeyDomain.mockResolvedValue({
+      accepted: true,
+      operation_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      state: "seal_queued",
+      status_url: "/api/v1/platform/tenant-key-domain",
+    });
+    apiMock.unsealTenantKeyDomain.mockResolvedValue(unsealed);
+
+    const user = userEvent.setup();
+    const view = renderAt("/admin/system");
+    expect(await screen.findByRole("heading", { name: "Tenant cryptographic custody" })).toBeInTheDocument();
+    expect(await screen.findByText("Deployment-key protected")).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: /Configured local wrapper ID/ }), "tenant-a-custody");
+    await user.click(screen.getByRole("button", { name: "Start or resume migration" }));
+    await waitFor(() => expect(apiMock.migrateTenantKeyDomain).toHaveBeenCalledWith({ wrapper_kind: "local_file", wrapper_id: "tenant-a-custody" }));
+    expect(await screen.findByText("Hot state migrated")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Seal tenant crypto" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Seal this tenant's cryptographic domain?" });
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Seal tenant crypto" }));
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Confirm seal" }));
+    await waitFor(() => expect(apiMock.sealTenantKeyDomain).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Cryptographically sealed")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Unseal tenant crypto" }));
+    await waitFor(() => expect(apiMock.unsealTenantKeyDomain).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Tenant domain available")).toBeInTheDocument();
+    expect(await axe(view.container)).toHaveNoViolations();
+  });
+
+  it("renders a terminal seal failure as available, retryable custody truth", async () => {
+    apiMock.me.mockResolvedValue({
+      subject: "custody-operator",
+      tenant_id: "t1",
+      email: "custody@example.test",
+      permissions: ["keys:read", "keys:write"],
+    });
+    apiMock.tenantKeyDomain.mockResolvedValue({
+      served: true,
+      protection_mode: "tenant_domain",
+      state: "partial",
+      wrapper_id: "tenant-a-custody",
+      wrapper_kind: "local_file",
+      progress_completed: 10,
+      progress_total: 10,
+      retryable: true,
+      operation_kind: "seal",
+      operation_status: "failed",
+      failure: "Tenant seal worker exhausted its retry budget before the seal committed.",
+      failure_code: "seal_delivery_exhausted",
+      legacy_history_exposure: "external_archives_possible",
+      last_transition_type: "tenant.key_domain.seal_failed",
+      last_transition_evidence_refs: ["tenant-domain://crypto-remains-available"],
+      local_wrapper_zero_egress: true,
+      remote_wrapper_state: "disabled_in_core_local_custody",
+      recovery: "Retry with a new Idempotency-Key; the exhausted key keeps replaying its receipt.",
+    });
+    const view = renderAt("/admin/system");
+    expect(await screen.findByText("Tenant seal worker exhausted its retry budget before the seal committed.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry seal with a new request" })).toBeInTheDocument();
+    expect(screen.getAllByText(/Retry with a new Idempotency-Key/)).toHaveLength(2);
+    expect(await axe(view.container)).toHaveNoViolations();
   });
 });

@@ -306,6 +306,9 @@ import type {
   ShareToken,
   ShareValue,
   SystemReadout,
+  TenantKeyDomainMigrateRequest,
+  TenantKeyDomainSealReceipt,
+  TenantKeyDomainStatus,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
   SSHFleetInventory,
@@ -710,6 +713,9 @@ export type {
   ShareToken,
   ShareValue,
   SystemReadout,
+  TenantKeyDomainMigrateRequest,
+  TenantKeyDomainSealReceipt,
+  TenantKeyDomainStatus,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
   SSHFleetInventory,
@@ -1148,6 +1154,10 @@ export interface Api {
   managedOfferingStatus(): Promise<ManagedOfferingStatus>;
   scaleOrchestration(): Promise<ScaleOrchestrationPlan>;
   platformSystem(): Promise<SystemReadout>;
+  tenantKeyDomain(): Promise<TenantKeyDomainStatus>;
+  migrateTenantKeyDomain(input: TenantKeyDomainMigrateRequest): Promise<TenantKeyDomainStatus>;
+  sealTenantKeyDomain(): Promise<TenantKeyDomainSealReceipt>;
+  unsealTenantKeyDomain(): Promise<TenantKeyDomainStatus>;
   activeActiveIssuance(): Promise<ActiveActiveIssuancePlan>;
   provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
@@ -1446,6 +1456,10 @@ const liveApi: Api = {
   managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),
   scaleOrchestration: () => req<ScaleOrchestrationPlan>("/api/v1/scale/orchestration"),
   platformSystem: () => req<SystemReadout>("/api/v1/platform/system"),
+  tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
+  migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
+  sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),
+  unsealTenantKeyDomain: () => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/unseal"),
   activeActiveIssuance: () => req<ActiveActiveIssuancePlan>("/api/v1/scale/ha-issuance"),
   provisionManagedTenant: (input) => mutate<ManagedTenant>("POST", "/api/v1/managed-offering/tenants", input),
   certificatePage: (options) => {
