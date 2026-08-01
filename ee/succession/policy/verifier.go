@@ -17,7 +17,7 @@ type DecisionLedger interface {
 	IsRecorded(decisionDigest []byte) (bool, error)
 }
 
-// ProvenanceVerifier is the in-signer plan-chain check (PCAS-claims 24, 40). It decodes the
+// ProvenanceVerifier is the in-signer plan-chain check (PCAS-claims-24, 40). It decodes the
 // provenance chain carried in the request's PolicyDecision, verifies the authority
 // signatures and both digest bindings, checks the decision authorizes the request's
 // (identity, target), checks the request's policy_ref equals the recorded-decision

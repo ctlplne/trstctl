@@ -33,7 +33,7 @@ const (
 	// the predecessor's retirement condition consumes this event (PCAS-claim-39).
 	TypeRewrapCompleted = "nhi.rewrap.completed"
 	// TypeMisissuance records a detected algorithm-epoch equivocation: two distinct
-	// dual-signed records for one identity at the same epoch (PCAS-claims 11, 28). A monitor
+	// dual-signed records for one identity at the same epoch (PCAS-claims-11, 28). A monitor
 	// emits it, binding both record commitments and the named minting signers, so the
 	// misissuance is durable and attributable on the ledger.
 	TypeMisissuance = "nhi.algorithm.misissuance"
@@ -163,7 +163,7 @@ type RewrapCompletedV1 struct {
 
 func (RewrapCompletedV1) isSuccessionPayload() {}
 
-// MisissuanceV1 records a detected algorithm-epoch equivocation (PCAS-claims 11, 28): two
+// MisissuanceV1 records a detected algorithm-epoch equivocation (PCAS-claims-11, 28): two
 // distinct dual-signed records for one identity at the same epoch. It binds both
 // record commitments and, when the records carry verifiable signer attestations, the
 // named minting signers — so the misissuance is durable and attributable from the

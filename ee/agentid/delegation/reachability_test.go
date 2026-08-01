@@ -11,7 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
-// reachability_test.go drives the AGID-06 in-signer reachability precondition (AGID-claims 5/6 /
+// reachability_test.go drives the AGID-06 in-signer reachability precondition (AGID-claims-5/6 /
 // INV-A5) through the SAME AGID-04b instrumented-keystore ordering harness the chain,
 // attestation, and task-envelope tests use (runGatedIssue / instrumentedKeystore /
 // orderLog). A gate with a reachability trust lookup verifies a SIGNED reachability verdict

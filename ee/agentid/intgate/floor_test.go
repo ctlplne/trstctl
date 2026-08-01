@@ -134,7 +134,7 @@ func TestDeferredAllowList_IsMinimal(t *testing.T) {
 	}
 	for d := range gotPkgs {
 		if !wantPkgs[d] {
-			t.Errorf("DEFERRED package allow-list has an unexpected entry %q: only ee/agentid/verify (the external RP SDK, claim 28) is a wholly external-consumer package; do not defer other packages to bypass the gate", d)
+			t.Errorf("DEFERRED package allow-list has an unexpected entry %q: only ee/agentid/verify (the external RP SDK, AGID-claim-28) is a wholly external-consumer package; do not defer other packages to bypass the gate", d)
 		}
 	}
 	for d := range wantPkgs {

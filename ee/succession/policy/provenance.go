@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package policy adds PCAS provenance around the PCAS-claim-23 policy decision that the
-// signer already verifies (PCAS-claims 24, 40; supports INV-15's "no path bypasses
+// signer already verifies (PCAS-claims-24, 40; supports INV-15's "no path bypasses
 // auditability"). The core internal/policy OPA engine remains the decision engine;
 // this package records and chains its outputs, in ee/.
 //

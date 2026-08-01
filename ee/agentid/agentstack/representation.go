@@ -7,7 +7,7 @@
 // forms (a model-weights digest for locally hosted weights OR a provider model
 // id + version when weights are not exposed) together with an explicit
 // indicator of which form is present, and the orchestrator/runtime version
-// identifiers (AGID-claims 11, 27-repr; establishing INV-A3, the representation +
+// identifiers (AGID-claims-11, 27-repr; establishing INV-A3, the representation +
 // tool-manifest-excess half).
 //
 // The representation is CANONICAL and byte-stable: the same agent stack yields
@@ -144,14 +144,14 @@ var (
 	ErrMissingToolDigest = errors.New("agentstack: representation missing tool-manifest digest")
 	// ErrModelFormUnset is returned when the model-form indicator is unset — the
 	// indicator cannot be omitted (AGID-claim-11).
-	ErrModelFormUnset = errors.New("agentstack: model form indicator is unset (claim 11)")
+	ErrModelFormUnset = errors.New("agentstack: model form indicator is unset (AGID-claim-11)")
 	// ErrModelFormAmbiguous is returned when the model carries fields for more than
 	// one form (e.g. both a weights digest and a provider id), so the single-form
 	// rule is violated.
-	ErrModelFormAmbiguous = errors.New("agentstack: model identifier present in more than one form (claim 11)")
+	ErrModelFormAmbiguous = errors.New("agentstack: model identifier present in more than one form (AGID-claim-11)")
 	// ErrModelFormIncomplete is returned when the declared form's required fields
 	// are absent (e.g. ModelFormProviderID without a provider id or version).
-	ErrModelFormIncomplete = errors.New("agentstack: model identifier incomplete for its declared form (claim 11)")
+	ErrModelFormIncomplete = errors.New("agentstack: model identifier incomplete for its declared form (AGID-claim-11)")
 	// ErrUnknownModelForm is returned when the model-form indicator is not one of
 	// the two defined forms.
 	ErrUnknownModelForm = errors.New("agentstack: unknown model form indicator")

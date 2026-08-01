@@ -12,7 +12,7 @@ import (
 // attestbind.go defines the PURE, datastore-free control-plane contracts the AGID-07b
 // broker precondition uses to bind a verified attestation to the issuance it justified
 // and to refuse a REPLAY (AGID-claim-9 / INV-A6), plus the sub-hour TTL-ceiling derivation the
-// ephemeral issuer is clamped to (AGID-claims 7/26 / INV-A7).
+// ephemeral issuer is clamped to (AGID-claims-7/26 / INV-A7).
 //
 // IMPORTANT (AN-4): this file — and the whole `delegation` package — is SIGNER-LINKED
 // (cmd/trstctl-signer attaches delegation.NewSignerGate). It therefore imports NO

@@ -9,7 +9,7 @@ import (
 )
 
 // verify.go is the pure, testable IN-SIGNER verification of a signed reachability verdict
-// (AGID-claims 5/6 / INV-A5): the check the isolated signer runs as a PRECONDITION of the key
+// (AGID-claims-5/6 / INV-A5): the check the isolated signer runs as a PRECONDITION of the key
 // operation. It performs NO key operation, holds no issuance key, builds no graph, and
 // touches no datastore — it depends ONLY on internal/crypto (so the isolated signer stays
 // datastore-free, AN-4, and graph computation stays OUT of the signer, AGID-claim-6). It:

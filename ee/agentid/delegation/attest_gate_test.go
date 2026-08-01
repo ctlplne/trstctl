@@ -55,7 +55,7 @@ func TestIssue_AttestationVerifiedBeforeKeygen(t *testing.T) {
 		t.Fatal("keygen never ran")
 	}
 	if ai >= ki {
-		t.Fatalf("call order = %v, want attestation verified BEFORE keygen (claim 10 / INV-A1)", f.log.snapshot())
+		t.Fatalf("call order = %v, want attestation verified BEFORE keygen (AGID-claim-10 / INV-A1)", f.log.snapshot())
 	}
 	// The bound material carries the attestation-evidence digest.
 	bm, err := ExtractBindingMaterial(res.credential)
@@ -91,7 +91,7 @@ func TestAttestation_MinClassGate(t *testing.T) {
 	}
 	res := runGatedIssue(t, f.log, f.gate, req, f.mintKeyOp(t))
 	if res.decision.Approved {
-		t.Fatal("below-class attestation was approved (claim 10 min-class gate failed)")
+		t.Fatal("below-class attestation was approved (AGID-claim-10 min-class gate failed)")
 	}
 	if f.keystore.keyOps() != 0 {
 		t.Fatalf("below-class attestation performed %d key ops, want zero", f.keystore.keyOps())
@@ -143,17 +143,17 @@ func TestIssue_AttestationAgentStackNoChain(t *testing.T) {
 	}
 	// Attestation before keygen.
 	if f.log.index("attest-verified") >= f.log.index("keyop") {
-		t.Fatalf("call order = %v, want attestation before keygen (claim 32)", f.log.snapshot())
+		t.Fatalf("call order = %v, want attestation before keygen (AGID-claim-32)", f.log.snapshot())
 	}
 	bm, err := ExtractBindingMaterial(res.credential)
 	if err != nil {
 		t.Fatalf("extract binding: %v", err)
 	}
 	if len(bm.ChainHeadDigest) != 0 {
-		t.Fatalf("no-chain fallback bound a chain-head digest %x, want none (claim 32)", bm.ChainHeadDigest)
+		t.Fatalf("no-chain fallback bound a chain-head digest %x, want none (AGID-claim-32)", bm.ChainHeadDigest)
 	}
 	if len(bm.AgentStackDigest) == 0 {
-		t.Fatal("no-chain fallback bound no agent-stack digest (claim 32)")
+		t.Fatal("no-chain fallback bound no agent-stack digest (AGID-claim-32)")
 	}
 	// The bound agent-stack digest is the digest of the OPAQUE representation bytes the
 	// caller shipped (the gate binds exactly what it received, so a relying party

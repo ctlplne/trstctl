@@ -58,7 +58,7 @@ var algRegistry = map[crypto.Algorithm]uint64{
 	crypto.Algorithm("Hybrid-ML-DSA-44-ECDSA-P256"): 41,
 
 	// ML-KEM key-establishment identifiers (confidentiality-key succession, PCAS-14 /
-	// PCAS-claims 15, 30). Registered so a commitment may name a KEM successor or
+	// PCAS-claims-15, 30). Registered so a commitment may name a KEM successor or
 	// predecessor; possession for these is proven by a decapsulation transcript or a
 	// paired epoch-bound signing key, not by a signature over the commitment.
 	crypto.Algorithm("ML-KEM-512"):  50,
@@ -96,10 +96,10 @@ type CommitmentFields struct {
 	// v2 bindings (INT-08) are bound in the commitment ONLY when CommitmentVersion >= 2,
 	// under a distinct v2 domain. v1 records (CommitmentVersion 0 or 1) encode exactly
 	// as before and keep the frozen v1 golden vector. Binding these in the commitment
-	// makes PCAS-claims 24/33/35/42 literally "the commitment binds ...", and lets base
+	// makes PCAS-claims-24/33/35/42 literally "the commitment binds ...", and lets base
 	// VerifyChain detect a flipped RecordType (closing the naive-RP bypass, INT-09).
 	CommitmentVersion         uint32
-	RecordType                RecordType // "" ordinary; revocation/ceremony/emergency (PCAS-claims 36/37)
+	RecordType                RecordType // "" ordinary; revocation/ceremony/emergency (PCAS-claims-36/37)
 	AuthzDigest               []byte     // digest of the dual-control authorization artifact (PCAS-claim-42)
 	AttestationEvidenceDigest []byte     // successor-custody attestation evidence digest (PCAS-claim-35)
 	AttestationType           string     // attestation-type registry id (PCAS-claim-35)

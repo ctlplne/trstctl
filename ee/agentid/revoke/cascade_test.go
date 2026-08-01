@@ -173,13 +173,13 @@ func TestRevoke_ReasonClassRecorded(t *testing.T) {
 			t.Fatalf("fetch directive (%s): found=%v err=%v", reason, found, err)
 		}
 		if dir.Reason != string(reason) {
-			t.Fatalf("directive row reason = %q, want %q (claim 17 not recorded)", dir.Reason, reason)
+			t.Fatalf("directive row reason = %q, want %q (AGID-claim-17 not recorded)", dir.Reason, reason)
 		}
 	}
 
 	// An unrecognized reason class is refused before any determination or ledger write.
 	if _, err := c.EnqueueDirective(ctx, revoke.Directive{TenantID: tenantA, Subject: "subj", Reason: revoke.ReasonClass("made-up")}); err == nil {
-		t.Fatal("an unrecognized reason class was accepted; claim-17 reason validation is missing")
+		t.Fatal("an unrecognized reason class was accepted; AGID-claim-17 reason validation is missing")
 	}
 }
 

@@ -150,7 +150,7 @@ type Violation struct {
 }
 
 // Determination is the ceiling-evaluation OUTCOME the verdict binds and the signer
-// verifies (AGID-claim 5/6). RequesterClass names the class the ceiling was selected by;
+// verifies (AGID-claim-5/6). RequesterClass names the class the ceiling was selected by;
 // Exceeded is true iff any dimension was violated; Violations names each violated ceiling
 // with its offending-subset digest. A Determination with Exceeded=false is an APPROVE
 // determination; Exceeded=true is a REFUSE determination the signer honors by performing

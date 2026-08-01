@@ -197,7 +197,7 @@ type Config struct {
 	// never consulted unless a record references an envelope.
 	TaskEnvelopeTrust taskenv.TrustLookup
 	// ReachabilityTrust resolves a reachability-verdict signer key id to its public key
-	// DER (AGID-06, AGID-claims 5/6). It is the signer-held registry of the reachability
+	// DER (AGID-06, AGID-claims-5/6). It is the signer-held registry of the reachability
 	// engine's verdict-signing identities the gate verifies a presented reachability
 	// verdict's signature against. Setting it (non-nil) ENABLES the reachability
 	// precondition: a chain-bearing request must then carry a valid signed verdict for the
@@ -377,7 +377,7 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 	}
 	taskEnvelopeDigest := teres.chainHead
 
-	// (5) Reachability bound (AGID-06, AGID-claims 5/6 / INV-A5): when the reachability
+	// (5) Reachability bound (AGID-06, AGID-claims-5/6 / INV-A5): when the reachability
 	// precondition is engaged (a verdict is carried, or the gate REQUIRES reachability and
 	// a chain is present), verify the SIGNED reachability verdict as a PRECONDITION of the
 	// key op and BEFORE the binding is assembled. The verdict is bound to the FINAL
@@ -394,7 +394,7 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 	}
 
 	// Binding target: at least one of a verified chain head or an agent-stack
-	// representation must be present (AGID-claims 31/32 fallbacks each satisfy exactly one).
+	// representation must be present (AGID-claims-31/32 fallbacks each satisfy exactly one).
 	if len(chainHeadDigest) == 0 && len(reprBytes) == 0 {
 		return verifyResult{refused: true, check: CheckBindingTarget, hopIndex: -1, detail: "no chain and no agent-stack representation"}
 	}

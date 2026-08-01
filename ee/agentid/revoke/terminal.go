@@ -27,7 +27,7 @@ import (
 // terminal flag + stamps terminal_at (idempotently), and OUTSIDE the tx but bound to it
 // durable-first appends the terminal AN-2 event carrying the SIGNED aggregate evidence
 // artifact (aggregate.go: the completion-evidence digest + subject id + reason class +
-// directive watermark + ledger head as of terminal — AGID-claims 18/33). It performs NO key
+// directive watermark + ledger head as of terminal — AGID-claims-18/33). It performs NO key
 // op on issued credentials and NEVER mints a credential; its only signing is the
 // aggregate artifact via internal/crypto (AN-3).
 //
@@ -234,7 +234,7 @@ func (tt *TerminalTransition) Transition(ctx context.Context, tenantID, directiv
 		// flip below is a no-op (already terminal), so we append the (fresh) artifact.
 	}
 
-	// Build the signed aggregate artifact from the verdict (AGID-claims 18/33). The BOUND BODY is
+	// Build the signed aggregate artifact from the verdict (AGID-claims-18/33). The BOUND BODY is
 	// deterministic (subject/reason/watermark/head/completion-digest); only the ECDSA
 	// signature bytes vary run-to-run, which is why the persisted artifact above is reused
 	// on a repeat call rather than re-signed.

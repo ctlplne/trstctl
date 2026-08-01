@@ -11,7 +11,7 @@ import (
 )
 
 // aggregate.go mints and verifies the SIGNED aggregate evidence artifact for a terminal
-// revocation (AGID-claims 18 and the independent AGID-claim-33). When a directive reaches the
+// revocation (AGID-claims-18 and the independent AGID-claim-33). When a directive reaches the
 // terminal revoked-with-evidence state — every enqueued and follow-on job carries signed
 // per-job completion evidence (§7.3 / INV-A9) — the terminal transition mints ONE signed
 // artifact that binds a DIGEST of the per-job completion evidence recorded under the
@@ -36,7 +36,7 @@ const aggregateDomain = "agid/agentid/revocation-aggregate-evidence/v1"
 // keeps the aggregation function distinct from any other digest-over-digests use.
 const completionDigestDomain = "agid/agentid/revocation-aggregate/completion-set/v1"
 
-// AggregateEvidence is the signed terminal-revocation aggregate artifact (AGID-claims 18/33).
+// AggregateEvidence is the signed terminal-revocation aggregate artifact (AGID-claims-18/33).
 // It is a pure value: a relying party stores it and verifies it offline. The bound set
 // is exactly the AGID-claim-33 binding set plus the completion-evidence digest of AGID-claim-18:
 //   - CompletionEvidenceDigest: a digest over the SORTED per-job completion-evidence

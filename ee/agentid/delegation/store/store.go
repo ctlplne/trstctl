@@ -546,7 +546,7 @@ func nilIfEmpty(b []byte) []byte {
 // AGID-10 cascade read paths + effect ledger. AGID-02 defined the revocation
 // SCHEMA and the descendant-set read; AGID-10 adds the reads its cascade/executor
 // need (the directive it recorded, the jobs it enqueued) and the durable
-// recorded-effect ledger that makes job execution idempotent (AGID-claim 16/21 /
+// recorded-effect ledger that makes job execution idempotent (AGID-claim-16/21 /
 // INV-A8) with signed per-job completion evidence (INV-A9). These are AGID-10
 // writes/reads over the AGID-02 tables plus agent_revocation_effects (910002).
 // ---------------------------------------------------------------------------

@@ -66,7 +66,7 @@ type PreconditionsBody struct {
 	// absent and no record references an envelope, the gate behaves exactly as AGID-04b.
 	Envelope []byte `json:"envelope,omitempty"`
 	// ReachabilityVerdict carries the encoded signed reachability verdict (ee/agentid/reach)
-	// the reachability engine produced OUTSIDE the signer (AGID-06, AGID-claims 5/6 / INV-A5).
+	// the reachability engine produced OUTSIDE the signer (AGID-06, AGID-claims-5/6 / INV-A5).
 	// Optional in carriage, but fail-closed in effect: the gate verifies the verdict's
 	// signature + watermark + ceiling determination as a PRECONDITION of the key op, bound
 	// to the FINAL record's authority. When the gate has reachability enforcement enabled

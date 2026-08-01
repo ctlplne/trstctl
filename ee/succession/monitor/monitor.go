@@ -3,7 +3,7 @@
 // Package monitor turns the PCAS detection primitives into reachable monitors over the
 // AN-2 ledger (INT-19). The misissuance monitor scans dual-signed succession records
 // for an algorithm-epoch equivocation — two distinct records for one identity at the
-// same epoch (PCAS-claims 11, 28) — and, on detection, emits a durable, attributable
+// same epoch (PCAS-claims-11, 28) — and, on detection, emits a durable, attributable
 // misissuance event binding both record commitments and, where the records carry
 // verifiable signer attestations, the named minting signers. The emitted proof is
 // self-contained: a third party re-derives it from the two records alone.

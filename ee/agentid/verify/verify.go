@@ -9,7 +9,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// verify.go is the OFFLINE relying-party verification entrypoint (AGID-claims 28, 29,
+// verify.go is the OFFLINE relying-party verification entrypoint (AGID-claims-28, 29,
 // 7 relying-party side / INV-A7 RP half). Verify runs a FAIL-CLOSED sequence of
 // checks in a deliberate order: cheap structural refusals first, then the
 // credential SIGNATURE against the trust root, then the AGENT-STACK-vs-policy
@@ -83,7 +83,7 @@ var (
 	ErrNoAction = errors.New("verify: requested action names no operation")
 )
 
-// Verify is the offline relying-party decision (AGID-claims 28/29/7 RP side). It
+// Verify is the offline relying-party decision (AGID-claims-28/29/7 RP side). It
 // decodes the presented credential, verifies its signature against the pinned
 // trust root, compares the bound agent-stack representation to local policy,
 // enforces the bound authority and (when present) the bound task scope on the

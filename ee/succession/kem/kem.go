@@ -2,7 +2,7 @@
 
 // Package kem implements succession for key-establishment (confidentiality)
 // credentials — e.g. ML-KEM — where the successor cannot sign the commitment
-// (PCAS-claims 15, 30). A KEM successor proves possession one of two ways, and the
+// (PCAS-claims-15, 30). A KEM successor proves possession one of two ways, and the
 // record NAMES which it uses:
 //
 //   - Variant A (interactive): the signer encapsulates a challenge to the successor

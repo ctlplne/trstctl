@@ -14,7 +14,7 @@ import (
 // identity's signed relying-party acknowledgements from ledger events, evaluates the
 // quorum via the Controller, and — only if met — announces the pure-PQC succession,
 // revokes then zeroizes the predecessor, and emits the retirement event binding the
-// ack-set digest (PCAS-claims 2/3/8). At-least-once invocation is safe: a below-quorum
+// ack-set digest (PCAS-claims-2/3/8). At-least-once invocation is safe: a below-quorum
 // evaluation changes nothing (ErrQuorumNotMet, no state change).
 type Worker struct{ ctrl *Controller }
 

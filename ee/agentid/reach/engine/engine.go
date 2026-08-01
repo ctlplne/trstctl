@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package engine is the OUTSIDE-the-signer half of the AGID pre-issuance reachability
-// bound (patent AGID-claims 5/6/25, INV-A5): the reachability engine that resolves the
+// bound (patent AGID-claims-5/6/25, INV-A5): the reachability engine that resolves the
 // requested authority of the FINAL delegation record against the read-only core
 // credential graph (internal/graph), computes the bounded-depth reachable set (services
 // accepting this authority, the assets they front, and the transitive closure), and
@@ -404,7 +404,7 @@ func resourceNodeID(value string) string {
 	return "res:" + v
 }
 
-// ProduceVerdict is the engine's end-to-end OUTSIDE-the-signer path (AGID-claims 5/6): resolve
+// ProduceVerdict is the engine's end-to-end OUTSIDE-the-signer path (AGID-claims-5/6): resolve
 // the reachable set for a request, evaluate it against the requester class's ceiling, and
 // return a SIGNED verdict binding the reachable-set digest, the ceiling determination, and
 // the graph watermark. class selects the ceiling; a class with no configured ceiling is a

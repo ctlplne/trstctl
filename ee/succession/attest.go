@@ -12,7 +12,7 @@ import (
 )
 
 // attest.go carries the signer-attributable evidence bound to every succession
-// record (PCAS-claims 28, 42; establishes INV-13). INV-13 is an ATTRIBUTION property, not
+// record (PCAS-claims-28, 42; establishes INV-13). INV-13 is an ATTRIBUTION property, not
 // a prevention one: a compromised signer can still mint, but every record it mints
 // carries a countersignature that NAMES it, and the authorization under which it
 // minted is verifiable from the published record — so misissuance is attributable.

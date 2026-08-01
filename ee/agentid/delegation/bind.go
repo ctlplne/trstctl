@@ -12,7 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// bind.go computes the credential BINDING (INV-A3, AGID-claims 1/24/34): a digest of the
+// bind.go computes the credential BINDING (INV-A3, AGID-claims-1/24/34): a digest of the
 // verified chain head plus the agent-stack representation, and the MINIMAL X.509
 // extension that carries that binding into the issued credential so a relying party
 // verifies it offline (the RP verifier is AGID-09; the richer carriage encodings are

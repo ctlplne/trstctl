@@ -73,7 +73,7 @@ func (rc ReasonClass) Valid() bool {
 // executor records the one it performed as the evidence's effect class.
 type EffectClass string
 
-// The revocation effect classes (§7, AGID-claim 16/19).
+// The revocation effect classes (§7, AGID-claim-16/19).
 const (
 	// EffectRevoke: flip the descendant credential's status to revoked (the core
 	// revoke effect; every job performs at least this).
@@ -111,7 +111,7 @@ func (d Directive) validate() error {
 		return fmt.Errorf("revoke: directive requires a subject")
 	}
 	if !d.Reason.Valid() {
-		return fmt.Errorf("revoke: directive reason class %q is not recognized (claim 17)", d.Reason)
+		return fmt.Errorf("revoke: directive reason class %q is not recognized (AGID-claim-17)", d.Reason)
 	}
 	return nil
 }

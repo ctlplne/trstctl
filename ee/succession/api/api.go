@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package api is the external PCAS surface (PCAS-claims 6, 9): request a succession
+// Package api is the external PCAS surface (PCAS-claims-6, 9): request a succession
 // (idempotent, AN-5), fetch an identity's succession chain (a response a relying
 // party verifies offline with PCAS-07), and record a signed relying-party
 // capability acknowledgement (an nhi.rp.ack the PCAS-10 quorum counts). It attaches
@@ -458,7 +458,7 @@ func requestSuccessionHandler(a *api.API, svc Service) http.HandlerFunc {
 				return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id is required")
 			}
 			if !plannableCredentialTypes[req.CredentialType] {
-				return 0, nil, api.ErrStatus(http.StatusBadRequest, "credential_type must be one of the claim-9 genus: x509, ssh, workload-svid, api-token, secret")
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "credential_type must be one of the PCAS-claim-9 genus: x509, ssh, workload-svid, api-token, secret")
 			}
 			if req.TargetAlgorithm == "" {
 				return 0, nil, api.ErrStatus(http.StatusBadRequest, "target_algorithm is required")

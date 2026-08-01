@@ -26,7 +26,7 @@ import (
 // isolated signer process (served over a Unix domain socket with SO_PEERCRED peer
 // authentication) mints a dual-signed succession record on request from a
 // control-plane CLIENT, and only public material crosses the boundary. This is the
-// wire path the audit found missing — the method of PCAS-claims 1/12/49 actually
+// wire path the audit found missing — the method of PCAS-claims-1/12/49 actually
 // executed across the custody boundary, not in-process.
 func TestINT01_MintSuccessorOverTransport(t *testing.T) {
 	// SIGNER side: the predecessor key and the successor keygen backend live only

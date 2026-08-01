@@ -287,7 +287,7 @@ func TestQuorum_EvaluatedPerTenant(t *testing.T) {
 
 // TestRetirement_RevokeThenZeroize_FailClosed: at quorum the predecessor is revoked
 // THEN zeroized (in that order), signing fails closed, and the retirement event binds
-// the satisfying ack-set digest with the succession record reference (PCAS-claims 8, 3 / INV-9).
+// the satisfying ack-set digest with the succession record reference (PCAS-claims-8, 3 / INV-9).
 func TestRetirement_RevokeThenZeroize_FailClosed(t *testing.T) {
 	rp1, rp2 := newRP(t, "rp1"), newRP(t, "rp2")
 	led := &memLedger{}
@@ -335,7 +335,7 @@ func TestRetirement_RevokeThenZeroize_FailClosed(t *testing.T) {
 
 // TestZeroize_Residue: after an evidence-gated retirement the predecessor's material
 // is gone — signing fails closed with ErrZeroized and the handle is terminal
-// (PCAS-claims 8, 16 / INV-9).
+// (PCAS-claims-8, 16 / INV-9).
 func TestZeroize_Residue(t *testing.T) {
 	rp1, rp2 := newRP(t, "rp1"), newRP(t, "rp2")
 	led := &memLedger{}

@@ -146,7 +146,7 @@ func TestAgentStack_ModelFormIndicatorPresent(t *testing.T) {
 	// The indicator cannot be omitted: an unset form is rejected fail-closed at
 	// construction, at validation, and at canonicalization.
 	if _, err := agentstack.New(prompt, manifest, agentstack.Model{WeightsDigest: []byte("x")}); err == nil {
-		t.Error("New accepted a model with an unset form indicator; want error (claim 11)")
+		t.Error("New accepted a model with an unset form indicator; want error (AGID-claim-11)")
 	}
 	unset := agentstack.Representation{
 		SystemPromptDigest: []byte("d"),
@@ -168,7 +168,7 @@ func TestAgentStack_ModelFormIndicatorPresent(t *testing.T) {
 		ModelVersion:    "v",
 	}
 	if err := ambiguous.Validate(); err == nil {
-		t.Error("Validate accepted a model in more than one form; want error (claim 11)")
+		t.Error("Validate accepted a model in more than one form; want error (AGID-claim-11)")
 	}
 
 	// Incomplete declared form is rejected.

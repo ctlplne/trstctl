@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package federation bridges succession trust across deployment boundaries without
-// merging ledgers (PCAS-claims 34, 43, 44; FIG. 10). The importing deployment verifies
+// merging ledgers (PCAS-claims-34, 43, 44; FIG. 10). The importing deployment verifies
 // a foreign identity's succession chain record-by-record against the foreign
 // genesis anchor, then appends only a BRIDGE record — binding the foreign chain
 // head, both deployment ids, and a monotone epoch mapping — to its own ledger. The
@@ -31,7 +31,7 @@ var ErrImportVerification = errors.New("federation: foreign chain failed verific
 // BridgeRecord binds a verified foreign chain head to the local deployment via a
 // monotone epoch mapping. It is signed by the local bridging authority and,
 // for a mutual bridge, countersigned by the foreign bridging authority over the
-// same commitment (PCAS-claims 34, 43).
+// same commitment (PCAS-claims-34, 43).
 type BridgeRecord struct {
 	ForeignDeployment   string
 	LocalDeployment     string
@@ -89,7 +89,7 @@ type ImportResult struct {
 // Import verifies a foreign identity's succession chain record-by-record against
 // its genesis anchor and, on success, produces a signed bridge record. On any
 // verification failure it produces a signed quarantine event instead and returns
-// ErrImportVerification; it never mutates local succession state (PCAS-claims 34, 44).
+// ErrImportVerification; it never mutates local succession state (PCAS-claims-34, 44).
 func Import(localAuthority crypto.Signer, localDeployment string, foreignTrustRootPubDER []byte, foreignGenesis succession.GenesisRecord, foreignChain []succession.SuccessionRecord, localBaseEpoch uint64) (ImportResult, error) {
 	if err := succession.VerifyGenesis(foreignTrustRootPubDER, foreignGenesis); err != nil {
 		return quarantine(localAuthority, foreignGenesis, err)

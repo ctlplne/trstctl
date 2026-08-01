@@ -56,7 +56,7 @@ func TestToolManifest_ExceedsRegisteredRefused(t *testing.T) {
 	// Exceeding is refused, and the excess is named.
 	v := agentstack.Compare(agentstack.NewToolManifest("fs.read", "shell.exec"), registered, nil)
 	if v.Accepted {
-		t.Fatal("manifest with an extra tool was accepted; want refused (claim 12)")
+		t.Fatal("manifest with an extra tool was accepted; want refused (AGID-claim-12)")
 	}
 	if len(v.Excess) != 1 || v.Excess[0] != "shell.exec" {
 		t.Fatalf("excess = %v, want exactly [shell.exec]", v.Excess)

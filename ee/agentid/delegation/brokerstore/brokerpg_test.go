@@ -187,7 +187,7 @@ func TestAttestation_BoundToIssuanceReplayRefused(t *testing.T) {
 		   JOIN agent_issuances i ON i.tenant_id = b.tenant_id AND i.credential_id = b.credential_id
 		  WHERE b.tenant_id = current_setting('trstctl.tenant_id')::uuid`)
 	if boundToIssuance != 1 {
-		t.Fatalf("attestation binding not joined to its issuance (bound rows = %d, want 1) — must reference the issuance it justified (claim 9)", boundToIssuance)
+		t.Fatalf("attestation binding not joined to its issuance (bound rows = %d, want 1) — must reference the issuance it justified (AGID-claim-9)", boundToIssuance)
 	}
 
 	// SECOND issuance with the SAME attestation (DIFFERENT idempotency key = a genuine
@@ -252,7 +252,7 @@ func TestIssue_IdempotencyKeySingleEvent(t *testing.T) {
 
 	// Exactly one issuance event: one issuance row, one binding, one outbox message.
 	if got := countRows(t, cs, tenant, `SELECT count(*) FROM agent_issuances WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid`); got != 1 {
-		t.Fatalf("agent_issuances rows after %d identical requests = %d, want exactly 1 (claim 15 / AN-5)", n, got)
+		t.Fatalf("agent_issuances rows after %d identical requests = %d, want exactly 1 (AGID-claim-15 / AN-5)", n, got)
 	}
 	if got := countRows(t, cs, tenant, `SELECT count(*) FROM agent_attestation_bindings WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid`); got != 1 {
 		t.Fatalf("attestation bindings after %d identical requests = %d, want exactly 1", n, got)

@@ -22,7 +22,7 @@ func (f *fakeByok) Algorithm() crypto.Algorithm { return f.alg }
 func (f *fakeByok) rotate()                     { f.v++ } // same-algorithm re-key
 
 // TestEpoch_DistinctFromRotationVersion: the algorithm-epoch and the core byok
-// rotation-version are independent monotonic counters (PCAS-claims 1/22 / INV-2).
+// rotation-version are independent monotonic counters (PCAS-claims-1/22 / INV-2).
 func TestEpoch_DistinctFromRotationVersion(t *testing.T) {
 	id := NewGenesis("id", "t", crypto.RSA2048, []byte{1})
 	rc := &fakeByok{v: 0, alg: crypto.RSA2048}

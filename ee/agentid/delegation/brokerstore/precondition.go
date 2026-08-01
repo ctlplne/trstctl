@@ -40,7 +40,7 @@ import (
 //      VerifyIssuancePreconditions over the resolved chain + attestation. A non-approving
 //      decision refuses (no key op). This guarantees the broker never issues a chain-bound
 //      credential the signer did not verify.
-//   3. Sub-hour TTL ceiling (AGID-claims 7/26 / INV-A7): derive the credential lifetime as the
+//   3. Sub-hour TTL ceiling (AGID-claims-7/26 / INV-A7): derive the credential lifetime as the
 //      minimum validity along the chain, clamped strictly sub-hour. An over-long request
 //      is refused; validity is determinable from the credential alone (no revocation
 //      status is queried).
@@ -236,7 +236,7 @@ func (m *memoryIdempotencer) Do(ctx context.Context, tenantID, key string, fn fu
 	return res, nil
 }
 
-// BrokerPrecondition is the real chain-bound issuance precondition (AGID-claims 7/8/9/14/15/26).
+// BrokerPrecondition is the real chain-bound issuance precondition (AGID-claims-7/8/9/14/15/26).
 // It satisfies broker.IssuancePrecondition. Construct it with NewBrokerPrecondition.
 type BrokerPrecondition struct {
 	cfg Config
@@ -337,7 +337,7 @@ func (p *BrokerPrecondition) evaluate(ctx context.Context, view broker.IssuanceV
 		return evaluationResult{}, err
 	}
 
-	// (2) Sub-hour TTL ceiling (AGID-claims 7/26 / INV-A7): derive the exact validity window
+	// (2) Sub-hour TTL ceiling (AGID-claims-7/26 / INV-A7): derive the exact validity window
 	// before the signer RPC so the in-signer key op certifies only this bounded lifetime.
 	// No revocation status is queried — validity is determinable from the credential alone.
 	now := p.cfg.Clock()
@@ -455,7 +455,7 @@ func (p *BrokerPrecondition) verifyInSigner(ctx context.Context, tenantID string
 
 // recordBinding records the verified attestation bound to the issuance it justifies and
 // enqueues the AN-6 outbox intent, under the idempotency key so N identical requests yield
-// exactly one issuance event (AGID-claims 9/15 / INV-A6 / AN-5). A replay (same attestation,
+// exactly one issuance event (AGID-claims-9/15 / INV-A6 / AN-5). A replay (same attestation,
 // different key) is refused by the durable unique index (delegation.ErrAttestationReplay).
 // The credential id is derived from the approved binding material so the binding row keys
 // to the credential the broker will mint.

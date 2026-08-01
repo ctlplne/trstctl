@@ -128,7 +128,7 @@ func TestRevoke_SignerRefusesWhileDirectiveActive(t *testing.T) {
 		t.Fatalf("VerifyIssuancePreconditions (issuance): %v", err)
 	}
 	if dec.Approved {
-		t.Fatal("issuance APPROVED while a directive is active against the subject (claim 20 violated)")
+		t.Fatal("issuance APPROVED while a directive is active against the subject (AGID-claim-20 violated)")
 	}
 	if len(dec.RefusalRecord) == 0 {
 		t.Fatal("refused issuance carries no signed refusal record")

@@ -41,7 +41,7 @@ func TestFloor_HistoryDeterminationEqualsCounter(t *testing.T) {
 
 // TestCounterFree_RefusesSameRollbacks: a minter using the counter-free history
 // floor refuses exactly the requests a stored-counter minter refuses, over a
-// random corpus (PCAS-claims 48/49 / INV-16). Any divergence is an automatic RED.
+// random corpus (PCAS-claims-48/49 / INV-16). Any divergence is an automatic RED.
 func TestCounterFree_RefusesSameRollbacks(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	mk := func(floor minter.FloorStore) *minter.Minter {

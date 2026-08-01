@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package delegation implements delegated-authority succession domains (PCAS-claims 33,
+// Package delegation implements delegated-authority succession domains (PCAS-claims-33,
 // 45, 46; FIG. 8): a tree of tenant scopes, each with succession-constraint state
 // (an algorithm-epoch floor). The effective constraint for a scope is the
 // strongest over the scope and all its ancestors, so a constraint never loosens

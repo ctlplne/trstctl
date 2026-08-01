@@ -54,7 +54,7 @@ type SuccessionRecord struct {
 	// requires it for any weaker-class succession.
 	BreakGlassAuth []byte
 
-	// RecordType distinguishes exceptional-but-chained records (PCAS-claims 36, 37,
+	// RecordType distinguishes exceptional-but-chained records (PCAS-claims-36, 37,
 	// PCAS-23): a revocation tombstone, or a ceremony / break-glass / emergency
 	// record. The empty value is an ordinary succession. Exceptional records still
 	// chain, stay epoch-monotonic, and require a transparency-log inclusion proof.
@@ -69,7 +69,7 @@ type SuccessionRecord struct {
 	AttestationType           string
 }
 
-// RecordType marks an exceptional-but-chained succession record (PCAS-claims 36, 37).
+// RecordType marks an exceptional-but-chained succession record (PCAS-claims-36, 37).
 type RecordType string
 
 const (

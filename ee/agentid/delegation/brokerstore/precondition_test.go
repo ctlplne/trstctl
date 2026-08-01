@@ -18,7 +18,7 @@ import (
 // datastore: short-TTL/no-status-query (AGID-claim-7 / INV-A7), sub-hour-on-verified-
 // attestation (AGID-claim-26 / INV-A6), renewal-repeats-verification-in-signer (AGID-claim-8), and
 // policy-deny-no-key-op-audit-reason (AGID-claim-14). The datastore-backed replay + idempotency
-// paths (AGID-claims 9/15) live in brokerpg_test.go against real embedded PostgreSQL.
+// paths (AGID-claims-9/15) live in brokerpg_test.go against real embedded PostgreSQL.
 //
 // The precondition drives a REAL AGID-04 gate (built via the public delegation API), an
 // in-memory fake recorder standing in for the durable store, and fake policy/resolver.
@@ -73,7 +73,7 @@ func TestCredential_ShortTTLNoStatusQuery(t *testing.T) {
 		t.Fatalf("derived TTL = %s, want the 20-minute chain minimum", ttl)
 	}
 	if ttl >= delegation.SubHour {
-		t.Fatalf("derived TTL %s is not sub-hour (claim 7 / INV-A7)", ttl)
+		t.Fatalf("derived TTL %s is not sub-hour (AGID-claim-7 / INV-A7)", ttl)
 	}
 	// A request over the ceiling is refused (over-long is fail-closed).
 	if _, err := delegation.SubHourCeiling(envs, now, 45*time.Minute); !errors.Is(err, delegation.ErrTTLCeilingExceeded) {
@@ -159,7 +159,7 @@ func TestEphemeral_SubHourOnVerifiedAttestation(t *testing.T) {
 		TenantID: "t1", AgentID: "agent-1", IdempotencyKey: "k-att-no",
 	})
 	if err == nil {
-		t.Fatal("issuance minted WITHOUT a verified attestation (claim 26 violated)")
+		t.Fatal("issuance minted WITHOUT a verified attestation (AGID-claim-26 violated)")
 	}
 	if !errors.Is(err, ErrSignerRefused) {
 		t.Fatalf("attestation-absent refusal = %v, want ErrSignerRefused", err)
@@ -216,7 +216,7 @@ func TestRenewal_RepeatsVerificationInSigner(t *testing.T) {
 		t.Fatalf("renewal refused: %v", err)
 	}
 	if att.verifyCount() != 2 {
-		t.Fatalf("renewal ran the in-signer verification %d times total, want 2 (renewal repeats verification, claim 8)", att.verifyCount())
+		t.Fatalf("renewal ran the in-signer verification %d times total, want 2 (renewal repeats verification, AGID-claim-8)", att.verifyCount())
 	}
 	if rec.count() != 2 {
 		t.Fatalf("renewal recorded %d bindings, want 2 (a fresh credential)", rec.count())
@@ -273,10 +273,10 @@ func TestPolicyGate_DenyNoKeyOpAuditReason(t *testing.T) {
 	// An audit event carrying the denial reason was emitted.
 	ev, ok := audit.find("agent.identity.refused")
 	if !ok {
-		t.Fatal("policy-denied issuance emitted no agent.identity.refused audit event (claim 14)")
+		t.Fatal("policy-denied issuance emitted no agent.identity.refused audit event (AGID-claim-14)")
 	}
 	if !strings.Contains(string(ev.data), reason) {
-		t.Fatalf("audit event data %q does not carry the denial reason %q (claim 14)", ev.data, reason)
+		t.Fatalf("audit event data %q does not carry the denial reason %q (AGID-claim-14)", ev.data, reason)
 	}
 	if ev.tenantID != "t1" {
 		t.Fatalf("audit event tenant = %q, want t1 (AN-1/AN-2)", ev.tenantID)

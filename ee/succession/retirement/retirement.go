@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package retirement is the evidence-gated tail of the PCAS loop (PCAS-claims 2, 3, 8).
+// Package retirement is the evidence-gated tail of the PCAS loop (PCAS-claims-2, 3, 8).
 // A hybrid→pure-PQC cutover — and the retirement of the superseded predecessor key
 // — proceeds only after a quorum of relying-party acknowledgements that are each
 // (a) signed by the acknowledging RP, (b) bound to the identity and the epoch being
@@ -282,7 +282,7 @@ func New(cfg Config) (*Controller, error) {
 // advances the pure-PQC succession, retires the predecessor (revoke fail-closed →
 // zeroize), and emits a retirement event binding the satisfying ack-set digest. If
 // the quorum is not met it returns ErrQuorumNotMet and performs no state change:
-// nothing is announced, and the predecessor is left untouched (PCAS-claims 2, 3, 8).
+// nothing is announced, and the predecessor is left untouched (PCAS-claims-2, 3, 8).
 func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime time.Time) (CutoverResult, error) {
 	q := EvaluateQuorum(req.Acks, req.Target, c.cfg.Roster, c.cfg.Policy, evalTime)
 	if !q.Met {
@@ -313,7 +313,7 @@ func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime t
 		}
 	}
 
-	// PCAS-claims 8, 16 / INV-9: revoke (fail-closed) THEN zeroize the
+	// PCAS-claims-8, 16 / INV-9: revoke (fail-closed) THEN zeroize the
 	// predecessor from its locked buffers.
 	if req.Predecessor != nil {
 		if err := req.Predecessor.Revoke(ctx, req.Target.TenantID); err != nil {

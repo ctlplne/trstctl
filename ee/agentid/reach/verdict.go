@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package reach is the CRYPTO-ONLY half of the AGID pre-issuance reachability bound (patent
-// AGID-claims 5/6/25, INV-A5): the SIGNED REACHABILITY VERDICT, the policy CEILINGS a reachable
+// AGID-claims-5/6/25, INV-A5): the SIGNED REACHABILITY VERDICT, the policy CEILINGS a reachable
 // set is bounded by, the reachable-set VALUE the verdict binds a digest of, and the pure,
 // datastore-free IN-SIGNER VERIFICATION the isolated signer runs as a key-op precondition.
 // BEFORE the isolated signer performs a private-key operation, it must verify a signed

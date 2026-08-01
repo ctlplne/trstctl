@@ -315,7 +315,7 @@ func TestIssue_ChainOnlyNoAgentStack(t *testing.T) {
 		t.Fatalf("chain-only credential bound head %x, want %x", bm.ChainHeadDigest, bc.headDigest)
 	}
 	if len(bm.AgentStackDigest) != 0 {
-		t.Fatalf("chain-only credential bound an agent-stack digest %x, want none (claim 31)", bm.AgentStackDigest)
+		t.Fatalf("chain-only credential bound an agent-stack digest %x, want none (AGID-claim-31)", bm.AgentStackDigest)
 	}
 }
 

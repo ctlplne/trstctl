@@ -14,7 +14,7 @@ import (
 // executes with at-least-once delivery and AT MOST ONE recorded effect per key.
 // Replaying the same job N times records exactly one effect; a crash-resume mid-cascade
 // (the worker dies after some jobs, another resumes) leaves no duplicate and no lost
-// effect (AGID-claims 16/21 / INV-A8).
+// effect (AGID-claims-16/21 / INV-A8).
 func TestRevoke_JobIdempotentAtLeastOnce(t *testing.T) {
 	h := newHarness(t, "revoke_idempotent")
 	ctx := context.Background()

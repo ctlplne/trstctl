@@ -114,7 +114,7 @@ type AttestationGate interface {
 
 // PlanProvenanceVerifier verifies the policy-decision provenance chain (finding ⟵
 // plan ⟵ decision) carried in the request, inside the signer and BEFORE successor
-// keygen (PCAS-claims 24, 40, PCAS-21). ee/succession/policy.ProvenanceVerifier implements
+// keygen (PCAS-claims-24, 40, PCAS-21). ee/succession/policy.ProvenanceVerifier implements
 // it.
 type PlanProvenanceVerifier interface {
 	Verify(req signing.MintRequest) error
@@ -128,7 +128,7 @@ func WithPolicy(v PolicyVerifier) Option { return func(m *Minter) { m.policy = v
 
 // WithCommitmentV2 mints records with the version-2 commitment (INT-08), which binds
 // RecordType, the authz digest, the attestation evidence digest + type, and the
-// delegation path IN the commitment (PCAS-claims 24/33/35/42) so both dual signatures cover
+// delegation path IN the commitment (PCAS-claims-24/33/35/42) so both dual signatures cover
 // them and base chain verification detects a tamper. v1 records remain verifiable.
 func WithCommitmentV2() Option { return func(m *Minter) { m.commitmentV2 = true } }
 

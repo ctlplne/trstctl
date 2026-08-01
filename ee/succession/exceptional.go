@@ -9,7 +9,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// exceptional.go carries the exceptional-but-chained succession records (PCAS-claims 36,
+// exceptional.go carries the exceptional-but-chained succession records (PCAS-claims-36,
 // 37; establishes the revocation/ceremony limbs of INV-15). The point is that
 // exceptional paths stay ON the chain: they are minted as distinct record TYPES at
 // the next algorithm-epoch, they carry a mandatory transparency-log inclusion proof,

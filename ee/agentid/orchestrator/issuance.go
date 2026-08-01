@@ -214,7 +214,7 @@ func (w *issuanceWorker) deliver(ctx context.Context, m coreorch.Message) error 
 			return fmt.Errorf("agentid issuance worker: non-revocation check failed closed: %w", err)
 		}
 		if revoked {
-			return fmt.Errorf("agentid issuance worker: chain head is under an active revocation directive; refusing chain-bound issuance (claim 20)")
+			return fmt.Errorf("agentid issuance worker: chain head is under an active revocation directive; refusing chain-bound issuance (AGID-claim-20)")
 		}
 	}
 

@@ -33,7 +33,7 @@ func neweventID() string {
 type Clock func() int64
 
 // Executor performs a single revocation job idempotently and records SIGNED per-job
-// completion evidence (AGID-claims 16/19/21 / INV-A9). It is the outbox Handler the
+// completion evidence (AGID-claims-16/19/21 / INV-A9). It is the outbox Handler the
 // dispatcher hands a claimed revocation-job Message: it decodes the job payload,
 // performs the effect(s), and — in ONE pg transaction — records the effect (keyed by
 // the job's idempotency key so AT MOST ONE effect is recorded per key), stamps the

@@ -11,7 +11,7 @@ import (
 )
 
 // reachability.go is the AGID-06 extension of the in-signer gate: the pre-issuance
-// reachability bound (AGID-claims 5/6 / INV-A5). When the reachability precondition is engaged,
+// reachability bound (AGID-claims-5/6 / INV-A5). When the reachability precondition is engaged,
 // the gate verifies a SIGNED REACHABILITY VERDICT — produced OUTSIDE the signer by the
 // ee/agentid/reach engine — as a PRECONDITION of the key operation, BOUND to the FINAL
 // delegation record's authority. The verdict binds a reachable-set digest, a ceiling
@@ -59,7 +59,7 @@ var (
 	ErrReachabilitySubject = errors.New("delegation: cannot compute head authority digest for reachability")
 )
 
-// verifyReachability is the AGID-06 in-signer precondition (AGID-claims 5/6 / INV-A5). It runs
+// verifyReachability is the AGID-06 in-signer precondition (AGID-claims-5/6 / INV-A5). It runs
 // INSIDE verify(), AFTER the chain has verified (so the head record is a verified value)
 // and BEFORE the binding is assembled / any key op is reached. It performs NO key op. Any
 // refusal names CheckReachability. Semantics per the engagement rules above.

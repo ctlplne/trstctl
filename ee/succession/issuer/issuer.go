@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package issuer implements issuer-level (authority) succession (PCAS-claims 20, 27): the
+// Package issuer implements issuer-level (authority) succession (PCAS-claims-20, 27): the
 // issuing CA / intermediate is itself a succession-managed NHI whose chain is an
 // ordinary PCAS-04 chain. End-entity leaves issued under it INHERIT the issuer's
 // algorithm-epoch and carry an (issuer-epoch, rotation-version) tuple, so a whole
@@ -26,7 +26,7 @@ var (
 
 // Leaf is an end-entity credential issued under a succession-managed issuer. It
 // carries the issuer binding and the (issuer-epoch, rotation-version) tuple; it holds
-// NO succession record of its own — it inherits the issuer's epoch (PCAS-claims 20, 27).
+// NO succession record of its own — it inherits the issuer's epoch (PCAS-claims-20, 27).
 type Leaf struct {
 	LeafID          string
 	IssuerID        string

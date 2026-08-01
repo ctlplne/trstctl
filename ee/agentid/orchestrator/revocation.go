@@ -163,7 +163,7 @@ func (w *cascadeWorker) deliverJob(ctx context.Context, m coreorch.Message) erro
 
 	// (3) Attempt the terminal transition: when EVERY enqueued and follow-on job is
 	// evidenced, flip the directive terminal and mint the SIGNED aggregate evidence
-	// artifact (INV-A9 / AGID-claims 18/33). The production caller for revoke.NewTerminalTransition.
+	// artifact (INV-A9 / AGID-claims-18/33). The production caller for revoke.NewTerminalTransition.
 	// A still-draining directive is left non-terminal (no flip), which is not an error.
 	if _, err := w.terminal.Transition(ctx, tenantID, directiveID); err != nil {
 		return fmt.Errorf("agentid cascade worker: terminal transition: %w", err)

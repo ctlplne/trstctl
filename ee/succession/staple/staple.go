@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package staple carries a succession proof inline in an authentication handshake
-// or credential (PCAS-claims 31, 32): a presenter attaches at least one succession
+// or credential (PCAS-claims-31, 32): a presenter attaches at least one succession
 // record OR a signed epoch checkpoint, and the relying party verifies the
 // identity's current algorithm inline — verifying the signatures and confirming
 // the epoch against a last-accepted value — without out-of-band resolution or

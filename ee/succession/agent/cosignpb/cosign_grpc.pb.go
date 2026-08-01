@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Workload-agent predecessor co-sign contract (PCAS claim 19, INT-16). The platform
+// Workload-agent predecessor co-sign contract (PCAS-claim-19, INT-16). The platform
 // signer/orchestrator forms a succession commitment and asks the workload agent —
 // which holds the predecessor key — to co-sign it. The request carries the STRUCTURED
 // commitment fields (a canonical, reversible encoding), NEVER an opaque digest, so the

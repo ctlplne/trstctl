@@ -15,7 +15,7 @@ import (
 var ErrCeremonyRejected = errors.New("rpverify: ceremony/emergency record rejected by relying-party policy")
 
 // ExceptionalPolicy is the relying party's stricter policy for exceptional records
-// (revocation / ceremony / emergency, PCAS-claims 36, 37). Revocation tombstones are
+// (revocation / ceremony / emergency, PCAS-claims-36, 37). Revocation tombstones are
 // accepted with mandatory inclusion + a type-binding attestation; ceremony/emergency
 // records are either rejected outright or accepted with an elevated confirmation.
 type ExceptionalPolicy struct {
