@@ -142,6 +142,12 @@ jobs:
       - name: Editions gate
         run: make editions-gate
 
+      # Patent claim traceability: ee/docs/claim-traceability.md is generated
+      # from the claim citations in ee/ Go source. A citation added, moved, or
+      # removed without regenerating the committed table fails the build here.
+      - name: Claim traceability check
+        run: make claim-traceability-check
+
       # AGID-INT-CALL STRONG check: an RTA call graph seeded from the cmd/* main.main
       # (built WITHOUT -tags trstctl_core) proves every ee/agentid constructor is
       # reachable from a running binary. The floor tier already ran inside `make lint`

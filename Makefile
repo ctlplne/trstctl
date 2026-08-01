@@ -471,6 +471,11 @@ xrec-release-gate: ## XREC-13 release gate: conformance vectors + differential +
 	@echo ">> xrec-release-gate (XREC-13 conformance, differential, fuzz decode smoke, edition/zero-removal, and real-substrate e2e)"
 	@$(GO) test -tags integration ./ee/reconcile/conformance/... -count=1 -timeout=10m
 
+.PHONY: claim-traceability-check
+claim-traceability-check: ## Verify ee/docs/claim-traceability.md regenerates byte-identical from the claim citations in ee/ source
+	@echo ">> claim-traceability-check (ee/docs/claim-traceability.md is generated; a stale table fails)"
+	@python3 scripts/ci/extract-claim-traceability.py --check
+
 .PHONY: security-review
 security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate vdec-caller-gate vdec-caller-gate-strong vdec-wire-gate vdec-release-gate ## Security-focused local review for signer, remediation, connectors, XREC, and VDEC delivery paths
 	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC package tests)"
