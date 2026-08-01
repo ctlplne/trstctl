@@ -14,10 +14,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	authpkg "trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -178,6 +180,7 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Secrets.EnableAPI = true
+	cfg.Secrets.AuthSecretFile = filepath.Join(t.TempDir(), "machine-auth-secret")
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "deployment-kek")
 	wrapperPath := filepath.Join(t.TempDir(), "tenant-wrapper.key")
@@ -312,6 +315,15 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	if lockedVault.Code != http.StatusLocked || !strings.Contains(lockedVault.Body.String(), "sealed") {
 		t.Fatalf("sealed tenant A Vault-compatible read = %d body=%s", lockedVault.Code, lockedVault.Body.String())
 	}
+	machineA := authmethod.TokenMethod{Secret: secrets.authSecret, TenantID: sealedTenant, Scopes: map[string][]string{"sealed-workload": {"secrets:read"}}}
+	credentialA, err := machineA.Issue("sealed-workload", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockedLogin := servedTenantMachineLogin(t, srv, sealedTenant, credentialA)
+	if lockedLogin.Code != http.StatusLocked || !strings.Contains(lockedLogin.Body.String(), `"tenant_key_domain_status":"sealed"`) || strings.Contains(lockedLogin.Body.String(), credentialA) {
+		t.Fatalf("sealed tenant A machine login = %d body=%s", lockedLogin.Code, lockedLogin.Body.String())
+	}
 	if value, err := oidcA(ctx); err == nil {
 		secret.Wipe(value)
 		t.Fatal("sealed tenant A OIDC client secret opened")
@@ -331,6 +343,15 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	createOwnerB := servedTenantSealRequest(t, srv, tokenB, http.MethodPost, "/api/v1/owners", "tenant-b-owner-while-a-sealed", []byte(`{"kind":"workload","name":"neighbor-remains-writable"}`))
 	if createOwnerB.Code != http.StatusCreated || !strings.Contains(createOwnerB.Body.String(), "neighbor-remains-writable") {
 		t.Fatalf("neighbor tenant B ordinary API mutation = %d body=%s", createOwnerB.Code, createOwnerB.Body.String())
+	}
+	machineB := authmethod.TokenMethod{Secret: secrets.authSecret, TenantID: neighborTenant, Scopes: map[string][]string{"neighbor-workload": {"secrets:read"}}}
+	credentialB, err := machineB.Issue("neighbor-workload", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	availableLogin := servedTenantMachineLogin(t, srv, neighborTenant, credentialB)
+	if availableLogin.Code != http.StatusOK || !strings.Contains(availableLogin.Body.String(), `"principal":"neighbor-workload"`) || strings.Contains(availableLogin.Body.String(), credentialB) {
+		t.Fatalf("neighbor tenant B machine login = %d body=%s", availableLogin.Code, availableLogin.Body.String())
 	}
 
 	unseal := servedTenantSealRequest(t, srv, tokenA, http.MethodPost, "/api/v1/platform/tenant-key-domain/unseal", "tenant-unseal-secret-path", nil)
@@ -369,6 +390,20 @@ func servedTenantSealRequest(
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	return rec
+}
+
+func servedTenantMachineLogin(t *testing.T, srv *Server, tenantID, credential string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(map[string]string{"method": "token", "credential": credential})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/secrets/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", tenantID)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	return rec

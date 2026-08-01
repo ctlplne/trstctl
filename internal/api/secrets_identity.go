@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretsdk"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // ---- one-time secret share + redeem (F60) ----------------------------------
@@ -296,6 +297,25 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusBadRequest, "X-Tenant-ID is required for machine login"))
 		return
 	}
+	if a.tenantCrypto != nil {
+		err := a.tenantCrypto.WithTenant(r.Context(), tenantID, func(cipher tenantseal.Cipher) error {
+			ctx := context.WithValue(r.Context(), tenantCipherCtxKey, cipher)
+			a.machineLoginForTenant(w, r.WithContext(ctx), tenantID)
+			return nil
+		})
+		if err != nil {
+			a.writeError(w, err)
+		}
+		return
+	}
+	a.machineLoginForTenant(w, r, tenantID)
+}
+
+// machineLoginForTenant runs only after the public route's tenant hint has
+// acquired the same shared custody fence used by authenticated routes. The
+// presented credential still MAC-binds and authenticates the tenant; the hint
+// never grants access by itself.
+func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tenantID string) {
 	var req machineLoginRequest
 	if err := decodeJSON(r, &req); err != nil {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
