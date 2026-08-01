@@ -15,7 +15,7 @@ import (
 // parser (x509.ParseCertificateRequest + self-signature check). Every issuance
 // path (ACME finalize, agent enrollment, EST/SCEP later) parses an untrusted CSR
 // through this boundary, so it must fail closed on malformed input, never panic.
-// CLAUDE.md §6.
+// TEST-FUZZASSERT-001.
 //
 // This is an in-package (package crypto) test, so it may use crypto/x509 to mint a
 // valid seed — exactly as the boundary itself does (AN-3).

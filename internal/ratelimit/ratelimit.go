@@ -2,7 +2,7 @@
 
 // Package ratelimit is the PostgreSQL-backed per-tenant rate limiter (R2.3): a
 // token bucket persisted in the rate_limits table, so the limit holds across every
-// control-plane replica without a separate datastore (no Redis — CLAUDE.md). It
+// control-plane replica without a separate datastore (no Redis; see docs/operations.md). It
 // implements the api.RateLimiter shape so the API guard can shed load per
 // authenticated tenant.
 package ratelimit

@@ -218,7 +218,7 @@ describe("WIRE-12 Platform served admin surface", () => {
       estimated_daily_event_load: 10000000,
       estimated_monthly_cost_usd: 14500,
       unit_economics: { estimated_cost_per_credential_usd: 0.0145, postgres_gib_30_day: 700, jetstream_gib_30_day: 1200, events_per_day: 10000000 },
-      tenant_isolation: { storage_enforcement: "RLS", query_rule: "tenant_id filter", evidence_refs: ["CLAUDE.md: AN-1"] },
+      tenant_isolation: { storage_enforcement: "RLS", query_rule: "tenant_id filter", evidence_refs: ["README.md: AN-1"] },
       datastore: { postgres: "external HA PostgreSQL", jetstream: "external JetStream", rls: "tenant_id", outbox: "transactional outbox" },
       signer: { process_model: "separate signer process", transport: "gRPC over UDS", scaling: "scale signer separately" },
       projection_replay: { replay_floor_events_per_second: 500, max_lag_events: 50, rebuild_source: "append-only event log" },

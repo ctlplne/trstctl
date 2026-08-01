@@ -276,7 +276,7 @@ describe("auth + dashboards", () => {
     renderAt("/");
 
     const dash = await screen.findByRole("region", { name: "Dashboard" });
-    // First data-dependent read is a findBy (web/AGENTS.md S-C3): react-query
+    // First data-dependent read is a findBy (web/DESIGN.md S-C3): react-query
     // delivers results on a macrotask, so the header region appears before the
     // gate settles — awaiting the CTA is the settle point.
     expect(await within(dash).findByText(/Welcome to trstctl/)).toBeInTheDocument();

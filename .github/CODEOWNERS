@@ -21,7 +21,7 @@
 *                               @ctlplne/security
 
 # --- Security-critical: the root of trust (TEST-006) ------------------------
-# A compromise of any of these is, per CLAUDE.md, "the company is over." They get
+# A compromise of any of these is, per README.md AN-4, "the company is over." They get
 # explicit, mandatory ownership so no change lands without a security review.
 
 # AN-3 — the sole cryptography boundary. Nothing else may import crypto/*.

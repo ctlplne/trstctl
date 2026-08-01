@@ -11,7 +11,7 @@ import (
 )
 
 // FuzzParseCMPRequest hardens the CMP PKIMessage parser (an untrusted-input parser per
-// CLAUDE.md §6): no input may crash it; it must always return cleanly (a request or an
+// TEST-FUZZASSERT-001): no input may crash it; it must always return cleanly (a request or an
 // error), never both, and never panic.
 func FuzzParseCMPRequest(f *testing.F) {
 	f.Add([]byte(nil))

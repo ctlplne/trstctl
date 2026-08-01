@@ -38,7 +38,7 @@ type sshTrustOptions struct {
 // returns (handled=true) so the caller knows the agent ran this one-shot op
 // instead of the steady-state loop. It is fail-closed and refuses to proceed
 // without explicit confirmation — forgetting --ssh-trust-confirm does NOT silently
-// rewrite trust (CLAUDE.md §8: never weaken sshd/authorized_keys trust without
+// rewrite trust (SIGNER-004: never weaken sshd/authorized_keys trust without
 // explicit confirmation and rollback). On success the agent prints what changed.
 func runSSHTrustAddCA(ctx context.Context, o sshTrustOptions) (handled bool, err error) {
 	if !o.addCA {

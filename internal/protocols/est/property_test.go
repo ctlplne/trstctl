@@ -14,7 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// Property-based tests for the EST wire parser (TEST-003 / CLAUDE.md §6, which
+// Property-based tests for the EST wire parser (TEST-003 / TEST-FUZZASSERT-001, which
 // mandates property tests for every protocol parser). The fuzz target in
 // fuzz_test.go gives corpus-mutation coverage; these pin the *invariants* the
 // parser must hold — parse-after-encode identity, the never-both-CSR-and-error

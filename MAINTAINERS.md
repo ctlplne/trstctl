@@ -1,12 +1,12 @@
 # Maintaining trstctl
 
 This file is the transfer document: what a new maintainer needs in their head
-to own this repository, written for someone who did not build it. `AGENTS.md`
+to own this repository, written for someone who did not build it. `README.md`
 states the contract; this states the *operational* knowledge — why the gates
 exist, what breaks when you touch which tree, and how to debug a red pipeline
 without archaeology.
 
-If you are here because you inherited this codebase: read `AGENTS.md` first,
+If you are here because you inherited this codebase: read `README.md` first,
 then this, then `docs/design/architecture-invariants.md`. That is roughly two
 hours and covers everything load-bearing.
 
@@ -139,7 +139,7 @@ well, so keep it honest even when a claim would look better rounded up.
 
 ## Bus factor
 
-This file, `AGENTS.md`, `docs/design/architecture-invariants.md`, and the nine
+This file, `README.md`, `docs/design/architecture-invariants.md`, and the nine
 runbooks under `docs/runbooks/` are the transfer set. The runbooks cover the
 operations a maintainer will actually be paged for: signer recovery, key
 ceremony, disaster-recovery drill, outbox dead letters, fleet rollout and

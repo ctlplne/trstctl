@@ -21,7 +21,7 @@ var fuzzFuncRE = regexp.MustCompile(`(?m)^func Fuzz\w+\(`)
 // in this dir").
 var fuzzFuncNameRE = regexp.MustCompile(`(?m)^func (Fuzz\w+)\(`)
 
-// TestEveryUntrustedParserIsFuzzed makes CLAUDE.md §6 ("fuzz every parser that
+// TestEveryUntrustedParserIsFuzzed makes TEST-FUZZASSERT-001 ("fuzz every parser that
 // touches untrusted input") executable: it enumerates the packages that parse
 // attacker-controlled bytes and fails if any lacks at least one Go fuzz target.
 // It was RED before R4.3 (ctlog, certinfo, sshkeys, and the CSR parser here had
@@ -52,7 +52,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	// Every discovered parser's package must have a fuzz target.
 	for fn, dir := range discovered {
 		if !dirHasFuzzTarget(t, dir) {
-			t.Errorf("untrusted parser %s (in %s) has no Go fuzz target — CLAUDE.md §6 / TEST-FUZZASSERT-001 require every parser that touches untrusted input to be fuzzed", fn, dir)
+			t.Errorf("untrusted parser %s (in %s) has no Go fuzz target — TEST-FUZZASSERT-001 requires every parser that touches untrusted input to be fuzzed", fn, dir)
 		}
 	}
 
@@ -155,7 +155,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 
 // requireFuzzFuncByName fails if any of the named Fuzz targets is missing from
 // the *_test.go files in dir. It pins the exact untrusted decoders that must
-// stay fuzzed (CLAUDE.md §6), closing the false-"all parsers fuzzed" assurance a
+// stay fuzzed (TEST-FUZZASSERT-001), closing the false-"all parsers fuzzed" assurance a
 // directory-level check gives when one decoder in a multi-decoder package loses
 // its harness.
 func requireFuzzFuncByName(t *testing.T, dir string, want map[string]string) {
@@ -179,7 +179,7 @@ func requireFuzzFuncByName(t *testing.T, dir string, want map[string]string) {
 	}
 	for name, what := range want {
 		if !found[name] {
-			t.Errorf("required fuzz target %s (%s) is missing — CLAUDE.md §6 / FUZZ-001/002 require it; do not remove it", name, what)
+			t.Errorf("required fuzz target %s (%s) is missing — FUZZ-001/002 require it; do not remove it", name, what)
 		}
 	}
 }

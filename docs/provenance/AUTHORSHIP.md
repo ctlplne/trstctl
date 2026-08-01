@@ -52,7 +52,7 @@ preserved in the repository and its history.
 The following were authored by the human, independently of any AI system, and constitute
 the architecture and specification of the work:
 
-**3.1 The architectural contract.** `AGENTS.md` defines nine binding invariants
+**3.1 The architectural contract.** `README.md` defines nine binding invariants
 (AN-1 … AN-9) that govern every line of the system: PostgreSQL row-level security as the
 tenancy fence; event-sourced state with projections as the only read path; a single
 cryptographic boundary at `internal/crypto`; an isolated signing process; idempotency on
@@ -64,14 +64,14 @@ of the entire codebase.
 **3.2 The product design.** The open-core split line — what remains MPL-2.0 and free
 (multi-tenancy, the crypto boundary, audit and export rights, the offline license
 verifier) versus what is commercial — is a human product judgment recorded in
-`AGENTS.md` and `docs/editions.md`, including the "zero removal" principle stating that
+`docs/editions.md`, including the "zero removal" principle stating that
 no capability may be taken away from the free tier to create an upsell.
 
 **3.3 The specifications.** Work was decomposed into sprint cards
 (**[FILL: path — e.g. `trstctl-backlog.md`]**), each stating scope, explicit exclusions,
 dependencies, and acceptance criteria before implementation began. Implementation was
 constrained to the card; scope expansion was prohibited by the written process
-(`AGENTS.md` §7).
+(the written sprint-card process).
 
 **3.4 The enforcement design.** The custom `go/analysis` architecture linter
 (`tools/trstctllint`, eight analyzers), the catalog-derived invariant tests, the
@@ -116,7 +116,7 @@ IP evidence, not process exhaust, and should not be garbage-collected.
 
 | Evidence | Location | What it shows |
 |---|---|---|
-| Architectural contract | `AGENTS.md`, leaf `AGENTS.md` files | Human-authored invariants predating implementation |
+| Architectural contract | `README.md` (AN-1 … AN-9) | Human-authored invariants predating implementation |
 | Invariant documentation | `docs/design/architecture-invariants.md` | The design in reader form |
 | Threat models | `docs/security/threat-model.md`, `docs/design/signing-service.md` | Human security analysis |
 | Sprint specifications | **[FILL: path]** | Per-change human specification with acceptance criteria |

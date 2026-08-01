@@ -14,7 +14,7 @@
 // is held for as long as the leader's connection lives and is released AUTOMATICALLY
 // by PostgreSQL if that connection drops, so a crashed or partitioned leader frees the
 // lock and a follower takes over on its next campaign — failover with no lease timer
-// and no extra datastore (CLAUDE.md §5: no Redis). It is fail-safe: a replica that
+// and no extra datastore (no Redis; see docs/operations.md). It is fail-safe: a replica that
 // cannot win the lock simply stays a follower and serves reads; nothing about
 // issuance or query serving depends on being the leader.
 package leader

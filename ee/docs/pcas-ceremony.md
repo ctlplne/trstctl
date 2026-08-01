@@ -154,4 +154,4 @@ policy to it.
 
 Both runbooks are versioned with this file. Any change to the quorum size, the token
 binding fields, the custody model, or the RP acceptance policy MUST update this document
-in the same change, and is referenced from `AGENTS.md`.
+in the same change.

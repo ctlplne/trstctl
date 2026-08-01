@@ -478,7 +478,7 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 		TenantIsolation: ScaleTenantIsolation{
 			StorageEnforcement: "every table carries tenant_id and PostgreSQL RLS enforces isolation below the API",
 			QueryRule:          "repository queries must filter on tenant_id and the architecture linter fails unsafe paths",
-			EvidenceRefs:       []string{"CLAUDE.md: AN-1", "tools/trstctllint", "internal/store/migrations"},
+			EvidenceRefs:       []string{"README.md: AN-1", "tools/trstctllint", "internal/store/migrations"},
 		},
 		Datastore: ScaleDatastorePosture{
 			Postgres:  "external HA PostgreSQL for CAP-MEDIUM and CAP-LARGE; no SQLite path",

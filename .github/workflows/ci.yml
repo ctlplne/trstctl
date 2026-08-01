@@ -494,7 +494,7 @@ jobs:
         run: scripts/ci/verify-scheduled-gates.sh
 
   # Continuous-fuzzing regression net (FUZZ-003). The mandated "fuzz every parser
-  # that touches untrusted input" (CLAUDE.md §6) is only a safety net if it RUNS:
+  # that touches untrusted input" (TEST-FUZZASSERT-001) is only a safety net if it RUNS:
   # this job replays each target's committed seed corpus (under testdata/fuzz, so a
   # known crasher like FUZZ-001's 0x30 0x84 fails fast) and then fuzzes each target
   # for a short budget. The schedule trigger raises the budget for a deeper nightly

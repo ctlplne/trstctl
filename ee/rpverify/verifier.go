@@ -10,7 +10,7 @@
 // LICENSE (HARNESS §1.6.4, decision 2026-07-05): this package is proprietary
 // LicenseRef-trstctl-EE so that NO MPL patent grant attaches to independent claim
 // 13. It is deliberately NOT in MPL core, and it is NOT the internal/license
-// offline license checker (a different thing that AGENTS.md keeps in core).
+// offline license checker (a different thing the AN-9 editions boundary keeps in core).
 package rpverify
 
 import (

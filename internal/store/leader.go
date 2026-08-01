@@ -24,7 +24,7 @@ import (
 // drops — so if the leader process crashes or its network partitions, the lock frees
 // and a follower acquires it on its next campaign (failover), with no lease timer to
 // tune and no split-brain window beyond TCP keepalive. It needs no new datastore
-// (CLAUDE.md §5: no Redis) and reuses the same mechanism migrations and the boot
+// (no Redis; see docs/operations.md) and reuses the same mechanism migrations and the boot
 // catch-up already rely on.
 
 // LeaderAdvisoryLockKey is the fixed PostgreSQL advisory-lock key a replica takes to

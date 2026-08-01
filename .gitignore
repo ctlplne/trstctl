@@ -87,3 +87,11 @@ docs-internal/
 /web/test-results/
 /web/playwright-report/
 /web/.storybook-static/
+
+# AH-0002: AGENTS.md / CLAUDE.md are agent-tooling working files, not product
+# documentation, and this repository ships publicly. The canonical contract lives
+# outside the repo (../agents-contract/). Bare patterns so they match at every
+# depth. docs/agent_contract_files_test.go (CODE-105) is the load-bearing gate —
+# .gitignore is advisory and `git add -f` walks straight past it.
+AGENTS.md
+CLAUDE.md

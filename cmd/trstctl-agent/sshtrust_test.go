@@ -42,7 +42,7 @@ func baseOpts(t *testing.T) sshTrustOptions {
 	}
 }
 
-// TestAgentSSHTrustRequiresConfirmation is the SIGNER-004 / CLAUDE.md §8 assertion:
+// TestAgentSSHTrustRequiresConfirmation is the SIGNER-004 assertion:
 // the trust rewrite refuses to proceed without --ssh-trust-confirm, and writes
 // NOTHING when refused. Forgetting the confirmation fails closed.
 func TestAgentSSHTrustRequiresConfirmation(t *testing.T) {
@@ -54,7 +54,7 @@ func TestAgentSSHTrustRequiresConfirmation(t *testing.T) {
 		t.Fatal("the op should be handled (the flag is on) even when confirmation is missing")
 	}
 	if err == nil {
-		t.Fatal("the SSH-trust rewrite ran WITHOUT confirmation; it must fail closed (CLAUDE.md §8)")
+		t.Fatal("the SSH-trust rewrite ran WITHOUT confirmation; it must fail closed (SIGNER-004)")
 	}
 	if _, statErr := os.Stat(o.trustedKeys); statErr == nil {
 		t.Error("the trust file was written despite missing confirmation")

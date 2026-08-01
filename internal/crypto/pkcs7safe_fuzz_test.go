@@ -80,7 +80,7 @@ func TestPKCS7BoundaryRecoversFUZZ001Crasher(t *testing.T) {
 }
 
 // FuzzParseSCEPResponse hardens the SCEP CertRep parser (ParseSCEPResponse,
-// scep.go:202) — an untrusted-input decoder (CLAUDE.md §6) that shares the
+// scep.go:202) — an untrusted-input decoder (TEST-FUZZASSERT-001) that shares the
 // smallstep/pkcs7 BER decoder proven to panic in FUZZ-001. It is seeded with the
 // original crasher (0x30 0x84) plus truncated/garbage DER; no input may panic the
 // parser — it must always return cleanly (bytes or an error), never both, never a

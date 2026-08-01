@@ -2,7 +2,7 @@ import { createElement, type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /** S-C9: the console's typographic refinement rules, named as primitives so
- * the discipline is reusable instead of tribal knowledge (see web/AGENTS.md):
+ * the discipline is reusable instead of tribal knowledge (see web/DESIGN.md):
  *
  * - Eyebrow — the ONE tracked-uppercase micro-label style for section
  *   headers, stat labels, chart titles, and definition terms. Pages had four

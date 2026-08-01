@@ -37,7 +37,7 @@ func (fakeWrapper) UnwrapDEK(wrapped []byte) ([]byte, error) {
 // the stored-byte slices for the wrapped DEK / nonce / ciphertext — before any
 // AEAD verification. Sealed blobs are read from at-rest storage and backups, so a
 // truncated, version-bumped, or wrappedLen-mutated blob must fail closed
-// (ErrFormat / ErrDecrypt), never panic or read out of bounds. CLAUDE.md §6.
+// (ErrFormat / ErrDecrypt), never panic or read out of bounds. TEST-FUZZASSERT-001.
 //
 // This test lives inside the AN-3 crypto boundary (internal/crypto/seal), so it may
 // use crypto/rand directly to mint a real Seal() seed.

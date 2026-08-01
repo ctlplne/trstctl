@@ -10,7 +10,7 @@ import (
 )
 
 // FuzzParseSCEPRequest hardens the SCEP pkiMessage parser (an untrusted-input parser per
-// CLAUDE.md §6): no input — random bytes, truncated DER, a valid SignedData with a hostile
+// TEST-FUZZASSERT-001): no input — random bytes, truncated DER, a valid SignedData with a hostile
 // envelope — may crash it; it must always return cleanly (a request or an error), never
 // both, and never panic.
 func FuzzParseSCEPRequest(f *testing.F) {

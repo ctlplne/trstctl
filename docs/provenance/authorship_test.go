@@ -29,8 +29,7 @@ func TestAuthorshipEvidencePathsExist(t *testing.T) {
 
 	// Every concrete §3/§5 citation, kept in the order the record makes them.
 	evidence := []string{
-		"AGENTS.md",
-		"internal/crypto/AGENTS.md", // a named high-risk leaf of the hub-and-spoke contract
+		"README.md",
 		"docs/design/architecture-invariants.md",
 		"docs/security/threat-model.md",
 		"docs/design/signing-service.md",
@@ -51,7 +50,7 @@ func TestAuthorshipEvidencePathsExist(t *testing.T) {
 	// The record must actually cite what this test asserts (drift the other
 	// way: a reworded record silently dropping a citation).
 	for _, cited := range []string{
-		"`AGENTS.md`",
+		"`README.md`",
 		"docs/design/architecture-invariants.md",
 		"docs/security/threat-model.md",
 		"docs/design/signing-service.md",

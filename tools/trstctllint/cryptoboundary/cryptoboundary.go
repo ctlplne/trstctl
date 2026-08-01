@@ -6,15 +6,15 @@
 // cryptography boundary. Every other package must route crypto operations
 // through that boundary's interfaces.
 //
-// AN-3 covers more than the standard library. CLAUDE.md §2 says "no crypto
-// imports exist anywhere else" and the contract's intent is one auditable
+// AN-3 covers more than the standard library. The AN-3 invariant is that "no
+// crypto imports exist anywhere else", and its intent is one auditable
 // cryptography boundary; a package that pulled a third-party cipher
 // (golang.org/x/crypto, github.com/cloudflare/circl) outside internal/crypto
 // would defeat that just as surely as importing crypto/x509 (CRYPTO-002).
 // So third-party crypto modules are forbidden outside the boundary too — but
 // only in production (non-test) files: differential/conformance tests
 // legitimately drive a reference implementation (the upstream ACME or SSH
-// client) as a known-good oracle (CLAUDE.md §6), which is a test concern, not a
+// client) as a known-good oracle (the conformance-oracle carve-out), which is a test concern, not a
 // handler/service pulling crypto outside the boundary. The stdlib crypto/* ban
 // stays absolute (every file) as before.
 package cryptoboundary

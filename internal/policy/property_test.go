@@ -13,7 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/policy"
 )
 
-// Property-based tests for the policy engine (TEST-003 / CLAUDE.md §6). The
+// Property-based tests for the policy engine (TEST-003 / TEST-FUZZASSERT-001). The
 // example/table-driven tests in policy_test.go pin specific decisions; these pin
 // the *invariants* the base policy must hold over generated inputs — default-deny,
 // the profile precondition's monotonicity, and the fail-closed contract — which a

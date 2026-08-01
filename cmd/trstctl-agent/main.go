@@ -84,7 +84,7 @@ func main() {
 	// adds the SSH CA to this host's TrustedUserCAKeys (additive; never removes
 	// existing trust), validated with `sshd -t`, reloaded, and auto-rolled-back on
 	// failure. Gated behind --ssh-trust-confirm because weakening sshd trust is a
-	// lockout-class mutation (CLAUDE.md §8).
+	// lockout-class mutation (SIGNER-004).
 	sshTrustAddCA := flag.Bool("ssh-trust-add-ca", false, "ADD the SSH CA to this host's trust (default off; additive, with rollback). Requires --ssh-trust-confirm")
 	sshTrustConfirm := flag.Bool("ssh-trust-confirm", false, "explicit confirmation required to rewrite SSH CA trust")
 	sshTrustCAKey := flag.String("ssh-trust-ca-key", "", "path to the SSH CA public key (OpenSSH authorized-key line) to trust")

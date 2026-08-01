@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, type ReactNode } from "react";
 
-/** S-C5: the TanStack Query layer. Adoption policy (see web/AGENTS.md): new
+/** S-C5: the TanStack Query layer. Adoption policy (see web/DESIGN.md): new
  * surfaces use useApiQuery/useQueryClient directly; existing pages migrate off
  * lib/useResource when they are next touched. The adapter below deliberately
  * mirrors useResource's { data, loading, error } shape so a pilot migration is

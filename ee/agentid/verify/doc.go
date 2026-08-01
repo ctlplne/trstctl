@@ -68,8 +68,8 @@
 // LICENSE (decision recorded 2026-07-07): this
 // package is proprietary LicenseRef-trstctl-EE so NO MPL patent grant attaches to
 // independent AGID-claim-28 (or dependent 29). It is deliberately NOT in MPL core and
-// is NOT the internal/license offline license checker (a different thing AGENTS.md
-// keeps in MPL core). The same ISARA / audit-N-8 grant trap PCAS-07 / XREC-12 /
+// is NOT the internal/license offline license checker (a different thing the AN-9
+// editions boundary keeps in MPL core). The same ISARA / audit-N-8 grant trap PCAS-07 / XREC-12 /
 // GRCA-04 guard applies: shipping this in core would grant AGID-claim-28 away under
 // MPL 2.1.
 //

@@ -30,7 +30,7 @@ func seedAuthorizedLine(tb testing.TB) []byte {
 
 // FuzzParseAuthorizedKeys: parsing an authorized_keys file must never panic and
 // must terminate (the fuzz timeout catches a non-advancing loop) on arbitrary
-// bytes. CLAUDE.md §6.
+// bytes. TEST-FUZZASSERT-001.
 func FuzzParseAuthorizedKeys(f *testing.F) {
 	f.Add(seedAuthorizedLine(f))
 	f.Add([]byte(""))

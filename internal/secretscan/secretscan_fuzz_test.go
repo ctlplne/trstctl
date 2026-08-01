@@ -5,7 +5,7 @@ package secretscan
 import "testing"
 
 // The scanner-report parsers ingest untrusted JSON from external tools, so they
-// are fuzzed for the "never panics" property (CLAUDE.md). A malformed report must
+// are fuzzed for the "never panics" property (TEST-FUZZASSERT-001). A malformed report must
 // fail closed, never crash the ingest path — and never surface a secret value
 // (the Finding type structurally cannot carry one).
 

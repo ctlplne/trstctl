@@ -10,7 +10,7 @@
 //
 // PCAS is a patented feature set and lives entirely under ee/ (SPDX
 // LicenseRef-trstctl-EE); MPL core never imports it outside the tagged attach
-// seam (AGENTS.md AN-9, HARNESS §1.6). This package touches no core code.
+// seam (AN-9, HARNESS §1.6). This package touches no core code.
 //
 // This file set (card PCAS-01) provides two things:
 //

@@ -5,7 +5,7 @@ package crypto
 import "testing"
 
 // These fuzz the untrusted-input parsers added for SPIFFE/JWT-SVID and the OIDC/
-// SAT attesters (CLAUDE.md: fuzz every parser that touches untrusted input). The
+// SAT attesters (TEST-FUZZASSERT-001: fuzz every parser that touches untrusted input). The
 // property under test is "never panics on arbitrary input" — a malformed token
 // from a hostile client must fail closed, not crash the process.
 

@@ -28,7 +28,7 @@ paths = [
 # The one published conformance keypair that lives in non-_test source
 # (internal/connector/conformance.go) — a deterministic ECDSA P-256 vector
 # (CN conformance.connector.test) shipped so forks/plugins can self-validate the
-# connector suite (CLAUDE.md §6). Pinned by its EXACT key body so a future real
+# connector suite (the conformance-oracle carve-out). Pinned by its EXACT key body so a future real
 # finding in that file is NOT suppressed. The full-history scan also sees this
 # fixture's earlier placeholder form; .gitleaksignore pins that one historical
 # finding by exact fingerprint instead of broadening this rule.

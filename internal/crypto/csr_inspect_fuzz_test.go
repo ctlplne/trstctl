@@ -19,7 +19,7 @@ import (
 // attacker-supplied CSR (ACME finalize, EST/SCEP enroll, agent enrollment), and a
 // CSR may carry an arbitrary extensionRequest whose ExtKeyUsage extension value is
 // attacker-controlled ASN.1. A malformed CSR, or a valid CSR with a malformed/
-// adversarial EKU extension, must fail closed (an error), never panic. CLAUDE.md §6.
+// adversarial EKU extension, must fail closed (an error), never panic. TEST-FUZZASSERT-001.
 //
 // FUZZ-002: certinfo.Inspect was fuzzed (FuzzInspect) but crypto.InspectCSR — a
 // different parser with its own EKU extension decode — was not directly fuzzed.

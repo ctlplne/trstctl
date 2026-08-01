@@ -12,7 +12,7 @@ import (
 
 // FuzzCTLog drives arbitrary bytes through the RFC 6962 response parsers — both
 // ParseSTH (JSON) and ParseEntries (JSON → base64 → MerkleTreeLeaf framing →
-// embedded X.509 via certinfo). CLAUDE.md §6 requires every untrusted-input
+// embedded X.509 via certinfo). TEST-FUZZASSERT-001 requires every untrusted-input
 // parser to be fuzzed: a malformed or hostile CT log must fail closed (return an
 // error), never panic the monitor and never silently accept impossible data.
 func FuzzCTLog(f *testing.F) {

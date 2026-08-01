@@ -42,14 +42,14 @@ carries paperwork.
 
 ## Before you write code
 
-Read [`AGENTS.md`](AGENTS.md). It is the standing engineering contract:
+Read [How it's built](README.md#how-its-built). It is the standing engineering contract:
 architecture invariants AN-1 through AN-9 (multi-tenancy under PostgreSQL RLS,
 event-sourced state, the single `internal/crypto` boundary, the isolated signer
 process, idempotent mutations, the outbox for external effects, bounded worker
 pools, locked and zeroed key material, and the core-vs-`ee/` fence). Several of
 those are enforced by a custom `go/analysis` linter and a pull request cannot
-merge while one is violated. `web/AGENTS.md` and the leaf `AGENTS.md` files
-under high-risk packages carry the local rules.
+merge while one is violated. [`web/DESIGN.md`](web/DESIGN.md) carries the
+console's local rules, and each package's `doc.go` header carries its own.
 
 If you believe a linter finding is a false positive, fix the rule in its own
 change with a test fixture rather than adding a blanket ignore.
@@ -67,7 +67,7 @@ change with a test fixture rather than adding a blanket ignore.
    (`make lint-partial` is for fast local feedback when the optional lint tools
    are missing; it is not the gate.)
 5. Update the docs the change touches, add a CHANGELOG entry under
-   `[Unreleased]`, and update a package's `AGENTS.md` if it grew a convention.
+   `[Unreleased]`, and update the package's `doc.go` header if it grew a convention.
 6. Open one focused pull request. Do not bundle unrelated changes; note adjacent
    work as a follow-up instead.
 
