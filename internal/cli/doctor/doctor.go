@@ -113,17 +113,17 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
-		fmt.Fprintf(stderr, "doctor: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "doctor: %v\n", err)
 		return ExitError{2}
 	}
 	if opts.dsn == "" {
-		fmt.Fprintln(stderr, "doctor: a PostgreSQL DSN is required (--postgres-dsn or TRSTCTL_POSTGRES_DSN); doctor probes the same datastore the deployment serves from")
+		_, _ = fmt.Fprintln(stderr, "doctor: a PostgreSQL DSN is required (--postgres-dsn or TRSTCTL_POSTGRES_DSN); doctor probes the same datastore the deployment serves from")
 		return ExitError{2}
 	}
 
 	s, err := store.Open(ctx, opts.dsn)
 	if err != nil {
-		fmt.Fprintf(stderr, "doctor: connect: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "doctor: connect: %v\n", err)
 		return ExitError{2}
 	}
 	defer s.Close()
@@ -150,18 +150,18 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 
 	if opts.sign {
 		if err := signReceipt(&receipt, opts.auditKeyFile); err != nil {
-			fmt.Fprintf(stderr, "doctor: sign receipt: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "doctor: sign receipt: %v\n", err)
 			return ExitError{2}
 		}
 	}
 	if opts.jsonPath != "" {
 		blob, err := json.MarshalIndent(receipt, "", "  ")
 		if err != nil {
-			fmt.Fprintf(stderr, "doctor: encode receipt: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "doctor: encode receipt: %v\n", err)
 			return ExitError{2}
 		}
 		if err := os.WriteFile(opts.jsonPath, append(blob, '\n'), 0o600); err != nil {
-			fmt.Fprintf(stderr, "doctor: write receipt: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "doctor: write receipt: %v\n", err)
 			return ExitError{2}
 		}
 	}
@@ -221,7 +221,7 @@ func signReceipt(r *Receipt, keyFile string) error {
 }
 
 func renderReport(w io.Writer, r Receipt) {
-	fmt.Fprintf(w, "trstctl doctor — %s\n", r.GeneratedAt.Format(time.RFC3339))
+	_, _ = fmt.Fprintf(w, "trstctl doctor — %s\n", r.GeneratedAt.Format(time.RFC3339))
 	groups := map[string][]Probe{}
 	var order []string
 	for _, p := range r.Probes {
@@ -232,14 +232,14 @@ func renderReport(w io.Writer, r Receipt) {
 	}
 	sort.Strings(order)
 	for _, g := range order {
-		fmt.Fprintf(w, "\n%s\n", g)
+		_, _ = fmt.Fprintf(w, "\n%s\n", g)
 		for _, p := range groups[g] {
-			fmt.Fprintf(w, "  [%-4s] %-6s %s\n", p.Status, p.ID, p.Detail)
+			_, _ = fmt.Fprintf(w, "  [%-4s] %-6s %s\n", p.Status, p.ID, p.Detail)
 		}
 	}
-	fmt.Fprintf(w, "\n%d pass, %d fail, %d warn, %d skipped\n",
+	_, _ = fmt.Fprintf(w, "\n%d pass, %d fail, %d warn, %d skipped\n",
 		r.Summary.Pass, r.Summary.Fail, r.Summary.Warn, r.Summary.Skip)
 	if r.Signature != nil {
-		fmt.Fprintf(w, "receipt signed (%s, key %s)\n", r.Signature.Alg, r.Signature.KeyID)
+		_, _ = fmt.Fprintf(w, "receipt signed (%s, key %s)\n", r.Signature.Alg, r.Signature.KeyID)
 	}
 }
