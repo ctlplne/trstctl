@@ -80,6 +80,7 @@ nav:
       - Capacity and cost model: performance-capacity.md
       - Usability outcome SLOs: usability.md
   - Operations & resilience: operations.md
+  - Prove isolation (trstctl doctor): operations/doctor.md
   - CLI: cli.md
   - Telemetry: telemetry.md
   - Privacy data catalog: privacy-data-catalog.md
