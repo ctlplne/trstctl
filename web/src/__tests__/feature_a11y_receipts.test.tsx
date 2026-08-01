@@ -438,6 +438,8 @@ const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
         };
       case "discoveryMonitoring":
         return { summary: {}, sources: [] };
+      case "discoveryCoverage":
+        return { generated_at: "2026-06-20T10:05:00Z", observed: 0, unobserved: 0, structurally_unobservable: 0, classes: [] };
       case "nhiShadowPosture":
         return {
           summary: {

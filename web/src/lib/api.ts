@@ -110,6 +110,7 @@ import type {
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
+  DiscoveryCoverage,
   DiscoveryFinding,
   DiscoveryFindingList,
   DiscoveryFindingTriageRequest,
@@ -546,6 +547,7 @@ export type {
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
+  DiscoveryCoverage,
   DiscoveryFinding,
   DiscoveryFindingList,
   DiscoveryFindingTriageRequest,
@@ -1210,6 +1212,7 @@ export interface Api {
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
   discoveryMonitoring(): Promise<DiscoveryMonitoring>;
+  discoveryCoverage(options?: { class?: string; sourceKind?: string }): Promise<DiscoveryCoverage>;
   driftRemediation(): Promise<DriftRemediation>;
   decideDriftRemediation(id: string, input: DriftRemediationDecisionRequest): Promise<DriftRemediationDecision>;
   discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
@@ -1533,6 +1536,13 @@ const liveApi: Api = {
   getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
+  discoveryCoverage: (options) => {
+    const qs = new URLSearchParams();
+    if (options?.class) qs.set("class", options.class);
+    if (options?.sourceKind) qs.set("source_kind", options.sourceKind);
+    const suffix = qs.toString();
+    return req<DiscoveryCoverage>(`/api/v1/discovery/coverage${suffix ? `?${suffix}` : ""}`);
+  },
   driftRemediation: () => req<DriftRemediation>("/api/v1/discovery/drift-remediation"),
   decideDriftRemediation: (id, input) =>
     mutate<DriftRemediationDecision>("POST", `/api/v1/discovery/drift-remediation/${encodeURIComponent(id)}/decision`, input),

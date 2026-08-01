@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/cbom/coverage"
 	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/discovery/apikey"
 	"trstctl.com/trstctl/internal/discovery/compromise"
@@ -193,6 +194,86 @@ type DiscoveryMonitoringSource struct {
 	RepositoryPath            string     `json:"repository_path"`
 	FindingsPath              string     `json:"findings_path"`
 	UpdatedAt                 time.Time  `json:"updated_at"`
+}
+
+// DiscoveryCoverageResponse classifies the tenant's estate into the three
+// coverage buckets against the served sources' observability envelopes:
+// OBSERVED, OBSERVABLE-UNOBSERVED (with the specific reason and the action
+// that closes the gap), and STRUCTURALLY-UNOBSERVABLE (no configured source
+// can ever see the class). The counters cover the returned classes.
+type DiscoveryCoverageResponse struct {
+	GeneratedAt              time.Time                `json:"generated_at"`
+	Observed                 int                      `json:"observed"`
+	Unobserved               int                      `json:"unobserved"`
+	StructurallyUnobservable int                      `json:"structurally_unobservable"`
+	Classes                  []DiscoveryCoverageClass `json:"classes"`
+}
+
+// DiscoveryCoverageClass is one asset class's computed coverage bucket.
+type DiscoveryCoverageClass struct {
+	Class          string     `json:"class"`
+	Status         string     `json:"status"`
+	SourceKinds    []string   `json:"source_kinds,omitempty"`
+	ObservedBy     []string   `json:"observed_by,omitempty"`
+	LastObservedAt *time.Time `json:"last_observed_at,omitempty"`
+	Reason         string     `json:"reason,omitempty"`
+	Action         string     `json:"action,omitempty"`
+}
+
+func (a *API) getDiscoveryCoverage(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	rows, err := a.store.ListDiscoveryCoverage(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	states := make([]coverage.SourceState, 0, len(rows))
+	for _, row := range rows {
+		states = append(states, coverage.SourceState{
+			SourceID: row.SourceID, Kind: row.SourceKind, Name: row.SourceName,
+			LastRunStatus: row.LastRunStatus, LastCompletedAt: row.LastCompletedAt,
+		})
+	}
+	rep := coverage.Classify(time.Now().UTC(), states)
+
+	classFilter := strings.TrimSpace(r.URL.Query().Get("class"))
+	kindFilter := strings.TrimSpace(r.URL.Query().Get("source_kind"))
+	out := DiscoveryCoverageResponse{GeneratedAt: rep.GeneratedAt, Classes: []DiscoveryCoverageClass{}}
+	for _, c := range rep.Classes {
+		if classFilter != "" && string(c.Class) != classFilter {
+			continue
+		}
+		if kindFilter != "" && !sourceKindsContain(c.SourceKinds, kindFilter) {
+			continue
+		}
+		out.Classes = append(out.Classes, DiscoveryCoverageClass{
+			Class: string(c.Class), Status: string(c.Status), SourceKinds: c.SourceKinds,
+			ObservedBy: c.ObservedBy, LastObservedAt: c.LastObservedAt,
+			Reason: c.Reason, Action: c.Action,
+		})
+		switch c.Status {
+		case coverage.StatusObserved:
+			out.Observed++
+		case coverage.StatusUnobserved:
+			out.Unobserved++
+		case coverage.StatusStructural:
+			out.StructurallyUnobservable++
+		}
+	}
+	a.writeJSON(w, http.StatusOK, out)
+}
+
+func sourceKindsContain(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
 }
 
 //trstctl:mutation

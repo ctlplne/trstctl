@@ -272,6 +272,10 @@ describe("i18n boundary", () => {
       // language in every locale instead of the internal "served" status.
       // Posture follow-up: the localized crypto inventory separator preserves
       // its leading space so adjacent algorithm and transport text stays clear.
+      // Discovery-coverage re-pin: eight discovery.coverage.* keys (panel
+      // heading, caption, three-bucket summary, table headers, observed-by and
+      // unavailable copy) land with machine-authored es/de translations -
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
       // D-7806a198 adds the isolated-preview banner and sample-playbook copy,
       // and removes "served" implementation jargon from CA health copy.
       // I-60770d64 adds the reviewed core PQC campaign workflow copy while
@@ -289,8 +293,8 @@ describe("i18n boundary", () => {
       // preserving the completed/total progress placeholders.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "0f94ce1be78eca36d78368e86e9e172add95f15f5759ff0df351498e1f49b558",
-      "de-DE": "1c1afd05e92698bef79009c40cf5be1939cbb05b54f119e9c3e5106e50c23258",
+      "es-ES": "5c808ef7a58deb0bed4f45fa6ae1d238ff9479c1819de2e9bafa8d008635b2fe",
+      "de-DE": "30eb5d64a5dc6da5509b27cf2dfc230f8899528e0ad40c47faae30983ab5de40",
     });
   });
 

@@ -1273,6 +1273,22 @@ func componentSchemas() map[string]*Schema {
 		"summary":         ref("DiscoveryMonitoringSummary"),
 		"sources":         {Type: "array", Items: ref("DiscoveryMonitoringSource")},
 	}, "repository_path", "findings_path", "sources_path", "schedules_path", "runs_path", "summary", "sources")
+	discoveryCoverageClass := object(map[string]*Schema{
+		"class":            str(),
+		"status":           str(),
+		"source_kinds":     {Type: "array", Items: str()},
+		"observed_by":      {Type: "array", Items: str()},
+		"last_observed_at": timestamp(),
+		"reason":           str(),
+		"action":           str(),
+	}, "class", "status")
+	discoveryCoverage := object(map[string]*Schema{
+		"generated_at":              timestamp(),
+		"observed":                  {Type: "integer"},
+		"unobserved":                {Type: "integer"},
+		"structurally_unobservable": {Type: "integer"},
+		"classes":                   {Type: "array", Items: ref("DiscoveryCoverageClass")},
+	}, "generated_at", "observed", "unobserved", "structurally_unobservable", "classes")
 	ctMonitoringReq := object(map[string]*Schema{
 		"source_id":              uuid(),
 		"name":                   str(),
@@ -3658,6 +3674,8 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoringSummary":               discoveryMonitoringSummary,
 		"DiscoveryMonitoringSource":                discoveryMonitoringSource,
 		"DiscoveryMonitoring":                      discoveryMonitoring,
+		"DiscoveryCoverage":                        discoveryCoverage,
+		"DiscoveryCoverageClass":                   discoveryCoverageClass,
 		"CTMonitoringRequest":                      ctMonitoringReq,
 		"CTMonitoringLog":                          ctMonitoringLog,
 		"CTMonitoringSummary":                      ctMonitoringSummary,

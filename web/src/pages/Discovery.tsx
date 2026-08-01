@@ -16,6 +16,7 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
   api,
   ApiError,
+  type DiscoveryCoverage,
   type DiscoveryFinding,
   type DiscoveryMonitoring,
   type DiscoveryRun,
@@ -558,6 +559,7 @@ export function Discovery() {
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
   const [findings, setFindings] = useState<DiscoveryFinding[]>([]);
   const [monitoring, setMonitoring] = useState<DiscoveryMonitoring | null>(null);
+  const [coverageReport, setCoverageReport] = useState<DiscoveryCoverage | null>(null);
   const [shadowPosture, setShadowPosture] = useState<NHIShadowPosture | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
@@ -578,13 +580,14 @@ export function Discovery() {
   async function load() {
     setLoading(true);
     setNotice(null);
-    const [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult] = await Promise.allSettled([
+    const [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult, coverageResult] = await Promise.allSettled([
       api.discoverySources({ limit: 50 }),
       api.discoverySchedules({ limit: 50 }),
       api.discoveryRuns({ limit: 50 }),
       api.discoveryMonitoring(),
       api.nhiShadowPosture(),
       api.discoveryFindings({ limit: 50 }),
+      api.discoveryCoverage(),
     ]);
     if (sourceResult.status === "fulfilled") setSources(sourceResult.value.items ?? []);
     else setSources([]);
@@ -598,6 +601,8 @@ export function Discovery() {
     else setShadowPosture(null);
     if (findingResult.status === "fulfilled") setFindings(findingResult.value.items ?? []);
     else setFindings([]);
+    if (coverageResult.status === "fulfilled") setCoverageReport(coverageResult.value);
+    else setCoverageReport(null);
     const rejected = [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult].find(
       (result) => result.status === "rejected",
     );
@@ -938,6 +943,49 @@ export function Discovery() {
           ) : (
             <SourceTable sources={sources} busy={busy} onStart={startRun} activity={sourceActivity} />
           )}
+          <section aria-labelledby="coverage-heading" className="grid gap-3">
+            <h3 id="coverage-heading" className="text-title font-semibold">
+              {t("discovery.coverage.heading")}
+            </h3>
+            {coverageReport ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {t("discovery.coverage.summary", {
+                    observed: coverageReport.observed,
+                    unobserved: coverageReport.unobserved,
+                    structural: coverageReport.structurally_unobservable,
+                  })}
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="ui-table min-w-[54rem]">
+                    <caption className="sr-only">{t("discovery.coverage.caption")}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t("discovery.coverage.class")}</th>
+                        <th scope="col">{t("discovery.coverage.status")}</th>
+                        <th scope="col">{t("discovery.coverage.detail")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(coverageReport.classes ?? []).map((row) => (
+                        <tr key={row.class}>
+                          <td className="font-mono text-xs">{row.class}</td>
+                          <td>{row.status}</td>
+                          <td className="max-w-[36rem] text-sm">
+                            {row.status === "OBSERVED"
+                              ? t("discovery.coverage.observedBy", { sources: (row.observed_by ?? []).join(", ") })
+                              : [row.reason, row.action].filter(Boolean).join(" — ")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              !loading && <p className="text-sm text-muted-foreground">{t("discovery.coverage.unavailable")}</p>
+            )}
+          </section>
         </section>
       )}
 

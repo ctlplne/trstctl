@@ -1878,6 +1878,32 @@ DeploymentTargetRequest = TypedDict(
     total=False,
 )
 
+DiscoveryCoverage = TypedDict(
+    'DiscoveryCoverage',
+    {
+        'classes': list[dict[str, Any]],
+        'generated_at': str,
+        'observed': int,
+        'structurally_unobservable': int,
+        'unobserved': int,
+    },
+    total=False,
+)
+
+DiscoveryCoverageClass = TypedDict(
+    'DiscoveryCoverageClass',
+    {
+        'action': str,
+        'class': str,
+        'last_observed_at': str,
+        'observed_by': list[str],
+        'reason': str,
+        'source_kinds': list[str],
+        'status': str,
+    },
+    total=False,
+)
+
 DiscoveryFinding = TypedDict(
     'DiscoveryFinding',
     {

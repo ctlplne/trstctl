@@ -830,6 +830,10 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "expiring_before", typ: "string", desc: "RFC3339; return only certificates expiring before this time"},
 	}
+	coverageQuery := []param{
+		{name: "class", typ: "string", desc: "return only this asset class"},
+		{name: "source_kind", typ: "string", desc: "return only classes observed by envelopes of this source kind"},
+	}
 	discoveryFindingQuery := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
@@ -1026,6 +1030,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/discovery/drift-remediation", opID: "getDriftRemediation", summary: "Get drift findings, remediation actions, and operator decision evidence", handler: a.getDriftRemediation, resSchema: "DriftRemediation", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "POST", path: "/api/v1/discovery/drift-remediation/{id}/decision", opID: "decideDriftRemediation", summary: "Record an operator decision for a drift finding", handler: a.decideDriftRemediation, pathParams: idPath, reqSchema: "DriftRemediationDecisionRequest", resSchema: "DriftRemediationDecision", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "GET", path: "/api/v1/discovery/monitoring", opID: "getDiscoveryMonitoring", summary: "Get continuous monitoring and centralized inventory posture", handler: a.listDiscoveryMonitoring, resSchema: "DiscoveryMonitoring", successCode: "200", perm: authz.DiscoveryRead},
+		{method: "GET", path: "/api/v1/discovery/coverage", opID: "getDiscoveryCoverage", summary: "Get discovery coverage: observed, observable-unobserved, and structurally unobservable asset classes", handler: a.getDiscoveryCoverage, query: coverageQuery, resSchema: "DiscoveryCoverage", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "GET", path: "/api/v1/discovery/findings", opID: "listDiscoveryFindings", summary: "List discovery findings", handler: a.listDiscoveryFindings, query: discoveryFindingQuery, resSchema: "DiscoveryFindingList", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "POST", path: "/api/v1/discovery/findings/{id}/claim", opID: "claimDiscoveryFinding", summary: "Claim a discovery finding as managed", handler: a.claimDiscoveryFinding, pathParams: idPath, reqSchema: "DiscoveryFindingTriageRequest", resSchema: "DiscoveryFinding", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "POST", path: "/api/v1/discovery/findings/{id}/dismiss", opID: "dismissDiscoveryFinding", summary: "Dismiss a discovery finding", handler: a.dismissDiscoveryFinding, pathParams: idPath, reqSchema: "DiscoveryFindingTriageRequest", resSchema: "DiscoveryFinding", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},

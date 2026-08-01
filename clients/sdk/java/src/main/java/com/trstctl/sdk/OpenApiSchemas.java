@@ -155,6 +155,8 @@ public final class OpenApiSchemas {
       "DeploymentTarget",
       "DeploymentTargetList",
       "DeploymentTargetRequest",
+      "DiscoveryCoverage",
+      "DiscoveryCoverageClass",
       "DiscoveryFinding",
       "DiscoveryFindingList",
       "DiscoveryFindingTriageRequest",

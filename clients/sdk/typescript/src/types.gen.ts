@@ -1325,6 +1325,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get discovery coverage: observed, observable-unobserved, and structurally unobservable asset classes */
+        get: operations["getDiscoveryCoverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/ct-monitoring": {
         parameters: {
             query?: never;
@@ -5610,6 +5627,24 @@ export interface components {
             config?: Record<string, never>;
             connector: string;
             name: string;
+        };
+        DiscoveryCoverage: {
+            classes: components["schemas"]["DiscoveryCoverageClass"][];
+            /** Format: date-time */
+            generated_at: string;
+            observed: number;
+            structurally_unobservable: number;
+            unobserved: number;
+        };
+        DiscoveryCoverageClass: {
+            action?: string;
+            class: string;
+            /** Format: date-time */
+            last_observed_at?: string;
+            observed_by?: string[];
+            reason?: string;
+            source_kinds?: string[];
+            status: string;
         };
         DiscoveryFinding: {
             /** Format: date-time */
@@ -12970,6 +13005,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectorDelivery"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDiscoveryCoverage: {
+        parameters: {
+            query?: {
+                /** @description return only this asset class */
+                class?: string;
+                /** @description return only classes observed by envelopes of this source kind */
+                source_kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryCoverage"];
                 };
             };
             /** @description client error */

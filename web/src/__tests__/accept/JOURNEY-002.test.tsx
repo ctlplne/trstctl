@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     discoverySchedules: vi.fn(),
     discoveryRuns: vi.fn(),
     discoveryMonitoring: vi.fn(),
+    discoveryCoverage: vi.fn(),
     nhiShadowPosture: vi.fn(),
     discoveryFindings: vi.fn(),
     claimDiscoveryFinding: vi.fn(),
@@ -119,6 +120,7 @@ function seedDiscoveryMocks() {
       },
     ],
   });
+  apiMock.discoveryCoverage.mockResolvedValue({ generated_at: "2026-06-20T10:05:00Z", observed: 0, unobserved: 0, structurally_unobservable: 0, classes: [] });
   apiMock.discoveryMonitoring.mockResolvedValue({
     repository_path: "/api/v1/certificates",
     findings_path: "/api/v1/discovery/findings",

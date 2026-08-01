@@ -66,6 +66,7 @@ const { apiMock, clearApiCalls } = vi.hoisted(() => {
     if (name === "acmeDNS01ProviderConfigs") return page;
     if (name === "mdmSCEPStatus") return { served: true, policies: [] };
     if (name === "discoveryMonitoring") return { generated_at: generatedAt, summary: {}, sources: [] };
+    if (name === "discoveryCoverage") return { generated_at: generatedAt, observed: 0, unobserved: 0, structurally_unobservable: 0, classes: [] };
     if (name === "driftRemediation") return { generated_at: generatedAt, findings: [], summary: {} };
     if (name === "ctMonitoring") return { enabled: false, logs: [] };
     if (name === "listCBOMAssets") return { generated_at: generatedAt, items: [], summary: {}, migration_progress: {} };

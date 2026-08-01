@@ -1308,6 +1308,24 @@ export interface DeploymentTargetRequest {
   name: string;
 }
 
+export interface DiscoveryCoverage {
+  classes: DiscoveryCoverageClass[];
+  generated_at: string;
+  observed: number;
+  structurally_unobservable: number;
+  unobserved: number;
+}
+
+export interface DiscoveryCoverageClass {
+  action?: string;
+  class: string;
+  last_observed_at?: string;
+  observed_by?: string[];
+  reason?: string;
+  source_kinds?: string[];
+  status: string;
+}
+
 export interface DiscoveryFinding {
   discovered_at: string;
   fingerprint: string;

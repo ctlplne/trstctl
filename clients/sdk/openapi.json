@@ -4992,6 +4992,74 @@
         ],
         "type": "object"
       },
+      "DiscoveryCoverage": {
+        "properties": {
+          "classes": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryCoverageClass"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed": {
+            "type": "integer"
+          },
+          "structurally_unobservable": {
+            "type": "integer"
+          },
+          "unobserved": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generated_at",
+          "observed",
+          "unobserved",
+          "structurally_unobservable",
+          "classes"
+        ],
+        "type": "object"
+      },
+      "DiscoveryCoverageClass": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "class": {
+            "type": "string"
+          },
+          "last_observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "class",
+          "status"
+        ],
+        "type": "object"
+      },
       "DiscoveryFinding": {
         "properties": {
           "discovered_at": {
@@ -24008,6 +24076,71 @@
         ],
         "summary": "Validate a deployment connector target",
         "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/discovery/coverage": {
+      "get": {
+        "operationId": "getDiscoveryCoverage",
+        "parameters": [
+          {
+            "description": "return only this asset class",
+            "in": "query",
+            "name": "class",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only classes observed by envelopes of this source kind",
+            "in": "query",
+            "name": "source_kind",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryCoverage"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get discovery coverage: observed, observable-unobserved, and structurally unobservable asset classes",
+        "x-trstctl-permission": "discovery:read"
       }
     },
     "/api/v1/discovery/ct-monitoring": {

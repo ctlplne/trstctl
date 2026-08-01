@@ -490,6 +490,38 @@ export const messages = {
     defaultMessage: "Runs",
     description: "Discovery page tab: discovery run history.",
   },
+  "discovery.coverage.caption": {
+    defaultMessage: "Discovery coverage by asset class",
+    description: "Screen-reader caption for the discovery coverage table.",
+  },
+  "discovery.coverage.heading": {
+    defaultMessage: "Coverage",
+    description: "Heading for the discovery coverage panel: which asset classes are observed, observable but unobserved, or structurally unobservable.",
+  },
+  "discovery.coverage.summary": {
+    defaultMessage: "{observed} observed - {unobserved} observable but unobserved - {structural} structurally unobservable",
+    description: "One-line discovery coverage summary carrying the three bucket counts.",
+  },
+  "discovery.coverage.class": {
+    defaultMessage: "Asset class",
+    description: "Coverage table column header: the asset class the row describes.",
+  },
+  "discovery.coverage.status": {
+    defaultMessage: "Status",
+    description: "Coverage table column header: the coverage bucket of the class.",
+  },
+  "discovery.coverage.detail": {
+    defaultMessage: "Detail",
+    description: "Coverage table column header: why a class is unobserved and what closes the gap, or which sources observed it.",
+  },
+  "discovery.coverage.observedBy": {
+    defaultMessage: "Observed by {sources}",
+    description: "Coverage detail cell naming the discovery sources whose fresh successful runs cover the class.",
+  },
+  "discovery.coverage.unavailable": {
+    defaultMessage: "Coverage is unavailable.",
+    description: "Shown when the discovery coverage endpoint could not be loaded.",
+  },
   "platform.tabs.access": {
     defaultMessage: "Access administration",
     description:
