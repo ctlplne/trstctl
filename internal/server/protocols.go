@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // protocolLeafTTL is the validity of a certificate minted through one of the
@@ -77,6 +78,9 @@ type protocolIssuer struct {
 	leafProfile        crypto.LeafProfile         // operator profile plus tenant certificate-profile constraints at mint time
 	ensureCRL          func(context.Context, string) error
 	publishCRL         func(context.Context, string) error
+	// tenantCrypto keeps the complete signer/event/idempotency mutation behind the
+	// same tenant-domain fence as secret and worker paths.
+	tenantCrypto tenantseal.Access
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
 	afterIssueSideEffects func(context.Context) error
@@ -94,6 +98,18 @@ var errProtocolIssuanceUnavailable = errors.New("server: protocol issuance unava
 // re-encode it to their wire format). It is the shared body behind the ca.CA and
 // Enroller adapters below.
 func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	if p.tenantCrypto == nil {
+		return p.issueProtocolLeaf(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl)
+	}
+	var leaf []byte
+	err := withTenantCipher(ctx, p.tenantCrypto, nil, tenantID, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
+		leaf, err = p.issueProtocolLeaf(scoped, tenantID, protocolName, idempotencyKey, csrDER, ttl)
+		return err
+	})
+	return leaf, err
+}
+
+func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration) ([]byte, error) {
 	if p.issue == nil {
 		return nil, errProtocolIssuanceUnavailable
 	}
@@ -244,6 +260,15 @@ func (p *protocolIssuer) inspectCSRInfo(csrDER []byte) (crypto.CSRInfo, error) {
 // event-sourced through certificate.revoked (AN-2), whose projection also updates
 // the issued-cert responder row so served OCSP and CRL answer revoked for the serial.
 func (p *protocolIssuer) RevokeProtocolLeaf(ctx context.Context, tenantID, protocolName string, fingerprint, serial string, reasonCode int, certDER []byte) error {
+	if p.tenantCrypto == nil {
+		return p.revokeProtocolLeaf(ctx, tenantID, protocolName, fingerprint, serial, reasonCode, certDER)
+	}
+	return withTenantCipher(ctx, p.tenantCrypto, nil, tenantID, func(scoped context.Context, _ tenantseal.Cipher) error {
+		return p.revokeProtocolLeaf(scoped, tenantID, protocolName, fingerprint, serial, reasonCode, certDER)
+	})
+}
+
+func (p *protocolIssuer) revokeProtocolLeaf(ctx context.Context, tenantID, protocolName string, fingerprint, serial string, reasonCode int, certDER []byte) error {
 	if tenantID == "" {
 		return errors.New("server: protocol revocation requires a tenant (AN-1)")
 	}

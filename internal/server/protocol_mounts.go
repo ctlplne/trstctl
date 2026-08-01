@@ -126,6 +126,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			_, err := s.revoc.generateCRL(ctx, tenantID)
 			return err
 		},
+		tenantCrypto: s.tenantCrypto,
 	}
 	sp := &servedProtocols{}
 

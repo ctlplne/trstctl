@@ -409,6 +409,33 @@ func TestIssuanceDispatcherTenantCryptoFenceBlocksSealedTenantWorkerButServesNei
 	}
 }
 
+func TestProtocolIssuerTenantCryptoFenceRefusesSealedTenantBeforeSigner(t *testing.T) {
+	const sealedTenant = "11111111-1111-1111-1111-111111111111"
+	access, err := tenantseal.NewAccess(fixedTenantDomainStore{domain: store.TenantKeyDomain{
+		TenantID: sealedTenant, DomainID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", Generation: 1,
+		ProtectionMode: store.TenantKeyProtectionTenantDomain, State: store.TenantKeyDomainStateSealed,
+		WrapperKind: tenantseal.WrapperKindLocalFile, WrapperID: "operator-a", WrappedDomainKEK: []byte("wrapped"),
+	}}, passthroughKeyWrapper{}, unreachableDomainRegistry{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	signerCalls := 0
+	issuer := &protocolIssuer{
+		tenantCrypto: access,
+		issue: func(context.Context, []byte, time.Duration, crypto.LeafProfile) ([]byte, error) {
+			signerCalls++
+			return nil, errors.New("test signer must not be reached")
+		},
+	}
+	_, err = issuer.IssueProtocolLeaf(context.Background(), sealedTenant, "acme", "sealed-protocol", []byte("csr-not-parsed"), time.Minute)
+	if status, ok := tenantseal.StatusOf(err); !ok || status != tenantseal.StatusSealed {
+		t.Fatalf("sealed protocol issuance status = (%q, %t), want (%q, true): %v", status, ok, tenantseal.StatusSealed, err)
+	}
+	if signerCalls != 0 {
+		t.Fatalf("sealed protocol issuance reached signer %d times", signerCalls)
+	}
+}
+
 func TestIssuanceDispatcherMissingFirstPartyHandlersLeaveOutboxRowsPending(t *testing.T) {
 	h := newIssuanceDispatcherHarness(t)
 	ctx := context.Background()
