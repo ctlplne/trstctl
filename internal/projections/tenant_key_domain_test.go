@@ -6,15 +6,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 func tenantKeyDomainSnapshot(state, operationStatus string, completed int64) projections.TenantKeyDomainSnapshot {
@@ -424,6 +429,128 @@ func TestTenantKeyDomainRebuildAndSnapshotRecovery(t *testing.T) {
 		restored.ProgressCursor != rebuilt.ProgressCursor ||
 		!bytes.Equal(restored.WrappedDomainKEK, rebuilt.WrappedDomainKEK) {
 		t.Fatalf("snapshot-restored key domain = %+v, want rebuilt %+v", restored, rebuilt)
+	}
+}
+
+// TestTenantKeyDomainSealedStateSurvivesEventBackupRestoreAndReplay proves the
+// disaster-recovery wall rather than only an in-place projection rebuild. A
+// fresh event store receives the portable backup, the read model is rebuilt
+// only from that restored source, and tenant A remains cryptographically closed
+// while legacy tenant B keeps its independent deployment-domain access.
+func TestTenantKeyDomainSealedStateSurvivesEventBackupRestoreAndReplay(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	source := openLog(t)
+
+	appendEvent := func(event events.Event) {
+		t.Helper()
+		if _, err := source.Append(ctx, event); err != nil {
+			t.Fatalf("append %s: %v", event.Type, err)
+		}
+	}
+	appendEvent(events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		Data: tenantRegistered("sealed tenant"),
+	})
+	appendEvent(events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantB,
+		Data: tenantRegistered("available neighbor"),
+	})
+
+	started := tenantKeyDomainSnapshot(store.TenantKeyDomainStateMigrating, store.TenantKeyOperationRunning, 0)
+	appendEvent(tenantKeyDomainEvent(t, projections.EventTenantKeyDomainMigrationStarted, 0, started))
+	completed := tenantKeyDomainSnapshot(store.TenantKeyDomainStateUnsealed, store.TenantKeyOperationCompleted, 10)
+	completed.LegacyHistoryExposure = store.TenantKeyLegacyNone
+	completed.MigrationStage = "complete"
+	completed.ProgressCursor = ""
+	appendEvent(tenantKeyDomainEvent(t, projections.EventTenantKeyDomainMigrationCompleted, 0, completed))
+
+	sealOperationID := "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	queued := completed
+	queued.State = store.TenantKeyDomainStateSealQueued
+	queued.OperationID = &sealOperationID
+	queued.OperationKind = store.TenantKeyOperationSeal
+	queued.OperationStatus = store.TenantKeyOperationPending
+	queued.SealIdempotencyKey = "backup-restore-seal"
+	queued.SealRequestBinding = strings.Repeat("b", 64)
+	appendEvent(tenantKeyDomainEvent(t, projections.EventTenantKeyDomainSealRequested, 0, queued))
+	sealed := queued
+	sealed.State = store.TenantKeyDomainStateSealed
+	sealed.OperationStatus = store.TenantKeyOperationCompleted
+	sealedAt := time.Date(2026, 7, 31, 2, 3, 4, 0, time.UTC)
+	sealed.SealedAt = &sealedAt
+	appendEvent(tenantKeyDomainEvent(t, projections.EventTenantKeyDomainSealed, 0, sealed))
+
+	var artifact bytes.Buffer
+	if _, err := backup.WriteLog(ctx, source, &artifact); err != nil {
+		t.Fatalf("backup event source: %v", err)
+	}
+	restoredLog := openLog(t)
+	if _, err := backup.RestoreLog(ctx, restoredLog, bytes.NewReader(artifact.Bytes())); err != nil {
+		t.Fatalf("restore event source: %v", err)
+	}
+	if err := projections.New(s).Rebuild(ctx, restoredLog); err != nil {
+		t.Fatalf("replay restored event source: %v", err)
+	}
+
+	restored, err := s.GetTenantKeyDomain(ctx, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.State != store.TenantKeyDomainStateSealed ||
+		restored.OperationStatus != store.TenantKeyOperationCompleted ||
+		restored.SealedAt == nil || !restored.SealedAt.Equal(sealedAt) {
+		t.Fatalf("restored tenant A domain = %+v, want completed sealed state", restored)
+	}
+
+	deployment, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x41}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := tenantseal.NewLocalWrapperRegistry(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := tenantseal.NewAccess(s, deployment, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calledA := false
+	err = access.WithTenant(ctx, tenantA, func(tenantseal.Cipher) error {
+		calledA = true
+		return nil
+	})
+	if calledA {
+		t.Fatal("restored sealed tenant A entered its crypto callback")
+	}
+	if status, ok := tenantseal.StatusOf(err); !ok || status != tenantseal.StatusSealed {
+		t.Fatalf("restored tenant A status = %q/%t err=%v, want sealed", status, ok, err)
+	}
+	calledB := false
+	if err := access.WithTenant(ctx, tenantB, func(cipher tenantseal.Cipher) error {
+		calledB = true
+		plain := []byte("restored-neighbor-proof")
+		defer secret.Wipe(plain)
+		aad := []byte("tenant-b:backup-restore")
+		container, err := cipher.Seal(plain, aad)
+		if err != nil {
+			return err
+		}
+		defer secret.Wipe(container)
+		opened, err := seal.Open(deployment, container, aad)
+		if err != nil {
+			return err
+		}
+		defer secret.Wipe(opened)
+		if !bytes.Equal(opened, plain) {
+			return errors.New("neighbor deployment-domain round trip changed plaintext")
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("restored tenant B access: %v", err)
+	}
+	if !calledB {
+		t.Fatal("restored tenant B crypto callback did not run")
 	}
 }
 
