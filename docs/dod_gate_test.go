@@ -17,7 +17,10 @@ func TestDODGateIsARequiredEmittingCICheck(t *testing.T) {
 		"TestDODGateProductionAssemblyCanary",
 		"tools/dodcensus/manifest.json",
 		"wiring-census.json",
-		`cache="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}"`,
+		// Persist the expensive package cache across reboots, while keeping the
+		// explicit override that lets CI and isolated proofs choose their cache.
+		"DOD_GOCACHE_DEFAULT := $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)/trstctl/dodcensus-gocache",
+		`cache="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}"`,
 		`(umask 077; mkdir -p "$$cache")`,
 	} {
 		if !strings.Contains(makefile, want) {

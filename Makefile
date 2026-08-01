@@ -15,6 +15,9 @@ CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli ter
 
 GO          ?= go
 CGO_ENABLED ?= 0
+# Fast/intermediate gates may use Go's test cache. Exact-tip and dod_proof runs
+# set TRSTCTL_EXACT_TIP=1 so every otherwise-cacheable Go test gets -count=1.
+GO_TEST_EXACT_FLAG := $(if $(filter 1 true,$(TRSTCTL_EXACT_TIP)),-count=1,)
 
 # Version metadata, git-derived with fallbacks so builds work outside a checkout.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -134,12 +137,11 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> go test (race + merged first-party coverage)"
-	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
-	$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
+	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
+	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
+	$(GO) test -race -count=1 -p=$$parallelism -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
 	@echo ">> go test live perf packages (serial)"
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
-	@echo ">> live performance SLO wall (uninstrumented; race/coverage changes wall-clock timings)"
-	@$(GO) test -count=1 -p=1 ./scripts/perf/cmd/perfgate -run '^TestPerfGateRunsLiveProfile$$'
 	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
@@ -154,6 +156,11 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 		bash scripts/ci/coverage-server-lifecycle.sh
 	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
 
+.PHONY: perf-live-wall
+perf-live-wall: ## Run the serialized live-performance SLO wall for iteration tips, batch tips, and release candidates
+	@echo ">> live performance SLO wall (serial, uninstrumented, uncached)"
+	@$(GO) test -count=1 -p=1 ./scripts/perf/cmd/perfgate -run '^TestPerfGateRunsLiveProfile$$'
+
 .PHONY: coverage-critical
 coverage-critical: ## Enforce the per-package coverage floor on security-critical packages (consumes cover.out.nogen from `make test`)
 	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
@@ -165,6 +172,9 @@ cover: test ## Alias for `make test`; writes cover.out and prints per-function c
 DOD_CENSUS_OUT ?= wiring-census.json
 DOD_CARD ?=
 DOD_CAPABILITY ?=
+# Keep compilation artifacts across reboots by default. Operators can still
+# isolate or relocate the cache with TRSTCTL_DOD_GOCACHE.
+DOD_GOCACHE_DEFAULT := $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)/trstctl/dodcensus-gocache
 DOD_SELECTION :=
 ifneq ($(strip $(DOD_CARD)),)
 DOD_SELECTION += --card $(DOD_CARD)
@@ -179,11 +189,11 @@ dod-gate: ## Prove every required capability is compiled, production-assembled, 
 	@if [ -n "$(strip $(DOD_CARD))" ] && [ -n "$(strip $(DOD_CAPABILITY))" ]; then \
 		echo "dod-gate: choose only one of DOD_CARD or DOD_CAPABILITY" >&2; exit 2; \
 	fi
-	@set -eu; cache="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}"; \
+	@set -eu; cache="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}"; \
 		if [ ! -e "$$cache" ]; then (umask 077; mkdir -p "$$cache"); fi
-	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) test ./tools/dodcensus/... -count=1
-	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) test ./internal/server -run '^TestDODGateProductionAssemblyCanary$$' -count=1
-	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" $(GO) run ./tools/dodcensus \
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./tools/dodcensus/... -count=1
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./internal/server -run '^TestDODGateProductionAssemblyCanary$$' -count=1
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) run ./tools/dodcensus \
 		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)" $(DOD_SELECTION)
 
 PQC_OPERATOR_LAB_MODE = $(if $(filter core-only,$(MAKECMDGOALS)),core,licensed)
@@ -191,7 +201,7 @@ PQC_OPERATOR_LAB_OUT ?= dist/pqc-operator-lab-$(PQC_OPERATOR_LAB_MODE).tar.gz
 
 .PHONY: pqc-operator-lab core-only
 pqc-operator-lab: ## Run the offline shipped-binary PQC rehearsal and archive non-secret receipts
-	@GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache}" \
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" \
 		$(GO) run ./tools/pqclab --repo . --mode "$(PQC_OPERATOR_LAB_MODE)" --out "$(PQC_OPERATOR_LAB_OUT)"
 
 core-only:
@@ -402,10 +412,11 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 		exit 1; \
 	fi
 	@echo ">> trstctl_core tests over non-ee packages"
-	@set -euo pipefail; pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
-	$(GO) test -tags trstctl_core -p=1 $$pkgs
+	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
+	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
+	$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs
 	@echo ">> trstctl_core live perf packages (serial)"
-	@$(GO) test -tags trstctl_core -p=1 $(LIVE_PERF_PACKAGES)
+	@$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)
 
 .PHONY: pcas-caller-gate
 pcas-caller-gate: ## PCAS production-caller gate (INT-23): every delivered mechanism has a non-test caller
@@ -592,12 +603,15 @@ clean: ## Remove build artifacts
 
 .PHONY: web
 web: ## Install deps, build the web console into internal/webui/dist (embedded by the binary), and verify the embed is a REAL Vite build
-	cd web && npm ci && npm run build
+	@# Local repeats reuse only a tree stamped for the exact lock digest. CI and
+	@# exact-tip proofs force npm ci with CI=true or TRSTCTL_WEB_CLEAN_INSTALL=1.
+	scripts/ci/install-web-deps.sh web
+	$(WEB_NPM) run build
 	@# SURFACE-001/006: prove the bundle we just embedded is a real build, not the
 	@# "not built" placeholder. `npm run build` already runs the FE↔BE contract check
 	@# (gen:api --check); this asserts the embedded artifact end-to-end on the Go side.
 	@echo ">> verify embedded console is a real build (TRSTCTL_REQUIRE_BUILT_UI=1)"
-	TRSTCTL_REQUIRE_BUILT_UI=1 $(GO) test ./internal/webui/...
+	TRSTCTL_REQUIRE_BUILT_UI=1 $(GO) test $(GO_TEST_EXACT_FLAG) ./internal/webui/...
 
 .PHONY: web-contract
 web-contract: ## Regenerate the FE API types from the served OpenAPI contract (SURFACE-005); commit the diff

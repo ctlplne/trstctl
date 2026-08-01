@@ -665,10 +665,10 @@ func TestShippedBuildEnvironmentUsesPrivateContainerWorkDirectory(t *testing.T) 
 
 func TestShippedBuildArgumentsBoundPackageParallelism(t *testing.T) {
 	expected := expectation{LaunchedTags: []string{"integration", "trstctl_test_signer"}}
-	got := shippedBuildArguments(expected, "linker flags", "/receipt/trstctl", "./cmd/trstctl")
+	got := shippedBuildArguments(expected, "linker flags", "/receipt/trstctl", "./cmd/trstctl", 6)
 	want := []string{
 		"build",
-		"-p=1",
+		"-p=6",
 		"-trimpath",
 		"-buildvcs=false",
 		"-mod=readonly",
@@ -681,6 +681,27 @@ func TestShippedBuildArgumentsBoundPackageParallelism(t *testing.T) {
 	}
 	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("shipped build arguments = %#v, want %#v", got, want)
+	}
+}
+
+func TestDescriptorPackageParallelismFallsBackLowAndCapsHigh(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		descriptors uint64
+		cpus        int
+		want        int
+	}{
+		{name: "macOS default", descriptors: 256, cpus: 12, want: 1},
+		{name: "one safe worker", descriptors: 384, cpus: 12, want: 1},
+		{name: "six safe workers", descriptors: 1024, cpus: 12, want: 6},
+		{name: "CPU cap", descriptors: 245760, cpus: 12, want: 12},
+		{name: "invalid CPU count", descriptors: 245760, cpus: 0, want: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := packageParallelismForDescriptorLimit(tc.descriptors, tc.cpus); got != tc.want {
+				t.Fatalf("parallelism(%d descriptors, %d CPUs) = %d, want %d", tc.descriptors, tc.cpus, got, tc.want)
+			}
+		})
 	}
 }
 

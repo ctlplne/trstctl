@@ -257,7 +257,7 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 			return shippedBuild{}, err
 		}
 		output := filepath.Join(binDir, name)
-		args := shippedBuildArguments(expected, ldflags, output, packagePath)
+		args := shippedBuildArguments(expected, ldflags, output, packagePath, descriptorPackageParallelism())
 		command := exec.Command(goTool, args...)
 		command.Dir = expected.Repo
 		command.Env = shippedBuildEnvironment(expected, goCache, runtimeTempDir)
@@ -335,12 +335,41 @@ func pathsOverlap(first, second string) bool {
 		(inside(resolvedFirst, resolvedSecond) || inside(resolvedSecond, resolvedFirst))
 }
 
-func shippedBuildArguments(expected expectation, ldflags, output, packagePath string) []string {
-	args := []string{"build", "-p=1", "-trimpath", "-buildvcs=false", "-mod=readonly"}
+func shippedBuildArguments(expected expectation, ldflags, output, packagePath string, parallelism int) []string {
+	if parallelism < 1 {
+		parallelism = 1
+	}
+	args := []string{"build", "-p=" + strconv.Itoa(parallelism), "-trimpath", "-buildvcs=false", "-mod=readonly"}
 	if len(expected.LaunchedTags) > 0 {
 		args = append(args, "-tags="+strings.Join(expected.LaunchedTags, ","))
 	}
 	return append(args, "-ldflags", ldflags, "-o", output, packagePath)
+}
+
+func descriptorPackageParallelism() int {
+	var limit unix.Rlimit
+	if err := unix.Getrlimit(unix.RLIMIT_NOFILE, &limit); err != nil {
+		return 1
+	}
+	return packageParallelismForDescriptorLimit(limit.Cur, runtime.NumCPU())
+}
+
+func packageParallelismForDescriptorLimit(descriptors uint64, cpus int) int {
+	// Keep the closed-P0 behavior on a 256-FD shell. Each extra worker gets a
+	// conservative 128-FD slice after reserving 256 descriptors for the gate,
+	// Docker transport, subprocess pipes, and the Go command itself.
+	const reserve, perPackage = uint64(256), uint64(128)
+	if cpus < 1 || descriptors <= reserve {
+		return 1
+	}
+	workers := (descriptors - reserve) / perPackage
+	if workers < 1 {
+		return 1
+	}
+	if workers > uint64(cpus) {
+		return cpus
+	}
+	return int(workers)
 }
 
 func validateRuntimePrivilegeDropper() (executableIdentity, error) {

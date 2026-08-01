@@ -213,15 +213,16 @@ func TestPerfSmokeScriptAndCIArtifactGateAreCommitted(t *testing.T) {
 	}
 }
 
-func TestMakeTestSerializesRealPerformancePackages(t *testing.T) {
+func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.T) {
 	mk := read(t, "../Makefile")
 	for _, want := range []string{
 		"LIVE_PERF_PACKAGES := ./internal/perf ",
 		"LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/",
-		"$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs",
+		"parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\"",
+		"$(GO) test -race -count=1 -p=$$parallelism -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs",
 		"$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
-		"$(GO) test -tags trstctl_core -p=1 $$pkgs",
-		"$(GO) test -tags trstctl_core -p=1 $(LIVE_PERF_PACKAGES)",
+		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs",
+		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)",
 		"tail -n +2 $(COVERPROFILE_LIVE_PERF)",
 	} {
 		if !strings.Contains(mk, want) {
@@ -230,6 +231,53 @@ func TestMakeTestSerializesRealPerformancePackages(t *testing.T) {
 	}
 	if got := strings.Count(mk, "grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$'"); got != 2 {
 		t.Errorf("Makefile excludes the serial performance package set from %d parallel lanes, want test and editions-gate", got)
+	}
+	if got := strings.Count(mk, "parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\""); got != 2 {
+		t.Errorf("Makefile derives descriptor-bounded package parallelism in %d main lanes, want test and editions-gate", got)
+	}
+}
+
+func TestLivePerformanceSLOWallIsDedicatedAndSerialized(t *testing.T) {
+	mk := read(t, "../Makefile")
+	testStart := strings.Index(mk, ".PHONY: test\n")
+	wallStart := strings.Index(mk, ".PHONY: perf-live-wall\n")
+	if testStart < 0 || wallStart < 0 || wallStart <= testStart {
+		t.Fatal("Makefile no longer exposes separate test and perf-live-wall targets")
+	}
+	coverageStart := strings.Index(mk[wallStart:], ".PHONY: coverage-critical\n")
+	if coverageStart < 0 {
+		t.Fatal("Makefile no longer bounds the dedicated perf-live-wall target")
+	}
+	testBlock := mk[testStart:wallStart]
+	wallBlock := mk[wallStart : wallStart+coverageStart]
+	if strings.Contains(testBlock, "TestPerfGateRunsLiveProfile") {
+		t.Error("ordinary make test still owns the cadence-pinned live SLO wall")
+	}
+	for _, want := range []string{
+		"perf-live-wall:",
+		"$(GO) test -count=1 -p=1 ./scripts/perf/cmd/perfgate -run '^TestPerfGateRunsLiveProfile$$'",
+	} {
+		if !strings.Contains(wallBlock, want) {
+			t.Errorf("dedicated live SLO wall missing %q", want)
+		}
+	}
+}
+
+func TestFullBarCachesRemainReproducibleAndPersistent(t *testing.T) {
+	mk := read(t, "../Makefile")
+	for _, want := range []string{
+		"GO_TEST_EXACT_FLAG := $(if $(filter 1 true,$(TRSTCTL_EXACT_TIP)),-count=1,)",
+		"DOD_GOCACHE_DEFAULT := $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)/trstctl/dodcensus-gocache",
+		`TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}"`,
+		"scripts/ci/install-web-deps.sh web",
+		"TRSTCTL_REQUIRE_BUILT_UI=1 $(GO) test $(GO_TEST_EXACT_FLAG) ./internal/webui/...",
+	} {
+		if !strings.Contains(mk, want) {
+			t.Errorf("Makefile throughput cache topology missing %q", want)
+		}
+	}
+	if strings.Contains(mk, "$${TMPDIR:-/tmp}/trstctl-dodcensus-gocache") {
+		t.Error("DoD Go cache still defaults to boot-ephemeral temporary storage")
 	}
 }
 
