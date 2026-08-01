@@ -3,6 +3,7 @@
 package docs
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -19,11 +20,8 @@ func TestSecurityExceptionRegisterKeepsAcceptedDebtVisible(t *testing.T) {
 	for _, required := range []string{
 		"GHSA-qwww-vcr4-c8h2",
 		"GHSA-mh99-v99m-4gvg",
-		"GHSA-52cp-r559-cp3m",
-		"GHSA-3jxr-9vmj-r5cp",
 		"SEC-5b43d4b3",
 		"S-7268c77e",
-		"S-a72284e3",
 		"Accepted:",
 		"Review by:",
 		"Package and version:",
@@ -59,5 +57,48 @@ func TestSecurityExceptionRegisterKeepsAcceptedDebtVisible(t *testing.T) {
 		t.Fatalf("read MkDocs navigation: %v", err)
 	} else if !strings.Contains(string(nav), "security-exceptions.md") {
 		t.Error("MkDocs navigation does not expose the security exception register")
+	}
+}
+
+func TestSDKGeneratorAdvisoriesStayRemediated(t *testing.T) {
+	t.Parallel()
+
+	register, err := os.ReadFile("security-exceptions.md")
+	if err != nil {
+		t.Fatalf("read security exception register: %v", err)
+	}
+	for _, stale := range []string{
+		"S-a72284e3",
+		"GHSA-52cp-r559-cp3m",
+		"GHSA-3jxr-9vmj-r5cp",
+		"js-yaml@4.2.0",
+		"brace-expansion@2.1.1",
+	} {
+		if strings.Contains(string(register), stale) {
+			t.Errorf("security exception register retains remediated SDK-generator debt %q", stale)
+		}
+	}
+
+	type lockedPackage struct {
+		Version string `json:"version"`
+	}
+	var lock struct {
+		Packages map[string]lockedPackage `json:"packages"`
+	}
+	contents, err := os.ReadFile("../clients/sdk/typescript/package-lock.json")
+	if err != nil {
+		t.Fatalf("read TypeScript SDK generator lockfile: %v", err)
+	}
+	if err := json.Unmarshal(contents, &lock); err != nil {
+		t.Fatalf("decode TypeScript SDK generator lockfile: %v", err)
+	}
+	for path, want := range map[string]string{
+		"node_modules/@redocly/openapi-core": "1.34.18",
+		"node_modules/js-yaml":               "4.3.0",
+		"node_modules/brace-expansion":       "2.1.4",
+	} {
+		if got := lock.Packages[path].Version; got != want {
+			t.Errorf("%s version = %q, want remediated %q", path, got, want)
+		}
 	}
 }
