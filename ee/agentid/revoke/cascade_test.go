@@ -17,7 +17,7 @@ import (
 // the cascade enumerates the descendant credential set from the AGID-02 delegation-tree
 // projection AS OF a determining watermark, records that watermark in the directive
 // event/row, and the enumeration is reproducible by replay — the same ledger yields the
-// same set and the same watermark (claim 16 / INV-A8).
+// same set and the same watermark (AGID-claim-16 / INV-A8).
 func TestRevoke_DescendantSetFromProjectionWatermark(t *testing.T) {
 	h := newHarness(t, "revoke_descendants")
 	ctx := context.Background()
@@ -79,7 +79,7 @@ func TestRevoke_DescendantSetFromProjectionWatermark(t *testing.T) {
 // TestRevoke_DirectiveAndJobsSingleTxn: the directive state-change/projection and one
 // job per descendant commit in ONE database transaction (the transactional outbox). A
 // fault injected BETWEEN the directive-record write and the job enqueue leaves NEITHER
-// — no directive row, no job rows, no outbox jobs (claim 16 / INV-A8). Then a clean run
+// — no directive row, no job rows, no outbox jobs (AGID-claim-16 / INV-A8). Then a clean run
 // commits all of them atomically. (Per the G3 note this asserts projection⊕outbox
 // atomicity, NOT a JetStream-append-in-tx.)
 func TestRevoke_DirectiveAndJobsSingleTxn(t *testing.T) {
@@ -153,7 +153,7 @@ func TestRevoke_DirectiveAndJobsSingleTxn(t *testing.T) {
 
 // TestRevoke_ReasonClassRecorded: the directive's reason class is recorded in the
 // ledger — both in the durable directive row and, replayable, in the RevocationDirective
-// event (claim 17). An unrecognized reason is refused before any ledger write.
+// event (AGID-claim-17). An unrecognized reason is refused before any ledger write.
 func TestRevoke_ReasonClassRecorded(t *testing.T) {
 	h := newHarness(t, "revoke_reason")
 	ctx := context.Background()
@@ -184,7 +184,7 @@ func TestRevoke_ReasonClassRecorded(t *testing.T) {
 }
 
 // TestRevoke_DownstreamPlanePublishViaOutbox: at least one job publishes a revocation
-// entry to a downstream trust plane through the AN-6 outbox (claim 19). After the
+// entry to a downstream trust plane through the AN-6 outbox (AGID-claim-19). After the
 // cascade enqueues the jobs and the executor runs them, a downstream-plane outbox entry
 // exists for the revoked credential — the publication rode the SAME outbox, keyed by an
 // AN-5 idempotency key so a retry does not double-publish.
@@ -207,7 +207,7 @@ func TestRevoke_DownstreamPlanePublishViaOutbox(t *testing.T) {
 	// Run the revocation jobs; each publishes a downstream-plane entry via the outbox.
 	drainOutbox(t, h.outbox, ex, 8)
 
-	// A downstream-plane publication is now pending on the SAME outbox (claim 19 / AN-6).
+	// A downstream-plane publication is now pending on the SAME outbox (AGID-claim-19 / AN-6).
 	pub := h.pendingByDestination(t, tenantA, revoke.DestinationDownstreamPlane)
 	if len(pub) == 0 {
 		// It may already have been dispatched if a downstream handler ran; assert it was

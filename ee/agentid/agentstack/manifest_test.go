@@ -36,7 +36,7 @@ func (r *aliasResolver) ResolveTool(raw string) (string, bool) {
 
 // TestToolManifest_ExceedsRegisteredRefused asserts a declared manifest that
 // exceeds the registered tool set is refused and names the excess, while a
-// subset/equal manifest is accepted (claim 12 / INV-A3, acceptance #3).
+// subset/equal manifest is accepted (AGID-claim-12 / INV-A3, acceptance #3).
 func TestToolManifest_ExceedsRegisteredRefused(t *testing.T) {
 	registered := agentstack.NewRegisteredToolSet("fs.read", "net.http", "db.query")
 

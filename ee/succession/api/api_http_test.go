@@ -187,7 +187,7 @@ func newAPI(t *testing.T, svc succapi.Service) *api.API {
 }
 
 // TestRequestSuccession_Idempotent: a replayed Idempotency-Key returns the original
-// result and the service mints the request exactly once (claim 6).
+// result and the service mints the request exactly once (PCAS-claim-6).
 func TestRequestSuccession_Idempotent(t *testing.T) {
 	svc := &fakeService{}
 	a := newAPI(t, svc)
@@ -228,8 +228,8 @@ func TestRequestSuccession_MissingIdempotencyKey(t *testing.T) {
 	}
 }
 
-// TestIdentityTypes_X509_SSH_SVID_Token_Secret: every claim-9 credential type
-// round-trips the API end-to-end; a type outside the genus is rejected (claim 9).
+// TestIdentityTypes_X509_SSH_SVID_Token_Secret: every PCAS-claim-9 credential type
+// round-trips the API end-to-end; a type outside the genus is rejected (PCAS-claim-9).
 func TestIdentityTypes_X509_SSH_SVID_Token_Secret(t *testing.T) {
 	svc := &fakeService{}
 	a := newAPI(t, svc)
@@ -261,7 +261,7 @@ func TestIdentityTypes_X509_SSH_SVID_Token_Secret(t *testing.T) {
 }
 
 // TestChain_Verifiable: the GET chain response decodes to records that verify with
-// the succession verifier (PCAS-07's offline check) — claim 9 / acceptance 2.
+// the succession verifier (PCAS-07's offline check) — PCAS-claim-9 / acceptance 2.
 func TestChain_Verifiable(t *testing.T) {
 	sc, err := succession.BuildSampleChain(crypto.NewSoftwareBackend(), "spiffe://d", identity, tenantA)
 	if err != nil {
@@ -303,7 +303,7 @@ func TestChain_Verifiable(t *testing.T) {
 
 // TestAck_SignatureRequiredAndCountable: a signed ack is accepted and preserves the
 // signature + identity/epoch binding intact, so PCAS-10 counts it; a stripped-signature
-// ack is refused at ingestion (claim 3 inputs).
+// ack is refused at ingestion (PCAS-claim-3 inputs).
 func TestAck_SignatureRequiredAndCountable(t *testing.T) {
 	svc := &fakeService{}
 	a := newAPI(t, svc)

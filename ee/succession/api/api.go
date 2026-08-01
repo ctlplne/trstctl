@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package api is the external PCAS surface (claims 6, 9): request a succession
+// Package api is the external PCAS surface (PCAS-claims 6, 9): request a succession
 // (idempotent, AN-5), fetch an identity's succession chain (a response a relying
 // party verifies offline with PCAS-07), and record a signed relying-party
 // capability acknowledgement (an nhi.rp.ack the PCAS-10 quorum counts). It attaches
 // through the feature-neutral api.Option route seam (the ee/pqcmigration precedent);
 // no PCAS route, handler, or DTO lives in MPL core. Every mutation flows through the
 // shared idempotency path (api.Mutate), so a replayed Idempotency-Key returns the
-// original result (claim 6).
+// original result (PCAS-claim-6).
 package api
 
 import (
@@ -23,7 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/editionseam"
 )
 
-// plannableCredentialTypes is the claim-9 identity/credential genus the API accepts,
+// plannableCredentialTypes is the PCAS-claim-9 identity/credential genus the API accepts,
 // mirroring ee/pqcmigration's plannable genus (X.509, SSH, workload-identity SVID,
 // API token, secret). Kept local so the API surface does not pull the planner's
 // dependency graph into the request path.
@@ -511,7 +511,7 @@ func ackHandler(a *api.API, svc Service) http.HandlerFunc {
 				return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id and relying_party are required")
 			}
 			// The signature is the whole point of an acknowledgement: reject a stripped
-			// ack at ingestion so an unsigned ack can never reach the quorum (claim 3).
+			// ack at ingestion so an unsigned ack can never reach the quorum (PCAS-claim-3).
 			if len(req.Signature) == 0 {
 				return 0, nil, api.ErrStatus(http.StatusBadRequest, "signature is required; an unsigned acknowledgement is not accepted")
 			}

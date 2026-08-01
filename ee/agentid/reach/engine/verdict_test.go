@@ -13,7 +13,8 @@ import (
 )
 
 // verdict_test.go exercises the crypto-only reach verdict/ceiling/verify surface end to end
-// against reachable sets produced by the engine. It lives in the engine_test package (which
+// against reachable sets produced by the engine — the AGID-claim-25 mechanism: compute the
+// reachable set of a requested authority set, produce a signed reachability verdict, verify it. It lives in the engine_test package (which
 // imports both reach and the engine) because the tests resolve a realistic set with the
 // engine, then assert the reach package's Evaluate / NewVerdict / VerifyVerdict /
 // DetermineOrFailClosed behavior over it. The reach package itself stays crypto-only (no
@@ -28,7 +29,7 @@ func prodPolicy() *reach.CeilingPolicy {
 	})
 }
 
-// TestReachability_VerdictBindsWatermarkAndDigest is a CANONICAL test (claim 6 / INV-A5):
+// TestReachability_VerdictBindsWatermarkAndDigest is a CANONICAL test (AGID-claim-6 / INV-A5):
 // the verdict binds the reachable-set digest + ceiling determination + graph watermark, and
 // verification is INVARIANT to graph changes AFTER the watermark (freshness is bounded by
 // the watermark). It produces a signed verdict at wm-1, mutates the underlying graph, and

@@ -6,7 +6,7 @@ import "trstctl.com/trstctl/internal/eventspec"
 
 // DerivedEpoch computes an identity's algorithm-epoch purely from its event
 // history — the count of recorded algorithm-change (succession) events — with no
-// separately stored counter (claim 47 / INV-16). For a valid monotone chain it
+// separately stored counter (PCAS-claim-47 / INV-16). For a valid monotone chain it
 // equals the stored epoch (the highest bound epoch), so monotonicity does not
 // depend on the storage form of the counter. Malformed events are surfaced as
 // errors; unknown/forward events are skipped (same rule as Decode).

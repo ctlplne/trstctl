@@ -546,7 +546,7 @@ func nilIfEmpty(b []byte) []byte {
 // AGID-10 cascade read paths + effect ledger. AGID-02 defined the revocation
 // SCHEMA and the descendant-set read; AGID-10 adds the reads its cascade/executor
 // need (the directive it recorded, the jobs it enqueued) and the durable
-// recorded-effect ledger that makes job execution idempotent (claim 16/21 /
+// recorded-effect ledger that makes job execution idempotent (AGID-claim 16/21 /
 // INV-A8) with signed per-job completion evidence (INV-A9). These are AGID-10
 // writes/reads over the AGID-02 tables plus agent_revocation_effects (910002).
 // ---------------------------------------------------------------------------
@@ -555,7 +555,7 @@ func nilIfEmpty(b []byte) []byte {
 // effect class that was performed, the executor identity, the completion time, and
 // the SIGNED completion-evidence document (evidence body + signature + verifying
 // public key). Exactly one row exists per (directive_id, idempotency_key) once an
-// effect is recorded — the AN-5 idempotency substrate (claim 21). AGID-11's terminal
+// effect is recorded — the AN-5 idempotency substrate (AGID-claim-21). AGID-11's terminal
 // gate reads these as the per-job proof set (INV-A9).
 type RevocationEffect struct {
 	DirectiveID    string
@@ -637,7 +637,7 @@ func (r *Repo) FetchRevocationJobs(ctx context.Context, tenantID, directiveID st
 // RecordEffectIfAbsentTx records a job's effect + signed completion evidence on the
 // caller's ALREADY-OPEN, RLS-scoped transaction, ONLY IF no effect for the same
 // (directive_id, idempotency_key) already exists, and reports whether it inserted.
-// This is the at-most-one-recorded-effect-per-key primitive (claim 21): a worker
+// This is the at-most-one-recorded-effect-per-key primitive (AGID-claim-21): a worker
 // retrying a job at-least-once re-runs this, but the conditional insert collapses a
 // redelivery whose effect already landed to a no-op (recorded=false), so the net
 // effect is exactly-once. It also stamps the job's completion_ref so the AGID-11
@@ -721,15 +721,15 @@ func (r *Repo) CountEffects(ctx context.Context, tenantID, directiveID string) (
 // AGID-02 defined the revocation SCHEMA and AGID-10 the effect ledger; AGID-11 adds
 // (1) the idempotent terminal flip (marks the directive revoked-with-evidence and
 // stamps terminal_at when every job is evidenced — INV-A9), (2) the incomplete-jobs
-// projection query (jobs with no recorded effect — claim 22), and (3) the tiny reads
+// projection query (jobs with no recorded effect — AGID-claim-22), and (3) the tiny reads
 // the CONTROL-PLANE directive-backed revocation reader consults so the in-signer gate
 // refuses issuance/renewal whose chain includes a subject under an active directive
-// (claim 20). The reader lives in ee/agentid/revoke (NOT the signer-linked delegation
+// (AGID-claim-20). The reader lives in ee/agentid/revoke (NOT the signer-linked delegation
 // package), so the signer closure links no SQL; it calls these reads over the AGID-02
 // tables. All queries constrain tenant_id fail-closed (AN-1).
 // ---------------------------------------------------------------------------
 
-// DirectiveTiming carries the two timestamps the interval monitor (claim 23) needs:
+// DirectiveTiming carries the two timestamps the interval monitor (AGID-claim-23) needs:
 // CreatedAt is when the directive row was recorded (the transition start reference),
 // and TerminalAt is when the terminal revoked-with-evidence state was reached (0/NULL
 // until it is). Both are Unix seconds. Terminal reports whether the directive has
@@ -795,7 +795,7 @@ func (r *Repo) FetchDirectiveTiming(ctx context.Context, tenantID, directiveID s
 
 // IncompleteJobs returns the jobs enqueued under directiveID for which NO signed
 // completion effect has been recorded yet — the "did the kill finish?" projection
-// query (claim 22). A job is incomplete iff it has no row in agent_revocation_effects
+// query (AGID-claim-22). A job is incomplete iff it has no row in agent_revocation_effects
 // for its (directive_id, idempotency_key). Ordered by idempotency key for
 // determinism, scoped to tenantID by RLS. An empty result means every job is
 // evidenced (the cascade is complete and eligible for the terminal transition).
@@ -843,7 +843,7 @@ func (r *Repo) IncompleteJobs(ctx context.Context, tenantID, directiveID string)
 // (active) revocation directive exists, scoped to tenantID by RLS. It is the single
 // read the CONTROL-PLANE directive-backed revocation reader (ee/agentid/revoke
 // refuse_active.go) consults per hop so the in-signer gate refuses issuance/renewal
-// whose chain includes such a subject while the directive is active (claim 20).
+// whose chain includes such a subject while the directive is active (AGID-claim-20).
 //
 // A directive is "active" while it has NOT reached the terminal revoked-with-evidence
 // state (terminal = false): the cascade over already-issued credentials + future

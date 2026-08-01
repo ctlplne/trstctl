@@ -27,7 +27,7 @@ func foreignChain(t *testing.T, be crypto.KeyGenerator) succession.SampleChain {
 
 // TestFederation_RecordByRecordVerify: a valid foreign chain imports (bridge
 // produced) only after every record verifies; a tampered mid-chain record
-// quarantines (claim 34).
+// quarantines (PCAS-claim-34).
 func TestFederation_RecordByRecordVerify(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	localAuth, _ := be.GenerateKey(crypto.ECDSAP256)
@@ -58,7 +58,7 @@ func TestFederation_RecordByRecordVerify(t *testing.T) {
 }
 
 // TestFederation_MonotoneMapping: the bridge epoch mapping is monotone, and a
-// reordered/downgraded foreign chain cannot import (claim 34 / INV-14).
+// reordered/downgraded foreign chain cannot import (PCAS-claim-34 / INV-14).
 func TestFederation_MonotoneMapping(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	localAuth, _ := be.GenerateKey(crypto.ECDSAP256)
@@ -78,7 +78,7 @@ func TestFederation_MonotoneMapping(t *testing.T) {
 }
 
 // TestFederation_NoAuthoritativeImport: only a bridge record is produced; the
-// foreign records are not returned for local authoritative storage (claim 34).
+// foreign records are not returned for local authoritative storage (PCAS-claim-34).
 func TestFederation_NoAuthoritativeImport(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	localAuth, _ := be.GenerateKey(crypto.ECDSAP256)
@@ -98,7 +98,7 @@ func TestFederation_NoAuthoritativeImport(t *testing.T) {
 }
 
 // TestFederation_MutualDualSignedBridge: the mutual bridge requires both
-// authorities' signatures over the common commitment (claim 43).
+// authorities' signatures over the common commitment (PCAS-claim-43).
 func TestFederation_MutualDualSignedBridge(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	localAuth, _ := be.GenerateKey(crypto.ECDSAP256)
@@ -124,7 +124,7 @@ func TestFederation_MutualDualSignedBridge(t *testing.T) {
 }
 
 // TestFederation_QuarantineOnFailedImport: a failed import emits a signed
-// verification-failure event (claim 44).
+// verification-failure event (PCAS-claim-44).
 func TestFederation_QuarantineOnFailedImport(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	localAuth, _ := be.GenerateKey(crypto.ECDSAP256)
@@ -143,7 +143,7 @@ func TestFederation_QuarantineOnFailedImport(t *testing.T) {
 }
 
 // TestFederation_LocalStateUnmodified: a failed import produces no bridge, so no
-// local trust state is added (claim 44). Import is side-effect-free.
+// local trust state is added (PCAS-claim-44). Import is side-effect-free.
 func TestFederation_LocalStateUnmodified(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	localAuth, _ := be.GenerateKey(crypto.ECDSAP256)

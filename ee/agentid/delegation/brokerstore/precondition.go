@@ -33,21 +33,21 @@ import (
 // driver and no message bus (TestSignerDependencyClosure).
 //
 // The ordering it enforces on a chain-bound request, ALL before the broker's mint:
-//   1. Policy gate (S10.1 / claim 14): evaluate agent id + requested authority +
+//   1. Policy gate (S10.1 / AGID-claim-14): evaluate agent id + requested authority +
 //      attestation method. A DENY performs NO key op and emits an audit event carrying
 //      the denial reason.
-//   2. In-signer verification (AGID-04, claim 1 / INV-A1): re-invoke the AGID-04 Gate's
+//   2. In-signer verification (AGID-04, AGID-claim-1 / INV-A1): re-invoke the AGID-04 Gate's
 //      VerifyIssuancePreconditions over the resolved chain + attestation. A non-approving
 //      decision refuses (no key op). This guarantees the broker never issues a chain-bound
 //      credential the signer did not verify.
-//   3. Sub-hour TTL ceiling (claims 7/26 / INV-A7): derive the credential lifetime as the
+//   3. Sub-hour TTL ceiling (AGID-claims 7/26 / INV-A7): derive the credential lifetime as the
 //      minimum validity along the chain, clamped strictly sub-hour. An over-long request
 //      is refused; validity is determinable from the credential alone (no revocation
 //      status is queried).
-//   4. Attestation binding + replay refusal (claim 9 / INV-A6): record the verified
+//   4. Attestation binding + replay refusal (AGID-claim-9 / INV-A6): record the verified
 //      attestation bound to the issuance it justifies; a second issuance presenting the
 //      same attestation evidence is refused (the durable unique index rejects it).
-//   5. Idempotency (claim 15 / AN-5): the whole record step runs under the idempotency
+//   5. Idempotency (AGID-claim-15 / AN-5): the whole record step runs under the idempotency
 //      key, so N identical requests yield exactly one issuance event.
 //
 // This precondition holds NO issuance key and mints nothing itself. The AGID-04 gate it
@@ -63,11 +63,11 @@ import (
 var (
 	// ErrPolicyDenied is returned when the S10.1 policy gate denies the chain-bound
 	// issuance. The audit event carrying the denial reason has already been emitted
-	// (claim 14). No key op is performed.
+	// (AGID-claim-14). No key op is performed.
 	ErrPolicyDenied = errors.New("brokerstore: chain-bound issuance denied by policy")
 	// ErrSignerRefused is returned when the AGID-04 in-signer gate refuses the chain +
 	// attestation (INV-A1). No key op is performed. The "mints only on verified
-	// attestation" refusal (claim 26 / INV-A6) surfaces as ErrSignerRefused too: the
+	// attestation" refusal (AGID-claim-26 / INV-A6) surfaces as ErrSignerRefused too: the
 	// AGID-04 gate refuses when a required attestation is absent or invalid, before any
 	// key op.
 	ErrSignerRefused = errors.New("brokerstore: in-signer verification refused the chain-bound issuance")
@@ -86,7 +86,7 @@ var (
 )
 
 // PolicyEvaluator is the narrow S10.1 policy decision seam the precondition consults
-// (claim 14). policy.Engine (via broker.PolicyGate) satisfies it. It is an interface so
+// (AGID-claim-14). policy.Engine (via broker.PolicyGate) satisfies it. It is an interface so
 // the precondition is testable with a fake and does not force the policy engine into the
 // test closure.
 type PolicyEvaluator interface {
@@ -109,16 +109,16 @@ type ChainBoundRequest struct {
 	// delegator public key DER + signed Record.
 	Chain []delegation.RecordEnvelope
 	// DesignatedClass names the authority class the chain head is designated as, keying
-	// the min-attestation-class policy (claim 10).
+	// the min-attestation-class policy (AGID-claim-10).
 	DesignatedClass string
 	// Attestation is the opaque attestation-evidence body (type + payload) presented with
 	// the request. Required when a designated class demands a minimum attestation class or
-	// in the attestation-gated fallback (claim 26).
+	// in the attestation-gated fallback (AGID-claim-26).
 	Attestation []byte
 	// AttestationMethod names the method that produced Attestation.
 	AttestationMethod string
 	// SubjectRepr is the agent-stack representation to bind (AGID-03). Optional in the
-	// chain-only fallback (claim 31).
+	// chain-only fallback (AGID-claim-31).
 	SubjectRepr []byte
 	// Envelope carries the encoded task envelope a chain head references (AGID-05).
 	Envelope []byte
@@ -129,7 +129,7 @@ type ChainBoundRequest struct {
 	TrustAnchorRef string
 	// RequestedTTL is the caller-requested credential lifetime. Zero (or negative) means
 	// "no explicit request": the precondition derives the lifetime from the chain,
-	// clamped sub-hour (claim 7 / INV-A7). A positive value exceeding the chain ceiling
+	// clamped sub-hour (AGID-claim-7 / INV-A7). A positive value exceeding the chain ceiling
 	// is refused.
 	RequestedTTL time.Duration
 	// PolicyAttrs are extra attributes merged into the policy input (beyond agent id,
@@ -174,22 +174,22 @@ type Config struct {
 	// and the credential is minted there, with only public material returned). Both satisfy
 	// signing.IssuanceGate; the precondition neither knows nor cares which it holds.
 	Gate signing.IssuanceGate
-	// Policy is the S10.1 decision gate (claim 14). Nil ⇒ every chain-bound request is
+	// Policy is the S10.1 decision gate (AGID-claim-14). Nil ⇒ every chain-bound request is
 	// refused (ErrNoPolicyGate), fail-closed.
 	Policy PolicyEvaluator
 	// Resolver resolves the edition-private chain-bound context for a view. Nil ⇒ every
 	// chain-bound request is refused (ErrNoRequestContext), fail-closed.
 	Resolver RequestResolver
 	// Recorder persists the attestation binding + issuance + AN-6 outbox intent and
-	// refuses replays (claim 9 / INV-A6). Nil ⇒ persistence is refused
+	// refuses replays (AGID-claim-9 / INV-A6). Nil ⇒ persistence is refused
 	// (delegation.ErrNoBindingStore), fail-closed: the chain-bound path never mints
 	// without a durable replay defense. The production *Recorder satisfies it.
 	Recorder delegation.IssuanceBindingRecorder
 	// Idem is the AN-5 idempotencer guarding the record step so N identical requests
-	// yield exactly one issuance event (claim 15). Nil ⇒ an in-memory idempotencer is
+	// yield exactly one issuance event (AGID-claim-15). Nil ⇒ an in-memory idempotencer is
 	// used (single-node/test); production supplies the PostgreSQL-backed one.
 	Idem Idempotencer
-	// Audit is the AN-2 sink the policy-denial reason is emitted to (claim 14). Nil ⇒
+	// Audit is the AN-2 sink the policy-denial reason is emitted to (AGID-claim-14). Nil ⇒
 	// no-op.
 	Audit auditsink.Auditor
 	// Clock supplies the current time for the TTL-ceiling derivation. Nil ⇒ time.Now.
@@ -236,7 +236,7 @@ func (m *memoryIdempotencer) Do(ctx context.Context, tenantID, key string, fn fu
 	return res, nil
 }
 
-// BrokerPrecondition is the real chain-bound issuance precondition (claims 7/8/9/14/15/26).
+// BrokerPrecondition is the real chain-bound issuance precondition (AGID-claims 7/8/9/14/15/26).
 // It satisfies broker.IssuancePrecondition. Construct it with NewBrokerPrecondition.
 type BrokerPrecondition struct {
 	cfg Config
@@ -315,7 +315,7 @@ func (p *BrokerPrecondition) CheckIssuancePreconditionResult(ctx context.Context
 
 // evaluate is the shared gauntlet for both issuance and renewal (CheckRenewalPrecondition
 // calls it with renewal=true, which is identical here in effect — a renewal re-invokes the
-// SAME policy + in-signer verification before any key op, claim 8 — the flag exists only to
+// SAME policy + in-signer verification before any key op, AGID-claim-8 — the flag exists only to
 // tag the audit trail and to document that no step is skipped on renewal).
 func (p *BrokerPrecondition) evaluate(ctx context.Context, view broker.IssuanceView, renewal bool) (evaluationResult, error) {
 	// Resolve the edition-private chain-bound context. Fail closed if none staged.
@@ -330,14 +330,14 @@ func (p *BrokerPrecondition) evaluate(ctx context.Context, view broker.IssuanceV
 		return evaluationResult{}, ErrNoRequestContext
 	}
 
-	// (1) Policy gate (claim 14): a DENY performs NO key op and emits an audit event with
+	// (1) Policy gate (AGID-claim-14): a DENY performs NO key op and emits an audit event with
 	// the denial reason. This runs FIRST so a denied request never reaches the signer or a
 	// key op.
 	if err := p.checkPolicy(ctx, view, req); err != nil {
 		return evaluationResult{}, err
 	}
 
-	// (2) Sub-hour TTL ceiling (claims 7/26 / INV-A7): derive the exact validity window
+	// (2) Sub-hour TTL ceiling (AGID-claims 7/26 / INV-A7): derive the exact validity window
 	// before the signer RPC so the in-signer key op certifies only this bounded lifetime.
 	// No revocation status is queried — validity is determinable from the credential alone.
 	now := p.cfg.Clock()
@@ -346,17 +346,17 @@ func (p *BrokerPrecondition) evaluate(ctx context.Context, view broker.IssuanceV
 		return evaluationResult{}, err
 	}
 
-	// (3) In-signer verification + signer-held key op (AGID-04, claim 1 / INV-A1):
+	// (3) In-signer verification + signer-held key op (AGID-04, AGID-claim-1 / INV-A1):
 	// re-invoke the AGID-04 gate over the resolved chain + attestation, carrying the exact
 	// sub-hour validity bounds. A non-approving decision refuses. On a renewal this is the
-	// SAME full verification (claim 8) — nothing is trusted from a prior issuance.
+	// SAME full verification (AGID-claim-8) — nothing is trusted from a prior issuance.
 	decision, err := p.verifyInSigner(ctx, view.TenantID, req, now.Unix(), now.Add(ttl).Unix())
 	if err != nil {
 		return evaluationResult{}, err
 	}
 
-	// (4)+(5) Attestation binding + replay refusal (claim 9 / INV-A6) under the
-	// idempotency key (claim 15 / AN-5): record the verified attestation bound to the
+	// (4)+(5) Attestation binding + replay refusal (AGID-claim-9 / INV-A6) under the
+	// idempotency key (AGID-claim-15 / AN-5): record the verified attestation bound to the
 	// issuance it justifies; a replay is refused; a retried request collapses to one
 	// issuance event.
 	binding, err := p.recordBinding(ctx, view, req, decision, renewal, now, ttl)
@@ -377,7 +377,7 @@ type evaluationResult struct {
 }
 
 // checkPolicy evaluates the S10.1 policy gate and, on a deny, emits the AN-2 audit event
-// carrying the denial reason (claim 14) and returns ErrPolicyDenied. It runs before any
+// carrying the denial reason (AGID-claim-14) and returns ErrPolicyDenied. It runs before any
 // signer consult or key op, so a policy-denied request performs no key op.
 func (p *BrokerPrecondition) checkPolicy(ctx context.Context, view broker.IssuanceView, req ChainBoundRequest) error {
 	if p.cfg.Policy == nil {
@@ -404,7 +404,7 @@ func (p *BrokerPrecondition) checkPolicy(ctx context.Context, view broker.Issuan
 		return fmt.Errorf("brokerstore: policy evaluation failed: %w", err)
 	}
 	if !dec.Allow {
-		// Emit the denial reason (claim 14). Emit (not a bare _ = Audit) so a failed
+		// Emit the denial reason (AGID-claim-14). Emit (not a bare _ = Audit) so a failed
 		// audit write surfaces rather than silently dropping the record.
 		_ = auditsink.Emit(ctx, p.cfg.Audit, nil, "agent.identity.refused", view.TenantID,
 			[]byte(fmt.Sprintf(`{"agent_id":%q,"reason":%q,"chain_bound":true}`, view.AgentID, dec.Reason)))
@@ -455,7 +455,7 @@ func (p *BrokerPrecondition) verifyInSigner(ctx context.Context, tenantID string
 
 // recordBinding records the verified attestation bound to the issuance it justifies and
 // enqueues the AN-6 outbox intent, under the idempotency key so N identical requests yield
-// exactly one issuance event (claims 9/15 / INV-A6 / AN-5). A replay (same attestation,
+// exactly one issuance event (AGID-claims 9/15 / INV-A6 / AN-5). A replay (same attestation,
 // different key) is refused by the durable unique index (delegation.ErrAttestationReplay).
 // The credential id is derived from the approved binding material so the binding row keys
 // to the credential the broker will mint.
@@ -488,7 +488,7 @@ func (p *BrokerPrecondition) recordBinding(ctx context.Context, view broker.Issu
 		Chain:              append([]delegation.RecordEnvelope(nil), req.Chain...),
 	}
 	// Under the idempotency key: a retried request replays the recorded result without
-	// re-inserting, so exactly one issuance event exists per key (claim 15 / AN-5). The
+	// re-inserting, so exactly one issuance event exists per key (AGID-claim-15 / AN-5). The
 	// recorder itself is transactional (issuance + binding + outbox in one tx); the
 	// idempotencer collapses retries in front of it.
 	_, err = p.cfg.Idem.Do(ctx, view.TenantID, view.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
@@ -507,7 +507,7 @@ func (p *BrokerPrecondition) recordBinding(ctx context.Context, view broker.Issu
 // agent, and chain digest, so the binding keys to a deterministic id the broker's mint
 // can be reconciled against. A renewal derives a DISTINCT id (it is a fresh credential),
 // but the same attestation evidence still cannot justify it (the evidence-digest unique
-// index rejects a reused attestation, claim 9).
+// index rejects a reused attestation, AGID-claim-9).
 func credentialIDFor(view broker.IssuanceView, chainDigest []byte, renewal bool) string {
 	kind := "cred"
 	if renewal {

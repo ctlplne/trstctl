@@ -11,7 +11,7 @@ import (
 )
 
 // SpentStore records consumed single-use token nonces so a replayed token is refused
-// (claim 5). Consume atomically records a nonce and reports whether it was ALREADY
+// (PCAS-claim-5). Consume atomically records a nonce and reports whether it was ALREADY
 // spent. A durable implementation makes single-use survive a signer restart (INT-06).
 type SpentStore interface {
 	Consume(nonce string) (alreadySpent bool, err error)
@@ -38,7 +38,7 @@ func (s *memSpentStore) Consume(nonce string) (bool, error) {
 
 // DurableSpentStore is a file-backed SpentStore in the signer custody dir: each
 // consumed nonce is appended (fsync'd) to a file and reloaded on construction, so
-// single-use survives a signer restart (INT-06, claim 5). Nonces are newline-free
+// single-use survives a signer restart (INT-06, PCAS-claim-5). Nonces are newline-free
 // random strings.
 type DurableSpentStore struct {
 	mu   sync.Mutex

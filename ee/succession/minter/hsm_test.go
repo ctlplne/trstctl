@@ -28,7 +28,7 @@ func hsmMinter(t *testing.T) (*minter.Minter, *minter.SoftHSM) {
 
 // TestHSM_CustodyBoundaryNoRelease: private key material is never released from the
 // custody boundary — an export attempt fails closed, and a mint over the HSM backend
-// still yields a verifiable record carrying only public material (claim 26 / INV-1).
+// still yields a verifiable record carrying only public material (PCAS-claim-26 / INV-1).
 func TestHSM_CustodyBoundaryNoRelease(t *testing.T) {
 	hsm := minter.NewSoftHSM(crypto.NewSoftwareBackend())
 	s, err := hsm.GenerateKey(crypto.ECDSAP384)
@@ -67,7 +67,7 @@ func TestHSM_CustodyBoundaryNoRelease(t *testing.T) {
 
 // TestHSM_HighWaterWithinBoundary: the epoch floor lives within the module — a fresh
 // signer process (control-plane reset/rollback) loads the authoritative floor from
-// the module and refuses a mint below it (claim 26 / INV-3).
+// the module and refuses a mint below it (PCAS-claim-26 / INV-3).
 func TestHSM_HighWaterWithinBoundary(t *testing.T) {
 	m1, hsm := hsmMinter(t)
 

@@ -10,7 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// hsm.go is the custody-boundary embodiment of the claim-12 signer (claim 26): the
+// hsm.go is the custody-boundary embodiment of the PCAS-claim-12 signer (PCAS-claim-26): the
 // isolated process comprises a hardware security module holding the key material PLUS
 // an enforcement component mediating all use of the module. Together they form a
 // custody boundary from which private key material is not released, and the
@@ -26,7 +26,7 @@ import (
 // state loss or rollback cannot regress it (INV-1, INV-3).
 
 // ErrKeyMaterialNotReleasable is returned by any attempt to export private key
-// material from the custody boundary — the material is not releasable (claim 26 /
+// material from the custody boundary — the material is not releasable (PCAS-claim-26 /
 // INV-1).
 var ErrKeyMaterialNotReleasable = errors.New("minter: private key material is not releasable from the custody boundary")
 
@@ -88,13 +88,13 @@ func (h *SoftHSM) Resolve(handle string) (crypto.Signer, error) {
 
 // TryExport models an attempt to extract private key bytes for handle. It always
 // fails closed: no API, error, or debug path releases key material from the boundary
-// (claim 26 / INV-1).
+// (PCAS-claim-26 / INV-1).
 func (h *SoftHSM) TryExport(handle string) ([]byte, error) {
 	return nil, ErrKeyMaterialNotReleasable
 }
 
 // FloorStore returns the module-resident epoch-floor store: the floor lives inside
-// the custody boundary, not in control-plane storage (claim 26 / INV-3).
+// the custody boundary, not in control-plane storage (PCAS-claim-26 / INV-3).
 func (h *SoftHSM) FloorStore() FloorStore { return &hsmFloor{hsm: h} }
 
 // hsmFloor is a FloorStore whose state is the module-resident, monotonic epoch floor.

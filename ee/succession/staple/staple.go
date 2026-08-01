@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package staple carries a succession proof inline in an authentication handshake
-// or credential (claims 31, 32): a presenter attaches at least one succession
+// or credential (PCAS-claims 31, 32): a presenter attaches at least one succession
 // record OR a signed epoch checkpoint, and the relying party verifies the
 // identity's current algorithm inline — verifying the signatures and confirming
 // the epoch against a last-accepted value — without out-of-band resolution or
@@ -35,7 +35,7 @@ var (
 )
 
 // Attachment is the inline succession proof: EITHER a chain of records OR a signed
-// epoch checkpoint (claim 31). Exactly one limb is populated.
+// epoch checkpoint (PCAS-claim-31). Exactly one limb is populated.
 type Attachment struct {
 	Records    []succession.SuccessionRecord     `json:"records,omitempty"`
 	Checkpoint *succession.SignedEpochCheckpoint `json:"checkpoint,omitempty"`
@@ -73,8 +73,8 @@ type Policy struct {
 }
 
 // VerifyStapled verifies an attachment inline and returns the current posture. A
-// nil attachment fails when the policy requires one (claim 32: absence-as-failure).
-// It negotiates no algorithm and resolves nothing out of band (claim 31).
+// nil attachment fails when the policy requires one (PCAS-claim-32: absence-as-failure).
+// It negotiates no algorithm and resolves nothing out of band (PCAS-claim-31).
 func VerifyStapled(att *Attachment, p Policy) (Result, error) {
 	if att == nil {
 		if p.RequireAttachment {
@@ -121,7 +121,7 @@ func VerifyStapled(att *Attachment, p Policy) (Result, error) {
 	}
 }
 
-// --- carriage (claim 32) ---------------------------------------------------
+// --- carriage (PCAS-claim-32) ---------------------------------------------------
 
 // TLSExtension models a TLS handshake extension carrying the attachment.
 type TLSExtension struct {

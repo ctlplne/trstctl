@@ -39,7 +39,7 @@ type TrustRoot struct {
 }
 
 // LocalPolicy is the relying party's approved-configuration policy the bound
-// credential is checked against (claim 28 / claim 29). It is entirely local and
+// credential is checked against (AGID-claim-28 / AGID-claim-29). It is entirely local and
 // static; the verifier consults nothing else.
 type LocalPolicy struct {
 	// ApprovedAgentStackDigests is the set of agent-stack representation digests
@@ -55,7 +55,7 @@ type LocalPolicy struct {
 	ApprovedAgentStackDigests map[string]struct{}
 
 	// ApprovedToolManifest is the relying party's copy of the tool manifest whose
-	// digest is bound in the agent-stack representation (claim 29). The verifier
+	// digest is bound in the agent-stack representation (AGID-claim-29). The verifier
 	// recomputes its digest and requires it to equal the bound tool-manifest digest;
 	// then a requested action's tool must be a member of this manifest. When empty,
 	// tool-manifest enforcement still runs: the bound representation's tool-manifest
@@ -98,13 +98,13 @@ type LocalPolicy struct {
 type Action struct {
 	// Operation is the operation identifier the action performs (e.g.
 	// "read-object", "invoke-payment"). It is checked against the bound authority's
-	// permitted operations (claim 28) and, when a task envelope is bound, against the
+	// permitted operations (AGID-claim-28) and, when a task envelope is bound, against the
 	// task scope. Compared after normalization (trim + lowercase). An empty operation
 	// is refused fail-closed (an action must name what it does).
 	Operation string
 
 	// Tool is the tool identifier the action would use. It must be a member of the
-	// bound tool manifest (claim 29); a tool absent from the manifest refuses the
+	// bound tool manifest (AGID-claim-29); a tool absent from the manifest refuses the
 	// action (ErrToolAbsentFromManifest). Compared after normalization (trim +
 	// lowercase). Empty means the action uses no tool -- the tool-manifest membership
 	// check is then skipped for this action (the authority and task-scope checks
@@ -121,7 +121,7 @@ type Action struct {
 	TaskInputDigest []byte
 }
 
-// Clock supplies the current time for the short-TTL validity check (claim 7). It
+// Clock supplies the current time for the short-TTL validity check (AGID-claim-7). It
 // is an interface (not time.Now) so the offline validity decision is testable and
 // so the verify path never reaches for a wall clock through any network-adjacent
 // facility. A nil Clock passed to Verify defaults to the system clock.

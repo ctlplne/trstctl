@@ -12,7 +12,7 @@ import (
 )
 
 // TestINT06_DurableDualControlSingleUseSurvivesRestart proves single-use survives a
-// signer restart (claim 5): a durable dual-control authorizer consumes a token; a
+// signer restart (PCAS-claim-5): a durable dual-control authorizer consumes a token; a
 // FRESH authorizer over the same custody dir refuses the replay. With the in-memory
 // store the fresh authorizer would accept it — a single-use bypass.
 func TestINT06_DurableDualControlSingleUseSurvivesRestart(t *testing.T) {

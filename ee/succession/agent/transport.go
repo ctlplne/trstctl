@@ -18,7 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// transport.go carries the workload-agent co-sign RPC (claim 19, INT-16): the
+// transport.go carries the workload-agent co-sign RPC (PCAS-claim-19, INT-16): the
 // platform signer/orchestrator asks the agent, over a real gRPC transport, to co-sign
 // a succession commitment with the predecessor key the agent holds. The wire carries
 // the STRUCTURED commitment fields (MarshalFields) — never an opaque digest — so the

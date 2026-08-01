@@ -25,7 +25,7 @@ func (s *memEpochStore) SetLastAccepted(id string, epoch uint64) error {
 
 // TestRPVerify_RejectsLowerIssuerEpoch: the RP rejects a leaf whose carried issuer
 // epoch is below the last-accepted issuer epoch for that authority, and advances the
-// store on a current-or-newer epoch; tallies are per authority (claim 27).
+// store on a current-or-newer epoch; tallies are per authority (PCAS-claim-27).
 func TestRPVerify_RejectsLowerIssuerEpoch(t *testing.T) {
 	store := newMemEpochStore()
 	const authority = "spiffe://d/ca"

@@ -89,7 +89,7 @@ func rec(identity string, epoch uint64) pcasstore.Record {
 }
 
 // TestRLS_CrossTenantDenied: a record written under one tenant is invisible to
-// another; row-level security denies cross-tenant reads (claim 7 / INV-5 RLS).
+// another; row-level security denies cross-tenant reads (PCAS-claim-7 / INV-5 RLS).
 func TestRLS_CrossTenantDenied(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()

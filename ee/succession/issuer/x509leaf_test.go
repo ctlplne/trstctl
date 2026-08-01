@@ -39,7 +39,7 @@ func leafCSR(t *testing.T) []byte {
 // TestINT14_RealLeafCarriesIssuerEpochExtension issues REAL end-entity certificates
 // under an issuer-succession posture and proves the (issuer-epoch, rotation) tuple is
 // carried as an X.509 extension a relying party parses and enforces: a leaf from a
-// superseded issuer epoch is rejected (claim 27).
+// superseded issuer epoch is rejected (PCAS-claim-27).
 func TestINT14_RealLeafCarriesIssuerEpochExtension(t *testing.T) {
 	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {

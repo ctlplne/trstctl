@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package rpverify is the proprietary relying-party verifier for PCAS succession
-// chains (independent claim 13). It verifies a chain OFFLINE: no algorithm
+// chains (independent PCAS-claim-13). It verifies a chain OFFLINE: no algorithm
 // negotiation, no runtime cryptographic-provider load, and no network fetch — the
 // caller supplies the chain. Verification primitives come from ee/succession
 // (PCAS-04) and ee/translog (PCAS-06); all hashing and signature verification
@@ -34,7 +34,7 @@ var (
 )
 
 // EpochStore is the caller-supplied durable last-accepted-epoch state per identity
-// (claim 13). The verifier reads it before accepting a chain and advances it on
+// (PCAS-claim-13). The verifier reads it before accepting a chain and advances it on
 // success, so a stale or downgraded chain is refused even across a verifier
 // restart. A nil store disables the discipline (single-shot verification).
 type EpochStore interface {
@@ -61,7 +61,7 @@ type Options struct {
 
 	// BreakGlassAuthorityDER is the break-glass authority's public key. When a
 	// record is a strength-downgrade (weaker successor class), the RP mirrors the
-	// signer's refusal (claim 17 / INV-8): it accepts the record only if it carries
+	// signer's refusal (PCAS-claim-17 / INV-8): it accepts the record only if it carries
 	// a valid, request-bound break-glass token this key signed. Empty => any
 	// weaker-class succession is rejected (fail-closed).
 	BreakGlassAuthorityDER []byte
@@ -85,7 +85,7 @@ type Result struct {
 }
 
 // classical registry algorithms (pre-quantum). Used only to decide which records
-// require a pre-CRQC log timestamp (claim 18).
+// require a pre-CRQC log timestamp (PCAS-claim-18).
 var classical = map[crypto.Algorithm]bool{
 	crypto.RSA2048: true, crypto.RSA3072: true, crypto.RSA4096: true,
 	crypto.ECDSAP256: true, crypto.ECDSAP384: true, crypto.ECDSAP521: true, crypto.Ed25519: true,
@@ -93,7 +93,7 @@ var classical = map[crypto.Algorithm]bool{
 
 // Verify verifies the chain offline and, on success, advances the last-accepted
 // epoch for the identity. It performs no algorithm negotiation and loads no
-// runtime provider (claim 13 / INV-6).
+// runtime provider (PCAS-claim-13 / INV-6).
 func Verify(in Input, store EpochStore, opts Options) (Result, error) {
 	if err := succession.VerifyGenesis(in.TrustRootPubDER, in.Genesis); err != nil {
 		return Result{}, err
@@ -127,7 +127,7 @@ func Verify(in Input, store EpochStore, opts Options) (Result, error) {
 		if opts.ExpectedTenant != "" && rec.Fields.TenantID != opts.ExpectedTenant {
 			return Result{}, fmt.Errorf("%w: record %d tenant %q", ErrWrongTenant, i, rec.Fields.TenantID)
 		}
-		// Mirror the signer's strength-downgrade refusal (claim 17 / INV-8): a
+		// Mirror the signer's strength-downgrade refusal (PCAS-claim-17 / INV-8): a
 		// weaker-class succession is accepted only with a valid break-glass token.
 		if succession.IsStrengthDowngrade(rec.Fields.PredecessorAlg, rec.Fields.SuccessorAlg) {
 			if err := verifyBreakGlass(rec, opts.BreakGlassAuthorityDER); err != nil {

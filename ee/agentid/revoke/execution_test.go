@@ -14,7 +14,7 @@ import (
 // executes with at-least-once delivery and AT MOST ONE recorded effect per key.
 // Replaying the same job N times records exactly one effect; a crash-resume mid-cascade
 // (the worker dies after some jobs, another resumes) leaves no duplicate and no lost
-// effect (claims 16/21 / INV-A8).
+// effect (AGID-claims 16/21 / INV-A8).
 func TestRevoke_JobIdempotentAtLeastOnce(t *testing.T) {
 	h := newHarness(t, "revoke_idempotent")
 	ctx := context.Background()
@@ -137,7 +137,7 @@ func TestRevoke_PerJobSignedCompletionEvidence(t *testing.T) {
 // TestRevoke_FollowOnJobAfterWatermark: a descendant whose delegation/issuance record
 // was committed AFTER the directive's determining watermark (a sub-delegation minted
 // moments before the directive, sequenced after it, discovered at replay) generates a
-// FOLLOW-ON job under the SAME directive (§7.2 / claim 16). The original cascade misses
+// FOLLOW-ON job under the SAME directive (§7.2 / AGID-claim-16). The original cascade misses
 // it; the follow-on pass chases it, and the late descendant gets a follow_on job +
 // outbox entry — exactly once.
 func TestRevoke_FollowOnJobAfterWatermark(t *testing.T) {

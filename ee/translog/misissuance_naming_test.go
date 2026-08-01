@@ -49,7 +49,7 @@ func attestedRecord(t *testing.T, identity string, epoch uint64, attest crypto.S
 }
 
 // TestMisissuanceProof_NamesMintingSigner: a misissuance proof over two equivocating
-// records names the minting signer(s) from their attestations (claim 28 / INV-13).
+// records names the minting signer(s) from their attestations (PCAS-claim-28 / INV-13).
 func TestMisissuanceProof_NamesMintingSigner(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	signerA, _ := be.GenerateKey(crypto.ECDSAP256)

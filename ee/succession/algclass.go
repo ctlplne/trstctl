@@ -7,7 +7,7 @@ import "trstctl.com/trstctl/internal/crypto"
 // StrengthClass is a coarse cryptographic-strength class. The signer enforces a
 // partial order over classes — PurePQ >= Hybrid >= Classical — and refuses a
 // forward succession to a strictly weaker class absent a break-glass
-// authorization (claim 17 / INV-8). The order is signer configuration, never
+// authorization (PCAS-claim-17 / INV-8). The order is signer configuration, never
 // request input, so a compromised control plane cannot redefine "weaker".
 type StrengthClass int
 

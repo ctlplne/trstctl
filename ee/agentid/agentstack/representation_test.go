@@ -88,7 +88,7 @@ func TestAgentStack_PromptAndToolManifestDigests(t *testing.T) {
 
 // TestAgentStack_ModelFormIndicatorPresent asserts the model identifier is in
 // exactly one form (weights digest XOR provider id+version) with an explicit
-// indicator that round-trips and cannot be omitted (claim 11 / INV-A3,
+// indicator that round-trips and cannot be omitted (AGID-claim-11 / INV-A3,
 // acceptance #2).
 func TestAgentStack_ModelFormIndicatorPresent(t *testing.T) {
 	prompt := []byte("system prompt")

@@ -2,7 +2,7 @@
 
 // Package orchestrator runs idempotent PCAS succession jobs. A job mints a
 // successor through the signer, then appends the succession record and a
-// transactional-outbox publish intent in the SAME database transaction (claim 6 /
+// transactional-outbox publish intent in the SAME database transaction (PCAS-claim-6 /
 // INV-4), so publication is exactly-once under retries. It reuses the MPL core
 // store, its RLS-scoped transaction, and the core outbox table; it forks none of
 // them (AN-6).
@@ -47,7 +47,7 @@ func New(core *corestore.Store, m Minter) *Orchestrator { return &Orchestrator{c
 
 // RunSuccession mints and records a succession for tenantID under idempotencyKey.
 // A retry with the same key returns the original record without minting again
-// (exactly-once effect, claim 6 / INV-4). On a new key it mints, then appends the
+// (exactly-once effect, PCAS-claim-6 / INV-4). On a new key it mints, then appends the
 // record and the outbox publish intent in one transaction.
 func (o *Orchestrator) RunSuccession(ctx context.Context, tenantID string, req signing.MintRequest, idempotencyKey string) (Result, error) {
 	if idempotencyKey == "" {
@@ -72,7 +72,7 @@ func (o *Orchestrator) RunSuccession(ctx context.Context, tenantID string, req s
 	}
 
 	// Same transaction: append the succession record AND the outbox publish intent
-	// (claim 6 / INV-4). At-least-once delivery by a separate worker, rendered
+	// (PCAS-claim-6 / INV-4). At-least-once delivery by a separate worker, rendered
 	// exactly-once by idempotency, is the AN-6 discipline.
 	err = o.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx,

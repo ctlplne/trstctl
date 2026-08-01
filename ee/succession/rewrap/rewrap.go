@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package rewrap implements claim 15's "re-wrap before retirement" as durable
-// orchestration (claim 39; establishes the re-wrap limb of INV-15). Data protected
+// Package rewrap implements PCAS-claim-15's "re-wrap before retirement" as durable
+// orchestration (PCAS-claim-39; establishes the re-wrap limb of INV-15). Data protected
 // under a predecessor KEM key is re-wrapped under the successor by staged, resumable
 // jobs DERIVED FROM the succession record: bounded stages with per-stage health
 // verification, resumable after a crash (idempotent stages, AN-5), with stage and
@@ -237,7 +237,7 @@ type CompletionReporter interface {
 
 // RetirementGate returns a retirement PreRetire precondition that blocks predecessor
 // retirement until the re-wrap completion events for (identityID, predecessorEpoch)
-// are recorded (claim 39). It is the standing INV-15 guard: whatever the mechanism,
+// are recorded (PCAS-claim-39). It is the standing INV-15 guard: whatever the mechanism,
 // retirement cannot proceed while re-wrap is incomplete.
 func RetirementGate(reporter CompletionReporter, identityID string, predecessorEpoch uint64) func(context.Context) error {
 	return func(context.Context) error {

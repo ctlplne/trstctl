@@ -2,9 +2,9 @@
 
 // Package delegation defines the AGID delegation-chain data model: the
 // authority-set model, its stable canonical normalization, the versioned
-// partial-order comparator that decides "no broader than the parent" (claim 3,
+// partial-order comparator that decides "no broader than the parent" (AGID-claim-3,
 // establishing the comparator half of INV-A2), the effective spend/rate budget
-// derivation as the minimum along a chain (claim 4), the delegation-record
+// derivation as the minimum along a chain (AGID-claim-4), the delegation-record
 // structure with its canonical serialization and delegator signature (§3.1), and
 // the versioned AN-2 event types for the delegation lifecycle.
 //
@@ -288,7 +288,7 @@ func CanonicalDigest(a Authority, reg *ToolRegistry) ([]byte, error) {
 }
 
 // WithinParent reports whether child is no broader than parent under the defined
-// partial order (child ⊑ parent), after canonical normalization with reg (claim 3,
+// partial order (child ⊑ parent), after canonical normalization with reg (AGID-claim-3,
 // INV-A2 comparator half):
 //
 //   - scopes, tools, classes: child's normalized set is a subset of parent's;
@@ -425,7 +425,7 @@ var ErrEmptyChain = errors.New("delegation: empty chain has no effective budget"
 var ErrIncomparableBudget = errors.New("delegation: incomparable budgets in chain (mixed currency or period)")
 
 // EffectiveBudgets returns the effective spend and rate budgets for a delegation
-// chain: the MINIMUM of the respective budgets along the chain (claim 4). The chain
+// chain: the MINIMUM of the respective budgets along the chain (AGID-claim-4). The chain
 // is ordered root-first, but the minimum fold is order-independent. All spend budgets
 // must share a currency and all rate budgets a period; otherwise the minimum is
 // undefined and ErrIncomparableBudget is returned. An empty chain returns

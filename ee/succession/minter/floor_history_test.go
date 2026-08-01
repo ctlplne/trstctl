@@ -15,7 +15,7 @@ import (
 )
 
 // TestFloor_HistoryDeterminationEqualsCounter: the counter-free history floor and
-// a stored counter derive the same floor over the same advance sequence (claim 48
+// a stored counter derive the same floor over the same advance sequence (PCAS-claim-48
 // / INV-16).
 func TestFloor_HistoryDeterminationEqualsCounter(t *testing.T) {
 	hist := minter.NewHistoryFloorStore()
@@ -41,7 +41,7 @@ func TestFloor_HistoryDeterminationEqualsCounter(t *testing.T) {
 
 // TestCounterFree_RefusesSameRollbacks: a minter using the counter-free history
 // floor refuses exactly the requests a stored-counter minter refuses, over a
-// random corpus (claims 48/49 / INV-16). Any divergence is an automatic RED.
+// random corpus (PCAS-claims 48/49 / INV-16). Any divergence is an automatic RED.
 func TestCounterFree_RefusesSameRollbacks(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	mk := func(floor minter.FloorStore) *minter.Minter {
@@ -73,7 +73,7 @@ func TestCounterFree_RefusesSameRollbacks(t *testing.T) {
 }
 
 // TestEpoch_DerivedBoundAndEnforced: minting under the derived (history) floor and
-// the stored counter binds the same epoch in a verifiable record (claim 47).
+// the stored counter binds the same epoch in a verifiable record (PCAS-claim-47).
 func TestEpoch_DerivedBoundAndEnforced(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	predH, _ := be.GenerateKey(crypto.ECDSAP256)
@@ -108,7 +108,7 @@ func TestEpoch_DerivedBoundAndEnforced(t *testing.T) {
 }
 
 // TestCounterAgnostic_MintAndVerify: mint under the counter-free floor, then
-// verify offline; a rollback is refused custody-side (independent claim 49).
+// verify offline; a rollback is refused custody-side (independent PCAS-claim-49).
 func TestCounterAgnostic_MintAndVerify(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	trustRoot, _ := be.GenerateKey(crypto.ECDSAP256)

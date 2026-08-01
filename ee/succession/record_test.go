@@ -18,7 +18,7 @@ func sampleChain(t *testing.T) SampleChain {
 	return sc
 }
 
-// TestVerifyRecord_AcceptsValid: a valid dual-attested record verifies (claim 1),
+// TestVerifyRecord_AcceptsValid: a valid dual-attested record verifies (PCAS-claim-1),
 // and any single-bit tamper in any bound field or either signature is rejected.
 func TestVerifyRecord_AcceptsValid(t *testing.T) {
 	sc := sampleChain(t)
@@ -54,7 +54,7 @@ func TestVerifyRecord_AcceptsValid(t *testing.T) {
 	}
 }
 
-// TestRecord_GenusFields: the record models the claim-25 genus — commitment
+// TestRecord_GenusFields: the record models the PCAS-claim-25 genus — commitment
 // naming stable id + both pubs/algs + epoch, a predecessor attestation, and a
 // successor possession proof.
 func TestRecord_GenusFields(t *testing.T) {
@@ -96,7 +96,7 @@ func TestRecord_PossessionProofVariants(t *testing.T) {
 
 // TestRecord_NeitherAttestationAloneSuffices: a record with only the predecessor
 // attestation, or only the successor possession proof, fails verification
-// (claim 25 — neither limb alone establishes the succession).
+// (PCAS-claim-25 — neither limb alone establishes the succession).
 func TestRecord_NeitherAttestationAloneSuffices(t *testing.T) {
 	rec := sampleChain(t).Records[0]
 
@@ -189,7 +189,7 @@ func mintSigned(t *testing.T, be crypto.KeyGenerator, predEpoch, epoch uint64, p
 
 // TestVerifyChain_RejectsBadEpochs drives the structural epoch/anchor branches of
 // VerifyChain with records whose dual signatures are valid but whose epoch
-// relationships are inconsistent (claim 13 / INV-6 chain discipline).
+// relationships are inconsistent (PCAS-claim-13 / INV-6 chain discipline).
 func TestVerifyChain_RejectsBadEpochs(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	trustRoot, err := be.GenerateKey(crypto.ECDSAP256)

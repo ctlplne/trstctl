@@ -23,7 +23,7 @@ func chain(t *testing.T) succession.SampleChain {
 }
 
 // TestStapling_InlineVerify: a carried record chain verifies inline; a tampered
-// attachment fails (claim 31).
+// attachment fails (PCAS-claim-31).
 func TestStapling_InlineVerify(t *testing.T) {
 	sc := chain(t)
 	att := staple.Attachment{Records: sc.Records}
@@ -47,7 +47,7 @@ func TestStapling_InlineVerify(t *testing.T) {
 }
 
 // TestStapling_CheckpointOrRecordLimb: both a record chain and a signed checkpoint
-// verify inline and yield a current epoch (claim 31).
+// verify inline and yield a current epoch (PCAS-claim-31).
 func TestStapling_CheckpointOrRecordLimb(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	sc, err := succession.BuildSampleChain(be, "spiffe://d", "spiffe://d/id", tenant)
@@ -79,7 +79,7 @@ func TestStapling_CheckpointOrRecordLimb(t *testing.T) {
 }
 
 // TestStapling_TLSExtensionCarriage: the attachment round-trips through a TLS
-// extension and verifies (claim 32).
+// extension and verifies (PCAS-claim-32).
 func TestStapling_TLSExtensionCarriage(t *testing.T) {
 	sc := chain(t)
 	ext, err := staple.Attachment{Records: sc.Records}.ToTLSExtension()
@@ -102,7 +102,7 @@ func TestStapling_TLSExtensionCarriage(t *testing.T) {
 }
 
 // TestStapling_CertExtensionCarriage: the attachment round-trips through an X.509
-// certificate extension and verifies (claim 32).
+// certificate extension and verifies (PCAS-claim-32).
 func TestStapling_CertExtensionCarriage(t *testing.T) {
 	sc := chain(t)
 	ext, err := staple.Attachment{Records: sc.Records}.ToCertExtension()
@@ -125,7 +125,7 @@ func TestStapling_CertExtensionCarriage(t *testing.T) {
 }
 
 // TestStapling_AbsenceIsFailure: when policy requires an attachment, its absence is
-// a verification failure (claim 32).
+// a verification failure (PCAS-claim-32).
 func TestStapling_AbsenceIsFailure(t *testing.T) {
 	if _, err := staple.VerifyStapled(nil, staple.Policy{RequireAttachment: true}); !errors.Is(err, staple.ErrAttachmentRequired) {
 		t.Fatalf("absent required attachment: got %v, want ErrAttachmentRequired", err)

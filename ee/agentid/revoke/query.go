@@ -8,7 +8,7 @@ import (
 	agidstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 )
 
-// query.go exposes the incomplete-jobs projection query (claim 22): "did the kill
+// query.go exposes the incomplete-jobs projection query (AGID-claim-22): "did the kill
 // finish?" as a ledger query. It returns the set of revocation jobs under a directive for
 // which signed completion evidence has NOT been recorded — the jobs that stand between the
 // directive and its terminal revoked-with-evidence state. It is a pure read over the
@@ -25,7 +25,7 @@ type IncompleteJob struct {
 }
 
 // IncompleteJobs returns the jobs enqueued under directiveID that have no recorded signed
-// completion evidence (claim 22), scoped to tenantID by RLS, ordered deterministically by
+// completion evidence (AGID-claim-22), scoped to tenantID by RLS, ordered deterministically by
 // idempotency key. An empty slice means every enqueued and follow-on job is evidenced —
 // the cascade is complete and the directive is eligible for the terminal transition
 // (terminal.go). It reads the AGID-02 projection (jobs LEFT of the effect ledger), so a

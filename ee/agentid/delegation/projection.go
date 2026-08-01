@@ -11,7 +11,7 @@ import (
 
 // This file holds the delegation-tree read projections folded from the AN-2
 // delegation-lifecycle events (events.go): the "descendant credential set for a
-// subject" together with the determining WATERMARK (§7.1, claim 16 / INV-A8). The
+// subject" together with the determining WATERMARK (§7.1, AGID-claim-16 / INV-A8). The
 // projection is the source of truth AGID-10 reads to determine the cascade. It is a
 // PURE FUNCTION of the event prefix up to the watermark: DescendantSetOf(seq,
 // subject, wm) depends only on the events with sequence <= wm, and is deterministic
@@ -129,7 +129,7 @@ func withinWatermark(seq, watermark uint64) bool {
 }
 
 // DescendantSet is the descendant-credential set for a subject as of a watermark
-// (claim 16 / INV-A8): every issued credential whose delegation chain includes the
+// (AGID-claim-16 / INV-A8): every issued credential whose delegation chain includes the
 // subject (as delegator or delegate on any record of the chain), determined over the
 // event prefix with sequence <= watermark. Credentials is SORTED and de-duplicated
 // so the set is a deterministic value. Watermark is the determining watermark of the

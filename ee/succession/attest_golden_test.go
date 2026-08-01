@@ -10,7 +10,7 @@ import (
 )
 
 // TestINT11_AttestMessageGolden freezes the signer-attestation message encoding
-// (INT-11). The signer attestation is the attribution binding (claim 28) and, for v1
+// (INT-11). The signer attestation is the attribution binding (PCAS-claim-28) and, for v1
 // records, the tamper-evidence for RecordType / authz / attestation evidence. Pinning
 // its canonical bytes means an accidental format change is caught before it silently
 // breaks external verifiers that reproduce the message. The attestation is
@@ -35,7 +35,7 @@ func TestINT11_AttestMessageGolden(t *testing.T) {
 	t.Logf("ATTEST_MESSAGE_GOLDEN=%s", got)
 }
 
-// TestINT11_AuthzDigestGolden freezes the authz-digest encoding (claim 42) and pins
+// TestINT11_AuthzDigestGolden freezes the authz-digest encoding (PCAS-claim-42) and pins
 // that an empty artifact yields a distinct, well-defined digest.
 func TestINT11_AuthzDigestGolden(t *testing.T) {
 	got := hex.EncodeToString(AuthzDigest([]byte("authorization-token-bytes")))

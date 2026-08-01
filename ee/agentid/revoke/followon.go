@@ -14,7 +14,7 @@ import (
 
 // FollowOnResult reports the follow-on jobs a GenerateFollowOn pass created: the
 // descendant credentials that were discovered AFTER the directive's watermark and now
-// carry a follow-on job under the same directive (§7.2, claim 16).
+// carry a follow-on job under the same directive (§7.2, AGID-claim-16).
 type FollowOnResult struct {
 	DirectiveID string
 	NewJobs     []string // descendant credential ids that got a follow-on job

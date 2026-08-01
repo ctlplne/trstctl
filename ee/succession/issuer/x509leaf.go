@@ -13,7 +13,7 @@ import (
 )
 
 // x509leaf.go issues REAL end-entity certificates that carry the issuer-level
-// succession tuple as an X.509 extension (claim 27, INT-14), and reads it back for the
+// succession tuple as an X.509 extension (PCAS-claim-27, INT-14), and reads it back for the
 // relying party. The tuple binds the issuing authority's algorithm-epoch and the leaf's
 // (algorithm-invariant) rotation version into the certificate itself, so a leaf issued
 // under a superseded issuer authority is detectable from the certificate alone — an
@@ -71,7 +71,7 @@ func IssueLeafCertificate(caCertDER []byte, caSigner crypto.DigestSigner, csrDER
 // ParseAuthorityEpoch reads the succession-authority-epoch tuple from a real leaf
 // certificate. It returns ErrNoAuthorityEpoch when the certificate carries no such
 // extension, so a policy that requires the extension can treat its absence as a
-// failure (claim 27).
+// failure (PCAS-claim-27).
 func ParseAuthorityEpoch(certDER []byte) (authorityID string, issuerEpoch, rotationVersion uint64, err error) {
 	value, _, found, err := crypto.LeafExtensionValue(certDER, AuthorityEpochExtensionOID)
 	if err != nil {

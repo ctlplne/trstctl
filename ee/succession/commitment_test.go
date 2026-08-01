@@ -90,7 +90,7 @@ func TestCommitment_AliasRejected(t *testing.T) {
 
 // TestCommitment_DeploymentScoped: the deployment scope is bound in the
 // commitment, so records from a different deployment do not verify (INV-5 /
-// claim 7).
+// PCAS-claim-7).
 func TestCommitment_DeploymentScoped(t *testing.T) {
 	a := fixedFields()
 	a.DeploymentScope = "spiffe://deployment-a"

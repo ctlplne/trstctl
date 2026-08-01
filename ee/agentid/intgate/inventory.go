@@ -38,7 +38,7 @@ var InScopePackages = []string{
 // DeferredPackages is the allow-list: in-scope packages whose exported constructors are
 // EXEMPT from the "must have a non-test caller / must be RTA-reachable" bar because
 // they are external-consumer-only by construction. ee/agentid/verify (and its ./wasm
-// build) is the proprietary OFFLINE relying-party verifier SDK (claim 28) consumed
+// build) is the proprietary OFFLINE relying-party verifier SDK (AGID-claim-28) consumed
 // OUTSIDE this repo; a control-plane caller would be a contrived, meaningless
 // invocation. This mirrors the PCAS gate's DEFERRED tier (the offline PCAS-07 verifier
 // is likewise external-consumer-only). Rationale: ee/agentid/verify/doc.go.
@@ -233,7 +233,7 @@ var Inventory = []Constructor{
 	{Pkg: "ee/agentid/revoke", Name: "NewDirectiveRevocationReader", File: "ee/agentid/revoke/refuse_active.go", Tier: TierRequired, SeededVia: "orchestrator issuance worker (per-hop non-revocation reader)"},
 	{Pkg: "ee/agentid/revoke", Name: "NewTerminalTransition", File: "ee/agentid/revoke/terminal.go", Tier: TierRequired, SeededVia: "orchestrator revocation worker (terminal transition)"},
 
-	// ---- verify (AGID-09): DEFERRED external RP SDK (claim 28) --------------------
+	// ---- verify (AGID-09): DEFERRED external RP SDK (AGID-claim-28) --------------------
 	{Pkg: "ee/agentid/verify", Name: "NewLocalPolicy", File: "ee/agentid/verify/helpers.go", Tier: TierDeferred, SeededVia: "external relying-party SDK (no in-repo control-plane caller by design)"},
 }
 

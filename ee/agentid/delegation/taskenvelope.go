@@ -13,7 +13,7 @@ import (
 // taskenvelope.go is the AGID-05 extension of the in-signer gate: when a delegation
 // record references a task envelope (its TaskDigest is set), the gate verifies the
 // referenced envelope's SIGNATURE and EXPIRY as a PRECONDITION of the key operation
-// (claim 2 / INV-A4), reusing the AGID-04b refusal path on failure (zero key ops), and
+// (AGID-claim-2 / INV-A4), reusing the AGID-04b refusal path on failure (zero key ops), and
 // requires the referenced envelope's canonical digest to equal the record's TaskDigest.
 // The verified digest is then bound into the credential ALONGSIDE the chain-head digest
 // and the agent-stack representation (INV-A3 additive; see bind.go).
@@ -63,7 +63,7 @@ func decodeTaskEnvelope(b []byte) (taskenv.Envelope, error) {
 	return env, nil
 }
 
-// verifyTaskEnvelope is the AGID-05 in-signer precondition (claim 2 / INV-A4). It runs
+// verifyTaskEnvelope is the AGID-05 in-signer precondition (AGID-claim-2 / INV-A4). It runs
 // INSIDE verify(), AFTER the chain has verified (so the head record's TaskDigest is a
 // verified, signed value) and BEFORE the binding is assembled / any key op is reached.
 // Semantics, fail-closed:
@@ -103,7 +103,7 @@ func (g *Gate) verifyTaskEnvelope(headTaskDigest, envelopeBody []byte, now time.
 	if !bytesEqual(envDigest, headTaskDigest) {
 		return refusal(CheckTaskEnvelope, -1, ErrTaskEnvelopeDigestMismatch.Error())
 	}
-	// Signature + expiry verified inside the boundary (claim 2). The requester key is
+	// Signature + expiry verified inside the boundary (AGID-claim-2). The requester key is
 	// resolved through the gate's trust lookup; a gate with no lookup cannot verify a
 	// referenced envelope and fails closed.
 	if g.cfg.TaskEnvelopeTrust == nil {

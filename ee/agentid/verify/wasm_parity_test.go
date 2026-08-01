@@ -13,7 +13,7 @@ import (
 )
 
 // wasm_parity_test.go is the WASM SMOKE TEST asserting native/WASM RESULT PARITY
-// (AGID-09 WASM build parity / claim 28 INV-A7). It builds the ./wasm entrypoint
+// (AGID-09 WASM build parity / AGID-claim-28 INV-A7). It builds the ./wasm entrypoint
 // for GOOS=js GOARCH=wasm, runs it under Node via Go's wasm exec shim, and asserts
 // the offline decision it prints equals the decision the SAME sample produces
 // natively (BuildAndVerifySample). If the native and wasm verifiers ever diverge

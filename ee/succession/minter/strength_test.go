@@ -63,7 +63,7 @@ func breakGlassToken(t *testing.T, authority crypto.Signer, req signing.MintRequ
 }
 
 // TestMint_RefusesStrengthDowngrade: PQ->classical and hybrid->classical are
-// refused without break-glass (claim 17 / INV-8).
+// refused without break-glass (PCAS-claim-17 / INV-8).
 func TestMint_RefusesStrengthDowngrade(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	for _, predAlg := range []crypto.Algorithm{"ML-DSA-65", "Hybrid-Ed25519-Dilithium3"} {
@@ -89,7 +89,7 @@ func TestMint_RefusesStrengthDowngrade(t *testing.T) {
 }
 
 // TestMint_BreakGlassOverride_MofN: with a valid break-glass token the downgrade
-// mints and the record carries the break-glass marker (claim 17).
+// mints and the record carries the break-glass marker (PCAS-claim-17).
 func TestMint_BreakGlassOverride_MofN(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	authority, err := be.GenerateKey(crypto.ECDSAP256)
@@ -117,7 +117,7 @@ func TestMint_BreakGlassOverride_MofN(t *testing.T) {
 }
 
 // TestBreakGlass_TokenBoundSingleUse: a replayed token, or one bound to a
-// different target algorithm, is refused (claim 17 / INV-8).
+// different target algorithm, is refused (PCAS-claim-17 / INV-8).
 func TestBreakGlass_TokenBoundSingleUse(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	authority, err := be.GenerateKey(crypto.ECDSAP256)

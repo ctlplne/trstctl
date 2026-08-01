@@ -9,12 +9,12 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// verify.go is the OFFLINE relying-party verification entrypoint (claims 28, 29,
+// verify.go is the OFFLINE relying-party verification entrypoint (AGID-claims 28, 29,
 // 7 relying-party side / INV-A7 RP half). Verify runs a FAIL-CLOSED sequence of
 // checks in a deliberate order: cheap structural refusals first, then the
 // credential SIGNATURE against the trust root, then the AGENT-STACK-vs-policy
 // comparison, then AUTHORITY and TASK-SCOPE, then the TOOL-MANIFEST membership
-// (claim 29), then the short-TTL VALIDITY from the credential alone (claim 7).
+// (AGID-claim-29), then the short-TTL VALIDITY from the credential alone (AGID-claim-7).
 // Every check that can refuse runs before any "allow" is returned; Verify returns
 // nil only when all pass. It performs NO network access and constructs NO network
 // client (see TestCredential_ShortTTLNoStatusQuery).
@@ -48,7 +48,7 @@ var (
 	// an agent-stack digest -- there is no subject to verify. Fail-closed.
 	ErrNothingBound = errors.New("verify: credential binds no subject (neither chain-head nor agent-stack)")
 	// ErrAgentStackNotApproved is returned when the credential binds an agent stack
-	// but its digest is not in the relying party's approved set (claim 28). The
+	// but its digest is not in the relying party's approved set (AGID-claim-28). The
 	// bounded guarantee (HARNESS 1.5 note (a)) applies: this confirms the
 	// ISSUANCE-TIME binding is one the RP approved, not that the running agent still
 	// matches it -- drift is bounded by the credential's short TTL.
@@ -57,11 +57,11 @@ var (
 	// class is not one the relying party accepts.
 	ErrAuthorityClassNotPermitted = errors.New("verify: bound authority class is not permitted by local policy")
 	// ErrActionExceedsAuthority is returned when the requested action's operation is
-	// not within the set the bound authority class permits (claim 28).
+	// not within the set the bound authority class permits (AGID-claim-28).
 	ErrActionExceedsAuthority = errors.New("verify: requested action exceeds the authority bound in the credential")
 	// ErrActionOutsideTaskScope is returned when a task envelope is bound and the
 	// requested action falls outside its task scope, EVEN IF the broader authority
-	// would permit it (claim 28 -- task binding is enforced additively).
+	// would permit it (AGID-claim-28 -- task binding is enforced additively).
 	ErrActionOutsideTaskScope = errors.New("verify: requested action is outside the bound task-envelope scope")
 	// ErrTaskEnvelopeUnverified is returned when the credential binds a task-envelope
 	// digest but the policy supplies no matching envelope to bound the action, or the
@@ -70,7 +70,7 @@ var (
 	ErrTaskEnvelopeUnverified = errors.New("verify: credential binds a task-envelope digest that local policy did not supply or does not match")
 	// ErrToolAbsentFromManifest is returned when the requested action's tool is not a
 	// member of the tool manifest whose digest is bound in the agent-stack
-	// representation (claim 29).
+	// representation (AGID-claim-29).
 	ErrToolAbsentFromManifest = errors.New("verify: requested action's tool is absent from the bound tool manifest")
 	// ErrToolManifestMismatch is returned when the relying party's supplied tool
 	// manifest does not have the digest bound in the agent-stack representation, so
@@ -83,7 +83,7 @@ var (
 	ErrNoAction = errors.New("verify: requested action names no operation")
 )
 
-// Verify is the offline relying-party decision (claims 28/29/7 RP side). It
+// Verify is the offline relying-party decision (AGID-claims 28/29/7 RP side). It
 // decodes the presented credential, verifies its signature against the pinned
 // trust root, compares the bound agent-stack representation to local policy,
 // enforces the bound authority and (when present) the bound task scope on the
@@ -119,8 +119,8 @@ func Verify(cred Credential, root TrustRoot, policy LocalPolicy, action Action, 
 		return Result{}, ErrNothingBound
 	}
 
-	// (3) Agent-stack representation vs. LOCAL POLICY (claim 28). Only when the
-	// credential binds an agent stack; a chain-only credential (claim 31 fallback)
+	// (3) Agent-stack representation vs. LOCAL POLICY (AGID-claim-28). Only when the
+	// credential binds an agent stack; a chain-only credential (AGID-claim-31 fallback)
 	// carries no representation to compare and is governed by authority + task scope
 	// alone.
 	var boundRep *boundRepr
@@ -129,7 +129,7 @@ func Verify(cred Credential, root TrustRoot, policy LocalPolicy, action Action, 
 			return Result{}, ErrAgentStackNotApproved
 		}
 		// Recover the bound prompt/tool/model digests from the opaque representation so
-		// the tool-manifest (claim 29) can be enforced. A representation the RP approved
+		// the tool-manifest (AGID-claim-29) can be enforced. A representation the RP approved
 		// by digest but whose opaque bytes are absent/malformed is refused fail-closed.
 		if len(bv.AgentStackRepr) == 0 {
 			// Approved by digest but no repr bytes to confine tools against: only safe if
@@ -152,12 +152,12 @@ func Verify(cred Credential, root TrustRoot, policy LocalPolicy, action Action, 
 		}
 	}
 
-	// (4) TOOL MANIFEST (claim 29): when the action names a tool, it must be a member
+	// (4) TOOL MANIFEST (AGID-claim-29): when the action names a tool, it must be a member
 	// of the manifest whose digest is bound in the representation. The RP supplies the
 	// approved manifest; the verifier confirms it is the bound one (digest match) and
 	// then checks membership. A credential that binds NO agent-stack representation
 	// (a chain-only credential) carries no tool manifest, so an action naming a tool
-	// cannot be proven confined and is REFUSED fail-closed (claim 29 confines the
+	// cannot be proven confined and is REFUSED fail-closed (AGID-claim-29 confines the
 	// agent to the BOUND subset; with no bound subset, no tool is permitted).
 	if boundRep != nil {
 		if err := enforceToolManifest(boundRep, policy, action); err != nil {
@@ -167,13 +167,13 @@ func Verify(cred Credential, root TrustRoot, policy LocalPolicy, action Action, 
 		return Result{}, ErrToolManifestMismatch
 	}
 
-	// (5) AUTHORITY (claim 28): the bound class must be permitted, and the action's
+	// (5) AUTHORITY (AGID-claim-28): the bound class must be permitted, and the action's
 	// operation must be within that class's permitted operations.
 	if err := enforceAuthority(bv.DesignatedClass, op, policy); err != nil {
 		return Result{}, err
 	}
 
-	// (6) TASK SCOPE (claim 28): when the credential binds a task-envelope digest,
+	// (6) TASK SCOPE (AGID-claim-28): when the credential binds a task-envelope digest,
 	// the action must fall within the bound envelope's scope -- enforced ADDITIVELY,
 	// even if the authority above would permit it. A bound envelope the RP cannot
 	// supply/verify refuses fail-closed.
@@ -184,7 +184,7 @@ func Verify(cred Credential, root TrustRoot, policy LocalPolicy, action Action, 
 		}
 	}
 
-	// (7) Short-TTL VALIDITY from the credential alone (claim 7): expiry/not-yet-valid
+	// (7) Short-TTL VALIDITY from the credential alone (AGID-claim-7): expiry/not-yet-valid
 	// is decided from the bound window and the caller's clock, with NO status query.
 	// When the credential carries a window, it is enforced; a credential presenting no
 	// determinable window is honored only if the caller did not require one.
@@ -213,7 +213,7 @@ func agentStackApproved(digest []byte, policy LocalPolicy) bool {
 	return ok
 }
 
-// enforceToolManifest enforces claim 29. When the action names no tool, there is
+// enforceToolManifest enforces AGID-claim-29. When the action names no tool, there is
 // nothing to confine (the manifest membership check is skipped). When it names a
 // tool, the RP's supplied ApprovedToolManifest must have the digest bound in the
 // representation (so the RP is reasoning about the right tool set), and the tool
@@ -236,7 +236,7 @@ func enforceToolManifest(rep *boundRepr, policy LocalPolicy, action Action) erro
 	return ErrToolAbsentFromManifest
 }
 
-// enforceAuthority enforces the authority half of claim 28: the bound class must
+// enforceAuthority enforces the authority half of AGID-claim-28: the bound class must
 // be permitted (when the policy constrains classes), and the operation must be
 // within the class's permitted operations. A class with no permitted-operations
 // entry permits NO operation (fail-closed): authority is explicit.

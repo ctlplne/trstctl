@@ -54,7 +54,7 @@ func validRecord(t *testing.T, identity string, epoch uint64, policyRef string) 
 }
 
 // TestSTH_CarriesLogTimestamp: Append returns a stable index and a signed tree
-// head carrying a log timestamp (claim 18).
+// head carrying a log timestamp (PCAS-claim-18).
 func TestSTH_CarriesLogTimestamp(t *testing.T) {
 	signer := newSigner(t)
 	log := New(signer)
@@ -84,7 +84,7 @@ func TestSTH_CarriesLogTimestamp(t *testing.T) {
 }
 
 // TestInclusionProof_Verifies: an inclusion proof verifies for appended records
-// and fails for non-members (claim 4).
+// and fails for non-members (PCAS-claim-4).
 func TestInclusionProof_Verifies(t *testing.T) {
 	log := New(newSigner(t))
 	var entries [][]byte
@@ -158,7 +158,7 @@ func TestDowngradeEvidence_EpochCollisionDetected(t *testing.T) {
 }
 
 // TestMisissuanceProof_ArtifactGenerated: a self-contained misissuance proof is
-// built and independently verified (claim 11); an invalid or non-colliding pair
+// built and independently verified (PCAS-claim-11); an invalid or non-colliding pair
 // is refused.
 func TestMisissuanceProof_ArtifactGenerated(t *testing.T) {
 	a := validRecord(t, "spiffe://d/db", 1, "policy:a")

@@ -10,14 +10,14 @@ import (
 )
 
 // DecisionLedger records signed policy decisions and reports whether a decision (by
-// its digest) was recorded (claim 24). In production it is backed by the AN-2 ledger
+// its digest) was recorded (PCAS-claim-24). In production it is backed by the AN-2 ledger
 // / transparency log; a decision must be recorded before or with the mint.
 type DecisionLedger interface {
 	Record(sd SignedDecision) error
 	IsRecorded(decisionDigest []byte) (bool, error)
 }
 
-// ProvenanceVerifier is the in-signer plan-chain check (claims 24, 40). It decodes the
+// ProvenanceVerifier is the in-signer plan-chain check (PCAS-claims 24, 40). It decodes the
 // provenance chain carried in the request's PolicyDecision, verifies the authority
 // signatures and both digest bindings, checks the decision authorizes the request's
 // (identity, target), checks the request's policy_ref equals the recorded-decision
@@ -86,7 +86,7 @@ func (l *MemDecisionLedger) IsRecorded(decisionDigest []byte) (bool, error) {
 }
 
 // Get resolves a recorded decision by digest — the "queryable from the ledger" side
-// of claim 24 (an auditor resolves policy_ref → recorded artifact).
+// of PCAS-claim-24 (an auditor resolves policy_ref → recorded artifact).
 func (l *MemDecisionLedger) Get(decisionDigest []byte) (SignedDecision, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

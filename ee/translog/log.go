@@ -16,7 +16,7 @@ const sthDomain = "trstctl/pcas/translog/sth/v1"
 
 // STH is a signed tree head: a commitment to the log's state at a point in time.
 // The Timestamp lets a relying party later evaluate the pre-CRQC anchoring
-// condition of claim 18.
+// condition of PCAS-claim-18.
 type STH struct {
 	TreeSize  int
 	RootHash  []byte
@@ -24,7 +24,9 @@ type STH struct {
 	Signature []byte // over the STH's canonical encoding (present when the log has a signer)
 }
 
-// Log is an append-only Merkle-tree transparency log for succession records.
+// Log is an append-only Merkle-tree transparency log for succession records:
+// Append publishes a record and InclusionProof yields the audit path whose
+// validity PCAS-claim-4 makes a condition of verification.
 type Log struct {
 	mu     sync.Mutex
 	leaves [][]byte // raw entries

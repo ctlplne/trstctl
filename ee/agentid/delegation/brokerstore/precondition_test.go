@@ -15,18 +15,18 @@ import (
 )
 
 // precondition_test.go covers the AGID-07b chain-bound precondition paths that need NO
-// datastore: short-TTL/no-status-query (claim 7 / INV-A7), sub-hour-on-verified-
-// attestation (claim 26 / INV-A6), renewal-repeats-verification-in-signer (claim 8), and
-// policy-deny-no-key-op-audit-reason (claim 14). The datastore-backed replay + idempotency
-// paths (claims 9/15) live in brokerpg_test.go against real embedded PostgreSQL.
+// datastore: short-TTL/no-status-query (AGID-claim-7 / INV-A7), sub-hour-on-verified-
+// attestation (AGID-claim-26 / INV-A6), renewal-repeats-verification-in-signer (AGID-claim-8), and
+// policy-deny-no-key-op-audit-reason (AGID-claim-14). The datastore-backed replay + idempotency
+// paths (AGID-claims 9/15) live in brokerpg_test.go against real embedded PostgreSQL.
 //
 // The precondition drives a REAL AGID-04 gate (built via the public delegation API), an
 // in-memory fake recorder standing in for the durable store, and fake policy/resolver.
 
 // attestedRequest builds a valid narrowing chain plus a seeded verified attestation and
 // returns the gate, its attestor, and the ChainBoundRequest a resolver would stage. The
-// designated class + min-class make attestation REQUIRED (claim 10), which is the
-// "mints only on verified attestation" property (claim 26).
+// designated class + min-class make attestation REQUIRED (AGID-claim-10), which is the
+// "mints only on verified attestation" property (AGID-claim-26).
 func attestedRequest(t *testing.T, tenantID, method string, minClass delegation.MinClassPolicy, designatedClass string, clock func() time.Time) (*delegation.Gate, *fakeAttestor, ChainBoundRequest) {
 	t.Helper()
 	envs, anchors := twoHopChain(t, tenantID, openWindow(), openWindow())
@@ -51,7 +51,7 @@ func newPre(gate *delegation.Gate, pol PolicyEvaluator, res RequestResolver, rec
 	})
 }
 
-// ---- TestCredential_ShortTTLNoStatusQuery (claim 7 / INV-A7) ----
+// ---- TestCredential_ShortTTLNoStatusQuery (AGID-claim-7 / INV-A7) ----
 
 // TestCredential_ShortTTLNoStatusQuery proves the chain-bound ephemeral credential's
 // validity is <= the minimum ceiling along the chain AND < 1h, and that the lifetime is
@@ -121,7 +121,7 @@ func TestCredential_ShortTTLNoStatusQuery(t *testing.T) {
 	}
 }
 
-// ---- TestEphemeral_SubHourOnVerifiedAttestation (claim 26 / INV-A6) ----
+// ---- TestEphemeral_SubHourOnVerifiedAttestation (AGID-claim-26 / INV-A6) ----
 
 // TestEphemeral_SubHourOnVerifiedAttestation proves the chain-bound path mints ONLY on a
 // verified attestation and is refused absent it.
@@ -183,7 +183,7 @@ func TestEphemeral_SubHourOnVerifiedAttestation(t *testing.T) {
 	}
 }
 
-// ---- TestRenewal_RepeatsVerificationInSigner (claim 8) ----
+// ---- TestRenewal_RepeatsVerificationInSigner (AGID-claim-8) ----
 
 // TestRenewal_RepeatsVerificationInSigner proves a renewal re-invokes the FULL in-signer
 // verification (chain + attestation) via the AGID-04 gate before any key op: the attestor
@@ -242,7 +242,7 @@ func TestRenewal_RepeatsVerificationInSigner(t *testing.T) {
 	}
 }
 
-// ---- TestPolicyGate_DenyNoKeyOpAuditReason (claim 14) ----
+// ---- TestPolicyGate_DenyNoKeyOpAuditReason (AGID-claim-14) ----
 
 // TestPolicyGate_DenyNoKeyOpAuditReason proves a policy-denied chain-bound issuance
 // performs NO key op (no in-signer verify, no binding) and emits an audit event carrying

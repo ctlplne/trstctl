@@ -47,7 +47,7 @@ func (c *signerCustody) GenerateKEMSuccessor(_, kemAlg string) ([]byte, error) {
 // signer custody boundary: the KEM successor key is generated inside the signer and
 // only its PUBLIC key crosses out, the record is publicly verifiable, and the re-wrap
 // retirement gate blocks predecessor retirement until re-wrap completion is recorded
-// (claim 15, INT-12).
+// (PCAS-claim-15, INT-12).
 func TestINT12_KEMSuccessionThroughSigner(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	pred, err := be.GenerateKey(crypto.ECDSAP256)

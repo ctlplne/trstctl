@@ -52,7 +52,7 @@ type cascadeWorker struct {
 }
 
 // defaultCompletionIntervalSeconds is the policy completion interval the interval monitor
-// measures a cascade against (claim 23). A deployment overrides it via policy in
+// measures a cascade against (AGID-claim-23). A deployment overrides it via policy in
 // AGID-INT-WIRE; a conservative one-hour default records an exceedance for a kill that
 // overruns an hour without completing.
 const defaultCompletionIntervalSeconds int64 = 3600
@@ -131,7 +131,7 @@ func (w *cascadeWorker) deliverDirective(ctx context.Context, m coreorch.Message
 // directive toward its terminal state. It executes the job idempotently (the executor),
 // generates any follow-on for late descendants, attempts the terminal transition (which
 // mints the aggregate artifact when complete), and runs the interval monitor. A retry
-// re-runs Execute, which collapses an already-recorded effect to a no-op (claim 21).
+// re-runs Execute, which collapses an already-recorded effect to a no-op (AGID-claim-21).
 func (w *cascadeWorker) deliverJob(ctx context.Context, m coreorch.Message) error {
 	if m.Destination != RevocationJobDestination {
 		return fmt.Errorf("agentid cascade worker: unexpected job destination %q", m.Destination)
@@ -163,14 +163,14 @@ func (w *cascadeWorker) deliverJob(ctx context.Context, m coreorch.Message) erro
 
 	// (3) Attempt the terminal transition: when EVERY enqueued and follow-on job is
 	// evidenced, flip the directive terminal and mint the SIGNED aggregate evidence
-	// artifact (INV-A9 / claims 18/33). The production caller for revoke.NewTerminalTransition.
+	// artifact (INV-A9 / AGID-claims 18/33). The production caller for revoke.NewTerminalTransition.
 	// A still-draining directive is left non-terminal (no flip), which is not an error.
 	if _, err := w.terminal.Transition(ctx, tenantID, directiveID); err != nil {
 		return fmt.Errorf("agentid cascade worker: terminal transition: %w", err)
 	}
 
 	// (4) Run the interval monitor: record the DISTINCT exceedance event if the cascade
-	// overran its completion interval (claim 23). The production caller for
+	// overran its completion interval (AGID-claim-23). The production caller for
 	// revoke.NewIntervalMonitor. It records at most once per directive, so repeated job
 	// deliveries do not duplicate the event.
 	if _, err := w.interval.Check(ctx, tenantID, directiveID); err != nil {

@@ -38,7 +38,7 @@ const (
 // enqueues an idempotent job through the core outbox; chain-fetch reads the
 // RLS-scoped succession store; ack-record appends a signed nhi.rp.ack to the AN-2
 // ledger. HTTP-level idempotency (api.Mutate) makes a replayed Idempotency-Key
-// return the original result without re-invoking these methods (claim 6).
+// return the original result without re-invoking these methods (PCAS-claim-6).
 type service struct {
 	store          *corestore.Store
 	repo           *pcasstore.Repo

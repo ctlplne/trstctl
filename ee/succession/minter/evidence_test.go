@@ -25,7 +25,7 @@ func attestKey(t *testing.T) (crypto.Signer, map[string][]byte) {
 
 // TestRecord_CarriesSignerAttestation: every minted record (ordinary and break-glass)
 // carries a signer-attestation countersignature that verifies and names the signer;
-// a stripped attestation fails AttestedVerify (claim 28 / INV-13).
+// a stripped attestation fails AttestedVerify (PCAS-claim-28 / INV-13).
 func TestRecord_CarriesSignerAttestation(t *testing.T) {
 	attest, roster := attestKey(t)
 
@@ -73,7 +73,7 @@ func TestRecord_CarriesSignerAttestation(t *testing.T) {
 
 // TestRecord_CarriesAuthzDigest / TestAuthzDigest_VerifiableFromRecord: a minted
 // record binds a digest of the dual-control authorization artifact, and a third party
-// recomputes it from the published artifact (claim 42).
+// recomputes it from the published artifact (PCAS-claim-42).
 func TestRecord_CarriesAuthzDigest(t *testing.T) {
 	attest, _ := attestKey(t)
 	be := crypto.NewSoftwareBackend()
@@ -105,7 +105,7 @@ func TestRecord_CarriesAuthzDigest(t *testing.T) {
 
 // TestRefusal_SignedArtifact: each refusal class (epoch, strength, policy,
 // dual-control) yields a signed refusal artifact naming the request + violated
-// constraint (claim 41).
+// constraint (PCAS-claim-41).
 func TestRefusal_SignedArtifact(t *testing.T) {
 	attest, _ := attestKey(t)
 	attestPub := attest.Public().DER

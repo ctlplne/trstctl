@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package retirement is the evidence-gated tail of the PCAS loop (claims 2, 3, 8).
+// Package retirement is the evidence-gated tail of the PCAS loop (PCAS-claims 2, 3, 8).
 // A hybrid→pure-PQC cutover — and the retirement of the superseded predecessor key
 // — proceeds only after a quorum of relying-party acknowledgements that are each
 // (a) signed by the acknowledging RP, (b) bound to the identity and the epoch being
@@ -86,7 +86,7 @@ type QuorumResult struct {
 
 // AckMessage is the canonical, domain-separated, length-prefixed message a relying
 // party signs to acknowledge (tenant, identity, epoch). Binding all three means a
-// signature cannot be replayed across tenants, identities, or epochs (claim 3).
+// signature cannot be replayed across tenants, identities, or epochs (PCAS-claim-3).
 func AckMessage(tenantID, identityID string, epoch uint64, relyingParty string) []byte {
 	var b bytes.Buffer
 	writeField(&b, []byte(ackDomain))
@@ -118,8 +118,8 @@ func (r Roster) verify(ack SignedAck) error {
 
 // EvaluateQuorum tallies the acks that satisfy the cutover condition for target
 // under policy at evalTime. An ack counts only if it targets the same tenant,
-// identity, and epoch; verifies under its rostered RP key (claim 3(a),(b)); and was
-// recorded within the validity window (claim 3(c)). Distinct RPs are counted once;
+// identity, and epoch; verifies under its rostered RP key (PCAS-claim-3(a),(b)); and was
+// recorded within the validity window (PCAS-claim-3(c)). Distinct RPs are counted once;
 // the tally is confined to target.TenantID and never crosses tenants (INV-5). The
 // returned Satisfying set is exactly the counted acks, sorted deterministically.
 func EvaluateQuorum(acks []SignedAck, target Target, roster Roster, policy QuorumPolicy, evalTime time.Time) QuorumResult {
@@ -155,7 +155,7 @@ func EvaluateQuorum(acks []SignedAck, target Target, roster Roster, policy Quoru
 // AckSetDigest is the digest binding a set of satisfying acknowledgements, hashed
 // through the core AN-3 boundary. The set is sorted by relying party, then each ack
 // is length-prefix encoded (tenant, identity, epoch, RP, signature), so an auditor
-// with the same acks recomputes the same digest (claim 3, offline-verifiable limb).
+// with the same acks recomputes the same digest (PCAS-claim-3, offline-verifiable limb).
 func AckSetDigest(acks []SignedAck) []byte {
 	sorted := append([]SignedAck(nil), acks...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].RelyingParty < sorted[j].RelyingParty })
@@ -214,7 +214,7 @@ type EventAppender interface {
 	Append(ctx context.Context, e events.Event) (events.Event, error)
 }
 
-// Successor is the pure-PQC posture the cutover advances to (claim 2). The
+// Successor is the pure-PQC posture the cutover advances to (PCAS-claim-2). The
 // dual-signed succession record itself is minted by PCAS-05/08; the cutover records
 // the evidence-gated posture advance and binds the record by reference.
 type Successor struct {
@@ -282,7 +282,7 @@ func New(cfg Config) (*Controller, error) {
 // advances the pure-PQC succession, retires the predecessor (revoke fail-closed →
 // zeroize), and emits a retirement event binding the satisfying ack-set digest. If
 // the quorum is not met it returns ErrQuorumNotMet and performs no state change:
-// nothing is announced, and the predecessor is left untouched (claims 2, 3, 8).
+// nothing is announced, and the predecessor is left untouched (PCAS-claims 2, 3, 8).
 func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime time.Time) (CutoverResult, error) {
 	q := EvaluateQuorum(req.Acks, req.Target, c.cfg.Roster, c.cfg.Policy, evalTime)
 	if !q.Met {
@@ -290,7 +290,7 @@ func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime t
 	}
 	digest := AckSetDigest(q.Satisfying)
 
-	// claim 2: announce the evidence-gated hybrid→pure-PQC succession before retiring
+	// PCAS-claim-2: announce the evidence-gated hybrid→pure-PQC succession before retiring
 	// the predecessor, so the identity's new key is on the ledger first.
 	if err := c.append(ctx, succession.SuccessionV1{
 		IdentityID:            req.Target.IdentityID,
@@ -313,7 +313,8 @@ func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime t
 		}
 	}
 
-	// claim 8 / INV-9: revoke (fail-closed) THEN zeroize the predecessor.
+	// PCAS-claims 8, 16 / INV-9: revoke (fail-closed) THEN zeroize the
+	// predecessor from its locked buffers.
 	if req.Predecessor != nil {
 		if err := req.Predecessor.Revoke(ctx, req.Target.TenantID); err != nil {
 			return CutoverResult{QuorumMet: true, Quorum: q, AckSetDigest: digest, Advanced: true}, fmt.Errorf("retirement: revoke predecessor: %w", err)
@@ -323,7 +324,7 @@ func (c *Controller) Execute(ctx context.Context, req CutoverRequest, evalTime t
 		}
 	}
 
-	// claim 3: emit retirement binding the ack-set digest (offline-verifiable).
+	// PCAS-claim-3: emit retirement binding the ack-set digest (offline-verifiable).
 	if err := c.append(ctx, succession.RetirementV1{
 		IdentityID:    req.Target.IdentityID,
 		TenantID:      req.Target.TenantID,

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package policy adds PCAS provenance around the claim-23 policy decision that the
-// signer already verifies (claims 24, 40; supports INV-15's "no path bypasses
+// Package policy adds PCAS provenance around the PCAS-claim-23 policy decision that the
+// signer already verifies (PCAS-claims 24, 40; supports INV-15's "no path bypasses
 // auditability"). The core internal/policy OPA engine remains the decision engine;
 // this package records and chains its outputs, in ee/.
 //
-//   - claim 24: the signed policy decision is RECORDED (ledger event / translog
+//   - PCAS-claim-24: the signed policy decision is RECORDED (ledger event / translog
 //     commitment) and the commitment's policy_ref is the DIGEST of that recorded
 //     decision, so an auditor resolves commitment → recorded artifact.
-//   - claim 40: a finding ⟵ remediation-plan ⟵ policy-decision HASH CHAIN. The signer
+//   - PCAS-claim-40: a finding ⟵ remediation-plan ⟵ policy-decision HASH CHAIN. The signer
 //     verifies the authority signatures AND both digest bindings (decision→plan,
 //     plan→finding) before successor keygen, so the in-signer decision is traceable
 //     to the finding that occasioned it.
@@ -168,7 +168,7 @@ func signedDigest(msg []byte, authorityID string, sig []byte) []byte {
 }
 
 // PolicyRef is the value bound into the commitment: the digest of the recorded
-// (signed) decision, hex-encoded (claim 24). An auditor resolves commitment.policy_ref
+// (signed) decision, hex-encoded (PCAS-claim-24). An auditor resolves commitment.policy_ref
 // → this recorded decision.
 func PolicyRef(chain PlanChain) string {
 	return "sha256:" + hex.EncodeToString(DecisionDigest(chain.Decision))
@@ -204,7 +204,7 @@ func DecodeChain(b []byte) (PlanChain, error) {
 
 // VerifyChain verifies the full provenance chain: each authority signature, and both
 // digest bindings (plan→finding and decision→plan). This is the hash chain that makes
-// the decision traceable to the finding (claim 40).
+// the decision traceable to the finding (PCAS-claim-40).
 func VerifyChain(chain PlanChain, findingAuthorityDER, planAuthorityDER, decisionAuthorityDER []byte) error {
 	if crypto.VerifyMessage(findingAuthorityDER, findingMessage(chain.Finding.Finding), chain.Finding.Signature) != nil {
 		return ErrFindingSig
@@ -226,7 +226,7 @@ func VerifyChain(chain PlanChain, findingAuthorityDER, planAuthorityDER, decisio
 
 // TraceToFinding resolves a published record's policy_ref back to its finding: it
 // checks that policyRef is the digest of the chain's recorded decision, verifies the
-// chain's digest bindings, and returns the originating finding (claim 40). The signing
+// chain's digest bindings, and returns the originating finding (PCAS-claim-40). The signing
 // authorities are supplied by the auditor out of band.
 func TraceToFinding(policyRef string, chain PlanChain, findingAuthorityDER, planAuthorityDER, decisionAuthorityDER []byte) (Finding, error) {
 	if policyRef != PolicyRef(chain) {

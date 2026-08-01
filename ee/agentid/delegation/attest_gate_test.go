@@ -20,7 +20,7 @@ func attBody(t *testing.T, method string, payload []byte) []byte {
 }
 
 // TestIssue_AttestationVerifiedBeforeKeygen proves the attestation is verified BEFORE any
-// key op (claim 10 / INV-A1): the instrumented attestor records "attest-verified", the
+// key op (AGID-claim-10 / INV-A1): the instrumented attestor records "attest-verified", the
 // keystore records "keyop", and the log shows attestation strictly before keygen. A
 // designated class requiring hardware-TPM is met by seeded hardware-TPM evidence.
 func TestIssue_AttestationVerifiedBeforeKeygen(t *testing.T) {
@@ -68,7 +68,7 @@ func TestIssue_AttestationVerifiedBeforeKeygen(t *testing.T) {
 }
 
 // TestAttestation_MinClassGate proves the min-attestation-class policy refuses below-class
-// evidence NAMING the class not met (claim 10). A designated class requiring HSM is
+// evidence NAMING the class not met (AGID-claim-10). A designated class requiring HSM is
 // presented with only software-class evidence, which is refused; the refusal detail names
 // the required class.
 func TestAttestation_MinClassGate(t *testing.T) {
@@ -109,7 +109,7 @@ func TestAttestation_MinClassGate(t *testing.T) {
 	}
 }
 
-// TestIssue_AttestationAgentStackNoChain proves fallback claim 32: verified attestation +
+// TestIssue_AttestationAgentStackNoChain proves fallback AGID-claim-32: verified attestation +
 // an agent-stack representation with NO multi-hop chain yields a credential binding the
 // agent-stack representation, verified in-signer before keygen. There is no chain; the
 // binding carries the agent-stack digest and no chain-head digest.
@@ -127,7 +127,7 @@ func TestIssue_AttestationAgentStackNoChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode repr: %v", err)
 	}
-	// Precondition body carries only the designated class, no chain (claim 32).
+	// Precondition body carries only the designated class, no chain (AGID-claim-32).
 	pre, _ := encodePreconditionsForTest(PreconditionsBody{DesignatedClass: "agent"})
 	req := signing.IssuancePreconditions{
 		TenantID:          "t1",

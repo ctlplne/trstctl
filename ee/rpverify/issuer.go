@@ -8,11 +8,11 @@ import (
 )
 
 // ErrStaleIssuerEpoch is returned when a leaf carries an issuer epoch below the
-// relying party's last-accepted issuer epoch for that authority (claim 27).
+// relying party's last-accepted issuer epoch for that authority (PCAS-claim-27).
 var ErrStaleIssuerEpoch = errors.New("rpverify: leaf carries an issuer epoch below the last-accepted issuer epoch")
 
 // LeafTuple is the (issuer-epoch, rotation-version) tuple an end-entity leaf carries
-// under an issuer-level succession (claim 27). The issuer epoch is the algorithm-epoch
+// under an issuer-level succession (PCAS-claim-27). The issuer epoch is the algorithm-epoch
 // of the issuing authority at issuance; the rotation version is the leaf's ordinary
 // (algorithm-invariant) re-issuance counter.
 type LeafTuple struct {
@@ -23,7 +23,7 @@ type LeafTuple struct {
 // AcceptLeafTuple checks a leaf's carried issuer epoch against the relying party's
 // durable last-accepted issuer epoch for authorityID, using the same EpochStore
 // discipline as chain verification (keyed by the authority identifier). A leaf whose
-// issuer epoch is below last-accepted is rejected (claim 27); a current-or-newer
+// issuer epoch is below last-accepted is rejected (PCAS-claim-27); a current-or-newer
 // issuer epoch is accepted and advances the store. A nil store disables the
 // discipline (single-shot check).
 func AcceptLeafTuple(authorityID string, tuple LeafTuple, store EpochStore) error {

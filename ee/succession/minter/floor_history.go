@@ -4,7 +4,7 @@ package minter
 
 import "sync"
 
-// HistoryFloorStore is a counter-free FloorStore (claim 48 / INV-16): it retains
+// HistoryFloorStore is a counter-free FloorStore (PCAS-claim-48 / INV-16): it retains
 // the recorded per-identity succession history and DERIVES the epoch floor from
 // it (the highest recorded epoch) rather than storing a separate counter. Its
 // observable behavior — what the minter refuses — is identical to a stored
@@ -47,7 +47,7 @@ func (s *HistoryFloorStore) Advance(identityID string, epoch uint64) error {
 }
 
 // RecordedTransition reports, by history determination, whether epoch would
-// duplicate or precede a recorded transition for identityID (claim 48). This is
+// duplicate or precede a recorded transition for identityID (PCAS-claim-48). This is
 // the counter-free equivalent of the "epoch <= floor" comparison.
 func (s *HistoryFloorStore) RecordedTransition(identityID string, epoch uint64) bool {
 	s.mu.Lock()

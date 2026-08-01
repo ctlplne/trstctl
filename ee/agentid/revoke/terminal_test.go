@@ -13,7 +13,7 @@ import (
 // TestRevoke_TerminalOnlyWhenAllJobsComplete: the subject transitions to the terminal
 // revoked-with-evidence state ONLY WHEN signed completion evidence exists for EVERY
 // enqueued and follow-on job; withholding one job's evidence leaves it NON-terminal, and
-// supplying all makes it terminal (claim 16 terminal limb / INV-A9).
+// supplying all makes it terminal (AGID-claim-16 terminal limb / INV-A9).
 func TestRevoke_TerminalOnlyWhenAllJobsComplete(t *testing.T) {
 	h := newHarness(t, "revoke_terminal_allcomplete")
 	ctx := context.Background()
@@ -111,7 +111,7 @@ func TestRevoke_TerminalOnlyWhenAllJobsComplete(t *testing.T) {
 
 // TestRevoke_TerminalStateReplayVerifiable: the terminal state is verifiable from the
 // ledger/durable projection by DETERMINISTIC REPLAY — a fresh reader replaying the
-// recorded jobs + per-job evidence reaches the SAME terminal verdict (claim 16 / INV-A9).
+// recorded jobs + per-job evidence reaches the SAME terminal verdict (AGID-claim-16 / INV-A9).
 func TestRevoke_TerminalStateReplayVerifiable(t *testing.T) {
 	h := newHarness(t, "revoke_terminal_replay")
 	ctx := context.Background()
@@ -168,7 +168,7 @@ func TestRevoke_TerminalStateReplayVerifiable(t *testing.T) {
 
 // TestRevoke_AggregateEvidenceThirdPartyVerifiable: the signed aggregate artifact binds a
 // digest of the per-job completion evidence and is THIRD-PARTY verifiable OFFLINE against
-// ONLY the published per-job evidence digests — no control-plane access (claim 18 /
+// ONLY the published per-job evidence digests — no control-plane access (AGID-claim-18 /
 // INV-A9). A truncated or substituted digest set fails closed.
 func TestRevoke_AggregateEvidenceThirdPartyVerifiable(t *testing.T) {
 	h := newHarness(t, "revoke_aggregate_offline")
@@ -225,7 +225,7 @@ func TestRevoke_AggregateEvidenceThirdPartyVerifiable(t *testing.T) {
 
 // TestRevoke_AggregateArtifactBindsSubjectReasonWatermarkHead: the aggregate artifact also
 // binds the SUBJECT ID, the REASON CLASS, the DIRECTIVE WATERMARK, and the LEDGER HEAD as
-// of the terminal revoked state — the independent-claim-33 binding set (claim 33).
+// of the terminal revoked state — the independent-AGID-claim-33 binding set (AGID-claim-33).
 func TestRevoke_AggregateArtifactBindsSubjectReasonWatermarkHead(t *testing.T) {
 	h := newHarness(t, "revoke_aggregate_claim33")
 	ctx := context.Background()
@@ -263,7 +263,7 @@ func TestRevoke_AggregateArtifactBindsSubjectReasonWatermarkHead(t *testing.T) {
 	if artifact.LedgerHead < res.Watermark {
 		t.Fatalf("aggregate ledger head %d < determining watermark %d (head must be as-of terminal)", artifact.LedgerHead, res.Watermark)
 	}
-	// The completion-evidence digest is bound and non-empty (claim 18 limb of the same
+	// The completion-evidence digest is bound and non-empty (AGID-claim-18 limb of the same
 	// artifact).
 	if len(artifact.CompletionEvidenceDigest) == 0 {
 		t.Fatal("aggregate binds no completion-evidence digest")
@@ -296,7 +296,7 @@ func TestRevoke_AggregateArtifactBindsSubjectReasonWatermarkHead(t *testing.T) {
 
 // TestRevoke_IntervalExceedanceRecorded: the subject must transition within a
 // policy-defined interval; advancing a fake clock past the interval records the exceedance
-// as a DISTINCT ledger event (claim 23 / INV-A9), exactly once.
+// as a DISTINCT ledger event (AGID-claim-23 / INV-A9), exactly once.
 func TestRevoke_IntervalExceedanceRecorded(t *testing.T) {
 	h := newHarness(t, "revoke_interval")
 	ctx := context.Background()
@@ -359,7 +359,7 @@ func TestRevoke_IntervalExceedanceRecorded(t *testing.T) {
 }
 
 // TestRevoke_IncompleteJobsQuery: the projection exposes a query returning exactly the
-// jobs for which signed completion evidence has NOT been recorded (claim 22). An
+// jobs for which signed completion evidence has NOT been recorded (AGID-claim-22). An
 // incomplete cascade surfaces exactly the missing-evidence jobs; a complete one surfaces
 // none.
 func TestRevoke_IncompleteJobsQuery(t *testing.T) {

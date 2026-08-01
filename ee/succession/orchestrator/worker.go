@@ -34,7 +34,7 @@ const (
 // predecessor handle from the serving high-water, builds a MintRequest, and runs it
 // idempotently through the orchestrator — mint over the signer transport, then record
 // + rp-publish + high-water advance in one transaction. It is idempotent on the
-// request id, so at-least-once outbox delivery yields exactly-once minting (claim 6).
+// request id, so at-least-once outbox delivery yields exactly-once minting (PCAS-claim-6).
 type SuccessionRequestWorker struct {
 	orch *Orchestrator
 }

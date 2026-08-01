@@ -7,7 +7,7 @@
 // forms (a model-weights digest for locally hosted weights OR a provider model
 // id + version when weights are not exposed) together with an explicit
 // indicator of which form is present, and the orchestrator/runtime version
-// identifiers (claims 11, 27-repr; establishing INV-A3, the representation +
+// identifiers (AGID-claims 11, 27-repr; establishing INV-A3, the representation +
 // tool-manifest-excess half).
 //
 // The representation is CANONICAL and byte-stable: the same agent stack yields
@@ -63,7 +63,7 @@ const (
 	toolManifestDigestDomain = "agid/agentstack/tool-manifest/v1"
 )
 
-// ModelForm is the explicit indicator (claim 11) of which of the two mutually
+// ModelForm is the explicit indicator (AGID-claim-11) of which of the two mutually
 // exclusive model-identifier forms a Representation carries. Exactly one form is
 // present; the indicator round-trips through CanonicalBytes and cannot be
 // omitted (the unset zero value is rejected by Validate).
@@ -72,7 +72,7 @@ type ModelForm uint8
 const (
 	// ModelFormUnset is the zero value and is never a valid representation: a
 	// representation with no declared model form is rejected fail-closed, so the
-	// indicator cannot be silently omitted (claim 11).
+	// indicator cannot be silently omitted (AGID-claim-11).
 	ModelFormUnset ModelForm = 0
 	// ModelFormWeightsDigest indicates the model is identified by a digest of its
 	// locally hosted weights (WeightsDigest is set; ProviderModelID/ModelVersion
@@ -97,7 +97,7 @@ func (f ModelForm) String() string {
 }
 
 // Model is the model-identifier component of a Representation in EXACTLY ONE of
-// two forms, tagged by an explicit Form indicator (claim 11). WeightsDigest is a
+// two forms, tagged by an explicit Form indicator (AGID-claim-11). WeightsDigest is a
 // raw digest (typically SHA-256 of the weights) computed by the caller outside
 // this package. ProviderModelID/ModelVersion are non-secret opaque identifiers
 // (for example "anthropic/claude-x" and "2026-01-01"). None of these fields is
@@ -143,7 +143,7 @@ var (
 	// tool-manifest digest.
 	ErrMissingToolDigest = errors.New("agentstack: representation missing tool-manifest digest")
 	// ErrModelFormUnset is returned when the model-form indicator is unset — the
-	// indicator cannot be omitted (claim 11).
+	// indicator cannot be omitted (AGID-claim-11).
 	ErrModelFormUnset = errors.New("agentstack: model form indicator is unset (claim 11)")
 	// ErrModelFormAmbiguous is returned when the model carries fields for more than
 	// one form (e.g. both a weights digest and a provider id), so the single-form
@@ -164,7 +164,7 @@ var (
 // returns — the plaintext prompt is never retained on the struct nor logged
 // (AN-8). The tool manifest is sorted and de-duplicated before digesting so
 // declaration order and duplicates do not change the digest. New validates the
-// model form (claim 11) and returns an error rather than an invalid
+// model form (AGID-claim-11) and returns an error rather than an invalid
 // representation (fail-closed).
 //
 // New performs NO key operation: the digests route through crypto.SHA256Sum
@@ -212,7 +212,7 @@ func digestSystemPrompt(rawSystemPrompt []byte) ([]byte, error) {
 }
 
 // Validate reports whether m is a well-formed model identifier under the
-// single-form rule (claim 11): exactly one form is declared and complete, the
+// single-form rule (AGID-claim-11): exactly one form is declared and complete, the
 // indicator is one of the two defined forms, and no fields for the other form
 // are set. It is fail-closed — an unset or ambiguous form is an error.
 func (m Model) Validate() error {
@@ -257,7 +257,7 @@ func (m Model) canonical() Model {
 }
 
 // Validate reports whether a representation is well-formed: it carries both
-// component digests and a valid single-form model identifier (claim 11 / §4.1).
+// component digests and a valid single-form model identifier (AGID-claim-11 / §4.1).
 // It is fail-closed and performs no key operation.
 func (r Representation) Validate() error {
 	if len(r.SystemPromptDigest) == 0 {
@@ -293,7 +293,7 @@ func (r Representation) CanonicalBytes() ([]byte, error) {
 	writeField(&b, "tool_manifest_digest")
 	writeBytes(&b, r.ToolManifestDigest)
 	// model block: an explicit one-byte form tag then the declared form's fields,
-	// so the indicator itself is bound and a form swap flips the bytes (claim 11).
+	// so the indicator itself is bound and a form swap flips the bytes (AGID-claim-11).
 	writeField(&b, "model")
 	b.WriteByte(byte(r.Model.Form))
 	switch r.Model.Form {

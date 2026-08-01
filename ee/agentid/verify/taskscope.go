@@ -6,7 +6,7 @@ import (
 	"trstctl.com/trstctl/ee/agentid/taskenv"
 )
 
-// taskscope.go enforces the TASK-BINDING half of claim 28: when a credential
+// taskscope.go enforces the TASK-BINDING half of AGID-claim-28: when a credential
 // binds a task-envelope digest, a requested action must fall within the scope of
 // THAT envelope, enforced ADDITIVELY -- even when the broader authority set would
 // permit the action. The relying party supplies its own copy of the envelope
@@ -67,7 +67,7 @@ func scopeInputs(env *taskenv.Envelope) map[string][]byte {
 	return in
 }
 
-// enforceTaskScope enforces claim 28's task binding. The credential bound
+// enforceTaskScope enforces AGID-claim-28's task binding. The credential bound
 // boundDigest; the RP must supply an ExpectedTaskEnvelope whose recomputed digest
 // equals boundDigest (else ErrTaskEnvelopeUnverified). Then:
 //

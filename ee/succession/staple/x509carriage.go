@@ -12,7 +12,7 @@ import (
 )
 
 // x509carriage.go makes the succession attachment a REAL X.509 certificate extension
-// (claim 32, INT-15): a presenter issues an end-entity certificate carrying the
+// (PCAS-claim-32, INT-15): a presenter issues an end-entity certificate carrying the
 // attachment, and a relying party extracts and verifies it from the parsed certificate
 // inline — no out-of-band resolution. A required-but-absent attachment on a real
 // certificate is a verification failure. This is the certificate-extension carriage
@@ -52,7 +52,7 @@ func IssueStapledLeaf(caCertDER []byte, caSigner crypto.DigestSigner, csrDER []b
 
 // AttachmentFromCertificate extracts the succession attachment from a real leaf
 // certificate. found is false when the certificate carries no attachment extension —
-// a required-attachment policy treats that as a failure (claim 32).
+// a required-attachment policy treats that as a failure (PCAS-claim-32).
 func AttachmentFromCertificate(certDER []byte) (att Attachment, found bool, err error) {
 	value, _, ok, err := crypto.LeafExtensionValue(certDER, CertExtensionOID)
 	if err != nil {
@@ -78,7 +78,7 @@ func AttachmentFromCertificate(certDER []byte) (att Attachment, found bool, err 
 
 // VerifyStapledCertificate extracts the attachment from a REAL certificate and verifies
 // it inline under p. Absence of the extension is a failure when p.RequireAttachment
-// (claim 32: a required-but-absent attachment fails verification), so a presenter
+// (PCAS-claim-32: a required-but-absent attachment fails verification), so a presenter
 // cannot strip the proof to force a downgrade.
 func VerifyStapledCertificate(certDER []byte, p Policy) (Result, error) {
 	att, found, err := AttachmentFromCertificate(certDER)

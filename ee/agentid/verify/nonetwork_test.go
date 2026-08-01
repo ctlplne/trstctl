@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// nonetwork_test.go proves the OFFLINE property structurally (claim 7 / INV-A7):
+// nonetwork_test.go proves the OFFLINE property structurally (AGID-claim-7 / INV-A7):
 // the verify path constructs NO network client and issues NO revocation-status
 // query. It does this two ways that a future change cannot silently defeat:
 //
@@ -78,7 +78,7 @@ func packageGoFiles(t *testing.T) []string {
 // package (and its WASM subpackage) and fails if any imports a network package or
 // references a dialing / status-query surface. This is the structural proof that
 // the verify path constructs no network client and issues no revocation-status
-// query (claim 7 / INV-A7 offline property).
+// query (AGID-claim-7 / INV-A7 offline property).
 func TestNoNetworkClientInVerifyPath(t *testing.T) {
 	fset := token.NewFileSet()
 	for _, f := range packageGoFiles(t) {

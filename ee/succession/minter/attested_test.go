@@ -59,7 +59,7 @@ func attestedMinter(t *testing.T, minByClass map[string]attest.Class, verr error
 
 // TestAttested_VerifyBeforeGenerate: attestation is verified before keygen — a valid
 // attestation mints (keygen once); an absent or failing attestation prevents keygen
-// entirely (claim 35 / INV-15).
+// entirely (PCAS-claim-35 / INV-15).
 func TestAttested_VerifyBeforeGenerate(t *testing.T) {
 	// classical gated at ClassSoftware; software evidence meets it.
 	m, ck, _ := attestedMinter(t, map[string]attest.Class{"classical": attest.ClassSoftware}, nil)
@@ -94,7 +94,7 @@ func TestAttested_VerifyBeforeGenerate(t *testing.T) {
 }
 
 // TestAttested_EvidenceDigestBound: the evidence digest + type are bound in the record
-// (by the signer attestation) and verifiable from the published evidence (claim 35).
+// (by the signer attestation) and verifiable from the published evidence (PCAS-claim-35).
 func TestAttested_EvidenceDigestBound(t *testing.T) {
 	m, _, roster := attestedMinter(t, map[string]attest.Class{"classical": attest.ClassSoftware}, nil)
 	ev := attest.Evidence{Type: "software", Blob: []byte("quote:software")}
@@ -127,7 +127,7 @@ func TestAttested_EvidenceDigestBound(t *testing.T) {
 
 // TestAttested_MinClassGate: a gated algorithm class refuses below-minimum evidence at
 // mint, and the relying party rejects such a record; un-gated classes are unaffected
-// (claim 35; RP mirror).
+// (PCAS-claim-35; RP mirror).
 func TestAttested_MinClassGate(t *testing.T) {
 	// classical gated at ClassHardwareTPM; software evidence is below minimum → refused.
 	m, ck, _ := attestedMinter(t, map[string]attest.Class{"classical": attest.ClassHardwareTPM}, nil)

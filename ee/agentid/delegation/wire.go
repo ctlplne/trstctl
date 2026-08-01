@@ -19,11 +19,11 @@ import (
 //     carries its delegator public key DER + the signed Record) plus the designated
 //     authority class the chain head claims (for the min-attestation-class gate).
 //   - SubjectRepr: the agent-stack representation to bind (AGID-03). Optional in the
-//     chain-only fallback (claim 31).
+//     chain-only fallback (AGID-claim-31).
 //   - Attestation: the attestation evidence body (type + blob). Optional in the
 //     chain-only fallback; REQUIRED when a designated authority class demands a
-//     minimum attestation class (claim 10) and in the attestation-gated fallback
-//     (claim 32).
+//     minimum attestation class (AGID-claim-10) and in the attestation-gated fallback
+//     (AGID-claim-32).
 //
 // Decoding is JSON: deterministic, self-delimiting, and the same encoding the AGID-02
 // ledger events use. The gate treats every field as untrusted input and re-verifies
@@ -50,23 +50,23 @@ type RecordEnvelope struct {
 // signing.IssuancePreconditions.Preconditions. Chain is ordered ROOT-FIRST (the
 // root-anchored hop is Chain[0]); the head is the last element. DesignatedClass, when
 // non-empty, names the authority class the chain head is designated as, which the
-// min-attestation-class policy gates (claim 10).
+// min-attestation-class policy gates (AGID-claim-10).
 type PreconditionsBody struct {
 	// Chain is the delegation chain, ordered root-first. Empty in the
-	// attestation-gated fallback (claim 32), where an agent-stack representation +
+	// attestation-gated fallback (AGID-claim-32), where an agent-stack representation +
 	// verified attestation stands alone with no multi-hop chain.
 	Chain []RecordEnvelope `json:"chain,omitempty"`
 	// DesignatedClass names the authority class the head is designated as, keying the
-	// min-attestation-class policy (claim 10). Empty means no class gate applies.
+	// min-attestation-class policy (AGID-claim-10). Empty means no class gate applies.
 	DesignatedClass string `json:"designated_class,omitempty"`
 	// Envelope carries the encoded task envelope (ee/agentid/taskenv) the chain head
-	// references via its Record.TaskDigest (AGID-05, claim 2). Optional: present only
+	// references via its Record.TaskDigest (AGID-05, AGID-claim-2). Optional: present only
 	// when a record references a task envelope. The gate verifies its signature + expiry
 	// as a precondition of the key op and binds its digest into the credential; when
 	// absent and no record references an envelope, the gate behaves exactly as AGID-04b.
 	Envelope []byte `json:"envelope,omitempty"`
 	// ReachabilityVerdict carries the encoded signed reachability verdict (ee/agentid/reach)
-	// the reachability engine produced OUTSIDE the signer (AGID-06, claims 5/6 / INV-A5).
+	// the reachability engine produced OUTSIDE the signer (AGID-06, AGID-claims 5/6 / INV-A5).
 	// Optional in carriage, but fail-closed in effect: the gate verifies the verdict's
 	// signature + watermark + ceiling determination as a PRECONDITION of the key op, bound
 	// to the FINAL record's authority. When the gate has reachability enforcement enabled

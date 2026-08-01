@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package agent implements the workload-held-predecessor succession path (claim 19,
+// Package agent implements the workload-held-predecessor succession path (PCAS-claim-19,
 // FIG. 5): the predecessor private key is held by a workload agent, not the platform
 // signer. The signer forms the commitment, the agent co-signs it as the predecessor,
 // the signer verifies that first signature against the commitment IT supplied,

@@ -58,7 +58,7 @@ func serveCoSign(t *testing.T, cs *agent.CoSigner) *grpc.ClientConn {
 // key and serves the co-sign RPC; the control plane forms the commitment and mints a
 // succession by requesting the predecessor co-signature over the transport. The
 // resulting record is a valid dual-signed succession record, and the agent's
-// oracle-prevention refusals hold over the wire (claim 19).
+// oracle-prevention refusals hold over the wire (PCAS-claim-19).
 func TestINT16_WorkloadHeldCoSignOverTransport(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	predKey, err := be.GenerateKey(crypto.ECDSAP256)

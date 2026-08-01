@@ -33,16 +33,16 @@ func neweventID() string {
 type Clock func() int64
 
 // Executor performs a single revocation job idempotently and records SIGNED per-job
-// completion evidence (claims 16/19/21 / INV-A9). It is the outbox Handler the
+// completion evidence (AGID-claims 16/19/21 / INV-A9). It is the outbox Handler the
 // dispatcher hands a claimed revocation-job Message: it decodes the job payload,
 // performs the effect(s), and — in ONE pg transaction — records the effect (keyed by
 // the job's idempotency key so AT MOST ONE effect is recorded per key), stamps the
 // job's completion reference, appends the signed completion-evidence event
 // durable-first, and (for a downstream-publishing job) enqueues the downstream-plane
-// revocation entry on the SAME transaction (claim 19). A worker retrying the job
+// revocation entry on the SAME transaction (AGID-claim-19). A worker retrying the job
 // at-least-once re-runs Execute; the conditional effect insert collapses a redelivery
 // whose effect already landed to a no-op, so execution resumes after a control-plane
-// failure without duplication or loss (claim 21).
+// failure without duplication or loss (AGID-claim-21).
 type Executor struct {
 	log       EventLog
 	repo      repoTxAccess
@@ -141,8 +141,8 @@ func (e *Executor) Handler() orchestrator.Handler {
 // signs the completion evidence, and in ONE pg transaction records the effect
 // (at-most-one per idempotency key), stamps the job completion ref, appends the
 // evidence event durable-first, and enqueues the downstream-plane publication for a
-// publishing job (claim 19). A redelivery whose effect already landed is a no-op
-// (claim 21). The message's IdempotencyKey is the job key; m.Payload is the JobPayload.
+// publishing job (AGID-claim-19). A redelivery whose effect already landed is a no-op
+// (AGID-claim-21). The message's IdempotencyKey is the job key; m.Payload is the JobPayload.
 func (e *Executor) Execute(ctx context.Context, m orchestrator.Message) error {
 	p, err := decodeJobPayload(m.Payload)
 	if err != nil {
@@ -181,7 +181,7 @@ func (e *Executor) Execute(ctx context.Context, m orchestrator.Message) error {
 	}
 
 	// First, atomically claim the effect: record it iff absent. This is the AN-5
-	// idempotency gate (claim 21). If another attempt already recorded the effect,
+	// idempotency gate (AGID-claim-21). If another attempt already recorded the effect,
 	// recorded is false and we must NOT re-append evidence or re-publish downstream.
 	recorded := false
 	err = e.repo.WithTenant(ctx, p.TenantID, func(tx pgx.Tx) error {
@@ -191,9 +191,9 @@ func (e *Executor) Execute(ctx context.Context, m orchestrator.Message) error {
 		}
 		recorded = ins
 		if !recorded {
-			return nil // effect already landed: no-op (claim 21)
+			return nil // effect already landed: no-op (AGID-claim-21)
 		}
-		// Downstream-plane publication (claim 19), SAME tx as the effect, so the
+		// Downstream-plane publication (AGID-claim-19), SAME tx as the effect, so the
 		// publish intent is durable iff the effect is. Keyed independently but stably
 		// so a redelivery de-duplicates downstream.
 		if p.PublishDownstream {

@@ -107,8 +107,8 @@ func TestBuildSuccessionJobs_Idempotent(t *testing.T) {
 	}
 }
 
-// TestIdentityTypes_X509_SSH_SVID_Token_Secret: every member of the claim-9
-// identity/credential genus maps to a plannable succession job (claim 9).
+// TestIdentityTypes_X509_SSH_SVID_Token_Secret: every member of the PCAS-claim-9
+// identity/credential genus maps to a plannable succession job (PCAS-claim-9).
 func TestIdentityTypes_X509_SSH_SVID_Token_Secret(t *testing.T) {
 	genus := PlannableCredentialTypes()
 	if len(genus) != 5 {

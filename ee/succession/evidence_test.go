@@ -31,7 +31,7 @@ func evFields() succession.CommitmentFields {
 
 // TestAttestation_BindsAnyRecord: the attestation primitive (used by KEM, recovery,
 // and the minter) names the signer, binds the authz_digest, and rejects a tampered
-// or unattested record (claim 28 / claim 42 / INV-13).
+// or unattested record (PCAS-claim-28 / PCAS-claim-42 / INV-13).
 func TestAttestation_BindsAnyRecord(t *testing.T) {
 	attest := evSigner(t)
 	roster := map[string][]byte{"signer-x": attest.Public().DER}
@@ -63,7 +63,7 @@ func TestAttestation_BindsAnyRecord(t *testing.T) {
 
 // TestRefusal_RecordedAsAuditEvent: a signed refusal artifact round-trips as an AN-2
 // ledger event and remains verifiable; tampering the recorded constraint breaks it
-// (claim 41).
+// (PCAS-claim-41).
 func TestRefusal_RecordedAsAuditEvent(t *testing.T) {
 	attest := evSigner(t)
 	art, err := succession.SignRefusal(attest, succession.RefusalArtifact{

@@ -22,7 +22,7 @@ func issuerChain(t *testing.T) (succession.GenesisRecord, []succession.Successio
 
 // TestIssuerSuccession_LeafInheritsEpoch: a leaf issued under the succeeded issuer
 // inherits the issuer's current algorithm-epoch, derived from the issuer's chain
-// (claim 20).
+// (PCAS-claim-20).
 func TestIssuerSuccession_LeafInheritsEpoch(t *testing.T) {
 	genesis, chain := issuerChain(t)
 	head := chain[len(chain)-1].Fields.Epoch
@@ -66,7 +66,7 @@ func TestIssuerSuccession_LeafInheritsEpoch(t *testing.T) {
 
 // TestIssuerSuccession_LeafReissueNoPerLeafRecord: re-issuing a fleet under the
 // succeeded issuer produces zero per-leaf succession records; every leaf inherits the
-// issuer's new epoch (claim 20).
+// issuer's new epoch (PCAS-claim-20).
 func TestIssuerSuccession_LeafReissueNoPerLeafRecord(t *testing.T) {
 	genesis, chain := issuerChain(t)
 	posture, err := issuer.PostureFromChain(genesis, chain)
@@ -91,7 +91,7 @@ func TestIssuerSuccession_LeafReissueNoPerLeafRecord(t *testing.T) {
 }
 
 // TestIssuerTuple_LeafCarriesEpochAndRotation: a leaf carries the (issuer-epoch,
-// rotation-version) tuple (claim 27).
+// rotation-version) tuple (PCAS-claim-27).
 func TestIssuerTuple_LeafCarriesEpochAndRotation(t *testing.T) {
 	genesis, chain := issuerChain(t)
 	posture, err := issuer.PostureFromChain(genesis, chain)

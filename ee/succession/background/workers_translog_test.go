@@ -52,7 +52,7 @@ func TestTransparencyHead_RealRootNotSynthesized(t *testing.T) {
 }
 
 // TestTransparencyHead_DivergentRecordsDivergentHead verifies the equivocation
-// property claim 29 relies on: two record sets that differ in even one leaf, at
+// property PCAS-claim-29 relies on: two record sets that differ in even one leaf, at
 // the same tree size, produce different bound heads.
 func TestTransparencyHead_DivergentRecordsDivergentHead(t *testing.T) {
 	base := []pcasstore.Record{

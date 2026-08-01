@@ -14,7 +14,7 @@ import (
 
 // TestMintRequestForJob_CarriesTargetAndPolicyRef: the glue maps a planned PQC
 // succession job to a signer MintRequest carrying the job's target algorithm and
-// reproducible policy_ref (claim 23), plus the operational binding. No PG needed.
+// reproducible policy_ref (PCAS-claim-23), plus the operational binding. No PG needed.
 func TestMintRequestForJob_CarriesTargetAndPolicyRef(t *testing.T) {
 	job := pqcmigration.SuccessionJob{
 		IdentityID:      "spiffe://d/id",

@@ -121,7 +121,7 @@ func TestConstructorInventory_MatchesSource(t *testing.T) {
 // TestDeferredAllowList_IsMinimal pins the DEFERRED allow-list to its exact, justified
 // set so broadening it (deferring something to dodge the gate) is a conscious, reviewed
 // diff. Two entries, both external-consumer-only:
-//   - PACKAGE ee/agentid/verify: the offline relying-party verifier SDK (claim 28),
+//   - PACKAGE ee/agentid/verify: the offline relying-party verifier SDK (AGID-claim-28),
 //     consumed outside this repo (the card's sanctioned DEFERRED tier).
 //   - SYMBOL ee/agentid/agentstack.New: the issuer-side representation builder that
 //     ingests the raw secret prompt; a control-plane caller would violate AN-8 (and AN-4

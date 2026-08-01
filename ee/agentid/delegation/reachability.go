@@ -11,15 +11,15 @@ import (
 )
 
 // reachability.go is the AGID-06 extension of the in-signer gate: the pre-issuance
-// reachability bound (claims 5/6 / INV-A5). When the reachability precondition is engaged,
+// reachability bound (AGID-claims 5/6 / INV-A5). When the reachability precondition is engaged,
 // the gate verifies a SIGNED REACHABILITY VERDICT — produced OUTSIDE the signer by the
 // ee/agentid/reach engine — as a PRECONDITION of the key operation, BOUND to the FINAL
 // delegation record's authority. The verdict binds a reachable-set digest, a ceiling
 // determination, and a graph watermark; the signer trusts the verdict's SIGNATURE +
 // WATERMARK, never a live graph query, so graph computation stays out of the custody
-// boundary (claim 6). A reachable set that exceeds a policy ceiling yields an Exceeded
+// boundary (AGID-claim-6). A reachable set that exceeds a policy ceiling yields an Exceeded
 // determination the gate refuses on, naming the violated ceiling and referencing a digest
-// of the offending reachable subset (claim 5). An absent/unsigned/tampered/stale verdict
+// of the offending reachable subset (AGID-claim-5). An absent/unsigned/tampered/stale verdict
 // is treated fail-closed as a ceiling violation (no key op).
 //
 // This file adds NO new core signing option: it extends the existing AGID-04a
@@ -59,7 +59,7 @@ var (
 	ErrReachabilitySubject = errors.New("delegation: cannot compute head authority digest for reachability")
 )
 
-// verifyReachability is the AGID-06 in-signer precondition (claims 5/6 / INV-A5). It runs
+// verifyReachability is the AGID-06 in-signer precondition (AGID-claims 5/6 / INV-A5). It runs
 // INSIDE verify(), AFTER the chain has verified (so the head record is a verified value)
 // and BEFORE the binding is assembled / any key op is reached. It performs NO key op. Any
 // refusal names CheckReachability. Semantics per the engagement rules above.
@@ -153,7 +153,7 @@ func (g *Gate) headAuthorityDigest(chain []RecordEnvelope) ([]byte, error) {
 }
 
 // reachabilityDetail renders a verification error as refusal detail, NAMING the violated
-// ceiling for a ceiling breach (claim 5) so the signed refusal is diagnostic without the
+// ceiling for a ceiling breach (AGID-claim-5) so the signed refusal is diagnostic without the
 // graph. A CeilingExceededError names its first ceiling and reason; every other error is
 // rendered by its message (all fail-closed, all no-key-op).
 func reachabilityDetail(err error) string {

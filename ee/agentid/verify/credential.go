@@ -16,7 +16,7 @@ import (
 // credential.go models the CREDENTIAL a caller presents and performs, offline,
 // the two credential-level steps: recover the bound values from the presented
 // carriage form (AGID-08 decoders), verify the signature against the trust root,
-// and determine the validity WINDOW from the credential alone (claim 7). It
+// and determine the validity WINDOW from the credential alone (AGID-claim-7). It
 // constructs NO network client and issues NO query for a credential's revocation state: the trust
 // root is caller-pinned, and validity is read from the credential's own bytes.
 
@@ -71,7 +71,7 @@ type Credential struct {
 
 // Window is a validity window as inclusive Unix-second bounds, matching the
 // taskenv/delegation Window semantics: a zero bound means "unbounded" on that
-// side. It is the credential's own short-TTL lifetime (claim 7); the verifier
+// side. It is the credential's own short-TTL lifetime (AGID-claim-7); the verifier
 // reads it from the credential and checks it against the caller's clock with NO
 // status query.
 type Window struct {
@@ -272,7 +272,7 @@ func windowFromTokenClaimsSegment(token []byte) Window {
 }
 
 // checkValidity decides a credential's validity from the credential alone at the
-// clock's instant (claim 7). It is fail-closed: an absent window is not "valid
+// clock's instant (AGID-claim-7). It is fail-closed: an absent window is not "valid
 // forever" -- when a validity check is demanded and no window is determinable, the
 // credential is refused (ErrNoValidityWindow). No query for a credential's revocation state is
 // issued; only the bound window and the caller's clock decide.

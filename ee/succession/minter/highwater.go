@@ -13,7 +13,7 @@ import (
 // highwater.go hardens the per-identity epoch floor beyond PCAS-05's restart
 // persistence so that "the floor cannot regress" holds under OPERATIONAL failure —
 // backup/restore, HA fail-over, and control-plane replay — not just runtime
-// compromise (claim 21, completes INV-3; load-bearing for independent claim 12).
+// compromise (PCAS-claim-21, completes INV-3; load-bearing for independent PCAS-claim-12).
 //
 // Three backings, composable:
 //   - a hardware MonotonicCounter (TPM/HSM) whose value survives a restore of the

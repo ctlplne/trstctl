@@ -128,7 +128,7 @@ func pureSuccessor() retirement.Successor {
 }
 
 // TestSuccession_HybridThenPurePQC: the hybrid→pure-PQC succession is announced only
-// once the ack quorum is met (claim 2).
+// once the ack quorum is met (PCAS-claim-2).
 func TestSuccession_HybridThenPurePQC(t *testing.T) {
 	rp1, rp2 := newRP(t, "rp1"), newRP(t, "rp2")
 	ctx := context.Background()
@@ -177,7 +177,7 @@ func TestSuccession_HybridThenPurePQC(t *testing.T) {
 }
 
 // TestRetirement_OnlyAfterQuorum: below quorum nothing is retired and no retirement
-// event is emitted; the predecessor is untouched and can still sign (claim 3 / INV-7).
+// event is emitted; the predecessor is untouched and can still sign (PCAS-claim-3 / INV-7).
 func TestRetirement_OnlyAfterQuorum(t *testing.T) {
 	rp1, rp2, rp3 := newRP(t, "rp1"), newRP(t, "rp2"), newRP(t, "rp3")
 	led := &memLedger{}
@@ -206,7 +206,7 @@ func TestRetirement_OnlyAfterQuorum(t *testing.T) {
 }
 
 // TestAck_MustBeSigned: an unsigned ack and one signed under a non-rostered/wrong
-// key are not counted (claim 3(a)).
+// key are not counted (PCAS-claim-3(a)).
 func TestAck_MustBeSigned(t *testing.T) {
 	rp1, rp2 := newRP(t, "rp1"), newRP(t, "rp2")
 	roster := rosterOf(rp1, rp2)
@@ -229,7 +229,7 @@ func TestAck_MustBeSigned(t *testing.T) {
 
 // TestAck_BindsIdentityAndEpoch: an ack's signature binds identity and epoch, so it
 // cannot be relabeled onto another identity/epoch; and an ack recorded outside the
-// validity window is not counted (claim 3(b),(c)).
+// validity window is not counted (PCAS-claim-3(b),(c)).
 func TestAck_BindsIdentityAndEpoch(t *testing.T) {
 	rp1 := newRP(t, "rp1")
 	roster := rosterOf(rp1)
@@ -265,7 +265,7 @@ func TestAck_BindsIdentityAndEpoch(t *testing.T) {
 }
 
 // TestQuorum_EvaluatedPerTenant: a tally for one tenant never counts another
-// tenant's acks (claim 3 / INV-5).
+// tenant's acks (PCAS-claim-3 / INV-5).
 func TestQuorum_EvaluatedPerTenant(t *testing.T) {
 	rp1, rp2 := newRP(t, "rp1"), newRP(t, "rp2")
 	roster := rosterOf(rp1, rp2)
@@ -287,7 +287,7 @@ func TestQuorum_EvaluatedPerTenant(t *testing.T) {
 
 // TestRetirement_RevokeThenZeroize_FailClosed: at quorum the predecessor is revoked
 // THEN zeroized (in that order), signing fails closed, and the retirement event binds
-// the satisfying ack-set digest with the succession record reference (claims 8, 3 / INV-9).
+// the satisfying ack-set digest with the succession record reference (PCAS-claims 8, 3 / INV-9).
 func TestRetirement_RevokeThenZeroize_FailClosed(t *testing.T) {
 	rp1, rp2 := newRP(t, "rp1"), newRP(t, "rp2")
 	led := &memLedger{}
@@ -335,7 +335,7 @@ func TestRetirement_RevokeThenZeroize_FailClosed(t *testing.T) {
 
 // TestZeroize_Residue: after an evidence-gated retirement the predecessor's material
 // is gone — signing fails closed with ErrZeroized and the handle is terminal
-// (claims 8, 16 / INV-9).
+// (PCAS-claims 8, 16 / INV-9).
 func TestZeroize_Residue(t *testing.T) {
 	rp1, rp2 := newRP(t, "rp1"), newRP(t, "rp2")
 	led := &memLedger{}

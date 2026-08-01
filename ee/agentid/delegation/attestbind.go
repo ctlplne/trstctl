@@ -11,8 +11,8 @@ import (
 
 // attestbind.go defines the PURE, datastore-free control-plane contracts the AGID-07b
 // broker precondition uses to bind a verified attestation to the issuance it justified
-// and to refuse a REPLAY (claim 9 / INV-A6), plus the sub-hour TTL-ceiling derivation the
-// ephemeral issuer is clamped to (claims 7/26 / INV-A7).
+// and to refuse a REPLAY (AGID-claim-9 / INV-A6), plus the sub-hour TTL-ceiling derivation the
+// ephemeral issuer is clamped to (AGID-claims 7/26 / INV-A7).
 //
 // IMPORTANT (AN-4): this file — and the whole `delegation` package — is SIGNER-LINKED
 // (cmd/trstctl-signer attaches delegation.NewSignerGate). It therefore imports NO
@@ -34,7 +34,7 @@ var (
 	// ErrAttestationReplay is returned when the attestation evidence presented for an
 	// issuance has ALREADY justified an issuance for this tenant (the evidence_digest
 	// UNIQUE index rejected the insert). The second issuance is refused with NO key op
-	// (claim 9 / INV-A6). The brokerstore recorder returns it; the precondition surfaces
+	// (AGID-claim-9 / INV-A6). The brokerstore recorder returns it; the precondition surfaces
 	// it.
 	ErrAttestationReplay = errors.New("delegation: attestation evidence already bound to a prior issuance (replay refused)")
 	// ErrNoBindingStore is returned when the precondition has no recorder configured (or a
@@ -43,7 +43,7 @@ var (
 	ErrNoBindingStore = errors.New("delegation: no attestation-binding store configured")
 	// ErrTTLCeilingExceeded is returned when the requested credential validity would
 	// exceed the minimum validity ceiling along the delegation chain, or is not
-	// sub-hour. Fail-closed: an over-long credential is refused, never minted (claim 7
+	// sub-hour. Fail-closed: an over-long credential is refused, never minted (AGID-claim-7
 	// / INV-A7).
 	ErrTTLCeilingExceeded = errors.New("delegation: requested credential TTL exceeds the chain ceiling or is not sub-hour")
 	// ErrNoChainCeiling is returned when a sub-hour ceiling cannot be derived. Fail-closed.
@@ -51,7 +51,7 @@ var (
 )
 
 // SubHour is the hard sub-hour ceiling every chain-bound ephemeral credential is clamped
-// to (claim 7 / INV-A7: validity < 1h). A derived or requested TTL at or above this is
+// to (AGID-claim-7 / INV-A7: validity < 1h). A derived or requested TTL at or above this is
 // clamped below it; a credential can never be minted with an hour-or-longer lifetime.
 const SubHour = time.Hour
 
@@ -69,7 +69,7 @@ type IssuanceBinding struct {
 	TenantID string
 	// IdempotencyKey keys the AN-6 outbox intent so at-least-once delivery is
 	// exactly-once downstream, and (paired with the AN-5 idempotencer) collapses a
-	// retried request to a single issuance event (claim 15 / AN-5).
+	// retried request to a single issuance event (AGID-claim-15 / AN-5).
 	IdempotencyKey string
 	// CredentialID is the issued credential's identifier (the mint result's id).
 	CredentialID string
@@ -90,7 +90,7 @@ type IssuanceBinding struct {
 	// TaskEnvelopeDigest is the optional bound task-envelope digest (AGID-05).
 	TaskEnvelopeDigest []byte
 	// EvidenceDigest is the verified attestation-evidence digest whose per-tenant
-	// uniqueness refuses a replay (claim 9 / INV-A6). Empty when no attestation was
+	// uniqueness refuses a replay (AGID-claim-9 / INV-A6). Empty when no attestation was
 	// required (chain-only fallback), in which case no binding row is written and no
 	// replay defense applies (there is nothing to replay).
 	EvidenceDigest []byte
@@ -114,16 +114,16 @@ type IssuanceBinding struct {
 type IssuanceBindingRecorder interface {
 	// RecordIssuanceBinding persists the issuance + attestation binding + AN-6 outbox
 	// intent in one transaction, returning ErrAttestationReplay when the evidence was
-	// already bound (claim 9 / INV-A6). It performs no key operation.
+	// already bound (AGID-claim-9 / INV-A6). It performs no key operation.
 	RecordIssuanceBinding(ctx context.Context, b IssuanceBinding) error
 }
 
 // SubHourCeiling derives the credential lifetime for a chain-bound issuance: the MINIMUM
 // of (a) the tightest remaining validity along the chain relative to now, (b) an
 // explicit requested TTL when positive, and (c) the hard sub-hour ceiling. The result is
-// always strictly less than one hour and never longer than the chain permits (claim 7 /
+// always strictly less than one hour and never longer than the chain permits (AGID-claim-7 /
 // INV-A7). It is a pure computation over the already-verified chain — no revocation
-// status is queried (revocation is by expiry, claim 26).
+// status is queried (revocation is by expiry, AGID-claim-26).
 //
 // requestedTTL <= 0 means "no explicit request": the ceiling is derived from the chain
 // (clamped sub-hour). A positive requestedTTL that exceeds the derived ceiling is an

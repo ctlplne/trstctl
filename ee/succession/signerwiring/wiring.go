@@ -27,7 +27,7 @@ type Config struct {
 	Floors minter.FloorStore
 	// FloorDir, when set and Floors is nil, selects a DURABLE, restart-surviving
 	// file-backed epoch floor under this directory within the signer custody boundary
-	// (INT-05, claim 21). Empty (and Floors nil) => interim in-memory floor.
+	// (INT-05, PCAS-claim-21). Empty (and Floors nil) => interim in-memory floor.
 	FloorDir string
 	// AttestSigner, when set, countersigns every minted record with the signer's
 	// attestation key. INT-11 makes attestation mandatory with a frozen vector.
@@ -43,7 +43,7 @@ type Config struct {
 	// Unset — the default — keeps downgrades refused unconditionally: the
 	// authority key is an operator ceremony input, never a control-plane one,
 	// so an unconfigured deployment fails closed rather than accepting tokens
-	// from anywhere (claim 17).
+	// from anywhere (PCAS-claim-17).
 	BreakGlassAuthorityPubDER []byte
 }
 
@@ -70,7 +70,7 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 			floors = newInterimFloorStore()
 		}
 	}
-	// Downgrade refusal on by default (claim 17): a weaker-class successor is
+	// Downgrade refusal on by default (PCAS-claim-17): a weaker-class successor is
 	// refused outright unless the operator provisioned a break-glass authority
 	// key, in which case a valid single-use token signed by that authority can
 	// authorize one. Durable single-use state when the custody dir is known.

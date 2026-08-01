@@ -45,7 +45,7 @@ func stapleCSR(t *testing.T) []byte {
 // TestINT15_AttachmentCarriedInRealCertificate proves the succession attachment is
 // carried in a REAL X.509 certificate extension and verified inline from the parsed
 // certificate, and that a required-but-absent attachment on a real certificate fails
-// (claim 32).
+// (PCAS-claim-32).
 func TestINT15_AttachmentCarriedInRealCertificate(t *testing.T) {
 	caDER, caKey := stapleCA(t)
 

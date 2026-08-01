@@ -8,7 +8,7 @@ import (
 	"trstctl.com/trstctl/internal/broker"
 )
 
-// renewal.go is the AGID-07b renewal path (claim 8): a renewal request RE-INVOKES the
+// renewal.go is the AGID-07b renewal path (AGID-claim-8): a renewal request RE-INVOKES the
 // FULL in-signer verification (chain + attestation) via the AGID-04 gate, and re-runs the
 // policy gate, BEFORE any key op — nothing is trusted from the prior issuance. It is a
 // thin wrapper over the same gauntlet CheckIssuancePrecondition runs, tagged as a renewal
@@ -20,14 +20,14 @@ import (
 // fresh credential and must clear policy, the in-signer chain+attestation verification,
 // the sub-hour ceiling, and the attestation-replay defense identically to a first
 // issuance. In particular a renewal presenting the SAME attestation evidence as the
-// credential it renews is refused by the evidence-digest unique index (claim 9), so a
+// credential it renews is refused by the evidence-digest unique index (AGID-claim-9), so a
 // renewal must present fresh attestation — exactly the property that makes a short-TTL
 // credential's renewal a re-attestation, not a rubber stamp.
 
 // CheckRenewalPrecondition is the renewal entry point. It runs the SAME full gauntlet as
 // a first chain-bound issuance (policy → in-signer chain+attestation verification →
 // sub-hour ceiling → attestation bind/replay under idempotency), re-invoking the AGID-04
-// gate before any key op (claim 8). It returns nil only when every step approves; any
+// gate before any key op (AGID-claim-8). It returns nil only when every step approves; any
 // refusal returns a non-nil error and no key op is performed.
 //
 // It takes the generic broker.IssuanceView (the same the core broker forwards on its

@@ -18,7 +18,7 @@ var (
 	ErrAttestationEvidence = errors.New("rpverify: record's bound attestation evidence digest does not match the published evidence")
 )
 
-// AttestedPolicy mirrors the signer's custody class gate (claim 35, FIG. 9): for a
+// AttestedPolicy mirrors the signer's custody class gate (PCAS-claim-35, FIG. 9): for a
 // gated algorithm class the relying party requires the record to carry a signer-attested
 // custody attestation of at least the minimum class.
 type AttestedPolicy struct {
@@ -55,7 +55,7 @@ func VerifyAttestedRecord(rec succession.SuccessionRecord, p AttestedPolicy) err
 }
 
 // VerifyEvidenceDigest checks that a record's bound evidence digest matches the
-// published attestation evidence (claim 35: the custody evidence that gated the
+// published attestation evidence (PCAS-claim-35: the custody evidence that gated the
 // succession is verifiable from the published record + evidence).
 func VerifyEvidenceDigest(rec succession.SuccessionRecord, evidence attest.Evidence) error {
 	if !bytes.Equal(rec.AttestationEvidenceDigest, attest.Digest(evidence)) {

@@ -49,7 +49,7 @@ func (e *Executor) appendEvidenceEvent(ctx context.Context, p JobPayload, eviden
 // recordEffectTx records a job's effect + signed completion evidence on the caller's
 // tx via the AGID-02 store's conditional insert, and reports whether it inserted. It
 // is the thin bridge from the executor's per-effect values to the store row; the
-// store's WHERE-NOT-EXISTS insert is the at-most-one-per-key guard (claim 21).
+// store's WHERE-NOT-EXISTS insert is the at-most-one-per-key guard (AGID-claim-21).
 func recordEffectTx(ctx context.Context, tx pgx.Tx, p JobPayload, idempotencyKey string, effect EffectClass, executor string, completedAt int64, body, sig, pub []byte) (bool, error) {
 	return agidstore.RecordEffectIfAbsentTx(ctx, tx, agidstore.RevocationEffect{
 		DirectiveID:    p.DirectiveID,

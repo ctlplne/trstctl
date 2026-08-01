@@ -40,7 +40,7 @@ var (
 
 // BreakGlassVerifier verifies a distinct, single-use, request-bound break-glass
 // token authorizing a forward strength-downgrade succession, inside the signer
-// (claim 17 / INV-8). It is separate from the dual-control AuthVerifier.
+// (PCAS-claim-17 / INV-8). It is separate from the dual-control AuthVerifier.
 type BreakGlassVerifier interface {
 	VerifyAndConsume(token []byte, req signing.MintRequest) error
 }
@@ -65,13 +65,13 @@ type FloorStore interface {
 // isolation scope (identity, tenant, deployment) and target — not just (identity,
 // target) — closing a scope-confusion replay across tenants/deployments. When one is
 // configured, minting requires a valid decision, verified BEFORE successor-key
-// generation (claim 23).
+// generation (PCAS-claim-23).
 type PolicyVerifier interface {
 	Verify(decision []byte, req signing.MintRequest) error
 }
 
 // AuthVerifier verifies a single-use dual-control authorization token that binds
-// the request, and marks it spent (claim 5). paramsDigest is the digest of the
+// the request, and marks it spent (PCAS-claim-5). paramsDigest is the digest of the
 // committed request parameters that exist before successor-key generation.
 type AuthVerifier interface {
 	VerifyAndConsume(token []byte, req signing.MintRequest, paramsDigest []byte) error
@@ -105,7 +105,7 @@ type Minter struct {
 }
 
 // AttestationGate verifies the successor-custodian attestation evidence carried in the
-// request and enforces the class gate, BEFORE successor keygen (claim 35, PCAS-29). On
+// request and enforces the class gate, BEFORE successor keygen (PCAS-claim-35, PCAS-29). On
 // success it returns the evidence digest + type to bind into the record; an error
 // refuses the mint. ee/succession/attest.Gate implements it.
 type AttestationGate interface {
@@ -114,7 +114,7 @@ type AttestationGate interface {
 
 // PlanProvenanceVerifier verifies the policy-decision provenance chain (finding ⟵
 // plan ⟵ decision) carried in the request, inside the signer and BEFORE successor
-// keygen (claims 24, 40, PCAS-21). ee/succession/policy.ProvenanceVerifier implements
+// keygen (PCAS-claims 24, 40, PCAS-21). ee/succession/policy.ProvenanceVerifier implements
 // it.
 type PlanProvenanceVerifier interface {
 	Verify(req signing.MintRequest) error
@@ -123,17 +123,17 @@ type PlanProvenanceVerifier interface {
 // Option configures a Minter.
 type Option func(*Minter)
 
-// WithPolicy requires a policy-authority-signed decision on every mint (claim 23).
+// WithPolicy requires a policy-authority-signed decision on every mint (PCAS-claim-23).
 func WithPolicy(v PolicyVerifier) Option { return func(m *Minter) { m.policy = v } }
 
 // WithCommitmentV2 mints records with the version-2 commitment (INT-08), which binds
 // RecordType, the authz digest, the attestation evidence digest + type, and the
-// delegation path IN the commitment (claims 24/33/35/42) so both dual signatures cover
+// delegation path IN the commitment (PCAS-claims 24/33/35/42) so both dual signatures cover
 // them and base chain verification detects a tamper. v1 records remain verifiable.
 func WithCommitmentV2() Option { return func(m *Minter) { m.commitmentV2 = true } }
 
 // DelegationConstraint enforces the delegated-authority effective constraint for a
-// scope BEFORE successor keygen (claim 33, INT-13): given the scope and the target
+// scope BEFORE successor keygen (PCAS-claim-33, INT-13): given the scope and the target
 // (new) epoch, it refuses a succession that violates the effective ancestor floor and,
 // on success, returns the canonical delegation-path representation to bind in the
 // commitment. ee/succession/delegation.MinterConstraint implements it.
@@ -147,7 +147,7 @@ type DelegationConstraint interface {
 // is bound in the v2 commitment.
 func WithDelegation(d DelegationConstraint) Option { return func(m *Minter) { m.delegation = d } }
 
-// WithDualControl requires a single-use authorization token on every mint (claim 5).
+// WithDualControl requires a single-use authorization token on every mint (PCAS-claim-5).
 func WithDualControl(v AuthVerifier) Option {
 	return func(m *Minter) {
 		m.auth = v
@@ -158,7 +158,7 @@ func WithDualControl(v AuthVerifier) Option {
 // WithStrengthOrdering enforces the class partial order (PurePQ >= Hybrid >=
 // Classical): a forward succession to a strictly weaker class is refused unless
 // the request carries a valid break-glass token that bg verifies. A nil bg means
-// downgrades are always refused (claim 17 / INV-8).
+// downgrades are always refused (PCAS-claim-17 / INV-8).
 func WithStrengthOrdering(bg BreakGlassVerifier) Option {
 	return func(m *Minter) {
 		m.enforceStrength = true
@@ -167,7 +167,7 @@ func WithStrengthOrdering(bg BreakGlassVerifier) Option {
 }
 
 // WithAttestationGate verifies the successor-custodian attestation evidence and the
-// class gate inside the signer BEFORE successor keygen (claim 35): a failing or
+// class gate inside the signer BEFORE successor keygen (PCAS-claim-35): a failing or
 // absent attestation prevents keygen entirely, and the evidence digest + type are
 // bound into the record.
 func WithAttestationGate(g AttestationGate) Option {
@@ -183,8 +183,8 @@ func WithPlanProvenance(v PlanProvenanceVerifier) Option {
 }
 
 // WithAttestation makes the signer countersign every minted record with its
-// attestation key (claim 28) and emit a signed refusal artifact on every refusal
-// (claim 41). Once configured there is no mint path that skips the countersignature
+// attestation key (PCAS-claim-28) and emit a signed refusal artifact on every refusal
+// (PCAS-claim-41). Once configured there is no mint path that skips the countersignature
 // (INV-13). signerID names the signer in both.
 func WithAttestation(attestSigner crypto.Signer, signerID string) Option {
 	return func(m *Minter) {
@@ -194,7 +194,7 @@ func WithAttestation(attestSigner crypto.Signer, signerID string) Option {
 }
 
 // RefusalError wraps a refusal sentinel with the signer's signed refusal artifact
-// (claim 41). errors.Is against the underlying sentinel still succeeds, so callers
+// (PCAS-claim-41). errors.Is against the underlying sentinel still succeeds, so callers
 // that match on ErrEpochNotCurrent, ErrStrengthDowngrade, etc. are unaffected.
 type RefusalError struct {
 	Artifact succession.RefusalArtifact
@@ -258,7 +258,10 @@ func (m *Minter) SetSuccessorKeyStore(s signing.SuccessorKeyStore) { m.succStore
 // key inside the boundary, forms the PCAS-04 commitment, dual-signs it with the
 // predecessor and successor keys, durably advances the epoch floor, and returns
 // only the successor public key + encoded record. Neither private key crosses the
-// boundary.
+// boundary. This is the independent PCAS-claim-49 method: in-signer keygen, the
+// commitment over both algorithms and public keys, dual signatures neither of
+// which alone establishes the succession, and the custody-side refusal of any
+// duplicate or preceding transition.
 func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (signing.MintResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -271,7 +274,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 
 	// Epoch monotonicity: the asserted predecessor epoch must equal the recorded
 	// floor. Stale, equal-but-already-advanced, or skipped epochs are refused
-	// (claim 12 / INV-3).
+	// (PCAS-claim-12 / INV-3).
 	floor := m.floor[req.IdentityID]
 	if req.AssertedPredecessorEpoch != floor {
 		return signing.MintResult{}, m.refuse(succession.RefusalEpoch, req, ErrEpochNotCurrent)
@@ -281,7 +284,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 
 	// Strength ordering: refuse a FORWARD succession to a strictly weaker
 	// algorithm class absent a valid, single-use break-glass token verified inside
-	// the signer (claim 17 / INV-8). This is distinct from epoch rollback (INV-3).
+	// the signer (PCAS-claim-17 / INV-8). This is distinct from epoch rollback (INV-3).
 	var breakGlassUsed bool
 	if m.enforceStrength && succession.IsStrengthDowngrade(pred.Algorithm(), req.TargetAlgorithm) {
 		if m.breakGlass == nil || len(req.BreakGlass) == 0 {
@@ -306,7 +309,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		delegationPath = dp
 	}
 
-	// Policy verification BEFORE successor-key generation (claim 23).
+	// Policy verification BEFORE successor-key generation (PCAS-claim-23).
 	if m.policy != nil {
 		if len(req.PolicyDecision) == 0 {
 			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyRequired)
@@ -325,7 +328,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		}
 	}
 
-	// Custody-attestation verification BEFORE successor-key generation (claim 35): the
+	// Custody-attestation verification BEFORE successor-key generation (PCAS-claim-35): the
 	// successor-custodian evidence is verified and class-gated in-signer; a failing or
 	// absent attestation prevents keygen entirely.
 	var attestEvidenceDigest []byte
@@ -338,7 +341,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		attestEvidenceDigest, attestType = d, ty
 	}
 
-	// Dual-control verification BEFORE successor-key generation (claim 5).
+	// Dual-control verification BEFORE successor-key generation (PCAS-claim-5).
 	if m.requireAuth {
 		if len(req.Authorization) == 0 {
 			return signing.MintResult{}, m.refuse(succession.RefusalDualControl, req, ErrAuthorizationRequired)
@@ -382,8 +385,8 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	authzDigest := succession.AuthzDigest(req.Authorization)
 	if m.commitmentV2 {
 		// Bind the record-level fields IN the commitment (INT-08): RecordType (ordinary
-		// for the minter), the authz digest (claim 42), and the attestation evidence
-		// digest + type (claim 35). Both dual signatures then cover them, so base
+		// for the minter), the authz digest (PCAS-claim-42), and the attestation evidence
+		// digest + type (PCAS-claim-35). Both dual signatures then cover them, so base
 		// VerifyChain alone detects a tamper (INT-09) and "the commitment binds ..." is
 		// literally true.
 		fields.CommitmentVersion = 2
@@ -412,7 +415,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	}
 	if breakGlassUsed {
 		// Mark the record as a break-glass succession; the RP requires this for any
-		// weaker-class succession (claim 17). It is self-authenticating (authority
+		// weaker-class succession (PCAS-claim-17). It is self-authenticating (authority
 		// signature), so it needs no commitment binding.
 		rec.BreakGlassAuth = cloneBytesBG(req.BreakGlass)
 	}
@@ -421,13 +424,13 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// by the signer attestation), so the authorization is verifiable from the record.
 	rec.AuthzDigest = authzDigest
 
-	// Bind the successor-custody attestation evidence digest + type (claim 35), so the
+	// Bind the successor-custody attestation evidence digest + type (PCAS-claim-35), so the
 	// record proves what custody evidence gated it. The signer attestation binds these.
 	rec.AttestationEvidenceDigest = attestEvidenceDigest
 	rec.AttestationType = attestType
 
 	// Signer attestation: countersign every record with the signer's attestation key
-	// (claim 28 / INV-13). When attestation is configured there is no path here that
+	// (PCAS-claim-28 / INV-13). When attestation is configured there is no path here that
 	// leaves a record unattested. It binds the commitment and authz_digest.
 	if m.attestSigner != nil {
 		att, err := succession.Attest(m.attestSigner, m.signerID, rec)
@@ -467,7 +470,7 @@ type paramsForDigest struct {
 }
 
 // RequestParamsDigest is the digest of the committed request parameters that
-// exist before successor-key generation (claim 5). An approval authority binds a
+// exist before successor-key generation (PCAS-claim-5). An approval authority binds a
 // dual-control token to this value; the minter recomputes and compares it.
 func RequestParamsDigest(req signing.MintRequest) []byte {
 	data, _ := json.Marshal(paramsForDigest{
@@ -509,7 +512,7 @@ type PolicyDecision struct {
 }
 
 // SignedPolicyAuthorizer verifies policy decisions signed by a policy authority
-// whose public key the signer holds (claim 23).
+// whose public key the signer holds (PCAS-claim-23).
 type SignedPolicyAuthorizer struct{ AuthorityPubDER []byte }
 
 // Verify checks the authority signature and that the decision authorizes the
@@ -548,7 +551,7 @@ func (p SignedPolicyAuthorizer) Verify(decision []byte, req signing.MintRequest)
 
 // AuthorizationToken is the single-use dual-control artifact an approval authority
 // signs. The m-of-n approval is gathered OUTSIDE the signer; the signer verifies
-// only this one artifact and never tallies per-approver approvals (claim 5).
+// only this one artifact and never tallies per-approver approvals (PCAS-claim-5).
 type AuthorizationToken struct {
 	IdentityID               string           `json:"identity_id"`
 	TenantID                 string           `json:"tenant_id"`
@@ -559,7 +562,7 @@ type AuthorizationToken struct {
 }
 
 // SignedTokenAuthorizer verifies authority-signed AuthorizationTokens and enforces
-// single-use by retaining spent nonces (claim 5).
+// single-use by retaining spent nonces (PCAS-claim-5).
 type SignedTokenAuthorizer struct {
 	AuthorityPubDER []byte
 	spent           SpentStore
@@ -573,7 +576,7 @@ func NewSignedTokenAuthorizer(authorityPubDER []byte) *SignedTokenAuthorizer {
 
 // NewDurableSignedTokenAuthorizer builds a dual-control authorizer whose single-use
 // state is durable within the signer custody dir, so a consumed token replayed after
-// a signer restart is refused (INT-06, claim 5).
+// a signer restart is refused (INT-06, PCAS-claim-5).
 func NewDurableSignedTokenAuthorizer(authorityPubDER []byte, dir string) (*SignedTokenAuthorizer, error) {
 	s, err := NewDurableSpentStore(dir, "pcas-dualcontrol-spent")
 	if err != nil {
@@ -648,7 +651,7 @@ func NewSignedBreakGlassAuthorizer(authorityPubDER []byte) *SignedBreakGlassAuth
 }
 
 // NewDurableSignedBreakGlassAuthorizer builds a break-glass authorizer whose
-// single-use state is durable within the signer custody dir (INT-06, claim 17).
+// single-use state is durable within the signer custody dir (INT-06, PCAS-claim-17).
 func NewDurableSignedBreakGlassAuthorizer(authorityPubDER []byte, dir string) (*SignedBreakGlassAuthorizer, error) {
 	s, err := NewDurableSpentStore(dir, "pcas-breakglass-spent")
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 const postureReportDomain = "trstctl/pcas/succession/posture-report/v1"
 
 // PostureReport is a signed, standalone statement of an identity's current
-// cryptographic posture (claim 50): the algorithm in force, its epoch, and a
+// cryptographic posture (PCAS-claim-50): the algorithm in force, its epoch, and a
 // digest of the succession record that put it in force. A consumer verifies it
 // from the report bytes plus the reporter's public key ALONE — with no ledger
 // replay (distinct from PCAS-24's replay-correspondence attestation).
@@ -60,7 +60,7 @@ func SignPostureReport(reporter crypto.Signer, r PostureReport) (PostureReport, 
 }
 
 // VerifyPostureReport verifies r against the reporter's public key. It consults
-// ONLY the report bytes and the key — it performs no ledger replay (claim 50).
+// ONLY the report bytes and the key — it performs no ledger replay (PCAS-claim-50).
 func VerifyPostureReport(reporterPubDER []byte, r PostureReport) error {
 	if len(r.Signature) == 0 {
 		return errors.New("succession: posture report is unsigned")

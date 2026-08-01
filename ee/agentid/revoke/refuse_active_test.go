@@ -17,7 +17,7 @@ import (
 
 // TestRevoke_SignerRefusesWhileDirectiveActive: while a revocation directive is ACTIVE
 // against a delegation record of a chain, the isolated signing process REFUSES any
-// issuance OR renewal whose chain includes the subject (claim 20 / INV-A9). This REUSES
+// issuance OR renewal whose chain includes the subject (AGID-claim-20 / INV-A9). This REUSES
 // the AGID-04 gate seam — the same signing.IssuanceGate the signer consults before any
 // key op — with AGID-11's directive-backed RevocationReader supplied as the per-hop
 // non-revocation reader. There is NO new internal/signing option and NO new gate check:

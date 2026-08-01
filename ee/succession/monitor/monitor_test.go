@@ -53,7 +53,7 @@ func attested(t *testing.T, identity string, epoch uint64, attest crypto.Signer,
 // TestINT19_MisissuanceMonitorDetectsAndEmits drives the misissuance monitor over a
 // record stream: it detects the first algorithm-epoch equivocation, emits a durable
 // misissuance event that decodes to a self-verifying artifact naming the minting
-// signers, and changes nothing on a clean stream (claims 11, 28).
+// signers, and changes nothing on a clean stream (PCAS-claims 11, 28).
 func TestINT19_MisissuanceMonitorDetectsAndEmits(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	signerA, _ := be.GenerateKey(crypto.ECDSAP256)

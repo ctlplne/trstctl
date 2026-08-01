@@ -98,7 +98,7 @@ func Parse(data []byte) (Representation, error) {
 		rep.Model.ModelVersion = ver
 	default:
 		// Unset or unknown form tag: fail closed rather than accept an
-		// indicator-less or bogus model (claim 11).
+		// indicator-less or bogus model (AGID-claim-11).
 		return Representation{}, ErrMalformed
 	}
 

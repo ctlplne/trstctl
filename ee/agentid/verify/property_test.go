@@ -15,10 +15,10 @@ import (
 //
 //   P1 tool-manifest digest is order- and duplicate-INDEPENDENT (canonicalization).
 //   P2 a tool IN the manifest is accepted; a tool NOT in it is refused -- for random
-//      manifests and random query tools (claim 29 membership is exact).
+//      manifests and random query tools (AGID-claim-29 membership is exact).
 //   P3 the validity window decision is MONOTONE in the clock: accepted at some
 //      instant t implies accepted for every instant within [NotBefore,NotAfter], and
-//      refused strictly outside (claim 7 short-TTL from the credential alone).
+//      refused strictly outside (AGID-claim-7 short-TTL from the credential alone).
 //   P4 REFUSAL IS STABLE: re-running Verify on the same refused input refuses the
 //      same way (determinism / no hidden state, no network dependence).
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package delegation implements delegated-authority succession domains (claims 33,
+// Package delegation implements delegated-authority succession domains (PCAS-claims 33,
 // 45, 46; FIG. 8): a tree of tenant scopes, each with succession-constraint state
 // (an algorithm-epoch floor). The effective constraint for a scope is the
 // strongest over the scope and all its ancestors, so a constraint never loosens
@@ -25,7 +25,7 @@ import (
 // effective constraint of a scope.
 var ErrConstraintViolation = errors.New("delegation: succession violates the effective constraint")
 
-// Constraint is a scope's succession-constraint state (claim 33): at least an
+// Constraint is a scope's succession-constraint state (PCAS-claim-33): at least an
 // algorithm-epoch floor.
 type Constraint struct{ EpochFloor uint64 }
 
@@ -68,7 +68,7 @@ func (t *Tree) Path(id string) ([]string, error) {
 
 // EffectiveFloor returns the effective epoch floor for a scope: the MAX floor over
 // the scope and all its ancestors, so the effective constraint never loosens down
-// the tree (claim 33 / INV-14).
+// the tree (PCAS-claim-33 / INV-14).
 func (t *Tree) EffectiveFloor(id string) (uint64, error) {
 	path, err := t.Path(id)
 	if err != nil {
@@ -84,7 +84,7 @@ func (t *Tree) EffectiveFloor(id string) (uint64, error) {
 }
 
 // CheckSuccession refuses a succession for an identity of scope id whose target
-// epoch is below the effective floor (claim 33).
+// epoch is below the effective floor (PCAS-claim-33).
 func (t *Tree) CheckSuccession(id string, targetEpoch uint64) error {
 	floor, err := t.EffectiveFloor(id)
 	if err != nil {
@@ -129,7 +129,7 @@ type IdentityState struct {
 
 // RaiseConstraint raises scope id's floor and returns the identities of that scope
 // or its descendants whose current epoch now violates the raised effective floor —
-// the forced-migration jobs (claim 45).
+// the forced-migration jobs (PCAS-claim-45).
 func (t *Tree) RaiseConstraint(id string, newFloor uint64, identities map[string]IdentityState) ([]string, error) {
 	s, ok := t.scopes[id]
 	if !ok {
@@ -175,7 +175,7 @@ func (t *Tree) isDescendant(scope, ancestor string) bool {
 }
 
 // DelegationPolicyRef binds a delegation path into the succession commitment via
-// the policy_ref field (claim 33 — the path representation is committed because
+// the policy_ref field (PCAS-claim-33 — the path representation is committed because
 // policy_ref is a bound commitment field). Distinct paths yield distinct refs and
 // hence distinct commitments.
 func DelegationPolicyRef(path []string) string {
@@ -191,7 +191,7 @@ func DelegationPolicyRef(path []string) string {
 }
 
 // CoSignGenesis has a descendant scope's trust root co-sign the genesis of an
-// identity minted at the request of a provider entity (claim 46). It is the same
+// identity minted at the request of a provider entity (PCAS-claim-46). It is the same
 // tenant-trust-root attestation VerifyGenesis checks, with the descendant scope's
 // root as the signing authority.
 func CoSignGenesis(descendantRoot crypto.Signer, g succession.GenesisRecord) (succession.GenesisRecord, error) {

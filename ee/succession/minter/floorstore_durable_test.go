@@ -55,7 +55,7 @@ func (r floorTestResolver) Resolve(h string) (crypto.Signer, error) {
 }
 
 // TestINT05_DurableFloorRefusesStaleEpochAfterRestart proves the durable floor
-// survives a signer restart (claim 21): minter 1 mints epoch 1 over a durable floor;
+// survives a signer restart (PCAS-claim-21): minter 1 mints epoch 1 over a durable floor;
 // a FRESH minter + fresh floor store over the SAME directory loads floor=1 and refuses
 // the stale asserted-epoch-0 mint. With an in-memory floor the fresh minter would
 // re-mint at epoch 1 — a rollback.

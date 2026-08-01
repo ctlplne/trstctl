@@ -10,7 +10,7 @@ import "trstctl.com/trstctl/internal/crypto"
 // the core byok rotation-version (internal/crypto/byok.ManagedSigner.Version),
 // which counts same-algorithm re-keys. A same-algorithm re-key advances the
 // rotation-version but NOT the algorithm-epoch and is definitionally not a
-// succession (claim 22 / INV-2). Genesis is epoch 0.
+// succession (PCAS-claim-22 / INV-2). Genesis is epoch 0.
 type AlgorithmEpoch uint64
 
 // RotationCounter is the read-only view of core byok lifecycle state that the
@@ -55,7 +55,7 @@ func (i *Identity) Epoch() AlgorithmEpoch { return i.epoch }
 func (i *Identity) Algorithm() crypto.Algorithm { return i.alg }
 
 // Descriptor pairs the algorithm-epoch with the core byok rotation-version,
-// making the two-counter model explicit (claim 22 / INV-2). The epoch is owned
+// making the two-counter model explicit (PCAS-claim-22 / INV-2). The epoch is owned
 // here (it advances only on a cross-algorithm succession); the rotation-version
 // is read from core byok and never modified by PCAS.
 type Descriptor struct {

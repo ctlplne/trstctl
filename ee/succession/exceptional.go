@@ -9,17 +9,17 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// exceptional.go carries the exceptional-but-chained succession records (claims 36,
+// exceptional.go carries the exceptional-but-chained succession records (PCAS-claims 36,
 // 37; establishes the revocation/ceremony limbs of INV-15). The point is that
 // exceptional paths stay ON the chain: they are minted as distinct record TYPES at
 // the next algorithm-epoch, they carry a mandatory transparency-log inclusion proof,
 // and their type is bound by the signer attestation — so no exceptional path bypasses
 // the ledger, the epoch discipline, or auditability.
 //
-//   - Revocation-as-succession (claim 36): a tombstone record at the next epoch. A
+//   - Revocation-as-succession (PCAS-claim-36): a tombstone record at the next epoch. A
 //     relying party learns revocation from ordinary offline chain verification — the
 //     chain itself is the revocation status; there is no separate revocation query.
-//   - Ceremony / emergency records (claim 37): a claim-17 break-glass downgrade, or a
+//   - Ceremony / emergency records (PCAS-claim-37): a PCAS-claim-17 break-glass downgrade, or a
 //     control-plane-unavailable emergency issuance, minted as a distinct chained type
 //     with mandatory inclusion and stricter relying-party policy.
 
@@ -32,7 +32,7 @@ var (
 // IsExceptional reports whether a record is a non-ordinary (exceptional) type.
 func IsExceptional(rec SuccessionRecord) bool { return rec.RecordType != RecOrdinary }
 
-// BuildRevocation mints a revocation tombstone at the next epoch (claim 36): the
+// BuildRevocation mints a revocation tombstone at the next epoch (PCAS-claim-36): the
 // current key signs a record marking the identity revoked. The successor is the key
 // itself (a self-succession tombstone), so the record is a valid dual-attested chain
 // record; RecordType marks it a tombstone and the signer attestation binds that type.
@@ -95,7 +95,7 @@ func BuildExceptional(fields CommitmentFields, predecessor, successor crypto.Sig
 
 // RequireInclusionForExceptional refuses to publish/finalize an exceptional record
 // that lacks an inclusion proof — no exceptional path takes effect outside the ledger
-// (claim 37 / INV-15). Ordinary records are unaffected.
+// (PCAS-claim-37 / INV-15). Ordinary records are unaffected.
 func RequireInclusionForExceptional(rec SuccessionRecord) error {
 	if IsExceptional(rec) && len(rec.InclusionProof) == 0 {
 		return ErrExceptionalInclusion
@@ -128,7 +128,7 @@ func VerifyExceptional(rec SuccessionRecord, roster map[string][]byte, verifyInc
 	return nil
 }
 
-// Revoked reports whether a chain's head is a revocation tombstone (claim 36): the
+// Revoked reports whether a chain's head is a revocation tombstone (PCAS-claim-36): the
 // chain itself is the revocation status. Establish the chain's authenticity with
 // VerifyChain first.
 func Revoked(chain []SuccessionRecord) bool {

@@ -16,7 +16,7 @@ import (
 const evidenceDomain = "agid/agentid/revocation-completion-evidence/v1"
 
 // CompletionEvidence is the per-job completion proof recorded in the ledger when a
-// revocation job's effect is performed (§7.3, claim 16 / INV-A9). It names the job
+// revocation job's effect is performed (§7.3, AGID-claim-16 / INV-A9). It names the job
 // (its idempotency key and directive), the target credential, the effect class that
 // was performed, the completion timestamp, and the executor identity — exactly the
 // fields the card enumerates. It is SIGNED (Signature over the canonical body via

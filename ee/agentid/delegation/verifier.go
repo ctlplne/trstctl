@@ -13,7 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
-// verifier.go is the custody-boundary heart of AGID (independent claim 1): the real
+// verifier.go is the custody-boundary heart of AGID (independent AGID-claim-1): the real
 // signing.IssuanceGate that, BEFORE any private-key operation, verifies IN ORDER and
 // FAILS CLOSED:
 //
@@ -27,13 +27,13 @@ import (
 //  3. Attestation evidence via internal/attest (read-only), including the
 //     min-attestation-class gate: a designated authority class requires a minimum
 //     attestation class; below-class evidence is refused NAMING the class not met
-//     (claim 10).
+//     (AGID-claim-10).
 //
 // On ANY failure the gate returns IssuanceDecision{Approved:false, RefusalRecord:<signed
 // refusal naming the failed hop+check>} with ZERO key ops; the caller appends an
 // agent.refusal.recorded event. On success it returns Approved:true with BindingMaterial
 // = the chain-head digest + agent-stack representation binding, and records the
-// root-anchor phishing-resistant auth reference for the issuance event (claim 13). The
+// root-anchor phishing-resistant auth reference for the issuance event (AGID-claim-13). The
 // real key op (agent keygen/certify) runs in the keyOp closure the signer supplies AFTER
 // approval (see bind.go MintCredential); INV-A1 ordering is enforced by the core seam
 // (issuancegate.go gatedIssue) which consults this gate BEFORE any key op.
@@ -46,7 +46,7 @@ import (
 
 // RootAnchor is one root anchor the signer holds in its trust store: the delegator
 // public key DER that a valid chain's root hop must be signed by, plus a
-// phishing-resistant auth reference recorded with the issuance event (claim 13). The
+// phishing-resistant auth reference recorded with the issuance event (AGID-claim-13). The
 // AuthRef is an opaque handle to the phishing-resistant authenticator (a FIDO2/WebAuthn
 // credential id, a hardware-token serial, ...) that bound the root principal; it is
 // non-secret and recorded, never a password.
@@ -55,7 +55,7 @@ type RootAnchor struct {
 	// chain's root hop signature must verify against this key for the chain to anchor.
 	PublicDER []byte
 	// AuthRef is the phishing-resistant auth reference for the root principal, recorded
-	// with the issuance event (claim 13). Non-secret.
+	// with the issuance event (AGID-claim-13). Non-secret.
 	AuthRef string
 }
 
@@ -174,7 +174,7 @@ type Config struct {
 	// that requires none proceeds. Production supplies CoreAttestationVerifier.
 	Attestor AttestationVerifier
 	// MinClass maps a designated authority class to its minimum attestation class
-	// (claim 10). Optional: an empty policy gates no class.
+	// (AGID-claim-10). Optional: an empty policy gates no class.
 	MinClass MinClassPolicy
 	// Tools resolves tool aliases for the comparator (AGID-01). Optional: a nil
 	// registry resolves each tool to its normalized self.
@@ -189,7 +189,7 @@ type Config struct {
 	IssuingCACertDER []byte
 	IssuingCASigner  crypto.DigestSigner
 	// TaskEnvelopeTrust resolves a task-envelope requester key id to its public key DER
-	// (AGID-05, claim 2). It is the signer-held registry of requester identities to
+	// (AGID-05, AGID-claim-2). It is the signer-held registry of requester identities to
 	// phishing-resistant keys the gate verifies a referenced task envelope's signature
 	// against. Optional: a gate constructed WITHOUT it behaves exactly as AGID-04b for
 	// envelope-free chains; but a chain whose head REFERENCES a task envelope is refused
@@ -197,7 +197,7 @@ type Config struct {
 	// never consulted unless a record references an envelope.
 	TaskEnvelopeTrust taskenv.TrustLookup
 	// ReachabilityTrust resolves a reachability-verdict signer key id to its public key
-	// DER (AGID-06, claims 5/6). It is the signer-held registry of the reachability
+	// DER (AGID-06, AGID-claims 5/6). It is the signer-held registry of the reachability
 	// engine's verdict-signing identities the gate verifies a presented reachability
 	// verdict's signature against. Setting it (non-nil) ENABLES the reachability
 	// precondition: a chain-bearing request must then carry a valid signed verdict for the
@@ -208,7 +208,7 @@ type Config struct {
 	// signer (the signer trusts the signature, not a live graph).
 	ReachabilityTrust reach.VerdictTrustLookup
 	// ReachabilityWatermark is the signer's freshness policy for a reachability verdict's
-	// graph watermark (AGID-06, claim 6). Optional: when nil, any non-empty watermark is
+	// graph watermark (AGID-06, AGID-claim-6). Optional: when nil, any non-empty watermark is
 	// accepted (verification is still invariant to graph changes after the watermark,
 	// because the signer trusts the signed digest). Production supplies a real staleness
 	// policy (e.g. the verdict watermark must match/track the tenant's current graph
@@ -223,7 +223,7 @@ type Config struct {
 	RequireReachability bool
 }
 
-// Gate is the real in-signer verify-before-keygen issuance gate (claim 1). It
+// Gate is the real in-signer verify-before-keygen issuance gate (AGID-claim-1). It
 // implements signing.IssuanceGate. Construct it with NewGate.
 type Gate struct {
 	cfg Config
@@ -267,7 +267,7 @@ func NewGate(cfg Config) (*Gate, error) {
 
 // verifyResult is the internal outcome of the in-order verification: either a refusal
 // (named check + hop + detail) or an approval carrying the assembled binding material
-// and the root-anchor auth reference to record (claim 13).
+// and the root-anchor auth reference to record (AGID-claim-13).
 type verifyResult struct {
 	refused  bool
 	check    string
@@ -279,7 +279,7 @@ type verifyResult struct {
 	chainHead []byte
 }
 
-// VerifyIssuancePreconditions is the gate entry point (claim 1). It performs the full
+// VerifyIssuancePreconditions is the gate entry point (AGID-claim-1). It performs the full
 // in-order verification and returns an IssuanceDecision. On refusal it signs a refusal
 // artifact naming the failed hop+check and returns Approved:false with ZERO key ops. On
 // approval it returns Approved:true with the binding material; the caller runs the key
@@ -344,7 +344,7 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 		}
 	}
 
-	// (3) Attestation + min-attestation-class gate (claim 10).
+	// (3) Attestation + min-attestation-class gate (AGID-claim-10).
 	ares := g.verifyAttestation(req, body)
 	if ares.refused {
 		return ares.verifyResult
@@ -362,7 +362,7 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 		reprBytes = req.SubjectRepr
 	}
 
-	// (4) Task envelope (AGID-05, claim 2 / INV-A4): when the chain HEAD references a
+	// (4) Task envelope (AGID-05, AGID-claim-2 / INV-A4): when the chain HEAD references a
 	// task envelope (its verified, signed TaskDigest is set), verify the referenced
 	// envelope's SIGNATURE + EXPIRY here, as a PRECONDITION of the key op and BEFORE the
 	// binding is assembled, and require its canonical digest to equal the head's
@@ -377,7 +377,7 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 	}
 	taskEnvelopeDigest := teres.chainHead
 
-	// (5) Reachability bound (AGID-06, claims 5/6 / INV-A5): when the reachability
+	// (5) Reachability bound (AGID-06, AGID-claims 5/6 / INV-A5): when the reachability
 	// precondition is engaged (a verdict is carried, or the gate REQUIRES reachability and
 	// a chain is present), verify the SIGNED reachability verdict as a PRECONDITION of the
 	// key op and BEFORE the binding is assembled. The verdict is bound to the FINAL
@@ -394,7 +394,7 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 	}
 
 	// Binding target: at least one of a verified chain head or an agent-stack
-	// representation must be present (claims 31/32 fallbacks each satisfy exactly one).
+	// representation must be present (AGID-claims 31/32 fallbacks each satisfy exactly one).
 	if len(chainHeadDigest) == 0 && len(reprBytes) == 0 {
 		return verifyResult{refused: true, check: CheckBindingTarget, hopIndex: -1, detail: "no chain and no agent-stack representation"}
 	}
@@ -410,7 +410,7 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 // verifyChain verifies the self-describing chain hop-by-hop, root-first: linkage, each
 // hop's signature against its CARRIED delegator key, non-expiry against now, depth
 // accounting, and non-revocation via the reader; and that the ROOT hop's delegator key
-// chains to a held root anchor (claim 1 chain limb + claim 13 root-anchor). It returns
+// chains to a held root anchor (AGID-claim-1 chain limb + AGID-claim-13 root-anchor). It returns
 // the chain-head digest and the root anchor's auth reference on success.
 func (g *Gate) verifyChain(tenantID string, chain []RecordEnvelope, now time.Time) verifyResult {
 	reg := g.cfg.Tools
@@ -528,12 +528,12 @@ type attResult struct {
 
 // verifyAttestation verifies the attestation evidence (read-only over internal/attest)
 // and enforces the min-attestation-class gate for the chain head's designated authority
-// class (claim 10). Semantics:
+// class (AGID-claim-10). Semantics:
 //   - No designated class and no attestation body: nothing to verify; the evidence
-//     digest is empty. (The chain-only fallback, claim 31.)
+//     digest is empty. (The chain-only fallback, AGID-claim-31.)
 //   - A positive min class for the designated class, or a non-empty attestation body:
 //     the evidence MUST verify and MUST meet the min class, else refuse -- and when it
-//     is below class, NAME the class not met (claim 10). A verified attestation's
+//     is below class, NAME the class not met (AGID-claim-10). A verified attestation's
 //     evidence digest is bound.
 func (g *Gate) verifyAttestation(req signing.IssuancePreconditions, body PreconditionsBody) attResult {
 	att, err := decodeAttestation(req.Attestation, req.AttestationMethod)
@@ -560,7 +560,7 @@ func (g *Gate) verifyAttestation(req signing.IssuancePreconditions, body Precond
 		return attResult{verifyResult: refusal(CheckAttestation, -1, "attestation evidence failed verification")}
 	}
 	if got := classOfAttestation(verified); got < minClass {
-		// Below class: NAME the class not met (claim 10).
+		// Below class: NAME the class not met (AGID-claim-10).
 		return attResult{verifyResult: refusal(CheckAttestation, -1, fmt.Sprintf("%v: have %s, need %s", ErrBelowMinClass, got, minClass))}
 	}
 	return attResult{detailBytes: attestationEvidenceDigest(verified)}

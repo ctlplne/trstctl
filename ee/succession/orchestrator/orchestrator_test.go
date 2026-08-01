@@ -132,7 +132,7 @@ func req(identity string) signing.MintRequest {
 }
 
 // TestSuccession_IdempotentSingleMint: a retry with the same key mints exactly
-// once and returns the original record (claim 6 / INV-4).
+// once and returns the original record (PCAS-claim-6 / INV-4).
 func TestSuccession_IdempotentSingleMint(t *testing.T) {
 	orch, cm, cs := setup(t)
 	ctx := context.Background()
@@ -169,7 +169,7 @@ func TestSuccession_IdempotentSingleMint(t *testing.T) {
 }
 
 // TestPublish_OnlyViaOutbox: publication of a minted record flows only through the
-// transactional outbox, written in the same txn as the record (claim 6 / INV-4).
+// transactional outbox, written in the same txn as the record (PCAS-claim-6 / INV-4).
 func TestPublish_OnlyViaOutbox(t *testing.T) {
 	orch, _, cs := setup(t)
 	ctx := context.Background()

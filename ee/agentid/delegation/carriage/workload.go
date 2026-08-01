@@ -7,7 +7,7 @@ import (
 	"errors"
 )
 
-// workload.go is the workload-identity-document carriage form (claim 27, second
+// workload.go is the workload-identity-document carriage form (AGID-claim-27, second
 // alternative): the bound values ride as CLAIMS in a JSON workload-identity document. The
 // document nests the AGID binding under a single reserved claim (agidBindingClaim) so it
 // coexists with the issuer's own workload-identity claims (subject, audience, issuer,

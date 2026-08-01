@@ -15,7 +15,7 @@ const checkpointDomain = "trstctl/pcas/succession/epoch-checkpoint/v1"
 // algorithm-epoch and key, binding the transparency-log head as of issuance. A
 // relying party can verify from the checkpoint rather than from genesis (claim
 // 14), and divergence between two checkpoints' log heads at one epoch evidences
-// equivocation (claim 29).
+// equivocation (PCAS-claim-29).
 type SignedEpochCheckpoint struct {
 	DeploymentScope string
 	IdentityID      string
@@ -23,7 +23,7 @@ type SignedEpochCheckpoint struct {
 	Epoch           uint64
 	Algorithm       crypto.Algorithm
 	PublicKeyDER    []byte
-	LogTreeSize     uint64 // transparency-log head as of issuance (claim 29)
+	LogTreeSize     uint64 // transparency-log head as of issuance (PCAS-claim-29)
 	LogRootHash     []byte
 	IssuedAt        int64
 	Signature       []byte
@@ -65,7 +65,7 @@ func VerifyEpochCheckpoint(signerPubDER []byte, c SignedEpochCheckpoint) error {
 
 // CheckpointAnchor returns a genesis-shaped anchor at the checkpoint's epoch, so a
 // relying party can VerifyChain records after the checkpoint without replaying
-// from genesis (claim 14). The caller verifies the checkpoint signature
+// from genesis (PCAS-claim-14). The caller verifies the checkpoint signature
 // separately.
 func CheckpointAnchor(c SignedEpochCheckpoint) GenesisRecord {
 	return GenesisRecord{

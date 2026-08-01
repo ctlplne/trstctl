@@ -33,7 +33,7 @@ func TestRecord_CommitmentBindsClaim1Fields(t *testing.T) {
 		!bytes.Equal(c.CompletionEventsDigest, req.CompletionEventsDigest) ||
 		!bytes.Equal(c.DestructionEvidence.Digest, req.DestructionEvidence.Digest) ||
 		c.AuditChainHead != req.AuditChainHead {
-		t.Fatalf("commitment = %+v, want claim-1 fields bound", c)
+		t.Fatalf("commitment = %+v, want VDEC-claim-1 fields bound", c)
 	}
 
 	tampered := rec

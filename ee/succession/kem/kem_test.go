@@ -57,7 +57,7 @@ func baseFields(pred crypto.Signer, succAlg crypto.Algorithm, succPub []byte) su
 }
 
 // TestKEMPossessionProof_Decapsulation: a valid decap transcript verifies (Variant A);
-// a tampered transcript or a wrong-key decapsulation is rejected (claim 15).
+// a tampered transcript or a wrong-key decapsulation is rejected (PCAS-claim-15).
 func TestKEMPossessionProof_Decapsulation(t *testing.T) {
 	pred := ecdsa(t)
 	succKem := genKEM(t)
@@ -102,7 +102,7 @@ func TestKEMPossessionProof_Decapsulation(t *testing.T) {
 
 // TestKEMSuccession_PairedSigningKeyVariant: the paired epoch-bound signing key is
 // named in the commitment and its binding names the KEM public key; the record
-// verifies offline for an arbitrary third party (Variant B, claim 15).
+// verifies offline for an arbitrary third party (Variant B, PCAS-claim-15).
 func TestKEMSuccession_PairedSigningKeyVariant(t *testing.T) {
 	pred := ecdsa(t)
 	paired := ecdsa(t) // epoch-bound signing key paired with the KEM identity
@@ -141,7 +141,7 @@ func TestKEMSuccession_PairedSigningKeyVariant(t *testing.T) {
 
 // TestKEMSuccession_RecordNamesProofMechanism: a record must name exactly one
 // mechanism and carry exactly that limb; naming one but carrying the other is
-// rejected, and the interactive mechanism is flagged non-publicly-verifiable (claim 15).
+// rejected, and the interactive mechanism is flagged non-publicly-verifiable (PCAS-claim-15).
 func TestKEMSuccession_RecordNamesProofMechanism(t *testing.T) {
 	cases := []succession.PossessionProof{
 		{Kind: succession.ProofSuccessorSignature, Signature: []byte{1}, Transcript: []byte{2}}, // sig names, carries transcript too
@@ -168,7 +168,7 @@ func TestKEMSuccession_RecordNamesProofMechanism(t *testing.T) {
 	}
 }
 
-// --- predecessor-KEM (claim 30) --------------------------------------------
+// --- predecessor-KEM (PCAS-claim-30) --------------------------------------------
 
 func predKEMSetup(t *testing.T) (kem.PredecessorKEMRecord, succession.CommitmentFields, []byte, []byte) {
 	t.Helper()
@@ -204,7 +204,7 @@ func predKEMSetup(t *testing.T) (kem.PredecessorKEMRecord, succession.Commitment
 }
 
 // TestKEM_PredecessorPossessionProof: possession of the first (predecessor) KEM key
-// is proven by decapsulation of a challenge to the first public key (claim 30).
+// is proven by decapsulation of a challenge to the first public key (PCAS-claim-30).
 func TestKEM_PredecessorPossessionProof(t *testing.T) {
 	rec, _, predSS, succSS := predKEMSetup(t)
 	if err := kem.VerifyPredecessorKEM(rec, predSS, succSS); err != nil {
@@ -221,7 +221,7 @@ func TestKEM_PredecessorPossessionProof(t *testing.T) {
 }
 
 // TestKEM_BothTranscriptsBound: both transcripts must be present and bound to the
-// SAME commitment; a missing limb or a tampered commitment is rejected (claim 30).
+// SAME commitment; a missing limb or a tampered commitment is rejected (PCAS-claim-30).
 func TestKEM_BothTranscriptsBound(t *testing.T) {
 	rec, _, predSS, succSS := predKEMSetup(t)
 
@@ -239,7 +239,7 @@ func TestKEM_BothTranscriptsBound(t *testing.T) {
 	}
 }
 
-// --- re-wrap gate (claim 15) -----------------------------------------------
+// --- re-wrap gate (PCAS-claim-15) -----------------------------------------------
 
 type fakeRewrap struct{ complete bool }
 
@@ -250,7 +250,7 @@ type nopLedger struct{}
 func (nopLedger) Append(_ context.Context, e events.Event) (events.Event, error) { return e, nil }
 
 // TestKEMSuccession_RewrapThenRetire: predecessor retirement is blocked until re-wrap
-// under the successor completes, then proceeds (claim 15 re-wrap-before-retire).
+// under the successor completes, then proceeds (PCAS-claim-15 re-wrap-before-retire).
 func TestKEMSuccession_RewrapThenRetire(t *testing.T) {
 	const tenant, id = "11111111-1111-1111-1111-111111111111", "spiffe://d/id"
 	rpKey := ecdsa(t)

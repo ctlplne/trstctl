@@ -26,14 +26,14 @@ type JobBinding struct {
 	AssertedPredecessorEpoch uint64
 	NotBefore                int64
 	NotAfter                 int64
-	PolicyDecision           []byte // signer-verified policy artifact (claim 23)
-	Authorization            []byte // dual-control authorization token (claim 5)
-	BreakGlass               []byte // strength-downgrade break-glass token (claim 17)
+	PolicyDecision           []byte // signer-verified policy artifact (PCAS-claim-23)
+	Authorization            []byte // dual-control authorization token (PCAS-claim-5)
+	BreakGlass               []byte // strength-downgrade break-glass token (PCAS-claim-17)
 }
 
 // MintRequestForJob maps a PQC-planned succession job to the generic signer
 // MintRequest, carrying the job's target algorithm and reproducible policy_ref
-// (claim 23) alongside the operational binding. The predecessor key is referenced
+// (PCAS-claim-23) alongside the operational binding. The predecessor key is referenced
 // only by handle; no key material crosses into the request.
 func MintRequestForJob(job pqcmigration.SuccessionJob, b JobBinding) signing.MintRequest {
 	return signing.MintRequest{

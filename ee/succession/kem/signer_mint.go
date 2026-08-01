@@ -8,7 +8,7 @@ import (
 )
 
 // signer_mint.go mints a Variant-B (publicly verifiable) KEM succession THROUGH the
-// signer custody boundary (claim 15, INT-12). A KEM key cannot sign, so a KEM
+// signer custody boundary (PCAS-claim-15, INT-12). A KEM key cannot sign, so a KEM
 // succession is a normal dual-signed succession to a paired epoch-bound SIGNING key
 // that binds the KEM public key. The point of doing it through the signer is custody:
 // the signer generates BOTH the paired signing key and the ML-KEM successor key inside

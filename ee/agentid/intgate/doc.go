@@ -58,7 +58,7 @@
 //     MUST have a non-test caller; a regression fails the gate.
 //
 //   - DEFERRED (allow-listed): ee/agentid/verify (and its ./wasm build) is the
-//     proprietary OFFLINE relying-party verifier SDK (patent claim 28). It is consumed
+//     proprietary OFFLINE relying-party verifier SDK (patent AGID-claim-28). It is consumed
 //     OUTSIDE this repository -- by a relying party's own service or a browser WASM
 //     bundle -- so it legitimately has no in-repo control-plane caller, exactly as the
 //     PCAS gate's DEFERRED tier exempts the offline PCAS-07 relying-party verifier.

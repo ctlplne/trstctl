@@ -10,7 +10,7 @@ import (
 )
 
 // TestEpoch_DerivedFormEqualsStored: over many random valid histories, the epoch
-// derived from event history equals the stored (projected) epoch (claim 47 /
+// derived from event history equals the stored (projected) epoch (PCAS-claim-47 /
 // INV-16).
 func TestEpoch_DerivedFormEqualsStored(t *testing.T) {
 	ids := []string{"a", "b", "c"}
@@ -45,7 +45,7 @@ func TestEpoch_DerivedFormEqualsStored(t *testing.T) {
 }
 
 // TestPostureReport_SignedAndVerifiable: a posture report is signed and verifies;
-// a tampered field or wrong key is rejected (claim 50).
+// a tampered field or wrong key is rejected (PCAS-claim-50).
 func TestPostureReport_SignedAndVerifiable(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	reporter, err := be.GenerateKey(crypto.ECDSAP256)
@@ -72,7 +72,7 @@ func TestPostureReport_SignedAndVerifiable(t *testing.T) {
 }
 
 // TestPostureReport_NoReplayNeeded: the report is verified from only the report
-// bytes and the reporter key — no events, no projection replay (claim 50).
+// bytes and the reporter key — no events, no projection replay (PCAS-claim-50).
 func TestPostureReport_NoReplayNeeded(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	reporter, _ := be.GenerateKey(crypto.ECDSAP256)

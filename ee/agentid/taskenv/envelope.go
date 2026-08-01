@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package taskenv defines the AGID task-envelope model (patent claim 2 / INV-A4): the
+// Package taskenv defines the AGID task-envelope model (patent AGID-claim-2 / INV-A4): the
 // signed statement of a task's intent, its input commitments, its expiry, and the
 // requester's identity + signature over a canonical serialization. A delegation record
 // may reference a task envelope by its canonical digest (record.TaskDigest, AGID-01);
@@ -83,7 +83,7 @@ type Window struct {
 	NotAfter  int64 `json:"not_after"`
 }
 
-// Envelope is the signed task envelope (claim 2): the requester's identity + key
+// Envelope is the signed task envelope (AGID-claim-2): the requester's identity + key
 // reference, the task intent (structured and/or digest) with its input commitments, the
 // expiry window, and the requester's signature over the canonical serialization of the
 // preceding fields. The signer verifies Signature (against the requester key resolved

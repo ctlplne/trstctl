@@ -10,7 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// x509.go is the X.509 carriage form (claim 27, first alternative): the bound values ride
+// x509.go is the X.509 carriage form (AGID-claim-27, first alternative): the bound values ride
 // in a dedicated NON-CRITICAL certificate extension. Non-critical is mandatory: a legacy
 // relying party that does not understand AGID still parses and uses the certificate,
 // while an AGID-aware relying party (AGID-09) reads the extension and re-verifies the

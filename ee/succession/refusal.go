@@ -10,7 +10,7 @@ import (
 )
 
 // refusal.go carries the signed refusal artifact a signer emits when it REFUSES a
-// mint (claim 41, dependent of claim 17). A refusal is as attributable as an
+// mint (PCAS-claim-41, dependent of PCAS-claim-17). A refusal is as attributable as an
 // issuance: the signer signs, inside the boundary, an artifact identifying the
 // refused request and the violated constraint, which is recorded as an audit/ledger
 // event. This is part of the INV-13 attribution story — every signer OUTCOME, not
@@ -30,7 +30,7 @@ const (
 // ErrRefusalArtifact is returned when a refusal artifact does not verify.
 var ErrRefusalArtifact = errors.New("succession: refusal artifact invalid")
 
-// RefusalArtifact is the signer's signed evidence of a refused mint (claim 41): the
+// RefusalArtifact is the signer's signed evidence of a refused mint (PCAS-claim-41): the
 // refused request (by params digest), the violated constraint, the signer, and when.
 type RefusalArtifact struct {
 	SignerID      string `json:"signer_id"`

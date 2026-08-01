@@ -23,17 +23,17 @@ const (
 	TypeRetirement = "nhi.algorithm.retirement"
 	// TypeRPAck is a signed relying-party capability acknowledgement (step 6).
 	TypeRPAck = "nhi.rp.ack"
-	// TypeRefusal records a signer's signed refusal of a mint (claim 41, PCAS-20):
+	// TypeRefusal records a signer's signed refusal of a mint (PCAS-claim-41, PCAS-20):
 	// the refused request and the violated constraint, attributable to the signer.
 	TypeRefusal = "nhi.algorithm.refusal"
 	// TypeRewrapStage records completion of one bounded, health-verified re-wrap stage
-	// (claim 39, PCAS-25).
+	// (PCAS-claim-39, PCAS-25).
 	TypeRewrapStage = "nhi.rewrap.stage"
 	// TypeRewrapCompleted records that all re-wrap stages for a predecessor completed;
-	// the predecessor's retirement condition consumes this event (claim 39).
+	// the predecessor's retirement condition consumes this event (PCAS-claim-39).
 	TypeRewrapCompleted = "nhi.rewrap.completed"
 	// TypeMisissuance records a detected algorithm-epoch equivocation: two distinct
-	// dual-signed records for one identity at the same epoch (claims 11, 28). A monitor
+	// dual-signed records for one identity at the same epoch (PCAS-claims 11, 28). A monitor
 	// emits it, binding both record commitments and the named minting signers, so the
 	// misissuance is durable and attributable on the ledger.
 	TypeMisissuance = "nhi.algorithm.misissuance"
@@ -99,10 +99,10 @@ type SuccessionV1 struct {
 func (SuccessionV1) isSuccessionPayload() {}
 
 // RetirementV1 records retirement of the predecessor at a given epoch. The
-// succession record persists as durable proof linking the epochs (claim 8).
+// succession record persists as durable proof linking the epochs (PCAS-claim-8).
 // AckSetDigest binds a digest of the signed relying-party acknowledgements that
 // satisfied the cutover quorum, so the evidence condition is itself offline
-// verifiable (claim 3); it is empty for a policy-time-bound retirement embodiment.
+// verifiable (PCAS-claim-3); it is empty for a policy-time-bound retirement embodiment.
 type RetirementV1 struct {
 	IdentityID    string `json:"identity_id"`
 	TenantID      string `json:"tenant_id"`
@@ -126,7 +126,7 @@ type RPAckV1 struct {
 
 func (RPAckV1) isSuccessionPayload() {}
 
-// RefusalV1 records a signer's signed refusal of a mint (claim 41, PCAS-20). It
+// RefusalV1 records a signer's signed refusal of a mint (PCAS-claim-41, PCAS-20). It
 // carries the refusal artifact so a verifier can attribute the refusal to the signer.
 type RefusalV1 struct {
 	IdentityID    string `json:"identity_id"`
@@ -140,7 +140,7 @@ type RefusalV1 struct {
 
 func (RefusalV1) isSuccessionPayload() {}
 
-// RewrapStageV1 records completion of one re-wrap stage (claim 39, PCAS-25).
+// RewrapStageV1 records completion of one re-wrap stage (PCAS-claim-39, PCAS-25).
 type RewrapStageV1 struct {
 	JobID            string `json:"job_id"`
 	IdentityID       string `json:"identity_id"`
@@ -152,7 +152,7 @@ type RewrapStageV1 struct {
 func (RewrapStageV1) isSuccessionPayload() {}
 
 // RewrapCompletedV1 records that all re-wrap stages completed for a predecessor; the
-// retirement condition requires it for KEM/confidentiality credentials (claim 39).
+// retirement condition requires it for KEM/confidentiality credentials (PCAS-claim-39).
 type RewrapCompletedV1 struct {
 	JobID            string `json:"job_id"`
 	IdentityID       string `json:"identity_id"`
@@ -163,7 +163,7 @@ type RewrapCompletedV1 struct {
 
 func (RewrapCompletedV1) isSuccessionPayload() {}
 
-// MisissuanceV1 records a detected algorithm-epoch equivocation (claims 11, 28): two
+// MisissuanceV1 records a detected algorithm-epoch equivocation (PCAS-claims 11, 28): two
 // distinct dual-signed records for one identity at the same epoch. It binds both
 // record commitments and, when the records carry verifiable signer attestations, the
 // named minting signers — so the misissuance is durable and attributable from the

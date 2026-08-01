@@ -73,10 +73,10 @@ type issuanceWorker struct {
 	// depth.
 	revocationReader *revoke.DirectiveRevocationReader
 	// policyEngine is the S10.1 decision gate the chain-bound precondition consults
-	// (claim 14). The conservative BaseModule (deny-by-default) is the safe default.
+	// (AGID-claim-14). The conservative BaseModule (deny-by-default) is the safe default.
 	policyEngine *policy.Engine
 	// recorder persists the issuance binding + AN-6 outbox intent and refuses attestation
-	// replays (claim 9 / INV-A6).
+	// replays (AGID-claim-9 / INV-A6).
 	recorder *brokerstore.Recorder
 	// signerGate is the AGID-04 in-signer gate the chain-bound precondition consults,
 	// driven over the out-of-process signer transport (AGID-INT-WIRE): the control-plane
@@ -117,7 +117,7 @@ func newIssuanceWorker(core *corestore.Store, repo *agidstore.Repo, log *events.
 	toolRegistry := delegation.NewToolRegistry(map[string]string{})
 	registeredTools := agentstack.NewRegisteredToolSet()
 
-	// The directive-backed non-revocation reader (claim 20). It reads the AGID-02
+	// The directive-backed non-revocation reader (AGID-claim-20). It reads the AGID-02
 	// projection under a background context and refuses active directives before the
 	// signer transport is called.
 	revocationReader := revoke.NewDirectiveRevocationReader(repo, context.Background())
@@ -200,7 +200,7 @@ func (w *issuanceWorker) deliver(ctx context.Context, m coreorch.Message) error 
 		return fmt.Errorf("agentid issuance worker: tool manifest exceeds registered set: %s", manifestVerdict.Reason)
 	}
 
-	// Pre-issuance non-revocation guard (claim 20): consult the directive-backed
+	// Pre-issuance non-revocation guard (AGID-claim-20): consult the directive-backed
 	// revocation reader for the chain head record digest. This is the production caller
 	// for revoke.NewDirectiveRevocationReader / DirectiveRevocationReader.IsRevoked: if the
 	// head (or any subject on its chain) is under an ACTIVE (non-terminal) revocation
@@ -317,7 +317,7 @@ func (w *issuanceWorker) driveChainBoundIssuance(ctx context.Context, tenantID s
 // set (agentstack.Compare), resolving tool aliases through the tool registry. It is the
 // production caller for agentstack.NewToolManifest; the verdict names any excess capability
 // (a tool outside the registered set), which a provisioned deployment refuses before any
-// key op (claim 12).
+// key op (AGID-claim-12).
 func (w *issuanceWorker) compareToolManifest(scopes []string) agentstack.ManifestVerdict {
 	declared := agentstack.NewToolManifest(scopes...)
 	return agentstack.Compare(declared, w.registeredTools, toolResolver{reg: w.toolRegistry})

@@ -11,7 +11,7 @@ import (
 )
 
 // DurableFloorStore is a file-backed, restart-surviving epoch-floor store held within
-// the signer's custody directory (INT-05, claim 21). It persists the per-identity
+// the signer's custody directory (INT-05, PCAS-claim-21). It persists the per-identity
 // algorithm-epoch floor to a file with atomic writes and MONOTONIC advances — a lower
 // or equal epoch never regresses the stored value — so a signer restart cannot lower
 // the floor and a stale-epoch mint is refused after restart. This is the software-

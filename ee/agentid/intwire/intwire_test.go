@@ -203,10 +203,10 @@ func TestAGID_Wire_Hardening_31_32_33_RealInfra(t *testing.T) {
 		t.Fatalf("DecodeAggregate: %v", err)
 	}
 	if err := revoke.VerifyAggregateOffline(artifact, ev.EvidenceDigests); err != nil {
-		t.Fatalf("claim-33 aggregate proof did not verify: %v", err)
+		t.Fatalf("AGID-claim-33 aggregate proof did not verify: %v", err)
 	}
 	if got := h.countRows(t, `SELECT count(*) FROM agent_revocation_effects WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND credential_id = $1`, issued.credentialID); got != 1 {
-		t.Fatalf("claim-33 effect rows = %d, want 1", got)
+		t.Fatalf("AGID-claim-33 effect rows = %d, want 1", got)
 	}
 }
 

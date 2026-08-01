@@ -8,7 +8,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// verify.go is the pure, testable in-signer verification of a task envelope (claim 2 /
+// verify.go is the pure, testable in-signer verification of a task envelope (AGID-claim-2 /
 // INV-A4): the requester signature and the non-expiry check the isolated signer runs as
 // a PRECONDITION of the key operation. It performs NO key operation and holds no key: it
 // resolves the requester's public key through a caller-supplied trust lookup and checks
@@ -25,7 +25,7 @@ import (
 type TrustLookup func(requesterKeyID string) (publicDER []byte, trusted bool)
 
 // VerifySignatureAndExpiry verifies a task envelope's requester signature and non-expiry
-// as a precondition of a key operation (claim 2). It is pure and fail-closed:
+// as a precondition of a key operation (AGID-claim-2). It is pure and fail-closed:
 //
 //   - the envelope must state some intent (Validate);
 //   - the requester key id must resolve through trustLookup to a trusted public key

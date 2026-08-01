@@ -5,7 +5,7 @@ package succession
 import "trstctl.com/trstctl/internal/crypto"
 
 // PossessionProofKind names the mechanism of the successor possession-proof limb
-// (claim 25). PCAS-04 implements the successor-signature variant; the KEM
+// (PCAS-claim-25). PCAS-04 implements the successor-signature variant; the KEM
 // decapsulation-transcript and non-interactive proof-of-possession variants are
 // modeled here and implemented in PCAS-14. A record names its mechanism so a
 // verifier knows exactly what it is checking.
@@ -25,7 +25,7 @@ type PossessionProof struct {
 	Transcript []byte // ProofDecapTranscript: challenge/response transcript (PCAS-14)
 }
 
-// SuccessionRecord is the dual-attested succession artifact (claim 25 genus): the
+// SuccessionRecord is the dual-attested succession artifact (PCAS-claim-25 genus): the
 // committed fields, a predecessor attestation, and a successor possession proof,
 // such that neither limb alone establishes the succession. The predecessor and
 // successor public keys are named inside Fields (bound in the commitment); the
@@ -41,27 +41,27 @@ type SuccessionRecord struct {
 	SignerAttestation []byte
 	InclusionProof    []byte
 
-	// AuthzDigest is the digest of the claim-5 dual-control authorization artifact
-	// under which this record was minted (claim 42, PCAS-20). It is bound by the
+	// AuthzDigest is the digest of the PCAS-claim-5 dual-control authorization artifact
+	// under which this record was minted (PCAS-claim-42, PCAS-20). It is bound by the
 	// signer attestation, so the authorization is verifiable from the published
 	// record alone.
 	AuthzDigest []byte
 
 	// BreakGlassAuth, when present, is the authority-signed, single-use break-glass
-	// token that authorized a forward strength-downgrade succession (claim 17 /
+	// token that authorized a forward strength-downgrade succession (PCAS-claim-17 /
 	// INV-8, PCAS-15). It is self-authenticating (verified against the break-glass
 	// authority's key) and marks the record as a break-glass succession; the RP
 	// requires it for any weaker-class succession.
 	BreakGlassAuth []byte
 
-	// RecordType distinguishes exceptional-but-chained records (claims 36, 37,
+	// RecordType distinguishes exceptional-but-chained records (PCAS-claims 36, 37,
 	// PCAS-23): a revocation tombstone, or a ceremony / break-glass / emergency
 	// record. The empty value is an ordinary succession. Exceptional records still
 	// chain, stay epoch-monotonic, and require a transparency-log inclusion proof.
 	RecordType RecordType
 
 	// AttestationEvidenceDigest and AttestationType bind the successor-custodian
-	// attestation evidence that gated the succession (claim 35, PCAS-29): the signer
+	// attestation evidence that gated the succession (PCAS-claim-35, PCAS-29): the signer
 	// verified the evidence before generating the successor key, and bound its digest
 	// + type here so the record proves what custody evidence gated it. They are bound
 	// by the signer attestation (tamper-evident).
@@ -69,20 +69,20 @@ type SuccessionRecord struct {
 	AttestationType           string
 }
 
-// RecordType marks an exceptional-but-chained succession record (claims 36, 37).
+// RecordType marks an exceptional-but-chained succession record (PCAS-claims 36, 37).
 type RecordType string
 
 const (
 	// RecOrdinary is an ordinary succession (the zero value).
 	RecOrdinary RecordType = ""
 	// RecRevocation is a revocation tombstone recorded as a chain record at the next
-	// epoch; the chain itself is the revocation status (claim 36).
+	// epoch; the chain itself is the revocation status (PCAS-claim-36).
 	RecRevocation RecordType = "revocation"
-	// RecCeremony is a break-glass / ceremony record (a claim-17 strength downgrade or
-	// an operator ceremony) recorded as a distinct chained record (claim 37).
+	// RecCeremony is a break-glass / ceremony record (a PCAS-claim-17 strength downgrade or
+	// an operator ceremony) recorded as a distinct chained record (PCAS-claim-37).
 	RecCeremony RecordType = "ceremony"
 	// RecEmergency is a control-plane-unavailable emergency issuance recorded as a
-	// distinct chained record (claim 37).
+	// distinct chained record (PCAS-claim-37).
 	RecEmergency RecordType = "emergency"
 )
 

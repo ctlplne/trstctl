@@ -11,7 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// token.go is the signed-token carriage form (claim 27, third alternative): the bound
+// token.go is the signed-token carriage form (AGID-claim-27, third alternative): the bound
 // values ride as confirmation-adjacent CLAIMS in a JWT-style token. It reuses the exact
 // bindingClaim shape the workload-identity document uses, so the same bound values produce
 // byte-identical claim bytes in both forms and one common decoder reads them identically.

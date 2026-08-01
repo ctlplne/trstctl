@@ -168,7 +168,7 @@ func approvePolicy(repr []byte, class, op string, tools []string) LocalPolicy {
 		WithToolManifest(tools...)
 }
 
-// ---- CANONICAL TEST 1 (claim 28 / INV-A7) ----
+// ---- CANONICAL TEST 1 (AGID-claim-28 / INV-A7) ----
 
 // TestRPVerify_OfflineAcceptsValid proves a valid credential verifies OFFLINE
 // against the trust root -- across all three carriage forms -- with no
@@ -216,7 +216,7 @@ func TestRPVerify_OfflineAcceptsValid(t *testing.T) {
 	})
 }
 
-// ---- CANONICAL TEST 2 (claim 28 / INV-A7) ----
+// ---- CANONICAL TEST 2 (AGID-claim-28 / INV-A7) ----
 
 // TestRPVerify_AgentStackVsLocalPolicy proves the bound agent-stack representation
 // is compared against local policy: an in-policy representation is accepted and an
@@ -247,7 +247,7 @@ func TestRPVerify_AgentStackVsLocalPolicy(t *testing.T) {
 	}
 }
 
-// ---- CANONICAL TEST 3 (claim 28 / INV-A7) ----
+// ---- CANONICAL TEST 3 (AGID-claim-28 / INV-A7) ----
 
 // TestRPVerify_RefusesActionExceedingAuthorityOrTaskScope proves an action that
 // EXCEEDS the bound authority is refused, AND an action that falls OUTSIDE the
@@ -293,7 +293,7 @@ func TestRPVerify_RefusesActionExceedingAuthorityOrTaskScope(t *testing.T) {
 	}
 }
 
-// ---- CANONICAL TEST 4 (claim 29 / INV-A7) ----
+// ---- CANONICAL TEST 4 (AGID-claim-29 / INV-A7) ----
 
 // TestRPVerify_RefusesToolAbsentFromManifest proves an action whose tool is absent
 // from the bound tool manifest is refused fail-closed, while a tool present in the
@@ -319,7 +319,7 @@ func TestRPVerify_RefusesToolAbsentFromManifest(t *testing.T) {
 	}
 }
 
-// ---- CANONICAL TEST 5 (claim 7 / INV-A7) ----
+// ---- CANONICAL TEST 5 (AGID-claim-7 / INV-A7) ----
 
 // TestCredential_ShortTTLNoStatusQuery proves a short-TTL credential's validity is
 // determinable from the credential ALONE: an unexpired credential is accepted and

@@ -120,7 +120,7 @@ func (w *checkpointWorker) runOnce(ctx context.Context) error {
 			return err
 		}
 		// Bind the real head of the tenant's append-only transparency log into
-		// every checkpoint minted this round (claim 29). The log is rebuilt
+		// every checkpoint minted this round (PCAS-claim-29). The log is rebuilt
 		// deterministically from the persisted succession ledger (records are
 		// returned in a stable identity,epoch order and, being append-only, are
 		// never removed or reordered), so its Merkle root is a pure function of the
@@ -518,7 +518,7 @@ func successorForPredecessor(ctx context.Context, repo *pcasstore.Repo, tenantID
 // pure, deterministic function of the record set — identical across processes,
 // machines, and restarts for the same records, and different whenever the record
 // set differs — which is what lets two checkpoints' bound heads evidence
-// equivocation (claim 29). The log is unsigned here because it is used only to
+// equivocation (PCAS-claim-29). The log is unsigned here because it is used only to
 // derive the Merkle root; the checkpoint that carries the root is itself signed.
 func transparencyHead(records []pcasstore.Record) (translog.STH, error) {
 	tlog := translog.New(nil)

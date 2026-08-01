@@ -8,7 +8,7 @@ import (
 	agidstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 )
 
-// refuse_active.go is the in-signer REFUSE-WHILE-ACTIVE half of AGID-11 (claim 20): while
+// refuse_active.go is the in-signer REFUSE-WHILE-ACTIVE half of AGID-11 (AGID-claim-20): while
 // a revocation directive is ACTIVE against any delegation record of a chain, the isolated
 // signing process refuses any ISSUANCE OR RENEWAL whose chain includes the subject. It
 // does this by REUSING the AGID-04 gate seam — the gate already consults a
@@ -67,7 +67,7 @@ func NewDirectiveRevocationReader(repo *agidstore.Repo, ctx context.Context) *Di
 
 // IsRevoked reports whether the delegation record identified by recordDigest is under an
 // ACTIVE (non-terminal) revocation directive for tenantID — the per-hop non-revocation
-// answer the gate consults before any key op (claim 20). A nil repo (misconfiguration)
+// answer the gate consults before any key op (AGID-claim-20). A nil repo (misconfiguration)
 // or a read error surfaces to the gate, which FAILS CLOSED (refuses with CheckRevocation):
 // a reader that cannot answer must not let issuance/renewal proceed. A record with no
 // matching row (unknown digest, or no active directive naming its subjects) reports false,

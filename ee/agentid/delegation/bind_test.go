@@ -12,7 +12,7 @@ import (
 
 // TestCredential_BindsChainDigestAndAgentStack proves the success path binds BOTH the
 // chain-head digest and the agent-stack representation into the credential, offline-
-// verifiable (claims 1/24/34 / INV-A3). The credential's AGID extension carries both
+// verifiable (AGID-claims 1/24/34 / INV-A3). The credential's AGID extension carries both
 // digests and the full representation; the issuance event records the chain digest.
 func TestCredential_BindsChainDigestAndAgentStack(t *testing.T) {
 	reg := (*ToolRegistry)(nil)
@@ -157,7 +157,7 @@ func TestAgentStack_PromptAndToolManifestDigests(t *testing.T) {
 func jsonUnmarshal(b []byte, v any) error { return jsonUnmarshalImpl(b, v) }
 
 // TestRefusal_SignedArtifactRecorded proves that on refusal a SIGNED refusal artifact is
-// produced and can be recorded to the ledger as agent.refusal.recorded (claims 1/14). It
+// produced and can be recorded to the ledger as agent.refusal.recorded (AGID-claims 1/14). It
 // uses a chain missing its root anchor (a spliced/forged root), asserts a verifying
 // signed refusal naming the failed check, and confirms the artifact encodes into a
 // well-formed refusal event.
@@ -217,7 +217,7 @@ func TestRefusal_SignedArtifactRecorded(t *testing.T) {
 }
 
 // TestRootAnchor_PhishingResistantRefRecorded proves the root-anchor phishing-resistant
-// auth reference is verified and recorded with the issuance (claim 13): the approved
+// auth reference is verified and recorded with the issuance (AGID-claim-13): the approved
 // decision's binding carries the root anchor's AuthRef, which the caller records in the
 // issuance event.
 func TestRootAnchor_PhishingResistantRefRecorded(t *testing.T) {

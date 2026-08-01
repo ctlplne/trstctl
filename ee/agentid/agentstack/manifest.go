@@ -16,7 +16,7 @@ import (
 // configured with. A RegisteredToolSet is the set of tools that has been
 // recorded for the agent as permitted. The comparison predicate (Compare)
 // checks a declared manifest against a registered set: a declared manifest that
-// EXCEEDS the registered set is refused fail-closed (claim 12 / §8.4), and the
+// EXCEEDS the registered set is refused fail-closed (AGID-claim-12 / §8.4), and the
 // refusal report NAMES the excess capability; a declared manifest that is a
 // subset of (or equal to) the registered set is accepted.
 //
@@ -118,7 +118,7 @@ func (m ToolManifest) Digest() []byte {
 }
 
 // ManifestVerdict is the result of comparing a declared manifest against a
-// registered tool set (claim 12). It is EVIDENCE ONLY: this card returns the
+// registered tool set (AGID-claim-12). It is EVIDENCE ONLY: this card returns the
 // predicate and the excess-capability report; the load-bearing signed refusal
 // record is minted inside the AN-4 signer (AGID-04). Accepted reports whether the
 // declared manifest is a subset of (or equal to) the registered set. When
@@ -138,7 +138,7 @@ type ManifestVerdict struct {
 var ErrManifestExceedsRegistered = errors.New("agentstack: declared tool manifest exceeds registered tool set")
 
 // Compare checks the declared manifest against the registered set and returns a
-// verdict (claim 12 / §8.4). It is FAIL-CLOSED:
+// verdict (AGID-claim-12 / §8.4). It is FAIL-CLOSED:
 //
 //   - Every declared tool must be a member of the registered set (by canonical
 //     identity) to be permitted. A declared tool NOT in the registered set is

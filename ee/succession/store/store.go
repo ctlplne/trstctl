@@ -133,7 +133,7 @@ type RetirementPolicy struct {
 
 // Repo is the tenant-scoped repository. Every method runs inside the core store's
 // RLS-scoped transaction (Store.WithTenant), so row-level security confines all
-// access to the caller's tenant (AN-1, claim 7 / INV-5 RLS half).
+// access to the caller's tenant (AN-1, PCAS-claim-7 / INV-5 RLS half).
 type Repo struct {
 	core *corestore.Store
 }

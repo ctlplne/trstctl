@@ -11,7 +11,7 @@ import (
 )
 
 // refusal.go carries the signer's SIGNED refusal artifact -- the fail-closed spine of
-// INV-A1 (claims 1/14). On ANY failed pre-keygen check the gate signs, inside the AN-4
+// INV-A1 (AGID-claims 1/14). On ANY failed pre-keygen check the gate signs, inside the AN-4
 // boundary, an artifact naming the failed HOP and the failed CHECK, and returns it in
 // IssuanceDecision.RefusalRecord with Approved=false and ZERO key ops. The caller
 // appends an agent.refusal.recorded event carrying it. A refusal is as attributable as

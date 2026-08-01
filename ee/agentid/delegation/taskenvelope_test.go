@@ -13,7 +13,7 @@ import (
 
 // taskenvelope_test.go proves AGID-05: when a delegation record references a task
 // envelope (its TaskDigest is set), the in-signer gate verifies the referenced
-// envelope's SIGNATURE and EXPIRY as a precondition of the key op (INV-A4, claim 2),
+// envelope's SIGNATURE and EXPIRY as a precondition of the key op (INV-A4, AGID-claim-2),
 // reusing AGID-04b's refusal path on failure (zero key ops), and on success BINDS the
 // task-envelope digest ALONGSIDE the chain-head digest + agent-stack representation
 // (INV-A3 additive). It reuses the AGID-04b instrumented-keystore ordering harness
@@ -99,7 +99,7 @@ func taskEnvFixture(t *testing.T, anchors map[string]RootAnchor, requesterKeyID 
 	return newGateFixtureWithTaskEnv(t, anchors, nil, nil, fixedClock(now), lookup)
 }
 
-// TestTaskEnvelope_SignatureAndExpiryVerifiedInSigner is the canonical test (claim 2 /
+// TestTaskEnvelope_SignatureAndExpiryVerifiedInSigner is the canonical test (AGID-claim-2 /
 // INV-A4): with the AGID-04b instrumented-keystore ordering harness, a VALID envelope
 // verifies + binds (key op runs, strictly after the gate), while an EXPIRED envelope and
 // a TAMPERED (bad-signature) envelope each perform ZERO key ops and mint a signed
@@ -210,7 +210,7 @@ func TestTaskEnvelope_SignatureAndExpiryVerifiedInSigner(t *testing.T) {
 	})
 }
 
-// TestCredential_BindsTaskEnvelopeDigest is the canonical binding test (claim 2 /
+// TestCredential_BindsTaskEnvelopeDigest is the canonical binding test (AGID-claim-2 /
 // INV-A4): on success the credential binds the task-envelope digest ALONGSIDE the
 // chain-head digest + the agent-stack representation, and the digest referenced in the
 // delegation record equals the digest bound in the credential.
@@ -329,7 +329,7 @@ func TestTaskEnvelope_ReferencedButNotSupplied(t *testing.T) {
 // TestNoTaskEnvelope_NoRegression proves the AGID-04b behavior is EXACTLY preserved when
 // no task envelope is referenced: a valid narrowing chain with NO TaskDigest and NO
 // carried envelope is approved, the key op runs after the gate, the credential binds the
-// chain head, and NO task-envelope digest is bound (claim 31 chain-only fallback,
+// chain head, and NO task-envelope digest is bound (AGID-claim-31 chain-only fallback,
 // unchanged). This is the "no envelope referenced ⇒ gate behaves exactly as AGID-04b"
 // regression guard.
 func TestNoTaskEnvelope_NoRegression(t *testing.T) {

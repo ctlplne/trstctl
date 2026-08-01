@@ -42,7 +42,7 @@ func liveChain(t *testing.T) (succession.GenesisRecord, []succession.SuccessionR
 }
 
 // TestRevocation_AsChainedRecord: a revocation tombstone chains at the next epoch and
-// a chain ending in it verifies as authentically revoked offline (claim 36).
+// a chain ending in it verifies as authentically revoked offline (PCAS-claim-36).
 func TestRevocation_AsChainedRecord(t *testing.T) {
 	genesis, chain, k1, attest, roster := liveChain(t)
 	revoc, err := succession.BuildRevocation(k1, excDeployment, excIdentity, excTenant, 1, 1, 1000, attest, "signer-1")
@@ -69,7 +69,7 @@ func TestRevocation_AsChainedRecord(t *testing.T) {
 }
 
 // TestRevocation_MandatoryInclusion: a revocation record without an inclusion proof is
-// refused at publish and rejected at verify; with one it is accepted (claim 36).
+// refused at publish and rejected at verify; with one it is accepted (PCAS-claim-36).
 func TestRevocation_MandatoryInclusion(t *testing.T) {
 	_, _, k1, attest, roster := liveChain(t)
 	revoc, err := succession.BuildRevocation(k1, excDeployment, excIdentity, excTenant, 1, 1, 1000, attest, "signer-1")
@@ -94,7 +94,7 @@ func TestRevocation_MandatoryInclusion(t *testing.T) {
 }
 
 // TestCeremony_ChainedRecord: break-glass ceremony and emergency issuances mint as
-// distinct chained record types at the next epoch, each requiring inclusion (claim 37).
+// distinct chained record types at the next epoch, each requiring inclusion (PCAS-claim-37).
 func TestCeremony_ChainedRecord(t *testing.T) {
 	genesis, chain, k1, attest, roster := liveChain(t)
 	okInclusion := func([]byte) error { return nil }

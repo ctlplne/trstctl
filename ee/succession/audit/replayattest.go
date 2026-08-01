@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package audit provides the PCAS replay-correspondence attestation (claim 38): a
+// Package audit provides the PCAS replay-correspondence attestation (PCAS-claim-38): a
 // signed artifact pairing the head of a tamper-evident audit hash chain with the
 // PCAS-01 posture-projection checkpoint it corresponds to at a stated ledger
 // offset. An optional independent-auditor countersignature lets consumers trust
@@ -150,7 +150,7 @@ func VerifyAgainstLedger(seq []events.Event, a ReplayAttestation) error {
 }
 
 // AuditorCountersign has an independent auditor re-run the replay, confirm the
-// correspondence, and countersign the pairing (claim 38).
+// correspondence, and countersign the pairing (PCAS-claim-38).
 func AuditorCountersign(seq []events.Event, a ReplayAttestation, auditor crypto.Signer) (ReplayAttestation, error) {
 	if err := VerifyAgainstLedger(seq, a); err != nil {
 		return ReplayAttestation{}, err

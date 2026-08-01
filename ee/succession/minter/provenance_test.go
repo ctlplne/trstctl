@@ -32,7 +32,7 @@ func provChain(t *testing.T, a crypto.Signer, identity, target string) policy.Pl
 
 // TestPlanChain_VerifiedBeforeKeygen: the minter verifies the provenance chain before
 // successor keygen — a valid chain mints (keygen once) and binds policy_ref in the
-// commitment; a broken chain refuses before any key is generated (claims 24, 40).
+// commitment; a broken chain refuses before any key is generated (PCAS-claims 24, 40).
 func TestPlanChain_VerifiedBeforeKeygen(t *testing.T) {
 	a, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
 	if err != nil {

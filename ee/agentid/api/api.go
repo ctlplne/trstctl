@@ -53,7 +53,7 @@ type IssueChainBoundRequest struct {
 	// to the in-signer gate for refusal attribution.
 	TrustAnchorRef string `json:"trust_anchor_ref"`
 	// DesignatedClass names the authority class the chain head is designated as, keying
-	// the min-attestation-class policy (claim 10) and the reachability requester class.
+	// the min-attestation-class policy (AGID-claim-10) and the reachability requester class.
 	DesignatedClass string `json:"designated_class"`
 	// Chain is the opaque encoded delegation chain (root-first RecordEnvelopes) the
 	// orchestrator decodes and the gate verifies hop-by-hop.
@@ -87,7 +87,7 @@ type IssueChainBoundResponse struct {
 }
 
 // RevokeRequest asks to revoke a subject (a delegation record, agent identity, or
-// credential — an opaque subject id) with a reason class (claim 17). The cascade
+// credential — an opaque subject id) with a reason class (AGID-claim-17). The cascade
 // determines the descendant set for the subject and drives the verifiable kill.
 type RevokeRequest struct {
 	// Subject is the opaque subject id to revoke.
@@ -96,7 +96,7 @@ type RevokeRequest struct {
 	// root-principal-request). An unrecognized class is rejected at ingestion.
 	Reason string `json:"reason"`
 	// PublishDownstream marks that every descendant job should also publish a downstream
-	// trust-plane revocation entry (KRL/CRL) through the outbox (claim 19).
+	// trust-plane revocation entry (KRL/CRL) through the outbox (AGID-claim-19).
 	PublishDownstream bool `json:"publish_downstream,omitempty"`
 }
 
@@ -384,7 +384,7 @@ func issueHandler(a *api.API, svc Service) http.HandlerFunc {
 }
 
 // revokeHandler stages a revocation directive idempotently. The reason class is validated
-// at ingestion so a malformed reason never reaches the ledger (claim 17).
+// at ingestion so a malformed reason never reaches the ledger (AGID-claim-17).
 func revokeHandler(a *api.API, svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idempotencyKey := r.Header.Get("Idempotency-Key")

@@ -28,7 +28,7 @@ var (
 // of the dual attestation over that commitment: the predecessor attestation (a
 // signature by the predecessor public key named in the commitment) and the
 // successor possession proof (a signature by the successor public key). Neither
-// limb alone suffices (claim 25). It negotiates no algorithm and loads no
+// limb alone suffices (PCAS-claim-25). It negotiates no algorithm and loads no
 // runtime provider — it verifies with the algorithms the keys already carry
 // (INV-6 building block). Signature verification routes through the core AN-3
 // boundary (crypto.VerifyMessage).

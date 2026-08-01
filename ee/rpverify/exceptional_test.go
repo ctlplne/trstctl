@@ -44,7 +44,7 @@ func exceptionalRecord(t *testing.T, rt succession.RecordType, withInclusion boo
 // TestCeremony_NoLedgerBypass: no exceptional path takes effect outside the ledger —
 // a ceremony record without inclusion is refused; and the RP applies stricter policy
 // (reject or elevate) to ceremony records while ordinary records are unaffected
-// (claim 37 / INV-15).
+// (PCAS-claim-37 / INV-15).
 func TestCeremony_NoLedgerBypass(t *testing.T) {
 	// Never logged (no inclusion proof) → refused: the ledger cannot be bypassed.
 	unlogged, roster, _ := exceptionalRecord(t, succession.RecCeremony, false)

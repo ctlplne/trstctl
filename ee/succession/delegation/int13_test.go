@@ -15,7 +15,7 @@ import (
 )
 
 // TestINT13_MinterEnforcesDelegationConstraint proves the delegated-authority
-// effective constraint is enforced INSIDE the minter, before keygen (claim 33): a
+// effective constraint is enforced INSIDE the minter, before keygen (PCAS-claim-33): a
 // succession whose target epoch is below the effective ancestor floor is refused
 // (ErrDelegation), and a compliant one binds the delegation path in the v2 commitment.
 func TestINT13_MinterEnforcesDelegationConstraint(t *testing.T) {

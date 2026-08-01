@@ -56,7 +56,7 @@ func BuildMisissuanceProof(a, b succession.SuccessionRecord) (MisissuanceProof, 
 }
 
 // NamesMintingSigners returns the minting signer identifiers named by the two
-// conflicting records' signer attestations (claim 28, PCAS-20). Both attestations
+// conflicting records' signer attestations (PCAS-claim-28, PCAS-20). Both attestations
 // must verify against the supplied roster of signer attestation keys, so the naming
 // is authenticated: a misissuance is attributable to the signer(s) that minted the
 // equivocating records (INV-13).

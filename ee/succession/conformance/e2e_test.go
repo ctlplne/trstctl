@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package conformance is the PCAS release gate (PCAS-12): the end-to-end claim-1
+// Package conformance is the PCAS release gate (PCAS-12): the end-to-end PCAS-claim-1
 // proof, the published conformance vectors + a differential verifier, fuzz targets on
 // the parsers, and the edition guards pinned as tests. It adds no product behavior —
 // it only proves the behavior the other cards deliver.
@@ -31,7 +31,7 @@ func (s *memEpochStore) LastAccepted(id string) (uint64, bool, error) {
 }
 func (s *memEpochStore) SetLastAccepted(id string, epoch uint64) error { s.m[id] = epoch; return nil }
 
-// TestE2E_Succession_OfflineVerify is the claim-1 end-to-end: a real signer mints a
+// TestE2E_Succession_OfflineVerify is the PCAS-claim-1 end-to-end: a real signer mints a
 // multi-epoch algorithm succession for a workload identity (each key generated and
 // used inside the module, epochs enforced by the signer floor), the chain is
 // assembled with its tenant-trust-root-anchored genesis, and a relying party then
@@ -95,7 +95,7 @@ func TestE2E_Succession_OfflineVerify(t *testing.T) {
 	rec2, _ := minter.DecodeRecord(res2.EncodedRecord)
 	chain := []succession.SuccessionRecord{rec1, rec2}
 
-	// Offline relying-party verification (claim 1 / claim 13 / INV-6).
+	// Offline relying-party verification (PCAS-claim-1 / PCAS-claim-13 / INV-6).
 	store := &memEpochStore{m: map[string]uint64{}}
 	result, err := rpverify.Verify(rpverify.Input{
 		TrustRootPubDER: trustRoot.Public().DER, Genesis: genesis, Chain: chain,

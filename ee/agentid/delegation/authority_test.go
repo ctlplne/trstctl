@@ -22,7 +22,7 @@ var reg = delegation.NewToolRegistry(map[string]string{
 
 // TestAuthority_PartialOrderSubsetAndNumeric exercises the comparator across every
 // dimension: subset on scope/tool/resource/class sets after canonical normalization,
-// <= on spend/rate/depth, and nested validity ceilings (claim 3 / INV-A2).
+// <= on spend/rate/depth, and nested validity ceilings (AGID-claim-3 / INV-A2).
 func TestAuthority_PartialOrderSubsetAndNumeric(t *testing.T) {
 	parent := delegation.Authority{
 		Scopes:    []string{"read", "write", "admin"},
@@ -184,7 +184,7 @@ func TestAuthority_PartialOrderSubsetAndNumeric(t *testing.T) {
 // TestAuthority_CanonicalNormalizationStable asserts that normalization is stable
 // (same input -> identical bytes), idempotent (normalize of normalize == normalize),
 // and that comparator verdicts are invariant under semantically-equal spellings
-// (claim 3 / INV-A2).
+// (AGID-claim-3 / INV-A2).
 func TestAuthority_CanonicalNormalizationStable(t *testing.T) {
 	// Two spellings of the same authority: different order, duplicates, mixed case
 	// and whitespace on scope strings, and a tool alias that resolves to the same id.
@@ -244,7 +244,7 @@ func TestAuthority_CanonicalNormalizationStable(t *testing.T) {
 
 // TestAuthority_EffectiveBudgetIsMinAlongChain asserts the derived effective spend
 // and rate budgets equal the minimum of the respective budgets along a multi-hop
-// chain (claim 4).
+// chain (AGID-claim-4).
 func TestAuthority_EffectiveBudgetIsMinAlongChain(t *testing.T) {
 	chain := []delegation.Authority{
 		{Spend: delegation.Budget{Amount: 1000, Currency: "USD"}, Rate: delegation.Rate{Limit: 100, Per: "minute"}},
@@ -309,7 +309,7 @@ func randAuthority(r *rand.Rand) delegation.Authority {
 
 // TestAuthority_PartialOrderProperties checks that the comparator is a partial order
 // over random authority sets: reflexive, antisymmetric under canonical form, and
-// transitive (claim 3 / INV-A2 — the comparator is a genuine partial order).
+// transitive (AGID-claim-3 / INV-A2 — the comparator is a genuine partial order).
 func TestAuthority_PartialOrderProperties(t *testing.T) {
 	r := rand.New(rand.NewSource(0xA61D01))
 	const iters = 4000
@@ -342,7 +342,7 @@ func TestAuthority_PartialOrderProperties(t *testing.T) {
 }
 
 // TestAuthority_MinBudgetFoldProperty checks that EffectiveBudgets returns the min
-// spend and min rate over random chains (claim 4), cross-checked against a naive
+// spend and min rate over random chains (AGID-claim-4), cross-checked against a naive
 // scan.
 func TestAuthority_MinBudgetFoldProperty(t *testing.T) {
 	r := rand.New(rand.NewSource(4))

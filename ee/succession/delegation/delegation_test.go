@@ -24,7 +24,7 @@ func tree() *delegation.Tree {
 }
 
 // TestDelegation_EffectiveConstraintNeverLoosens: the effective floor is
-// non-decreasing down the tree (claim 33 / INV-14).
+// non-decreasing down the tree (PCAS-claim-33 / INV-14).
 func TestDelegation_EffectiveConstraintNeverLoosens(t *testing.T) {
 	tr := tree()
 	path, err := tr.Path("app")
@@ -51,7 +51,7 @@ func TestDelegation_EffectiveConstraintNeverLoosens(t *testing.T) {
 }
 
 // TestDelegation_RefusesViolation: a succession below the effective floor is
-// refused (claim 33).
+// refused (PCAS-claim-33).
 func TestDelegation_RefusesViolation(t *testing.T) {
 	tr := tree()
 	if err := tr.CheckSuccession("app", 1); !errors.Is(err, delegation.ErrConstraintViolation) {
@@ -76,7 +76,7 @@ func commitFields(policyRef string) succession.CommitmentFields {
 }
 
 // TestDelegation_PathBoundInCommitment: the delegation path is bound into the
-// commitment via policy_ref; distinct paths yield distinct commitments (claim 33).
+// commitment via policy_ref; distinct paths yield distinct commitments (PCAS-claim-33).
 func TestDelegation_PathBoundInCommitment(t *testing.T) {
 	r1 := delegation.DelegationPolicyRef([]string{"org", "team", "app"})
 	r2 := delegation.DelegationPolicyRef([]string{"org", "team2", "app"})
@@ -100,7 +100,7 @@ func TestDelegation_PathBoundInCommitment(t *testing.T) {
 }
 
 // TestDelegation_RaiseConstraintGeneratesJobs: raising an ancestor floor produces
-// forced-migration jobs for violating descendants (claim 45).
+// forced-migration jobs for violating descendants (PCAS-claim-45).
 func TestDelegation_RaiseConstraintGeneratesJobs(t *testing.T) {
 	tr := tree()
 	tr.AddScope("other", "", delegation.Constraint{})
@@ -120,7 +120,7 @@ func TestDelegation_RaiseConstraintGeneratesJobs(t *testing.T) {
 	}
 }
 
-// --- provider mint (claim 46) ----------------------------------------------
+// --- provider mint (PCAS-claim-46) ----------------------------------------------
 
 type mapResolver map[string]crypto.Signer
 
@@ -155,7 +155,7 @@ func (f *memFloor) Advance(id string, e uint64) error {
 }
 
 // TestDelegation_ProviderMint: a provider mints a succession for a descendant
-// identity; the record binds the delegation path and verifies (claim 46).
+// identity; the record binds the delegation path and verifies (PCAS-claim-46).
 func TestDelegation_ProviderMint(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	pred, _ := be.GenerateKey(crypto.ECDSAP256)
@@ -183,7 +183,7 @@ func TestDelegation_ProviderMint(t *testing.T) {
 }
 
 // TestDelegation_DescendantRootCoSignsGenesis: the descendant scope's trust root
-// co-signs the identity's genesis; it verifies under that root (claim 46).
+// co-signs the identity's genesis; it verifies under that root (PCAS-claim-46).
 func TestDelegation_DescendantRootCoSignsGenesis(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	descendantRoot, _ := be.GenerateKey(crypto.ECDSAP256)

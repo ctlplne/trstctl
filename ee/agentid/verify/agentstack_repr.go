@@ -28,7 +28,7 @@ import (
 // and a hostile length header can only produce ErrMalformedRepr, never a panic or
 // a huge allocation -- matching agentstack/parse.go's discipline. AN-3: it names
 // no crypto/* package; the only hash it computes (the tool-manifest digest, to
-// enforce claim 29) routes through internal/crypto.
+// enforce AGID-claim-29) routes through internal/crypto.
 
 // These constants MIRROR ee/agentid/agentstack's canonical framing. They are
 // duplicated here (rather than imported) precisely to keep this package from
@@ -40,7 +40,7 @@ const (
 	toolManifestDigestDomain = "agid/agentstack/tool-manifest/v1"
 )
 
-// model-form tags mirror agentstack.ModelForm (claim 11): 0 unset (rejected), 1
+// model-form tags mirror agentstack.ModelForm (AGID-claim-11): 0 unset (rejected), 1
 // weights-digest, 2 provider-id.
 const (
 	modelFormUnset         = 0
@@ -142,7 +142,7 @@ func decodeBoundRepr(repr []byte) (boundRepr, error) {
 		}
 		r.ModelVersion = ver
 	default:
-		// Unset (0) or unknown form: fail closed (claim 11 -- the indicator cannot
+		// Unset (0) or unknown form: fail closed (AGID-claim-11 -- the indicator cannot
 		// be omitted or bogus).
 		return boundRepr{}, ErrMalformedRepr
 	}
@@ -227,7 +227,7 @@ func decodeJSONBoundRepr(repr []byte) (boundRepr, error) {
 // its APPROVED tool manifest (the tool list whose digest is bound in the
 // representation); recomputing the digest here lets the verifier confirm the
 // supplied manifest is the one bound, then confine an action to that manifest
-// (claim 29). Recomputing (rather than importing agentstack) keeps the verifier
+// (AGID-claim-29). Recomputing (rather than importing agentstack) keeps the verifier
 // dependency-light while guaranteeing the same digest for the same tool set.
 func toolManifestDigest(tools []string) []byte {
 	canon := canonicalTools(tools)

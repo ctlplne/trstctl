@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package revoke is the CONTROL-PLANE cascaded-revocation engine (AGID-10, the
-// cascade limbs of independent claim 16): on a revocation directive naming a subject
+// cascade limbs of independent AGID-claim-16): on a revocation directive naming a subject
 // it determines the descendant credential set from the AGID-02 delegation-tree
 // projection and RECORDS the determining watermark (§7.1); it commits the directive
 // projection AND one revocation job per descendant in ONE database transaction via
 // the AN-6 transactional outbox (the JetStream directive event is appended
 // durable-first and reconciled — see the G3 design note); each job executes
 // idempotently with at-least-once delivery and AT MOST ONE recorded effect per AN-5
-// idempotency key (claim 21), performing at least one external effect (status flip,
-// KRL/CRL publish through the same outbox — claim 19, session invalidation, or
+// idempotency key (AGID-claim-21), performing at least one external effect (status flip,
+// KRL/CRL publish through the same outbox — AGID-claim-19, session invalidation, or
 // dependent notification); every completed job records SIGNED per-job completion
 // evidence in the ledger (§7.3 / INV-A9); and a descendant whose delegation record
 // was committed after the watermark generates a FOLLOW-ON job under the same
@@ -39,13 +39,13 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
-// ReasonClass is the directive reason class recorded in the ledger (claim 17): why
+// ReasonClass is the directive reason class recorded in the ledger (AGID-claim-17): why
 // the subject is being revoked. The four classes are the ones the patent enumerates;
 // an unknown class is rejected at directive construction so the ledger only ever
 // carries a recognized reason (a malformed reason is a producer bug, not silent).
 type ReasonClass string
 
-// The recognized reason classes (claim 17).
+// The recognized reason classes (AGID-claim-17).
 const (
 	// ReasonCompromise: the subject (or a key on its chain) is believed compromised.
 	ReasonCompromise ReasonClass = "compromise"
@@ -73,13 +73,13 @@ func (rc ReasonClass) Valid() bool {
 // executor records the one it performed as the evidence's effect class.
 type EffectClass string
 
-// The revocation effect classes (§7, claim 16/19).
+// The revocation effect classes (§7, AGID-claim 16/19).
 const (
 	// EffectRevoke: flip the descendant credential's status to revoked (the core
 	// revoke effect; every job performs at least this).
 	EffectRevoke EffectClass = "revoke"
 	// EffectKRLPublish: publish a revocation entry (KRL/CRL) to a downstream trust
-	// plane through the SAME outbox (claim 19).
+	// plane through the SAME outbox (AGID-claim-19).
 	EffectKRLPublish EffectClass = "krl-publish"
 	// EffectSessionInvalidate: invalidate the descendant's active sessions.
 	EffectSessionInvalidate EffectClass = "session-invalidate"
@@ -117,7 +117,7 @@ func (d Directive) validate() error {
 }
 
 // directiveEvent builds the AN-2 RevocationDirective event that records this
-// directive and the determining watermark (§7.1, claim 16). It reuses the AGID-01
+// directive and the determining watermark (§7.1, AGID-claim-16). It reuses the AGID-01
 // RevocationDirectiveV1 payload + Encode so the event is the exact shape the AGID-02
 // projection folds. eventID is stamped by the caller before append (durable-first),
 // so the reconcile pass can key the per-descendant outbox jobs on it (G3).

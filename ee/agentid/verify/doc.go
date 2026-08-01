@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package verify is the proprietary, OFFLINE relying-party verifier for AGID
-// agent credentials (patent independent claim 28, dependent claim 29, and the
-// short-TTL / offline-validity half of claim 7; establishing the relying-party
+// agent credentials (patent independent AGID-claim-28, dependent AGID-claim-29, and the
+// short-TTL / offline-validity half of AGID-claim-7; establishing the relying-party
 // half of INV-A7). A relying party receives an AGID credential a caller presents
 // (the caller supplies the credential and the action it wants to take -- this
 // package fetches NOTHING) and decides, WITHOUT any network access and WITHOUT
@@ -18,19 +18,19 @@
 //
 //  2. It compares the bound AGENT-STACK REPRESENTATION against the relying party's
 //     LOCAL POLICY -- an approved set of agent-stack representation digests (a
-//     prompt/tool/model digest set) -- and REFUSES on mismatch (claim 28).
+//     prompt/tool/model digest set) -- and REFUSES on mismatch (AGID-claim-28).
 //
 //  3. It REFUSES a requested action that EXCEEDS the authority indication bound in
 //     the credential OR falls OUTSIDE the task scope corresponding to the bound
 //     task-envelope digest -- enforcing task binding even when the broader
-//     authority set would permit the action (claim 28).
+//     authority set would permit the action (AGID-claim-28).
 //
 //  4. It REFUSES a requested action whose TOOL is absent from the TOOL MANIFEST
-//     whose digest is bound in the agent-stack representation (claim 29): the
+//     whose digest is bound in the agent-stack representation (AGID-claim-29): the
 //     relying party confines the agent to exactly the bound tool subset.
 //
 //  5. It determines a short-TTL credential's validity from the CREDENTIAL ALONE
-//     (claim 7, relying-party side): expiry/not-yet-valid is decided from bound
+//     (AGID-claim-7, relying-party side): expiry/not-yet-valid is decided from bound
 //     validity bounds and the caller's clock, with NO query for a credential's revocation state.
 //
 // FAIL-CLOSED is the spine. An unverifiable signature, an out-of-policy agent
@@ -67,10 +67,10 @@
 //
 // LICENSE (decision recorded 2026-07-07): this
 // package is proprietary LicenseRef-trstctl-EE so NO MPL patent grant attaches to
-// independent claim 28 (or dependent 29). It is deliberately NOT in MPL core and
+// independent AGID-claim-28 (or dependent 29). It is deliberately NOT in MPL core and
 // is NOT the internal/license offline license checker (a different thing AGENTS.md
 // keeps in MPL core). The same ISARA / audit-N-8 grant trap PCAS-07 / XREC-12 /
-// GRCA-04 guard applies: shipping this in core would grant claim 28 away under
+// GRCA-04 guard applies: shipping this in core would grant AGID-claim-28 away under
 // MPL 2.1.
 //
 // EXCLUDES (this is offline relying-party verification ONLY). No control-plane

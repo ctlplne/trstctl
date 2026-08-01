@@ -51,7 +51,7 @@ func buildChain(t *testing.T, findingA, planA, decisionA crypto.Signer) policy.P
 }
 
 // TestPlanChain_DigestBindingsVerified: VerifyChain checks each authority signature
-// and both digest bindings; a broken link is rejected with a specific error (claim 40).
+// and both digest bindings; a broken link is rejected with a specific error (PCAS-claim-40).
 func TestPlanChain_DigestBindingsVerified(t *testing.T) {
 	a := authority(t)
 	pub := a.Public().DER
@@ -96,7 +96,7 @@ func TestPlanChain_DigestBindingsVerified(t *testing.T) {
 }
 
 // TestPolicyRef_IsDigestOfRecordedDecision: policy_ref equals the digest of the
-// recorded decision; a mismatch is refused by the in-signer verifier (claim 24).
+// recorded decision; a mismatch is refused by the in-signer verifier (PCAS-claim-24).
 func TestPolicyRef_IsDigestOfRecordedDecision(t *testing.T) {
 	a := authority(t)
 	pub := a.Public().DER
@@ -120,7 +120,7 @@ func TestPolicyRef_IsDigestOfRecordedDecision(t *testing.T) {
 }
 
 // TestPolicy_DecisionRecorded: minting with a decision that was never recorded fails
-// where recording is configured; the recorded decision is queryable (claim 24).
+// where recording is configured; the recorded decision is queryable (PCAS-claim-24).
 func TestPolicy_DecisionRecorded(t *testing.T) {
 	a := authority(t)
 	pub := a.Public().DER
@@ -147,7 +147,7 @@ func TestPolicy_DecisionRecorded(t *testing.T) {
 }
 
 // TestPlanChain_DecisionTraceableToFinding: from a published record's policy_ref an
-// auditor walks policy_ref → decision → plan → finding (claim 40).
+// auditor walks policy_ref → decision → plan → finding (PCAS-claim-40).
 func TestPlanChain_DecisionTraceableToFinding(t *testing.T) {
 	a := authority(t)
 	pub := a.Public().DER

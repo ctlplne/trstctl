@@ -24,8 +24,8 @@ import (
 )
 
 // brokerpg_test.go proves the two AGID-07b paths that require durable state against REAL
-// embedded PostgreSQL (no mocks): the attestation-binding replay refusal (claim 9 /
-// INV-A6) and the idempotency-key single-issuance-event property (claim 15 / AN-5). It
+// embedded PostgreSQL (no mocks): the attestation-binding replay refusal (AGID-claim-9 /
+// INV-A6) and the idempotency-key single-issuance-event property (AGID-claim-15 / AN-5). It
 // spins ONE embedded PostgreSQL lazily, migrates ONE shared AGID database once (disk-
 // frugal), isolates the two tests by tenant (RLS), and skips if PG cannot start. It
 // exercises the production brokerstore.Recorder behind the full BrokerPrecondition, so the
@@ -157,7 +157,7 @@ func countRows(t *testing.T, cs *corestore.Store, tenantID, sql string, args ...
 	return n
 }
 
-// ---- TestAttestation_BoundToIssuanceReplayRefused (claim 9 / INV-A6) ----
+// ---- TestAttestation_BoundToIssuanceReplayRefused (AGID-claim-9 / INV-A6) ----
 
 // TestAttestation_BoundToIssuanceReplayRefused proves the verified attestation is recorded
 // bound to the issuance it justified, and a SECOND issuance presenting the SAME attestation
@@ -226,7 +226,7 @@ func TestAttestation_BoundToIssuanceReplayRefused(t *testing.T) {
 	}
 }
 
-// ---- TestIssue_IdempotencyKeySingleEvent (claim 15 / AN-5) ----
+// ---- TestIssue_IdempotencyKeySingleEvent (AGID-claim-15 / AN-5) ----
 
 // TestIssue_IdempotencyKeySingleEvent proves N identical chain-bound requests (SAME
 // idempotency key) yield EXACTLY ONE issuance event: one agent_issuances row, one

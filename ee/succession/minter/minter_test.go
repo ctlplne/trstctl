@@ -81,7 +81,7 @@ func setup(t *testing.T, opts ...minter.Option) (*minter.Minter, mapResolver, *m
 // --- canonical tests -------------------------------------------------------
 
 // TestMintSuccessor_ProducesVerifiableRecord: a mint returns a record that
-// ee/succession.VerifyRecord accepts (claims 1/25).
+// ee/succession.VerifyRecord accepts (PCAS-claims 1/25).
 func TestMintSuccessor_ProducesVerifiableRecord(t *testing.T) {
 	m, _, _ := setup(t)
 	res, err := m.MintSuccessor(ctx, baseReq())
@@ -101,7 +101,7 @@ func TestMintSuccessor_ProducesVerifiableRecord(t *testing.T) {
 }
 
 // TestMint_EpochMonotonic_Refused: stale, skipped, or already-advanced epochs are
-// refused; only the current floor mints (claim 12 / INV-3).
+// refused; only the current floor mints (PCAS-claim-12 / INV-3).
 func TestMint_EpochMonotonic_Refused(t *testing.T) {
 	m, _, _ := setup(t)
 	if _, err := m.MintSuccessor(ctx, baseReq()); err != nil {
@@ -126,7 +126,7 @@ func TestMint_EpochMonotonic_Refused(t *testing.T) {
 }
 
 // TestSigner_NoPrivateKeyCrossesBoundary: the result carries only public material;
-// the record verifies with public data only (claims 12/16 / INV-1).
+// the record verifies with public data only (PCAS-claims 12/16 / INV-1).
 func TestSigner_NoPrivateKeyCrossesBoundary(t *testing.T) {
 	m, _, _ := setup(t)
 	res, err := m.MintSuccessor(ctx, baseReq())
@@ -154,7 +154,7 @@ func TestSigner_NoPrivateKeyCrossesBoundary(t *testing.T) {
 // TestSigner_ForgeResistance: without the signer (which holds the predecessor
 // private key) a compromised control plane cannot produce a record VerifyRecord
 // accepts — it can pick a successor key but cannot forge the predecessor
-// attestation (claims 1/12 / INV-1).
+// attestation (PCAS-claims 1/12 / INV-1).
 func TestSigner_ForgeResistance(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	// The signer's predecessor key; the control plane knows only its public DER.
@@ -196,7 +196,7 @@ func TestSigner_ForgeResistance(t *testing.T) {
 }
 
 // TestSigner_HighWaterSurvivesRestart: the sealed epoch floor persists across a
-// signer restart (claim 12 / INV-3).
+// signer restart (PCAS-claim-12 / INV-3).
 func TestSigner_HighWaterSurvivesRestart(t *testing.T) {
 	m1, res, floor := setup(t)
 	if _, err := m1.MintSuccessor(ctx, baseReq()); err != nil {
@@ -217,7 +217,7 @@ func TestSigner_HighWaterSurvivesRestart(t *testing.T) {
 	}
 }
 
-// --- dual control (claim 5) ------------------------------------------------
+// --- dual control (PCAS-claim-5) ------------------------------------------------
 
 func mintToken(t *testing.T, authority crypto.Signer, req signing.MintRequest, digest []byte, nonce string) []byte {
 	t.Helper()
@@ -238,7 +238,7 @@ func mintToken(t *testing.T, authority crypto.Signer, req signing.MintRequest, d
 }
 
 // TestMintSuccessor_RequiresDualControl: with dual control configured, a mint
-// without a valid authorization is refused; with one it succeeds (claim 5).
+// without a valid authorization is refused; with one it succeeds (PCAS-claim-5).
 func TestMintSuccessor_RequiresDualControl(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	authority, err := be.GenerateKey(crypto.ECDSAP256)
@@ -259,7 +259,7 @@ func TestMintSuccessor_RequiresDualControl(t *testing.T) {
 }
 
 // TestDualControl_TokenBoundSingleUse: a replayed token, or one bound to a
-// different identity/tenant/epoch/algorithm/request-digest, is refused (claim 5).
+// different identity/tenant/epoch/algorithm/request-digest, is refused (PCAS-claim-5).
 func TestDualControl_TokenBoundSingleUse(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	authority, err := be.GenerateKey(crypto.ECDSAP256)
@@ -294,7 +294,7 @@ func TestDualControl_TokenBoundSingleUse(t *testing.T) {
 	}
 }
 
-// --- policy (claim 23) -----------------------------------------------------
+// --- policy (PCAS-claim-23) -----------------------------------------------------
 
 func mintPolicy(t *testing.T, authority crypto.Signer, identity string, target crypto.Algorithm) []byte {
 	t.Helper()
@@ -377,7 +377,7 @@ func (k orderKeygen) GenerateKey(a crypto.Algorithm) (crypto.Signer, error) {
 }
 
 // TestPolicy_VerifiedBeforeKeygen: policy verification provably precedes successor
-// key generation (claim 23).
+// key generation (PCAS-claim-23).
 func TestPolicy_VerifiedBeforeKeygen(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	authority, err := be.GenerateKey(crypto.ECDSAP256)

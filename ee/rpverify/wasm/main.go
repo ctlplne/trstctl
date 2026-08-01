@@ -4,7 +4,7 @@
 
 // Command wasm verifies a freshly-built sample succession chain under js/wasm and
 // prints the verdict, so TestRPVerify_WASMParity can assert the verifier produces
-// the same result on wasm as on native (claim-13 portability / WASM build parity).
+// the same result on wasm as on native (PCAS-claim-13 portability / WASM build parity).
 package main
 
 import (

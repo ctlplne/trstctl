@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package attest models custody-attestation evidence for a succession's successor
-// key and the class gate over it (claim 35, FIG. 9; establishes the attested-pre-gen
+// key and the class gate over it (PCAS-claim-35, FIG. 9; establishes the attested-pre-gen
 // limb of INV-15). A succession request carries the successor custodian's attestation
 // evidence (a TPM quote, a cloud instance identity, …); the signer verifies it BEFORE
 // generating the successor key, binds its digest + type into the record, and refuses
@@ -77,7 +77,7 @@ func Decode(b []byte) (Evidence, error) {
 	return e, nil
 }
 
-// Digest is the evidence digest bound into the record (claim 35): a domain-separated
+// Digest is the evidence digest bound into the record (PCAS-claim-35): a domain-separated
 // hash of the type + blob, so a third party recomputes it from the published evidence.
 func Digest(e Evidence) []byte {
 	var b bytes.Buffer

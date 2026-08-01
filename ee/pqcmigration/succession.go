@@ -16,8 +16,8 @@ import (
 // succession.go wires the PQC migration planner (BuildPlan) to the PCAS succession
 // engine (PCAS-08): instead of a bare Reissue, a quantum-vulnerable credential is
 // planned as a SuccessionJob carrying the policy-decided target algorithm and a
-// reproducible policy_ref that PCAS-05 verifies under claim 23. Planning spans the
-// claim-9 identity/credential genus (X.509, SSH, workload-identity SVID, API token,
+// reproducible policy_ref that PCAS-05 verifies under PCAS-claim-23. Planning spans the
+// PCAS-claim-9 identity/credential genus (X.509, SSH, workload-identity SVID, API token,
 // secret). The target is chosen under internal/policy (OPA, bulkheaded), consumed
 // read-only. The classical→hybrid posture is served today; a hybrid→pure-PQC seam
 // is laid for the cutover gated by PCAS-10.
@@ -26,7 +26,7 @@ import (
 // an auditor knows exactly which fields it digests.
 const succDecisionSchema = 1
 
-// CredentialType is a member of the claim-9 identity/credential genus that a
+// CredentialType is a member of the PCAS-claim-9 identity/credential genus that a
 // succession can be planned for.
 type CredentialType string
 
@@ -38,7 +38,7 @@ const (
 	CredentialSecret       CredentialType = "secret"        // managed secret / MAC / wrapping key
 )
 
-// PlannableCredentialTypes returns the claim-9 genus each of whose members maps to
+// PlannableCredentialTypes returns the PCAS-claim-9 genus each of whose members maps to
 // a plannable succession.
 func PlannableCredentialTypes() []CredentialType {
 	return []CredentialType{
@@ -105,7 +105,7 @@ type Decision struct {
 
 // PolicyRef is the reproducible reference to a recorded decision: the hex SHA-256
 // of the canonical JSON encoding of d, hashed through the core AN-3 boundary. It is
-// the value carried into the PCAS-04 commitment as policy_ref (claim 23). Equal
+// the value carried into the PCAS-04 commitment as policy_ref (PCAS-claim-23). Equal
 // decisions yield equal refs; any change to any field changes the ref.
 func PolicyRef(d Decision) string {
 	b, _ := json.Marshal(d)
@@ -243,7 +243,7 @@ type SuccessionJob struct {
 }
 
 // Credential is a discovered credential to plan a succession for, spanning the
-// claim-9 genus. Cert-key credentials are typically produced from a BuildPlan via
+// PCAS-claim-9 genus. Cert-key credentials are typically produced from a BuildPlan via
 // CredentialsFromPlan; other genus members are supplied directly.
 type Credential struct {
 	AssetID           string

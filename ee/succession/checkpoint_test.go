@@ -19,7 +19,7 @@ func checkpointSigner(t *testing.T) crypto.Signer {
 }
 
 // TestCheckpoint_VerifyFromCheckpoint: a relying party verifies records from a
-// signed epoch checkpoint instead of from genesis (claim 14).
+// signed epoch checkpoint instead of from genesis (PCAS-claim-14).
 func TestCheckpoint_VerifyFromCheckpoint(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	sc, err := BuildSampleChain(be, "spiffe://d", "spiffe://d/id", "t")
@@ -52,7 +52,7 @@ func TestCheckpoint_VerifyFromCheckpoint(t *testing.T) {
 }
 
 // TestCheckpoint_CannotRegressLastAccepted: a chain not exceeding a checkpoint's
-// epoch is rejected (the checkpoint epoch cannot be regressed) (claim 14).
+// epoch is rejected (the checkpoint epoch cannot be regressed) (PCAS-claim-14).
 func TestCheckpoint_CannotRegressLastAccepted(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	sc, err := BuildSampleChain(be, "spiffe://d", "spiffe://d/id", "t")
@@ -69,7 +69,7 @@ func TestCheckpoint_CannotRegressLastAccepted(t *testing.T) {
 }
 
 // TestCheckpoint_BindsLogHead: the checkpoint binds the transparency-log head; a
-// tampered head breaks the signature (claim 29).
+// tampered head breaks the signature (PCAS-claim-29).
 func TestCheckpoint_BindsLogHead(t *testing.T) {
 	signer := checkpointSigner(t)
 	cp := SignedEpochCheckpoint{
@@ -96,7 +96,7 @@ func TestCheckpoint_BindsLogHead(t *testing.T) {
 }
 
 // TestCheckpoint_DivergenceEvidencesEquivocation: two checkpoints at one epoch
-// binding different log heads evidence equivocation (claim 29).
+// binding different log heads evidence equivocation (PCAS-claim-29).
 func TestCheckpoint_DivergenceEvidencesEquivocation(t *testing.T) {
 	a := SignedEpochCheckpoint{IdentityID: "id", Epoch: 2, LogTreeSize: 7, LogRootHash: []byte{1}}
 	b := SignedEpochCheckpoint{IdentityID: "id", Epoch: 2, LogTreeSize: 7, LogRootHash: []byte{2}}

@@ -137,7 +137,7 @@ func TestRPVerify_NoNegotiationNoProviderLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Concrete dynamic-loading / provider-registration API constructs (not prose):
-	// their absence in the verify path is the design-around (claim 13).
+	// their absence in the verify path is the design-around (PCAS-claim-13).
 	forbidden := []string{`"plugin"`, "plugin.Open", "dlopen", "LoadLibrary", "RegisterProvider", "SelectProvider("}
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {
@@ -211,7 +211,7 @@ func TestRPVerify_OverlapWindowFailsClosed(t *testing.T) {
 }
 
 // TestRPVerify_WASMParity builds and runs the verifier under js/wasm and asserts
-// it produces the same verdict as native (claim-13 portability). It skips if a
+// it produces the same verdict as native (PCAS-claim-13 portability). It skips if a
 // wasm runtime is unavailable.
 func TestRPVerify_WASMParity(t *testing.T) {
 	// Native verdict for a fresh valid chain.
@@ -285,7 +285,7 @@ func (f *memFloorRP) Advance(id string, e uint64) error {
 }
 
 // TestRPVerify_MirrorsStrengthRefusal: the RP rejects a weaker-class succession
-// that lacks a valid break-glass marker, and accepts one that has it (claim 17 /
+// that lacks a valid break-glass marker, and accepts one that has it (PCAS-claim-17 /
 // INV-8).
 func TestRPVerify_MirrorsStrengthRefusal(t *testing.T) {
 	be := crypto.NewSoftwareBackend()

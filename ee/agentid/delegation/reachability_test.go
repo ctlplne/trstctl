@@ -11,7 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
-// reachability_test.go drives the AGID-06 in-signer reachability precondition (claims 5/6 /
+// reachability_test.go drives the AGID-06 in-signer reachability precondition (AGID-claims 5/6 /
 // INV-A5) through the SAME AGID-04b instrumented-keystore ordering harness the chain,
 // attestation, and task-envelope tests use (runGatedIssue / instrumentedKeystore /
 // orderLog). A gate with a reachability trust lookup verifies a SIGNED reachability verdict
@@ -189,7 +189,7 @@ func allowPolicy() *reach.CeilingPolicy {
 	})
 }
 
-// TestReachability_VerdictSignedAndVerifiedInSigner is a CANONICAL test (claim 6 / INV-A5):
+// TestReachability_VerdictSignedAndVerifiedInSigner is a CANONICAL test (AGID-claim-6 / INV-A5):
 // with the instrumented-keystore ordering harness, a VALID signed verdict verifies as a
 // key-op precondition (the key op runs, strictly after the gate), while an ABSENT, UNSIGNED,
 // or TAMPERED verdict performs ZERO key ops and mints a signed refusal naming the
@@ -319,7 +319,7 @@ func TestReachability_VerdictSignedAndVerifiedInSigner(t *testing.T) {
 	})
 }
 
-// TestReachability_ExceedsCeilingRefused is a CANONICAL test (claim 5 / INV-A5): a reachable
+// TestReachability_ExceedsCeilingRefused is a CANONICAL test (AGID-claim-5 / INV-A5): a reachable
 // set exceeding a CARDINALITY, SENSITIVITY-CLASS, or TENANT-SPAN ceiling ⇒ the request is
 // refused with a signed refusal naming the reachability check, and ZERO key ops. The
 // verdict carries the Exceeded determination (computed outside the signer); the signer
@@ -377,7 +377,7 @@ func TestReachability_ExceedsCeilingRefused(t *testing.T) {
 
 			res := runGatedIssue(t, f.log, f.gate, req, f.mintKeyOp(t))
 			art := assertRefusedNoKeyOp(t, f, res, CheckReachability, tc.name+" ceiling")
-			// The refusal detail names the violated ceiling (claim 5).
+			// The refusal detail names the violated ceiling (AGID-claim-5).
 			if tc.name != "unconfigured-class-fail-closed" {
 				wantCeiling := map[string]reach.CeilingKind{
 					"cardinality":      reach.CeilingCardinality,

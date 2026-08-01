@@ -12,7 +12,7 @@ import (
 )
 
 // attest.go carries the signer-attributable evidence bound to every succession
-// record (claims 28, 42; establishes INV-13). INV-13 is an ATTRIBUTION property, not
+// record (PCAS-claims 28, 42; establishes INV-13). INV-13 is an ATTRIBUTION property, not
 // a prevention one: a compromised signer can still mint, but every record it mints
 // carries a countersignature that NAMES it, and the authorization under which it
 // minted is verifiable from the published record — so misissuance is attributable.
@@ -27,14 +27,14 @@ const (
 var ErrSignerAttestation = errors.New("succession: signer attestation invalid or missing")
 
 // SignerAttestationEnvelope is the minting signer's countersignature: it NAMES the
-// signer (claim 28) and carries its signature over the attested record.
+// signer (PCAS-claim-28) and carries its signature over the attested record.
 type SignerAttestationEnvelope struct {
 	SignerID  string `json:"signer_id"`
 	Signature []byte `json:"sig"`
 }
 
-// AuthzDigest is the digest of the claim-5 authorization artifact (a dual-control
-// token), bound into a record as authz_digest (claim 42). It is domain-separated and
+// AuthzDigest is the digest of the PCAS-claim-5 authorization artifact (a dual-control
+// token), bound into a record as authz_digest (PCAS-claim-42). It is domain-separated and
 // hashed through the core AN-3 boundary. An empty artifact yields a well-defined
 // digest (the "no dual-control" case).
 func AuthzDigest(authorizationArtifact []byte) []byte {
@@ -61,7 +61,7 @@ func attestMessage(rec SuccessionRecord, signerID string) ([]byte, error) {
 	// Bind the record type so an exceptional record's kind (revocation / ceremony /
 	// emergency, PCAS-23) is signer-attested and cannot be stripped or altered.
 	writeField(&b, []byte(rec.RecordType))
-	// Bind the custody attestation evidence digest + type (claim 35, PCAS-29), so the
+	// Bind the custody attestation evidence digest + type (PCAS-claim-35, PCAS-29), so the
 	// custody evidence that gated the succession is tamper-evidently part of the record.
 	writeField(&b, rec.AttestationEvidenceDigest)
 	writeField(&b, []byte(rec.AttestationType))
@@ -87,7 +87,7 @@ func Attest(attestSigner crypto.Signer, signerID string, rec SuccessionRecord) (
 }
 
 // VerifyAttestation verifies rec's signer attestation against a roster of signer
-// attestation keys (keyed by signer id) and returns the naming signer id (claim 28).
+// attestation keys (keyed by signer id) and returns the naming signer id (PCAS-claim-28).
 func VerifyAttestation(roster map[string][]byte, rec SuccessionRecord) (string, error) {
 	env, err := decodeAttestation(rec.SignerAttestation)
 	if err != nil {
@@ -109,7 +109,7 @@ func VerifyAttestation(roster map[string][]byte, rec SuccessionRecord) (string, 
 
 // MintingSignerID returns the signer id a record's attestation names, without
 // verifying the signature (use VerifyAttestation to verify). Used to name the minting
-// signer of a misissuance-proof record (claim 28).
+// signer of a misissuance-proof record (PCAS-claim-28).
 func MintingSignerID(rec SuccessionRecord) (string, error) {
 	env, err := decodeAttestation(rec.SignerAttestation)
 	if err != nil {
@@ -140,7 +140,7 @@ func AttestedVerify(rec SuccessionRecord, roster map[string][]byte) (string, err
 }
 
 // VerifyAuthzDigest checks that a record's authz_digest is the digest of the supplied
-// authorization artifact (claim 42): a third party recomputes it from the published
+// authorization artifact (PCAS-claim-42): a third party recomputes it from the published
 // artifact.
 func VerifyAuthzDigest(rec SuccessionRecord, authorizationArtifact []byte) error {
 	if !bytes.Equal(rec.AuthzDigest, AuthzDigest(authorizationArtifact)) {

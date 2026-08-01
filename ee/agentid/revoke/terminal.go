@@ -14,7 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
-// terminal.go is the AGID-11 terminal-state transition (claim 16 TERMINAL limb /
+// terminal.go is the AGID-11 terminal-state transition (AGID-claim-16 TERMINAL limb /
 // INV-A9): the subject transitions to the terminal `revoked-with-evidence` state ONLY
 // WHEN signed completion evidence exists — and VERIFIES — for EVERY enqueued AND
 // follow-on job of the directive (the obligation set AGID-10 recorded). Missing or
@@ -27,7 +27,7 @@ import (
 // terminal flag + stamps terminal_at (idempotently), and OUTSIDE the tx but bound to it
 // durable-first appends the terminal AN-2 event carrying the SIGNED aggregate evidence
 // artifact (aggregate.go: the completion-evidence digest + subject id + reason class +
-// directive watermark + ledger head as of terminal — claims 18/33). It performs NO key
+// directive watermark + ledger head as of terminal — AGID-claims 18/33). It performs NO key
 // op on issued credentials and NEVER mints a credential; its only signing is the
 // aggregate artifact via internal/crypto (AN-3).
 //
@@ -48,7 +48,7 @@ const TypeRevocationTerminal = "agent.revocation.terminal"
 const RevocationTerminalSchemaV1 = 1
 
 // TerminalTransition performs the evidenced terminal-state transition for a directive
-// (claim 16 terminal limb). It reads the obligation set + per-job evidence, verifies
+// (AGID-claim-16 terminal limb). It reads the obligation set + per-job evidence, verifies
 // completeness, and — only when complete — flips the directive terminal and mints +
 // appends the signed aggregate artifact. It holds the AGID-02 store (the durable
 // obligation/evidence reads + the terminal flip), the AN-2 log (the durable-first
@@ -107,7 +107,7 @@ type TerminalVerdict struct {
 }
 
 // VerifyTerminal computes the terminal verdict for a directive by DETERMINISTIC REPLAY of
-// the durable state (claim 16 terminal limb / INV-A9): it reads the obligation set (every
+// the durable state (AGID-claim-16 terminal limb / INV-A9): it reads the obligation set (every
 // enqueued and follow-on job) and, for each, loads the recorded signed completion evidence
 // and VERIFIES its signature. The directive is terminal iff there is at least one job and
 // every job has verifying evidence. It is a PURE READ — no flip, no event, no signing — so
@@ -234,7 +234,7 @@ func (tt *TerminalTransition) Transition(ctx context.Context, tenantID, directiv
 		// flip below is a no-op (already terminal), so we append the (fresh) artifact.
 	}
 
-	// Build the signed aggregate artifact from the verdict (claims 18/33). The BOUND BODY is
+	// Build the signed aggregate artifact from the verdict (AGID-claims 18/33). The BOUND BODY is
 	// deterministic (subject/reason/watermark/head/completion-digest); only the ECDSA
 	// signature bytes vary run-to-run, which is why the persisted artifact above is reused
 	// on a repeat call rather than re-signed.
@@ -384,7 +384,7 @@ func (tt *TerminalTransition) appendTerminalEvent(ctx context.Context, tenantID,
 }
 
 // ledgerHead returns the highest event sequence currently in the log — the ledger head
-// bound into the aggregate as of the terminal revoked state (claim 33). A log with no
+// bound into the aggregate as of the terminal revoked state (AGID-claim-33). A log with no
 // events yields 0.
 func (tt *TerminalTransition) ledgerHead(ctx context.Context) (uint64, error) {
 	var head uint64

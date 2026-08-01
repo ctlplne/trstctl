@@ -19,7 +19,7 @@ func mustEncode(t *testing.T, p Payload) events.Event {
 	return e
 }
 
-// TestReplay_DeterministicPosture is the canonical guard test for claim 10 /
+// TestReplay_DeterministicPosture is the canonical guard test for PCAS-claim-10 /
 // INV-10: replaying the succession ledger reconstructs the crypto-posture
 // projection deterministically (PCAS-01 acceptance criterion 2).
 func TestReplay_DeterministicPosture(t *testing.T) {

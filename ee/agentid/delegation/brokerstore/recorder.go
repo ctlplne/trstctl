@@ -4,7 +4,7 @@
 // chain-bound issuance recorder: it persists the verified attestation binding + the
 // issued-credential registry row + the AN-6 outbox publish intent in ONE RLS-scoped
 // transaction, and refuses a REPLAY of the same attestation evidence via the AGID-02
-// agent_attestation_bindings unique index (claim 9 / INV-A6).
+// agent_attestation_bindings unique index (AGID-claim-9 / INV-A6).
 //
 // It lives in its OWN package, SEPARATE from the signer-linked `delegation` package,
 // precisely so the isolated AN-4 signer (which imports delegation.NewSignerGate) never
@@ -82,7 +82,7 @@ func (r *Recorder) WithEventLog(log eventAppender) *Recorder {
 // RecordIssuanceBinding persists the issuance registry row and the verified attestation
 // binding, and appends the AN-6 outbox publish intent, in ONE RLS-scoped transaction
 // (AN-1/AN-6). A duplicate attestation evidence digest is rejected by the UNIQUE index
-// and surfaced as delegation.ErrAttestationReplay (claim 9 / INV-A6) — the transaction
+// and surfaced as delegation.ErrAttestationReplay (AGID-claim-9 / INV-A6) — the transaction
 // rolls back, so NO issuance row, NO binding, and NO outbox intent are written for a
 // replay. It performs no key operation.
 //
@@ -136,7 +136,7 @@ func (r *Recorder) RecordIssuanceBinding(ctx context.Context, b delegation.Issua
 			return fmt.Errorf("record issuance: %w", err)
 		}
 
-		// Attestation binding (claim 9 / INV-A6): bound to the issuance it justified. The
+		// Attestation binding (AGID-claim-9 / INV-A6): bound to the issuance it justified. The
 		// evidence_digest UNIQUE index is what refuses a replay — a second issuance
 		// presenting the same evidence violates it, and we surface ErrAttestationReplay.
 		if len(b.EvidenceDigest) > 0 {

@@ -22,7 +22,7 @@ const (
 )
 
 // IdentityPosture is the current cryptographic posture of one NHI, projected
-// from the succession ledger (claim 10). It is a projection only — never written
+// from the succession ledger (PCAS-claim-10). It is a projection only — never written
 // directly (AN-2); the durable RLS serving copy is PCAS-02.
 type IdentityPosture struct {
 	IdentityID       string
@@ -50,7 +50,7 @@ func stateForClass(class string) State {
 }
 
 // Fold deterministically reduces an ordered event sequence to the per-identity
-// crypto-posture projection (claim 10 / INV-10). It is:
+// crypto-posture projection (PCAS-claim-10 / INV-10). It is:
 //
 //   - deterministic: the output depends only on the event sequence;
 //   - idempotent and at-least-once safe (INV-4): re-delivering an event, or

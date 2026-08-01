@@ -17,7 +17,7 @@ import (
 // TestCrashRecovery_ExactlyOnce: a succession minted under an idempotency key, then
 // retried after a signer/orchestrator restart (a fresh process over the SAME durable
 // store), is not re-minted — the recorded record replays and exactly one record + one
-// outbox row exist (claim 6 / INV-4, the crash-recovery limb, PCAS-12).
+// outbox row exist (PCAS-claim-6 / INV-4, the crash-recovery limb, PCAS-12).
 func TestCrashRecovery_ExactlyOnce(t *testing.T) {
 	ctx := context.Background()
 	cs, err := corestore.Open(ctx, testDSN)

@@ -289,7 +289,7 @@ func TestAuthority_WideningRefused(t *testing.T) {
 	}
 }
 
-// TestIssue_ChainOnlyNoAgentStack proves fallback claim 31: a valid narrowing chain with
+// TestIssue_ChainOnlyNoAgentStack proves fallback AGID-claim-31: a valid narrowing chain with
 // NO agent-stack element yields a credential that binds the chain digest, verified before
 // keygen. The bound material carries the chain-head digest and no agent-stack digest.
 func TestIssue_ChainOnlyNoAgentStack(t *testing.T) {

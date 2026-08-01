@@ -12,7 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// bind.go computes the credential BINDING (INV-A3, claims 1/24/34): a digest of the
+// bind.go computes the credential BINDING (INV-A3, AGID-claims 1/24/34): a digest of the
 // verified chain head plus the agent-stack representation, and the MINIMAL X.509
 // extension that carries that binding into the issued credential so a relying party
 // verifies it offline (the RP verifier is AGID-09; the richer carriage encodings are
@@ -63,11 +63,11 @@ var (
 // BindingMaterial is the non-secret material bound into the credential (INV-A3). It
 // carries the chain-head record digest (empty in the attestation-gated fallback, claim
 // 32), the digest of the agent-stack representation and the representation's opaque
-// canonical bytes (empty in the chain-only fallback, claim 31; the bytes let a relying
+// canonical bytes (empty in the chain-only fallback, AGID-claim-31; the bytes let a relying
 // party recover the prompt+tool+model digests with the agentstack package), the
 // designated authority class, the attestation-evidence digest (empty when no attestation
 // was required), the comparator version so a verifier reproduces the decision
-// deterministically, and the root-anchor phishing-resistant auth reference (claim 13). At
+// deterministically, and the root-anchor phishing-resistant auth reference (AGID-claim-13). At
 // least one of ChainHeadDigest / AgentStackDigest is present (enforced by
 // NewBindingMaterial); a credential that binds neither is never minted.
 type BindingMaterial struct {
@@ -79,7 +79,7 @@ type BindingMaterial struct {
 	ComparatorVersion string `json:"comparator_version"`
 	RootAnchorAuthRef string `json:"root_anchor_auth_ref,omitempty"`
 	// TaskEnvelopeDigest is the canonical digest of the task envelope the chain head
-	// references (AGID-05, claim 2 / INV-A4), bound ALONGSIDE the chain-head digest and
+	// references (AGID-05, AGID-claim-2 / INV-A4), bound ALONGSIDE the chain-head digest and
 	// the agent-stack representation (INV-A3 is additive, not replaced). Empty when no
 	// record references a task envelope -- in which case the binding is byte-identical to
 	// AGID-04b (the field is omitempty and appended last in CanonicalBytes, so an

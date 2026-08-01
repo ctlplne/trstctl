@@ -195,7 +195,7 @@ func TestRefuse_MalformedRepr(t *testing.T) {
 	_ = repr
 }
 
-// TestChainOnlyCredential proves a chain-only credential (claim 31 fallback: no
+// TestChainOnlyCredential proves a chain-only credential (AGID-claim-31 fallback: no
 // agent-stack repr, no envelope) is governed by authority alone and accepts when
 // the operation is granted; it carries no representation to compare, so the
 // agent-stack policy check is skipped.

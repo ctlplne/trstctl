@@ -32,7 +32,7 @@ func job() rewrap.Job {
 func healthy(context.Context, string) error { return nil }
 
 // TestRewrap_StagedResumable: a job interrupted mid-stage resumes without redoing a
-// completed stage (no double-wrap) and reaches completion (claim 39).
+// completed stage (no double-wrap) and reaches completion (PCAS-claim-39).
 func TestRewrap_StagedResumable(t *testing.T) {
 	progress := rewrap.NewMemProgress()
 	ledger := rewrap.NewLedger()
@@ -73,7 +73,7 @@ func TestRewrap_StagedResumable(t *testing.T) {
 }
 
 // TestRewrap_StageHealthHalts: a per-stage health verification failure halts the job
-// with a structured error and records no completion (claim 39, AC4).
+// with a structured error and records no completion (PCAS-claim-39, AC4).
 func TestRewrap_StageHealthHalts(t *testing.T) {
 	ledger := rewrap.NewLedger()
 	runner := rewrap.NewRunner(rewrap.NewMemProgress(), ledger)
@@ -128,7 +128,7 @@ func retire(t *testing.T, gate func(context.Context) error) (*retirement.Control
 }
 
 // TestRewrap_CompletionGatesRetirement: retirement of the predecessor KEM key is
-// refused until the completion events are recorded; with them it proceeds (claim 39).
+// refused until the completion events are recorded; with them it proceeds (PCAS-claim-39).
 func TestRewrap_CompletionGatesRetirement(t *testing.T) {
 	ledger := rewrap.NewLedger()
 	runner := rewrap.NewRunner(rewrap.NewMemProgress(), ledger)

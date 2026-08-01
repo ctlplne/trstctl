@@ -12,7 +12,7 @@ import (
 // ErrNotASuccession is returned by Succeed when the requested successor algorithm
 // equals the current bound identifier: that is a same-algorithm re-key (a
 // rotation-version bump in core byok), not a succession. It advances no
-// algorithm-epoch and emits no nhi.algorithm.succession event (claim 22 / INV-2).
+// algorithm-epoch and emits no nhi.algorithm.succession event (PCAS-claim-22 / INV-2).
 var ErrNotASuccession = errors.New("succession: same-algorithm re-key is not a succession")
 
 // Transition is a first-class cross-algorithm succession transition for an
@@ -38,7 +38,7 @@ type Transition struct {
 // rebinds the identity to the new algorithm, and returns the Transition together
 // with the nhi.algorithm.succession ledger event (PCAS-01) to append to the AN-2
 // log. It returns ErrNotASuccession — advancing nothing and emitting nothing —
-// when successorAlg equals the current bound identifier (claim 22 / INV-2).
+// when successorAlg equals the current bound identifier (PCAS-claim-22 / INV-2).
 func (i *Identity) Succeed(successorAlg crypto.Algorithm, successorPubDER, proof []byte) (Transition, eventspec.Event, error) {
 	if successorAlg == i.alg {
 		return Transition{}, eventspec.Event{}, ErrNotASuccession

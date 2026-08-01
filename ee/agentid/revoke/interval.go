@@ -11,7 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
-// interval.go is the AGID-11 interval monitor (claim 23): the subject is expected to
+// interval.go is the AGID-11 interval monitor (AGID-claim-23): the subject is expected to
 // transition to the terminal revoked-with-evidence state within a POLICY-DEFINED INTERVAL
 // of the directive being recorded; an EXCEEDANCE — the interval elapses without the
 // terminal transition, or the transition landed later than the interval allows — is
@@ -27,7 +27,7 @@ import (
 // issuance/renewal (refused in-signer); expiry covers the outstanding credential.
 
 // TypeRevocationIntervalExceeded is the AN-2 event appended when a directive's terminal
-// transition exceeds the policy-defined completion interval (claim 23). It is a DISTINCT
+// transition exceeds the policy-defined completion interval (AGID-claim-23). It is a DISTINCT
 // event type (not the terminal event, not the effect event), so the exceedance is an
 // independent ledger fact. A projector that does not know it skips it (forward-compatible).
 const TypeRevocationIntervalExceeded = "agent.revocation.interval-exceeded"
@@ -35,7 +35,7 @@ const TypeRevocationIntervalExceeded = "agent.revocation.interval-exceeded"
 // RevocationIntervalExceededSchemaV1 is the baseline payload-shape version for the event.
 const RevocationIntervalExceededSchemaV1 = 1
 
-// IntervalMonitor records interval exceedances for revocation directives (claim 23). It
+// IntervalMonitor records interval exceedances for revocation directives (AGID-claim-23). It
 // holds the AGID-02 repo (the directive timing read), the AN-2 log (the distinct
 // exceedance event), the policy interval (seconds), and an injected clock (deterministic
 // tests). It performs no key op and no mutation of the directive; it only appends the
@@ -103,7 +103,7 @@ type CheckResult struct {
 }
 
 // Check evaluates one directive against the policy interval and, if the observed
-// completion interval exceeds it, appends the DISTINCT exceedance event (claim 23),
+// completion interval exceeds it, appends the DISTINCT exceedance event (AGID-claim-23),
 // exactly once. Elapsed time is (terminal_at - created_at) when the directive is terminal,
 // else (clock - created_at) while it is still draining. It appends the exceedance event
 // only on a fresh exceedance: it first checks whether one already exists in the ledger for

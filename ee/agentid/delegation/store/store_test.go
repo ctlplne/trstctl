@@ -424,8 +424,8 @@ func TestInsertReadRoundTrip_AllTables(t *testing.T) {
 // TestProjection_DescendantSetDeterministicReplay: replaying the same AGID-01 event
 // sequence — including DUPLICATE delivery of every event — yields the identical
 // descendant set AND the identical watermark, and that pure-projection answer equals
-// what the durable RLS store returns for the same events (claim 16 projection /
-// claim 24 replay). This is the canonical replay/determinism test.
+// what the durable RLS store returns for the same events (AGID-claim-16 projection /
+// AGID-claim-24 replay). This is the canonical replay/determinism test.
 func TestProjection_DescendantSetDeterministicReplay(t *testing.T) {
 	// Build a delegation forest as AN-2 events (AGID-01 types), with explicit
 	// sequences so the watermark is meaningful.

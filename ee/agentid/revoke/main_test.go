@@ -6,7 +6,7 @@ package revoke_test
 // PostgreSQL (shared across the package, per-test database) and an in-process embedded
 // NATS JetStream event log — the same substrates the spine runs under, never mocks —
 // so the transactional-outbox atomicity (INV-A8), the idempotent at-least-once job
-// execution (claim 21), and the durable-first directive append + reconcile (G3) are
+// execution (AGID-claim-21), and the durable-first directive append + reconcile (G3) are
 // exercised faithfully. Mirrors the AGID-02 store and internal/orchestrator harnesses.
 
 import (

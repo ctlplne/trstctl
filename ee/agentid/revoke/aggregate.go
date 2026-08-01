@@ -11,12 +11,12 @@ import (
 )
 
 // aggregate.go mints and verifies the SIGNED aggregate evidence artifact for a terminal
-// revocation (claims 18 and the independent claim 33). When a directive reaches the
+// revocation (AGID-claims 18 and the independent AGID-claim-33). When a directive reaches the
 // terminal revoked-with-evidence state — every enqueued and follow-on job carries signed
 // per-job completion evidence (§7.3 / INV-A9) — the terminal transition mints ONE signed
 // artifact that binds a DIGEST of the per-job completion evidence recorded under the
 // directive, so a single portable proof answers "did the kill finish?" without replaying
-// the whole ledger. Per the independent claim 33, the same artifact ALSO binds the
+// the whole ledger. Per the independent AGID-claim-33, the same artifact ALSO binds the
 // subject id, the reason class, the directive watermark, and the ledger head as of the
 // terminal revoked state.
 //
@@ -36,13 +36,13 @@ const aggregateDomain = "agid/agentid/revocation-aggregate-evidence/v1"
 // keeps the aggregation function distinct from any other digest-over-digests use.
 const completionDigestDomain = "agid/agentid/revocation-aggregate/completion-set/v1"
 
-// AggregateEvidence is the signed terminal-revocation aggregate artifact (claims 18/33).
+// AggregateEvidence is the signed terminal-revocation aggregate artifact (AGID-claims 18/33).
 // It is a pure value: a relying party stores it and verifies it offline. The bound set
-// is exactly the claim-33 binding set plus the completion-evidence digest of claim 18:
+// is exactly the AGID-claim-33 binding set plus the completion-evidence digest of AGID-claim-18:
 //   - CompletionEvidenceDigest: a digest over the SORTED per-job completion-evidence
-//     digests recorded under the directive (claim 18). Deterministic and reproducible
+//     digests recorded under the directive (AGID-claim-18). Deterministic and reproducible
 //     from the published per-job evidence digests alone.
-//   - SubjectID, ReasonClass, Watermark, LedgerHead: the claim-33 binding set — the
+//   - SubjectID, ReasonClass, Watermark, LedgerHead: the AGID-claim-33 binding set — the
 //     subject the directive named, the reason class, the directive's determining
 //     watermark, and the ledger head AS OF the terminal revoked state.
 //
@@ -62,7 +62,7 @@ type AggregateEvidence struct {
 	// match.
 	JobCount int `json:"job_count"`
 	// CompletionEvidenceDigest is the digest over the sorted per-job completion-evidence
-	// digests recorded under the directive (claim 18).
+	// digests recorded under the directive (AGID-claim-18).
 	CompletionEvidenceDigest []byte `json:"completion_evidence_digest"`
 	// Signature is the terminal-signer's signature over aggregateBodyBytes; omitted from
 	// the body that is signed (a signature cannot cover itself) and attached after.
@@ -72,7 +72,7 @@ type AggregateEvidence struct {
 }
 
 // CompletionEvidenceDigestOf folds a set of per-job completion-evidence digests into the
-// single digest the aggregate artifact binds (claim 18). It SORTS the digests (so the
+// single digest the aggregate artifact binds (AGID-claim-18). It SORTS the digests (so the
 // result is independent of job discovery order) and hashes the domain tag, the count, and
 // each length-prefixed digest through internal/crypto (AN-3). It is the SAME function the
 // artifact minting and the offline verifier both run, so an auditor recomputes the exact
@@ -175,7 +175,7 @@ func VerifyAggregateSignature(a AggregateEvidence) error {
 	return nil
 }
 
-// VerifyAggregateOffline is the THIRD-PARTY, control-plane-free verification (claim 18):
+// VerifyAggregateOffline is the THIRD-PARTY, control-plane-free verification (AGID-claim-18):
 // given the signed aggregate artifact and ONLY the published per-job completion-evidence
 // digests, it (1) verifies the artifact signature against its embedded key and (2)
 // recomputes the completion-evidence digest over the published digests and requires it to

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package carriage implements the three interchangeable CARRIAGE forms of an AGID
-// credential (claim 27 / INV-A3 carriage half): an X.509 non-critical certificate
+// credential (AGID-claim-27 / INV-A3 carriage half): an X.509 non-critical certificate
 // extension, a workload-identity document, and a signed (JWT-style) token. Each form
 // transports the SAME bound values -- the chain-head digest, the agent-stack
 // representation (its digest set plus the opaque canonical bytes), and, where present,
@@ -47,7 +47,7 @@ const carriageDomain = "agid/agentid/binding/v1"
 // carried faithfully by each carriage form. Its fields and their JSON tags are a
 // byte-for-byte mirror of ee/agentid/delegation.BindingMaterial: a carriage form encodes
 // a BoundValues and decodes back to one that is DeepEqual to the source, so the carried
-// digests equal exactly the values AGID-04 bound (claim 27 / INV-A3).
+// digests equal exactly the values AGID-04 bound (AGID-claim-27 / INV-A3).
 //
 // At least one of ChainHeadDigest / AgentStackDigest is present in a real binding; a
 // credential that binds neither is never minted (enforced upstream by the signer). This

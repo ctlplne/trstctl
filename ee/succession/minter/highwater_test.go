@@ -60,7 +60,7 @@ func hwCheckpoint(t *testing.T, signer crypto.Signer, epoch uint64, issuedAt int
 
 // TestHighWater_RestoreCannotRegress: after restoring an older sealed value, both the
 // hardware counter and a presented checkpoint pin the floor to the newest epoch, and
-// minting below it stays refused (claim 21 / INV-3).
+// minting below it stays refused (PCAS-claim-21 / INV-3).
 func TestHighWater_RestoreCannotRegress(t *testing.T) {
 	// Hardware-counter backing: counter still reads 5 though sealed was restored to 2.
 	ctr := newFakeCounter()
@@ -92,7 +92,7 @@ func TestHighWater_RestoreCannotRegress(t *testing.T) {
 
 // TestHighWater_QuorumAdvance: an unacknowledged advance does not seal; after a quorum
 // of distinct instances acks, the advance is durable and survives a single instance's
-// loss (claim 21).
+// loss (PCAS-claim-21).
 func TestHighWater_QuorumAdvance(t *testing.T) {
 	hw := minter.NewHighWater(nil, minter.WithQuorum(2))
 	if durable, err := hw.ProposeAdvance(hwID, 1, "instance-a"); err != nil || durable {
@@ -118,7 +118,7 @@ func TestHighWater_QuorumAdvance(t *testing.T) {
 // TestHighWater_LogReconcile_FailClosed: on restart with a suspect sealed value and no
 // fresh verified presentation, the signer refuses to mint for that identity — fail
 // closed (availability), not a regressed floor; a fresh verified checkpoint reconciles
-// it (claim 21).
+// it (PCAS-claim-21).
 func TestHighWater_LogReconcile_FailClosed(t *testing.T) {
 	key := hwSigner(t)
 	hw := minter.NewHighWater(map[string]uint64{hwID: 2},
@@ -154,7 +154,7 @@ func TestHighWater_LogReconcile_FailClosed(t *testing.T) {
 }
 
 // TestHighWater_StaleReplayCannotLower: replaying an older but validly-signed
-// checkpoint cannot lower the adopted floor (claim 21).
+// checkpoint cannot lower the adopted floor (PCAS-claim-21).
 func TestHighWater_StaleReplayCannotLower(t *testing.T) {
 	key := hwSigner(t)
 	hw := minter.NewHighWater(nil, minter.WithCheckpointKey(key.Public().DER))

@@ -2,7 +2,7 @@
 
 // Package kem implements succession for key-establishment (confidentiality)
 // credentials — e.g. ML-KEM — where the successor cannot sign the commitment
-// (claims 15, 30). A KEM successor proves possession one of two ways, and the
+// (PCAS-claims 15, 30). A KEM successor proves possession one of two ways, and the
 // record NAMES which it uses:
 //
 //   - Variant A (interactive): the signer encapsulates a challenge to the successor
@@ -14,7 +14,7 @@
 //     that key also signs a binding naming the KEM public key. An arbitrary third
 //     party verifies both offline.
 //
-// For a predecessor that is itself a KEM (claim 30), predecessor possession is
+// For a predecessor that is itself a KEM (PCAS-claim-30), predecessor possession is
 // proven by decapsulation of a challenge to the FIRST public key, and BOTH
 // transcripts are bound to the commitment. All ML-KEM primitives route through
 // ee/pqc and the core internal/crypto AN-3 boundary; this package imports no
@@ -79,7 +79,7 @@ func response(commitment, ciphertext, sharedSecret []byte) []byte {
 
 // EncapsulateChallenge encapsulates a fresh challenge to a successor/predecessor KEM
 // public key, returning the ciphertext to send and the challenger secret to retain
-// for verification (Variant A / claim 30 challenger side).
+// for verification (Variant A / PCAS-claim-30 challenger side).
 func EncapsulateChallenge(kemAlg string, kemPubDER []byte) (ciphertext, challengerSecret []byte, err error) {
 	return eepqc.Encapsulate(crypto.PublicKey{Algorithm: crypto.Algorithm(kemAlg), DER: kemPubDER})
 }
@@ -202,7 +202,7 @@ func VerifyPaired(rec PairedRecord) error {
 	return nil
 }
 
-// --- mechanism naming (claim 15) -------------------------------------------
+// --- mechanism naming (PCAS-claim-15) -------------------------------------------
 
 // VerifyNamesMechanism enforces that a possession proof names exactly one mechanism
 // and carries exactly that limb: a successor-signature proof must carry a signature
@@ -247,7 +247,7 @@ func RequirePublicVerifiability(kind succession.PossessionProofKind) error {
 	return nil
 }
 
-// --- predecessor-KEM chains (claim 30) -------------------------------------
+// --- predecessor-KEM chains (PCAS-claim-30) -------------------------------------
 
 // PredecessorKEMRecord is a succession whose predecessor AND successor are KEM keys.
 // Neither can sign, so both possession proofs are decap transcripts bound to the
@@ -259,7 +259,7 @@ type PredecessorKEMRecord struct {
 	SuccessorTranscript   []byte // decap transcript against Fields.SuccessorPub
 }
 
-// BuildPredecessorKEMRecord assembles a claim-30 record binding both transcripts.
+// BuildPredecessorKEMRecord assembles a PCAS-claim-30 record binding both transcripts.
 func BuildPredecessorKEMRecord(fields succession.CommitmentFields, predTr, succTr Transcript) PredecessorKEMRecord {
 	return PredecessorKEMRecord{
 		Fields:                fields,
@@ -270,7 +270,7 @@ func BuildPredecessorKEMRecord(fields succession.CommitmentFields, predTr, succT
 
 // VerifyPredecessorKEM verifies both decap transcripts against the commitment using
 // the respective challenger secrets (predecessor-first-pub and successor). Both must
-// bind the same commitment (claim 30); a missing limb is rejected.
+// bind the same commitment (PCAS-claim-30); a missing limb is rejected.
 func VerifyPredecessorKEM(rec PredecessorKEMRecord, predChallengerSecret, succChallengerSecret []byte) error {
 	if len(rec.PredecessorTranscript) == 0 || len(rec.SuccessorTranscript) == 0 {
 		return ErrMissingTranscripts
@@ -305,7 +305,7 @@ type RewrapLedger interface {
 }
 
 // RetirementGate returns a retirement PreRetire precondition that blocks predecessor
-// retirement until re-wrap is complete (claim 15 re-wrap-before-retire). The staged,
+// retirement until re-wrap is complete (PCAS-claim-15 re-wrap-before-retire). The staged,
 // resumable re-wrap job engine is PCAS-25; this is only the gate.
 func RetirementGate(led RewrapLedger, tenantID, identityID string, predecessorEpoch uint64) func(context.Context) error {
 	return func(context.Context) error {

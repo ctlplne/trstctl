@@ -44,23 +44,33 @@ EE_ROOT = "ee"
 OUT_PATH = os.path.join("ee", "docs", "claim-traceability.md")
 
 # Directory under ee/ -> patent family label. Extend as families are added.
+# The filed provisionals are PCAS, AGID, XREC, and VDEC — there is no PQCM
+# application. ee/pqcmigration cites the PCAS mechanisms (the claim-9
+# credential genus, the claim-23 policy_ref decision that PCAS-04/PCAS-05
+# carry and verify), so it maps to PCAS.
 FAMILY_BY_DIR = {
     "succession": "PCAS",
     "rpverify": "PCAS",
     "translog": "PCAS",
+    "pqcmigration": "PCAS",
     "agentid": "AGID",
     "reconcile": "XREC",
     "decommission": "VDEC",
-    "pqcmigration": "PQCM",
 }
 
 # Explicit, qualified form — preferred when present: PCAS-claim-5, AGID claim 12.
+# (PQCM stays recognized here so a stray legacy qualifier surfaces visibly in
+# the table instead of vanishing.) The `[-_ ]?` after `claims?` accepts the
+# canonical hyphenated form PCAS-claim-5.
 QUALIFIED = re.compile(
-    r"\b(?P<fam>PCAS|AGID|XREC|VDEC|PQCM)[-_ ]?claims?\s*(?P<nums>\d+(?:\s*(?:,|and|/|&|-)\s*\d+)*)",
+    r"\b(?P<fam>PCAS|AGID|XREC|VDEC|PQCM)[-_ ]?claims?[-_ ]?\s*(?P<nums>\d+(?:\s*(?:,|and|/|&|-)\s*\d+)*)",
     re.IGNORECASE,
 )
 # Bare form — ambiguous across families; family is inferred from the path.
-BARE = re.compile(r"\bclaims?\s+(?P<nums>\d+(?:\s*(?:,|and|/|&)\s*\d+)*)")
+# `(?:[-_]|\s+)` (not just whitespace) so the hyphenated `claim-9` style is
+# seen too; a bare citation invisible to this scan silently falls out of the
+# table, which is worse than an ambiguity finding.
+BARE = re.compile(r"\bclaims?(?:[-_]|\s+)(?P<nums>\d+(?:\s*(?:,|and|/|&)\s*\d+)*)")
 NUM = re.compile(r"\d+")
 
 

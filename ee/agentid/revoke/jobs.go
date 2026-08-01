@@ -13,7 +13,7 @@ import (
 // outbox seam: these are plain destination strings on the AN-6 outbox (the outbox
 // names "jobs"/destinations, not "revocation"), so `make editions-gate` stays green
 // and the core outbox carries no edition-specific concept. The downstream trust-plane
-// publication (claim 19) is just another destination.
+// publication (AGID-claim-19) is just another destination.
 const (
 	// DestinationRevocationJob is the per-descendant cascade job: the executor claims
 	// it, performs the effect(s), and records signed completion evidence. One job per
@@ -21,7 +21,7 @@ const (
 	DestinationRevocationJob = "agent.revocation.job"
 	// DestinationDownstreamPlane is the downstream trust-plane revocation-entry
 	// publication (KRL/CRL) — a job publishes a revocation entry here through the SAME
-	// outbox (claim 19 / AN-6).
+	// outbox (AGID-claim-19 / AN-6).
 	DestinationDownstreamPlane = "agent.revocation.downstream-plane"
 )
 
@@ -31,7 +31,7 @@ const (
 // directive it belongs to, the target credential, whether it is a follow-on, and the
 // reason class (carried so downstream publications and notifications can state why).
 // It is a pure value; the idempotency key is the outbox row's key, derived by
-// JobIdempotencyKey, so a redelivery collapses to one recorded effect (claim 21).
+// JobIdempotencyKey, so a redelivery collapses to one recorded effect (AGID-claim-21).
 type JobPayload struct {
 	TenantID     string      `json:"tenant_id"`
 	DirectiveID  string      `json:"directive_id"`
@@ -39,7 +39,7 @@ type JobPayload struct {
 	Reason       ReasonClass `json:"reason"`
 	FollowOn     bool        `json:"follow_on,omitempty"`
 	// PublishDownstream marks a job that must also publish a revocation entry to the
-	// downstream trust plane (KRL/CRL) through the outbox (claim 19). The executor
+	// downstream trust plane (KRL/CRL) through the outbox (AGID-claim-19). The executor
 	// enqueues that publication in the SAME transaction as recording the job effect.
 	PublishDownstream bool `json:"publish_downstream,omitempty"`
 }
@@ -67,14 +67,14 @@ func decodeJobPayload(b []byte) (JobPayload, error) {
 // credentialID): the enqueue, the outbox delivery, the recorded-effect insert, and
 // any reconcile/replay all derive the same key, so a job that runs more than once
 // (at-least-once delivery, crash-resume, follow-on re-enqueue) records AT MOST ONE
-// effect (claim 21 / INV-A8). It also namespaces the directive so two directives
+// effect (AGID-claim-21 / INV-A8). It also namespaces the directive so two directives
 // against overlapping descendant sets keep independent per-job effects.
 func JobIdempotencyKey(directiveID, credentialID string) string {
 	return "agid-revoke:" + directiveID + ":" + credentialID
 }
 
 // downstreamIdempotencyKey derives the idempotency key for the downstream-plane
-// publication a job emits (claim 19). It is distinct from the job's own key so the
+// publication a job emits (AGID-claim-19). It is distinct from the job's own key so the
 // publication and the job effect are independently at-most-once, but still stable per
 // (directive, credential) so a re-published entry is de-duplicated downstream.
 func downstreamIdempotencyKey(directiveID, credentialID string) string {

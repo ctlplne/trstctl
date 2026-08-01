@@ -30,7 +30,7 @@ func buildEvents(t *testing.T) []events.Event {
 
 // TestReplayAttestation_Verifies: the attestation binds head + offset + projection
 // checkpoint; verification succeeds on an honest pairing and fails on any mismatch
-// (claim 38).
+// (PCAS-claim-38).
 func TestReplayAttestation_Verifies(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	signer, err := be.GenerateKey(crypto.ECDSAP256)
@@ -84,7 +84,7 @@ func TestReplayAttestation_Verifies(t *testing.T) {
 }
 
 // TestReplayAttestation_AuditorCountersign: an independent auditor re-runs the
-// replay and countersigns; a consumer then accepts without replay (claim 38).
+// replay and countersigns; a consumer then accepts without replay (PCAS-claim-38).
 func TestReplayAttestation_AuditorCountersign(t *testing.T) {
 	be := crypto.NewSoftwareBackend()
 	signer, _ := be.GenerateKey(crypto.ECDSAP256)

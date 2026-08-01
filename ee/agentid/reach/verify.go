@@ -9,20 +9,20 @@ import (
 )
 
 // verify.go is the pure, testable IN-SIGNER verification of a signed reachability verdict
-// (claims 5/6 / INV-A5): the check the isolated signer runs as a PRECONDITION of the key
+// (AGID-claims 5/6 / INV-A5): the check the isolated signer runs as a PRECONDITION of the key
 // operation. It performs NO key operation, holds no issuance key, builds no graph, and
 // touches no datastore — it depends ONLY on internal/crypto (so the isolated signer stays
-// datastore-free, AN-4, and graph computation stays OUT of the signer, claim 6). It:
+// datastore-free, AN-4, and graph computation stays OUT of the signer, AGID-claim-6). It:
 //
 //   - resolves the verdict-signer's public key through a caller-supplied trust lookup (the
 //     signer holds this mapping; a caller cannot inject their own verdict key);
 //   - checks the verdict's signature over its canonical bytes (via internal/crypto, AN-3);
 //   - checks the graph WATERMARK is present and ACCEPTABLE (not stale) against the signer's
 //     watermark policy — so verification is bounded by, and invariant to graph changes
-//     after, the watermark (claim 6 / acceptance criterion 3);
+//     after, the watermark (AGID-claim-6 / acceptance criterion 3);
 //   - checks the verdict's SubjectDigest equals the request's final-record authority digest
 //     (so a verdict for one authority cannot authorize a different, broader one);
-//   - checks the ceiling DETERMINATION is not Exceeded (claim 5).
+//   - checks the ceiling DETERMINATION is not Exceeded (AGID-claim-5).
 //
 // FAIL-CLOSED is the spine: an absent, unsigned, tampered, stale-watermark, wrong-subject,
 // or Exceeded verdict is a CEILING VIOLATION — the delegation gate turns any returned
@@ -88,13 +88,13 @@ var (
 	// freshness policy. Fail-closed.
 	ErrVerdictStale = errors.New("reach: verdict graph watermark is stale or absent")
 	// ErrCeilingExceeded is returned when the verdict's ceiling determination is Exceeded
-	// (claim 5). The error names the first violated ceiling; the gate's refusal carries it.
+	// (AGID-claim-5). The error names the first violated ceiling; the gate's refusal carries it.
 	ErrCeilingExceeded = errors.New("reach: reachable set exceeds a policy ceiling")
 )
 
 // CeilingExceededError carries the exceeded-ceiling detail so the delegation gate can name
 // the violated ceiling and reference the offending-subset digest in its signed refusal,
-// WITHOUT re-computing the graph (claim 5). It wraps ErrCeilingExceeded.
+// WITHOUT re-computing the graph (AGID-claim-5). It wraps ErrCeilingExceeded.
 type CeilingExceededError struct {
 	// Violations are the verdict's determination violations (each names a ceiling and
 	// carries an offending-subset digest).
@@ -185,7 +185,7 @@ func VerifyVerdict(in VerifyInput) error {
 		return ErrVerdictStale
 	}
 
-	// (5) Ceiling determination (claim 5): the SIGNED determination governs. An Exceeded
+	// (5) Ceiling determination (AGID-claim-5): the SIGNED determination governs. An Exceeded
 	// determination is a refusal naming the ceiling.
 	if v.Determination.Exceeded {
 		return &CeilingExceededError{

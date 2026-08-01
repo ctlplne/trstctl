@@ -70,14 +70,14 @@ type DirectiveResult struct {
 }
 
 // EnqueueDirective runs the determination + transactional-enqueue limbs of the
-// cascade (claim 16):
+// cascade (AGID-claim-16):
 //
 //  1. DETERMINE the descendant credential set for the directive's subject from the
 //     AGID-02 delegation-tree projection, AS OF a watermark = the current head of the
 //     ledger (the highest folded sequence). The set and the watermark are a pure,
 //     replayable function of the event prefix (§7.1).
 //  2. Append the RevocationDirective event DURABLE-FIRST on the JetStream log,
-//     recording the reason class (claim 17) and the determining watermark. The
+//     recording the reason class (AGID-claim-17) and the determining watermark. The
 //     JetStream append is NOT in the pg tx (it cannot join one — G3); it is the source
 //     of truth and its ID keys the outbox jobs so the append→enqueue gap is healable.
 //  3. In ONE pg transaction: insert the directive projection row + one revocation-job
@@ -87,7 +87,7 @@ type DirectiveResult struct {
 //     atomicity the card asserts.
 //
 // It performs no key operation. downstreamCredentials, when non-empty, marks those
-// descendants' jobs to also publish a downstream-plane revocation entry (claim 19);
+// descendants' jobs to also publish a downstream-plane revocation entry (AGID-claim-19);
 // pass the full descendant set to publish for every credential.
 func (c *Cascade) EnqueueDirective(ctx context.Context, d Directive) (DirectiveResult, error) {
 	if err := d.validate(); err != nil {
@@ -158,7 +158,7 @@ func (c *Cascade) EnqueueDirective(ctx context.Context, d Directive) (DirectiveR
 				DirectiveID:       directiveID,
 				CredentialID:      cred,
 				Reason:            d.Reason,
-				PublishDownstream: true, // every descendant publishes downstream (claim 19)
+				PublishDownstream: true, // every descendant publishes downstream (AGID-claim-19)
 			}.encode()
 			if err != nil {
 				return err
@@ -207,7 +207,7 @@ func (c *Cascade) ledgerHead(ctx context.Context) (uint64, error) {
 // credential set for subject, using the AGID-02 projection (the authoritative fold).
 // It is deterministic and idempotent under replay and duplicate delivery (the
 // projection guarantees it), so the enumeration recorded against the watermark is
-// reproducible (§7.1, claim 16 / INV-A8).
+// reproducible (§7.1, AGID-claim-16 / INV-A8).
 func (c *Cascade) descendantsAsOf(ctx context.Context, tenantID, subject string, watermark uint64) ([]string, error) {
 	prefix, err := c.tenantPrefix(ctx, tenantID, watermark)
 	if err != nil {

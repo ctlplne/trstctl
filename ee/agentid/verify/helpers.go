@@ -42,7 +42,7 @@ func (p LocalPolicy) PermitClass(class string) LocalPolicy {
 
 // GrantOperations grants a bound authority class the set of operation identifiers
 // it may perform. An action whose operation is not granted for the credential's
-// bound class exceeds authority and is refused (claim 28). Operations are
+// bound class exceeds authority and is refused (AGID-claim-28). Operations are
 // normalized (trim + lowercase). Returns the policy for chaining.
 func (p LocalPolicy) GrantOperations(class string, ops ...string) LocalPolicy {
 	if p.PermittedOperations == nil {

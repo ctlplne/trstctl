@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package reach is the CRYPTO-ONLY half of the AGID pre-issuance reachability bound (patent
-// claims 5/6/25, INV-A5): the SIGNED REACHABILITY VERDICT, the policy CEILINGS a reachable
+// AGID-claims 5/6/25, INV-A5): the SIGNED REACHABILITY VERDICT, the policy CEILINGS a reachable
 // set is bounded by, the reachable-set VALUE the verdict binds a digest of, and the pure,
 // datastore-free IN-SIGNER VERIFICATION the isolated signer runs as a key-op precondition.
 // BEFORE the isolated signer performs a private-key operation, it must verify a signed
@@ -10,8 +10,8 @@
 // FINAL delegation record against the read-only core credential graph, computes the
 // bounded-depth reachable set, and classifies it. The signer trusts the verdict's SIGNATURE
 // + WATERMARK, never a live graph query, so graph computation stays out of the custody
-// boundary (claim 6). A reachable set exceeding a policy ceiling yields a refusal, so the
-// signer refuses the key op (claim 5).
+// boundary (AGID-claim-6). A reachable set exceeding a policy ceiling yields a refusal, so the
+// signer refuses the key op (AGID-claim-5).
 //
 // AN-4 boundary (the reason for the engine split): this package imports ONLY internal/crypto
 // (+ stdlib). The graph-walking engine — which pulls internal/graph + internal/store, and
@@ -101,7 +101,7 @@ type ReachedNode struct {
 // graph nodes forward-reachable (within the bounded depth) from the services that accept
 // the requested authority, with cardinality, the maximum sensitivity encountered, the
 // prohibited labels present, and the tenant span. It is the object the verdict binds a
-// DIGEST of (claim 6); the verdict never carries the set itself into the signer. The engine
+// DIGEST of (AGID-claim-6); the verdict never carries the set itself into the signer. The engine
 // (ee/agentid/reach/engine) populates it from the tenant graph; the crypto-only digest
 // lives here so the verdict path never needs the graph.
 type ReachableSet struct {
@@ -127,7 +127,7 @@ type ReachableSet struct {
 }
 
 // Digest returns the canonical, byte-stable SHA-256 of the reachable set, routed through
-// internal/crypto (AN-3). It is the value the verdict binds (claim 6) and is deterministic
+// internal/crypto (AN-3). It is the value the verdict binds (AGID-claim-6) and is deterministic
 // for a fixed graph watermark (acceptance criterion 3): the encoding is length-prefixed,
 // fixed-endian, and iterates canonically-ordered node/label sets, so the same set yields
 // identical bytes across runs, machines, and architectures. It carries NO secret (only
@@ -218,17 +218,17 @@ func normLabel(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 // intra-package hashing go through it.
 func sha256Of(b []byte) []byte { return crypto.SHA256Sum(b) }
 
-// verdict.go defines the SIGNED REACHABILITY VERDICT (claim 6 / INV-A5): the artifact the
+// verdict.go defines the SIGNED REACHABILITY VERDICT (AGID-claim-6 / INV-A5): the artifact the
 // reachability engine emits OUTSIDE the signer and the signer verifies as a key-op
 // precondition. The verdict binds three things and nothing that requires a graph to check:
 //
 //  1. ReachableDigest — the canonical digest of the reachable set the engine computed
-//     (claim 6). The signer never sees the set, only this digest.
+//     (AGID-claim-6). The signer never sees the set, only this digest.
 //  2. Determination   — the ceiling determination (Exceeded + named violations with
-//     offending-subset digests, claim 5). The signer HONORS this determination: an
+//     offending-subset digests, AGID-claim-5). The signer HONORS this determination: an
 //     Exceeded determination means no key op.
 //  3. Watermark        — the graph freshness watermark the reachable set was computed at
-//     (claim 6). The signer checks the watermark is acceptable (present and not stale);
+//     (AGID-claim-6). The signer checks the watermark is acceptable (present and not stale);
 //     verification is invariant to graph changes AFTER the watermark, because the signer
 //     trusts the SIGNED digest, not a live query (acceptance criterion 3).
 //
@@ -253,7 +253,7 @@ type VerdictKeyRef struct {
 	Algorithm string `json:"algorithm"`
 }
 
-// Verdict is the signed reachability verdict (claim 6). It is produced outside the signer
+// Verdict is the signed reachability verdict (AGID-claim-6). It is produced outside the signer
 // and verified inside it. Fields are ordered so the canonical bytes are stable.
 type Verdict struct {
 	// TenantID is the tenant the reachable set was computed for (AN-1). Bound so a verdict
@@ -265,7 +265,7 @@ type Verdict struct {
 	// request's final-record authority (verify.go), so a verdict computed for one
 	// authority cannot be presented for a different, broader one.
 	SubjectDigest []byte `json:"subject_digest"`
-	// ReachableDigest is the canonical digest of the reachable set (claim 6).
+	// ReachableDigest is the canonical digest of the reachable set (AGID-claim-6).
 	ReachableDigest []byte `json:"reachable_digest"`
 	// Cardinality, MaxSensitivity, TenantSpan mirror the reachable set's summary so a
 	// human reading a decoded verdict (or an audit) sees the shape without the set; they
@@ -274,10 +274,10 @@ type Verdict struct {
 	Cardinality    int         `json:"cardinality"`
 	MaxSensitivity Sensitivity `json:"max_sensitivity"`
 	TenantSpan     int         `json:"tenant_span"`
-	// Determination is the ceiling determination (claim 5). Bound so the signer honors the
+	// Determination is the ceiling determination (AGID-claim-5). Bound so the signer honors the
 	// SIGNED determination.
 	Determination Determination `json:"determination"`
-	// Watermark is the graph freshness watermark (claim 6).
+	// Watermark is the graph freshness watermark (AGID-claim-6).
 	Watermark string `json:"watermark"`
 	// IssuedAt is the Unix second the verdict was produced (non-secret), bound for audit
 	// and available for a freshness-by-age policy in the signer.
@@ -381,7 +381,7 @@ func DecodeVerdict(b []byte) (Verdict, error) {
 // NewVerdict assembles an UNSIGNED verdict from a resolved reachable set, its ceiling
 // determination, the graph watermark, the subject digest (the final-record authority
 // digest the verdict is bound to), the issued-at time, and the signing key reference. The
-// caller then Sign()s it. It binds the reachable-set digest (claim 6) and the summary
+// caller then Sign()s it. It binds the reachable-set digest (AGID-claim-6) and the summary
 // fields so the verdict is self-describing and tamper-evident.
 func NewVerdict(set ReachableSet, det Determination, watermark string, subjectDigest []byte, issuedAt int64, key VerdictKeyRef) Verdict {
 	return Verdict{
@@ -400,7 +400,7 @@ func NewVerdict(set ReachableSet, det Determination, watermark string, subjectDi
 
 // DetermineOrFailClosed evaluates a resolved reachable set against the requester class's
 // ceiling, or — when the class has NO configured ceiling — returns a fail-closed Exceeded
-// determination (claim 5). It is the ceiling half of the OUTSIDE-signer path, exported so
+// determination (AGID-claim-5). It is the ceiling half of the OUTSIDE-signer path, exported so
 // the reachability engine (ee/agentid/reach/engine) produces its verdict's determination
 // through the exact same crypto-only logic the signer's verify path re-checks, WITHOUT the
 // engine's graph/store dependencies leaking into this package. It performs NO key op and no

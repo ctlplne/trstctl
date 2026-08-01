@@ -13,7 +13,7 @@ import (
 
 // attest.go models the environment/custody attestation evidence the gate consumes and
 // the min-attestation-class gate keyed on the chain head's designated authority class
-// (claim 10). Verification is push-based: the gate verifies against a locally-configured
+// (AGID-claim-10). Verification is push-based: the gate verifies against a locally-configured
 // AttestationVerifier, pulling no networked verifier into the AN-4 boundary.
 //
 // IMPORTANT (AN-4): this signer-linked package does NOT import internal/attest. The core
@@ -38,7 +38,7 @@ var (
 	// verification against the configured verifier.
 	ErrAttestationInvalid = errors.New("delegation: attestation evidence failed verification")
 	// ErrBelowMinClass is returned when verified evidence is below the minimum
-	// attestation class the designated authority class requires (claim 10). Its
+	// attestation class the designated authority class requires (AGID-claim-10). Its
 	// message NAMES the class not met.
 	ErrBelowMinClass = errors.New("delegation: attestation class below the minimum required for the designated authority class")
 )
@@ -160,7 +160,7 @@ func classOfAttestation(att VerifiedAttestation) AttestationClass {
 }
 
 // MinClassPolicy maps a designated authority class to the minimum attestation class its
-// issuance requires (claim 10). A class absent from the map requires ClassNone (no
+// issuance requires (AGID-claim-10). A class absent from the map requires ClassNone (no
 // attestation gate). The empty policy gates nothing.
 type MinClassPolicy map[string]AttestationClass
 

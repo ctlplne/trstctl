@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package federation bridges succession trust across deployment boundaries without
-// merging ledgers (claims 34, 43, 44; FIG. 10). The importing deployment verifies
+// merging ledgers (PCAS-claims 34, 43, 44; FIG. 10). The importing deployment verifies
 // a foreign identity's succession chain record-by-record against the foreign
 // genesis anchor, then appends only a BRIDGE record — binding the foreign chain
 // head, both deployment ids, and a monotone epoch mapping — to its own ledger. The
@@ -31,7 +31,7 @@ var ErrImportVerification = errors.New("federation: foreign chain failed verific
 // BridgeRecord binds a verified foreign chain head to the local deployment via a
 // monotone epoch mapping. It is signed by the local bridging authority and,
 // for a mutual bridge, countersigned by the foreign bridging authority over the
-// same commitment (claims 34, 43).
+// same commitment (PCAS-claims 34, 43).
 type BridgeRecord struct {
 	ForeignDeployment   string
 	LocalDeployment     string
@@ -40,7 +40,7 @@ type BridgeRecord struct {
 	ForeignHeadEpoch    uint64
 	LocalBaseEpoch      uint64 // monotone mapping: local(foreignEpoch) = LocalBaseEpoch + foreignEpoch
 	LocalAuthoritySig   []byte
-	ForeignAuthoritySig []byte // mutual bridge (claim 43)
+	ForeignAuthoritySig []byte // mutual bridge (PCAS-claim-43)
 }
 
 func (b BridgeRecord) commitment() []byte {
@@ -61,7 +61,7 @@ func (b BridgeRecord) MapEpoch(foreignEpoch uint64) uint64 { return b.LocalBaseE
 
 // QuarantineEvent is a signed verification-failure event emitted when a foreign
 // chain fails import. No bridge record is appended and local state is untouched
-// (claim 44).
+// (PCAS-claim-44).
 type QuarantineEvent struct {
 	ForeignDeployment string
 	IdentityID        string
@@ -89,7 +89,7 @@ type ImportResult struct {
 // Import verifies a foreign identity's succession chain record-by-record against
 // its genesis anchor and, on success, produces a signed bridge record. On any
 // verification failure it produces a signed quarantine event instead and returns
-// ErrImportVerification; it never mutates local succession state (claims 34, 44).
+// ErrImportVerification; it never mutates local succession state (PCAS-claims 34, 44).
 func Import(localAuthority crypto.Signer, localDeployment string, foreignTrustRootPubDER []byte, foreignGenesis succession.GenesisRecord, foreignChain []succession.SuccessionRecord, localBaseEpoch uint64) (ImportResult, error) {
 	if err := succession.VerifyGenesis(foreignTrustRootPubDER, foreignGenesis); err != nil {
 		return quarantine(localAuthority, foreignGenesis, err)
@@ -139,7 +139,7 @@ func quarantine(localAuthority crypto.Signer, g succession.GenesisRecord, cause 
 }
 
 // Countersign has the foreign deployment's bridging authority sign the same
-// bridging commitment, forming a mutual bridge (claim 43).
+// bridging commitment, forming a mutual bridge (PCAS-claim-43).
 func Countersign(foreignAuthority crypto.Signer, b BridgeRecord) (BridgeRecord, error) {
 	sig, err := foreignAuthority.Sign(b.commitment(), crypto.SignOptions{Hash: crypto.SHA256})
 	if err != nil {
@@ -151,7 +151,7 @@ func Countersign(foreignAuthority crypto.Signer, b BridgeRecord) (BridgeRecord, 
 
 // VerifyBridge verifies the local bridging authority's signature over the bridging
 // commitment, and — when requireMutual — the foreign authority's countersignature
-// (claim 43).
+// (PCAS-claim-43).
 func VerifyBridge(localAuthorityPubDER, foreignAuthorityPubDER []byte, b BridgeRecord, requireMutual bool) error {
 	c := b.commitment()
 	if len(b.LocalAuthoritySig) == 0 {

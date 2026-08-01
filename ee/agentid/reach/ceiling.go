@@ -8,14 +8,14 @@ import (
 	"strings"
 )
 
-// ceiling.go defines the policy ceilings a reachable set is bounded by (claim 5) and the
+// ceiling.go defines the policy ceilings a reachable set is bounded by (AGID-claim-5) and the
 // ceiling DETERMINATION the verdict binds and the signer verifies. A ceiling is per
 // REQUESTER CLASS: the class of the requesting principal (e.g. the designated authority
 // class of the delegation head, or a broker-assigned tier) selects the ceiling the
 // reachable set is checked against. When a reachable set EXCEEDS any ceiling dimension,
 // the determination names the violated ceiling and carries a digest of the offending
 // reachable subset, so the signer's refusal names WHICH ceiling was exceeded without
-// re-computing the graph (claim 5 / INV-A5).
+// re-computing the graph (AGID-claim-5 / INV-A5).
 //
 // This file computes the determination OUTSIDE the signer (it is part of what the verdict
 // binds); the signer only re-checks the SIGNED determination. Ceilings are pure policy
@@ -38,7 +38,7 @@ const (
 	CeilingProhibitedLabel CeilingKind = "reach_prohibited_label"
 )
 
-// Ceiling is the policy bound for one requester class (claim 5). A zero value bounds
+// Ceiling is the policy bound for one requester class (AGID-claim-5). A zero value bounds
 // nothing (every dimension unlimited / no prohibited labels), so an unconfigured class is
 // NOT silently unbounded in the gate — the gate treats a missing verdict / missing ceiling
 // as fail-closed (verify.go), while a Ceiling explicitly configured with a bound enforces
@@ -64,7 +64,7 @@ type Ceiling struct {
 	ProhibitedLabels []string `json:"prohibited_labels,omitempty"`
 }
 
-// CeilingPolicy maps a requester class to its Ceiling (claim 5, "per requester class").
+// CeilingPolicy maps a requester class to its Ceiling (AGID-claim-5, "per requester class").
 // A class with no entry has no configured ceiling; the gate treats an authority whose
 // class has no ceiling as requiring an EXPLICIT ceiling — a verdict computed against an
 // absent ceiling is a fail-closed violation, never "allowed" — see NewCeilingPolicy /
@@ -138,7 +138,7 @@ func normalizeCeiling(c Ceiling) Ceiling {
 // Violation is one exceeded ceiling dimension: the kind, a human-meaningful reason
 // (non-secret), and a digest of the OFFENDING reachable subset (the nodes responsible for
 // the violation), so a signed refusal can carry it without the graph. It is part of the
-// ceiling determination the verdict binds (claim 5).
+// ceiling determination the verdict binds (AGID-claim-5).
 type Violation struct {
 	Ceiling CeilingKind `json:"ceiling"`
 	Reason  string      `json:"reason"`
@@ -150,7 +150,7 @@ type Violation struct {
 }
 
 // Determination is the ceiling-evaluation OUTCOME the verdict binds and the signer
-// verifies (claim 5/6). RequesterClass names the class the ceiling was selected by;
+// verifies (AGID-claim 5/6). RequesterClass names the class the ceiling was selected by;
 // Exceeded is true iff any dimension was violated; Violations names each violated ceiling
 // with its offending-subset digest. A Determination with Exceeded=false is an APPROVE
 // determination; Exceeded=true is a REFUSE determination the signer honors by performing
@@ -162,7 +162,7 @@ type Determination struct {
 }
 
 // Evaluate computes the ceiling determination for a reachable set against a ceiling for
-// the given requester class (claim 5). It is pure and deterministic: it checks each
+// the given requester class (AGID-claim-5). It is pure and deterministic: it checks each
 // dimension, records a Violation (with the offending-subset digest) per exceeded
 // dimension, and returns a Determination. It performs NO I/O and NO key op. The
 // determination is what the verdict binds; the signer re-checks the SIGNED determination,

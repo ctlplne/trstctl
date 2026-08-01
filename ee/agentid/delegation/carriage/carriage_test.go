@@ -52,7 +52,7 @@ func mustBinding(t *testing.T, chainHead, repr []byte, class string, att []byte,
 
 // bindingCases returns the bound triples the carriage tests exercise: a full binding
 // (chain head + agent-stack repr + task envelope), a chain-only binding (no repr, no
-// envelope -- claim 31 fallback), and an agent-stack-only binding (no chain head -- claim
+// envelope -- AGID-claim-31 fallback), and an agent-stack-only binding (no chain head -- claim
 // 32 fallback). Each is a real NewBindingMaterial output.
 func bindingCases(t *testing.T) []bindingCase {
 	t.Helper()
@@ -82,7 +82,7 @@ func bindingCases(t *testing.T) []bindingCase {
 func eqBytes(a, b []byte) bool { return bytes.Equal(a, b) }
 
 // assertCarriedEqualsBound asserts every carried field equals the AGID-04 bound field
-// byte-for-byte (claim 27 / INV-A3): the carriage is a faithful transport, so decode(form)
+// byte-for-byte (AGID-claim-27 / INV-A3): the carriage is a faithful transport, so decode(form)
 // reproduces exactly what the signer bound.
 func assertCarriedEqualsBound(t *testing.T, form string, got carriage.BoundValues, bm delegation.BindingMaterial) {
 	t.Helper()
@@ -112,7 +112,7 @@ func assertCarriedEqualsBound(t *testing.T, form string, got carriage.BoundValue
 	}
 }
 
-// TestCarriage_X509_WorkloadDoc_Token is the canonical carriage test (claim 27 / INV-A3
+// TestCarriage_X509_WorkloadDoc_Token is the canonical carriage test (AGID-claim-27 / INV-A3
 // carriage half). For each of the three interchangeable forms -- X.509 non-critical
 // extension, workload-identity document, signed token -- it encodes a KNOWN
 // (chain-head digest, agent-stack representation, optional task-envelope digest) triple
@@ -231,7 +231,7 @@ func TestCarriage_X509_WorkloadDoc_Token(t *testing.T) {
 // TestCarriage_CrossForm_CommonDecoder proves the cross-form property: the SAME bound
 // values encoded into all three forms are read IDENTICALLY by the common Decoder helper.
 // A single relying-party path (AGID-09) can thus consume any of the three carriages and
-// obtain the same bound values (claim 27 / INV-A3).
+// obtain the same bound values (AGID-claim-27 / INV-A3).
 func TestCarriage_CrossForm_CommonDecoder(t *testing.T) {
 	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {

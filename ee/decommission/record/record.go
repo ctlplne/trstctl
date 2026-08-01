@@ -138,6 +138,9 @@ type SuccessorKey struct {
 	Digest    []byte           `json:"digest,omitempty"`
 }
 
+// Commitment binds the VDEC-claim-1 destruction-record fields: the stable key
+// identifier, the final epoch, the digest of the recorded per-job completion
+// events, the destruction evidence, and the audit-chain head.
 type Commitment struct {
 	Version                    int                  `json:"version"`
 	Domain                     string               `json:"domain"`
