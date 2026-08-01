@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,26 +51,22 @@ func TestPerfGateExitsNonzeroForInjectedRuntimeBreaches(t *testing.T) {
 }
 
 func TestPerfGateRunsLiveProfile(t *testing.T) {
-	outPath := filepath.Join(t.TempDir(), "live.json")
-	cmd := exec.Command("go", "run", ".", "--profile", "live", "--samples", "16", "--pretty=false", "--out", outPath)
-	cmd.Env = append(os.Environ(), "GOCACHE="+filepath.Join(t.TempDir(), "gocache"))
-	out, err := cmd.CombinedOutput()
+	report, err := runProfile("live", 64, nil)
 	if err != nil {
-		t.Fatalf("perfgate live failed: %v\n%s", err, out)
+		t.Fatalf("run live profile: %v", err)
 	}
-	data, err := os.ReadFile(outPath)
-	if err != nil {
-		t.Fatalf("read live output: %v", err)
-	}
-	var report perf.Report
-	if err := json.Unmarshal(data, &report); err != nil {
-		t.Fatalf("decode live output: %v\n%s", err, data)
+	if err := liveProfileFailure(report); err != nil {
+		t.Fatal(err)
 	}
 	if report.Profile != "live" || !report.ServedStack || report.MeasurementArtifact != perf.LiveMeasurementArtifact {
 		t.Fatalf("bad live profile metadata: %+v", report)
 	}
 	if got, want := len(report.Results), len(perf.HotPaths())*2; got != want {
 		t.Fatalf("live result count = %d, want %d", got, want)
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("encode live output: %v", err)
 	}
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -85,6 +82,38 @@ func TestPerfGateRunsLiveProfile(t *testing.T) {
 	if cmd, _ := evidence["command"].(string); !strings.Contains(cmd, "scripts/perf/run-spine-burst.sh") || !strings.Contains(cmd, "scripts/perf/soak.sh --in") {
 		t.Fatalf("event_spine_burst.command = %q, want capture plus soak analyzer", cmd)
 	}
+}
+
+func TestLiveProfileFailurePreservesFailedReceipt(t *testing.T) {
+	err := liveProfileFailure(perf.Report{
+		Summary: perf.Summary{HotPaths: 8, Failed: 1},
+		Results: []perf.Result{{
+			HotPath: "api.issuance",
+			Phase:   "peak",
+			Failures: []string{
+				"p50 51.00ms exceeds 50.00ms",
+			},
+		}},
+	})
+	if err == nil {
+		t.Fatal("failed live profile returned no error")
+	}
+	for _, want := range []string{"1 of 8", "api.issuance", "peak", "51.00ms exceeds 50.00ms"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("failed live profile evidence missing %q:\n%s", want, err)
+		}
+	}
+}
+
+func liveProfileFailure(report perf.Report) error {
+	if report.Summary.OK {
+		return nil
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		return fmt.Errorf("encode failed live profile receipt: %w", err)
+	}
+	return fmt.Errorf("perfgate live failed: %d of %d hot paths missed SLO\nfailure receipt:\n%s", report.Summary.Failed, report.Summary.HotPaths, data)
 }
 
 func TestRunProfileUsesSmokeLiveAndRejectsUnknownProfiles(t *testing.T) {
