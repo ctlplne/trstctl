@@ -424,25 +424,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("secrets machine auth: %w", err)
 	}
-	var resultProtector *tenantseal.ResultProtector
-	var resultMigrator *tenantseal.ResultMigrator
-	var tenantKeyDomains *tenantseal.Lifecycle
-	var tenantCrypto tenantseal.Access
-	if st != nil {
-		var registry *tenantseal.LocalWrapperRegistry
-		resultProtector, resultMigrator, registry, tenantCrypto, err = idempotencyResultProtectionFromConfig(cfg.Secrets, st, sec.kek)
-		if err != nil {
-			return Deps{}, fmt.Errorf("tenant result protection: %w", err)
-		}
-		if log != nil {
-			tenantKeyDomains, err = tenantseal.NewLifecycle(
-				st, log, sec.kek, registry,
-				historyRewriteProofOptions(st, auditKey)...,
-			)
-			if err != nil {
-				return Deps{}, fmt.Errorf("tenant key-domain lifecycle: %w", err)
-			}
-		}
+	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, err := runTenantCustodyFromConfig(
+		cfg.Secrets, st, log, sec.kek, auditKey,
+	)
+	if err != nil {
+		return Deps{}, err
 	}
 	breakglassCACertDER, breakglassPublicKeyDER, err := breakglassVerifierMaterialFromConfig(cfg.Breakglass)
 	if err != nil {
@@ -452,15 +438,9 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("break-glass online lifecycle: %w", err)
 	}
-	notificationChannels, err := notificationChannelsFromConfig(cfg.Notifications)
+	notificationChannels, notificationOwner, err := runNotifications(cfg.Notifications, egressGuard)
 	if err != nil {
-		return Deps{}, fmt.Errorf("notifications: %w", err)
-	}
-	notificationChannels, notificationOwner, err := completeRunNotificationChannels(notificationChannels, func() ([]notify.Notifier, error) {
-		return incidentNotificationChannelsFromConfig(cfg.Notifications, egressGuard)
-	})
-	if err != nil {
-		return Deps{}, fmt.Errorf("incident notifications: %w", err)
+		return Deps{}, err
 	}
 	// From this point until the returned Deps is successfully transferred to
 	// Build, buildRunDeps owns every channel credential. Any later constructor
@@ -507,8 +487,6 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	kubernetesCSRPosture := kubernetesCSRPostureFromConfig(st)
-	kubernetesTrustBundlePosture := kubernetesTrustBundlePostureFromConfig(st)
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:         cfg.Signer.KeyStoreDir,
@@ -516,11 +494,8 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		ServiceNowBindings:        serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
 		TelemetryReporter:         telemetryReporter,
-		APIOptions: []api.Option{
-			kubernetesCSRPosture,
-			kubernetesTrustBundlePosture,
-		},
-		CACertFile: cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
+		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st)},
+		CACertFile:                cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
 		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER,
@@ -562,6 +537,51 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
+}
+
+func runNotifications(cfg config.Notifications, guard *egress.Guard) ([]notify.Notifier, *notificationChannelOwnership, error) {
+	channels, err := notificationChannelsFromConfig(cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("notifications: %w", err)
+	}
+	channels, owner, err := completeRunNotificationChannels(channels, func() ([]notify.Notifier, error) {
+		return incidentNotificationChannelsFromConfig(cfg, guard)
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("incident notifications: %w", err)
+	}
+	return channels, owner, nil
+}
+
+// runTenantCustodyFromConfig composes the two mutually dependent custody
+// services as one startup stage. Result protection and tenant lifecycle must
+// share the exact registry and access resolver; constructing either through a
+// parallel path would make a sealed tenant readable through the other.
+func runTenantCustodyFromConfig(
+	cfg config.Secrets,
+	st *store.Store,
+	log *events.Log,
+	deployment sealKeyWrapper,
+	auditKey *jose.SigningKey,
+) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, *tenantseal.Lifecycle, tenantseal.Access, error) {
+	if st == nil {
+		return nil, nil, nil, nil, nil
+	}
+	protector, migrator, registry, access, err := idempotencyResultProtectionFromConfig(cfg, st, deployment)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("tenant result protection: %w", err)
+	}
+	if log == nil {
+		return protector, migrator, nil, access, nil
+	}
+	lifecycle, err := tenantseal.NewLifecycle(
+		st, log, deployment, registry,
+		historyRewriteProofOptions(st, auditKey)...,
+	)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("tenant key-domain lifecycle: %w", err)
+	}
+	return protector, migrator, lifecycle, access, nil
 }
 
 func idempotencyResultProtectionFromConfig(
