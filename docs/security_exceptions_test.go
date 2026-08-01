@@ -102,3 +102,31 @@ func TestSDKGeneratorAdvisoriesStayRemediated(t *testing.T) {
 		}
 	}
 }
+
+func TestReactRouterExceptionNamesPublishedButIncompatiblePatch(t *testing.T) {
+	t.Parallel()
+
+	register, err := os.ReadFile("security-exceptions.md")
+	if err != nil {
+		t.Fatalf("read security exception register: %v", err)
+	}
+	text := string(register)
+	normalized := strings.Join(strings.Fields(text), " ")
+	for _, required := range []string{
+		"react-router@8.3.0`, is published",
+		"React and React DOM `>=19.2.7`",
+		"Node `>=22.22.0`",
+		"react-router-dom`, `7.18.2`",
+		"react-router@7.18.2",
+		"lockfile currently installs both packages at",
+		"compatible `react-router-dom` release",
+		"Publication of the standalone router alone is not that event",
+	} {
+		if !strings.Contains(normalized, required) {
+			t.Errorf("React Router exception does not contain current compatibility fact %q", required)
+		}
+	}
+	if strings.Contains(normalized, "8.3.0` as the first patched release, but that version is not published") {
+		t.Error("React Router exception still calls the published 8.3.0 patch unavailable")
+	}
+}

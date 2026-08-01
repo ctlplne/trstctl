@@ -25,9 +25,14 @@ backstop, not permission to skip the per-iteration probe.
 - **Review by:** 2026-08-04
 - **Package and version:** `react-router@7.18.1` through
   `react-router-dom@7.18.1`
-- **Why no compatible patch exists:** the advisory names `8.3.0` as the first
-  patched release, but that version is not published in the npm registry.
-  `7.18.1` is the newest published line available to this repository.
+- **Why no compatible patch exists:** the advisory's first patched standalone
+  router, `react-router@8.3.0`, is published. It is not a compatible remedy for
+  this console: it requires React and React DOM `>=19.2.7` plus Node
+  `>=22.22.0`, while the installed console uses React and React DOM `18.3.1`.
+  The newest published `react-router-dom`, `7.18.2`, still depends on
+  `react-router@7.18.2`; the lockfile currently installs both packages at
+  `7.18.1`. There is no published React-18-compatible `react-router-dom` line
+  that carries the patched router.
 - **Why the vulnerable path is unreachable:** the advisory is limited to React
   Router's unstable React Server Components action APIs. trstctl's console
   imports `BrowserRouter`, `Routes`, `Route`, and `Navigate` in
@@ -37,11 +42,13 @@ backstop, not permission to skip the per-iteration probe.
   Therefore an HTTP request cannot enter React Router's vulnerable
   server-action-before-error-response path: that server path is neither
   imported nor started.
-- **What we are waiting for:** a published patched React Router release,
-  followed by the route, navigation, typecheck, test, and production-build
-  compatibility run. The earlier `GHSA-wrjc-x8rr-h8h6` and
-  `GHSA-337j-9hxr-rhxg` findings are not exceptions; the current `7.18.1`
-  dependency has already remediated them.
+- **What we are waiting for:** a compatible `react-router-dom` release that
+  carries the patched router and a reviewed React/runtime upgrade path. That
+  compatibility event reopens `SEC-5b43d4b3` and `S-7268c77e` for route,
+  navigation, typecheck, test, and production-build verification. Publication
+  of the standalone router alone is not that event. The earlier
+  `GHSA-wrjc-x8rr-h8h6` and `GHSA-337j-9hxr-rhxg` findings are not exceptions;
+  the installed `7.18.1` dependencies already remediated them.
 - **Gate remains reporting:** the complete web build-and-runtime dependency
   tree is still scanned with dev dependencies included. `npm audit` reports
   this high advisory and exits non-zero; no advisory, package, or dependency
