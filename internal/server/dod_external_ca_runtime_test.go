@@ -410,12 +410,18 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}
+	runSecrets, err := loadRunSecrets(cfg)
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("load run secrets: %v", err)
+	}
+	t.Cleanup(runSecrets.Close)
 	guard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		_ = log.Close()
 		t.Fatal(err)
 	}
-	deps, err := buildRunDeps(ctx, cfg, st, log, signer, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	deps, err := buildRunDeps(ctx, cfg, st, log, signer, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("production buildRunDeps: %v", err)
