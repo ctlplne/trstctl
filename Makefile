@@ -138,6 +138,8 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
 	@echo ">> go test live perf packages (serial)"
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
+	@echo ">> live performance SLO wall (uninstrumented; race/coverage changes wall-clock timings)"
+	@$(GO) test -count=1 -p=1 ./scripts/perf/cmd/perfgate -run '^TestPerfGateRunsLiveProfile$$'
 	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \

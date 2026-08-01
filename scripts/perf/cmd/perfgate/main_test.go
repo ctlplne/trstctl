@@ -55,8 +55,19 @@ func TestPerfGateRunsLiveProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run live profile: %v", err)
 	}
-	if err := liveProfileFailure(report); err != nil {
-		t.Fatal(err)
+	if !raceInstrumentationEnabled {
+		if err := liveProfileFailure(report); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, result := range report.Results {
+		if result.Errors != 0 {
+			err := liveProfileFailure(report)
+			if err == nil {
+				err = fmt.Errorf("live profile %s/%s recorded %d operation errors", result.HotPath, result.Phase, result.Errors)
+			}
+			t.Fatal(err)
+		}
 	}
 	if report.Profile != "live" || !report.ServedStack || report.MeasurementArtifact != perf.LiveMeasurementArtifact {
 		t.Fatalf("bad live profile metadata: %+v", report)
