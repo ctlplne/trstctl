@@ -32,7 +32,7 @@ func moduleRoot(t *testing.T) string {
 
 func readFile(t *testing.T, path string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestShippedBinariesBuildReproducibly(t *testing.T) {
 		"-X trstctl.com/trstctl/internal/buildinfo.date=2026-01-01T00:00:00Z"
 
 	build := func(bin, out string) {
-		cmd := exec.Command(goBin, "build", "-trimpath", "-buildvcs=false",
+		cmd := exec.Command(goBin, "build", "-trimpath", "-buildvcs=false", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 			"-ldflags", ldflags, "-o", out, "./cmd/"+bin)
 		cmd.Dir = root
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")

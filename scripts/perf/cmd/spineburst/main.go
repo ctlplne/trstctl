@@ -167,10 +167,10 @@ func main() {
 			fail("write stdout: %v", err)
 		}
 	} else {
-		if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil { // #nosec G301 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 			fail("create output dir: %v", err)
 		}
-		if err := os.WriteFile(*out, data, 0o644); err != nil {
+		if err := os.WriteFile(*out, data, 0o644); err != nil { // #nosec G306 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 			fail("write %s: %v", *out, err)
 		}
 	}
@@ -476,7 +476,7 @@ func startEmbeddedPostgres(ctx context.Context) (*store.Store, func(), error) {
 	}
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(uint32(port)). // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		RuntimePath(filepath.Join(dir, "rt")).
 		DataPath(filepath.Join(dir, "data")).
 		BinariesPath(filepath.Join(dir, "bin")).
@@ -672,8 +672,8 @@ func insertOutboxBurst(ctx context.Context, state *captureState, count, offset i
 
 func replayEventLog(ctx context.Context, state *captureState, targetLag int) (int, int, error) {
 	target := state.lastSeq
-	if target > uint64(targetLag) {
-		target -= uint64(targetLag)
+	if target > uint64(targetLag) { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
+		target -= uint64(targetLag) // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 	}
 	replayed := 0
 	appliedTo := state.projectedTo
@@ -697,7 +697,7 @@ func replayEventLog(ctx context.Context, state *captureState, targetLag int) (in
 	state.projectedTo = appliedTo
 	lag := 0
 	if state.lastSeq > state.projectedTo {
-		lag = int(state.lastSeq - state.projectedTo)
+		lag = int(state.lastSeq - state.projectedTo) // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 	}
 	return replayed, lag, nil
 }

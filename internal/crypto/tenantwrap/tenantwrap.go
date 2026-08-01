@@ -235,7 +235,7 @@ func encodeWrappedDomainKEK(wrappedDomain []byte) []byte {
 	copy(out[:len(formatMagic)], formatMagic)
 	out[len(formatMagic)] = formatVersion
 	offset := len(formatMagic) + 1
-	binary.BigEndian.PutUint16(out[offset:offset+2], uint16(len(wrappedDomain)))
+	binary.BigEndian.PutUint16(out[offset:offset+2], uint16(len(wrappedDomain))) // #nosec G115 -- fixed-format buffer: a wrapped domain KEK has a fixed sealed length; an impossible oversize panics the slice bounds rather than truncating (CWE-190)
 	offset += 2
 	copy(out[offset:offset+len(wrappedDomain)], wrappedDomain)
 	sum := sha256.Sum256(out)

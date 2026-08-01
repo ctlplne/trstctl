@@ -59,7 +59,7 @@ func TestExternalCAProductionResponseReadersStayWipeable(t *testing.T) {
 				continue
 			}
 			path := filepath.Join(dir, entry.Name())
-			source, err := os.ReadFile(path)
+			source, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if err != nil {
 				t.Fatalf("read %s: %v", path, err)
 			}

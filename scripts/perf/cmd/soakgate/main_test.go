@@ -53,7 +53,7 @@ func TestSoakGateDirectInputAndReportLifecycle(t *testing.T) {
 	}
 	outputPath := filepath.Join(dir, "nested", "report.json")
 	writeReport(outputPath, false, report)
-	output, err := os.ReadFile(outputPath)
+	output, err := os.ReadFile(outputPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,13 +130,13 @@ func TestSoakGateCarriesSpineBurstEvidenceIntoTrendReport(t *testing.T) {
 		t.Fatalf("write input series: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", ".", "--in", inPath, "--out", outPath, "--profile", "spine-burst-cap-small", "--pretty=false")
+	cmd := exec.Command("go", "run", ".", "--in", inPath, "--out", outPath, "--profile", "spine-burst-cap-small", "--pretty=false") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = append(os.Environ(), "GOCACHE="+filepath.Join(dir, "gocache"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("soakgate failed: %v\n%s", err, out)
 	}
-	data, err := os.ReadFile(outPath)
+	data, err := os.ReadFile(outPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read output report: %v", err)
 	}

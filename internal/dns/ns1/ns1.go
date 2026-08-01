@@ -42,7 +42,7 @@ import (
 const defaultEndpoint = "https://api.nsone.net/v1"
 
 // apiKeyHeader is the NS1 authentication header carrying the API key.
-const apiKeyHeader = "X-NSONE-Key"
+const apiKeyHeader = "X-NSONE-Key" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 
 // Provider satisfies the DNS-01 plugin template.
 var _ acme.DNSProvider = (*Provider)(nil)

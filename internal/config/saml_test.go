@@ -5,7 +5,7 @@ package config
 import "testing"
 
 func fullSAML() SAML {
-	return SAML{
+	return SAML{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		Enabled:           true,
 		EntityID:          "https://app.example.com/auth/saml/metadata",
 		MetadataURL:       "https://app.example.com/auth/saml/metadata",

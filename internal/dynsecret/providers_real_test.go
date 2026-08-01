@@ -224,7 +224,7 @@ func TestRedisResponsesAreBoundedWipedAndClosed(t *testing.T) {
 
 func TestGeneratedDatabasePasswordCodeDoesNotStringifySecrets(t *testing.T) {
 	for _, name := range []string{"providers_real.go", "drivers.go"} {
-		source, err := os.ReadFile(name)
+		source, err := os.ReadFile(name) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -465,19 +465,19 @@ func startDynsecretPostgres(t *testing.T) (string, func()) {
 	bin := dir + "/bin"
 	runtime := dir + "/runtime"
 	data := dir + "/data"
-	if err := os.MkdirAll(bin, 0o755); err != nil {
+	if err := os.MkdirAll(bin, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(runtime, 0o755); err != nil {
+	if err := os.MkdirAll(runtime, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(data, 0o755); err != nil {
+	if err := os.MkdirAll(data, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	db := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
 		Username("postgres").Password("postgres").Database("postgres").
-		Port(uint32(port)).RuntimePath(runtime).DataPath(data).BinariesPath(bin))
+		Port(uint32(port)).RuntimePath(runtime).DataPath(data).BinariesPath(bin)) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 	if err := db.Start(); err != nil {
 		_ = os.RemoveAll(dir)
 		fmt.Fprintln(os.Stderr, "embedded postgres start:", err)

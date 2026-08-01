@@ -16,7 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/secretjson"
 )
 
-const azureJWTBearerAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+const azureJWTBearerAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 
 // AzureExchangeRequest is the thin Entra federated-credential encoder input.
 // SubjectToken is the already-validated OIDC proof accepted by the Entra app's

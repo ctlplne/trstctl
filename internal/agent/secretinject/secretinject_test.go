@@ -23,7 +23,7 @@ func TestCopyOnceCopiesMappedSecretBytes(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CopyOnce: %v", err)
 	}
-	got, err := os.ReadFile(filepath.Join(target, "db", "password"))
+	got, err := os.ReadFile(filepath.Join(target, "db", "password")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestCopyOnceDiscoversSourceFiles(t *testing.T) {
 	if err := CopyOnce(Options{SourceDir: source, TargetDir: target, Once: true}); err != nil {
 		t.Fatalf("CopyOnce: %v", err)
 	}
-	got, err := os.ReadFile(filepath.Join(target, "api-key"))
+	got, err := os.ReadFile(filepath.Join(target, "api-key")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

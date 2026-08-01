@@ -45,7 +45,7 @@ func TestPublishedHelmInstallBlocksRender(t *testing.T) {
 			render = strings.ReplaceAll(render, "deploy/helm/trstctl", "trstctl")
 			render = strings.ReplaceAll(render, "manifests/values-airgap.yaml", "trstctl/values-airgap.yaml")
 			render = strings.ReplaceAll(render, "--create-namespace", "")
-			cmd := exec.Command("/bin/sh", "-c", render)
+			cmd := exec.Command("/bin/sh", "-c", render) // #nosec G204 -- executes the repo's own documented helm command under test (CWE-78)
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("published command does not render with its exact values: %v\n%s\ncommand:\n%s", err, output, render)
@@ -110,7 +110,7 @@ func TestPublishedHelmEvaluationBlocksRenderOnlyWithExplicitSingleReplicaOverrid
 			render := strings.Replace(block, "helm install trstctl-eval", "helm template trstctl-eval", 1)
 			render = strings.ReplaceAll(render, "deploy/helm/trstctl", "trstctl")
 			render = strings.ReplaceAll(render, "--create-namespace", "")
-			cmd := exec.Command("/bin/sh", "-c", render)
+			cmd := exec.Command("/bin/sh", "-c", render) // #nosec G204 -- executes the repo's own documented helm command under test (CWE-78)
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("published eval command does not render with its exact values: %v\n%s\ncommand:\n%s", err, output, render)
@@ -127,7 +127,7 @@ func TestEveryPublishedExternalNATSHelmBlockDeclaresSignerAuthorization(t *testi
 		filepath.Join("..", "..", "docs", "airgap.md"),
 		filepath.Join("trstctl", "README.md"),
 	} {
-		body, err := os.ReadFile(path)
+		body, err := os.ReadFile(path) // #nosec G304 -- reads the repo's own docs pages from a walked list (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}

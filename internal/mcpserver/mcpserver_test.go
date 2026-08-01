@@ -79,7 +79,7 @@ func TestMCPWriteToolsAreExplicitOptInMetadata(t *testing.T) {
 }
 
 func TestMCPRESTToolsCoverRouteFamiliesAndGateWrites(t *testing.T) {
-	for opID, want := range map[string]string{
+	for opID, want := range map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"listCertificates":  "rest_list_certificates",
 		"listCAAuthorities": "rest_list_ca_authorities",
 		"issuePKISecret":    "rest_issue_pki_secret",

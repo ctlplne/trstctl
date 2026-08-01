@@ -205,7 +205,7 @@ func beginBSONDocument(dst []byte) ([]byte, int) {
 
 func finishBSONDocument(dst []byte, start int) []byte {
 	dst = append(dst, 0)
-	binary.LittleEndian.PutUint32(dst[start:start+4], uint32(len(dst)-start))
+	binary.LittleEndian.PutUint32(dst[start:start+4], uint32(len(dst)-start)) // #nosec G115 -- SQL Server TDS prelogin framing of short bounded fields (CWE-190)
 	return dst
 }
 
@@ -213,7 +213,7 @@ func appendBSONString(dst []byte, key string, value []byte) []byte {
 	dst = append(dst, 0x02)
 	dst = append(dst, key...)
 	dst = append(dst, 0)
-	dst = binary.LittleEndian.AppendUint32(dst, uint32(len(value)+1))
+	dst = binary.LittleEndian.AppendUint32(dst, uint32(len(value)+1)) // #nosec G115 -- SQL Server TDS prelogin framing of short bounded fields (CWE-190)
 	dst = append(dst, value...)
 	return append(dst, 0)
 }

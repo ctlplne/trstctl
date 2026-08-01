@@ -54,7 +54,7 @@ func (s *FilesystemSource) Discover(ctx context.Context) ([]Found, error) {
 			if fi, ierr := d.Info(); ierr != nil || fi.Size() > s.maxSize {
 				return nil
 			}
-			data, rerr := os.ReadFile(path)
+			data, rerr := os.ReadFile(path) // #nosec G122 G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367)
 			if rerr != nil {
 				return nil
 			}

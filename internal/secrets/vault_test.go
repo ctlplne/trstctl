@@ -144,7 +144,7 @@ func TestLoadOrCreateKEKIsStableAndPrivate(t *testing.T) {
 
 func TestLoadOrCreateKEKRejectsUnsafeExistingFileMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "kek.bin")
-	if err := os.WriteFile(path, bytes.Repeat([]byte{0x42}, 32), 0o644); err != nil {
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x42}, 32), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if _, err := secrets.LoadOrCreateKEK(path); err == nil {
@@ -177,7 +177,7 @@ func TestLoadOrCreateAuthSecretIsStableAndPrivate(t *testing.T) {
 
 func TestLoadOrCreateAuthSecretRejectsUnsafeExistingFileMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "auth.bin")
-	if err := os.WriteFile(path, bytes.Repeat([]byte{0x33}, 32), 0o644); err != nil {
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x33}, 32), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if _, err := secrets.LoadOrCreateAuthSecret(path); err == nil {

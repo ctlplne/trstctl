@@ -368,7 +368,7 @@ func TestRun_CheckConfigDefault(t *testing.T) {
 // resolves the external targets from the environment and reports them, with the
 // DSN password redacted.
 func TestRun_CheckConfigExternalTargets(t *testing.T) {
-	env := envFunc(map[string]string{
+	env := envFunc(map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://trstctl:s3cretpw@db.example.com:5432/trstctl?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",

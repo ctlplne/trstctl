@@ -81,7 +81,7 @@ func main() {
 	}
 	b.WriteString("}\n")
 
-	if err := os.WriteFile("internal/terraformprovider/openapi_routes.gen.go", []byte(b.String()), 0o644); err != nil {
+	if err := os.WriteFile("internal/terraformprovider/openapi_routes.gen.go", []byte(b.String()), 0o644); err != nil { // #nosec G306 -- generated Go source committed to the repo; world-readable by design (CWE-276)
 		fatal(err)
 	}
 }

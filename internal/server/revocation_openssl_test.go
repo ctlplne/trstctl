@@ -181,7 +181,7 @@ func runOpenSSL(t *testing.T, openssl string, args ...string) string {
 }
 
 func runOpenSSLMaybeError(openssl string, args ...string) (string, error) {
-	out, err := exec.Command(openssl, args...).CombinedOutput()
+	out, err := exec.Command(openssl, args...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	return string(out), err
 }
 

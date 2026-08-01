@@ -243,7 +243,7 @@ func equalStrings(a, b []string) bool {
 		return false
 	}
 	for i := range a {
-		if a[i] != b[i] {
+		if a[i] != b[i] { // #nosec G602 -- fixed-shape test data; the index is in range by construction (CWE-118)
 			return false
 		}
 	}

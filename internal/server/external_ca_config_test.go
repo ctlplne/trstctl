@@ -117,7 +117,7 @@ func TestExternalCARegistryHidesTenantBoundAuthority(t *testing.T) {
 
 func TestExternalCASecretSetLocksAndDestroysFileBytes(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "token")

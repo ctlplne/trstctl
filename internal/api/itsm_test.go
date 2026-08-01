@@ -8,13 +8,13 @@ import (
 )
 
 func TestServiceNowBindingApprovalRequiresConfiguredURLTokenAndPrivateFlag(t *testing.T) {
-	a := New(nil, nil, nil, WithServiceNowBindings(ServiceNowBinding{
+	a := New(nil, nil, nil, WithServiceNowBindings(ServiceNowBinding{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		InstanceURL:          "https://example.service-now.com/",
 		TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
 		AllowPrivateEndpoint: false,
 	}))
 
-	if _, err := a.approvedServiceNowBinding(serviceNowTicketRequest{
+	if _, err := a.approvedServiceNowBinding(serviceNowTicketRequest{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		InstanceURL:      "https://example.service-now.com",
 		TokenRef:         "env:TRSTCTL_SERVICENOW_TOKEN",
 		ShortDescription: "ok",
@@ -23,9 +23,9 @@ func TestServiceNowBindingApprovalRequiresConfiguredURLTokenAndPrivateFlag(t *te
 	}
 
 	for _, tc := range []serviceNowTicketRequest{
-		{InstanceURL: "https://attacker.example.test", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN"},
-		{InstanceURL: "https://example.service-now.com", TokenRef: "env:AWS_SECRET_ACCESS_KEY"},
-		{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true},
+		{InstanceURL: "https://attacker.example.test", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN"},                               // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		{InstanceURL: "https://example.service-now.com", TokenRef: "env:AWS_SECRET_ACCESS_KEY"},                                // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	} {
 		if _, err := a.approvedServiceNowBinding(tc); err == nil {
 			t.Fatalf("unapproved binding accepted: %+v", tc)
@@ -38,7 +38,7 @@ func TestOutboundEnvCredentialRefsRequireOperatorApproval(t *testing.T) {
 
 	_, err := a.responseIntegrationDispatchCommand(context.Background(), "tenant-sec-001", responseIntegrationDispatchRequest{
 		Title: "incident",
-		Destinations: []responseIntegrationDestinationRequest{{
+		Destinations: []responseIntegrationDestinationRequest{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			Provider:    "splunk",
 			EndpointURL: "https://splunk.example.test/services/collector",
 			TokenRef:    "env:AWS_SECRET_ACCESS_KEY",

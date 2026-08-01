@@ -92,7 +92,7 @@ func TestTLSReloadRotatedFileCertificateServedWithoutRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })} // #nosec G112 -- loopback test listener torn down by the test (CWE-400)
 	done := make(chan error, 1)
 	go func() { done <- sc.ServeHTTPS(srv, ln) }()
 	t.Cleanup(func() {

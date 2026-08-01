@@ -2461,7 +2461,7 @@ func committedFuzzTargets(t *testing.T) []string {
 			if d.IsDir() || !strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
-			body, err := os.ReadFile(filepath.FromSlash(path))
+			body, err := os.ReadFile(filepath.FromSlash(path)) // #nosec G122 -- test walks the repo's own checkout; no hostile symlink exposure (CWE-367)
 			if err != nil {
 				return err
 			}

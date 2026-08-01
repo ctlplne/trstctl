@@ -62,7 +62,7 @@ func newMockIdP(t *testing.T, clientID string) *mockIdP {
 		}
 		claims["nonce"] = nonce // the IdP binds the request nonce into the id_token
 		idp.codes[code] = claims
-		http.Redirect(w, r, redirectURI+"?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(state), http.StatusFound)
+		http.Redirect(w, r, redirectURI+"?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(state), http.StatusFound) // #nosec G710 -- test redirect within its own local server (CWE-601)
 	})
 	// /token: exchange the code for a signed id_token (RFC 6749 §4.1.3).
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {

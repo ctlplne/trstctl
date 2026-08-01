@@ -228,6 +228,18 @@ func (p Pin) verify(rawCerts [][]byte) error {
 	return nil
 }
 
+// verifyConn re-runs the pin over the connection state's peer chain.
+// VerifyPeerCertificate is skipped on resumed sessions; VerifyConnection is
+// not, so a pinned config enforces the pin on every connection, resumed or
+// fresh (CWE-295).
+func (p Pin) verifyConn(cs tls.ConnectionState) error {
+	raw := make([][]byte, 0, len(cs.PeerCertificates))
+	for _, c := range cs.PeerCertificates {
+		raw = append(raw, c.Raw)
+	}
+	return p.verify(raw)
+}
+
 func serverTLSConfig(serverCert tls.Certificate, clientCAs *x509.CertPool) *tls.Config {
 	return serverTLSConfigPinned(serverCert, clientCAs, nil)
 }
@@ -253,6 +265,11 @@ func serverTLSConfigPinned(serverCert tls.Certificate, clientCAs *x509.CertPool,
 		cfg.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			return p.verify(rawCerts)
 		}
+		// A resumed session skips VerifyPeerCertificate, which would let a
+		// ticket outlive a pin rotation: no tickets for pinned listeners, and
+		// VerifyConnection re-checks the pin even if a resumption path appears.
+		cfg.SessionTicketsDisabled = true
+		cfg.VerifyConnection = p.verifyConn
 	}
 	return cfg
 }
@@ -275,6 +292,10 @@ func clientTLSConfig(src ClientCertSource, serverCAs *x509.CertPool, serverName 
 		cfg.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			return p.verify(rawCerts)
 		}
+		// This client never sets a ClientSessionCache, so it never resumes;
+		// VerifyConnection still re-checks the pin on every connection so the
+		// guarantee cannot silently vanish if a cache is ever added (CWE-295).
+		cfg.VerifyConnection = p.verifyConn
 	}
 	return cfg
 }

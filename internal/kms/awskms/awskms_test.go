@@ -81,7 +81,7 @@ func (f *fakeKMS) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		f.mu.Lock()
 		f.n++
-		id := "key-" + hex.EncodeToString([]byte{byte(f.n)})
+		id := "key-" + hex.EncodeToString([]byte{byte(f.n)}) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		f.keys[id] = ls
 		f.mu.Unlock()
 		writeJSON(w, map[string]any{"KeyMetadata": map[string]string{"KeyId": id}})

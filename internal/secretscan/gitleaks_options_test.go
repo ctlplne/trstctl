@@ -97,7 +97,7 @@ cat > "$report" <<'JSON'
 ` + reportJSON + `
 JSON
 `
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	return path
@@ -105,7 +105,7 @@ JSON
 
 func readText(t *testing.T, path string) string {
 	t.Helper()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -202,7 +202,7 @@ func (ks *KeyStore) readSignOperation(operationID string) (signJournalRecord, er
 // file contents. Without it, a power loss can forget the executing marker or the
 // completed replacement even though file.Sync succeeded.
 func syncDirectory(path string) error {
-	dir, err := os.Open(path)
+	dir, err := os.Open(path) // #nosec G304 -- the signer's own keystore/journal directory from its config (CWE-22)
 	if err != nil {
 		return err
 	}

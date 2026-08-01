@@ -46,7 +46,7 @@ func TestLiveLinuxSSHDIntegrationSmoke(t *testing.T) {
 	runOpenSSHTool(t, ctx, sshKeygenPath, "-q", "-t", "ed25519", "-N", "", "-f", hostKeyPath)
 	caKeyPath := filepath.Join(dir, "trstctl_ssh_ca")
 	runOpenSSHTool(t, ctx, sshKeygenPath, "-q", "-t", "ed25519", "-N", "", "-f", caKeyPath)
-	caPub, err := os.ReadFile(caKeyPath + ".pub")
+	caPub, err := os.ReadFile(caKeyPath + ".pub") // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestLiveLinuxSSHDIntegrationSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if out, err := exec.CommandContext(ctx, sshdPath, "-t", "-f", cfgPath).CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(ctx, sshdPath, "-t", "-f", cfgPath).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Fatalf("initial sshd -t failed; live smoke runner is not usable: %v\n%s", err, out)
 	}
 
@@ -96,7 +96,7 @@ func liveSSHDSmokeEnabled() bool {
 
 type liveOSFS struct{}
 
-func (liveOSFS) ReadFile(p string) ([]byte, error) { return os.ReadFile(p) }
+func (liveOSFS) ReadFile(p string) ([]byte, error) { return os.ReadFile(p) } // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 func (liveOSFS) Glob(pattern string) ([]string, error) {
 	return filepath.Glob(pattern)
 }
@@ -112,7 +112,7 @@ func (liveOSFS) WriteFileAtomic(p string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
+	defer func() { _ = os.Remove(tmpName) }() // #nosec G703 -- temp file beside the harness-owned sshd config in a test dir (CWE-22)
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		return err
@@ -128,7 +128,7 @@ func (liveOSFS) WriteFileAtomic(p string, data []byte, mode os.FileMode) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, p)
+	return os.Rename(tmpName, p) // #nosec G703 -- atomic replace of the harness-owned sshd config in a test dir (CWE-22)
 }
 
 type liveSSHDReloader struct {
@@ -146,11 +146,11 @@ func startLiveSSHD(ctx context.Context, t *testing.T, sshdPath, cfgPath string, 
 	t.Helper()
 
 	logPath := filepath.Join(filepath.Dir(cfgPath), "sshd.log")
-	logFile, err := os.Create(logPath)
+	logFile, err := os.Create(logPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, sshdPath, "-D", "-e", "-f", cfgPath)
+	cmd := exec.CommandContext(ctx, sshdPath, "-D", "-e", "-f", cfgPath) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
@@ -176,7 +176,7 @@ func startLiveSSHD(ctx context.Context, t *testing.T, sshdPath, cfgPath string, 
 }
 
 func (r *liveSSHDReloader) Validate(ctx context.Context) error {
-	out, err := exec.CommandContext(ctx, r.sshdPath, "-t", "-f", r.cfgPath).CombinedOutput()
+	out, err := exec.CommandContext(ctx, r.sshdPath, "-t", "-f", r.cfgPath).CombinedOutput() // #nosec G204 -- live-sshd test harness validating its own config with the resolved sshd binary (CWE-78)
 	if err != nil {
 		return fmt.Errorf("sshd -t -f %s failed: %w: %s", r.cfgPath, err, out)
 	}
@@ -185,7 +185,7 @@ func (r *liveSSHDReloader) Validate(ctx context.Context) error {
 
 func (r *liveSSHDReloader) Reload(ctx context.Context) error {
 	r.reloads++
-	out, err := exec.CommandContext(ctx, "kill", "-HUP", strconv.Itoa(r.cmd.Process.Pid)).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "kill", "-HUP", strconv.Itoa(r.cmd.Process.Pid)).CombinedOutput() // #nosec G204 -- HUPs the harness's own child sshd by pid (CWE-78)
 	if err != nil {
 		return fmt.Errorf("reload live sshd with SIGHUP failed: %w: %s", err, out)
 	}
@@ -237,7 +237,7 @@ LogLevel ERROR
 
 func runOpenSSHTool(t *testing.T, ctx context.Context, name string, args ...string) {
 	t.Helper()
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("%s %s failed: %v\n%s", name, strings.Join(args, " "), err, out)
 	}
@@ -276,7 +276,7 @@ func waitForTCP(ctx context.Context, addr string, timeout time.Duration) error {
 
 func assertFileContains(t *testing.T, path, want string) {
 	t.Helper()
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

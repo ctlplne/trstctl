@@ -20,7 +20,7 @@ func readSSHString(b []byte) (body, rest []byte, ok bool) {
 		return nil, b, false
 	}
 	n := binary.BigEndian.Uint32(b[:4])
-	if uint64(len(b)-4) < uint64(n) {
+	if uint64(len(b)-4) < uint64(n) { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		return nil, b, false
 	}
 	return b[4 : 4+n], b[4+n:], true
@@ -152,7 +152,7 @@ func TestDistributeKRLLoadsInOpenSSH(t *testing.T) {
 
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, "id-cert.pub")
-	if err := os.WriteFile(certPath, iss.Certificate, 0o644); err != nil {
+	if err := os.WriteFile(certPath, iss.Certificate, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 
@@ -160,12 +160,12 @@ func TestDistributeKRLLoadsInOpenSSH(t *testing.T) {
 	krl := NewKRL()
 	krl.RevokeSerial(iss.Serial)
 	krlPath := filepath.Join(dir, "revoked.krl")
-	if err := os.WriteFile(krlPath, krl.DistributeKRL(1), 0o644); err != nil {
+	if err := os.WriteFile(krlPath, krl.DistributeKRL(1), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 
 	// ssh-keygen -Q -f <krl> <cert>: exit status is non-zero when the cert is revoked.
-	out, err := exec.Command("ssh-keygen", "-Q", "-f", krlPath, certPath).CombinedOutput()
+	out, err := exec.Command("ssh-keygen", "-Q", "-f", krlPath, certPath).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err == nil {
 		t.Fatalf("ssh-keygen did not report the revoked certificate as revoked using trstctl's KRL:\n%s", out)
 	}
@@ -181,10 +181,10 @@ func TestDistributeKRLLoadsInOpenSSH(t *testing.T) {
 		t.Fatal(err)
 	}
 	cert2Path := filepath.Join(dir, "id2-cert.pub")
-	if err := os.WriteFile(cert2Path, iss2.Certificate, 0o644); err != nil {
+	if err := os.WriteFile(cert2Path, iss2.Certificate, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("ssh-keygen", "-Q", "-f", krlPath, cert2Path).CombinedOutput(); err != nil {
+	if out, err := exec.Command("ssh-keygen", "-Q", "-f", krlPath, cert2Path).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Errorf("ssh-keygen wrongly reported a non-revoked cert as revoked:\n%s\n%v", out, err)
 	}
 }

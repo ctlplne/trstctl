@@ -19,16 +19,16 @@ import (
 const (
 	tsiPlural = "trstctlsecretinjections"
 
-	secretInjectionHashAnnotation   = "trstctl.com/secret-injection-hash"
-	secretInjectionNameAnnotation   = "trstctl.com/secret-injection-name"
-	secretInjectionSourceAnnotation = "trstctl.com/secret-injection-source"
-	secretInjectionManagedLabel     = "trstctl.com/secret-injected"
+	secretInjectionHashAnnotation   = "trstctl.com/secret-injection-hash"   // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	secretInjectionNameAnnotation   = "trstctl.com/secret-injection-name"   // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	secretInjectionSourceAnnotation = "trstctl.com/secret-injection-source" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	secretInjectionManagedLabel     = "trstctl.com/secret-injected"         // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 
-	secretInjectionSourceVolume = "trstctl-secret-injection-source"
-	secretInjectionTargetVolume = "trstctl-secret-injection"
-	secretInjectionSidecarName  = "trstctl-secret-injector"
-	secretInjectionSourceMount  = "/var/run/trstctl/source"
-	secretInjectionTargetMount  = "/trstctl/secrets"
+	secretInjectionSourceVolume = "trstctl-secret-injection-source" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	secretInjectionTargetVolume = "trstctl-secret-injection"        // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	secretInjectionSidecarName  = "trstctl-secret-injector"         // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	secretInjectionSourceMount  = "/var/run/trstctl/source"         // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	secretInjectionTargetMount  = "/trstctl/secrets"                // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 // SecretInjectionSpec declares no-code workload secret injection. The operator

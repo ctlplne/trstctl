@@ -105,7 +105,7 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(pem)
 	default:
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:malformed","detail":"unhandled %s"}`, r.URL.Path)
+		_, _ = fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:malformed","detail":"unhandled %s"}`, r.URL.Path) // #nosec G705 -- test-support package compiled only into test binaries (CWE-79)
 	}
 }
 
@@ -128,7 +128,7 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request) {
 	s.certs[certPath] = issued.CertificatePEM
 	s.mu.Unlock()
 	w.Header().Set("Location", s.u("/order/"+id))
-	_, _ = fmt.Fprintf(w, `{"status":"valid","finalize":%q,"certificate":%q}`, s.u(r.URL.Path), s.u(certPath))
+	_, _ = fmt.Fprintf(w, `{"status":"valid","finalize":%q,"certificate":%q}`, s.u(r.URL.Path), s.u(certPath)) // #nosec G705 -- test-support package compiled only into test binaries (CWE-79)
 }
 
 // csrFromJWS extracts the finalize request's CSR from the flattened-JSON JWS body

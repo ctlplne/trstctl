@@ -229,7 +229,7 @@ func run(ctx context.Context, args []string) error {
 }
 
 func loadDODManifest(path string) ([]byte, dodManifest, map[string]dodEntry, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return nil, dodManifest{}, nil, fmt.Errorf("read DoD manifest: %w", err)
 	}
@@ -294,7 +294,7 @@ func runLicensed(ctx context.Context, repo string, entries map[string]dodEntry) 
 		if err := cmd.Run(); err != nil {
 			return nil, nil, fmt.Errorf("stage %s: %w; census log=%s", stage.ID, err, sanitizeLog(censusLog.String()))
 		}
-		reportRaw, err := os.ReadFile(reportPath)
+		reportRaw, err := os.ReadFile(reportPath) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 		if err != nil {
 			return nil, nil, fmt.Errorf("read stage %s report: %w", stage.ID, err)
 		}
@@ -590,7 +590,7 @@ func newValidatedCommand(ctx context.Context, request commandRequest) (*exec.Cmd
 	default:
 		return nil, fmt.Errorf("unreviewed command kind %d", request.kind)
 	}
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 	cmd.Dir = dir
 	return cmd, nil
 }
@@ -791,7 +791,7 @@ func writeArchive(path string, files map[string][]byte) error {
 	sort.Strings(names)
 
 	parent := filepath.Dir(path)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
+	if err := os.MkdirAll(parent, 0o755); err != nil { // #nosec G301 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 		return fmt.Errorf("create archive directory: %w", err)
 	}
 	tmp, err := os.CreateTemp(parent, ".pqc-operator-lab-*.tar.gz")

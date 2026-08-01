@@ -1,15 +1,23 @@
 # golangci-lint v2 configuration.
 #
 # The standard linter set (errcheck, govet, ineffassign, staticcheck, unused) —
-# the same set the project has always used — plus the architecture linter
-# (tools/trstctllint) which runs separately via `make lint`. golangci-lint v2 is
-# required for Go 1.25.
+# the same set the project has always used — plus gosec (G1xx-G6xx, the
+# CWE-mapped Go security rules) and the architecture linter (tools/trstctllint)
+# which runs separately via `make lint`. golangci-lint v2 is required for
+# Go 1.25.
 #
 # No exclusions: errcheck is fully strict. Every ignored error is acknowledged
 # explicitly at its call site (`_ = f()`), so a genuinely-dropped error is never
 # silently muted by a name-pattern exclusion, and any new unchecked error fails
 # the build.
+#
+# gosec runs with no rule or path exclusions either. A finding is either fixed
+# or carries an inline `#nosec G### -- reason` at the exact call site, and every
+# such waiver must have a matching entry in docs/security/cwe-register.md — a
+# guard test (docs/security) fails on an unregistered or reasonless #nosec.
 version: "2"
 
 linters:
   default: standard
+  enable:
+    - gosec

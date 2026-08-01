@@ -194,7 +194,7 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if len(token) > 0 {
-		req.AddCookie(&http.Cookie{Name: "NITRO_AUTH_TOKEN", Value: secrettext.String(token)})
+		req.AddCookie(&http.Cookie{Name: "NITRO_AUTH_TOKEN", Value: secrettext.String(token)}) // #nosec G124 -- cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004)
 	}
 
 	resp, err := sb.Request(req)

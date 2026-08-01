@@ -94,11 +94,11 @@ func TestCreateSurvivesInvalidConfigAndRedactsCompleteArchive(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	firstBytes, err := os.ReadFile(output)
+	firstBytes, err := os.ReadFile(output) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondBytes, err := os.ReadFile(second)
+	secondBytes, err := os.ReadFile(second) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestCreateSurvivesInvalidConfigAndRedactsCompleteArchive(t *testing.T) {
 
 func readBundle(t *testing.T, path string) map[string][]byte {
 	t.Helper()
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

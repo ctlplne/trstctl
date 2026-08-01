@@ -386,7 +386,7 @@ func defaultOutboxJitter(base time.Duration) time.Duration {
 	if span <= 0 {
 		return base
 	}
-	return floor + time.Duration(rand.Int63n(int64(span)+1))
+	return floor + time.Duration(rand.Int63n(int64(span)+1)) // #nosec G404 -- retry backoff jitter, not a security decision (CWE-338)
 }
 
 func (o *Outbox) clockNow() time.Time { return o.now().UTC() }

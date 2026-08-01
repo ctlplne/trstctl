@@ -66,7 +66,7 @@ func (s *PrivateKeySource) Discover(ctx context.Context) ([]PrivateKeyFound, err
 			if ierr != nil || !fi.Mode().IsRegular() || fi.Size() > s.maxSize {
 				return nil
 			}
-			data, rerr := os.ReadFile(path)
+			data, rerr := os.ReadFile(path) // #nosec G122 G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367)
 			if rerr != nil {
 				return nil
 			}

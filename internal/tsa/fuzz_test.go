@@ -130,11 +130,11 @@ func derWrapFuzz(tag byte, body []byte) []byte {
 	out := []byte{tag}
 	switch {
 	case len(body) < 128:
-		out = append(out, byte(len(body)))
+		out = append(out, byte(len(body))) // #nosec G115 -- crafted DER length byte for fuzz corpus; truncation is the crafted input (CWE-190)
 	case len(body) <= 0xff:
-		out = append(out, 0x81, byte(len(body)))
+		out = append(out, 0x81, byte(len(body))) // #nosec G115 -- crafted DER length byte for fuzz corpus (CWE-190)
 	default:
-		out = append(out, 0x82, byte(len(body)>>8), byte(len(body)))
+		out = append(out, 0x82, byte(len(body)>>8), byte(len(body))) // #nosec G115 -- crafted DER length bytes for fuzz corpus (CWE-190)
 	}
 	return append(out, body...)
 }

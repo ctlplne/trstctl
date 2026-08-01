@@ -55,7 +55,7 @@ func (s *Store) AdvanceFederationCheckpoint(ctx context.Context, peerID string, 
 		//trstctl:system-query — cross-tenant by design: this advances a deployment-wide federation import watermark; tenant isolation is enforced when the imported event is projected.
 		`UPDATE federation_peer_checkpoints
 		    SET source_seq = GREATEST(source_seq, $2), updated_at = now()
-		  WHERE peer_id = $1`, peerID, int64(seq))
+		  WHERE peer_id = $1`, peerID, int64(seq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	if err != nil {
 		return fmt.Errorf("store: advance federation checkpoint for peer %q: %w", peerID, err)
 	}

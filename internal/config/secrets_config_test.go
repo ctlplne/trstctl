@@ -19,7 +19,7 @@ func TestSecretsKEKDefault(t *testing.T) {
 // TestSecretsKEKEnvOverride: operators point the KEK at their own (HSM-exported or
 // managed) key file via the environment.
 func TestSecretsKEKEnvOverride(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
@@ -38,7 +38,7 @@ func TestSecretsKEKEnvOverride(t *testing.T) {
 }
 
 func TestSecretsGitleaksEnvOverride(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
@@ -57,7 +57,7 @@ func TestSecretsGitleaksEnvOverride(t *testing.T) {
 }
 
 func TestTenantSealLocalWrapperEnvOverride(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",

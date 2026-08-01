@@ -23,7 +23,7 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 	goModCache := hostGoModCache(t)
 	image := "trstctl-softhsm-go:kms-03"
 	if out, err := exec.Command("docker", "image", "inspect", image).CombinedOutput(); err != nil {
-		build := exec.Command("docker", "build", "-t", image, filepath.Join("testdata", "softhsm"))
+		build := exec.Command("docker", "build", "-t", image, filepath.Join("testdata", "softhsm")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		if buildOut, buildErr := build.CombinedOutput(); buildErr != nil {
 			t.Fatalf("build SoftHSM test image after inspect failed (%v, %s): %v\n%s", err, out, buildErr, buildOut)
 		}
@@ -57,7 +57,7 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 		image,
 		"bash", "-lc", script,
 	}
-	out, err := exec.Command("docker", args...).CombinedOutput()
+	out, err := exec.Command("docker", args...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("SoftHSM integration failed: %v\n%s", err, out)
 	}

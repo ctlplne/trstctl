@@ -243,16 +243,16 @@ func vaultCompatJSONValue(t *testing.T, v any) any {
 func compareOrUpdateVaultCompatGolden(t *testing.T, path string, canon []byte) {
 	t.Helper()
 	if *updateVaultCompatGoldens {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, canon, 0o644); err != nil {
+		if err := os.WriteFile(path, canon, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 		t.Logf("wrote %s", path)
 		return
 	}
-	want, err := os.ReadFile(path)
+	want, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s (regenerate with -update-vault-compat-goldens): %v", path, err)
 	}

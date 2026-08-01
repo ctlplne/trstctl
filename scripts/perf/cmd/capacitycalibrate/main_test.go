@@ -177,7 +177,7 @@ func writeLiveArtifact(t *testing.T, report perf.Report) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	return path

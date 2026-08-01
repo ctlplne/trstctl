@@ -35,7 +35,7 @@ var cipherDirectives = map[string]bool{"ssl_ciphers": true, "sslciphersuite": tr
 func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
 	var out []cbom.Finding
 	for _, path := range expandGlobs(s.paths) {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- declared host-config path from the discovery source's own config (CWE-22)
 		if err != nil {
 			continue
 		}

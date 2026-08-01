@@ -23,7 +23,7 @@ func install(t *testing.T, path, class string, content []byte) drift.Watched {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, content, 0o644); err != nil {
+	if err := os.WriteFile(path, content, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	return drift.Watched{Path: path, Class: class, Fingerprint: drift.Fingerprint(content), Mode: 0o644}
@@ -70,7 +70,7 @@ func TestDetectReplaced(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "app.crt")
 	w := install(t, path, "certificate", certBytes())
-	if err := os.WriteFile(path, []byte("-----BEGIN CERTIFICATE-----\nIMPOSTER\n-----END CERTIFICATE-----\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("-----BEGIN CERTIFICATE-----\nIMPOSTER\n-----END CERTIFICATE-----\n"), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 
@@ -106,7 +106,7 @@ func TestReconcileAlertOnly(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "app.crt")
 	w := install(t, path, "certificate", certBytes())
-	_ = os.WriteFile(path, []byte("changed"), 0o644)
+	_ = os.WriteFile(path, []byte("changed"), 0o644) // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 
 	rec := &recorder{}
 	r := &drift.Reconciler{
@@ -124,7 +124,7 @@ func TestReconcileAlertOnly(t *testing.T) {
 	if len(rep.Blocked) != 0 || len(rep.Remediated) != 0 {
 		t.Errorf("alert-only must not block or remediate: %+v", rep)
 	}
-	if got, _ := os.ReadFile(path); !bytes.Equal(got, []byte("changed")) {
+	if got, _ := os.ReadFile(path); !bytes.Equal(got, []byte("changed")) { // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		t.Error("alert-only must not modify the file")
 	}
 	if len(rec.events) != 1 {
@@ -166,7 +166,7 @@ func TestReconcileAutoRemediateReplaced(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "app.crt")
 	w := install(t, path, "certificate", certBytes())
-	_ = os.WriteFile(path, []byte("IMPOSTER"), 0o644)
+	_ = os.WriteFile(path, []byte("IMPOSTER"), 0o644) // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 
 	rec := &recorder{}
 	r := &drift.Reconciler{
@@ -181,7 +181,7 @@ func TestReconcileAutoRemediateReplaced(t *testing.T) {
 	if len(rep.Remediated) != 1 {
 		t.Fatalf("expected remediation, got %+v", rep)
 	}
-	if got, _ := os.ReadFile(path); !bytes.Equal(got, certBytes()) {
+	if got, _ := os.ReadFile(path); !bytes.Equal(got, certBytes()) { // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		t.Error("auto-remediate must restore the declared content")
 	}
 	if len(rec.events) != 1 || !rec.events[0].Remediated {
@@ -206,7 +206,7 @@ func TestReconcileAutoRemediateRelocated(t *testing.T) {
 	if _, err := r.Reconcile(context.Background(), []drift.Watched{w}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := os.ReadFile(path); err != nil || !bytes.Equal(got, certBytes()) {
+	if got, err := os.ReadFile(path); err != nil || !bytes.Equal(got, certBytes()) { // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		t.Errorf("declared path not restored: %v", err)
 	}
 	if _, err := os.Stat(moved); !os.IsNotExist(err) {
@@ -223,7 +223,7 @@ func TestReconcileAuditsEveryDriftAndDefaultsSafe(t *testing.T) {
 	wa := install(t, a, "certificate", certBytes())
 	wb := install(t, b, "unknown-class", certBytes())
 	_ = os.Remove(a)
-	_ = os.WriteFile(b, []byte("changed"), 0o644)
+	_ = os.WriteFile(b, []byte("changed"), 0o644) // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 
 	rec := &recorder{}
 	r := &drift.Reconciler{
@@ -241,7 +241,7 @@ func TestReconcileAuditsEveryDriftAndDefaultsSafe(t *testing.T) {
 		t.Fatalf("expected 2 audited drifts, got %d", len(rec.events))
 	}
 	// b's unknown class defaulted to alert-only: not remediated.
-	if got, _ := os.ReadFile(b); !bytes.Equal(got, []byte("changed")) {
+	if got, _ := os.ReadFile(b); !bytes.Equal(got, []byte("changed")) { // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		t.Error("unknown class must default to alert-only (no remediation)")
 	}
 	if len(rep.Remediated) != 1 {

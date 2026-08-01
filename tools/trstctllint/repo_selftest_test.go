@@ -19,7 +19,7 @@ func TestRepoWideMulticheckerRunsAndFailsPlantedViolations(t *testing.T) {
 	}
 	runCmd(t, root, "go", "build", "-o", bin, "./tools/trstctllint")
 
-	clean := exec.Command(bin, "./...")
+	clean := exec.Command(bin, "./...") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	clean.Dir = root
 	clean.Env = commandEnv(t)
 	if out, err := clean.CombinedOutput(); err != nil {
@@ -96,7 +96,7 @@ package random
 const Algorithm = "ML-DSA-65"
 `)
 
-	planted := exec.Command(bin, "./...")
+	planted := exec.Command(bin, "./...") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	planted.Dir = fixture
 	planted.Env = commandEnv(t)
 	out, err := planted.CombinedOutput()
@@ -143,7 +143,7 @@ func commandEnv(t *testing.T) []string {
 
 func runCmd(t *testing.T, dir, name string, args ...string) {
 	t.Helper()
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = dir
 	cmd.Env = commandEnv(t)
 	if out, err := cmd.CombinedOutput(); err != nil {

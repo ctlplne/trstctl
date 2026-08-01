@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	token    = "ya29.access-token"
+	token    = "ya29.access-token" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	project  = "my-project"
 	location = "global"
 	certID   = "web-prod"

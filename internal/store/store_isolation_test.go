@@ -192,7 +192,7 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		if rel == "internal/store/store.go" {
 			return nil
 		}
-		src, err := os.ReadFile(path)
+		src, err := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func TestSystemQueryMarkersExplainTenantExposure(t *testing.T) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		src, err := os.ReadFile(path)
+		src, err := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if err != nil {
 			return err
 		}

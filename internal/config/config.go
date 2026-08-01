@@ -1842,7 +1842,7 @@ func Default() *Config {
 		ManagedKeys: ManagedKeys{Enabled: false, Provider: ManagedKeyProviderAWS},
 		// The signer runs as a supervised child by default (single binary); its
 		// keys are sealed under the data directory so a restart preserves the CA.
-		Signer: Signer{Mode: SignerChild, KeyStoreDir: "data/signer/keys", AuthSecretFile: "data/signer/sign-auth.bin", AllowCoResidentAuthorizer: true},
+		Signer: Signer{Mode: SignerChild, KeyStoreDir: "data/signer/keys", AuthSecretFile: "data/signer/sign-auth.bin", AllowCoResidentAuthorizer: true}, // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 		// The issuing CA certificate persists so it is stable across restarts. A
 		// baseline certificatePolicies OID is set so every served leaf carries a
 		// policy (RFC 5280 / BR-thin, PKIGOV-001); CDP/AIA URLs are left empty for the
@@ -1915,7 +1915,7 @@ func Parse(data []byte) (*Config, error) {
 func Load(getenv func(string) string) (*Config, error) {
 	cfg := Default()
 	if path := getenv("TRSTCTL_CONFIG_FILE"); path != "" {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the config loader reading the operator's own config file (CWE-22)
 		if err != nil {
 			return nil, fmt.Errorf("read config file %q: %w", path, err)
 		}
@@ -2412,7 +2412,7 @@ func setServiceNowEnv(getenv func(string) string, sn *ServiceNowITSM) {
 		return
 	}
 	if tokenRef == "" {
-		tokenRef = "env:TRSTCTL_SERVICENOW_TOKEN"
+		tokenRef = "env:TRSTCTL_SERVICENOW_TOKEN" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	}
 	binding := ServiceNowBinding{InstanceURL: instanceURL, TokenRef: tokenRef}
 	if allowPrivateRaw != "" {

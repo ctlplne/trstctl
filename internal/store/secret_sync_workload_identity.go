@@ -199,6 +199,7 @@ func (s *Store) FindSecretSyncWorkloadIdentitySourceForTarget(ctx context.Contex
 	return out, err
 }
 
+// #nosec G101 -- SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798)
 const secretSyncWorkloadIdentitySourceSelect = `
 	SELECT id::text, tenant_id::text, name, provider, role_arn, service_account,
 	       azure_tenant_id, client_id, target_scope, audience, subject,

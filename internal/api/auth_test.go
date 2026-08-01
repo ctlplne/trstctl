@@ -142,10 +142,10 @@ func TestAuthCallbackEstablishesSession(t *testing.T) {
 	verifier := cookieValue(login.Result().Cookies(), "trstctl_oidc_pkce")
 	preLogin := cookieValue(login.Result().Cookies(), "trstctl_oidc_prelogin")
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=good-code&state="+url.QueryEscape(state), nil)
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_prelogin", Value: preLogin})
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: state})
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_nonce", Value: nonce})
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_pkce", Value: verifier})
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_prelogin", Value: preLogin}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: state})       // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_nonce", Value: nonce})       // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_pkce", Value: verifier})     // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -195,10 +195,10 @@ func TestAuthCallbackRejectsTamperedPKCEVerifier(t *testing.T) {
 	nonce := cookieValue(login.Result().Cookies(), "trstctl_oidc_nonce")
 
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=good-code&state="+url.QueryEscape(state), nil)
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_prelogin", Value: preLogin})
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: state})
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_nonce", Value: nonce})
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_pkce", Value: "tampered-verifier"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_prelogin", Value: preLogin})        // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: state})              // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_nonce", Value: nonce})              // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_pkce", Value: "tampered-verifier"}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -345,7 +345,7 @@ func TestAuthCallbackAcceptsMatchingAuthorizationResponseIssuer(t *testing.T) {
 func TestAuthCallbackRejectsBadState(t *testing.T) {
 	h, _ := authAPI(t)
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=good-code&state=evil", nil)
-	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: "s-123"}) // mismatch
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: "s-123"}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004) (mismatch)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -365,8 +365,8 @@ func TestSAMLACSRejectsMismatchedRelayState(t *testing.T) {
 	form := url.Values{"RelayState": {"attacker-state"}, "SAMLResponse": {"opaque"}}
 	req := httptest.NewRequest(http.MethodPost, "/auth/saml/acs", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: "trstctl_saml_state", Value: "server-state"})
-	req.AddCookie(&http.Cookie{Name: "trstctl_saml_request_id", Value: "req-1"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_saml_state", Value: "server-state"}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_saml_request_id", Value: "req-1"})   // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -393,8 +393,8 @@ func TestSAMLACSForwardsRequestIDForSPInitiatedState(t *testing.T) {
 	form := url.Values{"RelayState": {"server-state"}, "SAMLResponse": {"opaque"}}
 	req := httptest.NewRequest(http.MethodPost, "/auth/saml/acs", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: "trstctl_saml_state", Value: "server-state"})
-	req.AddCookie(&http.Cookie{Name: "trstctl_saml_request_id", Value: "req-1"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_saml_state", Value: "server-state"}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_saml_request_id", Value: "req-1"})   // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -423,7 +423,7 @@ func callbackFromLogin(t *testing.T, cookies []*http.Cookie, code string) *http.
 	state := cookieValue(cookies, "trstctl_oidc_state")
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(state), nil)
 	for _, name := range []string{"trstctl_oidc_prelogin", "trstctl_oidc_state", "trstctl_oidc_nonce", "trstctl_oidc_pkce"} {
-		req.AddCookie(&http.Cookie{Name: name, Value: cookieValue(cookies, name)})
+		req.AddCookie(&http.Cookie{Name: name, Value: cookieValue(cookies, name)}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	}
 	return req
 }
@@ -444,7 +444,7 @@ func TestAuthMeReturnsSessionPrincipal(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -491,7 +491,7 @@ func TestAuthMeRejectsRevokedServerSideSession(t *testing.T) {
 		t.Fatalf("Revoke: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {

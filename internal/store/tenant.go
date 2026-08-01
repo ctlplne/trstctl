@@ -24,7 +24,7 @@ func (s *Store) UpsertTenant(ctx context.Context, t Tenant) error {
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO tenants (tenant_id, name, event_seq) VALUES ($1, $2, $3)
 		 ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name, event_seq = EXCLUDED.event_seq`,
-		t.TenantID, t.Name, int64(t.EventSeq))
+		t.TenantID, t.Name, int64(t.EventSeq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -46,7 +46,7 @@ func (s *Store) ListTenants(ctx context.Context) ([]Tenant, error) {
 		if err := rows.Scan(&t.TenantID, &t.Name, &t.CreatedAt, &seq); err != nil {
 			return nil, err
 		}
-		t.EventSeq = uint64(seq)
+		t.EventSeq = uint64(seq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 		out = append(out, t)
 	}
 	return out, rows.Err()
@@ -64,6 +64,6 @@ func (s *Store) GetTenant(ctx context.Context, tenantID string) (Tenant, error) 
 			"SELECT tenant_id::text, name, created_at, event_seq FROM tenants WHERE tenant_id = $1",
 			tenantID).Scan(&t.TenantID, &t.Name, &t.CreatedAt, &seq)
 	})
-	t.EventSeq = uint64(seq)
+	t.EventSeq = uint64(seq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return t, err
 }

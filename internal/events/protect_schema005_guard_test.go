@@ -89,7 +89,7 @@ func TestProtectSCHEMA005_EnvelopeRoundTripsSchemaVersion(t *testing.T) {
 // the version gate or stops failing closed, this guard goes RED.
 func TestProtectSCHEMA005_ProjectorRejectsUnknownVersionAnchor(t *testing.T) {
 	path := filepath.Join("..", "projections", "projections.go")
-	src, err := os.ReadFile(path)
+	src, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("SCHEMA-005 anchor: cannot read %s (the projector reject path must exist): %v", path, err)
 	}

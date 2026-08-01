@@ -79,10 +79,10 @@ func main() {
 		}
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil { // #nosec G301 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 		fail("create output dir: %v", err)
 	}
-	if err := os.WriteFile(*out, data, 0o644); err != nil {
+	if err := os.WriteFile(*out, data, 0o644); err != nil { // #nosec G306 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 		fail("write %s: %v", *out, err)
 	}
 }
@@ -233,8 +233,8 @@ func (s *liveSoakSampler) appendEventAndAdvanceProjection(ctx context.Context, p
 		return fmt.Errorf("append soak event: %w", err)
 	}
 	lag := s.projectionLagMin
-	if projectionLagHint > int(lag) {
-		lag = uint64(projectionLagHint)
+	if projectionLagHint > int(lag) { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
+		lag = uint64(projectionLagHint) // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 	}
 	applied := uint64(0)
 	if ev.Sequence > lag {
@@ -325,7 +325,7 @@ func startEmbeddedPostgres(ctx context.Context) (*store.Store, func(), error) {
 	for _, port := range ports {
 		pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 			Version(embeddedpostgres.V16).
-			Port(uint32(port)).
+			Port(uint32(port)). // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 			RuntimePath(filepath.Join(dir, fmt.Sprintf("rt-%d", port))).
 			DataPath(filepath.Join(dir, fmt.Sprintf("data-%d", port))).
 			BinariesPath(filepath.Join(dir, "bin")).
@@ -405,7 +405,7 @@ func projectionLag(ctx context.Context, st *store.Store, log *events.Log) (int, 
 	if err := st.SystemPool().QueryRow(ctx, `
 		SELECT GREATEST($1::bigint - applied_seq, 0)
 		  FROM projection_checkpoint
-		 WHERE id = 1`, int64(stats.LastSequence)).Scan(&lag); err != nil {
+		 WHERE id = 1`, int64(stats.LastSequence)).Scan(&lag); err != nil { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		return 0, fmt.Errorf("query projection lag: %w", err)
 	}
 	return lag, nil

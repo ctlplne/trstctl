@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 	port := freePort()
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(uint32(port)). // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
 		BinariesPath(dir + "/bin"). // per-package, not a shared /tmp dir: parallel `go test ./...` packages race the file-by-file extraction into a shared BinariesPath
@@ -220,7 +220,7 @@ func TestPropertyNoQueryPathLeaksOutOfScope(t *testing.T) {
 	e, _ := seed(t)
 	ctx := context.Background()
 	surfaces := allSurfaces()
-	rng := rand.New(rand.NewSource(1))
+	rng := rand.New(rand.NewSource(1)) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 
 	for i := 0; i < 300; i++ {
 		tenant := tenantA

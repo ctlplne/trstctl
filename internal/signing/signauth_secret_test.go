@@ -44,7 +44,7 @@ func TestLoadOrCreateAuthorizerCreatesStableSecret(t *testing.T) {
 
 func TestLoadOrCreateAuthorizerRejectsUnsafeExistingFileMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sign-auth.bin")
-	if err := os.WriteFile(path, bytes.Repeat([]byte{0x44}, 32), 0o644); err != nil {
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x44}, 32), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if _, err := signing.LoadOrCreateAuthorizer(path); err == nil {

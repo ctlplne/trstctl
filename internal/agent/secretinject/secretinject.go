@@ -176,7 +176,7 @@ func cleanTarget(root, target string) (string, error) {
 }
 
 func copyOne(sourcePath, targetPath string, fileMode fs.FileMode) error {
-	data, err := os.ReadFile(sourcePath)
+	data, err := os.ReadFile(sourcePath) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
 	if err != nil {
 		return fmt.Errorf("secretinject: read %s: %w", filepath.Base(sourcePath), err)
 	}

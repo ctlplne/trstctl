@@ -163,7 +163,7 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 			DisplayName: token.Subject,
 			Status:      status,
 			Ref:         token.ID,
-			Metadata: marshalNHIInventoryMetadata(map[string]any{
+			Metadata: marshalNHIInventoryMetadata(map[string]any{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 				"token_type": "trstctl_api_token",
 				"scopes":     token.Scopes,
 				"expires_at": token.ExpiresAt,

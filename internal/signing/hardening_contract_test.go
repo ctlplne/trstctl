@@ -52,7 +52,7 @@ func TestNonLinuxHardeningSourceFailsClosed(t *testing.T) {
 
 func readSource(t *testing.T, root, rel string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, rel))
+	data, err := os.ReadFile(filepath.Join(root, rel)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", rel, err)
 	}

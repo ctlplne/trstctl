@@ -19,7 +19,7 @@ import (
 
 const (
 	testParent = "projects/p/locations/l/keyRings/r"
-	testToken  = "ya29.gcp-access-token-do-not-log"
+	testToken  = "ya29.gcp-access-token-do-not-log" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 )
 
 // fakeKMS is a faithful in-process double of Google Cloud KMS. It enforces OAuth2 Bearer

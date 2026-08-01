@@ -41,7 +41,7 @@ func TestKeyMaterial(t *testing.T) {
 }
 
 func TestTokenStringRejectedAcrossAPIAndAuthSurfaces(t *testing.T) {
-	dir, cleanup, err := analysistest.WriteFiles(map[string]string{
+	dir, cleanup, err := analysistest.WriteFiles(map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"trstctl.com/trstctl/internal/api/access.go": `package api
 
 type secretJSONBytes []byte
@@ -77,7 +77,7 @@ type goodTokenResponse struct {
 }
 
 func TestKeymaterialBearerTokenStringResidency(t *testing.T) {
-	dir, cleanup, err := analysistest.WriteFiles(map[string]string{
+	dir, cleanup, err := analysistest.WriteFiles(map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"trstctl.com/trstctl/internal/api/secrets_identity.go": `package api
 
 import "encoding/hex"

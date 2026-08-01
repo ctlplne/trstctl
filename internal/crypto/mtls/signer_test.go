@@ -44,7 +44,7 @@ func loadPoolForTest(t *testing.T, caFile string) *x509.CertPool {
 // readFileForTest reads a file or fails the test.
 func readFileForTest(t *testing.T, path string) []byte {
 	t.Helper()
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}

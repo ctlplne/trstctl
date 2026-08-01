@@ -20,7 +20,7 @@ func TestFullManifestHashAndCopyHelpers(t *testing.T) {
 	if err := os.WriteFile(aPath, []byte("abc"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(bPath, []byte("defg"), 0o640); err != nil {
+	if err := os.WriteFile(bPath, []byte("defg"), 0o640); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 
@@ -43,14 +43,14 @@ func TestFullManifestHashAndCopyHelpers(t *testing.T) {
 	if err := CopyFile(aPath, dstFile, 0o600); err != nil {
 		t.Fatalf("CopyFile: %v", err)
 	}
-	if data, err := os.ReadFile(dstFile); err != nil || string(data) != "abc" {
+	if data, err := os.ReadFile(dstFile); err != nil || string(data) != "abc" { // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		t.Fatalf("copied file = %q, %v", data, err)
 	}
 	dstTree := filepath.Join(root, "tree-copy")
 	if err := CopyTree(src, dstTree); err != nil {
 		t.Fatalf("CopyTree: %v", err)
 	}
-	if data, err := os.ReadFile(filepath.Join(dstTree, "nested", "b.txt")); err != nil || string(data) != "defg" {
+	if data, err := os.ReadFile(filepath.Join(dstTree, "nested", "b.txt")); err != nil || string(data) != "defg" { // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		t.Fatalf("copied tree file = %q, %v", data, err)
 	}
 }

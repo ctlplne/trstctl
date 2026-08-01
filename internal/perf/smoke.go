@@ -170,7 +170,7 @@ func RunSmokeWithObservations(profile string, samples int, observations map[stri
 }
 
 func LoadSmokeObservations(path string) (map[string]Observation, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- perf harness reading its own artifact path (CWE-22)
 	if err != nil {
 		return nil, fmt.Errorf("read perf observations: %w", err)
 	}

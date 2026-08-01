@@ -46,11 +46,11 @@ func makeCredential(t *testing.T) destination.Credential {
 	if err := id.Save(keyPath, certPath); err != nil {
 		t.Fatal(err)
 	}
-	keyPEM, err := os.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
-	certPEM, err := os.ReadFile(certPath)
+	certPEM, err := os.ReadFile(certPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,14 +78,14 @@ func TestFilesystemInstallWritesCertAndKey(t *testing.T) {
 		t.Fatalf("Install: %v", err)
 	}
 
-	gotCert, err := os.ReadFile(certPath)
+	gotCert, err := os.ReadFile(certPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read installed cert: %v", err)
 	}
 	if !bytes.Equal(gotCert, cred.CertPEM) {
 		t.Error("installed certificate bytes differ from the credential")
 	}
-	gotKey, err := os.ReadFile(keyPath)
+	gotKey, err := os.ReadFile(keyPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read installed key: %v", err)
 	}

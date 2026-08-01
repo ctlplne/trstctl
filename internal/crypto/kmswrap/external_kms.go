@@ -119,7 +119,7 @@ func (w *ExternalKMSWrapper) run(operation string, input []byte) ([]byte, error)
 
 	args := append([]string{}, w.command[1:]...)
 	args = append(args, operation, w.provider, w.keyRef)
-	cmd := exec.CommandContext(ctx, w.command[0], args...)
+	cmd := exec.CommandContext(ctx, w.command[0], args...) // #nosec G204 -- operator-configured external KMS helper command (CWE-78)
 	cmd.Stdin = bytes.NewReader(input)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

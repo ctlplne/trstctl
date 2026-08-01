@@ -25,7 +25,7 @@ func TestPerfGateExitsNonzeroForInjectedRuntimeBreaches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command("go", "run", ".", "--samples", "4", "--pretty=false", "--observations", obsPath)
+	cmd := exec.Command("go", "run", ".", "--samples", "4", "--pretty=false", "--observations", obsPath) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = append(os.Environ(), "GOCACHE="+filepath.Join(t.TempDir(), "gocache"))
 	out, err := cmd.CombinedOutput()
 	if err == nil {

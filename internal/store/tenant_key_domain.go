@@ -143,7 +143,7 @@ func (s *Store) ApplyTenantKeyDomainSnapshotTx(ctx context.Context, tx pgx.Tx, d
 		domain.MigrationCompletedAt, domain.SealedAt, domain.UnsealedAt,
 		domain.LastTransitionEventID, domain.LastTransitionType,
 		domain.LastTransitionActor, domain.LastTransitionAt, evidenceRefs,
-		int64(domain.LastTransitionSequence), domain.CreatedAt, domain.UpdatedAt)
+		int64(domain.LastTransitionSequence), domain.CreatedAt, domain.UpdatedAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 

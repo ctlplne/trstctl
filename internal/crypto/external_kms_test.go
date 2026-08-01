@@ -85,7 +85,7 @@ else:
     sys.stderr.write("bad operation")
     sys.exit(4)
 `
-	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write external KMS helper: %v", err)
 	}
 	return path

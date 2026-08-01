@@ -129,7 +129,7 @@ func TestSignTokenCommandProviderReturnsExternalToken(t *testing.T) {
 	token := bytes.Repeat([]byte{0xA7}, 32)
 	script := filepath.Join(t.TempDir(), "approve-sign-intent.sh")
 	body := "#!/bin/sh\ncat >/dev/null\nprintf '%s' '" + base64.StdEncoding.EncodeToString(token) + "'\n"
-	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write token command: %v", err)
 	}
 
@@ -189,7 +189,7 @@ func signerTokenHelperCommand(t *testing.T, secret []byte) string {
 	script := filepath.Join(t.TempDir(), "signer-token-helper.sh")
 	body := "#!/bin/sh\nTRSTCTL_SIGNER_TOKEN_HELPER=1 TRSTCTL_SIGNER_TOKEN_SECRET_B64='" +
 		base64.StdEncoding.EncodeToString(secret) + "' '" + os.Args[0] + "' -test.run '^TestSignerTokenCommandHelper$'\n"
-	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil { // #nosec G306 G703 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Fatalf("write signer token helper: %v", err)
 	}
 	return script

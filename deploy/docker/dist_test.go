@@ -20,7 +20,7 @@ import (
 // fails the test if it is missing.
 func readArtifact(t *testing.T, path string) string {
 	t.Helper()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
@@ -405,7 +405,7 @@ func commandFlagNames(tokens []string) []string {
 // from deploy/docker) and returns its real flag set.
 func binaryHelpFlags(t *testing.T, bin string) map[string]bool {
 	t.Helper()
-	cmd := exec.Command("go", "run", "./cmd/"+bin, "--help")
+	cmd := exec.Command("go", "run", "./cmd/"+bin, "--help") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = filepath.Join("..", "..")
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -508,7 +508,7 @@ func TestReleaseWorkflowPublishesSLSAProvenance(t *testing.T) {
 		}
 	}
 
-	cmd := exec.Command("bash", filepath.Join("scripts", "release", "slsa-dry-run_selftest.sh"))
+	cmd := exec.Command("bash", filepath.Join("scripts", "release", "slsa-dry-run_selftest.sh")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = filepath.Join("..", "..")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -743,18 +743,19 @@ func TestNpmAuditDependencySurfacesPublishesSeverityReceipt(t *testing.T) {
 	web := filepath.Join(tmp, "web")
 	sdk := filepath.Join(tmp, "sdk")
 	for _, dir := range []string{web, sdk} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276)
 			t.Fatalf("mkdir %s: %v", dir, err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"fixture","version":"0.0.0","private":true}`), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"fixture","version":"0.0.0","private":true}`), 0o644); err != nil { // #nosec G306 -- non-secret npm fixture manifest in t.TempDir (CWE-276)
 			t.Fatalf("write package.json: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "package-lock.json"), []byte(`{"name":"fixture","version":"0.0.0","lockfileVersion":3,"packages":{"":{"name":"fixture","version":"0.0.0"}}}`), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "package-lock.json"), []byte(`{"name":"fixture","version":"0.0.0","lockfileVersion":3,"packages":{"":{"name":"fixture","version":"0.0.0"}}}`), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatalf("write package-lock.json: %v", err)
 		}
 	}
 
 	fakeNPM := filepath.Join(tmp, "npm")
+	// #nosec G306 -- fake npm shim in a test tempdir must be executable (CWE-276)
 	if err := os.WriteFile(fakeNPM, []byte(`#!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == "--version" ]]; then
@@ -793,7 +794,7 @@ esac
 	}
 
 	receipt := filepath.Join(tmp, "npm-audit-dependency-surfaces.json")
-	cmd := exec.Command("bash", filepath.Join("scripts", "ci", "npm-audit-dependency-surfaces.sh"))
+	cmd := exec.Command("bash", filepath.Join("scripts", "ci", "npm-audit-dependency-surfaces.sh")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
 		"NPM="+fakeNPM,
@@ -809,7 +810,7 @@ esac
 		t.Fatalf("npm audit wrapper did not announce the release-evidence receipt:\n%s", out)
 	}
 
-	data, err := os.ReadFile(receipt)
+	data, err := os.ReadFile(receipt) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read npm audit receipt: %v", err)
 	}
@@ -858,7 +859,7 @@ esac
 }
 
 func TestEmbeddedPostgresScanReceiptPolicySelfTest(t *testing.T) {
-	cmd := exec.Command("bash", filepath.Join("scripts", "supply-chain", "embedded-postgres-scan-receipt_selftest.sh"))
+	cmd := exec.Command("bash", filepath.Join("scripts", "supply-chain", "embedded-postgres-scan-receipt_selftest.sh")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = filepath.Join("..", "..")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

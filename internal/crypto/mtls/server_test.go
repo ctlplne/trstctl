@@ -29,8 +29,8 @@ func TestServeHTTPSEncryptsAndRefusesPlaintext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "trstctl_session", Value: "top-secret-session"})
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { // #nosec G112 -- local test listener owned and torn down by the test (CWE-400)
+		http.SetCookie(w, &http.Cookie{Name: "trstctl_session", Value: "top-secret-session", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 		_, _ = io.WriteString(w, "ok")
 	})}
 	go func() { _ = sc.ServeHTTPS(srv, ln) }()
@@ -92,7 +92,7 @@ func TestServeHTTPSRefusesTLS12(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })} // #nosec G112 -- local test listener owned and torn down by the test (CWE-400)
 	go func() { _ = sc.ServeHTTPS(srv, ln) }()
 	t.Cleanup(func() { _ = srv.Close() })
 	addr := ln.Addr().String()
@@ -128,7 +128,7 @@ func TestServeHTTPSRefusesTLS12(t *testing.T) {
 
 	// TLS 1.2-max client: must be refused (handshake fails) since the floor is 1.3.
 	only12 := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12},
+		TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12}, // #nosec G402 -- test TLS client speaking to the test's own server (CWE-295)
 	}}
 	if r, err := only12.Get("https://" + addr + "/healthz"); err == nil {
 		_ = r.Body.Close()
@@ -165,7 +165,7 @@ func TestLoopbackProbeClientReachesInternalServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })} // #nosec G112 -- local test listener owned and torn down by the test (CWE-400)
 	go func() { _ = sc.ServeHTTPS(srv, ln) }()
 	t.Cleanup(func() { _ = srv.Close() })
 

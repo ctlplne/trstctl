@@ -144,7 +144,7 @@ func (o *localOps) ReadFile(path string) ([]byte, error) {
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 		return nil, fmt.Errorf("connector: local read %q is not a regular non-symlink file", clean)
 	}
-	return os.ReadFile(clean)
+	return os.ReadFile(clean) // #nosec G304 -- operator-configured local-ops connector path; local file deploy is the feature (CWE-22)
 }
 
 func (o *localOps) WriteFile(path string, data []byte) error {
@@ -177,7 +177,7 @@ func (o *localOps) WriteFile(path string, data []byte) error {
 	if err := os.Rename(tmpName, clean); err != nil {
 		return err
 	}
-	dir, err := os.Open(parent)
+	dir, err := os.Open(parent) // #nosec G304 -- operator-configured local-ops connector path; local file deploy is the feature (CWE-22)
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func (o *localOps) ExecContext(parent context.Context, name string, args []strin
 	if action.PassArgs {
 		commandArgs = append(commandArgs, args...)
 	}
-	cmd := exec.CommandContext(ctx, action.Command, commandArgs...)
+	cmd := exec.CommandContext(ctx, action.Command, commandArgs...) // #nosec G204 -- operator-configured local-ops action command; running it is the feature (CWE-78)
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"}
 	var output limitedBuffer
 	defer output.Destroy()

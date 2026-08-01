@@ -154,7 +154,7 @@ func TestAuditCheckpointProviderBindsRetentionCheckpointAndTenantGenesis(t *test
 	}
 	if retained.BoundarySequence != cp.BoundarySeq ||
 		retained.BoundaryHash != cp.BoundaryHash ||
-		retained.RecordCount != uint64(cp.RecordCount) ||
+		retained.RecordCount != uint64(cp.RecordCount) || // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		retained.IdentityDigest == "" ||
 		retained.IdentityDigest == genesis.IdentityDigest {
 		t.Fatalf("mapped retention checkpoint = %+v", retained)

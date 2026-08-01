@@ -692,7 +692,7 @@ func (a *API) setTransientCookie(w http.ResponseWriter, name, value string) {
 	// SameSite=Lax (not Strict): the OIDC state/nonce cookies must survive the
 	// top-level cross-site redirect back from the identity provider, which Strict
 	// would drop. They are short-lived and unprivileged.
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004)
 		Name: name, Value: value, Path: "/", HttpOnly: true,
 		Secure: a.auth.Secure, SameSite: http.SameSiteLaxMode, MaxAge: 600,
 	})
@@ -703,7 +703,7 @@ func (a *API) setSessionCookie(w http.ResponseWriter, value string) {
 	// cross-site request, which (with the double-submit CSRF token) is the SEC-007
 	// hardening. The post-login redirect is same-site (this server's /), so Strict
 	// does not break the flow.
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004)
 		Name: sessionCookieName, Value: value, Path: "/", HttpOnly: true,
 		Secure: a.auth.Secure, SameSite: http.SameSiteStrictMode, Expires: time.Now().Add(12 * time.Hour),
 	})
@@ -715,14 +715,14 @@ func (a *API) setSessionCookie(w http.ResponseWriter, value string) {
 // required) and a cross-site attacker cannot read it (SameSite=Strict + same-origin
 // script access only). SEC-007.
 func (a *API) setCSRFCookie(w http.ResponseWriter, value string) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004)
 		Name: csrfCookieName, Value: value, Path: "/", HttpOnly: false,
 		Secure: a.auth.Secure, SameSite: http.SameSiteStrictMode, Expires: time.Now().Add(12 * time.Hour),
 	})
 }
 
 func (a *API) clearCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004)
 		Name: name, Value: "", Path: "/", HttpOnly: true,
 		Secure: a.auth.Secure, SameSite: http.SameSiteStrictMode, MaxAge: -1,
 	})

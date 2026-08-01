@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	testAPIKey = "ns1-api-key-do-not-log"
+	testAPIKey = "ns1-api-key-do-not-log" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	testZone   = "example.com"
 )
 

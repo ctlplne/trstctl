@@ -44,7 +44,7 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 		if err != nil {
 			return "", err
 		}
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 		if err != nil {
 			return "", fmt.Errorf("read %s: %w", name, err)
 		}
@@ -667,7 +667,7 @@ func managedKeyFindStatement(block *ast.BlockStmt, match func(ast.Stmt) bool) in
 
 func managedKeyOrdered(indexes ...int) bool {
 	for index, value := range indexes {
-		if value < 0 || index > 0 && value <= indexes[index-1] {
+		if value < 0 || index > 0 && value <= indexes[index-1] { // #nosec G602 -- fixed-shape data inside a developer tool (CWE-118)
 			return false
 		}
 	}

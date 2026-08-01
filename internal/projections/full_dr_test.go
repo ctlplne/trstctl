@@ -366,7 +366,7 @@ func TestFullDRConcurrentMutationRestoresSingleEventCut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteLogThrough: %v", err)
 	}
-	if uint64(written) != cut {
+	if uint64(written) != cut { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		t.Fatalf("event backup wrote %d events, want cut sequence %d", written, cut)
 	}
 	var pgBuf bytes.Buffer

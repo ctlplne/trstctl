@@ -268,7 +268,7 @@ func (s *Store) AppendIdentityTransitionTx(ctx context.Context, tx pgx.Tx, tenan
 		    SET from_state = EXCLUDED.from_state, to_state = EXCLUDED.to_state,
 		        event_type = EXCLUDED.event_type, reason = EXCLUDED.reason,
 		        occurred_at = EXCLUDED.occurred_at`,
-		tenantID, t.IdentityID, int64(t.Seq), t.FromState, t.ToState, t.EventType, t.Reason, t.OccurredAt)
+		tenantID, t.IdentityID, int64(t.Seq), t.FromState, t.ToState, t.EventType, t.Reason, t.OccurredAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -323,7 +323,7 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 		if err := rows.Scan(&seq, &t.FromState, &t.ToState, &t.EventType, &t.Reason, &t.OccurredAt); err != nil {
 			return nil, err
 		}
-		t.Seq = uint64(seq)
+		t.Seq = uint64(seq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 		out = append(out, t)
 	}
 	return out, rows.Err()
@@ -427,7 +427,7 @@ func (s *Store) UpsertTenantTx(ctx context.Context, tx pgx.Tx, t Tenant) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO tenants (tenant_id, name, event_seq) VALUES ($1, $2, $3)
 		 ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name, event_seq = EXCLUDED.event_seq`,
-		t.TenantID, t.Name, int64(t.EventSeq))
+		t.TenantID, t.Name, int64(t.EventSeq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 

@@ -442,7 +442,7 @@ func readManagedKeyJournalBytes(t *testing.T, root string) []byte {
 		if info.IsDir() {
 			return nil
 		}
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if err != nil {
 			return err
 		}

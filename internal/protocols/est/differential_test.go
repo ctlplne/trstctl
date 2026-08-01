@@ -98,13 +98,13 @@ func TestESTDifferentialVsLibest(t *testing.T) {
 	if err := os.Mkdir(outDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(bin, "-g", "-s", host, "-p", port, "-o", outDir) // -g: get cacerts
+	cmd := exec.Command(bin, "-g", "-s", host, "-p", port, "-o", outDir) // #nosec G204 G702 -- test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts)
 	cmd.Env = append(os.Environ(), "EST_OPENSSL_CACERT="+tlsTrustFile)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("libest estclient -g (get cacerts) failed against the EST server: %v\n%s", err, out)
 	}
-	gotB64, err := os.ReadFile(filepath.Join(outDir, "cacert-0-0.pkcs7"))
+	gotB64, err := os.ReadFile(filepath.Join(outDir, "cacert-0-0.pkcs7")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("libest estclient did not write cacert-0-0.pkcs7: %v\n%s", err, out)
 	}
@@ -163,10 +163,10 @@ func opensslPrintCerts(t *testing.T, ossl string, p7DER []byte) []byte {
 	t.Helper()
 	dir := t.TempDir()
 	in := filepath.Join(dir, "in.p7b")
-	if err := os.WriteFile(in, p7DER, 0o600); err != nil {
+	if err := os.WriteFile(in, p7DER, 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
-	out, err := exec.Command(ossl, "pkcs7", "-inform", "DER", "-in", in, "-print_certs").CombinedOutput()
+	out, err := exec.Command(ossl, "pkcs7", "-inform", "DER", "-in", in, "-print_certs").CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("openssl pkcs7 -print_certs rejected our EST PKCS#7 (not RFC 7030 certs-only): %v\n%s", err, out)
 	}
@@ -193,7 +193,7 @@ func opensslVerifyChain(t *testing.T, ossl string, leafPEM, caPEM []byte) {
 		args = append(args, "-partial_chain")
 	}
 	args = append(args, leafFile)
-	out, err := exec.Command(ossl, args...).CombinedOutput()
+	out, err := exec.Command(ossl, args...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("openssl verify rejected the EST-enrolled leaf against the CA: %v\n%s", err, out)
 	}

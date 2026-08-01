@@ -26,7 +26,7 @@ func repoRoot(t *testing.T) string {
 func buildSigner(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "trstctl-signer")
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/trstctl-signer")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/trstctl-signer") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = repoRoot(t)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build trstctl-signer: %v\n%s", err, out)

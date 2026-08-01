@@ -49,7 +49,7 @@ func TestParseJWKSetRejectsOversizedModulus(t *testing.T) {
 // TestParseJWKSetRejectsTinyModulus: a sub-2048-bit modulus is too weak to trust
 // and is rejected.
 func TestParseJWKSetRejectsTinyModulus(t *testing.T) {
-	small, err := rsa.GenerateKey(rand.Reader, 1024)
+	small, err := rsa.GenerateKey(rand.Reader, 1024) // #nosec G403 -- deliberately undersized key; the test proves the verifier refuses it (CWE-326)
 	if err != nil {
 		t.Fatal(err)
 	}

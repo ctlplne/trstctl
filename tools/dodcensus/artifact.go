@@ -82,7 +82,7 @@ func inspectOCIArtifact(repo string, profile BuildProfile) checkEvidence {
 		evidence.Detail = "release workflow path: " + err.Error()
 		return evidence
 	}
-	workflowBytes, err := os.ReadFile(workflowPath)
+	workflowBytes, err := os.ReadFile(workflowPath) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		evidence.Detail = "read release workflow: " + err.Error()
 		return evidence
@@ -164,7 +164,7 @@ func inspectOCIArtifact(repo string, profile BuildProfile) checkEvidence {
 		evidence.Detail = "Dockerfile path: " + err.Error()
 		return evidence
 	}
-	dockerfile, err := os.ReadFile(dockerfilePath)
+	dockerfile, err := os.ReadFile(dockerfilePath) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		evidence.Detail = "read Dockerfile: " + err.Error()
 		return evidence

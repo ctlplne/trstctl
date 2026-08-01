@@ -107,11 +107,11 @@ func TestFeatureServedFacetCitesExecutedAcceptanceTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find repo root: %v", err)
 	}
-	workflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	workflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read CI workflow: %v", err)
 	}
-	makefile, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	makefile, err := os.ReadFile(filepath.Join(root, "Makefile")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read Makefile: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestFeatureServedFacetCitesExecutedAcceptanceTest(t *testing.T) {
 			if !strings.HasSuffix(ref, "_test.go") || strings.HasPrefix(ref, "internal/featureparity/") {
 				continue
 			}
-			source, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(ref)))
+			source, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(ref))) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if err != nil {
 				continue
 			}

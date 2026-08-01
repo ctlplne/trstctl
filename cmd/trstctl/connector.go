@@ -185,7 +185,7 @@ func connectorCLIRequest(ctx context.Context, stdout io.Writer, cfg connectorCLI
 		}
 		rdr = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, cfg.baseURL+path, rdr)
+	req, err := http.NewRequestWithContext(ctx, method, cfg.baseURL+path, rdr) // #nosec G704 -- CLI calling the operator-specified connector base URL; their own target (CWE-918)
 	if err != nil {
 		return err
 	}
@@ -197,7 +197,7 @@ func connectorCLIRequest(ctx context.Context, stdout io.Writer, cfg connectorCLI
 	if mutation {
 		req.Header.Set("Idempotency-Key", "cli-"+time.Now().UTC().Format("20060102T150405Z")+"-"+randomHex8())
 	}
-	resp, err := connectorHTTPClient.Do(req)
+	resp, err := connectorHTTPClient.Do(req) // #nosec G704 -- CLI calling the operator-specified connector base URL; their own target (CWE-918)
 	if err != nil {
 		return err
 	}

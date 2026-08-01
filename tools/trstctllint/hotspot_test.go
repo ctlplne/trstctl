@@ -202,7 +202,7 @@ func isControlPlaneStartupPath(rel string) bool {
 
 func isGeneratedGo(t *testing.T, path string) bool {
 	t.Helper()
-	src, err := os.ReadFile(path)
+	src, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
@@ -292,7 +292,7 @@ func isGeneratedServedSurface(t *testing.T, path, rel string) bool {
 
 func countFileLines(t *testing.T, path string) int {
 	t.Helper()
-	src, err := os.ReadFile(path)
+	src, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}

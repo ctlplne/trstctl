@@ -150,19 +150,19 @@ func TestValidateSecretIntegrationsFailsClosed(t *testing.T) {
 		},
 		{
 			name: "unbound Kubernetes role", on: true, want: "role_bindings",
-			cfg: SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{{TenantID: tenant, ID: "k8s", Type: "kubernetes", Endpoint: "https://example.test", Namespace: "default", BearerTokenRef: "secret://k8s-token", AllowedRoles: []string{"read"}}}},
+			cfg: SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{{TenantID: tenant, ID: "k8s", Type: "kubernetes", Endpoint: "https://example.test", Namespace: "default", BearerTokenRef: "secret://k8s-token", AllowedRoles: []string{"read"}}}}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		{
 			name: "unsafe private endpoint policy", on: true, want: "requires private_egress_cidrs",
-			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "gcp", Type: "gcp-secret-manager", Endpoint: "http://127.0.0.1:8080", Project: "p", TokenRef: "secret://gcp-token", AllowPrivate: true}}},
+			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "gcp", Type: "gcp-secret-manager", Endpoint: "http://127.0.0.1:8080", Project: "p", TokenRef: "secret://gcp-token", AllowPrivate: true}}}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		{
 			name: "Terraform invalid category", on: true, want: "variable_category must be terraform or env",
-			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "tfc", Type: "terraform-cloud-opentofu", Endpoint: "https://app.terraform.io", WorkspaceID: "ws-production", VariableCategory: "secret", TokenRef: "secret://tfc-token"}}},
+			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "tfc", Type: "terraform-cloud-opentofu", Endpoint: "https://app.terraform.io", WorkspaceID: "ws-production", VariableCategory: "secret", TokenRef: "secret://tfc-token"}}}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		{
 			name: "Terraform environment HCL", on: true, want: "hcl=true is valid only for terraform variables",
-			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "tfc", Type: "terraform-cloud-opentofu", Endpoint: "https://app.terraform.io", WorkspaceID: "ws-production", VariableCategory: "env", HCL: true, TokenRef: "secret://tfc-token"}}},
+			cfg: SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{{TenantID: tenant, ID: "tfc", Type: "terraform-cloud-opentofu", Endpoint: "https://app.terraform.io", WorkspaceID: "ws-production", VariableCategory: "env", HCL: true, TokenRef: "secret://tfc-token"}}}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		{
 			name: "Vault traversal path", on: true, want: "path_prefix must not contain dot path components",

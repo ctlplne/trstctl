@@ -233,7 +233,7 @@ func TestFuzz006SmokeAndOSSFuzzStayReal(t *testing.T) {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		b, rerr := os.ReadFile(path)
+		b, rerr := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if rerr != nil {
 			return nil
 		}

@@ -60,7 +60,7 @@ func TestW1CredentialResponseReadersStayWipeable(t *testing.T) {
 		"run_connectors.go",
 		"secret_integrations.go",
 	} {
-		source, err := os.ReadFile(path)
+		source, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}

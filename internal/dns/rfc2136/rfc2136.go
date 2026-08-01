@@ -212,7 +212,7 @@ func (e udpExchange) Exchange(ctx context.Context, msg []byte) ([]byte, error) {
 func randomID() uint16 {
 	b, err := crypto.RandomBytes(2)
 	if err != nil {
-		return uint16(time.Now().UnixNano())
+		return uint16(time.Now().UnixNano()) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 	}
 	return binary.BigEndian.Uint16(b)
 }
@@ -239,7 +239,7 @@ func appendTXTRecord(msg []byte, name string, class uint16, ttl uint32, value st
 	out = appendUint16(out, dnsTypeTXT)
 	out = appendUint16(out, class)
 	out = appendUint32(out, ttl)
-	out = appendUint16(out, uint16(len(rdata)))
+	out = appendUint16(out, uint16(len(rdata))) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 	out = append(out, rdata...)
 	return out, nil
 }
@@ -256,7 +256,7 @@ func appendTSIG(msg []byte, id uint16, keyName string, secret []byte, now time.T
 	out = appendUint16(out, dnsTypeTSIG)
 	out = appendUint16(out, dnsClassANY)
 	out = appendUint32(out, 0)
-	out = appendUint16(out, uint16(len(rdata)))
+	out = appendUint16(out, uint16(len(rdata))) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 	out = append(out, rdata...)
 	return out, nil
 }
@@ -276,7 +276,7 @@ func tsigRData(msg []byte, id uint16, keyName string, secret []byte, now time.Ti
 	mac := crypto.HMACSHA256(secret, signed)
 
 	var rdata []byte
-	if rdata, err = appendTSIGVars(rdata, now, uint16(len(mac))); err != nil {
+	if rdata, err = appendTSIGVars(rdata, now, uint16(len(mac))); err != nil { // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 		return nil, err
 	}
 	rdata = append(rdata, mac...)
@@ -291,8 +291,8 @@ func appendTSIGVars(out []byte, now time.Time, macSize uint16) ([]byte, error) {
 	if out, err = appendName(out, tsigAlg); err != nil {
 		return nil, err
 	}
-	secs := uint64(now.Unix())
-	out = append(out, byte(secs>>40), byte(secs>>32), byte(secs>>24), byte(secs>>16), byte(secs>>8), byte(secs))
+	secs := uint64(now.Unix())                                                                                   // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
+	out = append(out, byte(secs>>40), byte(secs>>32), byte(secs>>24), byte(secs>>16), byte(secs>>8), byte(secs)) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 	out = appendUint16(out, tsigFudge)
 	out = appendUint16(out, macSize)
 	return out, nil
@@ -307,7 +307,7 @@ func appendName(out []byte, name string) ([]byte, error) {
 		if label == "" || len(label) > 63 {
 			return nil, fmt.Errorf("rfc2136: invalid DNS label in %q", name)
 		}
-		out = append(out, byte(len(label)))
+		out = append(out, byte(len(label))) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 		out = append(out, label...)
 	}
 	return append(out, 0), nil
@@ -332,11 +332,11 @@ func txtRData(value string) ([]byte, error) {
 }
 
 func appendUint16(out []byte, v uint16) []byte {
-	return append(out, byte(v>>8), byte(v))
+	return append(out, byte(v>>8), byte(v)) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 }
 
 func appendUint32(out []byte, v uint32) []byte {
-	return append(out, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	return append(out, byte(v>>24), byte(v>>16), byte(v>>8), byte(v)) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 }
 
 func setARCount(msg []byte, count uint16) []byte {

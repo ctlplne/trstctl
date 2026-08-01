@@ -42,7 +42,7 @@ func TestCMPOpenSSLClientP10CREnrollment(t *testing.T) {
 	certOut := filepath.Join(dir, "openssl-cmp-issued.pem")
 	logOut := filepath.Join(dir, "openssl-cmp.log")
 
-	cmd := exec.Command(ossl, "cmp",
+	cmd := exec.Command(ossl, "cmp", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-config", "",
 		"-cmd", "p10cr",
 		"-server", ts.URL,
@@ -74,7 +74,7 @@ func TestCMPOpenSSLClientP10CREnrollment(t *testing.T) {
 			t.Fatalf("openssl cmp wrote empty %s\n%s", p, out)
 		}
 	}
-	issuedPEM, err := os.ReadFile(certOut)
+	issuedPEM, err := os.ReadFile(certOut) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func opensslCMPRequest(t *testing.T, ossl string) (dir string, reqDER []byte) {
 	csrFile := writePEMFile(t, dir, "client.csr", "CERTIFICATE REQUEST", csrDER)
 	reqOut := filepath.Join(dir, "openssl-cmp-p10cr-request.der")
 	logOut := filepath.Join(dir, "openssl-cmp-reqout.log")
-	cmd := exec.Command(ossl, "cmp",
+	cmd := exec.Command(ossl, "cmp", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-config", "",
 		"-cmd", "p10cr",
 		"-csr", csrFile,
@@ -127,7 +127,7 @@ func opensslCMPRequest(t *testing.T, ossl string) (dir string, reqDER []byte) {
 	if err != nil {
 		t.Fatalf("openssl cmp reqout_only failed: %v\n%s", err, out)
 	}
-	reqDER, err = os.ReadFile(reqOut)
+	reqDER, err = os.ReadFile(reqOut) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read openssl cmp request: %v\n%s", err, out)
 	}
@@ -162,17 +162,17 @@ func archiveConformanceTranscripts(t *testing.T, prefix string, paths ...string)
 	if dstDir == "" {
 		return
 	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil { // #nosec G301 G703 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Fatalf("create transcript archive dir: %v", err)
 	}
 	for _, src := range paths {
-		in, err := os.Open(src)
+		in, err := os.Open(src) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("open transcript %s: %v", src, err)
 		}
 		defer func() { _ = in.Close() }()
 		dst := filepath.Join(dstDir, prefix+"-"+filepath.Base(src))
-		out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 G703 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("create archived transcript %s: %v", dst, err)
 		}
@@ -194,7 +194,7 @@ func TestArchiveConformanceTranscriptsWritesAllFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	archiveConformanceTranscripts(t, "unit", src)
-	got, err := os.ReadFile(filepath.Join(dir, "unit-request.der"))
+	got, err := os.ReadFile(filepath.Join(dir, "unit-request.der")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

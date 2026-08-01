@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	testToken = "cf-token-do-not-log"
+	testToken = "cf-token-do-not-log" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	zoneID    = "0123456789abcdef0123456789abcdef"
 )
 

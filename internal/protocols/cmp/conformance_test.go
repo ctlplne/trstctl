@@ -113,7 +113,7 @@ func TestCMPMessageParsesWithOpenSSL(t *testing.T) {
 	if err := os.WriteFile(in, reqDER, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out, err := exec.Command(ossl, "asn1parse", "-inform", "DER", "-in", in).CombinedOutput()
+	out, err := exec.Command(ossl, "asn1parse", "-inform", "DER", "-in", in).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("openssl asn1parse rejected our PKIMessage (malformed DER): %v\n%s", err, out)
 	}

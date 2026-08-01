@@ -40,8 +40,8 @@ func credential(t *testing.T) (certPEM, keyPEM []byte) {
 	if err := id.Save(filepath.Join(dir, "k.pem"), filepath.Join(dir, "c.pem")); err != nil {
 		t.Fatal(err)
 	}
-	certPEM, _ = os.ReadFile(filepath.Join(dir, "c.pem"))
-	keyPEM, _ = os.ReadFile(filepath.Join(dir, "k.pem"))
+	certPEM, _ = os.ReadFile(filepath.Join(dir, "c.pem")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
+	keyPEM, _ = os.ReadFile(filepath.Join(dir, "k.pem"))  // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	return certPEM, keyPEM
 }
 

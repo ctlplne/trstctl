@@ -93,7 +93,7 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 	// InsecureSkipVerify: we inventory whatever certificate is presented, valid or
 	// not — this connection is never used to send or trust data.
 	tlsConn := tls.Client(conn, &tls.Config{
-		InsecureSkipVerify: true, // discovery captures the served cert; it never trusts the connection
+		InsecureSkipVerify: true, // #nosec G402 -- discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295)
 		ServerName:         host,
 		MinVersion:         tls.VersionTLS10,
 		NextProtos:         cfg.alpn,

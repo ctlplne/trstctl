@@ -45,7 +45,7 @@ func TestACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 	recordsPath := filepath.Join(dir, "certbot-dns-records.tsv")
 	hookLogPath := filepath.Join(dir, "certbot-hooks.log")
 	hooksDir := filepath.Join(dir, "hooks")
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	authHook := filepath.Join(hooksDir, "auth.sh")
@@ -66,7 +66,7 @@ func TestACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 	workDir := filepath.Join(dir, "work")
 	logsDir := filepath.Join(dir, "logs")
 	for _, p := range []string{configDir, workDir, logsDir} {
-		if err := os.MkdirAll(p, 0o755); err != nil {
+		if err := os.MkdirAll(p, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 	}
@@ -175,7 +175,7 @@ func (r certbotDNSResolver) LookupTXT(ctx context.Context, name string) ([]strin
 }
 
 func readCertbotDNSRecords(path, wantName string) ([]string, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -222,7 +222,7 @@ printf 'cleanup identifier=%s auth_output=%s\n' "${CERTBOT_IDENTIFIER}" "${CERTB
 
 func writeCertbotHook(t *testing.T, path, body string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write certbot hook %s: %v", path, err)
 	}
 }
@@ -237,7 +237,7 @@ func writeTLSCertPEM(t *testing.T, path string, ts *httptest.Server) {
 
 func runExternalClient(t *testing.T, bin string, args, env []string, logPath string) {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
+	cmd := exec.Command(bin, args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if writeErr := os.WriteFile(logPath, out, 0o600); writeErr != nil {
@@ -250,7 +250,7 @@ func runExternalClient(t *testing.T, bin string, args, env []string, logPath str
 
 func assertCertbotIssuedDomain(t *testing.T, certPath, domain string) {
 	t.Helper()
-	pemBytes, err := os.ReadFile(certPath)
+	pemBytes, err := os.ReadFile(certPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read certbot cert %s: %v", certPath, err)
 	}
@@ -272,7 +272,7 @@ func archiveConformanceTranscripts(t *testing.T, prefix string, paths ...string)
 	if dstDir == "" {
 		return
 	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil { // #nosec G301 G703 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Fatalf("create transcript archive dir: %v", err)
 	}
 	for _, src := range paths {
@@ -288,7 +288,7 @@ func archiveExistingConformanceTranscripts(t *testing.T, prefix string, paths ..
 	if dstDir == "" {
 		return
 	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil { // #nosec G301 G703 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Logf("create partial transcript archive dir: %v", err)
 		return
 	}
@@ -300,12 +300,12 @@ func archiveExistingConformanceTranscripts(t *testing.T, prefix string, paths ..
 }
 
 func copyConformanceTranscript(dstDir, prefix, src string) error {
-	in, err := os.Open(src)
+	in, err := os.Open(src) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		return err
 	}
 	dst := filepath.Join(dstDir, prefix+"-"+filepath.Base(src))
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 G703 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		_ = in.Close()
 		return err
@@ -330,7 +330,7 @@ func TestArchiveACMEConformanceTranscriptsWritesPublicFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	archiveConformanceTranscripts(t, "unit", src)
-	got, err := os.ReadFile(filepath.Join(dir, "unit-certbot.log"))
+	got, err := os.ReadFile(filepath.Join(dir, "unit-certbot.log")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +349,7 @@ func TestArchiveExistingACMEConformanceTranscriptsKeepsPartialLogs(t *testing.T)
 
 	archiveExistingConformanceTranscripts(t, "unit", src, filepath.Join(t.TempDir(), "missing.log"))
 
-	got, err := os.ReadFile(filepath.Join(dir, "unit-certbot-issue.log"))
+	got, err := os.ReadFile(filepath.Join(dir, "unit-certbot-issue.log")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

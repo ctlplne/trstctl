@@ -86,7 +86,7 @@ func TestConnectorRegistryFromConfigBuildsTargetScopedLocalFactory(t *testing.T)
 		t.Fatalf("Deploy: %v", err)
 	}
 	for path, want := range map[string][]byte{certPath: cert, keyPath: key} {
-		got, err := os.ReadFile(path)
+		got, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}

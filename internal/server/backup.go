@@ -42,7 +42,7 @@ func backupIntegrityKey(cfg *config.Config) ([]byte, error) {
 	if path == "" {
 		return nil, nil
 	}
-	pem, err := os.ReadFile(path)
+	pem, err := os.ReadFile(path) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// No persisted audit key yet (e.g. a never-started fresh deployment):
@@ -91,7 +91,7 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 		if err != nil {
 			return fmt.Errorf("capture event backup cut: %w", err)
 		}
-		f, err := os.Create(path)
+		f, err := os.Create(path) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 		if err != nil {
 			return fmt.Errorf("create backup file: %w", err)
 		}
@@ -104,7 +104,7 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 		if err != nil {
 			return err
 		}
-		if uint64(n) != cut {
+		if uint64(n) != cut { // #nosec G115 -- record counts bounded by the event log (CWE-190)
 			return fmt.Errorf(
 				"event backup contains %d live records through cut %d; logical audit retention creates no source gaps, so refusing legacy or externally damaged history",
 				n, cut,
@@ -246,7 +246,7 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		}
 
 		eventsPath := filepath.Join(dir, "events.jsonl")
-		eventsFile, err := os.Create(eventsPath)
+		eventsFile, err := os.Create(eventsPath) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 		if err != nil {
 			return fmt.Errorf("create event log backup: %w", err)
 		}
@@ -255,7 +255,7 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 			_ = eventsFile.Close()
 			return err
 		}
-		if uint64(eventRecords) != eventCut {
+		if uint64(eventRecords) != eventCut { // #nosec G115 -- record counts bounded by the event log (CWE-190)
 			_ = eventsFile.Close()
 			return fmt.Errorf(
 				"full backup event history contains %d live records through cut %d; refusing legacy or externally damaged source gaps",
@@ -281,7 +281,7 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	artifacts := []backup.Artifact{eventArtifact}
 
 	pgPath := filepath.Join(dir, "postgres-state.jsonl")
-	pgFile, err := os.OpenFile(pgPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	pgFile, err := os.OpenFile(pgPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return backup.FullManifest{}, fmt.Errorf("create postgres state backup: %w", err)
 	}
@@ -364,7 +364,7 @@ func restoreEventLog(ctx context.Context, cfg *config.Config, path string, resum
 	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
 		return 0, errors.New("restore requires an external Postgres (set TRSTCTL_POSTGRES_MODE=external and TRSTCTL_POSTGRES_DSN)")
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return 0, fmt.Errorf("open backup file: %w", err)
 	}
@@ -463,11 +463,11 @@ func RunFullRestore(ctx context.Context, cfg *config.Config, dir string) (backup
 	if err := verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl")); err != nil {
 		return backup.PostgresStateSummary{}, err
 	}
-	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl"))
+	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return backup.PostgresStateSummary{}, fmt.Errorf("open event log for full-restore preflight: %w", err)
 	}
-	postgresFile, err := os.Open(filepath.Join(dir, "postgres-state.jsonl"))
+	postgresFile, err := os.Open(filepath.Join(dir, "postgres-state.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		_ = eventFile.Close()
 		return backup.PostgresStateSummary{}, fmt.Errorf("open postgres state for full-restore preflight: %w", err)
@@ -509,7 +509,7 @@ func RunFullRestore(ctx context.Context, cfg *config.Config, dir string) (backup
 		return backup.PostgresStateSummary{}, fmt.Errorf("open store for postgres state restore: %w", err)
 	}
 	defer st.Close()
-	f, err := os.Open(filepath.Join(dir, "postgres-state.jsonl"))
+	f, err := os.Open(filepath.Join(dir, "postgres-state.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return backup.PostgresStateSummary{}, fmt.Errorf("open postgres state backup: %w", err)
 	}

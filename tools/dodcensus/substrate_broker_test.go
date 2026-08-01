@@ -150,16 +150,16 @@ func TestBrokerDynamicFileRejectsSymlinkedAndWritablePathComponents(t *testing.T
 		t.Fatal("dynamic input beneath a symlinked directory passed")
 	}
 
-	if err := os.Chmod(filepath.Dir(hostFile), 0o722); err != nil {
+	if err := os.Chmod(filepath.Dir(hostFile), 0o722); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE", hostFile); err == nil {
 		t.Fatal("dynamic input beneath a group/world-writable directory passed")
 	}
-	if err := os.Chmod(filepath.Dir(hostFile), 0o700); err != nil {
+	if err := os.Chmod(filepath.Dir(hostFile), 0o700); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if err := os.Chmod(receiptDir, 0o755); err != nil {
+	if err := os.Chmod(receiptDir, 0o755); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE", hostFile); err == nil {
@@ -274,7 +274,7 @@ func writeBrokerTestFile(t *testing.T, root, name string, mode os.FileMode, body
 func privateBrokerTestDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	return dir

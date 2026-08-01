@@ -132,7 +132,7 @@ func runSecretScanPreCommitInstall(ctx context.Context, args []string, stdout, s
 	}
 	hookCommand := hookScanCommand(*command, root, *gitleaksBin)
 	script := "#!/bin/sh\nset -eu\nexec " + hookCommand + "\n"
-	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil { // #nosec G306 -- a git hook must be executable; 0755 is the working minimum (CWE-276)
 		_, _ = fmt.Fprintf(stderr, "error: write pre-commit hook: %v\n", err)
 		return 1
 	}

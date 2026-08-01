@@ -34,7 +34,7 @@ const mutatingPath = "/api/v1/agents/enrollment-tokens"
 func TestSessionMutationRejectedWithoutCSRFToken(t *testing.T) {
 	h, tok := sessionCookieFor(t)
 	req := httptest.NewRequest(http.MethodPost, mutatingPath, nil)
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	req.Header.Set("Idempotency-Key", "k-1")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -49,8 +49,8 @@ func TestSessionMutationRejectedWithoutCSRFToken(t *testing.T) {
 func TestSessionMutationRejectedWithMismatchedCSRFToken(t *testing.T) {
 	h, tok := sessionCookieFor(t)
 	req := httptest.NewRequest(http.MethodPost, mutatingPath, nil)
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok})
-	req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: "the-real-token"})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok})    // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: "the-real-token"}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	req.Header.Set("X-CSRF-Token", "a-different-token")
 	req.Header.Set("Idempotency-Key", "k-1")
 	rec := httptest.NewRecorder()
@@ -67,8 +67,8 @@ func TestSessionMutationRejectedWithMismatchedCSRFToken(t *testing.T) {
 func TestSessionMutationPassesCSRFWithMatchingToken(t *testing.T) {
 	h, tok := sessionCookieFor(t)
 	req := httptest.NewRequest(http.MethodPost, mutatingPath, nil)
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok})
-	req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: "matching-token"})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok})    // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: "matching-token"}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	req.Header.Set("X-CSRF-Token", "matching-token")
 	req.Header.Set("Idempotency-Key", "k-1")
 	rec := httptest.NewRecorder()

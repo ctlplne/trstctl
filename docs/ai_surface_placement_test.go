@@ -24,7 +24,7 @@ func TestAISurfaceCorePackagesDoNotImportEE(t *testing.T) {
 					return nil
 				}
 			}
-			body, err := os.ReadFile(path)
+			body, err := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 			if err != nil {
 				return err
 			}

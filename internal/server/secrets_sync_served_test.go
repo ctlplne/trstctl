@@ -383,7 +383,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 		"kind": "cloud_secret",
 		"config": map[string]any{
 			"providers": []map[string]any{
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "aws-secrets-manager",
 					"region":                 "us-east-1",
 					"endpoint":               awsDiscovery.URL,
@@ -394,7 +394,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"tag_key":                "type",
 					"tag_value":              "certificate",
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "gcp-secret-manager",
 					"project":                "trstctl-prod",
 					"endpoint":               gcpDiscovery.URL,
@@ -404,7 +404,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"label_key":              "type",
 					"label_value":            "certificate",
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "azure-key-vault",
 					"vault_url":              azureDiscovery.URL,
 					"allow_private_endpoint": true,
@@ -413,7 +413,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"tag_key":                "type",
 					"tag_value":              "certificate",
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "hashicorp-vault",
 					"vault_url":              vaultDiscovery.URL,
 					"allow_private_endpoint": true,
@@ -898,7 +898,7 @@ func (f *gcpSecretManagerSyncFixture) handle(w http.ResponseWriter, r *http.Requ
 	f.values[parts[2]+"/"+key] = string(decoded)
 	f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"name":"projects/` + parts[2] + `/secrets/` + key + `/versions/1"}`))
+	_, _ = w.Write([]byte(`{"name":"projects/` + parts[2] + `/secrets/` + key + `/versions/1"}`)) // #nosec G705 -- test writes fixture bytes to its own recorder/local server (CWE-79)
 }
 
 func (f *gcpSecretManagerSyncFixture) value(project, name string) string {
@@ -969,7 +969,7 @@ func (f *azureKeyVaultSyncFixture) handle(w http.ResponseWriter, r *http.Request
 	f.values[parts[1]] = string(decoded)
 	f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"id":"https://vault.example/secrets/` + parts[1] + `"}`))
+	_, _ = w.Write([]byte(`{"id":"https://vault.example/secrets/` + parts[1] + `"}`)) // #nosec G705 -- test writes fixture bytes to its own recorder/local server (CWE-79)
 }
 
 func (f *azureKeyVaultSyncFixture) value(name string) string {
@@ -1079,7 +1079,7 @@ func (f *gitLabCISyncFixture) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		w.WriteHeader(http.StatusCreated)
 	}
-	_, _ = w.Write([]byte(`{"key":"` + key + `"}`))
+	_, _ = w.Write([]byte(`{"key":"` + key + `"}`)) // #nosec G705 -- test writes fixture bytes to its own recorder/local server (CWE-79)
 }
 
 func (f *gitLabCISyncFixture) value(project, key string) string {

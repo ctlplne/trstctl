@@ -51,14 +51,14 @@ func startMachineSessionPostgres(t *testing.T) (string, func()) {
 	runtime := filepath.Join(dir, "runtime")
 	data := filepath.Join(dir, "data")
 	for _, path := range []string{bin, runtime, data} {
-		if err := os.MkdirAll(path, 0o755); err != nil {
+		if err := os.MkdirAll(path, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 	}
 	db := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
 		Username("postgres").Password("postgres").Database("postgres").
-		Port(uint32(port)).RuntimePath(runtime).DataPath(data).BinariesPath(bin))
+		Port(uint32(port)).RuntimePath(runtime).DataPath(data).BinariesPath(bin)) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 	if err := db.Start(); err != nil {
 		_ = os.RemoveAll(dir)
 		fmt.Fprintln(os.Stderr, "embedded postgres start:", err)

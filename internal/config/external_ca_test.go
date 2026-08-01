@@ -8,7 +8,7 @@ import (
 )
 
 func TestValidateExternalCAsAcceptsEveryCompiledProvider(t *testing.T) {
-	const secretRef = "file:/var/lib/trstctl/secrets/upstream"
+	const secretRef = "file:/var/lib/trstctl/secrets/upstream" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	mtls := ExternalCANetworkConfig{
 		RootCAFile: "/var/lib/trstctl/ca.pem", ClientCertFile: "/var/lib/trstctl/client.pem", ClientKeyFile: "/var/lib/trstctl/client-key.pem",
 	}
@@ -40,13 +40,13 @@ func TestValidateExternalCAsFailsClosed(t *testing.T) {
 		want string
 	}{
 		{"unknown", ExternalCAConfig{ID: "x", Type: "made-up", Name: "x"}, "not a built-in"},
-		{"duplicate", ExternalCAConfig{ID: "same", Type: "digicert", Name: "d", Endpoint: "https://ca.example", APIKeyRef: "file:/safe/key"}, "duplicated"},
+		{"duplicate", ExternalCAConfig{ID: "same", Type: "digicert", Name: "d", Endpoint: "https://ca.example", APIKeyRef: "file:/safe/key"}, "duplicated"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		{"inline-secret", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "https://ca.example", APIKeyRef: "plaintext"}, "file:/absolute/path"},
-		{"plain-http", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "http://ca.example", APIKeyRef: "file:/safe/key"}, "must use https"},
-		{"non-loopback-insecure-opt-in", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "http://10.0.0.8", APIKeyRef: "file:/safe/key", Network: ExternalCANetworkConfig{AllowInsecureHTTP: true}}, "loopback"},
-		{"unused-insecure-opt-in", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "https://ca.example", APIKeyRef: "file:/safe/key", Network: ExternalCANetworkConfig{AllowInsecureHTTP: true}}, "requires an HTTP loopback endpoint"},
+		{"plain-http", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "http://ca.example", APIKeyRef: "file:/safe/key"}, "must use https"},                                                                                             // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		{"non-loopback-insecure-opt-in", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "http://10.0.0.8", APIKeyRef: "file:/safe/key", Network: ExternalCANetworkConfig{AllowInsecureHTTP: true}}, "loopback"},                        // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		{"unused-insecure-opt-in", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "https://ca.example", APIKeyRef: "file:/safe/key", Network: ExternalCANetworkConfig{AllowInsecureHTTP: true}}, "requires an HTTP loopback endpoint"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		{"entrust-without-mtls", ExternalCAConfig{ID: "e", Type: "entrust", Name: "e", Endpoint: "http://ca.example", CAID: "ca", Network: ExternalCANetworkConfig{AllowInsecureHTTP: true}}, "requires a network mTLS identity"},
-		{"unbounded-private", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "https://10.0.0.4", APIKeyRef: "file:/safe/key", Network: ExternalCANetworkConfig{AllowPrivateEndpoint: true}}, "requires private_egress_cidrs"},
+		{"unbounded-private", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "https://10.0.0.4", APIKeyRef: "file:/safe/key", Network: ExternalCANetworkConfig{AllowPrivateEndpoint: true}}, "requires private_egress_cidrs"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		{"partial-mtls", ExternalCAConfig{ID: "e", Type: "entrust", Name: "e", Endpoint: "https://ca.example", CAID: "ca", Network: ExternalCANetworkConfig{ClientCertFile: "/safe/client.pem"}}, "must be set together"},
 	}
 	for _, tc := range tests {
@@ -64,7 +64,7 @@ func TestValidateExternalCAsFailsClosed(t *testing.T) {
 }
 
 func TestValidateExternalCAsAllowsExplicitLoopbackHTTPEmulator(t *testing.T) {
-	err := ValidateExternalCAs([]ExternalCAConfig{{
+	err := ValidateExternalCAs([]ExternalCAConfig{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		ID: "d", Type: "digicert", Name: "d", Endpoint: "http://127.0.0.1:18080", APIKeyRef: "file:/safe/key",
 		Network: ExternalCANetworkConfig{AllowInsecureHTTP: true},
 	}})

@@ -58,7 +58,7 @@ func TestProductionIdempotencyConstructorsAttachTenantResultProtector(t *testing
 
 func assertSourceContains(t *testing.T, path, anchor string) {
 	t.Helper()
-	source, err := os.ReadFile(path)
+	source, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}

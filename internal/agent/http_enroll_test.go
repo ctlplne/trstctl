@@ -145,7 +145,7 @@ func newHTTPSEnrollServer(t *testing.T, handler http.Handler) (string, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: handler}
+	srv := &http.Server{Handler: handler} // #nosec G112 -- local test listener owned and torn down by the test (CWE-400)
 	errc := make(chan error, 1)
 	go func() {
 		errc <- cert.ServeHTTPS(srv, ln)

@@ -24,7 +24,7 @@ func prepareManagedKeySignerConfig(cfg config.ManagedKeys) (string, func(), erro
 		return "", func() {}, err
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- 0700 on a directory: the execute bit is required to traverse it (CWE-276)
 		cleanup()
 		return "", func() {}, err
 	}

@@ -152,7 +152,7 @@ func (a *AgentIdentity) Save(keyPath, certPath string) error {
 	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return fmt.Errorf("mtls: write key: %w", err)
 	}
-	if err := os.WriteFile(certPath, a.chainPEM, 0o644); err != nil {
+	if err := os.WriteFile(certPath, a.chainPEM, 0o644); err != nil { // #nosec G306 -- certificate chain PEM is public material; the key is written 0600 separately (CWE-276)
 		return fmt.Errorf("mtls: write certificate: %w", err)
 	}
 	return nil
@@ -161,7 +161,7 @@ func (a *AgentIdentity) Save(keyPath, certPath string) error {
 // LoadAgentIdentity reloads an identity persisted by Save. It is how an agent
 // resumes after a restart without re-bootstrapping.
 func LoadAgentIdentity(commonName, keyPath, certPath string) (*AgentIdentity, error) {
-	keyPEM, err := os.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath) // #nosec G304 -- operator-configured certificate/key path from deployment config (CWE-22)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func LoadAgentIdentity(commonName, keyPath, certPath string) (*AgentIdentity, er
 	if !ok {
 		return nil, errors.New("mtls: stored key is not an ECDSA key")
 	}
-	chainPEM, err := os.ReadFile(certPath)
+	chainPEM, err := os.ReadFile(certPath) // #nosec G304 -- operator-configured certificate/key path from deployment config (CWE-22)
 	if err != nil {
 		wipeAgentKey(key)
 		return nil, err

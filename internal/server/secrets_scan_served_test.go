@@ -33,7 +33,7 @@ func TestServedGitleaksScanDetectsPlantedSecret(t *testing.T) {
 	t.Setenv("TRSTCTL_GITLEAKS_BIN", bin)
 
 	repo := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repo, "app.env"), []byte("SLACK_TOKEN="+sec07SlackBotToken+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repo, "app.env"), []byte("SLACK_TOKEN="+sec07SlackBotToken+"\n"), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write planted secret fixture: %v", err)
 	}
 
@@ -122,7 +122,7 @@ entropy = 3.5
 			Mode:          secretscan.ScanModeGitHistory,
 			CustomRules:   true,
 			Capabilities:  secretscan.ScanCapabilities(secretscan.ScanModeGitHistory, true),
-			Findings: []secretscan.Finding{{
+			Findings: []secretscan.Finding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				Scanner:       "gitleaks",
 				RuleID:        "trstctl-custom-token",
 				File:          filepath.Join(repo, "old.env"),
@@ -186,7 +186,7 @@ func requireGitleaksBinary(t *testing.T) string {
 		if candidate == "" {
 			continue
 		}
-		info, err := os.Stat(candidate)
+		info, err := os.Stat(candidate) // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		if err == nil && !info.IsDir() {
 			return candidate
 		}

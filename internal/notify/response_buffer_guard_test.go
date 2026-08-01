@@ -34,7 +34,7 @@ func TestNotificationResponseReadersStayWipeable(t *testing.T) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			return nil
 		}
-		source, err := os.ReadFile(path)
+		source, err := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if err != nil {
 			return err
 		}

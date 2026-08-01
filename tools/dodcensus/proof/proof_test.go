@@ -190,7 +190,7 @@ func TestGuestExecutableMapsBindOnlyTheExactCallerExecutable(t *testing.T) {
 
 	t.Run("target plus foreign-owner main executable", func(t *testing.T) {
 		procDir, targetPath, target, foreignPath := guestProcessFixture(t)
-		if err := os.WriteFile(foreignPath, minimalELFExecutable(), 0o700); err != nil {
+		if err := os.WriteFile(foreignPath, minimalELFExecutable(), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 		foreign, _, err := inspectExecutable(foreignPath, false, false)
@@ -209,7 +209,7 @@ func TestGuestExecutableMapsBindOnlyTheExactCallerExecutable(t *testing.T) {
 
 	t.Run("target plus exact reviewed interpreter", func(t *testing.T) {
 		procDir, targetPath, target, interpreterPath := guestProcessFixture(t)
-		if err := os.WriteFile(interpreterPath, minimalELFExecutable(), 0o700); err != nil {
+		if err := os.WriteFile(interpreterPath, minimalELFExecutable(), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 		interpreter, _, err := inspectExecutable(interpreterPath, false, false)
@@ -239,7 +239,7 @@ func TestGuestExecutableMapsBindOnlyTheExactCallerExecutable(t *testing.T) {
 
 	t.Run("exact target accepts only mount-bound Rosetta device alias", func(t *testing.T) {
 		procDir, targetPath, target, interpreterPath := guestProcessFixture(t)
-		if err := os.WriteFile(interpreterPath, minimalELFExecutable(), 0o700); err != nil {
+		if err := os.WriteFile(interpreterPath, minimalELFExecutable(), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 		interpreter, _, err := inspectExecutable(interpreterPath, false, false)
@@ -248,12 +248,12 @@ func TestGuestExecutableMapsBindOnlyTheExactCallerExecutable(t *testing.T) {
 		}
 		writeGuestMaps(t, procDir, targetPath, target, interpreterPath, interpreter)
 		mapsPath := filepath.Join(procDir, "maps")
-		raw, err := os.ReadFile(mapsPath)
+		raw, err := os.ReadFile(mapsPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}
 		aliased := strings.Replace(string(raw), procMapDeviceForTest(target.Device), "00:dead", 2)
-		if err := os.WriteFile(mapsPath, []byte(aliased), 0o600); err != nil {
+		if err := os.WriteFile(mapsPath, []byte(aliased), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 			t.Fatal(err)
 		}
 		if _, err := validateGuestExecutableMapsAt(procDir, targetPath, target, interpreter); err == nil || !strings.Contains(err.Error(), "outside the reviewed Rosetta boundary") {
@@ -324,7 +324,7 @@ func TestRosettaGuestDescriptorsBindEveryGuestShapeToTheExactTarget(t *testing.T
 		position := position
 		t.Run(fmt.Sprintf("target plus foreign shaped position %d", position), func(t *testing.T) {
 			procDir, targetPath, target, foreignPath := guestProcessFixture(t)
-			if err := os.WriteFile(foreignPath, minimalELFExecutable(), 0o700); err != nil {
+			if err := os.WriteFile(foreignPath, minimalELFExecutable(), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 				t.Fatal(err)
 			}
 			writeGuestDescriptor(t, procDir, "7", targetPath, 64, "0400040")
@@ -337,7 +337,7 @@ func TestRosettaGuestDescriptorsBindEveryGuestShapeToTheExactTarget(t *testing.T
 
 	t.Run("target pathname replaced with foreign bytes", func(t *testing.T) {
 		procDir, targetPath, target, _ := guestProcessFixture(t)
-		if err := os.WriteFile(targetPath, []byte("foreign replacement executable bytes"), 0o700); err != nil {
+		if err := os.WriteFile(targetPath, []byte("foreign replacement executable bytes"), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 		writeGuestDescriptor(t, procDir, "7", targetPath, 64, "0400040")
@@ -358,10 +358,10 @@ func guestProcessFixture(t *testing.T) (string, string, executableIdentity, stri
 	}
 	targetPath := filepath.Join(root, "target")
 	foreignPath := filepath.Join(root, "foreign")
-	if err := os.WriteFile(targetPath, []byte("gate-built target executable bytes"), 0o700); err != nil {
+	if err := os.WriteFile(targetPath, []byte("gate-built target executable bytes"), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(foreignPath, []byte("caller-owned foreign executable bytes"), 0o700); err != nil {
+	if err := os.WriteFile(foreignPath, []byte("caller-owned foreign executable bytes"), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	target, _, err := inspectExecutable(targetPath, false, false)
@@ -707,7 +707,7 @@ func TestDescriptorPackageParallelismFallsBackLowAndCapsHigh(t *testing.T) {
 
 func TestShippedBuildsReuseOneGatePrivateGoCache(t *testing.T) {
 	cacheDir := t.TempDir()
-	if err := os.Chmod(cacheDir, 0o700); err != nil {
+	if err := os.Chmod(cacheDir, 0o700); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	firstReceipt := t.TempDir()
@@ -727,7 +727,7 @@ func TestShippedBuildsReuseOneGatePrivateGoCache(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(firstReceipt, "shipped-gocache")); !os.IsNotExist(err) {
 		t.Fatalf("receipt root contains a copied shipped cache: %v", err)
 	}
-	if err := os.Chmod(cacheDir, 0o755); err != nil {
+	if err := os.Chmod(cacheDir, 0o755); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if _, err := ensureShippedGoCache(firstReceipt); err == nil {
@@ -754,7 +754,7 @@ func TestShippedBuildCacheRejectsAmbientOrReceiptOverlappingPaths(t *testing.T) 
 		})
 	}
 	realCache := t.TempDir()
-	if err := os.Chmod(realCache, 0o700); err != nil {
+	if err := os.Chmod(realCache, 0o700); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	link := filepath.Join(t.TempDir(), "cache-link")
@@ -907,7 +907,7 @@ func TestStartCompleteWritesUnsignedEvidenceForParentGate(t *testing.T) {
 		Destination: []byte("external-system/item/42"), Written: written, ReadBack: append([]byte(nil), written...),
 		ExecutionReceipt: execution,
 	}))
-	data, err := os.ReadFile(evidenceFile)
+	data, err := os.ReadFile(evidenceFile) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -994,7 +994,7 @@ func TestStartFailsClosedWithoutGateExpectations(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStartFailsClosedWithoutGateExpectations$")
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStartFailsClosedWithoutGateExpectations$") // #nosec G204 G702 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = proofMissingExpectationEnvironment(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
@@ -1036,7 +1036,7 @@ func TestExternalSubstrateCleanupAfterFatal(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "interrupted.pid")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestExternalSubstrateCleanupAfterFatal$")
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestExternalSubstrateCleanupAfterFatal$") // #nosec G204 G702 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = proofCleanupEnvironment(os.Environ(), "fatal-driver", marker)
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
@@ -1045,7 +1045,7 @@ func TestExternalSubstrateCleanupAfterFatal(t *testing.T) {
 	if err == nil {
 		t.Fatalf("fatal-driver unexpectedly passed; intentional t.Fatal did not run: %s", output)
 	}
-	rawPID, err := os.ReadFile(marker)
+	rawPID, err := os.ReadFile(marker) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("substrate cleanup marker is missing after t.Fatal: %v; output=%s", err, output)
 	}
@@ -1120,7 +1120,7 @@ func runProofCleanupFatalDriver(t *testing.T) {
 		SubstrateIdentity: "cleanup/substrate@sha256:" + strings.Repeat("d", 64),
 		ContractDigest:    "sha256:" + strings.Repeat("e", 64), Verifier: "external-write",
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=^TestExternalSubstrateCleanupAfterFatal$")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestExternalSubstrateCleanupAfterFatal$") // #nosec G204 G702 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = proofCleanupEnvironment(substrateEnvironment(expected), "substrate", marker)
 	_ = startExternal(t, expected, cmd, true)
 	t.Fatal("intentional fatal after READY before StopAndReceipt")
@@ -1146,7 +1146,7 @@ func runProofCleanupSubstrate(t *testing.T) {
 	case <-time.After(20 * time.Second):
 		t.Fatal("cleanup substrate was never interrupted")
 	}
-	if err := os.WriteFile(os.Getenv(proofCleanupMarkerEnv), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o600); err != nil {
+	if err := os.WriteFile(os.Getenv(proofCleanupMarkerEnv), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
 }

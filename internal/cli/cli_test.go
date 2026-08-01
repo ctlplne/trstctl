@@ -920,7 +920,7 @@ func TestSecretScanPreCommitInstallWritesHook(t *testing.T) {
 		t.Fatalf("exit = %d, stderr=%s", code, stderr)
 	}
 	hookPath := filepath.Join(repo, ".git", "hooks", "pre-commit")
-	data, err := os.ReadFile(hookPath)
+	data, err := os.ReadFile(hookPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1288,7 +1288,7 @@ func gitCLI(t *testing.T, repo string, args ...string) {
 
 func gitCLIOutput(t *testing.T, repo string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = repo
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1318,7 +1318,7 @@ cat > "$report" <<'JSON'
 ` + reportJSON + `
 JSON
 `
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	return path

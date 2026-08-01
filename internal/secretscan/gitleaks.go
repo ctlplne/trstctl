@@ -144,7 +144,7 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 		args = append(args, "--log-opts", "--all")
 	}
 	args = append(args, targetPath)
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd := exec.CommandContext(ctx, bin, args...) // #nosec G204 -- fixed git/gitleaks binaries over the operator's own repository (CWE-78)
 	cmd.Dir = targetRoot
 	cmd.Env = sanitizedGitleaksEnv(os.Environ())
 	var stderr limitedBuffer
@@ -156,7 +156,7 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 		}
 		return Report{}, fmt.Errorf("secretscan: gitleaks failed: %w%s", err, stderr.suffix())
 	}
-	data, err := os.ReadFile(reportPath)
+	data, err := os.ReadFile(reportPath) // #nosec G304 -- reads the report file this process asked gitleaks to write in its own tempdir (CWE-22)
 	if err != nil {
 		return Report{}, fmt.Errorf("secretscan: read gitleaks report: %w", err)
 	}
@@ -275,7 +275,7 @@ func (r *GitleaksRunner) resolveBinary() (string, error) {
 			continue
 		}
 		if filepath.IsAbs(candidate) || strings.ContainsRune(candidate, filepath.Separator) {
-			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() { // #nosec G703 -- locates the pinned gitleaks binary in known tool dirs (CWE-22)
 				return candidate, nil
 			}
 			continue

@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	bearerToken  = "ejbca-test-token"
+	bearerToken  = "ejbca-test-token" // #nosec G101 -- test-support package compiled only into test binaries (CWE-798)
 	certValidity = 365 * 24 * time.Hour
 )
 

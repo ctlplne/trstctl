@@ -219,7 +219,7 @@ func (b *substrateBroker) launch(ctx context.Context, expected runtimeExpectatio
 	if err != nil {
 		return nil, brokerReady{}, err
 	}
-	cmd := exec.Command(commandPath, expected.Command[1:]...)
+	cmd := exec.Command(commandPath, expected.Command[1:]...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 	cmd.Dir = b.repo
 	cmd.Env = brokerEnvironment(expected, b.receiptDir, validatedDynamic)
 	stdout, err := cmd.StdoutPipe()
@@ -388,7 +388,7 @@ func validateBrokerDynamicFile(receiptDir, name, path string) error {
 		return fmt.Errorf("inspect execution receipt directory for %s: %w", name, err)
 	}
 	rootStat, ok := rootInfo.Sys().(*syscall.Stat_t)
-	if !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 || rootInfo.Mode().Perm() != 0o700 || rootInfo.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !ok || rootStat.Uid != uint32(os.Getuid()) {
+	if !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 || rootInfo.Mode().Perm() != 0o700 || rootInfo.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !ok || rootStat.Uid != uint32(os.Getuid()) { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		return fmt.Errorf("execution receipt directory for %s is not a private gate-owned directory", name)
 	}
 	relative, err := scopedBrokerRelativePath(receiptDir, path)
@@ -412,7 +412,7 @@ func validateBrokerDynamicFile(receiptDir, name, path string) error {
 		}
 		if index < len(parts)-1 {
 			stat, statOK := info.Sys().(*syscall.Stat_t)
-			if !info.IsDir() || info.Mode().Perm()&0o022 != 0 || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !statOK || stat.Uid != uint32(os.Getuid()) {
+			if !info.IsDir() || info.Mode().Perm()&0o022 != 0 || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !statOK || stat.Uid != uint32(os.Getuid()) { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 				return fmt.Errorf("dynamic runtime input %s has an unsafe parent directory", name)
 			}
 		}
@@ -442,7 +442,7 @@ func validateBrokerDynamicFile(receiptDir, name, path string) error {
 		return fmt.Errorf("dynamic runtime secret input %s mode %04o is not owner-only", name, perm)
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || stat.Uid != uint32(os.Getuid()) || stat.Nlink != 1 {
+	if !ok || stat.Uid != uint32(os.Getuid()) || stat.Nlink != 1 { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		return fmt.Errorf("dynamic runtime input %s is not a single-link file owned by the gate", name)
 	}
 	return nil

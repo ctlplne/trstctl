@@ -309,7 +309,7 @@ func (r osRunner) Run(ctx context.Context, dir string, profile BuildProfile, nam
 	if err := os.MkdirAll(r.CacheDir, 0o700); err != nil {
 		return commandResult{Err: fmt.Errorf("create isolated Go cache: %w", err), ExitCode: -1}
 	}
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 	cmd.Dir = dir
 	cmd.Env = dodCommandEnvironment(os.Environ(), r.CacheDir, profile)
 	var stdout, stderr strings.Builder
@@ -497,7 +497,7 @@ func finishCLIReport(outPath string, report Report, sel selection, claimsErr err
 }
 
 func loadManifest(path string) (Manifest, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("open manifest %s: %w", path, err)
 	}
@@ -1282,7 +1282,7 @@ func selectedStatus(report Report, sel selection) (bool, bool) {
 }
 
 func writeReport(path string, report Report) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 		return err
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".wiring-census-*.json")

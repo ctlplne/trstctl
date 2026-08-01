@@ -1697,7 +1697,7 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertF
 	// reloaded key to the CA-signing purpose so the signer's persisted
 	// per-key constraint (SIGNER-002/003) is satisfied across a restart.
 	if caCertFile != "" {
-		if pemBytes, err := os.ReadFile(caCertFile); err == nil {
+		if pemBytes, err := os.ReadFile(caCertFile); err == nil { // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 			if blk, _ := pem.Decode(pemBytes); blk != nil && blk.Type == "CERTIFICATE" {
 				if remote, herr := s.signerForPrivilegedHandle(ctx, c, issuingCAHandle, signing.PurposeCASign); herr == nil {
 					s.caSigner = remote
@@ -1735,11 +1735,11 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertF
 // writeCertPEM writes a certificate (DER) PEM-encoded to path (0644 in a 0755
 // dir). The CA certificate is public, so it is not a secret.
 func writeCertPEM(path string, der []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- served CA certificate directory; the PEM is public material (CWE-276)
 		return err
 	}
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	return os.WriteFile(path, pemBytes, 0o644)
+	return os.WriteFile(path, pemBytes, 0o644) // #nosec G306 -- served CA certificate PEM is public material (CWE-276)
 }
 
 func (s *Server) signerForPrivilegedHandle(ctx context.Context, c *signing.Client, handle string, purpose signing.KeyPurpose) (*signing.RemoteSigner, error) {

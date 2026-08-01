@@ -1150,7 +1150,7 @@ func (b *AzureEntraBackend) CreateCredential(ctx context.Context, req GenerateRe
 	if out.KeyID == "" || len(out.SecretText) == 0 {
 		return "", nil, errors.New("dynsecret azure-entra: empty password response")
 	}
-	credential, err := json.Marshal(struct {
+	credential, err := json.Marshal(struct { // #nosec G117 -- the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200)
 		TenantID     string           `json:"tenant_id"`
 		ClientID     string           `json:"client_id"`
 		ClientSecret secret.JSONBytes `json:"client_secret"`

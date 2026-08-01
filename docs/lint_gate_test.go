@@ -22,7 +22,7 @@ func TestMakeLintFailsClosedWithoutOptionalTools(t *testing.T) {
 		"TMPDIR="+t.TempDir(),
 	)
 
-	cmd := exec.Command(makePath, "-f", "../Makefile", "lint")
+	cmd := exec.Command(makePath, "-f", "../Makefile", "lint") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -36,7 +36,7 @@ func TestMakeLintFailsClosedWithoutOptionalTools(t *testing.T) {
 		t.Fatalf("make lint used the partial-warning path instead of failing closed:\n%s", got)
 	}
 
-	cmd = exec.Command(makePath, "-f", "../Makefile", "lint-partial")
+	cmd = exec.Command(makePath, "-f", "../Makefile", "lint-partial") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = env
 	out, err = cmd.CombinedOutput()
 	if err != nil {
@@ -85,7 +85,7 @@ printf '%s\n' "$path"
 
 func writeExecutable(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o755); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

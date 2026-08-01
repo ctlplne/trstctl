@@ -113,7 +113,7 @@ func TestPluginHostHoldsNoPrivilegedHandles(t *testing.T) {
 		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		src, err := os.ReadFile(name)
+		src, err := os.ReadFile(name) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}

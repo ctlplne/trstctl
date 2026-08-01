@@ -107,7 +107,7 @@ func verifyBundledPostgresArchive(path string) (verified bool, err error) {
 // file is a fail-closed error. Split out so it is unit-testable with controlled
 // bytes without touching the global pin map.
 func verifyArchiveFileAgainst(path, wantHex string) (verified bool, err error) {
-	data, rerr := os.ReadFile(path)
+	data, rerr := os.ReadFile(path) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 	if rerr != nil {
 		if os.IsNotExist(rerr) {
 			return false, nil // cold cache: not an error, just nothing to verify yet

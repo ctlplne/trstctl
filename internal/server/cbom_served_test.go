@@ -59,7 +59,7 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 
 	dir := t.TempDir()
 	conf := filepath.Join(dir, "nginx.conf")
-	if err := os.WriteFile(conf, []byte("ssl_protocols TLSv1 TLSv1.2;\nssl_ciphers DES-CBC3-SHA:ECDHE-RSA-AES128-GCM-SHA256;\n"), 0o644); err != nil {
+	if err := os.WriteFile(conf, []byte("ssl_protocols TLSv1 TLSv1.2;\nssl_ciphers DES-CBC3-SHA:ECDHE-RSA-AES128-GCM-SHA256;\n"), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write host crypto fixture: %v", err)
 	}
 

@@ -64,7 +64,7 @@ func runGenKey(args []string, stdout io.Writer) error {
 	if err := os.WriteFile(*privPath, priv, 0o600); err != nil {
 		return fmt.Errorf("write private key: %w", err)
 	}
-	if err := os.WriteFile(*pubPath, pub, 0o644); err != nil {
+	if err := os.WriteFile(*pubPath, pub, 0o644); err != nil { // #nosec G306 -- writes the license PUBLIC key/inspection output; public material (CWE-276)
 		return fmt.Errorf("write public key: %w", err)
 	}
 	_, _ = fmt.Fprintf(stdout, "wrote %s and %s\n", *privPath, *pubPath)
@@ -135,7 +135,7 @@ func runSign(args []string, stdout, stderr io.Writer) error {
 		_, _ = io.WriteString(stdout, "\n")
 		return nil
 	}
-	return os.WriteFile(*outPath, raw, 0o644)
+	return os.WriteFile(*outPath, raw, 0o644) // #nosec G306 G703 -- writes the license PUBLIC key/inspection output; public material (CWE-22, CWE-276)
 }
 
 func runVerify(args []string, stdout, stderr io.Writer) error {

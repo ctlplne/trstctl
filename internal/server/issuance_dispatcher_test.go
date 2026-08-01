@@ -1185,7 +1185,7 @@ func sameStrings(got, want []string) bool {
 		return false
 	}
 	for i := range got {
-		if got[i] != want[i] {
+		if got[i] != want[i] { // #nosec G602 -- fixed-shape test data; the index is in range by construction (CWE-118)
 			return false
 		}
 	}

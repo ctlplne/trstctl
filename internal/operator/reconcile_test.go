@@ -214,7 +214,7 @@ func (f *fakeCluster) handler() http.Handler {
 				mergeMap(live, patch)
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"metadata":{"name":"` + name + `"}}`))
+			_, _ = w.Write([]byte(`{"metadata":{"name":"` + name + `"}}`)) // #nosec G705 -- test writes fixture bytes to its own recorder/local server (CWE-79)
 
 		// Get a Lease (404 when no operator has acquired it yet).
 		case r.Method == http.MethodGet && strings.Contains(path, "/leases/"):
@@ -309,7 +309,7 @@ func tcpObjectFullConfig(name string) map[string]any {
 		"replicas":   2,
 		"image":      "ghcr.io/ctlplne/trstctl:v9",
 		"signerMode": "sidecar",
-		"postgres": map[string]any{
+		"postgres": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"dsnSecret":    "trstctl-postgres",
 			"dsnSecretKey": "dsn",
 		},

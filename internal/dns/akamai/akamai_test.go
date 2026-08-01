@@ -23,7 +23,7 @@ import (
 
 const (
 	zone             = "example.com"
-	testClientToken  = "akab-client-token-xxxx"
+	testClientToken  = "akab-client-token-xxxx" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	testAccessToken  = "akab-access-token-xxxx"
 	testClientSecret = "edgegrid-client-secret-do-not-log"
 
@@ -128,7 +128,7 @@ func (f *fakeAkamai) handle(w http.ResponseWriter, r *http.Request) {
 			f.records[name][unquote(rd)] = true
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{"name":"`+name+`","type":"TXT"}`)
+		_, _ = io.WriteString(w, `{"name":"`+name+`","type":"TXT"}`) // #nosec G705 -- test writes fixture bytes to its own recorder/local server (CWE-79)
 	case http.MethodDelete:
 		if f.records[name] == nil {
 			http.Error(w, `{"detail":"record set not found"}`, http.StatusNotFound)

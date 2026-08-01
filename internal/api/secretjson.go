@@ -164,7 +164,7 @@ func appendJSONQuotedBytes(dst []byte, src []byte) []byte {
 		default:
 			if r < 0x20 {
 				dst = append(dst, `\u00`...)
-				dst = append(dst, "0123456789abcdef"[byte(r)>>4], "0123456789abcdef"[byte(r)&0x0f])
+				dst = append(dst, "0123456789abcdef"[byte(r)>>4], "0123456789abcdef"[byte(r)&0x0f]) // #nosec G115 -- rune already range-checked below 0x20 before hex packing (CWE-190)
 			} else {
 				dst = append(dst, src[:size]...)
 			}

@@ -258,7 +258,7 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 		}
 		output := filepath.Join(binDir, name)
 		args := shippedBuildArguments(expected, ldflags, output, packagePath, descriptorPackageParallelism())
-		command := exec.Command(goTool, args...)
+		command := exec.Command(goTool, args...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 		command.Dir = expected.Repo
 		command.Env = shippedBuildEnvironment(expected, goCache, runtimeTempDir)
 		var outputLog bytes.Buffer
@@ -369,7 +369,7 @@ func packageParallelismForDescriptorLimit(descriptors uint64, cpus int) int {
 	if workers > uint64(cpus) {
 		return cpus
 	}
-	return int(workers)
+	return int(workers) // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 }
 
 func validateRuntimePrivilegeDropper() (executableIdentity, error) {
@@ -464,7 +464,7 @@ func sourceAuditModulePath(repo string) (string, error) {
 	if !filepath.IsAbs(repo) {
 		return "", fmt.Errorf("companion FD-isolation source root is not absolute")
 	}
-	raw, err := os.ReadFile(filepath.Join(repo, "go.mod"))
+	raw, err := os.ReadFile(filepath.Join(repo, "go.mod")) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil || len(raw) == 0 || len(raw) > maxEvidenceBody {
 		return "", fmt.Errorf("read bounded source-audit go.mod: %w", err)
 	}
@@ -521,7 +521,7 @@ func companionProductionClosure(audit companionSourceAudit) ([]companionProducti
 		args = append(args, "-tags="+strings.Join(audit.tags, ","))
 	}
 	args = append(args, audit.packagePaths...)
-	command := exec.Command(audit.goTool, args...)
+	command := exec.Command(audit.goTool, args...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 	command.Dir, command.Env = audit.repo, audit.environment
 	stdout, err := command.StdoutPipe()
 	if err != nil {
@@ -1115,12 +1115,12 @@ func shippedBuildEnvironment(expected expectation, goCache, runtimeTempDir strin
 }
 
 func validatePrivateDirectory(path string) error {
-	info, err := os.Lstat(path)
+	info, err := os.Lstat(path) // #nosec G703 -- developer tool probing repo/toolchain paths, not a served binary (CWE-22)
 	if err != nil {
 		return fmt.Errorf("inspect private launched directory: %w", err)
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 || stat.Uid != uint32(os.Geteuid()) {
+	if !ok || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 || stat.Uid != uint32(os.Geteuid()) { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		return fmt.Errorf("launched directory is not a caller-owned, non-symlink 0700 directory")
 	}
 	return nil
@@ -1147,7 +1147,7 @@ func validateShippedBinary(path string, expected expectation, packagePath string
 	if err != nil {
 		return executableIdentity{}, fmt.Errorf("inspect launched binary %s: %w", packagePath, err)
 	}
-	if identity.UID != uint32(os.Geteuid()) {
+	if identity.UID != uint32(os.Geteuid()) { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		return executableIdentity{}, fmt.Errorf("launched binary %s is not owned by the runtime UID", packagePath)
 	}
 	wantImport := expected.LaunchedModulePath + "/" + strings.TrimPrefix(packagePath, "./")
@@ -1187,7 +1187,7 @@ func inspectExecutable(path string, followSymlink, requireBuildInfo bool) (execu
 	}
 	var file *os.File
 	if followSymlink {
-		file, err = os.Open(path)
+		file, err = os.Open(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	} else {
 		var descriptor int
 		descriptor, err = unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
@@ -1248,7 +1248,7 @@ func executableIdentityFromInfo(info os.FileInfo) (executableIdentity, error) {
 		return executableIdentity{}, fmt.Errorf("executable has no Unix stat identity")
 	}
 	return executableIdentity{
-		Device: uint64(stat.Dev), Inode: uint64(stat.Ino), Links: uint64(stat.Nlink),
+		Device: uint64(stat.Dev), Inode: uint64(stat.Ino), Links: uint64(stat.Nlink), // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		UID: stat.Uid, Size: info.Size(), Mode: info.Mode(),
 	}, nil
 }
@@ -1270,7 +1270,7 @@ func (p *ShippedProcess) CreateToken(directory string, environment []string, arg
 		p.t.Fatal(err)
 	}
 	commandName, commandArgs := shippedProcessCommand(p.build.binary, args...)
-	command := exec.Command(commandName, commandArgs...)
+	command := exec.Command(commandName, commandArgs...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 	command.Dir, command.Env = dir, env
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
@@ -1306,7 +1306,7 @@ func (p *ShippedProcess) Start(directory string, environment []string) {
 		p.t.Fatal("DOD-CENSUS: shipped control plane started more than once")
 	}
 	commandName, commandArgs := shippedProcessCommand(p.build.binary)
-	command := exec.Command(commandName, commandArgs...)
+	command := exec.Command(commandName, commandArgs...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 	command.Dir, command.Env = dir, env
 	command.Stdout, command.Stderr = &p.logs, &p.logs
 	if err := sealInheritedDescriptorsForShippedExec(); err != nil {
@@ -1589,7 +1589,7 @@ func (p *ShippedProcess) Do(request *http.Request) *launchedResponse {
 		Transport: transport, Timeout: 40 * time.Second,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	response, err := client.Do(directRequest)
+	response, err := client.Do(directRequest) // #nosec G704 -- developer tool calling the endpoint it was pointed at (CWE-918)
 	if err != nil {
 		p.t.Fatalf("DOD-CENSUS: direct shipped-process request: %v; logs=%s", err, p.Logs())
 	}
@@ -1669,7 +1669,7 @@ func inspectLiveProcess(pid int, built shippedBuild, expected expectation) (proc
 	if err != nil {
 		return processExecutableWitness{}, err
 	}
-	if err := validateShippedProcessPrivileges(pid, uint32(os.Geteuid()), uint32(os.Getegid())); err != nil {
+	if err := validateShippedProcessPrivileges(pid, uint32(os.Geteuid()), uint32(os.Getegid())); err != nil { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		return processExecutableWitness{}, err
 	}
 	procExecutable := filepath.Join("/proc", strconv.Itoa(pid), "exe")
@@ -1706,7 +1706,7 @@ func inspectLiveProcess(pid int, built shippedBuild, expected expectation) (proc
 	}
 	wantRunnerPath := expected.LaunchedModulePath + "/" + strings.TrimPrefix(expected.RuntimeTestPackage, "./")
 	runnerPathMatches := runnerBuild.Path == wantRunnerPath || runnerBuild.Path == wantRunnerPath+".test"
-	if runnerIdentity.UID != uint32(os.Geteuid()) || runnerBuild.Main.Path != expected.LaunchedModulePath || !runnerPathMatches || runnerBuild.GoVersion != runtime.Version() {
+	if runnerIdentity.UID != uint32(os.Geteuid()) || runnerBuild.Main.Path != expected.LaunchedModulePath || !runnerPathMatches || runnerBuild.GoVersion != runtime.Version() { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		return processExecutableWitness{}, fmt.Errorf("emulation interpreter is not hosting the gate-issued Go test runner")
 	}
 	runnerSettings := map[string]string{}
@@ -1880,11 +1880,11 @@ func validateBinfmtGuestBinding(pid int, path string, identity executableIdentit
 }
 
 func validateGuestExecutableMaps(pid int, path string, identity executableIdentity, allowRosettaBindAlias bool, reviewedInterpreters ...executableIdentity) (string, error) {
-	return validateGuestExecutableMapsAtForUIDWithRosettaAlias(filepath.Join("/proc", strconv.Itoa(pid)), path, identity, uint32(os.Geteuid()), allowRosettaBindAlias, reviewedInterpreters...)
+	return validateGuestExecutableMapsAtForUIDWithRosettaAlias(filepath.Join("/proc", strconv.Itoa(pid)), path, identity, uint32(os.Geteuid()), allowRosettaBindAlias, reviewedInterpreters...) // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 }
 
 func validateGuestExecutableMapsAt(procDir, path string, identity executableIdentity, reviewedInterpreters ...executableIdentity) (string, error) {
-	return validateGuestExecutableMapsAtForUIDWithRosettaAlias(procDir, path, identity, uint32(os.Geteuid()), false, reviewedInterpreters...)
+	return validateGuestExecutableMapsAtForUIDWithRosettaAlias(procDir, path, identity, uint32(os.Geteuid()), false, reviewedInterpreters...) // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 }
 
 func validateGuestExecutableMapsAtForUID(procDir, path string, identity executableIdentity, runtimeUID uint32, reviewedInterpreters ...executableIdentity) (string, error) {
@@ -1892,7 +1892,7 @@ func validateGuestExecutableMapsAtForUID(procDir, path string, identity executab
 }
 
 func validateGuestExecutableMapsAtForUIDWithRosettaAlias(procDir, path string, identity executableIdentity, runtimeUID uint32, allowRosettaBindAlias bool, reviewedInterpreters ...executableIdentity) (string, error) {
-	raw, err := os.ReadFile(filepath.Join(procDir, "maps"))
+	raw, err := os.ReadFile(filepath.Join(procDir, "maps")) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil || len(raw) == 0 || len(raw) > maxEvidenceBody {
 		return "", fmt.Errorf("read bounded guest executable maps: %w", err)
 	}
@@ -2003,7 +2003,7 @@ func validateGuestExecutableMapsAtForUIDWithRosettaAlias(procDir, path string, i
 }
 
 func validateRosettaBindDeviceAlias(procDir, targetPath, alias string) error {
-	raw, err := os.ReadFile(filepath.Join(procDir, "mountinfo"))
+	raw, err := os.ReadFile(filepath.Join(procDir, "mountinfo")) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil || len(raw) == 0 || len(raw) > maxEvidenceBody {
 		return fmt.Errorf("read bounded Rosetta mount provenance: %w", err)
 	}
@@ -2098,7 +2098,7 @@ func pathLexicallyInside(root, candidate string) bool {
 // pathname from /proc/PID/maps. Target objects additionally have their full
 // metadata and digest rebound through the same stable open file description.
 func inspectGuestMapObject(mapFile string, target executableIdentity, reviewedInterpreters ...executableIdentity) (executableIdentity, bool, bool, bool, error) {
-	file, err := os.Open(mapFile)
+	file, err := os.Open(mapFile) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return executableIdentity{}, false, false, false, err
 	}
@@ -2245,7 +2245,7 @@ func validateRosettaGuestDescriptorsAt(procDir, path string, identity executable
 		if readErr != nil {
 			continue
 		}
-		infoRaw, infoErr := os.ReadFile(filepath.Join(procDir, "fdinfo", fd))
+		infoRaw, infoErr := os.ReadFile(filepath.Join(procDir, "fdinfo", fd)) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 		if infoErr != nil {
 			return fmt.Errorf("read translator descriptor metadata: %w", infoErr)
 		}
@@ -2324,7 +2324,7 @@ func validateRosettaGuestDescriptorsAt(procDir, path string, identity executable
 }
 
 func descriptorELFMainExecutable(path string) (bool, error) {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return false, err
 	}
@@ -2527,7 +2527,7 @@ func requireExclusiveSocketOwner(pid int, inode string, built shippedBuild, expe
 		return err
 	}
 	procStat, ok := procInfo.Sys().(*syscall.Stat_t)
-	if !ok || procStat.Uid != uint32(os.Geteuid()) {
+	if !ok || procStat.Uid != uint32(os.Geteuid()) { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		return fmt.Errorf("launched PID is not owned by the gate runtime UID")
 	}
 	sealed := len(parentDescriptorSealed) == 1 && parentDescriptorSealed[0]
@@ -2578,7 +2578,7 @@ func requireExclusiveSocketOwner(pid int, inode string, built shippedBuild, expe
 			// destroyed; only the waitable PID record remains. Container PID 1
 			// may retain such records between sequential full-census groups. It
 			// cannot own or inherit the live socket inode being audited.
-			if raw, statusErr := os.ReadFile(filepath.Join(candidateRoot, "status")); statusErr == nil && processStatusIsZombie(raw) {
+			if raw, statusErr := os.ReadFile(filepath.Join(candidateRoot, "status")); statusErr == nil && processStatusIsZombie(raw) { // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 				continue
 			}
 			companionErr := fmt.Errorf("not an unreadable shipped companion")

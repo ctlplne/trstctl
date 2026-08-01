@@ -45,7 +45,7 @@ func (p *resultPrecondition) CheckIssuancePreconditionResult(_ context.Context, 
 	if p.err != nil {
 		return IssuancePreconditionResult{}, p.err
 	}
-	return IssuancePreconditionResult{
+	return IssuancePreconditionResult{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		CredentialID: "signer:credential:1",
 		Subject:      "spiffe://example.org/agent/" + v.AgentID,
 		CertDER:      []byte("signer-public-credential"),

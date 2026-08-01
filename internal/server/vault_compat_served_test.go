@@ -75,7 +75,7 @@ func TestVaultCLICompatibilityAgainstServedHandler(t *testing.T) {
 func vaultCLIBinary(t *testing.T) string {
 	t.Helper()
 	if path := strings.TrimSpace(os.Getenv("TRSTCTL_VAULT_BIN")); path != "" {
-		if _, err := os.Stat(path); err != nil {
+		if _, err := os.Stat(path); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 			t.Fatalf("TRSTCTL_VAULT_BIN=%s is not usable: %v", path, err)
 		}
 		return path
@@ -92,7 +92,7 @@ func vaultCLIBinary(t *testing.T) string {
 
 func runVault(t *testing.T, vault, home, addr, token string, args ...string) []byte {
 	t.Helper()
-	cmd := exec.Command(vault, args...)
+	cmd := exec.Command(vault, args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"VAULT_ADDR="+addr,

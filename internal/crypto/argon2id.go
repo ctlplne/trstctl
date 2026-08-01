@@ -66,7 +66,7 @@ func VerifyArgon2id(encoded, password []byte) (bool, error) {
 	}
 	defer secret.Wipe(salt)
 	defer secret.Wipe(want)
-	got := argon2.IDKey(password, salt, p.Iterations, p.MemoryKiB, p.Parallelism, uint32(len(want)))
+	got := argon2.IDKey(password, salt, p.Iterations, p.MemoryKiB, p.Parallelism, uint32(len(want))) // #nosec G115 -- length of a stored KDF hash, far under the uint32 bound (CWE-190)
 	defer secret.Wipe(got)
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }

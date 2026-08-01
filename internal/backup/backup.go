@@ -167,7 +167,7 @@ func VerifyEventLogBackupWithAuditCheckpoints(
 		Records:             spool.records,
 		HistoryEntries:      spool.entries,
 		ExactSequenceLayout: h.HistoryLayout == exactHistoryLayout,
-		HasGaps:             h.EventCutSequence > uint64(spool.records),
+		HasGaps:             h.EventCutSequence > uint64(spool.records), // #nosec G115 -- record counts bounded by the event log; fits both int and uint64 (CWE-190)
 	}
 	if err := verifyCheckpointPrefixesInSpool(h, spool, checkpoints); err != nil {
 		return EventLogBackupSummary{}, err
@@ -617,7 +617,7 @@ func validateVerifiedStream(h header, tr trailer, records, entries int) error {
 		// Legacy v1 records did not carry sequence, subject, or gap identity. They
 		// are safe to restore only when the cut proves a contiguous 1..N stream;
 		// otherwise renumbering would detach PostgreSQL checkpoint boundaries.
-		if entries != records || h.EventCutSequence != uint64(records) {
+		if entries != records || h.EventCutSequence != uint64(records) { // #nosec G115 -- record counts bounded by the event log; fits both int and uint64 (CWE-190)
 			return fmt.Errorf(
 				"backup: legacy event history lacks exact sequences/gaps (cut=%d records=%d); refusing unsafe restore",
 				h.EventCutSequence, records,

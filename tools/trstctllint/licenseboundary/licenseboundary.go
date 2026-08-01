@@ -32,7 +32,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		if !isRepoGoFile(filename, pass.Pkg.Path()) {
 			continue
 		}
-		bodyBytes, err := os.ReadFile(filename)
+		bodyBytes, err := os.ReadFile(filename) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 		if err != nil {
 			continue
 		}

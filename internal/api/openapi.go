@@ -154,7 +154,7 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 		Components: Components{
 			Schemas: schemas,
 			SecuritySchemes: map[string]SecurityScheme{
-				"BearerAuth": {
+				"BearerAuth": { // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 					Type:         "http",
 					Scheme:       "bearer",
 					BearerFormat: "trstctl API token",

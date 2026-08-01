@@ -104,7 +104,7 @@ func writeGoldenEvents(t *testing.T) {
 		{ID: "00000000-0000-4000-8000-00000000e004", Sequence: 4, Type: projections.EventCACeremonyApproved, TenantID: goldenTenantID, Time: base.Add(3 * time.Second),
 			Data: marshal(projections.CACeremonyApproved{CeremonyID: "00000000-0000-4000-8000-00000000f002", Custodian: "custodian-one"})},
 	}
-	if err := os.MkdirAll(filepath.Dir(filepath.FromSlash(goldenEventsPath)), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filepath.FromSlash(goldenEventsPath)), 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	f, err := os.Create(filepath.FromSlash(goldenEventsPath))

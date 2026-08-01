@@ -78,7 +78,7 @@ func TestManagedKeySubstrateIdentityRejectsEveryMutatedOrMissingRuntimeFile(t *t
 		t.Run("mutated_"+filepath.Base(target), func(t *testing.T) {
 			fixture := copyManagedKeyIdentityFixture(t, repo, substrate, "")
 			path := filepath.Join(fixture, filepath.FromSlash(target))
-			file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+			file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -138,7 +138,7 @@ func TestManagedKeyClosureRejectsRehashedMutableBuildInputs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := copyManagedKeyIdentityFixture(t, repo, base, "")
 			path := filepath.Join(fixture, filepath.FromSlash(tc.file))
-			raw, err := os.ReadFile(path)
+			raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -146,7 +146,7 @@ func TestManagedKeyClosureRejectsRehashedMutableBuildInputs(t *testing.T) {
 			if mutated == string(raw) {
 				t.Fatalf("mutation anchor %q is absent from %s", tc.old, tc.file)
 			}
-			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil {
+			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 				t.Fatal(err)
 			}
 			candidate := base
@@ -218,7 +218,7 @@ func dodDeadManagedKeyApprovalSpoof(runtime *dodManagedKeyRuntime, generated dod
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := copyManagedKeyIdentityFixture(t, repo, base, "")
 			path := filepath.Join(fixture, "internal", "server", "dod_managed_key_runtime_test.go")
-			raw, err := os.ReadFile(path)
+			raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -226,7 +226,7 @@ func dodDeadManagedKeyApprovalSpoof(runtime *dodManagedKeyRuntime, generated dod
 			if !strings.Contains(string(raw), tc.old) {
 				t.Fatalf("mutation anchor %q is absent", tc.old)
 			}
-			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil {
+			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 				t.Fatal(err)
 			}
 			candidate := rehashedManagedKeyCandidate(t, fixture, base)
@@ -244,7 +244,7 @@ func dodDeadManagedKeyApprovalSpoof(runtime *dodManagedKeyRuntime, generated dod
 func TestManagedKeyTPMRestartClosureFollowsProductionPath(t *testing.T) {
 	repo, _ := loadManagedKeyManifest(t)
 	path := filepath.Join(repo, "internal", "server", "dod_managed_key_runtime_test.go")
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func rehashedManagedKeyCandidate(t *testing.T, repo string, candidate Substrate)
 
 func TestManagedKeyRuntimeUsesContentAddressedImageAtBothRunSites(t *testing.T) {
 	repo, _ := loadManagedKeyManifest(t)
-	runtimeSource, err := os.ReadFile(filepath.Join(repo, "internal", "server", "dod_managed_key_runtime_test.go"))
+	runtimeSource, err := os.ReadFile(filepath.Join(repo, "internal", "server", "dod_managed_key_runtime_test.go")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestManagedKeyRuntimeUsesContentAddressedImageAtBothRunSites(t *testing.T) 
 		}
 	}
 
-	pythonSource, err := os.ReadFile(filepath.Join(repo, "tools", "dodcensus", "substrates", "managed_keys.py"))
+	pythonSource, err := os.ReadFile(filepath.Join(repo, "tools", "dodcensus", "substrates", "managed_keys.py")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +332,7 @@ func TestManagedKeyRuntimeUsesContentAddressedImageAtBothRunSites(t *testing.T) 
 		t.Fatal("managed-key substrate does not fail closed on a content-addressed inner image id")
 	}
 
-	entrypointSource, err := os.ReadFile(filepath.Join(repo, "tools", "dodcensus", "substrates", "managed_key_signer_entrypoint.sh"))
+	entrypointSource, err := os.ReadFile(filepath.Join(repo, "tools", "dodcensus", "substrates", "managed_key_signer_entrypoint.sh")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,12 +355,12 @@ func TestManagedKeyRuntimeClosureRejectsTestToProductInjectionPrimitives(t *test
 		t.Run(strings.NewReplacer("/", "_", `"`, "").Replace(primitive), func(t *testing.T) {
 			fixture := copyManagedKeyIdentityFixture(t, repo, base, "")
 			path := filepath.Join(fixture, "internal", "server", "dod_managed_key_runtime_test.go")
-			raw, err := os.ReadFile(path)
+			raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if err != nil {
 				t.Fatal(err)
 			}
 			mutated := append(raw, []byte("\n// adversarial runtime primitive: "+primitive+"\n")...)
-			if err := os.WriteFile(path, mutated, 0o600); err != nil {
+			if err := os.WriteFile(path, mutated, 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 				t.Fatal(err)
 			}
 			candidate := rehashedManagedKeyCandidate(t, fixture, base)
@@ -401,7 +401,7 @@ func TestManagedKeyClosureRejectsRehashedControlEndpointBypasses(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := copyManagedKeyIdentityFixture(t, repo, base, "")
 			path := filepath.Join(fixture, "internal", "server", "dod_managed_key_runtime_test.go")
-			raw, err := os.ReadFile(path)
+			raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -409,7 +409,7 @@ func TestManagedKeyClosureRejectsRehashedControlEndpointBypasses(t *testing.T) {
 			if mutated == string(raw) {
 				t.Fatalf("mutation anchor %q is absent", test.old)
 			}
-			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil {
+			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 				t.Fatal(err)
 			}
 			candidate := rehashedManagedKeyCandidate(t, fixture, base)
@@ -523,7 +523,7 @@ for local_state, provider_state in (("active", "ENABLED"), ("revoked", "DISABLED
     status, version = responses.pop()
     assert status == 200 and version["state"] == provider_state
 `
-	command := exec.Command("python3", "-c", program, path)
+	command := exec.Command("python3", "-c", program, path) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("managed-key cloud durable-lifecycle protocol self-test: %v output=%s", err, output)
 	}
@@ -559,7 +559,7 @@ else:
 os.environ[module.IMAGE_ENV] = "sha256:" + "a" * 64
 assert module.required_image_id() == os.environ[module.IMAGE_ENV]
 `
-	command := exec.Command("python3", "-c", program, path)
+	command := exec.Command("python3", "-c", program, path) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("managed-key inner receipt validation self-test: %v output=%s", err, output)
 	}
@@ -588,7 +588,7 @@ func copyManagedKeyIdentityFixture(t *testing.T, repo string, substrate Substrat
 			continue
 		}
 		source := filepath.Join(repo, filepath.FromSlash(name))
-		content, err := os.ReadFile(source)
+		content, err := os.ReadFile(source) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -600,7 +600,7 @@ func copyManagedKeyIdentityFixture(t *testing.T, repo string, substrate Substrat
 		if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(destination, content, info.Mode().Perm()); err != nil {
+		if err := os.WriteFile(destination, content, info.Mode().Perm()); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 			t.Fatal(err)
 		}
 	}

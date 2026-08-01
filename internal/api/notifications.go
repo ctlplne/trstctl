@@ -616,7 +616,7 @@ func notificationChannelTestOperationResponse(op store.NotificationTestOperation
 	if op.CredentialConfigured {
 		credentialRef = "redacted"
 	}
-	return notificationChannelTestResponse{
+	return notificationChannelTestResponse{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 		ChannelID: op.ChannelID, Destination: op.Destination, OutboxID: op.OutboxID,
 		Status: "queued", CredentialRef: credentialRef,
 		SecretHandling: "credential reference redacted; tenant channel endpoint metadata is read only by the delivery worker",
@@ -942,7 +942,7 @@ func toNotificationChannelResponse(ch store.NotificationChannel) notificationCha
 	if channelType == "" {
 		channelType = id
 	}
-	return notificationChannelResponse{
+	return notificationChannelResponse{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 		ID:                 id,
 		ChannelType:        channelType,
 		Label:              firstNonEmpty(strings.TrimSpace(ch.Label), notificationChannelDefaultLabel(id), id),

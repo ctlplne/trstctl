@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	kubernetesSecretHashAnnotation = "trstctl.com/secret-sync-hash"
-	kubernetesSecretNameAnnotation = "trstctl.com/secret-sync-name"
-	kubernetesSecretManagedLabel   = "trstctl.com/managed-by"
+	kubernetesSecretHashAnnotation = "trstctl.com/secret-sync-hash" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	kubernetesSecretNameAnnotation = "trstctl.com/secret-sync-name" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	kubernetesSecretManagedLabel   = "trstctl.com/managed-by"       // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 // SecretResolver resolves one remote trstctl secret reference into wipeable bytes.

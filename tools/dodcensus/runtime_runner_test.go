@@ -141,26 +141,26 @@ func TestRuntimeRunnerWritableDirRequiresPrivateHostOwnership(t *testing.T) {
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateRuntimeRunnerWritableDir(dir, uint32(os.Getuid())); err != nil {
+	if err := validateRuntimeRunnerWritableDir(dir, uint32(os.Getuid())); err != nil { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		t.Fatalf("private owner directory rejected: %v", err)
 	}
-	if err := os.Chmod(dir, 0o755); err != nil {
+	if err := os.Chmod(dir, 0o755); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if err := validateRuntimeRunnerWritableDir(dir, uint32(os.Getuid())); err == nil {
+	if err := validateRuntimeRunnerWritableDir(dir, uint32(os.Getuid())); err == nil { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		t.Fatal("world-visible runner directory passed")
 	}
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if err := validateRuntimeRunnerWritableDir(dir, uint32(os.Getuid()+1)); err == nil {
+	if err := validateRuntimeRunnerWritableDir(dir, uint32(os.Getuid()+1)); err == nil { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		t.Fatal("foreign-owned runner directory passed")
 	}
 	link := filepath.Join(t.TempDir(), "runner-link")
 	if err := os.Symlink(dir, link); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateRuntimeRunnerWritableDir(link, uint32(os.Getuid())); err == nil {
+	if err := validateRuntimeRunnerWritableDir(link, uint32(os.Getuid())); err == nil { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		t.Fatal("symlink runner directory passed")
 	}
 }
@@ -285,12 +285,12 @@ func TestRuntimeRunnerClosureRejectsMissingAndRehashedInvalidBasePin(t *testing.
 	manifest = validManifest(t, repo, enforcementRequired)
 	profile = manifest.BuildProfiles[manifest.DefaultBuildProfile]
 	basePath := filepath.Join(repo, filepath.FromSlash(runtimeRunnerBaseFile))
-	raw, err := os.ReadFile(basePath)
+	raw, err := os.ReadFile(basePath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mutated := strings.Replace(string(raw), strings.Repeat("b", 64), strings.Repeat("d", 64), 1)
-	if err := os.WriteFile(basePath, []byte(mutated), 0o600); err != nil {
+	if err := os.WriteFile(basePath, []byte(mutated), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
 	if evidence := inspectRuntimeRunnerProof(repo, profile); evidence.OK {
@@ -412,7 +412,7 @@ func TestRuntimeRunnerClosureRejectsRehashedMutableModuleCache(t *testing.T) {
 			manifest := validManifest(t, repo, enforcementRequired)
 			profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
 			path := filepath.Join(repo, filepath.FromSlash(profile.RuntimeRunner.Dockerfile))
-			raw, err := os.ReadFile(path)
+			raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -420,7 +420,7 @@ func TestRuntimeRunnerClosureRejectsRehashedMutableModuleCache(t *testing.T) {
 			if mutated == string(raw) {
 				t.Fatalf("mutation anchor %q is absent", test.old)
 			}
-			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil {
+			if err := os.WriteFile(path, []byte(mutated), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 				t.Fatal(err)
 			}
 			digest, err := commandIdentityDigest(repo, profile.RuntimeRunner.IdentityFiles)
@@ -466,11 +466,11 @@ func TestRuntimeRunnerNSSFilesMapOnlyValidatedNonRootOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	passwd, err := os.ReadFile(passwdFile)
+	passwd, err := os.ReadFile(passwdFile) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := os.ReadFile(groupFile)
+	group, err := os.ReadFile(groupFile) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

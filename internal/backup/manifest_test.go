@@ -29,7 +29,7 @@ func migrationTables(t *testing.T) []string {
 		if !strings.HasSuffix(e.Name(), ".sql") {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		b, err := os.ReadFile(filepath.Join(dir, e.Name())) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", e.Name(), err)
 		}

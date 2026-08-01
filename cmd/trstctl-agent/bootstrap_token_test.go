@@ -90,7 +90,7 @@ func TestBootstrapTokenRejectsAmbiguousSources(t *testing.T) {
 }
 
 func TestServiceArgumentsNeverPersistInlineBootstrapToken(t *testing.T) {
-	args := serviceArguments(agentOptions{
+	args := serviceArguments(agentOptions{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		enrollURL:   "https://cp.example/enroll",
 		caBundle:    "/etc/trstctl/ca.pem",
 		serverAddr:  "cp.example:9443",
@@ -198,7 +198,7 @@ func TestAgentInventoryReportsMetadataOnlyAcrossSources(t *testing.T) {
 		t.Fatalf("SelfSignedServerCert: %v", err)
 	}
 	certPath := filepath.Join(dir, "service.crt")
-	if err := os.WriteFile(certPath, serverCert.TrustPEM, 0o644); err != nil {
+	if err := os.WriteFile(certPath, serverCert.TrustPEM, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	privatePEM, _, err := cryptoboundary.GenerateEd25519KeyPEM()
@@ -367,13 +367,13 @@ func TestRenewWithBackoffSucceedsAndBoundsFailure(t *testing.T) {
 	}
 	a := agent.New(agent.Config{CommonName: "renewing-agent"}, nil)
 	success := &renewalChannel{ca: ca}
-	renewWithBackoff(context.Background(), a, success, time.Second, rand.New(rand.NewSource(1)))
+	renewWithBackoff(context.Background(), a, success, time.Second, rand.New(rand.NewSource(1))) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	if success.calls != 1 || a.CertificateSerial() == "" {
 		t.Fatalf("successful renewal calls=%d serial=%q", success.calls, a.CertificateSerial())
 	}
 
 	failure := &renewalChannel{ca: ca, err: errors.New("control plane unavailable")}
-	renewWithBackoff(context.Background(), a, failure, time.Nanosecond, rand.New(rand.NewSource(2)))
+	renewWithBackoff(context.Background(), a, failure, time.Nanosecond, rand.New(rand.NewSource(2))) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	if failure.calls != 1 {
 		t.Fatalf("bounded failed renewal calls=%d, want one", failure.calls)
 	}
@@ -381,7 +381,7 @@ func TestRenewWithBackoffSucceedsAndBoundsFailure(t *testing.T) {
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 	cancelled := &renewalChannel{ca: ca, err: errors.New("control plane unavailable")}
-	renewWithBackoff(cancelledCtx, a, cancelled, 2*time.Second, rand.New(rand.NewSource(3)))
+	renewWithBackoff(cancelledCtx, a, cancelled, 2*time.Second, rand.New(rand.NewSource(3))) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	if cancelled.calls != 1 {
 		t.Fatalf("cancelled renewal calls=%d, want one", cancelled.calls)
 	}
@@ -420,7 +420,7 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	enrollmentServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	enrollmentServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { // #nosec G112 -- local test listener owned and torn down by the test (CWE-400)
 		if r.Method != http.MethodPost || r.URL.Path != "/enroll/bootstrap" {
 			http.Error(w, "unexpected enrollment route", http.StatusNotFound)
 			return

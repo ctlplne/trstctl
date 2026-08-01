@@ -18,7 +18,7 @@ func TestAuthCallbackRejectsMissingNonce(t *testing.T) {
 	state := cookieValue(login.Result().Cookies(), "trstctl_oidc_state")
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=good-code&state="+state, nil)
 	for _, name := range []string{"trstctl_oidc_prelogin", "trstctl_oidc_state", "trstctl_oidc_pkce"} {
-		req.AddCookie(&http.Cookie{Name: name, Value: cookieValue(login.Result().Cookies(), name)})
+		req.AddCookie(&http.Cookie{Name: name, Value: cookieValue(login.Result().Cookies(), name)}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	}
 	// Deliberately NO trstctl_oidc_nonce cookie.
 	rec := httptest.NewRecorder()

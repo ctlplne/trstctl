@@ -24,13 +24,13 @@ func TestPrivateKeySourceDiscoversMetadataOnly(t *testing.T) {
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 	defer secret.Wipe(pemBytes)
 	keyPath := filepath.Join(dir, "keys", "server.key")
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(keyPath, pemBytes, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "README.txt"), []byte("nothing secret here\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "README.txt"), []byte("nothing secret here\n"), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 

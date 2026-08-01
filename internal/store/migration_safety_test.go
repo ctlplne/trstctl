@@ -79,7 +79,7 @@ func TestMigrationsAreOnlineSafe(t *testing.T) {
 		if v := migrationNumber(name); v <= onlineSafeBaseline {
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join(dir, name))
+		raw, err := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}

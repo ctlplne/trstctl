@@ -4,7 +4,7 @@ package crypto
 
 import (
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328)
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -542,7 +542,7 @@ func subjectKeyID(pub any) ([]byte, error) {
 	if _, err := asn1.Unmarshal(der, &spki); err != nil {
 		return nil, fmt.Errorf("crypto: parse SPKI for SKI: %w", err)
 	}
-	sum := sha1.Sum(spki.SubjectPublicKey.Bytes)
+	sum := sha1.Sum(spki.SubjectPublicKey.Bytes) // #nosec G401 -- RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328)
 	return sum[:], nil
 }
 

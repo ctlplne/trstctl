@@ -840,7 +840,7 @@ func TestEditionGatingIsConfinedToOpenCoreSeams(t *testing.T) {
 			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
-			b, rerr := os.ReadFile(path)
+			b, rerr := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 			if rerr != nil {
 				return nil
 			}
@@ -903,7 +903,7 @@ func anyTestDeclaresUnder(t *testing.T, root, name string) bool {
 		if !strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		b, rerr := os.ReadFile(path)
+		b, rerr := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if rerr != nil {
 			return nil
 		}
@@ -4407,7 +4407,7 @@ func TestFederationIsDocumentedAsNotBuiltAndAbsentInCode(t *testing.T) {
 		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		b, rerr := os.ReadFile(path)
+		b, rerr := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if rerr != nil {
 			return nil
 		}

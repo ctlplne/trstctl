@@ -39,7 +39,7 @@ func Fetch(ctx context.Context, hc *http.Client, req *http.Request, body []byte,
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			r.ContentLength = int64(len(body))
 		}
-		resp, err := hc.Do(r)
+		resp, err := hc.Do(r) // #nosec G704 -- fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918)
 		if err != nil {
 			return nil, err
 		}

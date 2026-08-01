@@ -104,7 +104,7 @@ func TestSignerKeystoreUsesKMSWrapper(t *testing.T) {
 	}
 	pub1 := genCA(t, s1)
 
-	sealed, err := os.ReadFile(filepath.Join(dir, "issuing-ca.key"))
+	sealed, err := os.ReadFile(filepath.Join(dir, "issuing-ca.key")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read sealed signer key: %v", err)
 	}
@@ -194,11 +194,11 @@ func TestSignerKeyBackupRestore(t *testing.T) {
 		t.Fatalf("ReadDir: %v", err)
 	}
 	for _, e := range entries {
-		b, err := os.ReadFile(filepath.Join(src, e.Name()))
+		b, err := os.ReadFile(filepath.Join(src, e.Name())) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", e.Name(), err)
 		}
-		if err := os.WriteFile(filepath.Join(dst, e.Name()), b, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dst, e.Name()), b, 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 			t.Fatalf("write %s: %v", e.Name(), err)
 		}
 	}
@@ -239,7 +239,7 @@ else:
     sys.stderr.write("bad operation")
     sys.exit(4)
 `
-	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write signer KMS helper: %v", err)
 	}
 	return path

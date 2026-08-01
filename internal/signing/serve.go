@@ -145,7 +145,7 @@ func listenUDS(socketPath string, opts ServeOptions) (net.Listener, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create socket dir: %w", err)
 	}
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- 0700 on a directory: the execute bit is required to traverse it (CWE-276)
 		return nil, fmt.Errorf("chmod socket dir: %w", err)
 	}
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {

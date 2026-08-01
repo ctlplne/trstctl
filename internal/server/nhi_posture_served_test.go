@@ -53,7 +53,7 @@ func TestServedNHIOverPrivilegeCAPPOST01EndToEnd(t *testing.T) {
 		"used_scopes":    []string{"repo:read"},
 		"last_used_at":   "2026-05-02T00:00:00Z",
 	})
-	seedDiscoveryPostureFinding(t, h.store, h.tenant, map[string]any{
+	seedDiscoveryPostureFinding(t, h.store, h.tenant, map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"credential_kind":      "oauth_app",
 		"principal":            "legacy-github-app",
 		"granted_permissions":  []string{"repo", "admin:org", "workflow"},
@@ -159,7 +159,7 @@ func TestServedNHIPolicyComplianceCAPGOV03EndToEnd(t *testing.T) {
 		}
 	}
 
-	seedIdentity("22222222-2222-2222-2222-22222222f001", "governed-ci-token", map[string]any{
+	seedIdentity("22222222-2222-2222-2222-22222222f001", "governed-ci-token", map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"policy_required":         true,
 		"rotation_cadence_days":   30,
 		"last_rotated_at":         now.AddDate(0, 0, -74).Format(time.RFC3339),
@@ -192,7 +192,7 @@ func TestServedNHIPolicyComplianceCAPGOV03EndToEnd(t *testing.T) {
 		"22222222-2222-2222-2222-22222222f102",
 		"22222222-2222-2222-2222-22222222f103",
 		now.AddDate(0, 0, -45),
-		map[string]any{
+		map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"credential_kind":  "oauth_app",
 			"principal":        "third-party-deploy-app",
 			"policy_required":  true,
@@ -581,7 +581,7 @@ func TestServedNHIExposureCAPPOST04EndToEnd(t *testing.T) {
 		"22222222-2222-2222-2222-22222222b302",
 		"22222222-2222-2222-2222-22222222b303",
 		now.AddDate(0, 0, -7),
-		map[string]any{
+		map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"credential_kind":         "oauth_app",
 			"principal":               "vendor-oauth-public-callback",
 			"exposure":                "external",

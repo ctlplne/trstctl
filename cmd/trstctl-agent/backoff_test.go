@@ -19,7 +19,7 @@ import (
 //
 // It runs with seeded RNGs so it is fully deterministic (no time.Now, no flake).
 func TestRotateBackoffIsBoundedJitteredAndPositive(t *testing.T) {
-	rng := rand.New(rand.NewSource(1))
+	rng := rand.New(rand.NewSource(1)) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 
 	// (a) + (b): every attempt yields a positive delay no greater than the cap, and
 	// the *ceiling* grows monotonically up to the cap.
@@ -46,7 +46,7 @@ func TestRotateBackoffIsBoundedJitteredAndPositive(t *testing.T) {
 		}
 		return d
 	}
-	r := rand.New(rand.NewSource(42))
+	r := rand.New(rand.NewSource(42)) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	var maxSeen time.Duration
 	const attempt = 3 // ceiling = 8s
 	for i := 0; i < 5000; i++ {
@@ -65,8 +65,8 @@ func TestRotateBackoffIsBoundedJitteredAndPositive(t *testing.T) {
 
 	// (c) jitter: two independent streams differ at the same attempt (not a fixed
 	// schedule). Compare a handful of draws; at least one must differ.
-	a := rand.New(rand.NewSource(7))
-	b := rand.New(rand.NewSource(9))
+	a := rand.New(rand.NewSource(7)) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
+	b := rand.New(rand.NewSource(9)) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	differs := false
 	for i := 0; i < 8; i++ {
 		if rotateBackoff(5, a) != rotateBackoff(5, b) {
@@ -83,7 +83,7 @@ func TestRotateBackoffIsBoundedJitteredAndPositive(t *testing.T) {
 // a high attempt index must have its ceiling clamped, so the jittered draw stays
 // within (0, Max].
 func TestRotateBackoffCapsAtMax(t *testing.T) {
-	r := rand.New(rand.NewSource(123))
+	r := rand.New(rand.NewSource(123)) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	for i := 0; i < 1000; i++ {
 		if d := rotateBackoff(50, r); d <= 0 || d > rotateBackoffMax {
 			t.Fatalf("rotateBackoff(50) = %v, want in (0, %v]", d, rotateBackoffMax)
@@ -92,7 +92,7 @@ func TestRotateBackoffCapsAtMax(t *testing.T) {
 }
 
 func TestHeartbeatDelayUsesServerHintWithBoundedJitter(t *testing.T) {
-	rng := rand.New(rand.NewSource(11))
+	rng := rand.New(rand.NewSource(11)) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	const hintSeconds = int64(30)
 	min := 24 * time.Second
 	max := 30 * time.Second
@@ -110,7 +110,7 @@ func TestHeartbeatDelayUsesServerHintWithBoundedJitter(t *testing.T) {
 }
 
 func TestHeartbeatDelayFallsBackAndNeverSpins(t *testing.T) {
-	rng := rand.New(rand.NewSource(12))
+	rng := rand.New(rand.NewSource(12)) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	fallback := 10 * time.Second
 	for _, seconds := range []int64{-5, 0} {
 		d := heartbeatDelaySeconds(seconds, fallback, rng)

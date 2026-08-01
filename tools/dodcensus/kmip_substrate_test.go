@@ -35,7 +35,7 @@ root = module.Node(module.TAG_RESPONSE_MESSAGE, module.STRUCTURE, b"", [batch])
 assert module.batch_status(root, module.OP_QUERY) == module.STATUS_SUCCESS
 assert module.batch_payload(root, module.OP_QUERY) is payload
 `
-	if output, err := exec.Command(python, "-c", program, module).CombinedOutput(); err != nil {
+	if output, err := exec.Command(python, "-c", program, module).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Fatalf("KMIP independent verifier direct-child regression: %v: %s", err, output)
 	}
 }

@@ -49,10 +49,10 @@ func main() {
 			fail("write stdout: %v", err)
 		}
 	} else {
-		if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil { // #nosec G301 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 			fail("create output dir: %v", err)
 		}
-		if err := os.WriteFile(*out, data, 0o644); err != nil {
+		if err := os.WriteFile(*out, data, 0o644); err != nil { // #nosec G306 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 			fail("write %s: %v", *out, err)
 		}
 	}

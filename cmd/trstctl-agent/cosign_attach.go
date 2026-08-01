@@ -86,7 +86,7 @@ func loadPredecessorSigner(path string) (crypto.Signer, func(), error) {
 	if path == "" {
 		return nil, nil, errors.New("workload co-sign: --workload-predecessor-key is required")
 	}
-	pemBytes, err := os.ReadFile(path)
+	pemBytes, err := os.ReadFile(path) // #nosec G304 -- operator-configured local path from the agent's own config (CWE-22)
 	if err != nil {
 		return nil, nil, fmt.Errorf("workload co-sign: read predecessor key: %w", err)
 	}

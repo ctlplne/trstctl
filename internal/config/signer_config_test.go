@@ -32,7 +32,7 @@ func TestSignerDefaultsToChild(t *testing.T) {
 // TestSignerExternalRequiresSocket: an external signer needs a socket; a bogus
 // mode fails fast.
 func TestSignerExternalRequiresSocket(t *testing.T) {
-	base := map[string]string{
+	base := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
@@ -44,7 +44,7 @@ func TestSignerExternalRequiresSocket(t *testing.T) {
 	if _, err := config.Load(envFunc(base, map[string]string{"TRSTCTL_SIGNER_MODE": "external"})); err == nil {
 		t.Error("external signer without a socket should fail validation")
 	}
-	if _, err := config.Load(envFunc(base, map[string]string{
+	if _, err := config.Load(envFunc(base, map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_SIGNER_MODE":             "external",
 		"TRSTCTL_SIGNER_SOCKET":           "/run/trstctl/signer.sock",
 		"TRSTCTL_SIGNER_AUTH_SECRET_FILE": "/run/trstctl/sign-auth.bin",
@@ -104,7 +104,7 @@ func TestSignerNonLinuxDevHardeningOverrideIsExplicit(t *testing.T) {
 // and is mutually exclusive with a UDS socket. A complete block validates and is
 // reported as mTLS-enabled.
 func TestSignerExternalMTLSValidation(t *testing.T) {
-	base := map[string]string{
+	base := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
@@ -112,7 +112,7 @@ func TestSignerExternalMTLSValidation(t *testing.T) {
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 	}
-	full := map[string]string{
+	full := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_SIGNER_MODE":              "external",
 		"TRSTCTL_SIGNER_MTLS_ADDRESS":      "signer.trstctl.svc:9443",
 		"TRSTCTL_SIGNER_MTLS_SERVER_NAME":  "signer.trstctl.svc",

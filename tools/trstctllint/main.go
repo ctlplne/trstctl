@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/tools/trstctllint/licenseboundary"
 	"trstctl.com/trstctl/tools/trstctllint/netexec"
 	"trstctl.com/trstctl/tools/trstctllint/tenantfilter"
+	"trstctl.com/trstctl/tools/trstctllint/tlsverify"
 )
 
 func main() {
@@ -25,5 +26,6 @@ func main() {
 		cryptoagility.Analyzer,   // PQC-00
 		netexec.Analyzer,         // SEC-005
 		licenseboundary.Analyzer, // PACKAGING-007
+		tlsverify.Analyzer,       // SEC-CWE-295
 	)
 }

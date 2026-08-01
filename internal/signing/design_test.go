@@ -27,7 +27,7 @@ func sourceDir(t *testing.T) string {
 
 func readRepoFile(t *testing.T, rel string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(sourceDir(t), rel))
+	data, err := os.ReadFile(filepath.Join(sourceDir(t), rel)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", rel, err)
 	}
@@ -133,7 +133,7 @@ func TestSignerHasNoHTTPServerCall(t *testing.T) {
 			if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
-			data, rerr := os.ReadFile(path)
+			data, rerr := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 			if rerr != nil {
 				return rerr
 			}

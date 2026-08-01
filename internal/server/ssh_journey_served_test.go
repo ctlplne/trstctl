@@ -169,7 +169,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 		t.Fatalf("served KRL is not OpenSSH binary format after API revoke: %q", firstBytes(krl, 8))
 	}
 	certPath := filepath.Join(dir, "id_ed25519-cert.pub")
-	if err := os.WriteFile(certPath, []byte(issued.Certificate), 0o644); err != nil {
+	if err := os.WriteFile(certPath, []byte(issued.Certificate), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 

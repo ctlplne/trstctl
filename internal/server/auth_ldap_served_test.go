@@ -124,18 +124,18 @@ func startOpenLDAPContainer(t *testing.T) string {
 		"osixia/openldap:1.5.0",
 		"--copy-service",
 	}
-	out, err := exec.Command("docker", args...).CombinedOutput()
+	out, err := exec.Command("docker", args...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("start OpenLDAP container: %v\n%s", err, out)
 	}
 	t.Cleanup(func() {
-		_ = exec.Command("docker", "rm", "-f", name).Run()
+		_ = exec.Command("docker", "rm", "-f", name).Run() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	})
 
 	var endpoint string
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
-		out, err := exec.Command("docker", "port", name, "389/tcp").CombinedOutput()
+		out, err := exec.Command("docker", "port", name, "389/tcp").CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		if err == nil {
 			endpoint = strings.TrimSpace(string(out))
 			if endpoint != "" {
@@ -152,7 +152,7 @@ func startOpenLDAPContainer(t *testing.T) string {
 	}
 
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("docker", "exec", name, "ldapsearch", "-x",
+		cmd := exec.Command("docker", "exec", name, "ldapsearch", "-x", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 			"-H", "ldap://127.0.0.1",
 			"-D", "cn=admin,dc=example,dc=org",
 			"-w", "admin-password",
@@ -163,13 +163,13 @@ func startOpenLDAPContainer(t *testing.T) string {
 		}
 		time.Sleep(750 * time.Millisecond)
 	}
-	logs, _ := exec.Command("docker", "logs", name).CombinedOutput()
+	logs, _ := exec.Command("docker", "logs", name).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	t.Fatalf("OpenLDAP container did not become ready; logs:\n%s", logs)
 	return ""
 }
 
 func openLDAPUserBindReady(name string) bool {
-	cmd := exec.Command("docker", "exec", name, "ldapsearch", "-x",
+	cmd := exec.Command("docker", "exec", name, "ldapsearch", "-x", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-H", "ldap://127.0.0.1",
 		"-D", "uid=alice,ou=people,dc=example,dc=org",
 		"-w", "alice-password",

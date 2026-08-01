@@ -17,7 +17,7 @@ package crypto
 // verifiable by any CMS implementation, not just our own parser (non-circular).
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328)
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -184,7 +184,7 @@ func BuildTimeStampToken(tstInfoDER []byte, tsaCertDER []byte, tsaSigner DigestS
 	// ESS signingCertificate: SHA-1 over the TSA certificate for RFC 3161-era
 	// verifiers, plus signingCertificateV2: SHA-256 over the same certificate for
 	// modern RFC 5035 verifiers.
-	certSumV1 := sha1.Sum(tsaCertDER)
+	certSumV1 := sha1.Sum(tsaCertDER) // #nosec G401 -- RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328)
 	scDER, err := asn1.Marshal(signingCertificate{Certs: []essCertID{{CertHash: certSumV1[:]}}})
 	if err != nil {
 		return nil, fmt.Errorf("crypto: encode signingCertificate: %w", err)

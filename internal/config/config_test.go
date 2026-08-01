@@ -61,7 +61,7 @@ func TestEnvOverridesFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_CONFIG_FILE":                                   path,
 		"TRSTCTL_POSTGRES_DSN":                                  "env-dsn",
 		"TRSTCTL_LOG_LEVEL":                                     "debug",
@@ -166,7 +166,7 @@ func TestEnvOverridesFile(t *testing.T) {
 }
 
 func TestManagedKeyPKCS11EnvAndValidation(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_MANAGED_KEYS_ENABLED":                    "true",
 		"TRSTCTL_MANAGED_KEYS_PROVIDER":                   "pkcs11",
 		"TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH":         "/usr/lib/softhsm/libsofthsm2.so",
@@ -350,22 +350,22 @@ func TestValidateRejectsBadValues(t *testing.T) {
 			c.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_SPLUNK_TOKEN", "env:TRSTCTL_SPLUNK_TOKEN"}
 		},
 		"servicenow missing instance": func(c *Config) {
-			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN"}}
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN"}} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		"servicenow bad token ref": func(c *Config) {
 			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:"}}
 		},
 		"servicenow http without private approval": func(c *Config) {
-			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "http://127.0.0.1:8080", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN"}}
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "http://127.0.0.1:8080", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN"}} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		"servicenow private missing cidr grant": func(c *Config) {
-			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true}}
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true}} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		"servicenow private bad cidr grant": func(c *Config) {
-			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true, PrivateEgressCIDRs: []string{"not-a-cidr"}}}
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true, PrivateEgressCIDRs: []string{"not-a-cidr"}}} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		"servicenow cidr without private approval": func(c *Config) {
-			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", PrivateEgressCIDRs: []string{"10.0.0.0/8"}}}
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", PrivateEgressCIDRs: []string{"10.0.0.0/8"}}} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		"telemetry missing instance id file": func(c *Config) {
 			c.Telemetry.Enabled = true

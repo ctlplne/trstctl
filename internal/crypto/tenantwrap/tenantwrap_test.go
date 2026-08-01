@@ -107,7 +107,7 @@ func TestCreateRejectsUnsafeWrapperMode(t *testing.T) {
 		t.Skip("Windows mode bits do not model Unix custody")
 	}
 	path := filepath.Join(t.TempDir(), "tenant-wrapper.key")
-	if err := os.WriteFile(path, bytes.Repeat([]byte{0x31}, localKeySize), 0o644); err != nil {
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x31}, localKeySize), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 

@@ -101,7 +101,7 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	if err := b.run(ctx, csrPath, certPath); err != nil {
 		return nil, err
 	}
-	chain, err := os.ReadFile(certPath)
+	chain, err := os.ReadFile(certPath) // #nosec G304 -- operator-configured shell-CA output path; the shell CA is an explicit operator integration (CWE-22)
 	if err != nil {
 		return nil, fmt.Errorf("shellca: read signed certificate: %w", err)
 	}
@@ -117,7 +117,7 @@ func (b *backend) run(ctx context.Context, csrPath, certPath string) error {
 	defer cancel()
 	args := append([]string(nil), b.cfg.Args...)
 	args = append(args, csrPath, certPath)
-	cmd := exec.CommandContext(runCtx, b.cfg.Command, args...)
+	cmd := exec.CommandContext(runCtx, b.cfg.Command, args...) // #nosec G204 -- the shell-CA backend exists to run the operator's configured signing command (CWE-78)
 	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"}, b.cfg.Env...)
 	readers, writers, descriptors, err := openSecretPipes(b.cfg.SecretFDs)
 	if err != nil {

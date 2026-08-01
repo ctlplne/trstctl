@@ -203,7 +203,7 @@ func listenLooseUnixSocket(t *testing.T) (string, net.Listener) {
 	if err != nil {
 		t.Fatalf("listen loose Unix socket: %v", err)
 	}
-	if err := os.Chmod(socketPath, 0o666); err != nil {
+	if err := os.Chmod(socketPath, 0o666); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		_ = ln.Close()
 		t.Fatalf("make socket deliberately loose: %v", err)
 	}

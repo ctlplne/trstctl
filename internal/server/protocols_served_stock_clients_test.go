@@ -47,7 +47,7 @@ func TestServedACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 	recordsPath := filepath.Join(dir, "certbot-dns-records.tsv")
 	hookLogPath := filepath.Join(dir, "certbot-hooks.log")
 	hooksDir := filepath.Join(dir, "hooks")
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	authHook := filepath.Join(hooksDir, "auth.sh")
@@ -77,7 +77,7 @@ func TestServedACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 	workDir := filepath.Join(dir, "work")
 	logsDir := filepath.Join(dir, "logs")
 	for _, p := range []string{configDir, workDir, logsDir} {
-		if err := os.MkdirAll(p, 0o755); err != nil {
+		if err := os.MkdirAll(p, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 	}
@@ -192,7 +192,7 @@ func TestServedESTLibestSimpleEnroll(t *testing.T) {
 	}
 	logOut := filepath.Join(dir, "libest-simpleenroll.log")
 
-	cmd := exec.Command(bin,
+	cmd := exec.Command(bin, // #nosec G204 G702 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-e",
 		"-s", host,
 		"-p", port,
@@ -203,14 +203,14 @@ func TestServedESTLibestSimpleEnroll(t *testing.T) {
 	)
 	cmd.Env = append(os.Environ(), "EST_OPENSSL_CACERT="+caFile)
 	out, err := cmd.CombinedOutput()
-	if werr := os.WriteFile(logOut, out, 0o600); werr != nil {
+	if werr := os.WriteFile(logOut, out, 0o600); werr != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatalf("write libest log: %v", werr)
 	}
 	if err != nil {
 		t.Fatalf("libest estclient simpleenroll failed against served EST endpoint: %v\n%s", err, out)
 	}
 	p7Path := filepath.Join(outDir, "cert-0-0.pkcs7")
-	gotB64, err := os.ReadFile(p7Path)
+	gotB64, err := os.ReadFile(p7Path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("libest estclient did not write %s: %v\n%s", p7Path, err, out)
 	}
@@ -266,7 +266,7 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 	enrollLog := filepath.Join(dir, "sscep-enroll.log")
 	scepURL := ts.URL + "/scep/pkiclient.exe"
 
-	getCA := exec.Command(sscep, "getca",
+	getCA := exec.Command(sscep, "getca", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-u", scepURL,
 		"-c", caFile,
 		"-F", "sha256",
@@ -285,7 +285,7 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 		t.Fatalf("sscep getca wrote an empty CA file\n%s", getCAOut)
 	}
 
-	enroll := exec.Command(sscep, "enroll",
+	enroll := exec.Command(sscep, "enroll", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-u", scepURL,
 		"-c", caFile,
 		"-k", clientKeyFile,
@@ -344,7 +344,7 @@ func TestServedCMPOpenSSLClientP10CREnrollment(t *testing.T) {
 	certOut := filepath.Join(dir, "openssl-cmp-issued.pem")
 	logOut := filepath.Join(dir, "openssl-cmp.log")
 
-	cmd := exec.Command(ossl, "cmp",
+	cmd := exec.Command(ossl, "cmp", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-config", "",
 		"-cmd", "p10cr",
 		"-server", h.ts.URL,
@@ -450,7 +450,7 @@ printf 'cleanup _acme-challenge.%s\n' "$CERTBOT_DOMAIN" >> "$TRSTCTL_CERTBOT_HOO
 
 func servedWriteExecutable(t *testing.T, path, body string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write executable %s: %v", path, err)
 	}
 }
@@ -468,7 +468,7 @@ func servedWriteTLSCertPEM(t *testing.T, path string, ts *httptest.Server) {
 
 func servedRunExternalClient(t *testing.T, bin string, args, env []string, logPath string) {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
+	cmd := exec.Command(bin, args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if werr := os.WriteFile(logPath, out, 0o600); werr != nil {
@@ -492,7 +492,7 @@ func servedAssertCertbotIssuedDomain(t *testing.T, certPath, domain string) {
 
 func servedReadPEMCert(t *testing.T, path string) []byte {
 	t.Helper()
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read cert %s: %v", path, err)
 	}
@@ -505,7 +505,7 @@ func servedReadPEMCert(t *testing.T, path string) []byte {
 
 func servedReadCertificateFile(t *testing.T, path string) []byte {
 	t.Helper()
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
@@ -568,7 +568,7 @@ func (r *servedSCEPTranscriptRecorder) ServeHTTP(w http.ResponseWriter, req *htt
 	defer r.mu.Unlock()
 	reqPath := filepath.Join(r.dir, "sscep-pkioperation-request.der")
 	respPath := filepath.Join(r.dir, "sscep-pkioperation-response.der")
-	if err := os.WriteFile(reqPath, requestDER, 0o600); err == nil {
+	if err := os.WriteFile(reqPath, requestDER, 0o600); err == nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		r.pkiReq = reqPath
 	}
 	if err := os.WriteFile(respPath, rw.body.Bytes(), 0o600); err == nil {
@@ -609,7 +609,7 @@ func servedArchiveConformanceTranscripts(t *testing.T, prefix string, paths ...s
 	if dstDir == "" {
 		return
 	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil { // #nosec G301 G703 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Fatalf("create transcript archive dir: %v", err)
 	}
 	for _, src := range paths {
@@ -623,7 +623,7 @@ func servedArchiveExistingConformanceTranscripts(t *testing.T, prefix string, pa
 	if dstDir == "" {
 		return
 	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil { // #nosec G301 G703 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Fatalf("create transcript archive dir: %v", err)
 	}
 	for _, src := range paths {
@@ -639,13 +639,13 @@ func servedArchiveExistingConformanceTranscripts(t *testing.T, prefix string, pa
 
 func servedArchiveOneTranscript(t *testing.T, dstDir, prefix, src string) {
 	t.Helper()
-	in, err := os.Open(src)
+	in, err := os.Open(src) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("open transcript %s: %v", src, err)
 	}
 	defer func() { _ = in.Close() }()
 	dst := filepath.Join(dstDir, prefix+"-"+filepath.Base(src))
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 G703 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("create archived transcript %s: %v", dst, err)
 	}

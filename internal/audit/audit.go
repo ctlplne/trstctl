@@ -145,7 +145,7 @@ func (s *Service) searchSeed(ctx context.Context, tenantID string) (from uint64,
 	if !ok {
 		return 0, "", 0, nil
 	}
-	return cp.BoundarySeq + 1, cp.BoundaryHash, uint64(cp.RecordCount), nil
+	return cp.BoundarySeq + 1, cp.BoundaryHash, uint64(cp.RecordCount), nil // #nosec G115 -- event sequence/count fits int64 by construction; bounded by the log (CWE-190)
 }
 
 // Search returns the records matching q, in append order. It replays the log and

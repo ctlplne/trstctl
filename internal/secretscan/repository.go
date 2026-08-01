@@ -93,7 +93,7 @@ func cloneURLHasInlineCredentials(raw string) bool {
 }
 
 func runGit(ctx context.Context, dir string, args ...string) error {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- fixed git/gitleaks binaries over the operator's own repository (CWE-78)
 	if dir != "" {
 		cmd.Dir = filepath.Clean(dir)
 	}

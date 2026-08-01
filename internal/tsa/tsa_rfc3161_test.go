@@ -125,7 +125,7 @@ func TestTimestampTokenOpenSSLCMSDifferential(t *testing.T) {
 	// -noverify skips the X.509 chain (the TSA cert is a test cert); the signature
 	// and messageDigest binding are still fully checked. A non-RFC-5652 blob (JSON)
 	// fails to parse here.
-	out, err := exec.Command(ossl, "cms", "-verify", "-inform", "DER", "-in", tokenPath,
+	out, err := exec.Command(ossl, "cms", "-verify", "-inform", "DER", "-in", tokenPath, // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-noverify", "-out", contentPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("openssl cms -verify rejected our timestamp token (not RFC 5652 CMS): %v\n%s", err, out)
@@ -133,7 +133,7 @@ func TestTimestampTokenOpenSSLCMSDifferential(t *testing.T) {
 	if !bytes.Contains(out, []byte("Verification successful")) {
 		t.Errorf("openssl cms did not report success:\n%s", out)
 	}
-	content, err := os.ReadFile(contentPath)
+	content, err := os.ReadFile(contentPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("openssl wrote no eContent: %v", err)
 	}

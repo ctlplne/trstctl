@@ -283,7 +283,7 @@ jwt_svid_file_mode = 0600
 
 	runCtx, runCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer runCancel()
-	cmd := exec.CommandContext(runCtx, helper, "-config", configPath, "-daemon-mode=false")
+	cmd := exec.CommandContext(runCtx, helper, "-config", configPath, "-daemon-mode=false") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	out, err := cmd.CombinedOutput()
 	if runCtx.Err() != nil {
 		t.Fatalf("spiffe-helper timed out:\n%s", out)
@@ -342,7 +342,7 @@ func runServedGoSpiffeClient(t *testing.T, endpoint string) servedGoSpiffeResult
 	clientDir := filepath.Join("testdata", "gospiffe-client")
 	runCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, goBin, "run", ".", endpoint)
+	cmd := exec.CommandContext(runCtx, goBin, "run", ".", endpoint) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = clientDir
 	out, err := cmd.CombinedOutput()
 	if runCtx.Err() != nil {
@@ -370,7 +370,7 @@ func runServedGoSpiffeJWTClient(t *testing.T, endpoint string) servedGoSpiffeRes
 	clientDir := filepath.Join("testdata", "gospiffe-client")
 	runCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, goBin, "run", ".", endpoint, "jwt")
+	cmd := exec.CommandContext(runCtx, goBin, "run", ".", endpoint, "jwt") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = clientDir
 	out, err := cmd.CombinedOutput()
 	if runCtx.Err() != nil {
@@ -471,11 +471,11 @@ func TestServedSSHEndToEnd(t *testing.T) {
 	// Write the issued cert and verify it with ssh-keygen -L when available (the stock
 	// OpenSSH tool the audit asks for). Otherwise parse it through the crypto boundary.
 	certPath := filepath.Join(dir, "id_ed25519-cert.pub")
-	if err := os.WriteFile(certPath, []byte(issued.Certificate), 0o644); err != nil {
+	if err := os.WriteFile(certPath, []byte(issued.Certificate), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if sshKeygen, err := exec.LookPath("ssh-keygen"); err == nil {
-		out, lerr := exec.Command(sshKeygen, "-L", "-f", certPath).CombinedOutput()
+		out, lerr := exec.Command(sshKeygen, "-L", "-f", certPath).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		if lerr != nil {
 			t.Fatalf("ssh-keygen -L failed: %v\n%s", lerr, out)
 		}
@@ -515,10 +515,10 @@ func TestServedSSHEndToEnd(t *testing.T) {
 	// When ssh-keygen is present, confirm it reports the cert revoked against the KRL.
 	if sshKeygen, err := exec.LookPath("ssh-keygen"); err == nil {
 		krlPath := filepath.Join(dir, "trstctl.krl")
-		if err := os.WriteFile(krlPath, krl, 0o644); err != nil {
+		if err := os.WriteFile(krlPath, krl, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
-		out, qerr := exec.Command(sshKeygen, "-Q", "-f", krlPath, certPath).CombinedOutput()
+		out, qerr := exec.Command(sshKeygen, "-Q", "-f", krlPath, certPath).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		// ssh-keygen -Qf exits non-zero when the cert is revoked; either way the output
 		// must mention revocation.
 		if !bytes.Contains(bytes.ToLower(out), []byte("revoked")) && qerr == nil {
@@ -533,10 +533,10 @@ func TestServedSSHEndToEnd(t *testing.T) {
 func genSSHKey(t *testing.T, keyPath string) []byte {
 	t.Helper()
 	if sshKeygen, err := exec.LookPath("ssh-keygen"); err == nil {
-		if out, gerr := exec.Command(sshKeygen, "-t", "ed25519", "-N", "", "-f", keyPath, "-C", "alice@corp").CombinedOutput(); gerr != nil {
+		if out, gerr := exec.Command(sshKeygen, "-t", "ed25519", "-N", "", "-f", keyPath, "-C", "alice@corp").CombinedOutput(); gerr != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 			t.Fatalf("ssh-keygen genkey: %v\n%s", gerr, out)
 		}
-		pub, err := os.ReadFile(keyPath + ".pub")
+		pub, err := os.ReadFile(keyPath + ".pub") // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -29,7 +29,7 @@ func TestServedResponseIntegrationsCAPREM03EndToEnd(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_SPLUNK_TOKEN", "env:TRSTCTL_JIRA_TOKEN"}
 		d.EnableRemediation = true
-		d.ServiceNowBindings = []api.ServiceNowBinding{{
+		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          serviceNowSink.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
 			AllowPrivateEndpoint: true,
@@ -49,10 +49,10 @@ func TestServedResponseIntegrationsCAPREM03EndToEnd(t *testing.T) {
 		"correlation_id": "incident-42",
 		"evidence_refs":  []string{"incident.execution/incident-42", "remediation.playbook/run-42"},
 		"destinations": []map[string]any{
-			{"id": "splunk-hec", "provider": "splunk", "endpoint_url": httpSink.URL("/splunk"), "token_ref": "env:TRSTCTL_SPLUNK_TOKEN", "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, httpSink.URL("/splunk"))}},
-			{"id": "jira-sec", "provider": "jira", "endpoint_url": httpSink.URL("/jira"), "token_ref": "env:TRSTCTL_JIRA_TOKEN", "project_key": "NHI", "issue_type": "Incident", "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, httpSink.URL("/jira"))}},
+			{"id": "splunk-hec", "provider": "splunk", "endpoint_url": httpSink.URL("/splunk"), "token_ref": "env:TRSTCTL_SPLUNK_TOKEN", "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, httpSink.URL("/splunk"))}},                                       // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+			{"id": "jira-sec", "provider": "jira", "endpoint_url": httpSink.URL("/jira"), "token_ref": "env:TRSTCTL_JIRA_TOKEN", "project_key": "NHI", "issue_type": "Incident", "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, httpSink.URL("/jira"))}}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			{"id": "slack-war-room", "provider": "slack"},
-			{"id": "servicenow-ir", "provider": "servicenow", "instance_url": serviceNowSink.URL(), "table": "incident", "token_ref": "env:TRSTCTL_SERVICENOW_TOKEN", "allow_private_endpoint": true},
+			{"id": "servicenow-ir", "provider": "servicenow", "instance_url": serviceNowSink.URL(), "table": "incident", "token_ref": "env:TRSTCTL_SERVICENOW_TOKEN", "allow_private_endpoint": true}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 	})
 	if status != http.StatusAccepted {

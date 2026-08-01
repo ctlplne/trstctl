@@ -274,7 +274,7 @@ func Load(path string, trustedPubPEMs [][]byte) (*Manager, error) {
 	if path == "" {
 		return Community(), nil
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- operator-supplied license file path (CWE-22)
 	if err != nil {
 		return nil, fmt.Errorf("license: read %s: %w", path, err)
 	}

@@ -86,7 +86,7 @@ func candidates() []string {
 			continue
 		}
 		seen[p] = true
-		if st, err := os.Stat(p); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 { // #nosec G703 -- test-support helper probing fixed well-known openssl paths; not linked into served binaries (CWE-22)
 			out = append(out, p)
 		}
 	}
@@ -94,7 +94,7 @@ func candidates() []string {
 }
 
 func commandOK(path string, args ...string) error {
-	out, err := exec.Command(path, args...).CombinedOutput()
+	out, err := exec.Command(path, args...).CombinedOutput() // #nosec G204 -- test-support helper running the system openssl found above; not linked into served binaries (CWE-78)
 	if err != nil {
 		return fmt.Errorf("%s %s: %w: %s", path, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}

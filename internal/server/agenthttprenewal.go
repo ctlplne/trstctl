@@ -61,7 +61,7 @@ func (s *Server) serveAgentHTTPRenewal(ctx context.Context, ln net.Listener) {
 		_ = ln.Close()
 		return
 	}
-	go func() {
+	go func() { // #nosec G118 -- shutdown grace period must outlive the already-canceled parent context (CWE-664)
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

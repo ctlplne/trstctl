@@ -264,7 +264,7 @@ func TestBadTokenRejected(t *testing.T) {
 func TestCredentialsNeverLogged(t *testing.T) {
 	srv := newFakeCloudDNS(testToken)
 	defer srv.Close()
-	const secret = "ya29.ultra-secret-token-material"
+	const secret = "ya29.ultra-secret-token-material" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	// Point the double at a different token so the request fails and surfaces an error.
 	p := newProvider(t, srv, googledns.Credentials{BearerToken: []byte(secret)})
 

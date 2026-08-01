@@ -120,7 +120,7 @@ func TestParseTrufflehog(t *testing.T) {
 
 func readRepoFile(t *testing.T, root, rel string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel))) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", rel, err)
 	}

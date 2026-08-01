@@ -89,10 +89,10 @@ func TestAgentDiscoveryReconcilesAllSourcesIntoInventory(t *testing.T) {
 	// Filesystem: cert1 (unique here) and cert4 (also served via Kubernetes, to
 	// exercise cross-source dedup).
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "app.crt"), []byte(dcert1), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "app.crt"), []byte(dcert1), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "shared.crt"), []byte(dcert4), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "shared.crt"), []byte(dcert4), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 

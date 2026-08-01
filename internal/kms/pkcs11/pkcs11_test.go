@@ -41,7 +41,7 @@ func (s *softSession) GenerateKey(alg crypto.Algorithm) (string, []byte, error) 
 	}
 	s.mu.Lock()
 	s.n++
-	handle := "obj-" + hex.EncodeToString([]byte{byte(s.n)})
+	handle := "obj-" + hex.EncodeToString([]byte{byte(s.n)}) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 	s.keys[handle] = &softKey{signer: ls}
 	s.mu.Unlock()
 	return handle, ls.Public().DER, nil

@@ -74,7 +74,7 @@ func dodStartShippedSignerProcess(t *testing.T, dir, label, authFile, managedKey
 	if runtime.GOOS != "linux" {
 		args = append(args, "--allow-insecure-dev-nonlinux")
 	}
-	cmd := exec.Command(binary, args...)
+	cmd := exec.Command(binary, args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Stdout = io.Discard
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

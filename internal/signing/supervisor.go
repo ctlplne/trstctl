@@ -43,7 +43,7 @@ func (e ExitSummary) Empty() bool { return e.Kind == "" }
 // process boundary: the signer runs as its own process, reached only over the
 // UDS.
 func StartChild(ctx context.Context, binaryPath, socketPath string, extraArgs ...string) (*Client, func(), error) {
-	cmd := exec.Command(binaryPath, append([]string{"--socket", socketPath}, extraArgs...)...)
+	cmd := exec.Command(binaryPath, append([]string{"--socket", socketPath}, extraArgs...)...) // #nosec G204 -- spawns the repo's own signer binary; AN-4 child-process mode (CWE-78)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -213,7 +213,7 @@ func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, rea
 
 		// CommandContext so cancelling the supervisor terminates the child; a
 		// graceful SIGINT with a kill fallback after WaitDelay.
-		cmd := exec.CommandContext(ctx, binaryPath, append([]string{"--socket", socketPath}, extraArgs...)...)
+		cmd := exec.CommandContext(ctx, binaryPath, append([]string{"--socket", socketPath}, extraArgs...)...) // #nosec G204 -- spawns the repo's own signer binary; AN-4 child-process mode (CWE-78)
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = 5 * time.Second
 		cmd.Stdout = os.Stderr

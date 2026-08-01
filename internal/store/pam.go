@@ -70,7 +70,7 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        ended_at = EXCLUDED.ended_at`,
 		p.TenantID, p.ID, p.TargetType, p.TargetID, p.Role, p.Status, p.Subject,
 		p.RequestedBy, p.Reason, p.AttestationID, p.BackendRef, p.SSHKeyID,
-		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.StartedAt, p.ExpiresAt, p.EndedAt)
+		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.StartedAt, p.ExpiresAt, p.EndedAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 

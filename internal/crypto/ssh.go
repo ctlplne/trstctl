@@ -53,8 +53,8 @@ func SignSSHCertificate(caSigner DigestSigner, p SSHCertParams) ([]byte, error) 
 		CertType:        p.CertType,
 		KeyId:           p.KeyID,
 		ValidPrincipals: p.Principals,
-		ValidAfter:      uint64(p.ValidAfter.Unix()),
-		ValidBefore:     uint64(p.ValidBefore.Unix()),
+		ValidAfter:      uint64(p.ValidAfter.Unix()),  // #nosec G115 -- certificate validity epoch seconds; non-negative by validation (CWE-190)
+		ValidBefore:     uint64(p.ValidBefore.Unix()), // #nosec G115 -- certificate validity epoch seconds; non-negative by validation (CWE-190)
 		Permissions: ssh.Permissions{
 			CriticalOptions: p.CriticalOptions,
 			Extensions:      p.Extensions,

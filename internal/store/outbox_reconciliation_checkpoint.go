@@ -31,7 +31,7 @@ func (s *Store) AdvanceOutboxReconciliationCheckpoint(ctx context.Context, seq u
 	_, err := s.pool.Exec(ctx,
 		`UPDATE outbox_reconciliation_checkpoint
 		    SET reconciled_seq = GREATEST(reconciled_seq, $1), updated_at = now()
-		  WHERE id = 1`, int64(seq))
+		  WHERE id = 1`, int64(seq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	if err != nil {
 		return fmt.Errorf("store: advance outbox reconciliation checkpoint: %w", err)
 	}

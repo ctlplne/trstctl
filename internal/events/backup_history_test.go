@@ -203,7 +203,7 @@ func openBackupHistoryTestLog(t *testing.T) *Log {
 func backupHistoryEvent(t *testing.T, sequence uint64, id, eventType string) BackupHistoryRecord {
 	t.Helper()
 	const tenantID = "11111111-1111-1111-1111-111111111111"
-	when := time.Unix(int64(sequence), 0).UTC()
+	when := time.Unix(int64(sequence), 0).UTC() // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 	stored, err := json.Marshal(storedEvent{
 		ID: id, Type: eventType, TenantID: tenantID, Time: when,
 		SchemaVersion: DefaultSchemaVersion, Data: []byte(fmt.Sprintf(`{"sequence":%d}`, sequence)),

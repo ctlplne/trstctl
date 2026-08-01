@@ -78,7 +78,7 @@ print(json.dumps({"serial": issued["serial"], "version": read2["version"]}, sort
 		t.Fatalf("write python roundtrip script: %v", err)
 	}
 
-	cmd := exec.Command(python, scriptPath)
+	cmd := exec.Command(python, scriptPath) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = append(os.Environ(),
 		"PYTHONPATH="+sdkSrc,
 		"TRSTCTL_SERVER="+h.ts.URL,

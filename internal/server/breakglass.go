@@ -120,7 +120,7 @@ func readPEMOrDERFile(path, wantType string) ([]byte, error) {
 	if path == "" {
 		return nil, errors.New("path is required")
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 	if err != nil {
 		return nil, err
 	}

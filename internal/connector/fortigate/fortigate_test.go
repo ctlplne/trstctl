@@ -16,7 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/connector/fortigate"
 )
 
-const testToken = "fortios-rest-api-token-supersecret"
+const testToken = "fortios-rest-api-token-supersecret" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 
 // stored is a local certificate the fake FortiOS received.
 type stored struct {
@@ -124,7 +124,7 @@ func (f *fakeFortiOS) handle(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, `{"status":"success","http_status":200,"name":"`+name+`"}`)
+	_, _ = io.WriteString(w, `{"status":"success","http_status":200,"name":"`+name+`"}`) // #nosec G705 -- test writes fixture bytes to its own recorder/local server (CWE-79)
 }
 
 var (

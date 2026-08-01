@@ -145,7 +145,7 @@ func TestMCPRESTSensitiveRoutesAreExcludedAndUncallable(t *testing.T) {
 		WithAISurface(AISurfaceBackend{MCPIdentity: "spiffe://example.test/mcp", MCPWriteTools: true}),
 	)
 	srv := h.mcpServerFor(authz.Principal{TenantID: tenantID, Subject: "agent"})
-	sensitiveOps := map[string]string{
+	sensitiveOps := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"createEnrollmentToken":   "agent enrollment token",
 		"createAPIToken":          "bearer API token",
 		"openPAMSession":          "privileged access credential",

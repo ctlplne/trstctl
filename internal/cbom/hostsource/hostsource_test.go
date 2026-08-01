@@ -19,7 +19,7 @@ func TestScanFlagsWeakProtocolAndCipher(t *testing.T) {
 	conf := "# tls config\n" +
 		"ssl_protocols TLSv1 TLSv1.2;\n" +
 		"ssl_ciphers DES-CBC3-SHA:ECDHE-RSA-AES128-GCM-SHA256;\n"
-	if err := os.WriteFile(path, []byte(conf), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(conf), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 

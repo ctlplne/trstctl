@@ -58,7 +58,7 @@ func (p signTokenCommand) Authorize(intent crypto.SignIntent) ([]byte, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, p.path)
+	cmd := exec.CommandContext(ctx, p.path) // #nosec G204 -- operator-configured token-helper command (CWE-78)
 	cmd.Stdin = bytes.NewReader(payload)
 	out, err := cmd.Output()
 	if ctx.Err() != nil {

@@ -8,7 +8,7 @@ const (
 	CapacityMeasurementArtifact = "scripts/perf/artifacts/capacity-measurement-baseline.json"
 
 	capacityUnitPostgresCertificate = "postgres_certificate_row"
-	capacityUnitPostgresCredential  = "postgres_credential_row"
+	capacityUnitPostgresCredential  = "postgres_credential_row" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	capacityUnitJetStreamEvent      = "jetstream_event"
 )
 

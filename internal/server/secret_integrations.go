@@ -910,7 +910,7 @@ func (p *configuredSyncPusher) gcpSyncCredentials(
 	return credential.Primary.Bytes(), credential.Destroy, nil
 }
 
-const defaultGCPWorkloadIdentityEndpoint = "https://sts.googleapis.com/v1/token"
+const defaultGCPWorkloadIdentityEndpoint = "https://sts.googleapis.com/v1/token" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 
 func gcpWorkloadIdentityEndpoint(cfg config.SecretSyncTargetConfig) string {
 	if endpoint := strings.TrimSpace(cfg.WorkloadIdentityEndpoint); endpoint != "" {

@@ -59,13 +59,13 @@ func TestLiveSoakSamplerCapturesRealSpineMetrics(t *testing.T) {
 func TestSoakCaptureCommandWritesAnalyzerInput(t *testing.T) {
 	dir := t.TempDir()
 	seriesPath := filepath.Join(dir, "series.json")
-	cmd := exec.Command("go", "run", ".", "--samples", "3", "--step-seconds", "60", "--load-samples", "4", "--no-sleep", "--pretty=false", "--out", seriesPath)
+	cmd := exec.Command("go", "run", ".", "--samples", "3", "--step-seconds", "60", "--load-samples", "4", "--no-sleep", "--pretty=false", "--out", seriesPath) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = append(os.Environ(), "GOCACHE="+filepath.Join(dir, "gocache"), "SOAK_CAPTURE_TEST_SAMPLER=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("soakcapture failed: %v\n%s", err, out)
 	}
-	data, err := os.ReadFile(seriesPath)
+	data, err := os.ReadFile(seriesPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read series: %v", err)
 	}

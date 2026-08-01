@@ -831,7 +831,7 @@ func notificationSecret(inline []byte, file, label string) ([]byte, error) {
 	if file == "" {
 		return bytes.TrimSpace(out), nil
 	}
-	data, err := os.ReadFile(file)
+	data, err := os.ReadFile(file) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 	if err != nil {
 		return nil, fmt.Errorf("read notification %s file: %w", label, err)
 	}
@@ -1184,7 +1184,7 @@ func buildPluginConfig(p config.Plugins) (PluginConfig, error) {
 	}
 	var keys [][]byte
 	for _, f := range p.TrustedKeyFiles {
-		pem, err := os.ReadFile(f)
+		pem, err := os.ReadFile(f) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 		if err != nil {
 			return PluginConfig{}, fmt.Errorf("read trusted plugin key %q: %w", f, err)
 		}

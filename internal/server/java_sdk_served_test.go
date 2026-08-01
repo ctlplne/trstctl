@@ -41,7 +41,7 @@ func TestJavaSDKAuthIssueAndSecretsRoundTripAgainstServedHandler(t *testing.T) {
 
 	work := t.TempDir()
 	classes := filepath.Join(work, "classes")
-	if err := os.Mkdir(classes, 0o755); err != nil {
+	if err := os.Mkdir(classes, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("make Java classes dir: %v", err)
 	}
 	roundTrip := filepath.Join(work, "RoundTrip.java")
@@ -52,11 +52,11 @@ func TestJavaSDKAuthIssueAndSecretsRoundTripAgainstServedHandler(t *testing.T) {
 	sources := []string{"-d", classes}
 	sources = append(sources, javaSources(t, javaSrc)...)
 	sources = append(sources, roundTrip)
-	if out, err := exec.Command(javac, sources...).CombinedOutput(); err != nil {
+	if out, err := exec.Command(javac, sources...).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Fatalf("compile Java SDK served round-trip: %v\n%s", err, out)
 	}
 
-	cmd := exec.Command(java, "-cp", classes, "RoundTrip")
+	cmd := exec.Command(java, "-cp", classes, "RoundTrip") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = append(os.Environ(),
 		"TRSTCTL_SERVER="+h.ts.URL,
 		"TRSTCTL_TENANT="+h.tenant,
@@ -87,7 +87,7 @@ func javaTool(t *testing.T, name string) string {
 	if err != nil {
 		t.Skipf("%s is required for the Java SDK acceptance test on this machine: %v", name, err)
 	}
-	if out, err := exec.Command(path, "-version").CombinedOutput(); err != nil {
+	if out, err := exec.Command(path, "-version").CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Skipf("%s is present but unusable on this machine: %v\n%s", name, err, out)
 	}
 	return path

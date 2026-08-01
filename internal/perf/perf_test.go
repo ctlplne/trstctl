@@ -175,7 +175,7 @@ func TestPerfLiveLoadNamesProductionServedRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{
+	want := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"api.issuance":            "POST /api/v1/identities",
 		"api.inventory":           "GET /api/v1/certificates",
 		"api.graph_risk":          "GET /api/v1/graph",

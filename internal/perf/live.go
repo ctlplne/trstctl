@@ -724,7 +724,7 @@ func liveSignerBinary(ctx context.Context, tempDir string) (string, error) {
 		return "", err
 	}
 	out := filepath.Join(tempDir, "trstctl-signer")
-	cmd := exec.CommandContext(ctx, "go", liveSignerBuildArgs(out)...)
+	cmd := exec.CommandContext(ctx, "go", liveSignerBuildArgs(out)...) // #nosec G204 -- perf harness building/running the repo's own signer with the go toolchain (CWE-78)
 	cmd.Dir = root
 	if data, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("build trstctl-signer for perf live: %w: %s", err, strings.TrimSpace(string(data)))
@@ -844,7 +844,7 @@ func processMemoryBytes(pid int) (rss uint64, virt uint64, err error) {
 			sizePages, sizeErr := strconv.ParseUint(fields[0], 10, 64)
 			rssPages, rssErr := strconv.ParseUint(fields[1], 10, 64)
 			if sizeErr == nil && rssErr == nil {
-				pageSize := uint64(os.Getpagesize())
+				pageSize := uint64(os.Getpagesize()) // #nosec G115 -- page size is positive and small (CWE-190)
 				return rssPages * pageSize, sizePages * pageSize, nil
 			}
 		}
@@ -888,7 +888,7 @@ func processOpenFDCount(pid int) int {
 func commandOutput(name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, name, args...).Output()
+	return exec.CommandContext(ctx, name, args...).Output() // #nosec G204 -- perf harness building/running the repo's own signer with the go toolchain (CWE-78)
 }
 
 func openFDCount() int {

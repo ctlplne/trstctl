@@ -58,7 +58,7 @@ func validateClaimsForSelection(repo string, manifest Manifest, report Report, s
 }
 
 func validateFreshProductClaims(repo string, manifest Manifest, report Report) error {
-	ledgerBytes, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(featureClaimsPath)))
+	ledgerBytes, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(featureClaimsPath))) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return fmt.Errorf("read feature claims ledger: %w", err)
 	}
@@ -69,11 +69,11 @@ func validateFreshProductClaims(repo string, manifest Manifest, report Report) e
 	if len(ledger.Items) == 0 {
 		return fmt.Errorf("feature claims ledger has no items")
 	}
-	readme, err := os.ReadFile(filepath.Join(repo, readmeClaimsPath))
+	readme, err := os.ReadFile(filepath.Join(repo, readmeClaimsPath)) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return fmt.Errorf("read README capability claims: %w", err)
 	}
-	limitations, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(hsmClaimsPath)))
+	limitations, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(hsmClaimsPath))) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return fmt.Errorf("read managed-key limitations claims: %w", err)
 	}
@@ -159,7 +159,7 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		"secret_sync":    10,
 		"hsm_kms":        6,
 	}
-	labels := map[string]string{
+	labels := map[string]string{ // #nosec G101 -- developer-tool constant matching the secret-name heuristic; no credential value (CWE-798)
 		"connector":      "Deployment connectors",
 		"external_ca":    "CA integrations",
 		"dynamic_secret": "Dynamic-secret backends",

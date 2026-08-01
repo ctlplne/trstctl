@@ -134,10 +134,10 @@ func main() {
 	if err != nil {
 		fail("marshal report: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil { // #nosec G301 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 		fail("create output dir: %v", err)
 	}
-	if err := os.WriteFile(*out, data, 0o644); err != nil {
+	if err := os.WriteFile(*out, data, 0o644); err != nil { // #nosec G306 -- developer tool writing repo/dist artifacts; the mode is intentional (CWE-276)
 		fail("write %s: %v", *out, err)
 	}
 }
@@ -214,7 +214,7 @@ func startEmbeddedPostgres() (string, func(), error) {
 	}
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(uint32(port)). // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 		RuntimePath(filepath.Join(dir, "rt")).
 		DataPath(filepath.Join(dir, "data")).
 		BinariesPath(filepath.Join(dir, "bin")).
@@ -343,7 +343,7 @@ func measureAuditRecordBytes() (int64, error) {
 }
 
 func measureResources(path string, postgresConnections int) (perf.CapacityResourceMeasurement, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return perf.CapacityResourceMeasurement{}, err
 	}

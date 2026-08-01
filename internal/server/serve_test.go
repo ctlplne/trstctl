@@ -14,7 +14,7 @@ import (
 )
 
 func newHandler() *http.Server {
-	return &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })}
+	return &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })} // #nosec G112 -- local test listener owned and torn down by the test (CWE-400)
 }
 
 // TestServeControlPlaneInternalRefusesPlaintext: the default (internal TLS) mode

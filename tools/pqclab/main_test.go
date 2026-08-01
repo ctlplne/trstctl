@@ -73,11 +73,11 @@ func TestWriteArchiveIsDeterministicChecksummedAndSecretFree(t *testing.T) {
 	if err := writeArchive(second, files); err != nil {
 		t.Fatal(err)
 	}
-	firstBytes, err := os.ReadFile(first)
+	firstBytes, err := os.ReadFile(first) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondBytes, err := os.ReadFile(second)
+	secondBytes, err := os.ReadFile(second) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

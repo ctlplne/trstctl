@@ -89,7 +89,7 @@ func TestAgentSSHMaterialReconcilesIntoInventory(t *testing.T) {
 
 	home := filepath.Join(t.TempDir(), ".ssh")
 	// authorized_keys: an owned grant and an unattributable (no-comment) one.
-	if err := os.MkdirAll(home, 0o755); err != nil {
+	if err := os.MkdirAll(home, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(home, "authorized_keys"), []byte(sshEdPub+"\n"+sshEcPub+"\n"), 0o600); err != nil {

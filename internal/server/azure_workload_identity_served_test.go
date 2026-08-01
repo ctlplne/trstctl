@@ -23,7 +23,7 @@ import (
 const (
 	servedAzureFederatedTargetID   = "azure-federated"
 	servedAzureFederatedProofName  = "sync/azure-workload-proof"
-	servedAzureFederatedSecretName = "sync/azure-source"
+	servedAzureFederatedSecretName = "sync/azure-source" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	servedAzureFederatedSubject    = "system:serviceaccount:default:web"
 	servedAzureTenantID            = "33333333-3333-4333-8333-333333333333"
 	servedAzureClientID            = "44444444-4444-4444-8444-444444444444"

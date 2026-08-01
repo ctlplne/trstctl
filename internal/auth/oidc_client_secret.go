@@ -12,7 +12,7 @@ import (
 const (
 	// OIDCClientSecretScope is the tenant-scoped credential scope used for OIDC
 	// confidential-client secrets.
-	OIDCClientSecretScope = "auth.oidc"
+	OIDCClientSecretScope = "auth.oidc" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	// OIDCClientSecretName is the stable credential name under an OIDC client ref.
 	OIDCClientSecretName = "client_secret"
 )

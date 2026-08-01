@@ -97,7 +97,7 @@ func TestProtectCORRECT102_AcceptAllIsTestOnly(t *testing.T) {
 		if !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		b, rerr := os.ReadFile(path)
+		b, rerr := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if rerr != nil {
 			return rerr
 		}

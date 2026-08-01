@@ -1197,7 +1197,7 @@ func mustWriteFile(t *testing.T, path string, data []byte) {
 
 func mustWriteFileMode(t *testing.T, path string, data []byte, mode os.FileMode) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, data, mode); err != nil {

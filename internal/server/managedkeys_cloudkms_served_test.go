@@ -27,7 +27,7 @@ const (
 	servedAzureVaultURL = "https://trstctl-test.managedhsm.azure.net"
 	servedAzureToken    = "azure-access-token-do-not-log"
 	servedGCPParent     = "projects/p/locations/l/keyRings/r"
-	servedGCPToken      = "ya29.gcp-access-token-do-not-log"
+	servedGCPToken      = "ya29.gcp-access-token-do-not-log" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 )
 
 // TestServedCloudKMSManagedKeyLifecycleCAPKEY02 proves CAP-KEY-02 through the

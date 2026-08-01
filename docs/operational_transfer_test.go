@@ -61,7 +61,7 @@ func TestOperationalTransferDocsArePresent(t *testing.T) {
 
 func readTransferDoc(t *testing.T, path string) string {
 	t.Helper()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}

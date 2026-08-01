@@ -64,7 +64,7 @@ func TestRedeemBootstrapTokenConsumesOnce(t *testing.T) {
 	ctx := context.Background()
 	seedTwoTenants(t, s)
 
-	if _, err := s.CreateBootstrapToken(ctx, store.BootstrapTokenRecord{
+	if _, err := s.CreateBootstrapToken(ctx, store.BootstrapTokenRecord{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		TenantID:        tenantA,
 		TokenHash:       "sha256:consume-once",
 		AllowedIdentity: "edge-agent",

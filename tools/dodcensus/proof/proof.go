@@ -86,7 +86,7 @@ func translateMountSuffix(hostRoot, aliasRoot, candidate string) (string, error)
 
 func validateMountTranslationIdentity(hostRoot, aliasRoot, hostSource, candidate string) error {
 	inspect := func(label, path string, requireDirectory bool) (os.FileInfo, error) {
-		info, err := os.Lstat(path)
+		info, err := os.Lstat(path) // #nosec G703 -- developer tool probing repo/toolchain paths, not a served binary (CWE-22)
 		if err != nil {
 			return nil, fmt.Errorf("inspect %s: %w", label, err)
 		}
@@ -319,7 +319,7 @@ func StartCommand(t *testing.T, id string) *ExternalSubstrate {
 		return startBrokerExternal(t, expected)
 	}
 	commandPath := filepath.Join(expected.Repo, filepath.FromSlash(expected.Command[0]))
-	cmd := exec.Command(commandPath, expected.Command[1:]...)
+	cmd := exec.Command(commandPath, expected.Command[1:]...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 	cmd.Dir = expected.Repo
 	cmd.Env = substrateEnvironment(expected)
 	return startExternal(t, expected, cmd, true)

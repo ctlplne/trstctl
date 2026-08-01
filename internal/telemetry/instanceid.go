@@ -18,7 +18,7 @@ import (
 // — so it carries no PII; the receiver counts distinct IDs to estimate active
 // deployments, and nothing more.
 func LoadOrCreateInstanceID(path string) (string, error) {
-	if b, err := os.ReadFile(path); err == nil {
+	if b, err := os.ReadFile(path); err == nil { // #nosec G304 -- fixed instance-id file under the configured data dir (CWE-22)
 		if id := strings.TrimSpace(string(b)); id != "" {
 			return id, nil
 		}

@@ -24,7 +24,7 @@ import (
 const (
 	servedGCPFederatedTargetID   = "gcp-federated"
 	servedGCPFederatedProofName  = "sync/gcp-workload-proof"
-	servedGCPFederatedSecretName = "sync/gcp-source"
+	servedGCPFederatedSecretName = "sync/gcp-source" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	servedGCPFederatedSubject    = "system:serviceaccount:default:web"
 	servedGCPServiceAccount      = "sync@example.iam.gserviceaccount.com"
 )

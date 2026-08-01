@@ -88,7 +88,7 @@ func TestAIModelLocalAllowsOnlyLoopbackHTTP(t *testing.T) {
 
 func TestAIModelRejectsURLCredentials(t *testing.T) {
 	c := Default()
-	c.AI.Model = AIModel{Mode: AIModelCloud, Provider: "gateway", Endpoint: "https://user:pass@llm.example.com/v1/chat/completions", Name: "ops-model", AllowEgress: true}
+	c.AI.Model = AIModel{Mode: AIModelCloud, Provider: "gateway", Endpoint: "https://user:pass@llm.example.com/v1/chat/completions", Name: "ops-model", AllowEgress: true} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	err := c.Validate()
 	if err == nil || !strings.Contains(err.Error(), "must not include credentials") {
 		t.Fatalf("model endpoint with URL credentials should fail, got %v", err)

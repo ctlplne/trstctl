@@ -98,7 +98,7 @@ func ServerCertFromFiles(certFile, keyFile string) (*ServerCert, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainPEM, err := os.ReadFile(certFile)
+	chainPEM, err := os.ReadFile(certFile) // #nosec G304 -- operator-configured certificate/key path from deployment config (CWE-22)
 	if err != nil {
 		return nil, fmt.Errorf("mtls: read server certificate: %w", err)
 	}
@@ -186,7 +186,7 @@ func LoopbackProbeClient(timeout time.Duration) *http.Client {
 		Timeout: timeout,
 		Transport: &http.Transport{
 			// Loopback liveness only — see the doc comment above.
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, //nolint:gosec
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, // #nosec G402 -- localhost liveness probe of this process's own ephemeral self-signed listener; no credential, no data (CWE-295)
 		},
 	}
 }

@@ -10,7 +10,7 @@ import (
 // fullOIDC returns a minimal, valid enabled OIDC block (loopback endpoints so the
 // https check's loopback exemption applies).
 func fullOIDC() OIDC {
-	return OIDC{
+	return OIDC{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		Enabled:           true,
 		Issuer:            "https://idp.example.com",
 		ClientID:          "trstctl-ui",
@@ -111,7 +111,7 @@ func TestOIDCLoopbackHTTPAllowed(t *testing.T) {
 
 // TestOIDCEnvOverlay: the scalar OIDC knobs overlay from the environment.
 func TestOIDCEnvOverlay(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_AUTH_OIDC_ENABLED":                                        "true",
 		"TRSTCTL_AUTH_OIDC_ISSUER":                                         "https://idp.env.example",
 		"TRSTCTL_AUTH_OIDC_AUTHORIZATION_RESPONSE_ISS_PARAMETER_SUPPORTED": "true",

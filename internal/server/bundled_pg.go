@@ -62,7 +62,7 @@ func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, e
 
 	db := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(uint32(port)). // #nosec G115 -- port validated into uint16 range by config parsing (CWE-190)
 		DataPath(filepath.Join(dataDir, "db")).
 		RuntimePath(filepath.Join(dataDir, "rt")).
 		// Cache the pinned binary outside the data dir so it is not re-downloaded on

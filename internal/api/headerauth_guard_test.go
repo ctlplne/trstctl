@@ -31,12 +31,12 @@ func TestProductionBinaryDoesNotLinkHeaderTrust(t *testing.T) {
 	}
 	root := apiRepoRoot(t)
 	bin := filepath.Join(t.TempDir(), "trstctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/trstctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/trstctl") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build cmd/trstctl: %v\n%s", err, out)
 	}
-	nm := exec.Command("go", "tool", "nm", bin)
+	nm := exec.Command("go", "tool", "nm", bin) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	nm.Dir = root
 	out, err := nm.CombinedOutput()
 	if err != nil {

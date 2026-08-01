@@ -243,7 +243,7 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 	}
 	checkpoint := Checkpoint{
 		TenantID: tenantID, BoundarySeq: boundary.StreamSequence, BoundaryHash: boundary.Hash,
-		RecordCount: int(boundary.Sequence), ArchiveURI: uri,
+		RecordCount: int(boundary.Sequence), ArchiveURI: uri, // #nosec G115 -- event sequence/count fits int64 by construction; bounded by the log (CWE-190)
 	}
 	for _, r := range segment {
 		if r.StreamSequence == 0 {

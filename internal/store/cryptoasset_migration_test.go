@@ -35,7 +35,7 @@ func TestCryptoAssetMigrationMergesExistingDesiredSignatureUnderTenantRLS(t *tes
 
 	for i, asset := range []store.CryptoAsset{weak, approved, foreign} {
 		if err := st.WithTenant(ctx, asset.TenantID, func(tx pgx.Tx) error {
-			return st.ApplyCryptoAssetObservedTx(ctx, tx, asset, uint64(10+i), now.Add(time.Duration(i)*time.Second))
+			return st.ApplyCryptoAssetObservedTx(ctx, tx, asset, uint64(10+i), now.Add(time.Duration(i)*time.Second)) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		}); err != nil {
 			t.Fatalf("seed crypto asset %s: %v", asset.ID, err)
 		}

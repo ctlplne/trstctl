@@ -27,7 +27,7 @@ func (s *Store) SaveAuditCheckpoint(ctx context.Context, cp audit.Checkpoint) er
 			               record_count  = EXCLUDED.record_count,
 			               archive_uri   = EXCLUDED.archive_uri,
 			               created_at    = now()`,
-			cp.TenantID, int64(cp.BoundarySeq), cp.BoundaryHash, int64(cp.RecordCount), cp.ArchiveURI)
+			cp.TenantID, int64(cp.BoundarySeq), cp.BoundaryHash, int64(cp.RecordCount), cp.ArchiveURI) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 		return err
 	})
 }
@@ -49,7 +49,7 @@ func (s *Store) ApplyAuditCheckpointTx(ctx context.Context, tx pgx.Tx, cp audit.
 		 DO UPDATE SET boundary_hash = EXCLUDED.boundary_hash,
 		               record_count  = EXCLUDED.record_count,
 		               archive_uri   = EXCLUDED.archive_uri`,
-		cp.TenantID, int64(cp.BoundarySeq), cp.BoundaryHash, int64(cp.RecordCount), cp.ArchiveURI)
+		cp.TenantID, int64(cp.BoundarySeq), cp.BoundaryHash, int64(cp.RecordCount), cp.ArchiveURI) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -69,7 +69,7 @@ func (s *Store) LatestAuditCheckpoint(ctx context.Context, tenantID string) (aud
 			  LIMIT 1`, tenantID)
 		switch err := row.Scan(&bseq, &cp.BoundaryHash, &count, &cp.ArchiveURI); {
 		case err == nil:
-			cp.BoundarySeq = uint64(bseq)
+			cp.BoundarySeq = uint64(bseq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 			cp.RecordCount = int(count)
 			found = true
 			return nil

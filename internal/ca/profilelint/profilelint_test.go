@@ -143,7 +143,7 @@ func TestArchiveProfileLintFixturesWritesCorpus(t *testing.T) {
 		t.Fatalf("fixture corpus = %v, want %v", written, want)
 	}
 	for _, name := range want {
-		raw, err := os.ReadFile(filepath.Join(dir, name))
+		raw, err := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 G703 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
@@ -170,7 +170,7 @@ type profileLintFixture struct {
 
 func writeProfileLintFixtures(t *testing.T, dir string) []string {
 	t.Helper()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 G703 -- non-secret fixture directory in t.TempDir (CWE-22, CWE-276)
 		t.Fatalf("create fixture dir: %v", err)
 	}
 	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -238,7 +238,7 @@ func writeProfileLintFixtures(t *testing.T, dir string) []string {
 
 	names := make([]string, 0, len(fixtures))
 	for _, fixture := range fixtures {
-		if err := os.WriteFile(filepath.Join(dir, fixture.name), pemCert(fixture.der), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, fixture.name), pemCert(fixture.der), 0o644); err != nil { // #nosec G306 G703 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 			t.Fatalf("write %s: %v", fixture.name, err)
 		}
 		names = append(names, fixture.name)
@@ -251,7 +251,7 @@ func writeProfileLintFixtures(t *testing.T, dir string) []string {
 		}
 		manifest = append(manifest, fmt.Sprintf("%s %s\n", role, name)...)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "MANIFEST.txt"), manifest, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "MANIFEST.txt"), manifest, 0o644); err != nil { // #nosec G306 G703 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Fatalf("write manifest: %v", err)
 	}
 	return names

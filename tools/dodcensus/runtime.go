@@ -36,7 +36,7 @@ const (
 	dodReceiptTestTimeoutArg = "-timeout=30m"
 )
 
-var verifierConstructor = map[string]string{
+var verifierConstructor = map[string]string{ // #nosec G101 -- developer-tool constant matching the secret-name heuristic; no credential value (CWE-798)
 	"external-write":       "ExternalWrite",
 	"credential-lifecycle": "CredentialLifecycle",
 	"ca-issue-chain":       "CAIssueChain",
@@ -129,7 +129,7 @@ func inspectSubstrate(repo, id string, substrate Substrate) checkEvidence {
 		evidence.Detail = "contract path: " + err.Error()
 		return evidence
 	}
-	contract, err := os.ReadFile(contractPath)
+	contract, err := os.ReadFile(contractPath) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		evidence.Detail = "read substrate contract: " + err.Error()
 		return evidence
@@ -150,7 +150,7 @@ func inspectSubstrate(repo, id string, substrate Substrate) checkEvidence {
 			evidence.Detail = "emulator command is missing, a directory, or not executable"
 			return evidence
 		}
-		commandBytes, readErr := os.ReadFile(commandPath)
+		commandBytes, readErr := os.ReadFile(commandPath) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 		if readErr != nil {
 			evidence.Detail = "read emulator/verifier command: " + readErr.Error()
 			return evidence
@@ -221,7 +221,7 @@ func commandIdentityDigest(repo string, names []string) (string, error) {
 		if !info.Mode().IsRegular() {
 			return "", fmt.Errorf("identity file %s is not a regular file", name)
 		}
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 		if err != nil {
 			return "", fmt.Errorf("read %s: %w", name, err)
 		}
@@ -435,7 +435,7 @@ func requireDODProofBuildConstraint(repo, name string) error {
 	if err != nil {
 		return fmt.Errorf("runtime proof path: %w", err)
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return fmt.Errorf("read runtime proof build constraint: %w", err)
 	}
@@ -1136,7 +1136,7 @@ func launchedBinarySpecForManifest(repo string, manifest Manifest) (launchedBina
 	if !ok || profile.BinaryPackage != manifest.BinaryPackage {
 		return launchedBinarySpec{}, fmt.Errorf("default shipped profile does not own manifest binary_package %q", manifest.BinaryPackage)
 	}
-	raw, err := os.ReadFile(filepath.Join(repo, "go.mod"))
+	raw, err := os.ReadFile(filepath.Join(repo, "go.mod")) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return launchedBinarySpec{}, fmt.Errorf("read module path for launched binary: %w", err)
 	}
@@ -1469,7 +1469,7 @@ func readRuntimeReceipt(path, label string) (runtimeReceipt, error) {
 	if info.IsDir() || info.Size() <= 0 || info.Size() > maxReceiptBytes {
 		return runtimeReceipt{}, fmt.Errorf("%s has invalid size %d", label, info.Size())
 	}
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil {
 		return runtimeReceipt{}, fmt.Errorf("open %s: %w", label, err)
 	}

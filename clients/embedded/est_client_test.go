@@ -44,7 +44,7 @@ func TestEmbeddedESTClientEnrolls(t *testing.T) {
 
 	tmp := t.TempDir()
 	bin := filepath.Join(tmp, "est_client")
-	build := exec.Command("cc", "-O2", "-o", bin, filepath.Join("csrc", "est_client.c"))
+	build := exec.Command("cc", "-O2", "-o", bin, filepath.Join("csrc", "est_client.c")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("cc build failed: %v\n%s", err, out)
 	}
@@ -68,15 +68,15 @@ func TestEmbeddedESTClientEnrolls(t *testing.T) {
 	defer ts.Close()
 
 	enrollDir := filepath.Join(tmp, "enroll")
-	if err := os.MkdirAll(enrollDir, 0o755); err != nil {
+	if err := os.MkdirAll(enrollDir, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	run := exec.Command(bin, ts.URL, enrollDir)
+	run := exec.Command(bin, ts.URL, enrollDir) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if out, err := run.CombinedOutput(); err != nil {
 		t.Fatalf("embedded EST client failed: %v\n%s", err, out)
 	}
 
-	cert, err := os.ReadFile(filepath.Join(enrollDir, "cert.pem"))
+	cert, err := os.ReadFile(filepath.Join(enrollDir, "cert.pem")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil || !bytes.Contains(cert, []byte("BEGIN CERTIFICATE")) {
 		t.Fatalf("client did not produce a certificate (err=%v)", err)
 	}
@@ -98,7 +98,7 @@ func TestEmbeddedESTClientRejectsOversizedResponse(t *testing.T) {
 
 	tmp := t.TempDir()
 	bin := filepath.Join(tmp, "est_client")
-	build := exec.Command("cc", "-O2", "-o", bin, filepath.Join("csrc", "est_client.c"))
+	build := exec.Command("cc", "-O2", "-o", bin, filepath.Join("csrc", "est_client.c")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("cc build failed: %v\n%s", err, out)
 	}
@@ -133,11 +133,11 @@ func TestEmbeddedESTClientRejectsOversizedResponse(t *testing.T) {
 	}()
 
 	enrollDir := filepath.Join(tmp, "enroll")
-	if err := os.MkdirAll(enrollDir, 0o755); err != nil {
+	if err := os.MkdirAll(enrollDir, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	url := "http://" + ln.Addr().String()
-	run := exec.Command(bin, url, enrollDir)
+	run := exec.Command(bin, url, enrollDir) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	out, err := run.CombinedOutput()
 	<-done
 
@@ -169,7 +169,7 @@ func TestEmbeddedESTClientRejectsShellInjectionWorkdir(t *testing.T) {
 
 	tmp := t.TempDir()
 	bin := filepath.Join(tmp, "est_client")
-	build := exec.Command("cc", "-O2", "-o", bin, filepath.Join("csrc", "est_client.c"))
+	build := exec.Command("cc", "-O2", "-o", bin, filepath.Join("csrc", "est_client.c")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("cc build failed: %v\n%s", err, out)
 	}
@@ -178,7 +178,7 @@ func TestEmbeddedESTClientRejectsShellInjectionWorkdir(t *testing.T) {
 	// A workdir that, if interpolated into `openssl req ... -keyout <wd>/key.pem ...`,
 	// would close the openssl command and run `touch <sentinel>`.
 	maliciousWD := tmp + "; touch " + sentinel + "; echo "
-	run := exec.Command(bin, "http://127.0.0.1:9/", maliciousWD)
+	run := exec.Command(bin, "http://127.0.0.1:9/", maliciousWD) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	out, err := run.CombinedOutput()
 	if err == nil {
 		t.Fatalf("client accepted a shell-metacharacter workdir (should have rejected it); output:\n%s", out)
@@ -194,10 +194,10 @@ func TestEmbeddedESTClientRejectsShellInjectionWorkdir(t *testing.T) {
 	// for network reasons against the unreachable URL, which is fine — we only assert
 	// it was NOT rejected as unsafe).
 	cleanWD := filepath.Join(tmp, "enroll")
-	if err := os.MkdirAll(cleanWD, 0o755); err != nil {
+	if err := os.MkdirAll(cleanWD, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	out2, _ := exec.Command(bin, "http://127.0.0.1:9/", cleanWD).CombinedOutput()
+	out2, _ := exec.Command(bin, "http://127.0.0.1:9/", cleanWD).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if bytes.Contains(out2, []byte("unsafe workdir")) {
 		t.Errorf("a clean workdir was wrongly rejected as unsafe:\n%s", out2)
 	}
@@ -214,7 +214,7 @@ func TestEmbeddedESTClientBuildsWithSanitizersWhenAvailable(t *testing.T) {
 
 	tmp := t.TempDir()
 	bin := filepath.Join(tmp, "est_client_sanitized")
-	build := exec.Command("cc",
+	build := exec.Command("cc", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-O1",
 		"-g",
 		"-fsanitize=address,undefined",

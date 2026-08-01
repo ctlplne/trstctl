@@ -178,7 +178,7 @@ func TestManagedKeyIdempotencyRejectsChangedActionBodyOrCallerBeforeService(t *t
 func TestManagedKeyIdempotencyCredentialCacheCollisionReturnsCredentialFreeConflict(t *testing.T) {
 	const (
 		rawKey     = "credential-bearing-cache-collision"
-		credential = "credential-sentinel-that-must-not-escape"
+		credential = "credential-sentinel-that-must-not-escape" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	)
 	idem := orchestrator.NewMemoryIdempotency()
 	if _, err := idem.Do(context.Background(), managedKeyTestTenant, rawKey, func(context.Context) ([]byte, error) {

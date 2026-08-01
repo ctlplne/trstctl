@@ -60,10 +60,10 @@ func validateWithOpenSSH(t *testing.T, cert []byte, wantPrincipal string) {
 		return
 	}
 	f := filepath.Join(t.TempDir(), "id-cert.pub")
-	if err := os.WriteFile(f, cert, 0o644); err != nil {
+	if err := os.WriteFile(f, cert, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	out, err := exec.Command("ssh-keygen", "-L", "-f", f).CombinedOutput()
+	out, err := exec.Command("ssh-keygen", "-L", "-f", f).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("stock ssh-keygen rejected the certificate: %v\n%s", err, out)
 	}

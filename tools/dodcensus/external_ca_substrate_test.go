@@ -165,7 +165,7 @@ assert not module.verify_sigv4("POST", "/", unsigned_target, b"{}", access_key="
 signed.replace_header("X-Amz-Target", "ACMPrivateCA.GetCertificate")
 assert not module.verify_sigv4("POST", "/", signed, b"{}", access_key="AKIADOD", secret_key=b"dod-token", region="us-east-1", service="acm-pca")
 `
-	command := exec.CommandContext(ctx, "python3", "-c", program, path)
+	command := exec.CommandContext(ctx, "python3", "-c", program, path) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("external-CA substrate protocol regression: %v\n%s", err, output)

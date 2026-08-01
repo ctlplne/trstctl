@@ -104,20 +104,20 @@ func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byt
 	out := make([]byte, 0, len(metaMagic)+5+len(purposes)+len(hashes))
 	out = append(out, metaMagic...)
 	out = append(out, metaVersion)
-	out = append(out, byte(len(purposes)))
+	out = append(out, byte(len(purposes))) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
 	for _, p := range purposes {
-		out = append(out, byte(p))
+		out = append(out, byte(p)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
 	}
-	out = append(out, byte(len(hashes)))
+	out = append(out, byte(len(hashes))) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
 	for _, h := range hashes {
-		out = append(out, byte(h))
+		out = append(out, byte(h)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
 	}
 	var flags byte
 	if kc.requireAuth {
 		flags |= flagRequireAuth
 	}
 	out = append(out, flags)
-	out = append(out, byte(algorithm))
+	out = append(out, byte(algorithm)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
 	return out
 }
 
@@ -238,7 +238,7 @@ func (ks *KeyStore) Load() (map[string]*heldKey, error) {
 			continue
 		}
 		stem := strings.TrimSuffix(name, keyFileExt)
-		sealed, err := os.ReadFile(filepath.Join(ks.dir, name))
+		sealed, err := os.ReadFile(filepath.Join(ks.dir, name)) // #nosec G304 -- the signer's own keystore/journal directory from its config (CWE-22)
 		if err != nil {
 			return nil, err
 		}

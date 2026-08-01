@@ -30,7 +30,7 @@ func TestServedSCIMProvisioningReflectsRBAC(t *testing.T) {
 	}
 	ctx := context.Background()
 	const tenantID = "11111111-1111-1111-1111-111111111111"
-	const scimToken = "scim-test-token"
+	const scimToken = "scim-test-token" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 
 	st := newServerTestStore(t)
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "acme"}); err != nil {
@@ -198,7 +198,7 @@ func doSession(t *testing.T, ts *httptest.Server, method, path, session string) 
 	if err != nil {
 		t.Fatalf("new session request: %v", err)
 	}
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: session})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: session}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	resp, err := ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)

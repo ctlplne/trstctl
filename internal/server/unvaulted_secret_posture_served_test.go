@@ -25,7 +25,7 @@ import (
 // configured vault-augmentation targets without returning secret values.
 func TestServedUnvaultedSecretPostureCAPSECR07EndToEnd(t *testing.T) {
 	repo := t.TempDir()
-	rawSecret := "cap-secr-07-raw-secret-value"
+	rawSecret := "cap-secr-07-raw-secret-value" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	if err := writeFile(t, filepath.Join(repo, "app.env"), "API_TOKEN="+rawSecret+"\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -146,10 +146,10 @@ repoDelivered:
 		"kind": "cloud_secret",
 		"config": map[string]any{
 			"providers": []map[string]any{
-				{"provider": "aws-secrets-manager", "region": "us-east-1", "endpoint": awsDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, awsDiscovery.URL)}, "access_key_id_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "tag_key": "type", "tag_value": "certificate"},
-				{"provider": "gcp-secret-manager", "project": "trstctl-prod", "endpoint": gcpDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, gcpDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "label_key": "type", "label_value": "certificate"},
-				{"provider": "azure-key-vault", "vault_url": azureDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, azureDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN", "tag_key": "type", "tag_value": "certificate"},
-				{"provider": "hashicorp-vault", "vault_url": vaultDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, vaultDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_VAULT_TOKEN", "mount": "secret", "path_prefix": "tls", "tag_key": "type", "tag_value": "certificate"},
+				{"provider": "aws-secrets-manager", "region": "us-east-1", "endpoint": awsDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, awsDiscovery.URL)}, "access_key_id_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "tag_key": "type", "tag_value": "certificate"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+				{"provider": "gcp-secret-manager", "project": "trstctl-prod", "endpoint": gcpDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, gcpDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "label_key": "type", "label_value": "certificate"},                                                                                     // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+				{"provider": "azure-key-vault", "vault_url": azureDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, azureDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN", "tag_key": "type", "tag_value": "certificate"},                                                                                                                // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+				{"provider": "hashicorp-vault", "vault_url": vaultDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, vaultDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_VAULT_TOKEN", "mount": "secret", "path_prefix": "tls", "tag_key": "type", "tag_value": "certificate"},                                                                          // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			},
 		},
 	})

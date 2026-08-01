@@ -287,7 +287,7 @@ func TestFullBackupEncryptsSensitiveArtifacts(t *testing.T) {
 	if artifact.Encryption == nil {
 		t.Fatal("sensitive artifact was captured without encryption metadata")
 	}
-	stored, err := os.ReadFile(filepath.Join(dir, "backup", filepath.FromSlash(artifact.Path)))
+	stored, err := os.ReadFile(filepath.Join(dir, "backup", filepath.FromSlash(artifact.Path))) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read encrypted artifact: %v", err)
 	}
@@ -335,7 +335,7 @@ func TestFullRestoreDecryptsEncryptedArtifact(t *testing.T) {
 	if err := restoreFileArtifact(manifest, "audit-signing-key", backupDir, "files/audit-signing-key.pem", restored, key); err != nil {
 		t.Fatalf("restoreFileArtifact: %v", err)
 	}
-	got, err := os.ReadFile(restored)
+	got, err := os.ReadFile(restored) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read restored: %v", err)
 	}
@@ -470,7 +470,7 @@ func TestFullBackupDirectoryArtifactsRestoreAndVerify(t *testing.T) {
 	if err := restoreDirArtifact(backup.NewFullManifest([]backup.Artifact{artifact}), "event-log", backupDir, "", restored, nil); err != nil {
 		t.Fatalf("restoreDirArtifact: %v", err)
 	}
-	got, err := os.ReadFile(filepath.Join(restored, "stream", "events.dat"))
+	got, err := os.ReadFile(filepath.Join(restored, "stream", "events.dat")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read restored tree: %v", err)
 	}
@@ -562,7 +562,7 @@ func treeContainsBytes(root string, needle []byte) (bool, error) {
 		if err != nil || found || d.IsDir() {
 			return err
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if err != nil {
 			return err
 		}

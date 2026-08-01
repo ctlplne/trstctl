@@ -75,7 +75,7 @@ func (s *Store) AdvanceProjectionCheckpoint(ctx context.Context, seq uint64) err
 	_, err := s.pool.Exec(ctx,
 		`UPDATE projection_checkpoint
 		    SET applied_seq = GREATEST(applied_seq, $1), updated_at = now()
-		  WHERE id = 1`, int64(seq))
+		  WHERE id = 1`, int64(seq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	if err != nil {
 		return fmt.Errorf("store: advance projection checkpoint: %w", err)
 	}
@@ -90,7 +90,7 @@ func (s *Store) AdvanceProjectionCheckpoint(ctx context.Context, seq uint64) err
 // table.
 func (s *Store) SetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx, seq uint64) error {
 	_, err := tx.Exec(ctx,
-		`UPDATE projection_checkpoint SET applied_seq = $1, updated_at = now() WHERE id = 1`, int64(seq))
+		`UPDATE projection_checkpoint SET applied_seq = $1, updated_at = now() WHERE id = 1`, int64(seq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	if err != nil {
 		return fmt.Errorf("store: set projection checkpoint: %w", err)
 	}

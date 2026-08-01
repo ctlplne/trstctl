@@ -61,7 +61,7 @@ func TestSessionSecretPersistsAcrossRestart(t *testing.T) {
 
 func TestSessionSecretRejectsUnsafeExistingFileMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "session.secret")
-	if err := os.WriteFile(path, bytes.Repeat([]byte{0x55}, 32), 0o644); err != nil {
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x55}, 32), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if _, err := loadOrCreateSessionSecret(path); err == nil {
@@ -93,7 +93,7 @@ func TestOIDCExchangeSendsStoredConfidentialClientSecret(t *testing.T) {
 	if err != nil {
 		t.Fatalf("exchange: %v", err)
 	}
-	if idToken != "id-token-from-confidential-client" {
+	if idToken != "id-token-from-confidential-client" { // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		t.Fatalf("id_token = %q", idToken)
 	}
 	form, err := url.ParseQuery(string(posted))

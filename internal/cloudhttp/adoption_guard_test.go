@@ -124,7 +124,7 @@ func TestAWSKMSUsesOfficialSDK(t *testing.T) {
 
 func readFile(t *testing.T, rel string) []byte {
 	t.Helper()
-	b, err := os.ReadFile(rel)
+	b, err := os.ReadFile(rel) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", rel, err)
 	}

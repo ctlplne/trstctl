@@ -12,7 +12,7 @@ import (
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- SHA-1 only for the conventional certificate fingerprint identifier, never integrity (CWE-328)
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
@@ -359,7 +359,7 @@ func Thumbprint(raw []byte) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("certinfo: parse certificate: %w", err)
 	}
-	sum := sha1.Sum(cert.Raw)
+	sum := sha1.Sum(cert.Raw) // #nosec G401 -- display/lookup fingerprint in the industry-standard form; not a security control (CWE-328)
 	return strings.ToUpper(hex.EncodeToString(sum[:])), nil
 }
 

@@ -31,7 +31,7 @@ func TestAirGapBundleUsesOnlyTrackedChartFiles(t *testing.T) {
 		t.Cleanup(func() { _ = os.Remove(path) })
 	}
 
-	trackedOutput, err := exec.Command("git", "-C", repo, "ls-files", "--", "deploy/helm/trstctl").Output()
+	trackedOutput, err := exec.Command("git", "-C", repo, "ls-files", "--", "deploy/helm/trstctl").Output() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("list tracked chart files: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestAirGapBundleUsesOnlyTrackedChartFiles(t *testing.T) {
 	var manifests [][]string
 	for build := 0; build < 2; build++ {
 		out := filepath.Join(t.TempDir(), "airgap")
-		cmd := exec.Command(filepath.Join(repo, "scripts", "airgap-bundle.sh"))
+		cmd := exec.Command(filepath.Join(repo, "scripts", "airgap-bundle.sh")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		cmd.Dir = repo
 		cmd.Env = append(os.Environ(),
 			"VERSION=v0.5.0",
@@ -120,7 +120,7 @@ func assertNoCanary(t *testing.T, root string) {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		body, err := os.ReadFile(path)
+		body, err := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if err != nil {
 			return err
 		}
@@ -136,7 +136,7 @@ func assertNoCanary(t *testing.T, root string) {
 
 func assertTrackedTar(t *testing.T, path string, tracked map[string]bool) {
 	t.Helper()
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func assertTrackedTar(t *testing.T, path string, tracked map[string]bool) {
 
 func tarManifest(t *testing.T, path string) []string {
 	t.Helper()
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

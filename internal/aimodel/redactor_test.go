@@ -36,7 +36,7 @@ var surfaceProbeShapes = []secretShape{
 		prompt: "the AES-128 key is 0123456789abcdef0123456789abcdef in hex",
 		secret: "0123456789abcdef0123456789abcdef",
 	},
-	{
+	{ // #nosec G101 -- fixture: AWS's documented example key id; the redactor must catch it (CWE-798)
 		name:   "bare_aws_akid",
 		prompt: "use key AKIAIOSFODNN7EXAMPLE for access to the bucket",
 		secret: "AKIAIOSFODNN7EXAMPLE",
@@ -66,7 +66,7 @@ var surfaceProbeShapes = []secretShape{
 		prompt: "credential=topsecretcredXYZ123 was rotated",
 		secret: "topsecretcredXYZ123",
 	},
-	{
+	{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		name:   "jwt_bearer",
 		prompt: "Authorization: Bearer eyJhbGciOi.eyJzdWIiOi.SflKxwRJSMxyz was sent",
 		secret: "eyJhbGciOi.eyJzdWIiOi.SflKxwRJSMxyz",
@@ -79,37 +79,37 @@ var surfaceProbeShapes = []secretShape{
 		prompt: "export TRSTCTL_TOKEN=trst_AbCdEf0123456789_GhIjKlMnOp and run",
 		secret: "trst_AbCdEf0123456789_GhIjKlMnOp",
 	},
-	{
+	{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		name:   "bearer_opaque",
 		prompt: "set header Authorization: Bearer sk-proj-9aZ8yX7wV6uT5sR4qP3oN2 please",
 		secret: "sk-proj-9aZ8yX7wV6uT5sR4qP3oN2",
 	},
-	{
+	{ // #nosec G101 -- fixture: fabricated DSN password; the redactor must catch it (CWE-798)
 		name:   "postgres_conn_string",
 		prompt: "DSN is postgres://admin:Sup3rSecretDbPw@db.internal:5432/trstctl now",
 		secret: "Sup3rSecretDbPw",
 	},
-	{
+	{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		name:   "aws_secret_access_key",
 		prompt: "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY in profile",
 		secret: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 	},
-	{
+	{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		name:   "client_secret_assignment",
 		prompt: "OIDC client_secret: 'gho_16C7e42F292c6912E7710c838347Ae178B4a' loaded",
 		secret: "gho_16C7e42F292c6912E7710c838347Ae178B4a",
 	},
-	{
+	{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		name:   "long_base64_blob",
 		prompt: "the wrapped key blob is YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU2Nzg5 here",
 		secret: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU2Nzg5",
 	},
-	{
+	{ // #nosec G101 -- fixture: fabricated PEM fragment; the redactor must catch it (CWE-798)
 		name:   "uppercase_pem_block",
 		prompt: "ctx:\n-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIKxSECRETBYTES09az\n-----END EC PRIVATE KEY-----\nexplain",
 		secret: "MHcCAQEEIKxSECRETBYTES09az",
 	},
-	{
+	{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		name:   "api_key_quoted_json",
 		prompt: `payload {"api_key":"AIzaSyD-EXAMPLEexamplekey1234567","q":"x"}`,
 		secret: "AIzaSyD-EXAMPLEexamplekey1234567",
@@ -154,12 +154,12 @@ var aiVendorOpaqueTokenShapes = []secretShape{
 		prompt: "operator pasted GitHub PAT ghp_1234567890abcdef1234567890abcdef1234 into the RCA prompt",
 		secret: "ghp_1234567890abcdef1234567890abcdef1234",
 	},
-	{
+	{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		name:   "github_fine_grained_pat",
 		prompt: "fine-grained token github_pat_11AABBCCDDEEFF00112233_0123456789abcdef0123456789abcdef was attached",
 		secret: "github_pat_11AABBCCDDEEFF00112233_0123456789abcdef0123456789abcdef",
 	},
-	{
+	{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		name:   "openai_project_key",
 		prompt: "assistant config shows sk-proj-aBcDeFgHiJkLmNoP-qRsTuVwXyZ012345 before rotation",
 		secret: "sk-proj-aBcDeFgHiJkLmNoP-qRsTuVwXyZ012345",

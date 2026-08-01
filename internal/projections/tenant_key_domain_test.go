@@ -56,7 +56,7 @@ func tenantKeyDomainEvent(t *testing.T, typ string, seq uint64, snapshot project
 		ID:            "event-" + typ,
 		Type:          typ,
 		TenantID:      tenantA,
-		Time:          time.Date(2026, 7, 31, 1, 2, int(seq), 0, time.UTC),
+		Time:          time.Date(2026, 7, 31, 1, 2, int(seq), 0, time.UTC), // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		Sequence:      seq,
 		SchemaVersion: 1,
 		Data:          data,
@@ -338,7 +338,7 @@ func TestTenantKeyDomainAllLifecycleEventsShareOneSnapshotContract(t *testing.T)
 				snapshot.SealIdempotencyKey = "projection-seal-request"
 				snapshot.SealRequestBinding = strings.Repeat("c", 64)
 			}
-			if err := p.Apply(ctx, tenantKeyDomainEvent(t, typ, uint64(i+2), snapshot)); err != nil {
+			if err := p.Apply(ctx, tenantKeyDomainEvent(t, typ, uint64(i+2), snapshot)); err != nil { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 				t.Fatalf("Apply(%s): %v", typ, err)
 			}
 			got, err := s.GetTenantKeyDomain(ctx, tenantA)

@@ -167,12 +167,15 @@ func Seal(w KeyWrapper, plaintext, aad []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(wrapped) == 0 || len(wrapped) > maxUint16Value {
+		return nil, ErrFormat
+	}
 
 	// magic | version | wrappedLen(2) | wrapped | nonce | ciphertext
 	out := make([]byte, 0, len(magic)+1+2+len(wrapped)+len(nonce)+len(ct))
 	out = append(out, magic...)
 	out = append(out, version1)
-	out = binary.BigEndian.AppendUint16(out, uint16(len(wrapped)))
+	out = binary.BigEndian.AppendUint16(out, uint16(len(wrapped))) // #nosec G115 -- bounded to maxUint16Value by the check above (CWE-190)
 	out = append(out, wrapped...)
 	out = append(out, nonce...)
 	out = append(out, ct...)
@@ -524,10 +527,10 @@ func buildV2(domain, tag, wrapped, nonce, ciphertext []byte) ([]byte, error) {
 	out := make([]byte, 0, len(magic)+1+2+len(domain)+len(tag)+2+len(wrapped)+len(nonce)+len(ciphertext))
 	out = append(out, magic...)
 	out = append(out, version2)
-	out = binary.BigEndian.AppendUint16(out, uint16(len(domain)))
+	out = binary.BigEndian.AppendUint16(out, uint16(len(domain))) // #nosec G115 -- validateDomain above caps the length at maxUint16Value (CWE-190)
 	out = append(out, domain...)
 	out = append(out, tag...)
-	out = binary.BigEndian.AppendUint16(out, uint16(len(wrapped)))
+	out = binary.BigEndian.AppendUint16(out, uint16(len(wrapped))) // #nosec G115 -- bounded to maxUint16Value by the guard above (CWE-190)
 	out = append(out, wrapped...)
 	out = append(out, nonce...)
 	out = append(out, ciphertext...)

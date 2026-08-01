@@ -225,7 +225,7 @@ func randHex(n int) string {
 			binary.BigEndian.PutUint64(b[n-8:], v)
 		} else {
 			for i := range b {
-				b[i] = byte(v >> (8 * i))
+				b[i] = byte(v >> (8 * i)) // #nosec G115 -- deliberate byte packing of a trace id (CWE-190)
 			}
 		}
 	}

@@ -166,7 +166,7 @@ func gitDiffNames(ctx context.Context, repo string, revArgs ...string) ([]string
 }
 
 func gitOutput(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- fixed git/gitleaks binaries over the operator's own repository (CWE-78)
 	cmd.Dir = filepath.Clean(dir)
 	cmd.Env = sanitizedGitEnv(os.Environ())
 	out, err := cmd.CombinedOutput()

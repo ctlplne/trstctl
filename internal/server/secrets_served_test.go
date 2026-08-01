@@ -381,7 +381,7 @@ func TestServedSecretStoreReferencesAndImport(t *testing.T) {
 	if err := json.Unmarshal(body, &rv); err != nil {
 		t.Fatalf("decode resolved dsn: %v (%s)", err, body)
 	}
-	if rv.Value != "postgres://payments:s3cr3t@db.internal/app" {
+	if rv.Value != "postgres://payments:s3cr3t@db.internal/app" { // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		t.Fatalf("resolved dsn = %q, want references expanded", rv.Value)
 	}
 
@@ -1076,6 +1076,7 @@ func TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM(t *testing.T) {
 		t.Fatal("cross-tenant k8s rejection echoed the credential")
 	}
 
+	// #nosec G101 -- fabricated STS exchange fixture; no real credential (CWE-798)
 	awsCredential := `{"method":"POST","url":"https://sts.amazonaws.com/","body":"Action=GetCallerIdentity&Version=2011-06-15"}`
 	status, body = servedMachineLogin(t, h, servedTestTenant, "aws-iam", awsCredential)
 	if status != http.StatusOK {

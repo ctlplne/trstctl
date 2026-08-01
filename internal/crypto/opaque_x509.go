@@ -11,7 +11,7 @@ package crypto
 
 import (
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328)
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -218,7 +218,7 @@ func SignOpaqueLeafFromVerifiedRequestWithProfile(caCertDER []byte, caSigner Dig
 	if err != nil {
 		return nil, err
 	}
-	ski := sha1.Sum(spki.PublicKey.Bytes)
+	ski := sha1.Sum(spki.PublicKey.Bytes) // #nosec G401 -- RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328)
 	now := time.Now().UTC()
 	leaf := &x509.Certificate{
 		SerialNumber: serial,

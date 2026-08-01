@@ -54,7 +54,7 @@ func TestFilesystemReinstallTightensLoosePermissions(t *testing.T) {
 	keyPath := filepath.Join(dir, "workload.key")
 	certPath := filepath.Join(dir, "workload.crt")
 
-	if err := os.WriteFile(keyPath, []byte("stale"), 0o644); err != nil {
+	if err := os.WriteFile(keyPath, []byte("stale"), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := destination.NewFilesystem(certPath, keyPath).Install(context.Background(), makeCredential(t)); err != nil {
@@ -76,10 +76,10 @@ func TestFilesystemReinstallTightensLoosePermissions(t *testing.T) {
 func TestFilesystemInstallTightensLooseDirectory(t *testing.T) {
 	root := t.TempDir()
 	sub := filepath.Join(root, "tls")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
+	if err := os.MkdirAll(sub, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
-	if err := os.Chmod(sub, 0o755); err != nil {
+	if err := os.Chmod(sub, 0o755); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 

@@ -161,7 +161,7 @@ func TestIsolatedSignerControlPlaneWiring(t *testing.T) {
 	v := defaultishValues()
 	signer := v["signer"].(map[string]any)
 	signer["mode"] = "isolated"
-	signer["mtls"] = map[string]any{
+	signer["mtls"] = map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"serverName":         "trstctl-signer.ns.svc",
 		"signerSecret":       "signer-mtls",
 		"controlPlaneSecret": "cp-signer-mtls",
@@ -597,7 +597,7 @@ func TestMultiReplicaHAIsTheDefault(t *testing.T) {
 		"postgres": map[string]any{"existingSecret": "", "existingSecretKey": "dsn"},
 		"kek":      map[string]any{"existingSecret": ""},
 		"signer": map[string]any{
-			"mode": "sidecar", "auth": map[string]any{"existingSecretKey": "sign-auth.bin"},
+			"mode": "sidecar", "auth": map[string]any{"existingSecretKey": "sign-auth.bin"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"mtls": map[string]any{"controlPlaneSecret": ""},
 		},
 		"resources": map[string]any{
@@ -799,7 +799,7 @@ func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
 		{
 			name: "nats missing",
 			values: map[string]any{
-				"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
+				"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				"nats":     map[string]any{"url": ""},
 				"kek":      map[string]any{"existingSecret": "", "generate": false},
 			},
@@ -808,7 +808,7 @@ func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
 		{
 			name: "kek missing",
 			values: map[string]any{
-				"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
+				"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				"nats":     map[string]any{"url": "nats://nats:4222"},
 				"kek":      map[string]any{"existingSecret": "", "generate": false},
 			},
@@ -824,7 +824,7 @@ func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
 	}
 
 	err := renderRequiredInputsGuard(t, map[string]any{
-		"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
+		"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"nats":     map[string]any{"url": "nats://nats:4222", "allowSingleReplica": true},
 		"kek":      map[string]any{"existingSecret": "", "generate": true},
 	})
@@ -884,7 +884,7 @@ func TestProductionSignerAuthTokenCommandRendersLoadableConfig(t *testing.T) {
 func TestEvalSignerCoResidentAuthorizerRequiresEvalShape(t *testing.T) {
 	eval := defaultishValues()
 	eval["replicaCount"] = 1
-	eval["postgres"] = map[string]any{"mode": "external", "dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": "", "existingSecretKey": "dsn"}
+	eval["postgres"] = map[string]any{"mode": "external", "dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": "", "existingSecretKey": "dsn"} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	eval["nats"] = map[string]any{"mode": "external", "url": "nats://nats:4222", "replicas": 1, "allowSingleReplica": true}
 	eval["kek"] = map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": true}
 	signer := eval["signer"].(map[string]any)
@@ -1074,7 +1074,7 @@ func renderHelperGuard(t *testing.T, name string, values map[string]any) error {
 // deploy/helm) so the chart tests can bind their assumptions to the real CI/CD.
 func readWorkflow(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", name))
+	b, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", name)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read .github/workflows/%s: %v", name, err)
 	}
@@ -1082,7 +1082,7 @@ func readWorkflow(t *testing.T, name string) string {
 }
 
 func TestHelmLintAndTemplateUseRenderableProductionValues(t *testing.T) {
-	const tokenCommandSet = "--set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve"
+	const tokenCommandSet = "--set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 
 	makefile, err := os.ReadFile(filepath.Join("..", "..", "Makefile"))
 	if err != nil {
@@ -1112,7 +1112,7 @@ func TestHelmLintAndTemplateUseRenderableProductionValues(t *testing.T) {
 func appVersionMatchesARealReleaseTag(t *testing.T, app string) bool {
 	t.Helper()
 	want := "v" + app
-	out, err := exec.Command("git", "-C", filepath.Join("..", ".."), "tag", "-l").Output()
+	out, err := exec.Command("git", "-C", filepath.Join("..", ".."), "tag", "-l").Output() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		// No git context (e.g. a source tarball). Fall back to a shape check:
 		// MAJOR.MINOR or MAJOR.MINOR.PATCH, all numeric — never a bare placeholder.
@@ -1135,7 +1135,7 @@ func appVersionMatchesARealReleaseTag(t *testing.T, app string) bool {
 // stays consistent with the published docs.
 func readDoc(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "..", "docs", name))
+	b, err := os.ReadFile(filepath.Join("..", "..", "docs", name)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read docs/%s: %v", name, err)
 	}
@@ -1185,7 +1185,7 @@ func TestTemplatesParse(t *testing.T) {
 
 func TestSecretTemplateRendersEvalSecretsAsSeparateDocuments(t *testing.T) {
 	v := defaultishValues()
-	v["postgres"] = map[string]any{
+	v["postgres"] = map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"mode": "external", "dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require",
 		"existingSecret": "", "existingSecretKey": "dsn",
 	}
@@ -1193,7 +1193,7 @@ func TestSecretTemplateRendersEvalSecretsAsSeparateDocuments(t *testing.T) {
 		"existingSecret": "", "existingSecretKey": "kek.bin", "generate": true,
 	}
 	signer := v["signer"].(map[string]any)
-	signer["auth"] = map[string]any{
+	signer["auth"] = map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"existingSecret": "", "existingSecretKey": "sign-auth.bin", "generate": true,
 	}
 
@@ -1492,7 +1492,7 @@ func defaultishValues() map[string]any {
 		"serviceAccount":      map[string]any{"create": true, "name": "", "annotations": map[string]any{}},
 		"signer": map[string]any{
 			"mode": "sidecar", "replicas": 1, "resources": map[string]any{},
-			"auth": map[string]any{
+			"auth": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				"existingSecret": "", "existingSecretKey": "sign-auth.bin", "generate": true,
 				"tokenCommand": "", "allowCoResidentAuthorizer": false,
 			},
@@ -1523,9 +1523,9 @@ func defaultishValues() map[string]any {
 
 func productionishValues() map[string]any {
 	v := defaultishValues()
-	v["postgres"] = map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-postgres", "existingSecretKey": "dsn"}
+	v["postgres"] = map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-postgres", "existingSecretKey": "dsn"} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	v["nats"] = map[string]any{"mode": "external", "url": "nats://nats:4222", "replicas": 3, "allowSingleReplica": false}
-	v["kek"] = map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false}
+	v["kek"] = map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	signer := v["signer"].(map[string]any)
 	auth := signer["auth"].(map[string]any)
 	auth["tokenCommand"] = "/usr/local/bin/trstctl-sign-approve"
@@ -1702,7 +1702,7 @@ func requireSecretDefaultMode(t *testing.T, pod map[string]any, name string, wan
 			t.Fatalf("Secret volume %q defaultMode = %#o, want %#o", name, v, want)
 		}
 	case uint64:
-		if int(v) != want {
+		if int(v) != want { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 			t.Fatalf("Secret volume %q defaultMode = %#o, want %#o", name, v, want)
 		}
 	default:

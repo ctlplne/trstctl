@@ -19,9 +19,9 @@ import (
 
 const (
 	gcpCloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
-	gcpTokenExchangeGrant = "urn:ietf:params:oauth:grant-type:token-exchange"
-	gcpAccessTokenType    = "urn:ietf:params:oauth:token-type:access_token"
-	gcpJWTTokenType       = "urn:ietf:params:oauth:token-type:jwt"
+	gcpTokenExchangeGrant = "urn:ietf:params:oauth:grant-type:token-exchange" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	gcpAccessTokenType    = "urn:ietf:params:oauth:token-type:access_token"   // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	gcpJWTTokenType       = "urn:ietf:params:oauth:token-type:jwt"            // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 // GCPExchangeRequest is the thin RFC 8693 and optional service-account

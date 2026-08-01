@@ -89,7 +89,7 @@ func WriteFullManifest(path string, m FullManifest) error {
 	}
 	sort.Slice(m.Artifacts, func(i, j int) bool { return m.Artifacts[i].Name < m.Artifacts[j].Name })
 	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return fmt.Errorf("backup: create full manifest: %w", err)
 	}
@@ -113,7 +113,7 @@ func WriteFullManifest(path string, m FullManifest) error {
 
 func ReadFullManifest(path string) (FullManifest, error) {
 	var m FullManifest
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return m, fmt.Errorf("backup: open full manifest: %w", err)
 	}
@@ -131,7 +131,7 @@ func ReadFullManifest(path string) (FullManifest, error) {
 }
 
 func HashFile(path string) (string, int64, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return "", 0, err
 	}
@@ -172,7 +172,7 @@ func HashTree(root string) (string, int64, error) {
 }
 
 func CopyFile(src, dst string, mode fs.FileMode) error {
-	in, err := os.Open(src)
+	in, err := os.Open(src) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func CopyFile(src, dst string, mode fs.FileMode) error {
 		return err
 	}
 	tmp := dst + ".tmp"
-	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return err
 	}

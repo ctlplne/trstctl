@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 		// manifest records and CI checksum-verifies + scans. See
 		// deploy/supply-chain/embedded-postgres.json.
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(uint32(port)). // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
 		BinariesPath(dir + "/bin"). // per-package (not a shared /tmp dir): the library extracts file-by-file into BinariesPath and only checks bin/ exists, so parallel `go test ./...` packages sharing it race (one sees bin/initdb before bin/postgres lands). The .txz still downloads once to the shared cache.

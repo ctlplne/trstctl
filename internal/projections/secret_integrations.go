@@ -25,7 +25,7 @@ const (
 	EventDynamicSecretLeaseRevocationFailed    = "dynsecret.lease.revocation_failed"
 	EventDynamicSecretOperationRequested       = "dynsecret.operation.requested"
 	EventDynamicSecretOperationCompleted       = "dynsecret.operation.completed"
-	EventSecretSyncQueued                      = "secret.sync.queued"
+	EventSecretSyncQueued                      = "secret.sync.queued" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretSyncDelivered                   = "secret.sync.delivered"
 	EventSecretSyncFailed                      = "secret.sync.failed"
 	EventSecretSyncWorkloadIdentityUpserted    = "secret.sync.workload_identity_source.upserted"

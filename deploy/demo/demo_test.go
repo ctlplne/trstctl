@@ -32,7 +32,7 @@ type composeFile struct {
 
 func read(t *testing.T, parts ...string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(parts...))
+	b, err := os.ReadFile(filepath.Join(parts...)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", filepath.Join(parts...), err)
 	}
@@ -65,7 +65,7 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if !contains(cp.Ports, "9443:8443") || contains(cp.Ports, "19081:19081") {
 		t.Fatalf("demo trstctl ports = %v, want only the browser/API port 9443:8443", cp.Ports)
 	}
-	for k, want := range map[string]string{
+	for k, want := range map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_AUTH_OIDC_ENABLED":                        "true",
 		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":                   "https://localhost:9443/auth/callback",
 		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":                  "http://127.0.0.1:19081/authorize",

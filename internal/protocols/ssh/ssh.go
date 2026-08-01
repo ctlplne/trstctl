@@ -327,6 +327,6 @@ func sshWriteUint64(b *bytes.Buffer, v uint64) {
 }
 
 func sshWriteString(b *bytes.Buffer, s []byte) {
-	sshWriteUint32(b, uint32(len(s)))
+	sshWriteUint32(b, uint32(len(s))) // #nosec G115 -- SSH wire string length, far under the uint32 bound for certificate fields (CWE-190)
 	b.Write(s)
 }

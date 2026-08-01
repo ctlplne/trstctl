@@ -492,7 +492,7 @@ func toDNS01ProviderConfigResponse(rec store.ACMEDNS01ProviderConfig) dns01Provi
 	if methods == nil {
 		methods = []string{}
 	}
-	return dns01ProviderConfigResponse{
+	return dns01ProviderConfigResponse{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 		ID: rec.ID, TenantID: rec.TenantID, Name: rec.Name, Provider: rec.Provider,
 		Zone: rec.Zone, ChallengeDomain: rec.ChallengeDomain, DelegationTarget: rec.DelegationTarget,
 		CredentialRefs: refs, Config: cfg, CAAIssuerDomain: rec.CAAIssuerDomain,

@@ -180,7 +180,7 @@ func TestDODParentSubstrateLoopbackBridgeForwardsHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := &http.Server{Handler: http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	server := &http.Server{Handler: http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) { // #nosec G112 -- local test listener owned and torn down by the test (CWE-400)
 		if request.URL.Path != "/proof" {
 			http.NotFound(response, request)
 			return

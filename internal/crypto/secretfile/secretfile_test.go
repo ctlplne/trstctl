@@ -45,7 +45,7 @@ func TestLoadRejectsUnsafeExistingMode(t *testing.T) {
 		t.Skip("Windows mode bits do not model Unix custody")
 	}
 	path := filepath.Join(t.TempDir(), "secret.bin")
-	if err := os.WriteFile(path, []byte("secret"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("secret"), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if _, err := secretfile.Load(path); err == nil {
@@ -58,13 +58,13 @@ func TestLoadRejectsUnsafeParentDirectory(t *testing.T) {
 		t.Skip("Windows mode bits do not model Unix custody")
 	}
 	dir := filepath.Join(t.TempDir(), "unsafe")
-	if err := os.Mkdir(dir, 0o777); err != nil {
+	if err := os.Mkdir(dir, 0o777); err != nil { // #nosec G301 -- deliberately loose fixture dir; secretfile must refuse it (CWE-276)
 		t.Fatal(err)
 	}
-	if err := os.Chmod(dir, 0o777); err != nil {
+	if err := os.Chmod(dir, 0o777); err != nil { // #nosec G302 -- deliberately loose fixture mode; secretfile must refuse it (CWE-276)
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) }) // #nosec G302 -- restores the fixture dir so t.TempDir cleanup can remove it (CWE-276)
 	path := filepath.Join(dir, "secret.bin")
 	if err := os.WriteFile(path, []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)

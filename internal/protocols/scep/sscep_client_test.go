@@ -52,7 +52,7 @@ func TestSCEPSSCEPClientEnrollment(t *testing.T) {
 	enrollLog := filepath.Join(dir, "sscep-enroll.log")
 	scepURL := ts.URL + "/scep/pkiclient.exe"
 
-	getCA := exec.Command(sscep, "getca",
+	getCA := exec.Command(sscep, "getca", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-u", scepURL,
 		"-c", caFile,
 		"-F", "sha256",
@@ -71,7 +71,7 @@ func TestSCEPSSCEPClientEnrollment(t *testing.T) {
 		t.Fatalf("sscep getca wrote an empty CA file\n%s", getCAOut)
 	}
 
-	enroll := exec.Command(sscep, "enroll",
+	enroll := exec.Command(sscep, "enroll", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-u", scepURL,
 		"-c", caFile,
 		"-k", clientKeyFile,
@@ -131,7 +131,7 @@ func (r *scepTranscriptRecorder) ServeHTTP(w http.ResponseWriter, req *http.Requ
 	defer r.mu.Unlock()
 	reqPath := filepath.Join(r.dir, "sscep-pkioperation-request.der")
 	respPath := filepath.Join(r.dir, "sscep-pkioperation-response.der")
-	if err := os.WriteFile(reqPath, requestDER, 0o600); err == nil {
+	if err := os.WriteFile(reqPath, requestDER, 0o600); err == nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		r.pkiReq = reqPath
 	}
 	if err := os.WriteFile(respPath, rw.body.Bytes(), 0o600); err == nil {
@@ -177,7 +177,7 @@ func writeSCEPPEMFile(t *testing.T, dir, name, typ string, der []byte) string {
 
 func readSCEPCertificateFile(t *testing.T, path string) []byte {
 	t.Helper()
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
@@ -193,16 +193,16 @@ func archiveSCEPConformanceTranscripts(t *testing.T, prefix string, paths ...str
 	if dstDir == "" {
 		return
 	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil { // #nosec G301 G703 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Fatalf("create transcript archive dir: %v", err)
 	}
 	for _, src := range paths {
-		in, err := os.Open(src)
+		in, err := os.Open(src) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("open transcript %s: %v", src, err)
 		}
 		dst := filepath.Join(dstDir, prefix+"-"+filepath.Base(src))
-		out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 G703 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			_ = in.Close()
 			t.Fatalf("create archived transcript %s: %v", dst, err)
@@ -230,7 +230,7 @@ func TestArchiveSCEPConformanceTranscriptsWritesAllFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	archiveSCEPConformanceTranscripts(t, "unit", src)
-	got, err := os.ReadFile(filepath.Join(dir, "unit-request.der"))
+	got, err := os.ReadFile(filepath.Join(dir, "unit-request.der")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

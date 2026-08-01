@@ -57,7 +57,7 @@ func (s *Source) Discover(_ context.Context) ([]sshinv.Found, error) {
 
 	// authorized_keys: each entry is a standing-access grant.
 	for _, path := range expandGlobs(s.cfg.AuthorizedKeysPaths) {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
 		if err != nil {
 			continue
 		}
@@ -76,7 +76,7 @@ func (s *Source) Discover(_ context.Context) ([]sshinv.Found, error) {
 
 	// known_hosts: trusted host keys.
 	for _, path := range expandGlobs(s.cfg.KnownHostsPaths) {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
 		if err != nil {
 			continue
 		}
@@ -93,7 +93,7 @@ func (s *Source) Discover(_ context.Context) ([]sshinv.Found, error) {
 
 	// sshd TrustedUserCAKeys: the CA whose user certificates the host trusts.
 	for _, caPath := range s.trustedCAPaths() {
-		data, err := os.ReadFile(caPath)
+		data, err := os.ReadFile(caPath) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
 		if err != nil {
 			continue
 		}
@@ -116,7 +116,7 @@ func (s *Source) Discover(_ context.Context) ([]sshinv.Found, error) {
 func (s *Source) collectPubFiles(globs []string, source string) []sshinv.Found {
 	var out []sshinv.Found
 	for _, path := range expandGlobs(globs) {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
 		if err != nil {
 			continue
 		}
@@ -140,7 +140,7 @@ func (s *Source) collectPubFiles(globs []string, source string) []sshinv.Found {
 func (s *Source) trustedCAPaths() []string {
 	var paths []string
 	for _, cfgPath := range expandGlobs(s.cfg.SSHDConfigPaths) {
-		data, err := os.ReadFile(cfgPath)
+		data, err := os.ReadFile(cfgPath) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
 		if err != nil {
 			continue
 		}

@@ -38,7 +38,7 @@ func TestNoSQLDriverLinkedIntoSigner(t *testing.T) {
 // because the signer never instantiates an HTTP server.
 func TestNoHTTPServerLinkedIntoSigner(t *testing.T) {
 	bin := buildSigner(t)
-	cmd := exec.Command("go", "tool", "nm", bin)
+	cmd := exec.Command("go", "tool", "nm", bin) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = repoRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

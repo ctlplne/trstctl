@@ -535,7 +535,7 @@ func decodeMDMSCEPTrustAnchorSecret(raw []byte) ([][]byte, error) {
 }
 
 func loadSCEPIntuneTrustAnchor(path string) ([]byte, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 	if err != nil {
 		return nil, fmt.Errorf("server: read SCEP Intune trust anchor %q: %w", path, err)
 	}
@@ -642,7 +642,7 @@ func (s *Server) tsaCertificate(_ context.Context, tsaSigner crypto.DigestSigner
 }
 
 func readCertPEM(path string) ([]byte, bool, error) {
-	pemBytes, err := os.ReadFile(path)
+	pemBytes, err := os.ReadFile(path) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
@@ -707,7 +707,7 @@ func (s *Server) protocolTransportKey(keyFile string, wrapper sealKeyWrapper) (c
 }
 
 func loadProtocolTransportKey(path string, wrapper sealKeyWrapper) (certDER, keyPKCS8 []byte, err error) {
-	sealed, err := os.ReadFile(path)
+	sealed, err := os.ReadFile(path) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -755,9 +755,9 @@ func saveProtocolTransportKey(path string, wrapper sealKeyWrapper, certDER, keyP
 func encodeProtocolTransportKey(certDER, keyPKCS8 []byte) []byte {
 	out := make([]byte, 0, len(protocolRAMagic)+8+len(certDER)+len(keyPKCS8))
 	out = append(out, protocolRAMagic...)
-	out = binary.BigEndian.AppendUint32(out, uint32(len(certDER)))
+	out = binary.BigEndian.AppendUint32(out, uint32(len(certDER))) // #nosec G115 -- DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190)
 	out = append(out, certDER...)
-	out = binary.BigEndian.AppendUint32(out, uint32(len(keyPKCS8)))
+	out = binary.BigEndian.AppendUint32(out, uint32(len(keyPKCS8))) // #nosec G115 -- DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190)
 	out = append(out, keyPKCS8...)
 	return out
 }

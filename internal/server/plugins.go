@@ -196,11 +196,11 @@ func (pm *PluginManager) loadDir(ctx context.Context, dir string, grant pluginho
 	sort.Strings(names)
 	for _, fname := range names {
 		name := strings.TrimSuffix(fname, ".wasm")
-		wasm, err := os.ReadFile(filepath.Join(dir, fname))
+		wasm, err := os.ReadFile(filepath.Join(dir, fname)) // #nosec G304 -- operator-configured plugin dir; WASM and signature are verified after the read (CWE-22)
 		if err != nil {
 			return fmt.Errorf("server: read plugin %q: %w", name, err)
 		}
-		sig, err := os.ReadFile(filepath.Join(dir, fname+".sig"))
+		sig, err := os.ReadFile(filepath.Join(dir, fname+".sig")) // #nosec G304 -- operator-configured plugin dir; WASM and signature are verified after the read (CWE-22)
 		if err != nil {
 			// No detached signature alongside the module → refuse (fail closed):
 			// the served path never instantiates an unsigned plugin.

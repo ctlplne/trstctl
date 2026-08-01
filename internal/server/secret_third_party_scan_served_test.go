@@ -19,7 +19,7 @@ import (
 
 func TestServedThirdPartySecretScanningCAPSCAN04EndToEnd(t *testing.T) {
 	root := t.TempDir()
-	rawSecret := "xoxb-cap-scan-04-secret-value"
+	rawSecret := "xoxb-cap-scan-04-secret-value" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	artifacts := map[string]string{
 		"cicd_log":           writeSecretArtifact(t, root, "cicd-log/build.log", "CI_JOB_TOKEN="+rawSecret+"\n"),
 		"container_registry": writeSecretArtifact(t, root, "registry/layer.env", "REGISTRY_PASSWORD="+rawSecret+"\n"),
@@ -151,7 +151,7 @@ func (f *fakeThirdPartySecretScanner) paths() []string {
 func writeSecretArtifact(t *testing.T, root, rel, body string) string {
 	t.Helper()
 	path := filepath.Join(root, rel)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {

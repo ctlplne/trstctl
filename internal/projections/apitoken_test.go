@@ -56,7 +56,7 @@ func TestAPITokenScopesEnforced(t *testing.T) {
 	assertProblem(t, hdr, body, http.StatusForbidden)
 
 	// An unknown token is rejected.
-	if st, _, _ := do(t, srv, "GET", "/api/v1/identities", reqOpts{bearer: "trst_deadbeefdeadbeefdeadbeef"}); st != http.StatusUnauthorized {
+	if st, _, _ := do(t, srv, "GET", "/api/v1/identities", reqOpts{bearer: "trst_deadbeefdeadbeefdeadbeef"}); st != http.StatusUnauthorized { // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		t.Errorf("unknown token GET = %d, want 401", st)
 	}
 }

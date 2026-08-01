@@ -147,7 +147,7 @@ func sessionReq(t *testing.T, srv *httptest.Server, method, path, session, body 
 		r = strings.NewReader(body)
 	}
 	req, _ := http.NewRequest(method, srv.URL+path, r)
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: session})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: session}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	if method != http.MethodGet {
 		req.Header.Set("Idempotency-Key", "sess-"+method+path)
 		req.Header.Set("Content-Type", "application/json")
@@ -156,7 +156,7 @@ func sessionReq(t *testing.T, srv *httptest.Server, method, path, session, body 
 		// non-HttpOnly cookie set at login and echoes it in the header). enforceCSRF
 		// only checks the two are equal, so a matching pair is what a real browser sends.
 		const csrf = "test-csrf-token-double-submit"
-		req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: csrf})
+		req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: csrf}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 		req.Header.Set("X-CSRF-Token", csrf)
 	}
 	resp, err := http.DefaultClient.Do(req)

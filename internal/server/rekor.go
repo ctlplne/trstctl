@@ -43,7 +43,7 @@ func rekorHandlerFromConfig(cfg config.CodeSigningRekor, guard *egress.Guard) (o
 	if keyFile == "" {
 		return nil, fmt.Errorf("code-signing Rekor client: log_public_key_file is required")
 	}
-	keyPEM, err := os.ReadFile(keyFile)
+	keyPEM, err := os.ReadFile(keyFile) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 	if err != nil {
 		return nil, fmt.Errorf("code-signing Rekor client: read trusted log public key: %w", err)
 	}

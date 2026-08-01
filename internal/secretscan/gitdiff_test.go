@@ -90,7 +90,7 @@ func gitSecretScan(t *testing.T, repo string, args ...string) {
 
 func gitSecretScanOutput(t *testing.T, repo string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = repo
 	out, err := cmd.CombinedOutput()
 	if err != nil {

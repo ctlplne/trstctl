@@ -147,7 +147,7 @@ func scanForContent(w Watched, scope []string) (string, bool) {
 			if err != nil || fi.Size() > maxScanFileSize {
 				continue
 			}
-			data, err := os.ReadFile(p)
+			data, err := os.ReadFile(p) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
 			if err != nil {
 				continue
 			}

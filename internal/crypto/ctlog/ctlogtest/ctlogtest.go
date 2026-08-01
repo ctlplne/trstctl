@@ -283,7 +283,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 
 // --- minimal TLS-style encoders (RFC 6962 §3.4) ---
 
-func u16(v int) []byte { return []byte{byte(v >> 8), byte(v)} }
+func u16(v int) []byte { return []byte{byte(v >> 8), byte(v)} } // #nosec G115 -- test-support package compiled only into test binaries (CWE-190)
 
 func u64(v uint64) []byte {
 	b := make([]byte, 8)
@@ -300,7 +300,7 @@ func asn1Cert(der []byte) []byte { return append(u24Len(der), der...) }
 // u24Len returns the 24-bit big-endian length of b.
 func u24Len(b []byte) []byte {
 	n := len(b)
-	return []byte{byte(n >> 16), byte(n >> 8), byte(n)}
+	return []byte{byte(n >> 16), byte(n >> 8), byte(n)} // #nosec G115 -- test-support package compiled only into test binaries (CWE-190)
 }
 
 func timestampMillis() uint64 { return uint64(time.Now().UnixMilli()) }

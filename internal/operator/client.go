@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	saTokenPath     = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	saTokenPath     = "/var/run/secrets/kubernetes.io/serviceaccount/token" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	saCAPath        = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 	saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	maxAPIBody      = 4 << 20

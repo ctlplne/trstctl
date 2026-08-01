@@ -106,7 +106,7 @@ func TestContextualScorersNormalizeNHIKindsAndMetadata(t *testing.T) {
 
 	finding := scoreDiscoveryFinding(g, store.DiscoveryFinding{
 		ID: "disc-1", Kind: "non_human_identity", Ref: "oauth-grant/payments", RiskScore: 91,
-		Metadata: mustJSON(t, map[string]any{
+		Metadata: mustJSON(t, map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"credential_kind": "oauth_app",
 			"display_name":    "Payments OAuth grant",
 			"owner":           "platform",

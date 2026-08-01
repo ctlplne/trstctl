@@ -7,7 +7,7 @@ import "testing"
 func fullSCIM() SCIM {
 	return SCIM{
 		Enabled: true,
-		Tokens: []SCIMToken{{
+		Tokens: []SCIMToken{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			Name:      "okta-prod",
 			TenantID:  "tenant-a",
 			TokenFile: "/var/lib/trstctl/scim-okta.token",
@@ -53,7 +53,7 @@ func TestSCIMEnabledValidPasses(t *testing.T) {
 }
 
 func TestSCIMEnvOverlaysSingleTenantToken(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_AUTH_SCIM_ENABLED":         "true",
 		"TRSTCTL_AUTH_SCIM_TOKEN_NAME":      "entra",
 		"TRSTCTL_AUTH_SCIM_TOKEN_TENANT_ID": "tenant-b",

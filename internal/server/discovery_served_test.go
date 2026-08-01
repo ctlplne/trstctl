@@ -623,9 +623,9 @@ func TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd(t *testing.T) {
 		"kind": "nhi_cross_surface",
 		"config": map[string]any{
 			"observations": []map[string]any{
-				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-api", "owner": "platform", "credential_kind": "oauth_client", "scopes": []string{"payments.read"}},
+				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-api", "owner": "platform", "credential_kind": "oauth_client", "scopes": []string{"payments.read"}}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				{"surface": "cloud", "system": "aws-iam", "external_id": "role/payments-prod", "principal": "arn:aws:iam::111111111111:role/payments-prod", "owner": "platform", "credential_kind": "role"},
-				{"surface": "saas", "system": "github", "external_id": "app/installations/42", "principal": "payments-ci-app", "owner": "devex", "credential_kind": "github_app"},
+				{"surface": "saas", "system": "github", "external_id": "app/installations/42", "principal": "payments-ci-app", "owner": "devex", "credential_kind": "github_app"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				{"surface": "on_prem", "system": "ldap", "external_id": "svc-payments", "principal": "svc-payments", "owner": "identity", "credential_kind": "service_account"},
 				{"surface": "code", "system": "github-code-search", "external_id": "repo/payments/path/deploy.yaml", "principal": "payments-deploy-key", "owner": "devex", "credential_kind": "deploy_key"},
 				{"surface": "ci", "system": "github-actions", "external_id": "repo/payments/env/prod", "principal": "payments-ci-token", "owner": "devex", "credential_kind": "workflow_identity"},
@@ -744,7 +744,7 @@ func TestServedShadowUnmanagedNHIDetectionCAPNHI05EndToEnd(t *testing.T) {
 		"kind": "nhi_cross_surface",
 		"config": map[string]any{
 			"observations": []map[string]any{
-				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-api", "owner": "platform", "credential_kind": "oauth_client", "scopes": []string{"payments.read"}},
+				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-api", "owner": "platform", "credential_kind": "oauth_client", "scopes": []string{"payments.read"}}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				{"surface": "cloud", "system": "aws-iam", "external_id": "access-key/AKIASHADOW", "principal": "shadow-cloud-key", "credential_kind": "api_key", "scopes": []string{"s3:*", "iam:read"}},
 				{"surface": "saas", "system": "github", "external_id": "user/legacy-bot/pat", "principal": "legacy-bot-token", "credential_kind": "personal_access_token"},
 				{"surface": "on_prem", "system": "ldap", "external_id": "svc-legacy", "principal": "svc-legacy", "owner": "identity", "credential_kind": "service_account"},
@@ -961,7 +961,7 @@ func TestServedUnifiedNHIInventoryCAPNHI02EndToEnd(t *testing.T) {
 		"kind": "nhi_cross_surface",
 		"config": map[string]any{
 			"observations": []map[string]any{
-				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-oauth", "owner": "platform", "credential_kind": "oauth_app", "scopes": []string{"payments.read"}},
+				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-oauth", "owner": "platform", "credential_kind": "oauth_app", "scopes": []string{"payments.read"}}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				{"surface": "cloud", "system": "aws-iam", "external_id": "role/payments-prod", "principal": "arn:aws:iam::111111111111:role/payments-prod", "owner": "platform", "credential_kind": "iam_role"},
 				{"surface": "saas", "system": "github", "external_id": "hooks/42", "principal": "payments-webhook", "owner": "devex", "credential_kind": "webhook"},
 				{"surface": "on_prem", "system": "ldap", "external_id": "svc-payments", "principal": "svc-payments", "owner": "identity", "credential_kind": "service_account"},
@@ -1041,13 +1041,13 @@ func TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read")
 
-	const rawToken = "ghp_INLINE_TOKEN_SHOULD_NOT_BE_ACCEPTED"
+	const rawToken = "ghp_INLINE_TOKEN_SHOULD_NOT_BE_ACCEPTED" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "bad-token-inventory",
 		"kind": "api_key",
 		"config": map[string]any{
 			"observations": []map[string]any{
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"surface":         "saas",
 					"system":          "github",
 					"external_id":     "user/pat/bad",
@@ -1086,7 +1086,7 @@ func TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd(t *testing.T) {
 					"evidence_refs":      []string{"aws-iam:credential-report/2026-06-20"},
 					"privileged":         true,
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"surface":            "saas",
 					"system":             "github",
 					"external_id":        "user/payments-ci/pat",
@@ -1099,7 +1099,7 @@ func TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd(t *testing.T) {
 					"last_seen_at":       "2026-06-21T08:30:00Z",
 					"evidence_refs":      []string{"github:audit/pat-1"},
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"surface":            "ci",
 					"system":             "github-actions",
 					"external_id":        "repo/payments/env/prod",
@@ -1125,7 +1125,7 @@ func TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd(t *testing.T) {
 					"last_seen_at":       "2026-06-22T10:15:00Z",
 					"evidence_refs":      []string{"stripe:audit/key-9"},
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"surface":            "idp",
 					"system":             "okta",
 					"external_id":        "app/payments-refresh-token",
@@ -1319,7 +1319,7 @@ func TestServedOwnershipAttributionCAPGOV01EndToEnd(t *testing.T) {
 		"kind": "api_key",
 		"config": map[string]any{
 			"observations": []map[string]any{
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"surface":            "saas",
 					"system":             "acme",
 					"external_id":        "apps/payments/token",
@@ -1331,7 +1331,7 @@ func TestServedOwnershipAttributionCAPGOV01EndToEnd(t *testing.T) {
 					"masked_fingerprint": "sha256:vendor-token-ref",
 					"evidence_refs":      []string{"acme:audit/tokens/7"},
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"surface":            "ci",
 					"system":             "github-actions",
 					"external_id":        "repo/payments/orphan",
@@ -2053,7 +2053,7 @@ func TestServedCompromisedCredentialDetectionCAPITDR02EndToEnd(t *testing.T) {
 		"kind": "credential_compromise",
 		"config": map[string]any{
 			"signals": []map[string]any{
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"principal":       "payments-api",
 					"credential_ref":  "api-token:payments-ci",
 					"credential_kind": "api_token",
@@ -2186,7 +2186,7 @@ func TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd(t *testing.T
 		"kind": "k8s_ingress_gateway",
 		"config": map[string]any{
 			"resources": []map[string]any{
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"kind":            "Ingress",
 					"api_version":     "networking.k8s.io/v1",
 					"namespace":       "payments",
@@ -2195,7 +2195,7 @@ func TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd(t *testing.T
 					"hosts":           []string{"payments.example.com"},
 					"auto_issue":      true,
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"kind":            "Gateway",
 					"api_version":     "gateway.networking.k8s.io/v1",
 					"namespace":       "edge",
@@ -2372,7 +2372,7 @@ func TestServedCloudCertificateDiscoveryACMEndToEnd(t *testing.T) {
 		"kind": "cloud_certificate",
 		"config": map[string]any{
 			"providers": []map[string]any{
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "aws-acm",
 					"region":                 "us-east-1",
 					"endpoint":               acm.URL,
@@ -2511,7 +2511,7 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 	certSecret := "tls/web"
 	plainSecret := "app/db"
 	var seen []string
-	sm := servedAWSSecretsManagerDouble(map[string]string{
+	sm := servedAWSSecretsManagerDouble(map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		certSecret:  servedCloudCertPEM(t, "sm-web.example", "sm-web.example"),
 		plainSecret: "not a certificate",
 	}, map[string]map[string]string{
@@ -2533,7 +2533,7 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 		"kind": "cloud_secret",
 		"config": map[string]any{
 			"providers": []map[string]any{
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "aws-secrets-manager",
 					"region":                 "us-east-1",
 					"endpoint":               sm.URL,
@@ -2701,7 +2701,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 		"kind": "cloud_secret",
 		"config": map[string]any{
 			"providers": []map[string]any{
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "aws-secrets-manager",
 					"region":                 "us-east-1",
 					"endpoint":               awsSM.URL,
@@ -2712,7 +2712,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 					"tag_key":                "type",
 					"tag_value":              "certificate",
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "gcp-secret-manager",
 					"project":                "p",
 					"endpoint":               gcpSM.URL,
@@ -2722,7 +2722,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 					"label_key":              "type",
 					"label_value":            "certificate",
 				},
-				{
+				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "hashicorp-vault",
 					"vault_url":              vault.URL,
 					"allow_private_endpoint": true,

@@ -84,7 +84,7 @@ func (c *CLI) InjectIO(ctx context.Context, secrets map[string][]byte, argv []st
 	if len(argv) == 0 {
 		return fmt.Errorf("secretscli: no command to run")
 	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) // #nosec G204 -- runs the operator's own command line verbatim; injecting secrets into their process is the feature (CWE-78)
 	env := os.Environ()
 	names := make([]string, 0, len(secrets))
 	for k, v := range secrets {

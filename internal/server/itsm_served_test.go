@@ -21,7 +21,7 @@ func TestServedServiceNowITSMTicketCAPDEP04EndToEnd(t *testing.T) {
 	sink := newServiceNowSink(t)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{
+		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          sink.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
 			AllowPrivateEndpoint: true,
@@ -30,7 +30,7 @@ func TestServedServiceNowITSMTicketCAPDEP04EndToEnd(t *testing.T) {
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write", string(authz.PrivateEgress))
 
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-servicenow-cap-dep-04", map[string]any{
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-servicenow-cap-dep-04", map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"instance_url":           sink.URL(),
 		"table":                  "incident",
 		"token_ref":              "env:TRSTCTL_SERVICENOW_TOKEN",
@@ -122,7 +122,7 @@ func TestServedServiceNowTicketRejectsUnapprovedSecretBackedEgress(t *testing.T)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
 	t.Setenv("TRSTCTL_AWS_SECRET_ACCESS_KEY", "do-not-send-this-to-servicenow")
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{
+		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          approved.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
 			AllowPrivateEndpoint: true,
@@ -131,7 +131,7 @@ func TestServedServiceNowTicketRejectsUnapprovedSecretBackedEgress(t *testing.T)
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write", string(authz.PrivateEgress))
 
-	base := map[string]any{
+	base := map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"instance_url":           approved.URL(),
 		"table":                  "incident",
 		"token_ref":              "env:TRSTCTL_SERVICENOW_TOKEN",
@@ -144,7 +144,7 @@ func TestServedServiceNowTicketRejectsUnapprovedSecretBackedEgress(t *testing.T)
 	}{
 		{
 			name:  "arbitrary_token_ref",
-			patch: map[string]any{"token_ref": "env:TRSTCTL_AWS_SECRET_ACCESS_KEY"},
+			patch: map[string]any{"token_ref": "env:TRSTCTL_AWS_SECRET_ACCESS_KEY"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		},
 		{
 			name:  "unapproved_instance_url",
@@ -180,7 +180,7 @@ func TestServedServiceNowPrivateEndpointRequiresPrivateEgressPermission(t *testi
 	sink := newServiceNowSink(t)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{
+		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          sink.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
 			AllowPrivateEndpoint: true,
@@ -189,7 +189,7 @@ func TestServedServiceNowPrivateEndpointRequiresPrivateEgressPermission(t *testi
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write")
 
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-private-egress-denied", map[string]any{
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-private-egress-denied", map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"instance_url":           sink.URL(),
 		"table":                  "incident",
 		"token_ref":              "env:TRSTCTL_SERVICENOW_TOKEN",
@@ -208,7 +208,7 @@ func TestServedServiceNowPrivateEndpointRequiresCIDRGrant(t *testing.T) {
 	sink := newServiceNowSink(t)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{
+		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          sink.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
 			AllowPrivateEndpoint: true,
@@ -216,7 +216,7 @@ func TestServedServiceNowPrivateEndpointRequiresCIDRGrant(t *testing.T) {
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write", string(authz.PrivateEgress))
 
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-private-egress-missing-cidr", map[string]any{
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-private-egress-missing-cidr", map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"instance_url":           sink.URL(),
 		"table":                  "incident",
 		"token_ref":              "env:TRSTCTL_SERVICENOW_TOKEN",

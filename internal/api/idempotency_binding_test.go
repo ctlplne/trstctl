@@ -16,7 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 )
 
-const mutationBindingSecretSentinel = "credential-sentinel-must-never-cross-binding"
+const mutationBindingSecretSentinel = "credential-sentinel-must-never-cross-binding" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 
 func mutationBindingRequest(subject, method, path string) *http.Request {
 	const tenantID = "11111111-1111-1111-1111-111111111111"

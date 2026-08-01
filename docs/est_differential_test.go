@@ -187,7 +187,7 @@ func repoDeclaresTestUnder(t *testing.T, root, name string) bool {
 		if err != nil || info.IsDir() || found || !strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		b, rerr := os.ReadFile(path)
+		b, rerr := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if rerr != nil {
 			return nil
 		}

@@ -44,7 +44,7 @@ func (s *servedPKCS11Session) GenerateKey(alg crypto.Algorithm) (string, []byte,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.seq++
-	handle := "pkcs11://slot/0/object/" + hex.EncodeToString([]byte{byte(s.seq)})
+	handle := "pkcs11://slot/0/object/" + hex.EncodeToString([]byte{byte(s.seq)}) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 	s.keys[handle] = &servedPKCS11Key{signer: signer, nonExtractable: true}
 	return handle, signer.Public().DER, nil
 }

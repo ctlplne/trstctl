@@ -147,7 +147,7 @@ SELECT jsonb_build_object(
 			          format_version = EXCLUDED.format_version,
 			          payload = EXCLUDED.payload,
 			          created_at = now()`,
-			tenantID, int64(coveredSeq), SnapshotFormatVersion, payload)
+			tenantID, int64(coveredSeq), SnapshotFormatVersion, payload) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 		if err != nil {
 			return fmt.Errorf("store: write snapshot: %w", err)
 		}

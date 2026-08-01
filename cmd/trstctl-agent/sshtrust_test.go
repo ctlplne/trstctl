@@ -79,7 +79,7 @@ func TestAgentSSHTrustDisabledIsNoOp(t *testing.T) {
 func TestAgentSSHTrustAddsCAAdditively(t *testing.T) {
 	o := baseOpts(t)
 	// Pre-existing trust + config that must be preserved (additive).
-	if err := os.WriteFile(o.trustedKeys, []byte("ssh-ed25519 AAAAexisting other-ca@corp\n"), 0o644); err != nil {
+	if err := os.WriteFile(o.trustedKeys, []byte("ssh-ed25519 AAAAexisting other-ca@corp\n"), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(o.sshdConfig, []byte("Port 2222\n"), 0o600); err != nil {
@@ -128,7 +128,7 @@ func TestAgentSSHTrustRollsBackOnValidateFailure(t *testing.T) {
 	o := baseOpts(t)
 	o.validateCmd = "false" // induce a validation failure (sshd -t rejects)
 	const orig = "ssh-ed25519 AAAAexisting other-ca@corp\n"
-	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil {
+	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(o.sshdConfig, []byte("Port 22\n"), 0o600); err != nil {
@@ -155,7 +155,7 @@ func TestAgentSSHTrustReloadRequired(t *testing.T) {
 	o := baseOpts(t)
 	o.reloadCmd = "" // no reload command → fail closed at the reload stage
 	const orig = "existing\n"
-	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil {
+	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(o.sshdConfig, []byte("Port 22\n"), 0o600); err != nil {
@@ -179,7 +179,7 @@ func TestAgentSSHTrustHealthRequired(t *testing.T) {
 	o := baseOpts(t)
 	o.healthCmd = "" // no post-reload daemon health check → fail closed
 	const orig = "existing\n"
-	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil {
+	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(o.sshdConfig, []byte("Port 22\n"), 0o600); err != nil {
@@ -221,7 +221,7 @@ func TestAgentSSHTrustRollsBackOnHealthFailure(t *testing.T) {
 	o := baseOpts(t)
 	o.healthCmd = "false" // induce daemon-health failure after reload
 	const orig = "existing\n"
-	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil {
+	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(o.sshdConfig, []byte("Port 22\n"), 0o600); err != nil {

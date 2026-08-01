@@ -43,11 +43,11 @@ func TestServedTSAOpenSSLTimestampOverHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := exec.Command(ossl, "ts", "-query", "-sha256", "-data", dataPath, "-out", reqPath).CombinedOutput()
+	out, err := exec.Command(ossl, "ts", "-query", "-sha256", "-data", dataPath, "-out", reqPath).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("openssl ts -query failed: %v\n%s", err, out)
 	}
-	reqDER, err := os.ReadFile(reqPath)
+	reqDER, err := os.ReadFile(reqPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestServedTSAOpenSSLTimestampOverHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err = exec.Command(ossl, "ts", "-verify", "-queryfile", reqPath, "-in", respPath, "-CAfile", caPath).CombinedOutput()
+	out, err = exec.Command(ossl, "ts", "-verify", "-queryfile", reqPath, "-in", respPath, "-CAfile", caPath).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		_ = os.WriteFile(verifyLogPath, out, 0o600)
 		t.Fatalf("openssl ts -verify rejected served /tsa response: %v\n%s", err, out)
@@ -100,16 +100,16 @@ func archiveServedTSATranscripts(t *testing.T, paths ...string) {
 	if dir == "" {
 		return
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 G703 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276)
 		t.Fatalf("create transcript dir: %v", err)
 	}
 	for _, src := range paths {
-		in, err := os.Open(src)
+		in, err := os.Open(src) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("open transcript %s: %v", src, err)
 		}
 		dst := filepath.Join(dir, filepath.Base(src))
-		out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+		out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644) // #nosec G302 G304 G703 -- test reads its own fixture/tempdir path (CWE-22, CWE-276)
 		if err != nil {
 			_ = in.Close()
 			t.Fatalf("create transcript %s: %v", dst, err)

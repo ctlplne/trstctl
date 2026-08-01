@@ -41,7 +41,7 @@ func TestMakeVulnDoesNotDependOnToolBinInPath(t *testing.T) {
 
 func goEnv(t *testing.T, key string) string {
 	t.Helper()
-	out, err := exec.Command("go", "env", key).Output()
+	out, err := exec.Command("go", "env", key).Output() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("go env %s: %v", key, err)
 	}

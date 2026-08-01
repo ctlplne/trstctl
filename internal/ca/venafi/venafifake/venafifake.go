@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	token    = "venafi-test-token"
+	token    = "venafi-test-token" // #nosec G101 -- test-support package compiled only into test binaries (CWE-798)
 	policyDN = `\VED\Policy\Certificates\trstctl`
 )
 

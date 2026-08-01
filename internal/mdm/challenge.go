@@ -76,7 +76,7 @@ func (c *Challenge) Validate(token string) error {
 	if !crypto.ConstantTimeEqual(mac, c.mac(expb, nonce)) {
 		return errors.New("mdm: challenge authentication failed")
 	}
-	if c.clock().Unix() > int64(binary.BigEndian.Uint64(expb)) {
+	if c.clock().Unix() > int64(binary.BigEndian.Uint64(expb)) { // #nosec G115 -- unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190)
 		return errors.New("mdm: challenge expired")
 	}
 	return nil
@@ -87,7 +87,7 @@ func (c *Challenge) Validator() func(string) error { return c.Validate }
 
 func (c *Challenge) token(exp int64, nonce []byte) string {
 	expb := make([]byte, 8)
-	binary.BigEndian.PutUint64(expb, uint64(exp))
+	binary.BigEndian.PutUint64(expb, uint64(exp)) // #nosec G115 -- unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190)
 	enc := base64.RawURLEncoding.EncodeToString
 	return enc(expb) + "." + enc(nonce) + "." + enc(c.mac(expb, nonce))
 }

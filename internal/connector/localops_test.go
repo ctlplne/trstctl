@@ -84,7 +84,7 @@ func TestLocalOpsPowerShellRequiresFullyPinnedOperatorArgv(t *testing.T) {
 	}
 	root := t.TempDir()
 	pwsh := filepath.Join(root, "pwsh")
-	if err := os.WriteFile(pwsh, []byte("fixture"), 0o700); err != nil {
+	if err := os.WriteFile(pwsh, []byte("fixture"), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatal(err)
 	}
 	if _, err := NewLocalOps(LocalOpsConfig{

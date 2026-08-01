@@ -57,7 +57,7 @@ func (d *softDevice) CreateKey(alg crypto.Algorithm) (string, []byte, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.n++
-	handle := "tpm-handle-" + hex.EncodeToString([]byte{byte(d.n)})
+	handle := "tpm-handle-" + hex.EncodeToString([]byte{byte(d.n)}) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 	d.keys[handle] = ls
 	return handle, ls.Public().DER, nil
 }
@@ -91,9 +91,9 @@ func (d *softDevice) CreateKeyForOperation(operationID string, alg crypto.Algori
 	for probe := uint64(0); probe < rangeSize; probe++ {
 		handle = "0x" + hex.EncodeToString([]byte{
 			byte((minHandle + ((start + probe) % rangeSize)) >> 24),
-			byte((minHandle + ((start + probe) % rangeSize)) >> 16),
-			byte((minHandle + ((start + probe) % rangeSize)) >> 8),
-			byte(minHandle + ((start + probe) % rangeSize)),
+			byte((minHandle + ((start + probe) % rangeSize)) >> 16), // #nosec G115 -- deliberate byte packing of a bounded TPM handle in a test helper (CWE-190)
+			byte((minHandle + ((start + probe) % rangeSize)) >> 8),  // #nosec G115 -- deliberate byte packing of a bounded TPM handle in a test helper (CWE-190)
+			byte(minHandle + ((start + probe) % rangeSize)),         // #nosec G115 -- deliberate byte packing of a bounded TPM handle in a test helper (CWE-190)
 		})
 		if d.keys[handle] == nil {
 			break
@@ -242,7 +242,7 @@ func TestTPMOperationIdentityProbesPastForeignSameAlgorithmHandle(t *testing.T) 
 		maxHandle = uint64(0x817fffff)
 	)
 	firstValue := minHandle + (binary.BigEndian.Uint64(tag[:8]) % (maxHandle - minHandle + 1))
-	firstHandle := "0x" + hex.EncodeToString([]byte{byte(firstValue >> 24), byte(firstValue >> 16), byte(firstValue >> 8), byte(firstValue)})
+	firstHandle := "0x" + hex.EncodeToString([]byte{byte(firstValue >> 24), byte(firstValue >> 16), byte(firstValue >> 8), byte(firstValue)}) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 	foreign, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)

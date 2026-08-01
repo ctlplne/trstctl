@@ -181,7 +181,7 @@ func TestChangelogExistsAndIsLinked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
 	}
-	tagOutput, err := exec.Command("git", "-C", repo, "tag", "--list", "v[0-9]*", "--sort=version:refname").Output()
+	tagOutput, err := exec.Command("git", "-C", repo, "tag", "--list", "v[0-9]*", "--sort=version:refname").Output() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("list published tags for CHANGELOG comparison: %v", err)
 	}
@@ -373,7 +373,7 @@ func TestKeyPackagesHaveLeafClaudeMd(t *testing.T) {
 			continue
 		}
 		f := filepath.Join(dir, "CLAUDE.md")
-		b, err := os.ReadFile(f)
+		b, err := os.ReadFile(f) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Errorf("internal/%s should carry a leaf CLAUDE.md capturing its package-specific rules (CODE-004): %v", pkg, err)
 			continue

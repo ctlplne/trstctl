@@ -911,7 +911,7 @@ func TestIdempotencyDoBoundReplaysOnlyMatchingAuthenticatedCommand(t *testing.T)
 		key          = "bound-transactional-sensitive"
 		binding      = "sha256:issuer-a-post-exact-path"
 		otherBinding = "sha256:issuer-b-or-other-path"
-		secretResult = "credential-sentinel-must-not-leak"
+		secretResult = "credential-sentinel-must-not-leak" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	)
 
 	runs := 0
@@ -960,7 +960,7 @@ func TestBoundCredentialCacheIsOpaqueToEveryLegacyUnboundReader(t *testing.T) {
 	idem := orchestrator.NewIdempotency(s)
 	const (
 		binding = "sha256:authenticated-api-command"
-		secret  = "bound-credential-sentinel-must-not-open"
+		secret  = "bound-credential-sentinel-must-not-open" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	)
 	tests := []struct {
 		name string

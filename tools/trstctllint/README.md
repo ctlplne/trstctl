@@ -16,8 +16,9 @@ request cannot merge while any rule is violated.
 | `cryptoagility` | **PQC-00** | Crypto and signer packages must keep crypto-agility as compile-time Go interfaces plus dependency injection behind `internal/crypto`: no Go `plugin` imports, no `internal/policy` imports into crypto/signer code, and no runtime-mutable provider/engine/backend registries or `RegisterCryptoSuite`-style functions. |
 | `netexec` | **SEC-005** | New outbound HTTP and process-exec surfaces must use SSRF-safe clients or reviewed validated-argv paths: ambient `http.DefaultClient`, new `exec.Command` call sites, and direct shell interpreter execution fail closed unless covered by an explicit analyzer fixture. |
 | `licenseboundary` | **PACKAGING-007** | Core Go files must carry `SPDX-License-Identifier: MPL-2.0`, `ee/` Go files must carry `SPDX-License-Identifier: LicenseRef-trstctl-EE`, core may not import `ee/` outside the tagged attach seam, and PQC-related code is rejected from core. |
+| `tlsverify` | **SEC-CWE-295** | `InsecureSkipVerify: true` (literal or assignment on a `tls.Config`) is allowed only in `internal/crypto/tlsprobe` — the discovery prober that inventories served certificates without trusting the connection — plus the single `mtls.LoopbackProbeClient` localhost liveness probe, and in `_test.go` files. Every other production path must verify. |
 
-All eight rules resolve types, AST shapes, imports, file headers, and SQL clauses (not
+All nine rules resolve types, AST shapes, imports, file headers, and SQL clauses (not
 substrings/source spelling), so
 a future violation cannot slip past CI by aliasing a receiver, hiding a secret
 behind a named type, mentioning `tenant_id` in a comment, or passing an

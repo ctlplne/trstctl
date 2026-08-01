@@ -21,7 +21,7 @@ func TestMigrateAutoDefaultsOn(t *testing.T) {
 // still valid — boot fails later, with guidance, only when migrations are
 // actually pending.
 func TestMigrateAutoEnvOverride(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
@@ -42,7 +42,7 @@ func TestMigrateAutoEnvOverride(t *testing.T) {
 // TestMigrateAutoMalformedEnvIgnored: a typo cannot silently flip the gate; the
 // prior (default-on) value stands.
 func TestMigrateAutoMalformedEnvIgnored(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",

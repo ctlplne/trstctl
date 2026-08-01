@@ -50,7 +50,7 @@ func LoadMCPRESTAllowlist() (MCPRESTAllowlist, error) {
 	if err != nil {
 		return MCPRESTAllowlist{}, err
 	}
-	b, err := os.ReadFile(filepath.Join(root, "internal", "featureparity", "mcp-rest-allowlist.json"))
+	b, err := os.ReadFile(filepath.Join(root, "internal", "featureparity", "mcp-rest-allowlist.json")) // #nosec G304 -- fixed repo-relative catalog path read by tools and tests (CWE-22)
 	if err != nil {
 		return MCPRESTAllowlist{}, fmt.Errorf("read MCP REST allowlist: %w", err)
 	}

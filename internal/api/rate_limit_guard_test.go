@@ -47,7 +47,7 @@ func TestGuardAppliesPerTenantRateLimiter(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/owners", nil)
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: tok}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

@@ -235,7 +235,7 @@ func (c *Config) validate() error {
 }
 
 func readTokenFile(path string) ([]byte, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- operator-configured upstream-authority plugin config path (CWE-22)
 	if err != nil {
 		return nil, err
 	}

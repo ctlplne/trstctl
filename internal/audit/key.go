@@ -22,7 +22,7 @@ func LoadOrCreateSigningKey(path, kid string) (*jose.SigningKey, error) {
 	if path == "" {
 		return nil, errors.New("audit: signing key path is required to persist the export key")
 	}
-	switch data, err := os.ReadFile(path); {
+	switch data, err := os.ReadFile(path); { // #nosec G304 -- operator-configured audit signing-key path from deployment config (CWE-22)
 	case err == nil:
 		return jose.ParseRSASigningKey(kid, data)
 	case !errors.Is(err, os.ErrNotExist):

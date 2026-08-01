@@ -139,7 +139,7 @@ func (enrollFuzzInput) Generate(r *rand.Rand, size int) reflect.Value {
 	case 0: // arbitrary bytes
 		b := make([]byte, r.Intn(size+1))
 		for i := range b {
-			b[i] = byte(r.Intn(256))
+			b[i] = byte(r.Intn(256)) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		}
 		return reflect.ValueOf(enrollFuzzInput{string(b)})
 	case 1: // near-base64 (alphabet only, random length, maybe bad padding)
@@ -152,7 +152,7 @@ func (enrollFuzzInput) Generate(r *rand.Rand, size int) reflect.Value {
 	case 2: // base64 of random bytes (decodes cleanly, fails CSR verification)
 		b := make([]byte, r.Intn(size+1))
 		for i := range b {
-			b[i] = byte(r.Intn(256))
+			b[i] = byte(r.Intn(256)) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 		}
 		return reflect.ValueOf(enrollFuzzInput{base64.StdEncoding.EncodeToString(b)})
 	default: // whitespace / empty

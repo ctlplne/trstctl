@@ -420,7 +420,7 @@ func buildThirdPartySecretScanPosture(generatedAt string) thirdPartySecretScanPo
 		generatedAt = "1970-01-01T00:00:00Z"
 	}
 	providers := []thirdPartySecretScanProviderResponse{
-		{
+		{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 			ID:             secretscan.ThirdPartyProviderCICDLog,
 			Name:           "CI/CD logs",
 			ArtifactKinds:  []string{"ci_cd_log", "job_trace", "workflow_log", "build_artifact"},
@@ -444,7 +444,7 @@ func buildThirdPartySecretScanPosture(generatedAt string) thirdPartySecretScanPo
 			SecretHandling: "Slack message text remains in the export artifact; trstctl stores metadata-only findings",
 			OutboxMode:     "artifact scan is discovery.run outbox work, never inline request handling",
 		},
-		{
+		{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 			ID:             secretscan.ThirdPartyProviderJira,
 			Name:           "Jira exports",
 			ArtifactKinds:  []string{"jira_export", "issue_export", "attachment_export"},
@@ -500,7 +500,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 		generatedAt = "1970-01-01T00:00:00Z"
 	}
 	providers := []secretRepoScanProviderResponse{
-		{
+		{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 			ID:               "github",
 			Name:             "GitHub",
 			RealtimeTriggers: []string{"push", "pull_request", "workflow_run", "repository_dispatch"},
@@ -510,7 +510,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
 			OutboxMode:       "clone and scan are discovery.run outbox work, never inline request handling",
 		},
-		{
+		{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 			ID:               "gitlab",
 			Name:             "GitLab",
 			RealtimeTriggers: []string{"push", "merge_request", "tag_push", "pipeline"},
@@ -520,7 +520,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
 			OutboxMode:       "clone and scan are discovery.run outbox work, never inline request handling",
 		},
-		{
+		{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 			ID:               "bitbucket",
 			Name:             "Bitbucket",
 			RealtimeTriggers: []string{"repo:push", "pullrequest:created", "pullrequest:updated", "repo:refs_changed"},

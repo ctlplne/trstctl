@@ -522,7 +522,7 @@ func (r *managedKeyRuntime) loadOperation(operationID string) (managedKeyOperati
 	if err != nil {
 		return managedKeyOperation{}, false, err
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- the signer's own keystore/journal directory from its config (CWE-22)
 	if errors.Is(err, os.ErrNotExist) {
 		return managedKeyOperation{}, false, nil
 	}
@@ -665,7 +665,7 @@ func atomicJSONFile(path string, value any) error {
 	if err := os.Rename(tmpName, path); err != nil {
 		return err
 	}
-	d, err := os.Open(dir)
+	d, err := os.Open(dir) // #nosec G304 -- the signer's own keystore/journal directory from its config (CWE-22)
 	if err != nil {
 		return err
 	}

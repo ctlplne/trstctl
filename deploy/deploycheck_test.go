@@ -93,7 +93,7 @@ func requireTestDeclares(t *testing.T, root, rel, name string) {
 
 func requireFileContains(t *testing.T, root, rel string, wants ...string) {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join(root, rel))
+	body, err := os.ReadFile(filepath.Join(root, rel)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read %s: %v", rel, err)
 	}
@@ -114,7 +114,7 @@ var flagRe = regexp.MustCompile(`(?m)^\s+-([A-Za-z][\w-]*)`)
 // from the binary is caught.
 func binaryFlags(t *testing.T, root, pkg string) map[string]bool {
 	t.Helper()
-	cmd := exec.Command("go", "run", "./cmd/"+pkg, "--help")
+	cmd := exec.Command("go", "run", "./cmd/"+pkg, "--help") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = root
 	// --help prints usage to stderr and exits 0; capture both streams.
 	var out bytes.Buffer
@@ -207,7 +207,7 @@ func staticContainers(t *testing.T, root string) []container {
 	}
 	var out []container
 	for _, rel := range files {
-		raw, err := os.ReadFile(filepath.Join(root, "deploy", rel))
+		raw, err := os.ReadFile(filepath.Join(root, "deploy", rel)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", rel, err)
 		}
@@ -289,7 +289,7 @@ func TestManifestFlagsAreDefinedByTheBinary(t *testing.T) {
 	// mTLS cert/peer flags; post-SIGNER-005 the binary defines all of them, so this
 	// scan confirms the manifest stays consistent with the binary's real flag set
 	// (and would fail if a future edit reintroduced an undefined flag).
-	signerTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "signer-deployment.yaml"))
+	signerTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "signer-deployment.yaml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read signer-deployment.yaml: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestDeployEnrollmentURLMatchesClient(t *testing.T) {
 		},
 	}
 	for _, check := range checks {
-		raw, err := os.ReadFile(filepath.Join(root, "deploy", check.rel))
+		raw, err := os.ReadFile(filepath.Join(root, "deploy", check.rel)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read deploy/%s: %v", check.rel, err)
 		}
@@ -437,7 +437,7 @@ func TestOPS008DeploymentStrengthGuardsStayWired(t *testing.T) {
 
 func TestComposeE2EGeneratesPortableUUIDs(t *testing.T) {
 	root := repoRoot(t)
-	cmd := exec.Command("bash", filepath.Join(root, "scripts", "ci", "compose-e2e_selftest.sh"))
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "ci", "compose-e2e_selftest.sh")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -447,7 +447,7 @@ func TestComposeE2EGeneratesPortableUUIDs(t *testing.T) {
 
 func TestProfileZlintGateFailsOnMalformedGeneratedLeaf(t *testing.T) {
 	root := repoRoot(t)
-	cmd := exec.Command("bash", filepath.Join(root, "scripts", "ci", "profile-zlint_selftest.sh"))
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "ci", "profile-zlint_selftest.sh")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -457,7 +457,7 @@ func TestProfileZlintGateFailsOnMalformedGeneratedLeaf(t *testing.T) {
 
 func TestComposeE2EPublishesPKIProfileLintArtifacts(t *testing.T) {
 	root := repoRoot(t)
-	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read ci workflow: %v", err)
 	}
@@ -542,7 +542,7 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 		if ext != ".yaml" && ext != ".yml" && ext != ".tpl" {
 			return nil
 		}
-		b, err := os.ReadFile(path)
+		b, err := os.ReadFile(path) // #nosec G122 G304 -- test reads its own fixture/tempdir path (CWE-22, CWE-367)
 		if err != nil {
 			return err
 		}
@@ -635,7 +635,7 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 
 	// (1) release.yml must carry a job that builds + signs + checksum-publishes the
 	// Windows agent, and verifies/gates signed publication.
-	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml"))
+	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read release.yml: %v", err)
 	}
@@ -704,7 +704,7 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 
 	// (2) The Makefile dist-windows recipe must Authenticode-sign BOTH the .exe and
 	// the .msi through the remote OIDC signing bridge when WINDOWS_CODESIGN_URL is set.
-	mk, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	mk, err := os.ReadFile(filepath.Join(root, "Makefile")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read Makefile: %v", err)
 	}
@@ -792,7 +792,7 @@ func keys(m map[string]bool) []string {
 // TRSTCTL_CONFIG_FILE (consulted by Load before applyEnv runs).
 func loaderEnvKeys(t *testing.T, root string) map[string]bool {
 	t.Helper()
-	src, err := os.ReadFile(filepath.Join(root, "internal", "config", "config.go"))
+	src, err := os.ReadFile(filepath.Join(root, "internal", "config", "config.go")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read internal/config/config.go: %v", err)
 	}
@@ -922,19 +922,19 @@ func TestManifestEnvKeysAreReadByTheBinary(t *testing.T) {
 	}
 	var sources []src
 
-	cfgTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "configmap.yaml"))
+	cfgTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "configmap.yaml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read configmap.yaml: %v", err)
 	}
 	sources = append(sources, src{"helm/templates/configmap.yaml", configMapDataKeys(string(cfgTpl))})
 
-	depTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "deployment.yaml"))
+	depTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "deployment.yaml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read deployment.yaml: %v", err)
 	}
 	sources = append(sources, src{"helm/templates/deployment.yaml", binaryEnvKeysInManifest(string(depTpl))})
 
-	compose, err := os.ReadFile(filepath.Join(root, "deploy", "docker", "docker-compose.yml"))
+	compose, err := os.ReadFile(filepath.Join(root, "deploy", "docker", "docker-compose.yml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read docker-compose.yml: %v", err)
 	}
@@ -997,7 +997,7 @@ const chartDir = "helm/trstctl"
 // caught while .Values.podAnnotations.whatever is allowed).
 func valuesYAMLPaths(t *testing.T, root string) (paths, freeform map[string]bool) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join(root, "deploy", chartDir, "values.yaml"))
+	raw, err := os.ReadFile(filepath.Join(root, "deploy", chartDir, "values.yaml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read values.yaml: %v", err)
 	}
@@ -1087,7 +1087,7 @@ func TestEveryTemplateValueExistsInValuesYAML(t *testing.T) {
 		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".tpl") {
 			continue
 		}
-		body, err := os.ReadFile(filepath.Join(tmplDir, name))
+		body, err := os.ReadFile(filepath.Join(tmplDir, name)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1270,7 +1270,7 @@ func fmtSprint(v any) string {
 // failing, so the render is best-effort but structurally faithful.
 func renderChartTemplate(t *testing.T, root, name string, values map[string]any) string {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join(root, "deploy", chartDir, "templates", name))
+	body, err := os.ReadFile(filepath.Join(root, "deploy", chartDir, "templates", name)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read templates/%s: %v", name, err)
 	}
@@ -1428,9 +1428,9 @@ func haValues() map[string]any {
 			"protocols":   map[string]any{"workers": 8, "queue": 256},
 			"agent":       map[string]any{"workers": 16, "queue": 1024},
 		},
-		"postgres": map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-db", "existingSecretKey": "dsn"},
+		"postgres": map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-db", "existingSecretKey": "dsn"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"nats":     map[string]any{"mode": "external", "url": "nats://trstctl-nats:4222"},
-		"kek":      map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false},
+		"kek":      map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"externalKMS": map[string]any{
 			"enabled": false, "provider": "", "keyRef": "", "wrapCommand": "", "timeout": "10s",
 		},
@@ -1450,7 +1450,7 @@ func haValues() map[string]any {
 		"serviceAccount":      map[string]any{"create": true, "name": "", "annotations": map[string]any{}},
 		"signer": map[string]any{
 			"mode": "sidecar", "replicas": 1, "resources": map[string]any{},
-			"auth": map[string]any{
+			"auth": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 				"allowCoResidentAuthorizer": false,
 				"tokenCommand":              "/usr/local/bin/trstctl-sign-approve",
 			},
@@ -1514,7 +1514,7 @@ func TestRenderedManifestsAreStructurallyValid(t *testing.T) {
 		filepath.Join("kubernetes", "daemonset.yaml"),
 		filepath.Join("operator", "operator.yaml"),
 	} {
-		raw, err := os.ReadFile(filepath.Join(root, "deploy", rel))
+		raw, err := os.ReadFile(filepath.Join(root, "deploy", rel)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", rel, err)
 		}

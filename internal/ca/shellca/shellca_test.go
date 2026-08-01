@@ -158,7 +158,7 @@ func TestShellCASignHelperProcess(t *testing.T) {
 		_, _ = fmt.Fprintln(os.Stderr, "shellca helper: missing csr/cert args")
 		os.Exit(2)
 	}
-	csrPEM, err := os.ReadFile(csrPath)
+	csrPEM, err := os.ReadFile(csrPath) // #nosec G304 G703 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "shellca helper: read csr: %v\n", err)
 		os.Exit(2)
@@ -179,7 +179,7 @@ func TestShellCASignHelperProcess(t *testing.T) {
 		_, _ = fmt.Fprintf(os.Stderr, "shellca helper: issue: %v\n", err)
 		os.Exit(2)
 	}
-	if err := os.WriteFile(certPath, issued.CertificatePEM, 0o600); err != nil {
+	if err := os.WriteFile(certPath, issued.CertificatePEM, 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		_, _ = fmt.Fprintf(os.Stderr, "shellca helper: write cert: %v\n", err)
 		os.Exit(2)
 	}

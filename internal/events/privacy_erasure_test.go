@@ -227,7 +227,7 @@ func TestPseudonymizeSubjectCompletionStaysInsideRewriteOperationLock(t *testing
 		subject,
 		func(completionCtx context.Context) error {
 			completionCalls++
-			go func() {
+			go func() { // #nosec G118 -- test goroutine lifecycle is managed by the test (CWE-664)
 				competingDone <- log.WithHistoryOperation(
 					context.Background(),
 					func(context.Context) error {

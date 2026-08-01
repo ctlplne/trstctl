@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	testToken = "ultradns-oauth2-bearer-token-do-not-log"
+	testToken = "ultradns-oauth2-bearer-token-do-not-log" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	testZone  = "example.com"
 )
 

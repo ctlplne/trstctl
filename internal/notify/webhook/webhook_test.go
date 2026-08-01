@@ -20,7 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/notify/webhook"
 )
 
-const testSecret = "hmac-key-do-not-log"
+const testSecret = "hmac-key-do-not-log" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 
 func newChannel(t *testing.T, srv *fakeReceiver, secret string) *webhook.Channel {
 	t.Helper()

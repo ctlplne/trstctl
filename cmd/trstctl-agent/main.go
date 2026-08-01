@@ -270,7 +270,7 @@ func prepareIdentityDir(path string, uid, gid int) error {
 	if err := os.Chown(clean, uid, gid); err != nil {
 		return fmt.Errorf("own identity dir: %w", err)
 	}
-	if err := os.Chmod(clean, 0o700); err != nil {
+	if err := os.Chmod(clean, 0o700); err != nil { // #nosec G302 -- 0700 on a directory: the execute bit is required to traverse it (CWE-276)
 		return fmt.Errorf("chmod identity dir: %w", err)
 	}
 	return nil
@@ -327,7 +327,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	ch := channelAdapter{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))}
 	fmt.Printf("trstctl-agent: connected to %s as %s (cert serial %s, expires %s)\n",
 		o.serverAddr, o.commonName, a.CertificateSerial(), a.CertificateNotAfter().Format(time.RFC3339))
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404 -- reconnect jitter, not a security decision (CWE-338)
 	var nextHeartbeat time.Duration
 	heartbeatFailures := 0
 	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {

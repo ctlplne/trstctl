@@ -87,7 +87,7 @@ func runSSHTrustAddCA(ctx context.Context, o sshTrustOptions) (handled bool, err
 // sshd_config), and removes.
 type osFS struct{}
 
-func (osFS) ReadFile(p string) ([]byte, error) { return os.ReadFile(p) }
+func (osFS) ReadFile(p string) ([]byte, error) { return os.ReadFile(p) } // #nosec G304 -- operator-configured local path from the agent's own config (CWE-22)
 
 func (osFS) Glob(pattern string) ([]string, error) { return filepath.Glob(pattern) }
 
@@ -164,7 +164,7 @@ func runCommandLine(ctx context.Context, line string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) // #nosec G204 -- operator-configured sshd reload command; running it is the feature (CWE-78)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%q failed: %v: %s", line, err, string(out))

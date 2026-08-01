@@ -31,7 +31,7 @@ func Load(path string) ([]byte, error) {
 	if err := validateFile(path, info); err != nil {
 		return nil, err
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- operator-configured local secret path; parents and file mode validated above (CWE-22)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func Create(path string, data []byte) error {
 	if err := validateParents(path); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22)
 	if err != nil {
 		return err
 	}

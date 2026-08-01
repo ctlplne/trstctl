@@ -306,7 +306,7 @@ func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 		"provider":          "cloudflare",
 		"zone":              "example.test",
 		"delegation_target": "tenant-123.auth.acme-dns.example.net",
-		"credential_refs": map[string]any{
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"api_token_ref": "secret://dns/cloudflare/api-token",
 		},
 		"config": map[string]any{
@@ -442,7 +442,7 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 		"name":     "trace012-webhook",
 		"provider": "webhook",
 		"zone":     "trace012.test",
-		"credential_refs": map[string]any{
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"bearer_token_ref": "secret://dns/webhook/bearer-token",
 		},
 		"config": map[string]any{
@@ -533,7 +533,7 @@ func TestServedACMEDomainValidationPolicyLimitsOrderChallengesTRACE016(t *testin
 		"name":     "trace016-dv-policy",
 		"provider": "webhook",
 		"zone":     "trace016.test",
-		"credential_refs": map[string]any{
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"bearer_token_ref": "secret://dns/trace016/bearer-token",
 		},
 		"config": map[string]any{
@@ -570,7 +570,7 @@ func TestServedACMEDomainValidationPolicyLimitsOrderChallengesTRACE016(t *testin
 		"name":     "trace016-dv-policy",
 		"provider": "webhook",
 		"zone":     "trace016.test",
-		"credential_refs": map[string]any{
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"bearer_token_ref": "secret://dns/trace016/bearer-token",
 		},
 		"config": map[string]any{
@@ -640,7 +640,7 @@ func TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014(t *tes
 		"provider":          "webhook",
 		"zone":              "trace014.test",
 		"delegation_target": delegatedTarget,
-		"credential_refs": map[string]any{
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"bearer_token_ref": "secret://dns/delegated/bearer-token",
 		},
 		"config": map[string]any{
@@ -716,7 +716,7 @@ func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
 		"provider":          "webhook",
 		"zone":              "trace015.test",
 		"caa_issuer_domain": "trstctl.example",
-		"credential_refs": map[string]any{
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"bearer_token_ref": "secret://dns/caa/bearer-token",
 		},
 		"config": map[string]any{
@@ -889,7 +889,7 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 		"name":     "trace013-plugin",
 		"provider": "reference-dns",
 		"zone":     "trace013.test",
-		"credential_refs": map[string]any{
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			"bearer_token_ref": "secret://dns/plugin/bearer-token",
 		},
 		"config": map[string]any{

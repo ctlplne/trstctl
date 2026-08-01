@@ -42,9 +42,9 @@ import (
 func TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators(t *testing.T) {
 	const (
 		awsAccessKey = "AKIDCLM05"
-		awsSecretKey = "CLM05SecretKeyForSigV4Only"
+		awsSecretKey = "CLM05SecretKeyForSigV4Only" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		acmTargetARN = "arn:aws:acm:us-east-1:123456789012:certificate/clm-05"
-		azureToken   = "clm-05-azure-token"
+		azureToken   = "clm-05-azure-token" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		azureCert    = "clm-05-web"
 	)
 
@@ -446,7 +446,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 		nginxCertPath = "/etc/nginx/tls/fullchain.pem"
 		nginxKeyPath  = "/etc/nginx/tls/privkey.pem"
 		javaStorePath = "/opt/payments/tls/payments.p12"
-		kempToken     = "cap-life-05-kemp-token"
+		kempToken     = "cap-life-05-kemp-token" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		kempVS        = "vs-cap-life-05-443"
 	)
 

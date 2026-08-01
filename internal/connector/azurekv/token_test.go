@@ -17,7 +17,7 @@ import (
 // grant and caches it, so repeated deploys do not re-hit the token endpoint.
 func TestClientCredentialsAcquiresAndCaches(t *testing.T) {
 	var hits int32
-	const clientSecret = "s3 cr+%&="
+	const clientSecret = "s3 cr+%&=" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	var gotGrant, gotClient, gotSecret, gotScope string
 	aad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&hits, 1)
@@ -60,7 +60,7 @@ func TestClientCredentialsAcquiresAndCaches(t *testing.T) {
 // A non-200 from the token endpoint is surfaced as an error, not a silent empty
 // token.
 func TestClientCredentialsTokenEndpointError(t *testing.T) {
-	const secret = "AZURE-CLIENT-SECRET-DO-NOT-LOG"
+	const secret = "AZURE-CLIENT-SECRET-DO-NOT-LOG" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	aad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":"invalid_client","echo":"` + secret + `"}`))

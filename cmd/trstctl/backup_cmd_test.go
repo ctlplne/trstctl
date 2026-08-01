@@ -28,7 +28,7 @@ func TestDRScriptsInvokeFullBackupRestoreFlags(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "calls.log")
 	fake := filepath.Join(dir, "trstctl-fake")
-	if err := os.WriteFile(fake, []byte("#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$TRSTCTL_FAKE_LOG\"\n"), 0o700); err != nil {
+	if err := os.WriteFile(fake, []byte("#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$TRSTCTL_FAKE_LOG\"\n"), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write fake trstctl: %v", err)
 	}
 
@@ -37,13 +37,13 @@ func TestDRScriptsInvokeFullBackupRestoreFlags(t *testing.T) {
 		filepath.Join("..", "..", "scripts", "dr", "full-backup.sh"),
 		filepath.Join("..", "..", "scripts", "dr", "full-restore.sh"),
 	} {
-		cmd := exec.Command("bash", script, backupDir)
+		cmd := exec.Command("bash", script, backupDir) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		cmd.Env = append(os.Environ(), "TRSTCTL_BIN="+fake, "TRSTCTL_FAKE_LOG="+logPath)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s failed: %v\n%s", script, err, out)
 		}
 	}
-	calls, err := os.ReadFile(logPath)
+	calls, err := os.ReadFile(logPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read fake trstctl log: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestDRScriptsInvokeFullBackupRestoreFlags(t *testing.T) {
 // instances for source, restore target, and corrupted-control target.
 func TestRestoreRehearsalUsesFreshExternalDatastores(t *testing.T) {
 	path := filepath.Join("..", "..", "scripts", "ci", "restore-rehearsal.sh")
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

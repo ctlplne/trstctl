@@ -47,7 +47,7 @@ const (
 	KindUnexpectedIssuance = "certificate.unexpected_issuance"
 	// KindCredentialDrift marks an alert raised because a credential no longer
 	// matches the state the agent/control plane declared.
-	KindCredentialDrift = "credential.drift"
+	KindCredentialDrift = "credential.drift" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	// KindResponseIntegration marks an operator-dispatched incident/remediation
 	// response packet for chat notification integrations.
 	KindResponseIntegration = "response.integration"

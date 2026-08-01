@@ -91,7 +91,7 @@ func RenewAt(info RenewalInfo, seed int64) time.Time {
 	if span <= 0 {
 		return w.Start
 	}
-	r := rand.New(rand.NewPCG(uint64(seed), 0x9E3779B97F4A7C15))
+	r := rand.New(rand.NewPCG(uint64(seed), 0x9E3779B97F4A7C15)) // #nosec G404 G115 -- deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190)
 	return w.Start.Add(time.Duration(r.Int64N(int64(span))))
 }
 

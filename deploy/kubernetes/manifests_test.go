@@ -413,7 +413,7 @@ func TestRenderAgentDaemonSetRequiresImmutableDigest(t *testing.T) {
 	root := filepath.Join("..", "..")
 	script := filepath.Join("scripts", "release", "render-kubernetes-agent-daemonset.sh")
 	goodImage := "ghcr.io/ctlplne/trstctl@sha256:" + strings.Repeat("1", 64)
-	cmd := exec.Command("bash", script, goodImage)
+	cmd := exec.Command("bash", script, goodImage) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -431,7 +431,7 @@ func TestRenderAgentDaemonSetRequiresImmutableDigest(t *testing.T) {
 		"ghcr.io/ctlplne/trstctl@sha256:" + strings.Repeat("0", 64),
 		"ghcr.io/ctlplne/trstctl@sha256:abc",
 	} {
-		cmd := exec.Command("bash", script, bad)
+		cmd := exec.Command("bash", script, bad) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		cmd.Dir = root
 		if out, err := cmd.CombinedOutput(); err == nil {
 			t.Fatalf("render accepted invalid image %q; output:\n%s", bad, out)
@@ -474,7 +474,7 @@ func TestAgentBootstrapDocsMintSecretAndEnableChannel(t *testing.T) {
 
 func TestAgentDaemonSetRenderPathIsWiredIntoCIAndRelease(t *testing.T) {
 	root := filepath.Join("..", "..")
-	ci, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	ci, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,7 +491,7 @@ func TestAgentDaemonSetRenderPathIsWiredIntoCIAndRelease(t *testing.T) {
 		}
 	}
 
-	release, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml"))
+	release, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

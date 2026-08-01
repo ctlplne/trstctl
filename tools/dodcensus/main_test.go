@@ -516,12 +516,12 @@ func TestRuntimeBindingRejectsUnrelatedHandlerSession(t *testing.T) {
 	writeGateFixture(t, repo, false)
 	manifest := validManifest(t, repo, enforcementRequired)
 	path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
 	bad := strings.Replace(string(data), "session := proof.Start(t, \"connector.nginx\", srv.Handler(), req)", "fake := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) })\n    session := proof.Start(t, \"connector.nginx\", fake, req)", 1)
-	if err := os.WriteFile(path, []byte(bad), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(bad), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
 	if evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates); evidence.OK {
@@ -535,13 +535,13 @@ func TestRuntimeBindingRejectsDeadProofPathAndExcludedSibling(t *testing.T) {
 		writeGateFixture(t, repo, false)
 		manifest := validManifest(t, repo, enforcementRequired)
 		path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}
 		source := strings.Replace(string(raw), "func TestDODConnectorNginxServed(t *testing.T) {", "func TestDODConnectorNginxServed(t *testing.T) {\nif false {", 1)
 		source = strings.Replace(source, "\n}\n", "\n}\n}\n", 1)
-		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 			t.Fatal(err)
 		}
 		if evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates); evidence.OK {
@@ -554,12 +554,12 @@ func TestRuntimeBindingRejectsDeadProofPathAndExcludedSibling(t *testing.T) {
 		writeGateFixture(t, repo, false)
 		manifest := validManifest(t, repo, enforcementRequired)
 		root := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
-		raw, err := os.ReadFile(root)
+		raw, err := os.ReadFile(root) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}
 		weak := strings.Replace(string(raw), "TestDODConnectorNginxServed", "TestDODUnrelated", 1)
-		if err := os.WriteFile(root, []byte(weak), 0o600); err != nil {
+		if err := os.WriteFile(root, []byte(weak), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 			t.Fatal(err)
 		}
 		excluded := strings.Replace(string(raw), "//go:build trstctl_dodproof", "//go:build trstctl_dodproof && never_enabled", 1)
@@ -575,7 +575,7 @@ func TestRuntimeBindingRejectsProofOnOnlyOneUnknownEnvironmentBranch(t *testing.
 	writeGateFixture(t, repo, false)
 	manifest := validManifest(t, repo, enforcementRequired)
 	path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -586,7 +586,7 @@ func TestRuntimeBindingRejectsProofOnOnlyOneUnknownEnvironmentBranch(t *testing.
 		t.Fatal("fixture has no root closing brace")
 	}
 	source = source[:closing] + "\n} else {\n    _ = os.Getenv(\"ATTACKER_BRANCH\")\n}" + source[closing:]
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
 	evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates, manifest.BuildProfiles["static"])
@@ -600,7 +600,7 @@ func TestRuntimeBindingDoesNotModelInjectedDODExpectationAsEmpty(t *testing.T) {
 	writeGateFixture(t, repo, false)
 	manifest := validManifest(t, repo, enforcementRequired)
 	path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -616,7 +616,7 @@ func dodFakeInjectedExpectation() {
     _ = Deps{ConnectorRegistry: newRegistry()}
 }
 `
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
 	evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates, manifest.BuildProfiles["static"])
@@ -631,7 +631,7 @@ func TestRuntimeBindingModelsOnlyExpectationAsInspectedEntry(t *testing.T) {
 		writeGateFixture(t, repo, false)
 		manifest := validManifest(t, repo, enforcementRequired)
 		path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -641,7 +641,7 @@ func TestRuntimeBindingModelsOnlyExpectationAsInspectedEntry(t *testing.T) {
 			t.Fatal("fixture has no root closing brace")
 		}
 		source = source[:closing] + "\n}" + source[closing:]
-		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 			t.Fatal(err)
 		}
 		if evidence := inspectRuntimeBindingForGroup(repo, manifest.Entries[0], manifest.Substrates, manifest.Entries, manifest.BuildProfiles["static"]); !evidence.OK {
@@ -654,7 +654,7 @@ func TestRuntimeBindingModelsOnlyExpectationAsInspectedEntry(t *testing.T) {
 		writeGateFixture(t, repo, false)
 		manifest := validManifest(t, repo, enforcementRequired)
 		path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -664,7 +664,7 @@ func TestRuntimeBindingModelsOnlyExpectationAsInspectedEntry(t *testing.T) {
 			t.Fatal("fixture has no root closing brace")
 		}
 		source = source[:closing] + "\n}" + source[closing:]
-		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 			t.Fatal(err)
 		}
 		if evidence := inspectRuntimeBinding(repo, manifest.Entries[0], manifest.Substrates, manifest.BuildProfiles["static"]); evidence.OK {
@@ -703,7 +703,7 @@ func TestRuntimeBindingRejectsFakeFullGroupBranchDuringExactSelection(t *testing
 	manifest.Entries = append(manifest.Entries, second)
 
 	path := filepath.Join(repo, "internal/server/dod_nginx_served_test.go")
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -718,7 +718,7 @@ func dodFakeFullGroup() {
     _ = Deps{ConnectorRegistry: newRegistry()}
 }
 `
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
 
@@ -1176,7 +1176,7 @@ func TestExactlyThirteenManifestRuntimeProofFilesUseDedicatedBuildConstraint(t *
 			t.Fatal(globErr)
 		}
 		for _, path := range paths {
-			raw, readErr := os.ReadFile(path)
+			raw, readErr := os.ReadFile(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 			if readErr != nil {
 				t.Fatal(readErr)
 			}
@@ -1477,7 +1477,7 @@ func writeFile(t *testing.T, repo, name, body string, mode os.FileMode) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(body), mode); err != nil {
+	if err := os.WriteFile(path, []byte(body), mode); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
 }

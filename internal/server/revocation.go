@@ -379,7 +379,7 @@ func crlShardIndex(serial string, shardCount int) int {
 	if err != nil {
 		return 0
 	}
-	return int(n % uint64(shardCount))
+	return int(n % uint64(shardCount)) // #nosec G115 -- value reduced modulo the shard count before conversion (CWE-190)
 }
 
 func crlDeltaEntries(entries []crypto.RevokedSerial, since time.Time) []crypto.RevokedSerial {

@@ -360,7 +360,7 @@ func sanitizedLogs(path string) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "No log file supplied. Re-run with --log-file to include a bounded sanitized tail.\n", nil
 	}
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- operator-invoked support bundle collecting its configured files (CWE-22)
 	if err != nil {
 		return "", fmt.Errorf("read support log: %w", err)
 	}

@@ -93,7 +93,7 @@ func idempotencyResultAAD(tenantID, key, binding string) ([]byte, error) {
 		if uint64(len(field)) > uint64(^uint32(0)) {
 			return nil, errors.New("tenantseal: idempotency result identity is too large")
 		}
-		binary.BigEndian.PutUint32(length[:], uint32(len(field)))
+		binary.BigEndian.PutUint32(length[:], uint32(len(field))) // #nosec G115 -- length framing of short bounded fields (CWE-190)
 		aad = append(aad, length[:]...)
 		aad = append(aad, field...)
 	}

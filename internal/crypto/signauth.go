@@ -63,7 +63,7 @@ func (si SignIntent) canonicalBytes() []byte {
 	out = append(out, domain...)
 	out = appendLenPrefixed(out, []byte(si.KeyHandle))
 	var p [4]byte
-	binary.BigEndian.PutUint32(p[:], uint32(si.Purpose))
+	binary.BigEndian.PutUint32(p[:], uint32(si.Purpose)) // #nosec G115 -- enum purpose and bounded message length framing (CWE-190)
 	out = append(out, p[:]...)
 	out = appendLenPrefixed(out, []byte(string(si.Hash)))
 	out = appendLenPrefixed(out, []byte(string(si.Padding)))
@@ -73,7 +73,7 @@ func (si SignIntent) canonicalBytes() []byte {
 
 func appendLenPrefixed(dst, b []byte) []byte {
 	var l [4]byte
-	binary.BigEndian.PutUint32(l[:], uint32(len(b)))
+	binary.BigEndian.PutUint32(l[:], uint32(len(b))) // #nosec G115 -- enum purpose and bounded message length framing (CWE-190)
 	dst = append(dst, l[:]...)
 	dst = append(dst, b...)
 	return dst

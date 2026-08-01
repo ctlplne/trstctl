@@ -87,7 +87,7 @@ func TestCLITokenScopeEnforced(t *testing.T) {
 // TestCLIUnknownTokenRejected: an unrecognized token is a 401.
 func TestCLIUnknownTokenRejected(t *testing.T) {
 	srv, _ := newGraphAPI(t)
-	env := cli.Env{Server: srv.URL, Token: "trstctl_pat_bogus", HTTPClient: srv.Client()}
+	env := cli.Env{Server: srv.URL, Token: "trstctl_pat_bogus", HTTPClient: srv.Client()} // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	code, _, _ := runCLI(t, env, "", "owners", "list")
 	if code == 0 {
 		t.Error("an unknown token should fail")

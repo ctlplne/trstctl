@@ -77,7 +77,7 @@ func Load() (Catalog, error) {
 	if err != nil {
 		return Catalog{}, err
 	}
-	b, err := os.ReadFile(filepath.Join(root, "internal", "featureparity", "feature-map-backlog.json"))
+	b, err := os.ReadFile(filepath.Join(root, "internal", "featureparity", "feature-map-backlog.json")) // #nosec G304 -- fixed repo-relative catalog path read by tools and tests (CWE-22)
 	if err != nil {
 		return Catalog{}, fmt.Errorf("read feature-map backlog: %w", err)
 	}

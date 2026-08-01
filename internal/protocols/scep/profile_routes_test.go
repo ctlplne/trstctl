@@ -103,7 +103,7 @@ func TestSCEPPerDeviceRateLimitRejectsExcessEnrollments(t *testing.T) {
 
 func firstCACert(t *testing.T, url string) []byte {
 	t.Helper()
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) // #nosec G107 -- test drives its own local server URL (CWE-88)
 	if err != nil {
 		t.Fatal(err)
 	}

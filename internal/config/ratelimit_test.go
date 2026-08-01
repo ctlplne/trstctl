@@ -27,7 +27,7 @@ func TestRateLimitDefaults(t *testing.T) {
 
 // TestRateLimitEnvOverrides: the limiter is configurable from the environment.
 func TestRateLimitEnvOverrides(t *testing.T) {
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
@@ -53,7 +53,7 @@ func TestRateLimitEnvOverrides(t *testing.T) {
 // TestRateLimitValidated: a malformed window or non-positive request count fails
 // fast.
 func TestRateLimitValidated(t *testing.T) {
-	base := map[string]string{
+	base := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE": "external",
 		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":     "external",

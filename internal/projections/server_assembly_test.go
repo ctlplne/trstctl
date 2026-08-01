@@ -41,7 +41,7 @@ func (s staticSigner) SignTokenProvider() signing.SignTokenProvider { return s.a
 func buildSignerBin(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "trstctl-signer")
-	out, err := exec.Command("go", "build", "-o", bin, "trstctl.com/trstctl/cmd/trstctl-signer").CombinedOutput()
+	out, err := exec.Command("go", "build", "-o", bin, "trstctl.com/trstctl/cmd/trstctl-signer").CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("build trstctl-signer: %v\n%s", err, out)
 	}

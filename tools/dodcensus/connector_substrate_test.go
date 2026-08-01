@@ -80,7 +80,7 @@ bad_command = command.replace(str(import_dir), str(iis_root / "attacker"))
 assert not outside.record_signal({"entry_id": "connector.iis", "logical": "powershell", "args": ["-NoProfile", "-NonInteractive", "-Command", bad_command]})
 assert not outside.passed()
 `
-	command := exec.Command("python3", "-c", source, target)
+	command := exec.Command("python3", "-c", source, target) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("connector substrate contract adversary failed: %v\n%s", err, output)

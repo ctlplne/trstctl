@@ -59,7 +59,7 @@ func deriveBackupArtifactKey(key []byte) ([]byte, error) {
 // both plaintext and stored-ciphertext digests. Plaintext bytes are wiped after the
 // envelope is written; the ciphertext is what remains in the backup directory.
 func WriteEncryptedFile(src, dst string, key []byte, aad string, mode fs.FileMode) (plainSHA string, plainBytes int64, storedSHA string, storedBytes int64, err error) {
-	plaintext, err := os.ReadFile(src)
+	plaintext, err := os.ReadFile(src) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return "", 0, "", 0, err
 	}
@@ -191,7 +191,7 @@ func writeEncryptedBytes(dst string, key []byte, aad string, plaintext []byte, m
 		return err
 	}
 	tmp := dst + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func writeEncryptedBytes(dst string, key []byte, aad string, plaintext []byte, m
 }
 
 func readEncryptedBytes(src string, key []byte, aad string) ([]byte, error) {
-	f, err := os.Open(src)
+	f, err := os.Open(src) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +246,7 @@ func writePlainFile(dst string, plaintext []byte, mode fs.FileMode) error {
 		return err
 	}
 	tmp := dst + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return err
 	}

@@ -25,7 +25,7 @@ func TestDetectPermissionChanged(t *testing.T) {
 	}
 	w := drift.Watched{Path: path, Class: "private-key", Fingerprint: drift.Fingerprint(content), Mode: 0o600}
 
-	if err := os.Chmod(path, 0o644); err != nil {
+	if err := os.Chmod(path, 0o644); err != nil { // #nosec G302 -- deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276)
 		t.Fatal(err)
 	}
 	findings, err := drift.Detect([]drift.Watched{w})
@@ -50,7 +50,7 @@ func TestAutoRemediatePermission(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := drift.Watched{Path: path, Class: "private-key", Fingerprint: drift.Fingerprint(content), Mode: 0o600}
-	if err := os.Chmod(path, 0o644); err != nil {
+	if err := os.Chmod(path, 0o644); err != nil { // #nosec G302 -- deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276)
 		t.Fatal(err)
 	}
 
@@ -78,7 +78,7 @@ func TestDetectRestrictedWorldAccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "app.key")
 	content := []byte("-----BEGIN PRIVATE KEY-----\nk\n-----END PRIVATE KEY-----\n")
-	if err := os.WriteFile(path, content, 0o644); err != nil { // world-readable
+	if err := os.WriteFile(path, content, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276) (world-readable)
 		t.Fatal(err)
 	}
 	w := drift.Watched{Path: path, Class: "private-key", Fingerprint: drift.Fingerprint(content), Restricted: true}

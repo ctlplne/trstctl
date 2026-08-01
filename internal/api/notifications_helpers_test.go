@@ -65,7 +65,7 @@ func TestNotificationPaginationAndRoutingNormalization(t *testing.T) {
 
 func TestNotificationResponseHelpersPreservePublicMetadataAndRedactSecrets(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	channel := toNotificationChannelResponse(store.NotificationChannel{
+	channel := toNotificationChannelResponse(store.NotificationChannel{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		TenantID: "tenant-a", ID: " Microsoft Teams ", Label: "", EndpointURL: "https://teams.example/hook",
 		CredentialRef: "vault://notifications/teams", Enabled: true,
 	})
@@ -184,7 +184,7 @@ func TestNotificationRoutesFailClosedWithoutEventedStores(t *testing.T) {
 			req.Header.Set("X-Tenant-ID", "11111111-1111-4111-8111-111111111111")
 			req.Header.Set("X-Subject", "operator-a")
 			req.Header.Set("X-Roles", "admin")
-			req.Header.Set("Idempotency-Key", "notification-helper-"+time.Now().Format("150405.000000000")+string(rune('a'+i)))
+			req.Header.Set("Idempotency-Key", "notification-helper-"+time.Now().Format("150405.000000000")+string(rune('a'+i))) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 			if rec.Code != tc.want {

@@ -71,7 +71,7 @@ func (s *trustStoreFileSource) Discover(ctx context.Context) ([]Found, error) {
 			if fi, ierr := d.Info(); ierr != nil || fi.Size() > s.maxSize {
 				return nil
 			}
-			data, rerr := os.ReadFile(path)
+			data, rerr := os.ReadFile(path) // #nosec G122 G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367)
 			if rerr != nil {
 				return nil
 			}
@@ -182,7 +182,7 @@ func readTrustStoreFile(path string, maxSize int64) ([]byte, error) {
 	if fi.Size() > maxSize {
 		return nil, fmt.Errorf("trust store %s is %d bytes; maximum is %d", path, fi.Size(), maxSize)
 	}
-	return os.ReadFile(path)
+	return os.ReadFile(path) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
 }
 
 func trustStoreMetadata(kind string) map[string]string {

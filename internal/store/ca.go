@@ -454,7 +454,7 @@ func (s *Store) ApplyKeyCeremonyApprovedTx(ctx context.Context, tx pgx.Tx, tenan
 		 ON CONFLICT (tenant_id, ceremony_id, custodian) DO UPDATE
 		    SET approval_event_id = COALESCE(ca_ceremony_approvals.approval_event_id, EXCLUDED.approval_event_id),
 		        approval_event_sequence = COALESCE(ca_ceremony_approvals.approval_event_sequence, EXCLUDED.approval_event_sequence)`,
-		tenantID, ceremonyID, custodian, approvedAt, eventID, int64(eventSequence))
+		tenantID, ceremonyID, custodian, approvedAt, eventID, int64(eventSequence)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -524,7 +524,7 @@ func (s *Store) AttachKeyCeremonyApprovalEvidence(ctx context.Context, tenantID,
 			        approval_event_sequence = COALESCE(approval_event_sequence, $5)
 			  WHERE tenant_id = $1 AND ceremony_id = $2 AND custodian = $3
 			  RETURNING approval_event_id`,
-			tenantID, ceremonyID, custodian, eventID, int64(eventSequence)).Scan(&attachedID); err != nil {
+			tenantID, ceremonyID, custodian, eventID, int64(eventSequence)).Scan(&attachedID); err != nil { // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrKeyCeremonyQuorumNotMet
 			}

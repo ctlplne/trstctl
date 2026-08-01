@@ -775,7 +775,7 @@ func buildUnvaultedSecretPosture(generatedAt string, sourceCounts secretVisibili
 		})
 	}
 	sort.Strings(configuredVaults)
-	return unvaultedSecretPostureResponse{
+	return unvaultedSecretPostureResponse{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 		Capability:            "CAP-SECR-07",
 		Served:                true,
 		GeneratedAt:           generatedAt,
@@ -923,7 +923,7 @@ func buildSecretWorkloadInjection(generatedAt string) secretWorkloadInjectionRes
 			EvidenceRef: "deploy/operator/crd.yaml",
 		},
 		Modes: []secretWorkloadInjectionModeResponse{
-			{
+			{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 				ID:             "file",
 				Name:           "Shared-volume file injection",
 				DeliveredBy:    "TrstctlSecretInjection + trstctl-agent --secret-inject sidecar",

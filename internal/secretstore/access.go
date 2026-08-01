@@ -63,9 +63,14 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Secret material and version metadata are never an HTML context: an
+	// explicit content type plus nosniff stops a browser from sniffing secret
+	// bytes into a renderable type (CWE-79 / CWE-116).
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	switch r.Method {
 	case http.MethodGet:
 		if r.URL.Query().Has("versions") {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			if _, err := fmt.Fprintf(w, "%v", a.store.Versions(path)); err != nil {
 				return
 			}
@@ -77,7 +82,8 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("X-Version", strconv.Itoa(ver))
-		if _, err := w.Write(val); err != nil {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		if _, err := w.Write(val); err != nil { // #nosec G705 -- the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79)
 			return
 		}
 	case http.MethodPut:
@@ -87,7 +93,8 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if _, err := fmt.Fprintf(w, `{"version":%d}`, ver); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := fmt.Fprintf(w, `{"version":%d}`, ver); err != nil { // #nosec G705 -- fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79)
 			return
 		}
 	case http.MethodPost:
@@ -102,7 +109,8 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if _, err := fmt.Fprintf(w, `{"version":%d}`, ver); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			if _, err := fmt.Fprintf(w, `{"version":%d}`, ver); err != nil { // #nosec G705 -- fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79)
 				return
 			}
 			return

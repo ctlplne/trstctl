@@ -10,19 +10,19 @@ import (
 func TestFindingsNormalizeAPIKeyTokenAndPATObservations(t *testing.T) {
 	age := 120
 	raw, err := json.Marshal(Config{Observations: []Observation{
-		{
+		{ // #nosec G101 -- synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798)
 			Surface: "cloud", System: "aws-iam", ExternalID: "access-key/AKIAEXAMPLE",
 			Principal: "arn:aws:iam::111111111111:user/payments", CredentialKind: "access-key",
 			CredentialRef: "aws:access-key/AKIAEXAMPLE", MaskedFingerprint: "sha256:aws-key-ref",
 			Scopes: []string{"iam:*"}, EvidenceRefs: []string{"aws:credential-report"}, Privileged: true,
 			RotationAgeDays: &age,
 		},
-		{
+		{ // #nosec G101 -- synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798)
 			Surface: "saas", System: "github", ExternalID: "user/payments/pat",
 			Principal: "payments-ci", CredentialKind: "pat", CredentialRef: "github:user/payments/pat",
 			MaskedFingerprint: "sha256:pat-ref", EvidenceRefs: []string{"github:audit/pat"},
 		},
-		{
+		{ // #nosec G101 -- synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798)
 			Surface: "ci", System: "github-actions", ExternalID: "repo/payments/env/prod",
 			Principal: "payments-release", CredentialKind: "refresh_token", CredentialRef: "github-actions:repo/payments/env/prod/token",
 			MaskedFingerprint: "sha256:ci-token-ref", ExpiresAt: "2026-07-01T00:00:00Z", EvidenceRefs: []string{"github-actions:secret-scan"},

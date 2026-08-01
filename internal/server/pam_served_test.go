@@ -206,14 +206,14 @@ func startPAMPostgres(t *testing.T) (string, func()) {
 	runtime := filepath.Join(dir, "runtime")
 	data := filepath.Join(dir, "data")
 	for _, path := range []string{bin, runtime, data} {
-		if err := os.MkdirAll(path, 0o755); err != nil {
+		if err := os.MkdirAll(path, 0o755); err != nil { // #nosec G301 -- fixture tree in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatal(err)
 		}
 	}
 	db := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
 		Username("postgres").Password("postgres").Database("postgres").
-		Port(uint32(port)).RuntimePath(runtime).DataPath(data).BinariesPath(bin))
+		Port(uint32(port)).RuntimePath(runtime).DataPath(data).BinariesPath(bin)) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
 	if err := db.Start(); err != nil {
 		_ = os.RemoveAll(dir)
 		fmt.Fprintln(os.Stderr, "embedded postgres start:", err)
@@ -284,7 +284,7 @@ func startPAMSSHD(t *testing.T, caPub []byte) pamSSHD {
 		t.Skipf("docker daemon is required for the sshd acceptance backend: %v\n%s", err, out)
 	}
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "trusted_user_ca_keys"), caPub, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "trusted_user_ca_keys"), caPub, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write trusted CA: %v", err)
 	}
 	dockerfile := `FROM alpine:3.20
@@ -296,23 +296,23 @@ RUN printf 'Port 22\nTrustedUserCAKeys /etc/ssh/trstctl/trusted_user_ca_keys\nPa
 EXPOSE 22
 CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 `
-	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(dockerfile), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(dockerfile), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write sshd Dockerfile: %v", err)
 	}
 	image := "trstctl-pam-sshd:" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	if out, err := exec.Command("docker", "build", "-t", image, dir).CombinedOutput(); err != nil {
+	if out, err := exec.Command("docker", "build", "-t", image, dir).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Skipf("build sshd container image: %v\n%s", err, out)
 	}
-	t.Cleanup(func() { _ = exec.Command("docker", "image", "rm", "-f", image).Run() })
+	t.Cleanup(func() { _ = exec.Command("docker", "image", "rm", "-f", image).Run() }) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	name := "trstctl-pam-sshd-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	if out, err := exec.Command("docker", "run", "-d", "--name", name, "-p", "127.0.0.1::22", image).CombinedOutput(); err != nil {
+	if out, err := exec.Command("docker", "run", "-d", "--name", name, "-p", "127.0.0.1::22", image).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Fatalf("run sshd container: %v\n%s", err, out)
 	}
-	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() }) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	var addr string
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		out, err := exec.Command("docker", "port", name, "22/tcp").CombinedOutput()
+		out, err := exec.Command("docker", "port", name, "22/tcp").CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		if err == nil {
 			addr = strings.TrimSpace(string(out))
 			if addr != "" {
@@ -322,7 +322,7 @@ CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 		time.Sleep(100 * time.Millisecond)
 	}
 	if addr == "" {
-		logs, _ := exec.Command("docker", "logs", name).CombinedOutput()
+		logs, _ := exec.Command("docker", "logs", name).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Fatalf("sshd container did not expose a port; logs:\n%s", logs)
 	}
 	parts := strings.Split(addr, ":")
@@ -344,10 +344,10 @@ func generatePAMSSHKey(t *testing.T) (string, string) {
 		t.Skipf("ssh-keygen is required for the sshd acceptance backend: %v", err)
 	}
 	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
-	if out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-N", "", "-f", keyPath, "-C", "pam-01").CombinedOutput(); err != nil {
+	if out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-N", "", "-f", keyPath, "-C", "pam-01").CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Fatalf("generate SSH user key: %v\n%s", err, out)
 	}
-	pub, err := os.ReadFile(keyPath + ".pub")
+	pub, err := os.ReadFile(keyPath + ".pub") // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
 		t.Fatalf("read SSH public key: %v", err)
 	}
@@ -375,10 +375,10 @@ func assertPAMSSHAccess(t *testing.T, sshd pamSSHD, keyPath, cert string, wantOK
 		"alice@127.0.0.1",
 		"true",
 	}
-	cmd := exec.Command("ssh", args...)
+	cmd := exec.Command("ssh", args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	out, err := cmd.CombinedOutput()
 	if wantOK && err != nil {
-		logs, _ := exec.Command("docker", "logs", sshd.Name).CombinedOutput()
+		logs, _ := exec.Command("docker", "logs", sshd.Name).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Fatalf("ssh with PAM certificate failed: %v\n%s\nsshd logs:\n%s", err, out, logs)
 	}
 	if !wantOK && err == nil {

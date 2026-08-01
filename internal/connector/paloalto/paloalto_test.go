@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	testAPIKey = "pan-os-api-key-do-not-log"
+	testAPIKey = "pan-os-api-key-do-not-log" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	certName   = "web-prod"
 )
 

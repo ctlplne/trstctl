@@ -406,7 +406,7 @@ func readBody(path string, stdin io.Reader) ([]byte, error) {
 	if path == "-" {
 		return io.ReadAll(stdin)
 	}
-	return os.ReadFile(path)
+	return os.ReadFile(path) // #nosec G304 -- operator-passed local file argument on their own command line (CWE-22)
 }
 
 // do performs the HTTP request and returns the status and response body.
@@ -414,7 +414,7 @@ func readBody(path string, stdin io.Reader) ([]byte, error) {
 // unpredictability, so math/rand/v2 (not crypto/*) keeps this outside the crypto
 // boundary (AN-3).
 func generateIdempotencyKey() string {
-	return fmt.Sprintf("cli-%016x%016x", rand.Uint64(), rand.Uint64())
+	return fmt.Sprintf("cli-%016x%016x", rand.Uint64(), rand.Uint64()) // #nosec G404 -- idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338)
 }
 
 func do(ctx context.Context, client *http.Client, server, method, path string, query url.Values, body []byte, token, tenant, idem string) (int, []byte, error) {
