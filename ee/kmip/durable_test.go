@@ -5,6 +5,8 @@ package kmip
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -12,7 +14,37 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
+
+type switchableKMIPTenantAccess struct {
+	tenantID string
+	cipher   tenantseal.Cipher
+	blocked  bool
+}
+
+func (a *switchableKMIPTenantAccess) WithTenant(_ context.Context, tenantID string, fn func(tenantseal.Cipher) error) error {
+	if tenantID != a.tenantID {
+		return errors.New("test KMIP tenant selection refused")
+	}
+	if a.blocked {
+		return errors.New("test KMIP tenant sealed")
+	}
+	return fn(a.cipher)
+}
+
+type kmipDomainCipher struct {
+	key     seal.KeyWrapper
+	binding []byte
+}
+
+func (c kmipDomainCipher) Seal(plaintext, aad []byte) ([]byte, error) {
+	return seal.SealDomain(c.key, plaintext, aad, c.binding)
+}
+
+func (c kmipDomainCipher) Open(container, aad []byte) ([]byte, error) {
+	return seal.OpenDomain(c.key, container, aad, c.binding)
+}
 
 func TestKMIPDurableStateReplaysSealedKeysAndLifecycle(t *testing.T) {
 	ctx := context.Background()
@@ -105,5 +137,72 @@ func TestKMIPDurableStateReplaysSealedKeysAndLifecycle(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatalf("inspect state events: %v", err)
+	}
+}
+
+func TestKMIPDurableReplayKeepsTenantDomainCiphertextAndSealBlocksWholeFrame(t *testing.T) {
+	ctx := context.Background()
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	deployment, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x51}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(deployment.Destroy)
+	domainKey, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x62}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(domainKey.Destroy)
+	const tenantID = "tenant-domain-kmip"
+	const objectID = "kmip-1"
+	binding := []byte("tenant-domain-kmip/domain-1/generation-1")
+	keyMaterial := []byte("0123456789abcdef0123456789abcdef")
+	aad := (&Server{tenantID: tenantID}).stateAAD(objectID, 1)
+	sealedKey, err := seal.SealDomain(domainKey, keyMaterial, aad, binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(kmipStateEvent{
+		ID: objectID, Algorithm: "AES", State: StateActive, Version: 1, SealedKey: sealedKey,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{Type: kmipStateCreatedEventType, TenantID: tenantID, Data: data}); err != nil {
+		t.Fatal(err)
+	}
+	access := &switchableKMIPTenantAccess{
+		tenantID: tenantID,
+		cipher:   kmipDomainCipher{key: domainKey, binding: binding},
+	}
+	service, err := NewDurable(ctx, tenantID, certAuth{}, &auditsink.Recorder{}, log, deployment, access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if cached := service.objects[objectID].sealedKey; bytes.Contains(cached, keyMaterial) {
+		t.Fatal("KMIP replay cached plaintext managed-key bytes")
+	}
+	opened, err := service.Get(ctx, []byte("good-client"), objectID)
+	if err != nil || !bytes.Equal(opened, keyMaterial) {
+		secret.Wipe(opened)
+		t.Fatalf("tenant-domain KMIP Get failed: %v", err)
+	}
+	secret.Wipe(opened)
+	if plaintext, err := seal.Open(deployment, sealedKey, aad); err == nil {
+		secret.Wipe(plaintext)
+		t.Fatal("deployment KEK opened tenant-domain KMIP state")
+	}
+
+	access.blocked = true
+	if _, err := service.Get(ctx, []byte("good-client"), objectID); err == nil {
+		t.Fatal("sealed tenant opened KMIP managed object")
+	}
+	if _, err := service.HandleFrame(ctx, []byte("good-client"), kmipRequestFrame(OperationQuery, nil)); err == nil {
+		t.Fatal("sealed tenant entered KMIP frame dispatch")
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // KMIPRuntime is the core-owned lifecycle contract for the licensed KMIP server.
@@ -37,6 +38,9 @@ type KMIPFactoryDeps struct {
 	// KeyWrapper envelope-seals KMIP object material before immutable state
 	// events are appended. The licensed factory fails closed when it is absent.
 	KeyWrapper seal.KeyWrapper
+	// TenantCrypto gates the complete protocol request and resolves migrated
+	// managed-object state through the tenant's independent custody domain.
+	TenantCrypto tenantseal.Access
 }
 
 func (s *Server) configureKMIPSurface(d Deps) error {
@@ -51,6 +55,7 @@ func (s *Server) configureKMIPSurface(d Deps) error {
 		Log:            s.logger,
 		EventLog:       d.Log,
 		KeyWrapper:     d.KEK,
+		TenantCrypto:   d.TenantCrypto,
 	})
 	if err != nil {
 		return fmt.Errorf("server: configure KMIP: %w", err)

@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const defaultWireFrameCap = 1 << 20
@@ -49,6 +50,18 @@ func ReadFrame(r io.Reader, maxFrameSize int) ([]byte, error) {
 // Revoke/Destroy, Query, and DiscoverVersions. Unsupported operations receive a
 // parseable KMIP failure instead of an unframed TCP close.
 func (s *Server) HandleFrame(ctx context.Context, clientCertDER []byte, frame []byte) ([]byte, error) {
+	if s.log == nil {
+		return s.handleFrame(ctx, clientCertDER, frame)
+	}
+	var response []byte
+	err := s.withTenantCipher(ctx, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
+		response, err = s.handleFrame(scoped, clientCertDER, frame)
+		return err
+	})
+	return response, err
+}
+
+func (s *Server) handleFrame(ctx context.Context, clientCertDER []byte, frame []byte) ([]byte, error) {
 	msg, err := DecodeRequestMessage(frame)
 	if err != nil {
 		return encodeResponse(1, 2, []wireResponseItem{failureItem(0, resultReasonInvalidMessage, err.Error())}), nil

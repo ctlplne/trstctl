@@ -65,6 +65,7 @@ func NewFactory() server.KMIPFactory {
 			audit.NewAuditor(d.EventLog),
 			d.EventLog,
 			d.KeyWrapper,
+			d.TenantCrypto,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("restore KMIP managed-object state: %w", err)
