@@ -155,6 +155,13 @@ jobs:
       - name: CWE register and coverage check
         run: make cwe-docs-check
 
+      # CBOM coverage design doc: docs/design/cbom-coverage.md is generated from
+      # the observability-envelope registry and the real classifier run over a
+      # fixed fixture estate. A source kind, asset class, or unobservable class
+      # added without regenerating the committed page fails the build here.
+      - name: CBOM coverage design doc check
+        run: make cbom-docs-check
+
       # AGID-INT-CALL STRONG check: an RTA call graph seeded from the cmd/* main.main
       # (built WITHOUT -tags trstctl_core) proves every ee/agentid constructor is
       # reachable from a running binary. The floor tier already ran inside `make lint`

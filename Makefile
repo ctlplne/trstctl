@@ -481,6 +481,11 @@ cwe-docs-check: ## Verify docs/security/cwe-register.md + cwe-coverage.md regene
 	@echo ">> cwe-docs-check (CWE register/coverage are generated; a stale page or reasonless waiver fails)"
 	@python3 scripts/ci/gen-cwe-docs.py --check
 
+.PHONY: cbom-docs-check
+cbom-docs-check: ## Verify docs/design/cbom-coverage.md regenerates byte-identical from the internal/cbom/coverage model
+	@echo ">> cbom-docs-check (the CBOM coverage design doc is generated from the envelope registry; a stale page fails)"
+	@$(GO) run ./tools/cbomcoveragedoc -check
+
 .PHONY: security-review
 security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate vdec-caller-gate vdec-caller-gate-strong vdec-wire-gate vdec-release-gate ## Security-focused local review for signer, remediation, connectors, XREC, and VDEC delivery paths
 	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC package tests)"

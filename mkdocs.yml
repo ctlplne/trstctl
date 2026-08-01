@@ -116,6 +116,7 @@ nav:
       - Supply chain: supply-chain.md
       - Branch protection & required checks: branch-protection.md
       - Signing service design: design/signing-service.md
+      - Discovery coverage model: design/cbom-coverage.md
   - Authoring guides:
       - Connectors: guides/connector-authoring.md
       - Plugins: guides/plugin-authoring.md
