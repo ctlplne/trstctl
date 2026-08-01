@@ -91,7 +91,7 @@ func runDoctor(t *testing.T, args ...string) (Receipt, string, int) {
 		}
 		code = exit.Code
 	}
-	blob, rerr := os.ReadFile(receiptPath)
+	blob, rerr := os.ReadFile(receiptPath) // #nosec G304 -- test reads its own tempdir receipt (CWE-22)
 	if rerr != nil {
 		t.Fatalf("receipt not written: %v (stderr %s)", rerr, stderr.String())
 	}

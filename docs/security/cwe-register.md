@@ -41,11 +41,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-999 annotated sites across 24 rules. Each row is
+1005 annotated sites across 24 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (216 sites)
+### G101 — CWE-798 Use of hardcoded credentials (219 sites)
 
 | Location | Reason |
 |---|---|
@@ -105,6 +105,9 @@ not this file.
 | `internal/broker/issuanceprecondition_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/ca/ejbca/ejbcafake/ejbcafake.go:28` | test-support package compiled only into test binaries (CWE-798) |
 | `internal/ca/venafi/venafifake/venafifake.go:25` | test-support package compiled only into test binaries (CWE-798) |
+| `internal/cbom/coverage/envelope.go:42` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:45` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:46` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cloudauth/azure.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -430,7 +433,7 @@ not this file.
 | `internal/events/privacy_erasure_test.go:230` | test goroutine lifecycle is managed by the test (CWE-664) |
 | `internal/server/agenthttprenewal.go:64` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 
-### G122 — CWE-367 Time-of-check time-of-use race (walk callback) (21 sites)
+### G122 — CWE-367 Time-of-check time-of-use race (walk callback) (22 sites)
 
 | Location | Reason |
 |---|---|
@@ -443,6 +446,7 @@ not this file.
 | `docs/protect_guards_test.go:847` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:910` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:4420` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/provenance/authorship_test.go:97` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:69` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/truststore.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -492,7 +496,7 @@ not this file.
 | `internal/projections/auth_resolver_test.go:159` | test cookie against the test's own local server (CWE-1004) |
 | `internal/server/scim_served_test.go:201` | test cookie against the test's own local server (CWE-1004) |
 
-### G204 — CWE-78 OS command injection (129 sites)
+### G204 — CWE-78 OS command injection (131 sites)
 
 | Location | Reason |
 |---|---|
@@ -521,6 +525,8 @@ not this file.
 | `deploy/helm/helm_test.go:1115` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:416` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
+| `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |
 | `docs/docs_drift_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_gate_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_gate_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -702,7 +708,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:162` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:277` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (261 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (262 sites)
 
 | Location | Reason |
 |---|---|
@@ -748,7 +754,7 @@ not this file.
 | `docs/protect_guards_test.go:847` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:910` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:4420` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/provenance/authorship_test.go:97` | test walks the repo's own checkout (CWE-22) |
+| `docs/provenance/authorship_test.go:97` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/destination/destination_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
@@ -798,6 +804,7 @@ not this file.
 | `internal/cli/cli.go:409` | operator-passed local file argument on their own command line (CWE-22) |
 | `internal/cli/cli_test.go:923` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor.go:203` | operator-supplied path to their own deployment's audit key (CWE-22) |
+| `internal/cli/doctor/doctor_test.go:94` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:1918` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/connector/localops.go:147` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -1129,7 +1136,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-license/main.go:138` | writes the license PUBLIC key/inspection output; public material (CWE-22, CWE-276) |
-| `docs/provenance/authorship_test.go:97` | test walks the repo's own checkout (CWE-22) |
+| `docs/provenance/authorship_test.go:97` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/sshtrust/sshd_live_test.go:115` | temp file beside the harness-owned sshd config in a test dir (CWE-22) |
 | `internal/agent/sshtrust/sshd_live_test.go:131` | atomic replace of the harness-owned sshd config in a test dir (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |

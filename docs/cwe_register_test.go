@@ -15,7 +15,7 @@ import (
 // the same freshness discipline the OpenAPI golden and the claim-traceability
 // table already use.
 func TestCWERegisterIsCurrent(t *testing.T) {
-	cmd := exec.Command("python3", "scripts/ci/gen-cwe-docs.py", "--check")
+	cmd := exec.Command("python3", "scripts/ci/gen-cwe-docs.py", "--check") // #nosec G204 -- test runs the repo's own committed generator (CWE-78)
 	cmd.Dir = ".."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -37,7 +37,7 @@ func TestCWEGeneratorRefusesReasonlessWaiver(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pkg, "bad.go"), []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("python3", "scripts/ci/gen-cwe-docs.py", "--root", root)
+	cmd := exec.Command("python3", "scripts/ci/gen-cwe-docs.py", "--root", root) // #nosec G204 -- test runs the repo's own committed generator against a tempdir fixture (CWE-78)
 	cmd.Dir = ".."
 	out, err := cmd.CombinedOutput()
 	if err == nil {

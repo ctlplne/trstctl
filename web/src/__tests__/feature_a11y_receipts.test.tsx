@@ -598,6 +598,45 @@ const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
         return { items: [] };
       case "sshStatus":
         return { authorities: [], trust_rollouts: [] };
+      case "platformSystem":
+        // The custody/idempotency panels index the readout's typed state; the
+        // generic {} default crashed them (COVER-005 Platform-route fix).
+        return {
+          version: "dev",
+          commit: "0000000",
+          build_date: "2026-06-20T00:00:00Z",
+          go_version: "go1.25",
+          started_at: "2026-06-20T00:00:00Z",
+          uptime_seconds: 60,
+          signer_mode: "child",
+          fips_module_active: false,
+          dependencies: [],
+          idempotency_results: {
+            state: "complete",
+            fleet_ready: true,
+            sealed_only_floor: true,
+            sealed_results: 1,
+            pending_results: 0,
+            indeterminate_results: 0,
+            legacy_dynamic_remaining: 0,
+            raw_v0_remaining: 0,
+            recovery: "No recovery action is required.",
+          },
+        };
+      case "tenantKeyDomain":
+        return {
+          served: true,
+          state: "unsealed",
+          protection_mode: "local",
+          recovery: "Wrapper material is recoverable from the local KEK file.",
+          remote_wrapper_state: "not-configured",
+          legacy_history_exposure: "none",
+          local_wrapper_zero_egress: true,
+          retryable: false,
+          progress_completed: 0,
+          progress_total: 0,
+          last_transition_evidence_refs: [],
+        };
       default:
         return {};
     }

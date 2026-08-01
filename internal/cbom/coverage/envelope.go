@@ -39,11 +39,11 @@ type Precondition string
 const (
 	PrecondRangesConfigured     Precondition = "scan-ranges-configured"
 	PrecondTargetsConfigured    Precondition = "scan-targets-configured"
-	PrecondCloudCredential      Precondition = "cloud-credential-configured"
+	PrecondCloudCredential      Precondition = "cloud-credential-configured" // #nosec G101 -- precondition identifier matching the credential-name heuristic; no credential value (CWE-798)
 	PrecondDomainsConfigured    Precondition = "monitored-domains-configured"
 	PrecondBaselineConfigured   Precondition = "deployment-baseline-configured"
-	PrecondConnectorCredential  Precondition = "connector-credential-configured"
-	PrecondClusterCredential    Precondition = "cluster-credential-configured"
+	PrecondConnectorCredential  Precondition = "connector-credential-configured" // #nosec G101 -- precondition identifier matching the credential-name heuristic; no credential value (CWE-798)
+	PrecondClusterCredential    Precondition = "cluster-credential-configured"   // #nosec G101 -- precondition identifier matching the credential-name heuristic; no credential value (CWE-798)
 	PrecondRepositoryConfigured Precondition = "repository-configured"
 	PrecondOperatorFindings     Precondition = "operator-supplied-findings"
 )

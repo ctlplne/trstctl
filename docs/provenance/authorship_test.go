@@ -94,7 +94,7 @@ func TestEveryGoFileCarriesSPDXHeader(t *testing.T) {
 			return nil
 		}
 		head := make([]byte, 400)
-		f, err := os.Open(path) // #nosec G304 G703 -- test walks the repo's own checkout (CWE-22)
+		f, err := os.Open(path) // #nosec G122 G304 G703 -- test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367)
 		if err != nil {
 			return err
 		}
