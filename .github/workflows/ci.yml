@@ -148,6 +148,13 @@ jobs:
       - name: Claim traceability check
         run: make claim-traceability-check
 
+      # CWE register/coverage: both documents are generated from the tree's
+      # in-source `#nosec G### -- reason` waivers plus the fixed-findings list.
+      # A new waiver without a reason, or one added without regenerating the
+      # committed pages, fails the build here.
+      - name: CWE register and coverage check
+        run: make cwe-docs-check
+
       # AGID-INT-CALL STRONG check: an RTA call graph seeded from the cmd/* main.main
       # (built WITHOUT -tags trstctl_core) proves every ee/agentid constructor is
       # reachable from a running binary. The floor tier already ran inside `make lint`

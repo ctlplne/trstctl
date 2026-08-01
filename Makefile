@@ -476,6 +476,11 @@ claim-traceability-check: ## Verify ee/docs/claim-traceability.md regenerates by
 	@echo ">> claim-traceability-check (ee/docs/claim-traceability.md is generated; a stale table fails)"
 	@python3 scripts/ci/extract-claim-traceability.py --check
 
+.PHONY: cwe-docs-check
+cwe-docs-check: ## Verify docs/security/cwe-register.md + cwe-coverage.md regenerate byte-identical from the tree's #nosec waivers
+	@echo ">> cwe-docs-check (CWE register/coverage are generated; a stale page or reasonless waiver fails)"
+	@python3 scripts/ci/gen-cwe-docs.py --check
+
 .PHONY: security-review
 security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate vdec-caller-gate vdec-caller-gate-strong vdec-wire-gate vdec-release-gate ## Security-focused local review for signer, remediation, connectors, XREC, and VDEC delivery paths
 	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC package tests)"
