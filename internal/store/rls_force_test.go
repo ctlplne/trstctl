@@ -12,6 +12,9 @@ import (
 // catalog (every base table in the public schema with a tenant_id column) rather
 // than a hard-coded list, so a newly-added tenant table is automatically held to
 // the same RLS invariants — a forgotten table cannot quietly escape the guard.
+// Both run through the SAME shared inventory helpers (store.TenantTableRLSStates,
+// store.USINGOnlyTenantPolicies) that `trstctl doctor --prove-isolation` probes
+// at runtime, so the CI guard and the field probe cannot drift apart.
 
 // TestEveryTenantTableForcesRLS is the ARCH-INFO-3 / TENANT-009 regression guard:
 // the AN-1 isolation core is enforced at the storage layer by row-level security
@@ -26,42 +29,20 @@ func TestEveryTenantTableForcesRLS(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	rows, err := s.SystemPool().Query(ctx, `
-		SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
-		FROM pg_class c
-		JOIN pg_namespace n ON n.oid = c.relnamespace
-		WHERE n.nspname = 'public'
-		  AND c.relkind = 'r'
-		  AND EXISTS (
-		      SELECT 1 FROM pg_attribute a
-		      WHERE a.attrelid = c.oid
-		        AND a.attname = 'tenant_id'
-		        AND a.attnum > 0
-		        AND NOT a.attisdropped
-		  )
-		ORDER BY c.relname`)
+	states, err := s.TenantTableRLSStates(ctx)
 	if err != nil {
 		t.Fatalf("query tenant tables: %v", err)
 	}
-	defer rows.Close()
 
 	var tables []string
-	for rows.Next() {
-		var name string
-		var enabled, forced bool
-		if err := rows.Scan(&name, &enabled, &forced); err != nil {
-			t.Fatalf("scan: %v", err)
+	for _, st := range states {
+		tables = append(tables, st.Table)
+		if !st.Enabled {
+			t.Errorf("tenant table %q does not ENABLE row-level security (AN-1)", st.Table)
 		}
-		tables = append(tables, name)
-		if !enabled {
-			t.Errorf("tenant table %q does not ENABLE row-level security (AN-1)", name)
+		if !st.Forced {
+			t.Errorf("tenant table %q does not FORCE row-level security; the table owner would BYPASS RLS and a missing WithTenant would leak across tenants (AN-1, ARCH-INFO-3/TENANT-009)", st.Table)
 		}
-		if !forced {
-			t.Errorf("tenant table %q does not FORCE row-level security; the table owner would BYPASS RLS and a missing WithTenant would leak across tenants (AN-1, ARCH-INFO-3/TENANT-009)", name)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatalf("rows: %v", err)
 	}
 
 	// Guard against a vacuous pass: the platform has ~24 tenant tables; if the
@@ -86,45 +67,10 @@ func TestNoTenantPolicyIsUsingOnly(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	// pg_policies.qual is the USING expression; with_check is the WITH CHECK
-	// expression. A policy that has a qual (a read filter) but a NULL with_check is
-	// "USING-only". We restrict to policies on tables that carry tenant_id (the
-	// tenant tables) so unrelated system policies are out of scope.
-	rows, err := s.SystemPool().Query(ctx, `
-		SELECT p.tablename, p.policyname
-		FROM pg_policies p
-		WHERE p.schemaname = 'public'
-		  AND p.qual IS NOT NULL
-		  AND p.with_check IS NULL
-		  AND EXISTS (
-		      SELECT 1
-		      FROM pg_attribute a
-		      JOIN pg_class c ON c.oid = a.attrelid
-		      JOIN pg_namespace n ON n.oid = c.relnamespace
-		      WHERE n.nspname = p.schemaname
-		        AND c.relname = p.tablename
-		        AND a.attname = 'tenant_id'
-		        AND a.attnum > 0
-		        AND NOT a.attisdropped
-		  )
-		ORDER BY p.tablename, p.policyname`)
+	usingOnly, err := s.USINGOnlyTenantPolicies(ctx)
 	if err != nil {
 		t.Fatalf("query USING-only policies: %v", err)
 	}
-	defer rows.Close()
-
-	var usingOnly []string
-	for rows.Next() {
-		var table, policy string
-		if err := rows.Scan(&table, &policy); err != nil {
-			t.Fatalf("scan: %v", err)
-		}
-		usingOnly = append(usingOnly, table+"."+policy)
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatalf("rows: %v", err)
-	}
-
 	if len(usingOnly) != 0 {
 		sort.Strings(usingOnly)
 		t.Errorf("found %d USING-only RLS policies on tenant tables (must all carry WITH CHECK for AN-1 write symmetry, TENANT-008): %v", len(usingOnly), usingOnly)

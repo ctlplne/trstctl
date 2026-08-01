@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/cli/doctor"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -40,6 +41,10 @@ func main() {
 	defer stop()
 
 	if err := run(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr); err != nil {
+		var exit doctor.ExitError
+		if errors.As(err, &exit) {
+			os.Exit(exit.Code) // doctor's 0/1/2 contract; the report already printed
+		}
 		fmt.Fprintf(os.Stderr, "trstctl: %v\n", err)
 		os.Exit(1)
 	}
@@ -69,6 +74,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	if len(args) > 0 && args[0] == "support-bundle" {
 		return runSupportBundle(ctx, args[1:], getenv, stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "doctor" {
+		// Invariant probes against the live deployment (doctor.ExitError
+		// carries the 0/1/2 command contract through main's exit path).
+		return doctor.Run(ctx, args[1:], getenv, stdout, stderr)
 	}
 
 	flags, help, err := parseRootFlags(args, stderr)

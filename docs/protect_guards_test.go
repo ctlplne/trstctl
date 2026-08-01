@@ -46,10 +46,14 @@ func TestStorageTenancyRegressionGuardsStayRequired(t *testing.T) {
 		}
 	}
 
-	rlsGuard := read(t, "../internal/store/rls_force_test.go")
+	// The canonical catalog SQL moved to the shared inventory helpers
+	// (store.TenantTableRLSStates / USINGOnlyTenantPolicies) so the CI guard
+	// and `trstctl doctor --prove-isolation` probe the same derivation; the
+	// strength pin travels with it.
+	rlsGuard := read(t, "../internal/store/rls_inventory.go")
 	for _, want := range []string{"pg_class", "relforcerowsecurity", "pg_policies", "with_check IS NULL"} {
 		if !strings.Contains(rlsGuard, want) {
-			t.Errorf("ARCH-004: rls_force_test.go no longer checks %q; the RLS catalog guard may be too weak", want)
+			t.Errorf("ARCH-004: rls_inventory.go no longer carries %q; the shared RLS catalog derivation may be too weak", want)
 		}
 	}
 
@@ -3763,13 +3767,19 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 		`tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID)`,
 	)
 
-	rlsGuard := read(t, "../internal/store/rls_force_test.go")
-	check("internal/store/rls_force_test.go catalog guards", rlsGuard,
+	// The catalog SQL lives in the shared inventory helpers (also probed by
+	// doctor); the test file keeps the assertions and the vacuity floor, the
+	// helper keeps the SQL.
+	rlsGuard := read(t, "../internal/store/rls_inventory.go")
+	check("internal/store/rls_inventory.go catalog derivation", rlsGuard,
 		"pg_class c",
 		"relrowsecurity",
 		"relforcerowsecurity",
 		"pg_policies p",
 		"p.with_check IS NULL",
+	)
+	rlsTest := read(t, "../internal/store/rls_force_test.go")
+	check("internal/store/rls_force_test.go vacuity floor", rlsTest,
 		"len(tables) < 20",
 	)
 

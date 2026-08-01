@@ -166,14 +166,17 @@ func TestStoreSystemPoolIsTheNamedRLSBypassAccessor(t *testing.T) {
 func TestSystemPoolProductionUseInventory(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	approved := map[string]int{
-		"internal/backup/postgres_state.go":     2,
-		"internal/idemgc/idemgc.go":             2,
-		"internal/perf/live.go":                 1,
-		"internal/orchestrator/outbox.go":       2,
-		"internal/outboxgc/outboxgc.go":         2,
-		"internal/server/server.go":             1,
-		"internal/store/connector_lifecycle.go": 1,
-		"internal/store/lifecycle.go":           1,
+		"internal/backup/postgres_state.go":       2,
+		"internal/cli/doctor/probes_isolation.go": 1,
+		"internal/cli/doctor/probes_ops.go":       2,
+		"internal/store/rls_inventory.go":         3,
+		"internal/idemgc/idemgc.go":               2,
+		"internal/perf/live.go":                   1,
+		"internal/orchestrator/outbox.go":         2,
+		"internal/outboxgc/outboxgc.go":           2,
+		"internal/server/server.go":               1,
+		"internal/store/connector_lifecycle.go":   1,
+		"internal/store/lifecycle.go":             1,
 	}
 	found := map[string]int{}
 
