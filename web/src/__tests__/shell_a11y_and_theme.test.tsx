@@ -25,6 +25,10 @@ const { apiMock } = vi.hoisted(() => ({
     managedOfferingStatus: vi.fn(),
     scaleOrchestration: vi.fn(),
     platformSystem: vi.fn(),
+    tenantKeyDomain: vi.fn(),
+    migrateTenantKeyDomain: vi.fn(),
+    sealTenantKeyDomain: vi.fn(),
+    unsealTenantKeyDomain: vi.fn(),
     activeActiveIssuance: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
@@ -205,6 +209,19 @@ describe("app shell accessibility and theme", () => {
         },
       ],
       evidence_refs: ["internal/api/enterprise_support.go"],
+    });
+    apiMock.tenantKeyDomain.mockResolvedValue({
+      served: true,
+      protection_mode: "legacy_deployment_kek",
+      state: "legacy",
+      progress_completed: 0,
+      progress_total: 0,
+      retryable: false,
+      legacy_history_exposure: "hot_history_pending",
+      last_transition_evidence_refs: [],
+      local_wrapper_zero_egress: true,
+      remote_wrapper_state: "disabled_in_core_local_custody",
+      recovery: "Configure a local wrapper and migrate.",
     });
     apiMock.managedOfferingStatus.mockResolvedValue({
       served: true,
