@@ -199,7 +199,7 @@ func (s *secretsService) withTenantCipher(ctx context.Context, tenantID string, 
 // rejects the request before its handler can observe or mutate tenant state.
 func (a *API) guardTenantCrypto(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if a.secrets == nil || a.secrets.be.TenantCrypto == nil {
+		if a.tenantCrypto == nil {
 			next(w, r)
 			return
 		}
@@ -208,7 +208,7 @@ func (a *API) guardTenantCrypto(next http.HandlerFunc) http.HandlerFunc {
 			a.writeProblem(w, problemUnauthorized())
 			return
 		}
-		err := a.secrets.withTenantCipher(r.Context(), tenantID, func(cipher tenantseal.Cipher) error {
+		err := a.tenantCrypto.WithTenant(r.Context(), tenantID, func(cipher tenantseal.Cipher) error {
 			ctx := context.WithValue(r.Context(), tenantCipherCtxKey, cipher)
 			next(w, r.WithContext(ctx))
 			return nil
@@ -263,6 +263,9 @@ func WithSecrets(be SecretsBackend) Option {
 	return func(c *config) {
 		c.secrets = &secretsService{
 			be: be, leases: map[string]dynsecret.Lifecycle{},
+		}
+		if c.tenantCrypto == nil {
+			c.tenantCrypto = be.TenantCrypto
 		}
 	}
 }

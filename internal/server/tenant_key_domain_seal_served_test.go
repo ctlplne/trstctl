@@ -168,8 +168,12 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 			t.Fatal(err)
 		}
 	}
-	tokenA := seedScopedToken(t, st, sealedTenant, "keys:read", "keys:write", "secrets:read", "secrets:write")
-	tokenB := seedScopedToken(t, st, neighborTenant, "secrets:read", "secrets:write")
+	tokenA := seedScopedToken(t, st, sealedTenant,
+		"keys:read", "keys:write", "owners:read", "owners:write", "secrets:read", "secrets:write",
+	)
+	tokenB := seedScopedToken(t, st, neighborTenant,
+		"owners:read", "owners:write", "secrets:read", "secrets:write",
+	)
 
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
@@ -296,6 +300,14 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	if lockedWrite.Code != http.StatusLocked || !strings.Contains(lockedWrite.Body.String(), `"tenant_key_domain_status":"sealed"`) {
 		t.Fatalf("sealed tenant A mutation = %d body=%s", lockedWrite.Code, lockedWrite.Body.String())
 	}
+	lockedOwners := servedTenantSealRequest(t, srv, tokenA, http.MethodGet, "/api/v1/owners", "", nil)
+	if lockedOwners.Code != http.StatusLocked || !strings.Contains(lockedOwners.Body.String(), `"tenant_key_domain_status":"sealed"`) {
+		t.Fatalf("sealed tenant A ordinary API read = %d body=%s", lockedOwners.Code, lockedOwners.Body.String())
+	}
+	lockedOwnerCreate := servedTenantSealRequest(t, srv, tokenA, http.MethodPost, "/api/v1/owners", "tenant-a-owner-while-sealed", []byte(`{"kind":"workload","name":"must-not-write-owner"}`))
+	if lockedOwnerCreate.Code != http.StatusLocked || !strings.Contains(lockedOwnerCreate.Body.String(), `"tenant_key_domain_status":"sealed"`) {
+		t.Fatalf("sealed tenant A ordinary API mutation = %d body=%s", lockedOwnerCreate.Code, lockedOwnerCreate.Body.String())
+	}
 	lockedVault := servedTenantSealRequest(t, srv, tokenA, http.MethodGet, "/v1/secret/data/db/password", "", nil)
 	if lockedVault.Code != http.StatusLocked || !strings.Contains(lockedVault.Body.String(), "sealed") {
 		t.Fatalf("sealed tenant A Vault-compatible read = %d body=%s", lockedVault.Code, lockedVault.Body.String())
@@ -316,6 +328,10 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	if readB.Code != http.StatusOK || !strings.Contains(readB.Body.String(), "tenant-b-secret") {
 		t.Fatalf("neighbor tenant B read = %d body=%s", readB.Code, readB.Body.String())
 	}
+	createOwnerB := servedTenantSealRequest(t, srv, tokenB, http.MethodPost, "/api/v1/owners", "tenant-b-owner-while-a-sealed", []byte(`{"kind":"workload","name":"neighbor-remains-writable"}`))
+	if createOwnerB.Code != http.StatusCreated || !strings.Contains(createOwnerB.Body.String(), "neighbor-remains-writable") {
+		t.Fatalf("neighbor tenant B ordinary API mutation = %d body=%s", createOwnerB.Code, createOwnerB.Body.String())
+	}
 
 	unseal := servedTenantSealRequest(t, srv, tokenA, http.MethodPost, "/api/v1/platform/tenant-key-domain/unseal", "tenant-unseal-secret-path", nil)
 	if unseal.Code != http.StatusOK {
@@ -330,6 +346,10 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	reopened := servedTenantSealRequest(t, srv, tokenA, http.MethodGet, "/api/v1/secrets/store/db/password", "", nil)
 	if reopened.Code != http.StatusOK || !strings.Contains(reopened.Body.String(), "tenant-a-secret") {
 		t.Fatalf("read unsealed tenant A = %d body=%s", reopened.Code, reopened.Body.String())
+	}
+	reopenedOwners := servedTenantSealRequest(t, srv, tokenA, http.MethodGet, "/api/v1/owners", "", nil)
+	if reopenedOwners.Code != http.StatusOK || strings.Contains(reopenedOwners.Body.String(), "must-not-write-owner") || strings.Contains(reopenedOwners.Body.String(), "neighbor-remains-writable") {
+		t.Fatalf("unsealed tenant A owner isolation = %d body=%s", reopenedOwners.Code, reopenedOwners.Body.String())
 	}
 	notWritten := servedTenantSealRequest(t, srv, tokenA, http.MethodGet, "/api/v1/secrets/store/after/seal", "", nil)
 	if notWritten.Code != http.StatusNotFound || strings.Contains(notWritten.Body.String(), "must-not-write") {

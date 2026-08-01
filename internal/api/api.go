@@ -113,6 +113,7 @@ type API struct {
 	systemReadout             SystemReadoutProvider
 	idemProtection            IdempotencyResultProtectionProvider
 	tenantKeyDomains          TenantKeyDomainLifecycle
+	tenantCrypto              tenantseal.Access
 	connectorRegistry         *connector.Registry
 	sshFleet                  SSHFleetProvider
 	codeSigningIdentities     CodeSigningIdentityProvider
@@ -192,6 +193,7 @@ type config struct {
 	systemReadout             SystemReadoutProvider
 	idemProtection            IdempotencyResultProtectionProvider
 	tenantKeyDomains          TenantKeyDomainLifecycle
+	tenantCrypto              tenantseal.Access
 	connectorRegistry         *connector.Registry
 	sshFleet                  SSHFleetProvider
 	codeSigningIdentities     CodeSigningIdentityProvider
@@ -447,6 +449,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		systemReadout:             cfg.systemReadout,
 		idemProtection:            cfg.idemProtection,
 		tenantKeyDomains:          cfg.tenantKeyDomains,
+		tenantCrypto:              cfg.tenantCrypto,
 		connectorRegistry:         cfg.connectorRegistry,
 		sshFleet:                  cfg.sshFleet,
 		codeSigningIdentities:     cfg.codeSigningIdentities,
@@ -482,7 +485,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 			continue
 		}
 		handler := r.handler
-		if strings.HasPrefix(r.path, "/api/v1/secrets/") && r.opID != "machineLogin" {
+		if a.tenantCrypto != nil && r.perm != "" && !tenantCryptoExemptOperation(r.opID) {
 			handler = a.guardTenantCrypto(handler)
 		}
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, handler))
@@ -545,6 +548,16 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	a.mux = mux
 	a.spec = buildSpec(a.routes(), a.licensedSchemas)
 	return a
+}
+
+func tenantCryptoExemptOperation(operationID string) bool {
+	switch operationID {
+	case "getPlatformSystem",
+		"getTenantKeyDomain", "migrateTenantKeyDomain", "sealTenantKeyDomain", "unsealTenantKeyDomain":
+		return true
+	default:
+		return false
+	}
 }
 
 // ServeHTTP implements http.Handler.

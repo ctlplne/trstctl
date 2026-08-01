@@ -1089,6 +1089,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
 		api.WithACMEARIPosture(s.ACMEARIPosture),
 		api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains),
+		api.WithTenantCrypto(d.TenantCrypto),
 	}
 }
 

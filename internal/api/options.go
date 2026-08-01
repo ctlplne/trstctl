@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -31,6 +32,13 @@ func WithRoles(roles ...authz.Role) Option {
 // append-only log required by AN-2.
 func WithEventLog(log *events.Log) Option {
 	return func(c *config) { c.eventLog = log }
+}
+
+// WithTenantCrypto keeps every authenticated tenant data route behind the
+// tenant-domain shared fence. Lifecycle/status recovery routes are the explicit
+// exception so an operator can inspect and unseal a closed tenant.
+func WithTenantCrypto(access tenantseal.Access) Option {
+	return func(c *config) { c.tenantCrypto = access }
 }
 
 // WithPQCCampaignClosureSigner wires the persistent core audit key used to make
