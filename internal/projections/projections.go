@@ -2134,9 +2134,17 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyDiscoverySourceUpsertedTx(ctx, tx, store.DiscoverySource{
+		if err := p.store.ApplyDiscoverySourceUpsertedTx(ctx, tx, store.DiscoverySource{
 			ID: pl.ID, TenantID: e.TenantID, Kind: pl.Kind, Name: pl.Name,
 			Config: pl.Config, CreatedAt: e.Time, UpdatedAt: e.Time,
+		}); err != nil {
+			return err
+		}
+		// The coverage rollup projects from the same event (AN-2): one row per
+		// source carrying the kind the envelope registry classifies at read time.
+		return p.store.ApplyDiscoveryCoverageSourceTx(ctx, tx, store.DiscoveryCoverage{
+			TenantID: e.TenantID, SourceID: pl.ID, SourceKind: pl.Kind,
+			SourceName: pl.Name, EventSequence: e.Sequence,
 		})
 	case EventDiscoveryScheduleUpserted:
 		var pl DiscoveryScheduleUpserted
@@ -2215,11 +2223,17 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		completedAt := e.Time
-		return p.store.ApplyDiscoveryRunCompletedTx(ctx, tx, store.DiscoveryRun{
+		if err := p.store.ApplyDiscoveryRunCompletedTx(ctx, tx, store.DiscoveryRun{
 			ID: pl.ID, TenantID: e.TenantID, Status: pl.Status, Targets: pl.Targets,
 			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
 			Error: pl.Error, CompletedAt: &completedAt,
-		})
+		}); err != nil {
+			return err
+		}
+		// Fold the completed run into its source's coverage rollup in the
+		// same transaction; the run row just applied supplies the source
+		// identity (AN-2, idempotent by event sequence).
+		return p.store.ApplyDiscoveryCoverageRunTx(ctx, tx, e.TenantID, pl.ID, pl.Status, completedAt, e.Sequence)
 	case EventACMEDNS01ProviderConfigUpserted:
 		var pl ACMEDNS01ProviderConfigUpserted
 		if err := decode(e, &pl); err != nil {
