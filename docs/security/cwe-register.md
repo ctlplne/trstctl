@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1005 annotated sites across 24 rules. Each row is
+1006 annotated sites across 24 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -708,7 +708,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:162` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:277` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (262 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (263 sites)
 
 | Location | Reason |
 |---|---|
@@ -748,6 +748,7 @@ not this file.
 | `deploy/kubernetes/manifests_test.go:494` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/docs_drift_test.go:376` | test reads its own fixture/tempdir path (CWE-22) |
+| `docs/doctor_doc_test.go:32` | fixed literal list of the repo's own committed doctor sources; no external input reaches this path (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/protect_guards_completeness_test.go:236` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
