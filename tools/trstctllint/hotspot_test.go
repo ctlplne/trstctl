@@ -33,6 +33,9 @@ func TestControlPlaneStartupHotspotsStaySplit(t *testing.T) {
 			}
 			return nil
 		}
+		if d.IsDir() {
+			return nil
+		}
 		rel := slashRel(t, root, path)
 		if !isControlPlaneStartupPath(rel) || isGeneratedGo(t, path) {
 			return nil
