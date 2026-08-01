@@ -2188,7 +2188,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/backup/backup.go", []string{"trstctl-event-log-backup", "version    = 1", "unsupported backup version"}},
 		{"../internal/backup/full_manifest.go", []string{"trstctl-full-backup", "fullVersion      = 1", "unsupported full backup manifest version"}},
 		{"../internal/backup/postgres_state.go", []string{"trstctl-postgres-state-backup", "postgresStateVersion    = 1", "unsupported postgres-state backup version"}},
-		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 9", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
+		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 10", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
 	} {
 		body := read(t, file.path)
 		for _, want := range file.want {
@@ -2969,7 +2969,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	}
 	snapshotGo := read(t, "../internal/store/snapshot.go")
 	for _, want := range []string{
-		"const SnapshotFormatVersion = 9",
+		"const SnapshotFormatVersion = 10",
 		"func (s *Store) WriteTenantSnapshot(",
 		"func (s *Store) LatestSnapshotOffset(",
 		"func (s *Store) RestoreSnapshotsTx(",
