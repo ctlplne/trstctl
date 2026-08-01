@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -214,74 +215,58 @@ func (d *issuanceDispatcher) handleDiscoveryRun(ctx context.Context, m orchestra
 	return err
 }
 
+// discoveryRunExecutor executes one discovery run for a source of a specific
+// kind on behalf of the dispatcher.
+type discoveryRunExecutor func(d *issuanceDispatcher, ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error)
+
+// discoveryRunExecutors is THE catalog of served discovery-source kinds: the
+// set the server can actually execute when a run is queued. Coverage treats
+// this registry as authoritative (see internal/cbom/coverage) —
+// TestEveryDiscoverySourceDeclaresEnvelope requires every kind here to carry
+// an observability envelope, and every envelope (bar the manual fallback) to
+// name a kind here, so the two cannot drift. A kind absent from this map
+// falls back to recording operator-supplied manual findings.
+var discoveryRunExecutors = map[string]discoveryRunExecutor{
+	"network":           (*issuanceDispatcher).executeNetworkDiscoveryRun,
+	"ssh":               (*issuanceDispatcher).executeSSHDiscoveryRun,
+	"cloud_certificate": (*issuanceDispatcher).executeCloudCertificateDiscoveryRun,
+	// secret_store routes through the same served secret-manager
+	// connectors as cloud_secret (aws-secrets-manager, gcp-secret-manager,
+	// azure-key-vault, hashicorp-vault): the kinds share the providers
+	// config shape, so the previously executor-less kind now runs for the
+	// served backends, and a provider outside that set fails with the
+	// connector's clear "unsupported provider" error instead of the
+	// generic no-connector fallback (A0.2b).
+	cloudsecret.SourceKind:          (*issuanceDispatcher).executeCloudSecretDiscoveryRun,
+	"secret_store":                  (*issuanceDispatcher).executeCloudSecretDiscoveryRun,
+	"ct_log":                        (*issuanceDispatcher).executeCTLogDiscoveryRun,
+	"drift":                         (*issuanceDispatcher).executeDriftDiscoveryRun,
+	nhi.SourceKind:                  (*issuanceDispatcher).executeNHICrossSurfaceDiscoveryRun,
+	oauthgrant.SourceKind:           (*issuanceDispatcher).executeOAuthGrantDiscoveryRun,
+	serviceaccount.SourceKind:       (*issuanceDispatcher).executeServiceAccountDiscoveryRun,
+	nhibehavior.SourceKind:          (*issuanceDispatcher).executeNHIBehaviorDiscoveryRun,
+	apikey.SourceKind:               (*issuanceDispatcher).executeAPIKeyOrManualDiscoveryRun,
+	compromise.SourceKind:           (*issuanceDispatcher).executeCompromisedCredentialDiscoveryRun,
+	k8stls.SourceKind:               (*issuanceDispatcher).executeKubernetesTLSAutoIssuanceRun,
+	secretscan.RepositorySourceKind: (*issuanceDispatcher).executeSecretRepositoryDiscoveryRun,
+	secretscan.ThirdPartySourceKind: (*issuanceDispatcher).executeThirdPartySecretDiscoveryRun,
+}
+
+// servedDiscoverySourceKinds returns the sorted catalog of source kinds the
+// server can execute, derived from the executor registry rather than a
+// hand-typed list.
+func servedDiscoverySourceKinds() []string {
+	kinds := make([]string, 0, len(discoveryRunExecutors))
+	for k := range discoveryRunExecutors {
+		kinds = append(kinds, k)
+	}
+	sort.Strings(kinds)
+	return kinds
+}
+
 func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
-	if src.Kind == "network" {
-		return d.executeNetworkDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == "ssh" {
-		return d.executeSSHDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == "cloud_certificate" {
-		return d.executeCloudCertificateDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == cloudsecret.SourceKind || src.Kind == "secret_store" {
-		// secret_store routes through the same served secret-manager
-		// connectors as cloud_secret (aws-secrets-manager, gcp-secret-manager,
-		// azure-key-vault, hashicorp-vault): the kinds share the providers
-		// config shape, so the previously executor-less kind now runs for the
-		// served backends, and a provider outside that set fails with the
-		// connector's clear "unsupported provider" error instead of the
-		// generic no-connector fallback (A0.2b).
-		return d.executeCloudSecretDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == "ct_log" {
-		return d.executeCTLogDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == "drift" {
-		return d.executeDriftDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == nhi.SourceKind {
-		return d.executeNHICrossSurfaceDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == oauthgrant.SourceKind {
-		return d.executeOAuthGrantDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == serviceaccount.SourceKind {
-		return d.executeServiceAccountDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == nhibehavior.SourceKind {
-		return d.executeNHIBehaviorDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == apikey.SourceKind {
-		// An observation-shaped config runs the served observer; an older
-		// manual-findings api_key source still records its supplied findings.
-		// A config that is neither gets a kind-specific refusal rather than
-		// the generic no-connector message, which read as "api_key is not
-		// served" when the real cause is a config that carries no
-		// observations and no findings (A0.2c).
-		if apikey.UsesObservationConfig(src.Config) {
-			return d.executeAPIKeyTokenDiscoveryRun(ctx, tenantID, src, run)
-		}
-		rep, err := d.recordManualDiscoveryFindings(ctx, tenantID, src, run.ID)
-		if err != nil {
-			return rep, "", "", err
-		}
-		if rep.Targets > 0 {
-			return rep, "succeeded", "", nil
-		}
-		return netscan.Report{}, "failed", "api_key discovery requires either an observations config or inline findings", nil
-	}
-	if src.Kind == compromise.SourceKind {
-		return d.executeCompromisedCredentialDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == k8stls.SourceKind {
-		return d.executeKubernetesTLSAutoIssuanceRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == secretscan.RepositorySourceKind {
-		return d.executeSecretRepositoryDiscoveryRun(ctx, tenantID, src, run)
-	}
-	if src.Kind == secretscan.ThirdPartySourceKind {
-		return d.executeThirdPartySecretDiscoveryRun(ctx, tenantID, src, run)
+	if execute, ok := discoveryRunExecutors[src.Kind]; ok {
+		return execute(d, ctx, tenantID, src, run)
 	}
 	rep, err := d.recordManualDiscoveryFindings(ctx, tenantID, src, run.ID)
 	if err != nil {
@@ -291,6 +276,26 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 		return rep, "succeeded", "", nil
 	}
 	return netscan.Report{}, "failed", "no server-side connector is configured for discovery source kind " + src.Kind, nil
+}
+
+// executeAPIKeyOrManualDiscoveryRun serves the api_key kind: an
+// observation-shaped config runs the served observer; an older
+// manual-findings api_key source still records its supplied findings. A
+// config that is neither gets a kind-specific refusal rather than the generic
+// no-connector message, which read as "api_key is not served" when the real
+// cause is a config that carries no observations and no findings (A0.2c).
+func (d *issuanceDispatcher) executeAPIKeyOrManualDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	if apikey.UsesObservationConfig(src.Config) {
+		return d.executeAPIKeyTokenDiscoveryRun(ctx, tenantID, src, run)
+	}
+	rep, err := d.recordManualDiscoveryFindings(ctx, tenantID, src, run.ID)
+	if err != nil {
+		return rep, "", "", err
+	}
+	if rep.Targets > 0 {
+		return rep, "succeeded", "", nil
+	}
+	return netscan.Report{}, "failed", "api_key discovery requires either an observations config or inline findings", nil
 }
 
 func (d *issuanceDispatcher) executeNetworkDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
