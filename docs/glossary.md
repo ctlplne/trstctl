@@ -323,12 +323,13 @@ the database or keys. See [Extensibility & plugins](features/extensibility-plugi
 
 ### Non-negotiables (AN-1 … AN-9)
 
-trstctl's eight architectural rules, designed in from the first commit and enforced
+trstctl's nine architectural rules, designed in from the first commit and enforced
 by a custom build linter plus the editions build fence: multi-tenant storage (AN-1), event sourcing (AN-2),
 cryptography behind one boundary (AN-3), an isolated signing process (AN-4),
 idempotency on every mutation (AN-5), an outbox for every external call (AN-6),
-bulkheads and backpressure (AN-7), and memory safety for key material (AN-8). They
-appear throughout these docs because almost every feature rests on them.
+bulkheads and backpressure (AN-7), memory safety for key material (AN-8), and the
+`ee/` editions boundary (AN-9). They appear throughout these docs because almost
+every feature rests on them.
 
 ### SAN (Subject Alternative Name)
 
