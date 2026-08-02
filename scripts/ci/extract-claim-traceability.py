@@ -21,6 +21,11 @@ Usage:
   scripts/ci/extract-claim-traceability.py --json out.json # machine-readable receipt
   scripts/ci/extract-claim-traceability.py --strict        # also fail on integrity findings
 
+The Applications table and the Verified column are NOT derived from source — they are
+read from ee/docs/claim-verification.json, the one human-maintained input. Filing
+dates, application serials and the provisional conversion deadline are recorded there;
+nothing in this script hard-codes them.
+
 Exit codes: 0 ok · 1 stale (--check), a configured family with zero citations
 (always), or integrity findings (--strict) · 2 usage error.
 
@@ -38,11 +43,28 @@ import os
 import re
 import sys
 from collections import defaultdict
+from datetime import date
 
 # --- configuration ---------------------------------------------------------
 
 EE_ROOT = "ee"
 OUT_PATH = os.path.join("ee", "docs", "claim-traceability.md")
+
+# The one human-maintained input. Repo-relative POSIX form for prose, os-native for
+# I/O, so the generated page reads the same on every platform.
+VERIFICATION_REL = "ee/docs/claim-verification.json"
+VERIFICATION_PATH = os.path.join(*VERIFICATION_REL.split("/"))
+
+# Fields of an application entry, in the column order they are rendered.
+APPLICATION_FIELDS = ("subject", "application_no", "filed", "converted_by")
+
+# An unfilled sidecar field renders as this, so a missing serial is visible rather
+# than a blank cell. Filling the sidecar is what removes it — nothing in this file
+# can be edited to record a filing date.
+PENDING_CELL = "_[counsel to supply]_"
+
+# Marker for a claim counsel has not yet reviewed.
+UNREVIEWED_CELL = "_[counsel]_"
 
 # Directory under ee/ -> patent family label. Extend as families are added.
 # The filed provisionals are PCAS, AGID, XREC, and VDEC — there is no PQCM
@@ -73,6 +95,80 @@ QUALIFIED = re.compile(
 # table, which is worse than an ambiguity finding.
 BARE = re.compile(r"\bclaims?(?:[-_]|\s+)(?P<nums>\d+(?:\s*(?:,|and|/|&)\s*\d+)*)")
 NUM = re.compile(r"\d+")
+
+
+class SidecarError(Exception):
+    """The human-maintained sidecar is missing or malformed."""
+
+
+def conversion_deadline(filed: str) -> str:
+    """Return the US provisional conversion deadline: filing date + 12 months.
+
+    Accepts YYYY-MM-DD or YYYY-MM and answers at the same precision it was given, so
+    a filing recorded only to the month never implies a day-precise deadline. An
+    unparseable or empty value returns "" and the caller renders the pending-cell placeholder.
+    """
+    m = re.fullmatch(r"(\d{4})-(\d{2})(?:-(\d{2}))?", filed.strip())
+    if not m:
+        return ""
+    year, month, day = int(m.group(1)), m.group(2), m.group(3)
+    if day is None:
+        return f"{year + 1}-{month}"
+    try:
+        return date(year + 1, int(month), int(day)).isoformat()
+    except ValueError:
+        # 29 February has no anniversary in a common year; the deadline is the last
+        # day of that month, not a rollover into March.
+        return date(year + 1, int(month), int(day) - 1).isoformat()
+
+
+def load_verification(path: str) -> dict:
+    """Read the sidecar that carries application metadata and counsel's verdicts.
+
+    JSON rather than YAML on purpose: the standard library parses it, so the CI job
+    that runs --check needs no third-party package installed.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except OSError as exc:
+        raise SidecarError(
+            f"{path} is missing ({exc}) — it carries the Applications table and the "
+            "Verified column; create it before generating"
+        ) from exc
+    except ValueError as exc:
+        raise SidecarError(f"{path} is not valid JSON: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise SidecarError(f"{path} must contain a JSON object at the top level")
+
+    apps = data.get("applications")
+    if not isinstance(apps, dict) or not apps:
+        raise SidecarError(f"{path} has no non-empty 'applications' object")
+    for fam, entry in apps.items():
+        if not isinstance(entry, dict):
+            raise SidecarError(f"{path}: applications[{fam!r}] must be an object")
+        unknown = sorted(set(entry) - set(APPLICATION_FIELDS))
+        if unknown:
+            raise SidecarError(
+                f"{path}: applications[{fam!r}] has unknown field(s) {unknown}; "
+                f"expected only {list(APPLICATION_FIELDS)}"
+            )
+        for field in APPLICATION_FIELDS:
+            if not isinstance(entry.get(field, ""), str):
+                raise SidecarError(
+                    f"{path}: applications[{fam!r}][{field!r}] must be a string "
+                    "(use \"\" for a value that is not known yet)"
+                )
+
+    verified = data.get("verified", {})
+    if not isinstance(verified, dict):
+        raise SidecarError(f"{path}: 'verified' must be an object mapping FAMILY-CLAIM to a note")
+    for key, note in verified.items():
+        if not isinstance(note, str):
+            raise SidecarError(f"{path}: verified[{key!r}] must be a string")
+
+    return {"applications": apps, "verified": verified}
 
 
 def family_for(path: str) -> str:
@@ -169,7 +265,7 @@ def findings(records) -> dict:
     }
 
 
-def render(records, found, n_qualified, n_bare) -> str:
+def render(records, found, n_qualified, n_bare, verif) -> str:
     out: list[str] = []
     w = out.append
     w("<!-- GENERATED FILE — do not edit by hand.")
@@ -183,16 +279,22 @@ def render(records, found, n_qualified, n_bare) -> str:
     w("it cannot drift from the code it describes.")
     w("")
     w("> **Verification status.** This table proves a *citation* exists, not that the")
-    w("> cited code practices the claim. The `Verified` column is maintained by counsel")
-    w("> review and is the only column a human edits — in `claim-verification.yaml`,")
-    w("> not here.")
+    w("> cited code practices the claim. The application metadata below and the")
+    w("> `Verified` column are the only human-maintained data; both are edited in")
+    w(f"> `{VERIFICATION_REL}`, not here. `Converted by` is the deadline to")
+    w("> convert a US provisional, computed as the filing date plus twelve months.")
     w("")
     w("## Applications")
     w("")
     w("| Family | Subject | Application / provisional no. | Filed | Converted by |")
     w("|---|---|---|---|---|")
-    for fam in found["families"]:
-        w(f"| {fam} | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |")
+    apps = verif["applications"]
+    for fam in sorted(apps):
+        entry = apps[fam]
+        cells = [entry.get(f, "").strip() for f in APPLICATION_FIELDS]
+        if not cells[3]:
+            cells[3] = conversion_deadline(cells[2])
+        w("| " + fam + " | " + " | ".join(c or PENDING_CELL for c in cells) + " |")
     w("")
     w(f"Citations parsed: **{n_qualified} qualified**, **{n_bare} bare** "
       "(bare citations infer their family from the directory — namespace them to remove the guesswork).")
@@ -219,7 +321,8 @@ def render(records, found, n_qualified, n_bare) -> str:
                     shown += f" _(+{len(paths) - 3} more)_"
                 return shown
 
-            w(f"| {claim} | {cell(impl)} | {cell(test)} | _[counsel]_ |")
+            verdict = verif["verified"].get(f"{fam}-{claim}", "").strip() or UNREVIEWED_CELL
+            w(f"| {claim} | {cell(impl)} | {cell(test)} | {verdict} |")
         w("")
 
     w("## Integrity findings")
@@ -281,6 +384,8 @@ def main() -> int:
                     help="also fail when integrity findings are present")
     ap.add_argument("--json", metavar="PATH", help="write a machine-readable receipt")
     ap.add_argument("--out", default=OUT_PATH, help=f"output path (default {OUT_PATH})")
+    ap.add_argument("--verification", default=VERIFICATION_PATH,
+                    help=f"human-maintained sidecar (default {VERIFICATION_PATH})")
     args = ap.parse_args()
 
     if not os.path.isdir(EE_ROOT):
@@ -294,7 +399,25 @@ def main() -> int:
         return 2
 
     found = findings(records)
-    rendered = render(records, found, n_qualified, n_bare)
+
+    try:
+        verif = load_verification(args.verification)
+    except SidecarError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    # Every family cited in ee/ must have an application entry. Without this a newly
+    # cited family would silently have no row, and no filing date or conversion
+    # deadline anywhere — the defect this sidecar exists to remove.
+    undeclared = [f for f in found["families"] if f not in verif["applications"]]
+    if undeclared:
+        print(f"error: {args.verification} has no application entry for cited "
+              f"family/families {undeclared} — add one (empty strings are fine) so the "
+              "filing date and the conversion deadline have somewhere to live",
+              file=sys.stderr)
+        return 2
+
+    rendered = render(records, found, n_qualified, n_bare, verif)
 
     if args.json:
         payload = {

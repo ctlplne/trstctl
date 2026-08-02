@@ -9,18 +9,19 @@ implementing files and the tests that exercise them. Generated from source, so
 it cannot drift from the code it describes.
 
 > **Verification status.** This table proves a *citation* exists, not that the
-> cited code practices the claim. The `Verified` column is maintained by counsel
-> review and is the only column a human edits — in `claim-verification.yaml`,
-> not here.
+> cited code practices the claim. The application metadata below and the
+> `Verified` column are the only human-maintained data; both are edited in
+> `ee/docs/claim-verification.json`, not here. `Converted by` is the deadline to
+> convert a US provisional, computed as the filing date plus twelve months.
 
 ## Applications
 
 | Family | Subject | Application / provisional no. | Filed | Converted by |
 |---|---|---|---|---|
-| AGID | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
-| PCAS | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
-| VDEC | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
-| XREC | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
+| AGID | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
+| PCAS | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
+| VDEC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
+| XREC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 
 Citations parsed: **982 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 

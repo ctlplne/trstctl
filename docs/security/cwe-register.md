@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1013 annotated sites across 24 rules. Each row is
+1014 annotated sites across 24 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -495,7 +495,7 @@ not this file.
 | `internal/projections/auth_resolver_test.go:159` | test cookie against the test's own local server (CWE-1004) |
 | `internal/server/scim_served_test.go:201` | test cookie against the test's own local server (CWE-1004) |
 
-### G204 — CWE-78 OS command injection (131 sites)
+### G204 — CWE-78 OS command injection (132 sites)
 
 | Location | Reason |
 |---|---|
@@ -524,6 +524,7 @@ not this file.
 | `deploy/helm/helm_test.go:1115` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:416` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `docs/claim_applications_test.go:67` | test runs the repository's own committed generator against tempdir fixtures it just wrote itself (CWE-78) |
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |
 | `docs/docs_drift_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
