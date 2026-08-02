@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// ---- ARCH-011: the reader-facing invariant pages count the same nine -----------
+// ---- ARCH-012: the reader-facing invariant pages count the same nine -----------
 //
 // README.md carries the canonical `| **AN-n** |` non-negotiables table. The two
 // reader-facing pages that restate the same rules had both drifted to eight:
@@ -53,11 +53,11 @@ var invariantSummaryPages = []struct {
 	{"glossary.md", " architectural rules"},
 }
 
-// TestInvariantPagesAgreeWithReadmeOnTheCount locks ARCH-011.
+// TestInvariantPagesAgreeWithReadmeOnTheCount locks ARCH-012.
 func TestInvariantPagesAgreeWithReadmeOnTheCount(t *testing.T) {
 	rows := linterANRowRe.FindAllStringSubmatch(read(t, "../README.md"), -1)
 	if len(rows) < 2 {
-		t.Fatal("ARCH-011: README.md no longer has a `| **AN-n** |` non-negotiables table; the canonical list moved — re-point this guard")
+		t.Fatal("ARCH-012: README.md no longer has a `| **AN-n** |` non-negotiables table; the canonical list moved — re-point this guard")
 	}
 	seen := map[string]bool{}
 	var ans []string
@@ -72,26 +72,26 @@ func TestInvariantPagesAgreeWithReadmeOnTheCount(t *testing.T) {
 
 	word, ok := invariantCountWords[len(ans)]
 	if !ok {
-		t.Fatalf("ARCH-011: README.md now defines %d non-negotiables (%v); add that size to invariantCountWords and update the summary pages in the same change", len(ans), ans)
+		t.Fatalf("ARCH-012: README.md now defines %d non-negotiables (%v); add that size to invariantCountWords and update the summary pages in the same change", len(ans), ans)
 	}
 
 	for _, page := range invariantSummaryPages {
 		body := read(t, page.path)
 
 		if want := word + page.noun; !strings.Contains(body, want) {
-			t.Errorf("ARCH-011: docs/%s must state %q — README.md's table defines %d non-negotiables (%v)", page.path, want, len(ans), ans)
+			t.Errorf("ARCH-012: docs/%s must state %q — README.md's table defines %d non-negotiables (%v)", page.path, want, len(ans), ans)
 		}
 		for size, stale := range invariantCountWords {
 			if size == len(ans) {
 				continue
 			}
 			if bad := stale + page.noun; strings.Contains(body, bad) {
-				t.Errorf("ARCH-011: docs/%s still says %q, but README.md defines %d non-negotiables (%v)", page.path, bad, len(ans), ans)
+				t.Errorf("ARCH-012: docs/%s still says %q, but README.md defines %d non-negotiables (%v)", page.path, bad, len(ans), ans)
 			}
 		}
 		for _, an := range ans {
 			if !strings.Contains(body, an) {
-				t.Errorf("ARCH-011: docs/%s never names %s, so a reader cannot map the page onto README.md's AN-n table — the page must carry the identifiers, not only the prose names", page.path, an)
+				t.Errorf("ARCH-012: docs/%s never names %s, so a reader cannot map the page onto README.md's AN-n table — the page must carry the identifiers, not only the prose names", page.path, an)
 			}
 		}
 	}
