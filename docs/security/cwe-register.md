@@ -629,8 +629,8 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:222` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/pqclab/main.go:593` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:22` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/trstctllint/repo_selftest_test.go:99` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/trstctllint/repo_selftest_test.go:146` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/trstctllint/repo_selftest_test.go:109` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/trstctllint/repo_selftest_test.go:158` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
 ### G301 — CWE-276 Incorrect default permissions (directory) (45 sites)
 
