@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery } from "@/lib/api";
+// This page renders errors in the fallback-prefixed shape ("Could not export
+// evidence: <detail>"), pinned by __tests__/operations_surface.test.tsx.
+import { apiProblemContext as apiProblemMessage } from "@/lib/apiProblem";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { PageHeader } from "@/components/PageHeader";
@@ -499,22 +502,4 @@ function noticeFor(err: unknown, fallback: string): Notice {
     return { kind: "permission", message: translateNow("source.your.session.cannot.read.tenant.audit.evid.6c0890fb54") };
   }
   return { kind: "error", message: apiProblemMessage(err, fallback) };
-}
-
-function apiProblemMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.retryAfterSeconds != null) return `${fallback}: retry in ${err.retryAfterSeconds}s.`;
-    const body = err.body.trim();
-    if (body) {
-      try {
-        const problem = JSON.parse(body) as { detail?: string; title?: string };
-        const message = problem.detail || problem.title;
-        if (message) return `${fallback}: ${message}`;
-      } catch {
-        return `${fallback}: ${body}`;
-      }
-    }
-    return `${fallback}: ${err.message}`;
-  }
-  return `${fallback}: ${err instanceof Error ? err.message : String(err)}`;
 }

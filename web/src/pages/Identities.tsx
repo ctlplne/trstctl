@@ -13,6 +13,7 @@ import {
   type RotationRun,
   type TransitionTo,
 } from "@/lib/api";
+import { apiProblemContext, apiProblemMessage } from "@/lib/apiProblem";
 import { Dialog } from "@/components/Dialog";
 import { IssuancePipeline } from "@/components/issuance";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -100,23 +101,11 @@ function isDestructive(to: TransitionTo): boolean {
 
 /** errorMessage renders an action error, special-casing a 429 so the user sees a
  * concrete retry hint (Retry-After) instead of a bare failure (SURFACE-007). */
-function apiProblemMessage(err: unknown): string {
-  if (err instanceof ApiError) {
-    try {
-      const problem = JSON.parse(err.body) as { detail?: string; title?: string };
-      return problem.detail || problem.title || err.message;
-    } catch {
-      return err.body || err.message;
-    }
-  }
-  return err instanceof Error ? err.message : String(err);
-}
-
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError && err.isRateLimited) {
     return err.retryAfterSeconds != null ? `Rate limited — please retry in ${err.retryAfterSeconds}s.` : "Rate limited — please retry shortly.";
   }
-  return `Action failed: ${apiProblemMessage(err)}`;
+  return apiProblemContext(err, "Action failed");
 }
 
 /** actionsFor returns the lifecycle actions valid from a state — the UI mirror
@@ -358,7 +347,7 @@ export function Identities() {
     try {
       setDetail(await api.getIdentity(id));
     } catch (err) {
-      setDetailError(`Could not load identity detail: ${apiProblemMessage(err)}`);
+      setDetailError(apiProblemContext(err, "Could not load identity detail"));
     } finally {
       setDetailLoading(false);
     }
@@ -393,7 +382,7 @@ export function Identities() {
         });
       } catch (err) {
         if (err instanceof ApiError && err.status === 403) {
-          setDeniedTransitions((current) => ({ ...current, [deniedKey(id, to)]: apiProblemMessage(err) }));
+          setDeniedTransitions((current) => ({ ...current, [deniedKey(id, to)]: apiProblemMessage(err, "Transition denied") }));
         }
         setError(errorMessage(err));
       } finally {
@@ -442,7 +431,7 @@ export function Identities() {
             nodeId,
             impact: null,
             loading: false,
-            error: `Blast-radius impact unavailable: ${apiProblemMessage(err)}`,
+            error: apiProblemContext(err, "Blast-radius impact unavailable"),
           });
         }
       });
@@ -479,7 +468,7 @@ export function Identities() {
       await load();
       await loadEvidence();
     } catch (err) {
-      setBulkError(apiProblemMessage(err));
+      setBulkError(apiProblemMessage(err, "Bulk revoke failed"));
     } finally {
       setBulkBusy(false);
     }
@@ -511,7 +500,7 @@ export function Identities() {
       await loadEvidence();
       setNotice(`NHI decommission accepted: ${result.summary.revoked} revoked, ${result.summary.retired} retired, ${result.summary.skipped} skipped.`);
     } catch (err) {
-      setError(`NHI decommission failed: ${apiProblemMessage(err)}`);
+      setError(apiProblemContext(err, "NHI decommission failed"));
     } finally {
       setDecommissionBusy(false);
     }

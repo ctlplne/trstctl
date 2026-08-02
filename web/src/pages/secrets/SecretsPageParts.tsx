@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import {
-  ApiError,
   type DynamicLease,
   type MachineLoginResponse,
   type SecretApprovalAction,
@@ -479,17 +478,4 @@ export function decodeTransitBytes(value: string): string {
   const binary = atob(value);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
-}
-
-export function apiProblemMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.retryAfterSeconds != null) return `${fallback}: retry in ${err.retryAfterSeconds}s`;
-    try {
-      const problem = JSON.parse(err.body) as { detail?: string; title?: string };
-      return problem.detail || problem.title || err.message;
-    } catch {
-      return err.body || err.message;
-    }
-  }
-  return err instanceof Error ? err.message : fallback;
 }

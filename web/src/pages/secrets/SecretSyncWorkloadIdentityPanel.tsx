@@ -15,7 +15,7 @@ import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type SecretSyncWorkloadIdentitySource, type SecretSyncWorkloadIdentitySourceRequest } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
-import { apiProblemMessage } from "./SecretsPageParts";
+import { apiProblemMessage } from "@/lib/apiProblem";
 
 type ValidationMessage =
   | "secrets.wif.nameRequired"

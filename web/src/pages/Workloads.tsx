@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Num } from "@/components/typography";
 import {
   api,
-  ApiError,
   type Attestation,
   type AttestedSVID,
   type BrokerAgentIdentity,
@@ -18,6 +17,7 @@ import {
   type WorkloadAttesterTrustSourceRequest,
   type WorkloadAttesterTrustSourceRotateRequest,
 } from "@/lib/api";
+import { apiProblemMessage } from "@/lib/apiProblem";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -1168,17 +1168,4 @@ function parseScopes(value: string): string[] {
     .split(",")
     .map((scope) => scope.trim())
     .filter(Boolean);
-}
-
-function apiProblemMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.retryAfterSeconds != null) return `${fallback}: retry in ${err.retryAfterSeconds}s`;
-    try {
-      const problem = JSON.parse(err.body) as { detail?: string; title?: string };
-      return problem.detail || problem.title || err.message;
-    } catch {
-      return err.body || err.message;
-    }
-  }
-  return err instanceof Error ? err.message : fallback;
 }

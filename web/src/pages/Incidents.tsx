@@ -3,7 +3,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Activity, Bell, CheckCircle, Download, Pause, Play, RotateCcw, Send } from "lucide-react";
 import {
   api,
-  ApiError,
   type ConnectorCatalogItem,
   type FleetReissuanceEvidence,
   type FleetReissuanceRequest,
@@ -24,6 +23,9 @@ import {
   type RemediationPlaybookRunRequest,
   type ServiceNowTicketRequest,
 } from "@/lib/api";
+// This page renders errors in the fallback-prefixed shape ("Could not execute
+// incident: <detail>").
+import { apiProblemContext as apiProblemMessage } from "@/lib/apiProblem";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { IdentityPicker } from "@/components/IdentityPicker";
 import { Dialog } from "@/components/Dialog";
@@ -1949,22 +1951,4 @@ function IncidentDetailRow({ term, children, mono = false }: { term: string; chi
       <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
     </div>
   );
-}
-
-function apiProblemMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.retryAfterSeconds != null) return `${fallback}: retry in ${err.retryAfterSeconds}s.`;
-    const body = err.body.trim();
-    if (body) {
-      try {
-        const problem = JSON.parse(body) as { detail?: string; title?: string };
-        const message = problem.detail || problem.title;
-        if (message) return `${fallback}: ${message}`;
-      } catch {
-        return `${fallback}: ${body}`;
-      }
-    }
-    return `${fallback}: ${err.message}`;
-  }
-  return `${fallback}: ${err instanceof Error ? err.message : String(err)}`;
 }

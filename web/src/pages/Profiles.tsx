@@ -1,6 +1,9 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Eye, GitCompare, Plus } from "lucide-react";
-import { api, ApiError, type Profile } from "@/lib/api";
+import { api, type Profile } from "@/lib/api";
+// This page renders errors in the fallback-prefixed shape ("Could not load
+// profiles: <detail>").
+import { apiProblemContext as apiProblemMessage } from "@/lib/apiProblem";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
@@ -641,24 +644,6 @@ function defaultCompareVersion(profile: Profile, listedProfiles: Profile[]): str
   if (active) return String(active.version);
   const closest = sameName.slice().sort((a, b) => Math.abs(a.version - profile.version) - Math.abs(b.version - profile.version))[0];
   return closest ? String(closest.version) : String(Math.max(1, profile.version - 1 || profile.version + 1));
-}
-
-function apiProblemMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.retryAfterSeconds != null) return `${fallback}: retry in ${err.retryAfterSeconds}s.`;
-    const body = err.body.trim();
-    if (body) {
-      try {
-        const problem = JSON.parse(body) as { detail?: string; title?: string };
-        const message = problem.detail || problem.title;
-        if (message) return `${fallback}: ${message}`;
-      } catch {
-        return `${fallback}: ${body}`;
-      }
-    }
-    return `${fallback}: ${err.message}`;
-  }
-  return `${fallback}: ${err instanceof Error ? err.message : String(err)}`;
 }
 
 interface DiffRow {

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type GraphImpact, type GraphNode, type GraphQueryResult, type GraphReachable, type GraphResponse } from "@/lib/api";
+// This page renders errors in the fallback-prefixed shape ("Could not compute
+// reachability: <detail>"), pinned by __tests__/operations_surface.test.tsx.
+import { apiProblemContext as apiProblemMessage } from "@/lib/apiProblem";
 import { CredentialChip } from "@/components/CredentialChip";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
@@ -724,22 +727,4 @@ function noticeFor(err: unknown, fallback: string): Notice {
     return { kind: "permission", message: translateNow("source.your.session.cannot.read.the.credential.gr.556ee31338") };
   }
   return { kind: "error", message: apiProblemMessage(err, fallback) };
-}
-
-function apiProblemMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.retryAfterSeconds != null) return `${fallback}: retry in ${err.retryAfterSeconds}s.`;
-    const body = err.body.trim();
-    if (body) {
-      try {
-        const problem = JSON.parse(body) as { detail?: string; title?: string };
-        const message = problem.detail || problem.title;
-        if (message) return `${fallback}: ${message}`;
-      } catch {
-        return `${fallback}: ${body}`;
-      }
-    }
-    return `${fallback}: ${err.message}`;
-  }
-  return `${fallback}: ${err instanceof Error ? err.message : String(err)}`;
 }

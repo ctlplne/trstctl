@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { Info } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ApiError, UnauthorizedError, api, type EphemeralApproval, type Identity } from "@/lib/api";
+import { apiProblemMessage } from "@/lib/apiProblem";
 import { approvalAuditHref, approvalRows, parseApprovalProgress, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { Num } from "@/components/typography";
 import { useAuth } from "@/auth/AuthProvider";
@@ -279,16 +280,4 @@ function approvalErrorMessage(err: unknown): string {
       : "Approval rate limited — please retry shortly.";
   }
   return apiProblemMessage(err, "Approval failed");
-}
-
-function apiProblemMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    try {
-      const problem = JSON.parse(err.body) as { detail?: string; title?: string };
-      return problem.detail || problem.title || err.message;
-    } catch {
-      return err.body || err.message;
-    }
-  }
-  return err instanceof Error ? err.message : fallback;
 }

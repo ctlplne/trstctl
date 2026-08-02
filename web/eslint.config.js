@@ -57,4 +57,29 @@ export default tseslint.config(
       "react/no-unescaped-entities": "off",
     },
   },
+  // WEB-APIPROBLEM-001 (AH-bc10425e): one error renderer. Eight page-local
+  // copies of apiProblemMessage had drifted apart - Approvals and Identities
+  // had lost the 429 Retry-After branch entirely - so the same rate-limited
+  // response rendered differently depending on which page served it. Import
+  // apiProblemMessage/apiProblemContext from @/lib/apiProblem instead; the
+  // paired vitest guard is src/lib/apiProblem.test.ts.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/apiProblem.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "FunctionDeclaration[id.name=/^apiProblem(Message|Context)$/]",
+          message:
+            "Import apiProblemMessage/apiProblemContext from @/lib/apiProblem (WEB-APIPROBLEM-001): a page-local copy is how the 429 retry hint got lost.",
+        },
+        {
+          selector: "VariableDeclarator[id.name=/^apiProblem(Message|Context)$/]",
+          message:
+            "Import apiProblemMessage/apiProblemContext from @/lib/apiProblem (WEB-APIPROBLEM-001): a page-local copy is how the 429 retry hint got lost.",
+        },
+      ],
+    },
+  },
 );

@@ -59,7 +59,6 @@ import {
   SecretApprovalQueue,
   Snippet,
   ThirdPartyScanPosture,
-  apiProblemMessage,
   decodeTransitBytes,
   defaultThirdPartyProviders,
   encodeTransitBytes,
@@ -70,6 +69,7 @@ import {
   secretApprovalQueueID,
   type SecretApprovalQueueItem,
 } from "./secrets/SecretsPageParts";
+import { apiProblemMessage } from "@/lib/apiProblem";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
 
 /** The store (tree + table + lifecycle) renders at /secrets; every other
