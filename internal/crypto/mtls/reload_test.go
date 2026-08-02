@@ -61,7 +61,7 @@ func writeSelfSignedPair(t *testing.T, dir, serial string) (certFile, keyFile st
 
 func fetchServedSerial(t *testing.T, addr string) string {
 	t.Helper()
-	conn, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS13}) //nolint:gosec // reload probe reads only the serial
+	conn, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS13}) // #nosec G402 -- reload probe of the test's own loopback listener; reads only the served serial, carries no data (CWE-295)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}

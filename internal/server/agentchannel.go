@@ -100,7 +100,7 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 	}
 	// Reuse path: persisted cert + a signer that still holds the agent CA key.
 	if certFile != "" {
-		if pemBytes, err := os.ReadFile(certFile); err == nil { //nolint:gosec // operator-configured CA path
+		if pemBytes, err := os.ReadFile(certFile); err == nil { // #nosec G304 -- operator-configured agent CA certificate path from this server's own config (CWE-22)
 			if blk, _ := pem.Decode(pemBytes); blk != nil && blk.Type == "CERTIFICATE" {
 				if remote, herr := s.signerForPrivilegedHandle(ctx, c, agentCAHandle, signing.PurposeCASign); herr == nil {
 					s.agentCASigner = remote

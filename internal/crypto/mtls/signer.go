@@ -104,7 +104,7 @@ func PinPEM(certPEM []byte) (string, error) {
 }
 
 func loadCAPool(caFile string) (*x509.CertPool, error) {
-	pem, err := os.ReadFile(caFile) //nolint:gosec // operator-supplied trust anchor path
+	pem, err := os.ReadFile(caFile) // #nosec G304 -- operator-configured peer CA trust anchor path from the signer's own config (CWE-22)
 	if err != nil {
 		return nil, fmt.Errorf("mtls: read peer CA: %w", err)
 	}
@@ -214,7 +214,7 @@ func GenerateSignerPeerMaterial(dir, serverName string, certTTL time.Duration) (
 	cpCertPath := filepath.Join(dir, "control-plane.crt")
 	cpKeyPath := filepath.Join(dir, "control-plane.key")
 
-	if err := os.WriteFile(caPath, ca.BundlePEM(), 0o644); err != nil { //nolint:gosec // public trust anchor
+	if err := os.WriteFile(caPath, ca.BundlePEM(), 0o644); err != nil { // #nosec G306 -- writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276)
 		return nil, fmt.Errorf("mtls: write CA: %w", err)
 	}
 	if err := writeCertKey(signerCertPath, signerKeyPath, serverCert); err != nil {
@@ -261,7 +261,7 @@ func writeCertKey(certPath, keyPath string, cert tls.Certificate) error {
 	for _, der := range cert.Certificate {
 		chain = append(chain, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
 	}
-	if err := os.WriteFile(certPath, chain, 0o644); err != nil { //nolint:gosec // public certificate
+	if err := os.WriteFile(certPath, chain, 0o644); err != nil { // #nosec G306 -- writes the PUBLIC leaf certificate chain; the private key beside it is written 0600 (CWE-276)
 		return err
 	}
 	key, ok := cert.PrivateKey.(*ecdsa.PrivateKey)

@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1008 annotated sites across 24 rules. Each row is
+1014 annotated sites across 24 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -708,7 +708,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:162` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:277` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (265 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (268 sites)
 
 | Location | Reason |
 |---|---|
@@ -749,6 +749,7 @@ not this file.
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/doctor_doc_test.go:32` | fixed literal list of the repo's own committed doctor sources; no external input reaches this path (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/protect_guards_completeness_test.go:236` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:847` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -814,6 +815,7 @@ not this file.
 | `internal/crypto/mtls/agent.go:164` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/agent.go:182` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/server.go:101` | operator-configured certificate/key path from deployment config (CWE-22) |
+| `internal/crypto/mtls/signer.go:107` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
 | `internal/crypto/mtls/signer_test.go:47` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/parserfuzz_audit_test.go:172` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/parserfuzz_audit_test.go:259` | test reads its own fixture/tempdir path (CWE-22) |
@@ -851,6 +853,7 @@ not this file.
 | `internal/secretscan/gitleaks.go:159` | reads the report file this process asked gitleaks to write in its own tempdir (CWE-22) |
 | `internal/secretscan/gitleaks_options_test.go:108` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/secretscan/secretscan_test.go:123` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/agentchannel.go:103` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/backup.go:45` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:94` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:249` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -978,7 +981,7 @@ not this file.
 | `tools/trstctllint/hotspot_test.go:295` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/licenseboundary/licenseboundary.go:35` | developer tool reading the repo paths it is pointed at (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (78 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (80 sites)
 
 | Location | Reason |
 |---|---|
@@ -1016,6 +1019,8 @@ not this file.
 | `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/mtls/agent.go:155` | certificate chain PEM is public material; the key is written 0600 separately (CWE-276) |
+| `internal/crypto/mtls/signer.go:217` | writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276) |
+| `internal/crypto/mtls/signer.go:264` | writes the PUBLIC leaf certificate chain; the private key beside it is written 0600 (CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:48` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/tenantwrap/tenantwrap_test.go:110` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/cbom_store_test.go:38` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1070,10 +1075,11 @@ not this file.
 | `internal/crypto/opaque_x509.go:221` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 
-### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (3 sites)
+### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (4 sites)
 
 | Location | Reason |
 |---|---|
+| `internal/crypto/mtls/reload_test.go:64` | reload probe of the test's own loopback listener; reads only the served serial, carries no data (CWE-295) |
 | `internal/crypto/mtls/server.go:189` | localhost liveness probe of this process's own ephemeral self-signed listener; no credential, no data (CWE-295) |
 | `internal/crypto/mtls/server_test.go:131` | test TLS client speaking to the test's own server (CWE-295) |
 | `internal/crypto/tlsprobe/tlsprobe.go:96` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
