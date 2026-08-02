@@ -254,3 +254,80 @@ func linterEqualANs(got, want []string) bool {
 	}
 	return true
 }
+
+// ---- ARCH-011: the reader-facing invariants page states the same split --------
+//
+// ARCH-010 above keeps README.md, .github/CODEOWNERS and MAINTAINERS.md honest
+// about which invariants the linter actually enforces. The page the docs site
+// publishes as the engineer and operator handoff document,
+// docs/design/architecture-invariants.md, was outside that scope and drifted the
+// other way: it named the invariants in prose with zero AN-n identifiers, called
+// them "the eight invariants" while README.md defines nine, and offered "The
+// architecture guard is a custom `go/analysis` linter that runs under `make
+// lint`" as its only enforcement statement, placed directly under the invariant
+// table. A reader reasonably concluded every invariant was analyzer-enforced.
+// AGENTS.md and MAINTAINERS.md already disclosed the asymmetry; the public page
+// was the one overclaiming.
+//
+// This guard reuses linterANScope, so the page is checked against the same
+// multichecker registration list ARCH-010 derives from and the two artifacts
+// cannot drift apart.
+
+// TestInvariantsPageStatesEnforcementAsymmetry locks ARCH-011. ELI5: the page a
+// new engineer reads to learn the architecture rules has to say which rules the
+// build stops them from breaking and which ones only tests hold, or they lean on
+// a wall that is not there.
+func TestInvariantsPageStatesEnforcementAsymmetry(t *testing.T) {
+	enforced, tested := linterANScope(t)
+	page := read(t, "design/architecture-invariants.md")
+	// Collapse whitespace so a claim that wraps across lines still matches.
+	flat := strings.Join(strings.Fields(page), " ")
+
+	// (1) Every invariant README defines must be identifiable on the page by its
+	// AN-n ID, so a reader can map the page onto the contract and onto a linter
+	// diagnostic. The page used to name none of them.
+	all := append(append([]string{}, enforced...), tested...)
+	linterSortANs(all)
+	for _, an := range all {
+		if !strings.Contains(flat, an) {
+			t.Errorf("ARCH-011: docs/design/architecture-invariants.md never names %s; the page must use the same AN-n identifiers as README.md so a reader can map it onto the contract and onto linter diagnostics", an)
+		}
+	}
+
+	// (2) The page's own count must match how many invariants README defines.
+	counts := map[int]string{7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+	word, ok := counts[len(all)]
+	if !ok {
+		t.Fatalf("ARCH-011: README.md now defines %d invariants; teach this guard the English word for that count", len(all))
+	}
+	if !strings.Contains(flat, word+" invariants") {
+		t.Errorf("ARCH-011: docs/design/architecture-invariants.md must say %q — README.md defines %d invariants (%v analyzer-enforced, %v test-enforced)", word+" invariants", len(all), enforced, tested)
+	}
+	for n, w := range counts {
+		if n != len(all) && strings.Contains(flat, w+" invariants") {
+			t.Errorf("ARCH-011: docs/design/architecture-invariants.md says %q, but README.md defines %d invariants", w+" invariants", len(all))
+		}
+	}
+
+	// (3) The asymmetry itself, derived from the multichecker registration list
+	// rather than restated by hand: registering a new AN-scoped analyzer (or
+	// dropping one) turns this red until the page is updated with it.
+	if want := linterJoinANs(enforced) + " have a dedicated analyzer"; !strings.Contains(flat, want) {
+		t.Errorf("ARCH-011: docs/design/architecture-invariants.md must state %q — tools/trstctllint/main.go registers an analyzer for exactly %v", want, enforced)
+	}
+	if want := linterJoinANs(tested) + " have no dedicated analyzer"; !strings.Contains(flat, want) {
+		t.Errorf("ARCH-011: docs/design/architecture-invariants.md must state %q — %v are held by tests, not by the linter, and this page is where a reader looks for that", want, tested)
+	}
+
+	// (4) The tests the page credits must exist, so the disclosure is not itself
+	// an unverified claim.
+	paths := linterTestPathRe.FindAllStringSubmatch(page, -1)
+	if len(paths) == 0 {
+		t.Error("ARCH-011: docs/design/architecture-invariants.md must name at least one concrete _test.go that holds an un-lintable invariant")
+	}
+	for _, m := range paths {
+		if _, err := os.Stat(filepath.FromSlash("../" + m[1])); err != nil {
+			t.Errorf("ARCH-011: docs/design/architecture-invariants.md cites %s as the proof for an un-lintable invariant, but it does not exist: %v", m[1], err)
+		}
+	}
+}

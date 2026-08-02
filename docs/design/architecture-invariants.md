@@ -7,18 +7,19 @@ they ship. This page is the handoff document for engineers and operators who nee
 to understand what the guard protects, what it intentionally does not protect,
 and how to extend it when the product grows.
 
-## The eight invariants
+## The nine invariants
 
-| Invariant | Plain-language contract | What to look for in a change |
-| --- | --- | --- |
-| **multi-tenant storage** | Every durable row belongs to a tenant, and PostgreSQL row-level security is the fence. Application code may add checks, but it is not the only fence. | New tables carry `tenant_id`; repository reads and writes constrain `tenant_id`; cross-tenant system scans have a narrow documented reason. |
-| **event-sourced state** | State-changing business facts are appended as events, then projected into read models. A rebuild from the event log must recover the same user-visible state. | New lifecycle transitions emit events first; projection code rebuilds derived rows; direct updates are only projection or housekeeping work. |
-| **single crypto boundary** | Cryptographic primitives and key handling stay behind one boundary so algorithms, HSMs, and policy can change without scattering crypto code through handlers. | New signing, parsing, sealing, hashing, and key-format work routes through the crypto package surfaces instead of importing primitives in feature code. |
-| **separate signing service** | Private-key operations run in the signer process, not inside the HTTP control plane. The control plane asks for signatures over a narrow transport. | New issuance and CA-key flows call the signer client; the signer does not gain HTTP, SQL, or broad operational dependencies. |
-| **idempotent mutations** | Retrying a state-changing request returns the original result instead of performing the action twice. | New mutating API paths accept an idempotency key and record operation ownership before side effects happen. |
-| **outbox external calls** | Calls to external systems are written as durable intent first, in the same transaction as the state change. Workers deliver them later. | New webhooks, connector calls, CA calls, notifications, and publishing paths write outbox rows instead of calling remote services inline. |
-| **bulkheads and backpressure** | Slow or noisy subsystems get bounded worker pools and queues. A full queue rejects fast instead of starving the whole control plane. | New background work chooses a subsystem pool, exposes rejection signals, and has a clear retry or operator response. |
-| **memory-safe key material** | Secret key bytes are short-lived byte buffers, not immutable strings, and are wiped or held in locked memory when practical. | New key-handling structs use byte slices or locked-key wrappers; logs, errors, telemetry, and docs never require secret values. |
+| ID | Invariant | Plain-language contract | What to look for in a change |
+| --- | --- | --- | --- |
+| **AN-1** | **multi-tenant storage** | Every durable row belongs to a tenant, and PostgreSQL row-level security is the fence. Application code may add checks, but it is not the only fence. | New tables carry `tenant_id`; repository reads and writes constrain `tenant_id`; cross-tenant system scans have a narrow documented reason. |
+| **AN-2** | **event-sourced state** | State-changing business facts are appended as events, then projected into read models. A rebuild from the event log must recover the same user-visible state. | New lifecycle transitions emit events first; projection code rebuilds derived rows; direct updates are only projection or housekeeping work. |
+| **AN-3** | **single crypto boundary** | Cryptographic primitives and key handling stay behind one boundary so algorithms, HSMs, and policy can change without scattering crypto code through handlers. | New signing, parsing, sealing, hashing, and key-format work routes through the crypto package surfaces instead of importing primitives in feature code. |
+| **AN-4** | **separate signing service** | Private-key operations run in the signer process, not inside the HTTP control plane. The control plane asks for signatures over a narrow transport. | New issuance and CA-key flows call the signer client; the signer does not gain HTTP, SQL, or broad operational dependencies. |
+| **AN-5** | **idempotent mutations** | Retrying a state-changing request returns the original result instead of performing the action twice. | New mutating API paths accept an idempotency key and record operation ownership before side effects happen. |
+| **AN-6** | **outbox external calls** | Calls to external systems are written as durable intent first, in the same transaction as the state change. Workers deliver them later. | New webhooks, connector calls, CA calls, notifications, and publishing paths write outbox rows instead of calling remote services inline. |
+| **AN-7** | **bulkheads and backpressure** | Slow or noisy subsystems get bounded worker pools and queues. A full queue rejects fast instead of starving the whole control plane. | New background work chooses a subsystem pool, exposes rejection signals, and has a clear retry or operator response. |
+| **AN-8** | **memory-safe key material** | Secret key bytes are short-lived byte buffers, not immutable strings, and are wiped or held in locked memory when practical. | New key-handling structs use byte slices or locked-key wrappers; logs, errors, telemetry, and docs never require secret values. |
+| **AN-9** | **editions boundary** | Commercial code lives only under `ee/`, and the MPL core never imports it. A core-only build links zero `ee/` packages, so the open-source edition is a complete product rather than a crippled shell. | New commercial capability lands under `ee/` behind an interface the core already defines; no core package gains an `ee/` import, and multi-tenancy, the crypto boundary, audit/export rights, and the offline license verifier stay in the core. |
 
 ## How the guard works
 
@@ -27,6 +28,19 @@ The architecture guard is a custom `go/analysis` linter that runs under
 shapes, SQL strings, and key-material types that violate the contracts above.
 That makes the guard easy to run in a local checkout and easy to reason about in
 code review.
+
+Enforcement is not symmetric, and this page states the split rather than letting
+a reader assume the linter covers everything.
+AN-1, AN-2, AN-3, AN-5, AN-8 and AN-9 have a dedicated analyzer, and for AN-9 the
+`licenseboundary` analyzer sits on top of the `ee/` build fence.
+AN-4, AN-6 and AN-7 have no dedicated analyzer: "the enqueue happened in the same
+transaction as the state change" is not reasonably lintable, so those three are
+held by dependency-closure and integration tests instead. The signer's
+`cmd/trstctl-signer/core_boundary_test.go` holds AN-4, and the outbox and
+bulkhead regression suites under `internal/orchestrator` and `internal/bulkhead`
+hold AN-6 and AN-7. Changing signer wiring, an outbox enqueue path, or a worker
+pool means running and, where needed, extending those tests; `make lint` will not
+catch you.
 
 The guard is not the only proof. The product also relies on package tests,
 integration tests, DR drills, and docs checks. Think of the guard as the smoke
