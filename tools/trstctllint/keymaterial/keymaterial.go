@@ -231,8 +231,26 @@ func inspectWithParent(file *ast.File, fn func(ast.Node, ast.Node) bool) {
 	})
 }
 
+// providerCredentialConfigPkgs are non-provider packages that nonetheless declare
+// provider-shaped credential fields. internal/config holds the operator-supplied
+// INBOUND side of every provider credential (and the OIDC confidential-client
+// secret), so a credential-named string field there is the same AN-8 leak as one
+// in the provider package that later reads it — the string is minted at config
+// load and outlives every byte-backed hop downstream.
+//
+// Scoped by exact package path, and only the credential-NAMED fields listed in
+// providerCredentialNames are flagged, so the several hundred ordinary string
+// knobs in internal/config (Issuer, Region, Endpoint, RedirectURI, ...) stay
+// untouched. The //trstctl:keymaterial marker is deliberately NOT used for this
+// package: it flags every string-backed field and would make the rule unusable
+// here. Extending this set is a deliberate, reviewed change, with a fixture.
+var providerCredentialConfigPkgs = map[string]bool{
+	"trstctl.com/trstctl/internal/config": true,
+}
+
 func providerCredentialScope(pkg string) bool {
-	return strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/kms/") ||
+	return providerCredentialConfigPkgs[pkg] ||
+		strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/kms/") ||
 		strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/dns/") ||
 		strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/notify/") ||
 		strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/connector/") ||

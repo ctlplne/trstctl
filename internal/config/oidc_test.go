@@ -46,7 +46,7 @@ func TestOIDCEnabledFailsClosed(t *testing.T) {
 		"no jwks":                func(o *OIDC) { o.JWKSJSON = ""; o.JWKSFile = "" },
 		"non-https endpoint":     func(o *OIDC) { o.AuthEndpoint = "http://idp.example.com/authorize" },
 		"secret and secret ref both set": func(o *OIDC) {
-			o.ClientSecret = "legacy-secret"
+			o.ClientSecret = []byte("legacy-secret")
 			o.ClientSecretTenant = "tenant-a"
 			o.ClientSecretRef = "primary"
 		},

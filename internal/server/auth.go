@@ -541,10 +541,15 @@ func oidcClientSecretBytes(ctx context.Context, o config.OIDC, source oidcClient
 		}
 		return b, nil
 	}
-	if o.ClientSecret == "" {
+	if len(o.ClientSecret) == 0 {
 		return nil, nil
 	}
-	return []byte(o.ClientSecret), nil
+	// Return an OWNED copy. The caller wipes whatever it gets back (see the
+	// `defer secret.Wipe(clientSecret)` in oidcExchange), and the config field has
+	// to survive for the next exchange — so the derived buffer is what gets wiped,
+	// never the operator-supplied one. The previous []byte(string) conversion
+	// copied by accident; this copies on purpose.
+	return append([]byte(nil), o.ClientSecret...), nil
 }
 
 func oidcTokenRequestBody(form url.Values, clientSecret []byte) []byte {

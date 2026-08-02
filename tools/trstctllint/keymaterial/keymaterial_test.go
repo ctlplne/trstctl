@@ -33,6 +33,13 @@ func TestKeyMaterial(t *testing.T) {
 		"trstctl.com/trstctl/internal/dns/badcreds",
 		"trstctl.com/trstctl/internal/notify/badcreds",
 		"trstctl.com/trstctl/internal/ca/badcreds",
+		// internal/config is the operator-supplied INBOUND side of every provider
+		// credential (and of the OIDC confidential-client secret). A
+		// credential-named string field there is the same AN-8 leak as one in the
+		// provider package that reads it, and it is minted earlier — at config
+		// load — so it outlives every byte-backed hop downstream. The fixture also
+		// pins that the ordinary string knobs beside it stay clean.
+		"trstctl.com/trstctl/internal/config",
 		"trstctl.com/trstctl/internal/signing",
 		// Default-on secret primitive WITHOUT the marker: ARCH-004 fail-closed
 		// proof — a forgotten marker does not disable the rule here.

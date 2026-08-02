@@ -7,6 +7,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -482,7 +484,22 @@ type OIDC struct {
 	ClientID string `json:"client_id,omitempty"`
 	// ClientSecret authenticates the code→token exchange at the token endpoint.
 	// Confidential clients require it; a public/PKCE client may leave it empty.
-	ClientSecret string `json:"client_secret,omitempty"`
+	//
+	// AN-8: this is live credential material, so it is held in wipeable byte
+	// memory and never in a Go string — an immutable string cannot be zeroed and
+	// the garbage collector may copy it freely, so a string-typed client secret
+	// persists in the heap (and in any core dump) for the whole process lifetime.
+	// That is not academic here: internal/server wipes the buffer it derives from
+	// this field after each token exchange, which is pointless while the original
+	// is an unwipeable string.
+	//
+	// secret.JSONBytes decodes from and encodes to a PLAIN JSON string, so the
+	// on-disk config form and TRSTCTL_AUTH_OIDC_CLIENT_SECRET are unchanged; a
+	// bare []byte would have silently switched this field to base64.
+	//
+	// Prefer ClientSecretTenant/ClientSecretRef below: they keep the secret
+	// encrypted at rest in the credential store instead of in the config file.
+	ClientSecret secret.JSONBytes `json:"client_secret,omitempty"`
 	// ClientSecretTenant / ClientSecretRef point to an encrypted credential-store
 	// entry for confidential clients. The row is tenant-scoped as
 	// (tenant, auth.oidc, ref, client_secret), and is opened only for token exchange.
@@ -2178,7 +2195,7 @@ func applyAuthEnv(getenv func(string) string, a *Auth) {
 	setString(getenv, "TRSTCTL_AUTH_OIDC_ISSUER", &a.OIDC.Issuer)
 	setBool(getenv, "TRSTCTL_AUTH_OIDC_AUTHORIZATION_RESPONSE_ISS_PARAMETER_SUPPORTED", &a.OIDC.AuthorizationResponseIssParamSupported)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_ID", &a.OIDC.ClientID)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET", &a.OIDC.ClientSecret)
+	setJSONBytes(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET", &a.OIDC.ClientSecret)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET_TENANT", &a.OIDC.ClientSecretTenant)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET_REF", &a.OIDC.ClientSecretRef)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT", &a.OIDC.AuthEndpoint)
@@ -2374,6 +2391,16 @@ func setString(getenv func(string) string, key string, dst *string) {
 func setBytes(getenv func(string) string, key string, dst *[]byte) {
 	if v := getenv(key); v != "" {
 		*dst = []byte(v)
+	}
+}
+
+// setJSONBytes is setBytes for secret.JSONBytes fields: credential material that
+// decodes from a plain JSON string but is held as wipeable bytes (AN-8). The
+// environment hands us a string we cannot control, so this is the earliest point
+// the value can be moved into byte memory; everything downstream stays bytes.
+func setJSONBytes(getenv func(string) string, key string, dst *secret.JSONBytes) {
+	if v := getenv(key); v != "" {
+		*dst = secret.JSONBytes(v)
 	}
 }
 
@@ -3556,7 +3583,11 @@ func (o OIDC) validate() []error {
 	if strings.TrimSpace(o.JWKSFile) == "" && strings.TrimSpace(o.JWKSJSON) == "" {
 		errs = append(errs, errors.New("auth.oidc requires jwks_file or jwks_json (the IdP signing keys) when enabled"))
 	}
-	if strings.TrimSpace(o.ClientSecret) != "" && strings.TrimSpace(o.ClientSecretRef) != "" {
+	// bytes.TrimSpace, not strings.TrimSpace(string(...)): converting the secret to
+	// a string here would reintroduce exactly the unwipeable copy this field's type
+	// exists to prevent (AN-8). Trimming preserves the previous semantics, where a
+	// whitespace-only client_secret counts as unset.
+	if len(bytes.TrimSpace(o.ClientSecret)) > 0 && strings.TrimSpace(o.ClientSecretRef) != "" {
 		errs = append(errs, errors.New("auth.oidc.client_secret and auth.oidc.client_secret_ref are mutually exclusive"))
 	}
 	if strings.TrimSpace(o.ClientSecretRef) != "" && strings.TrimSpace(o.ClientSecretTenant) == "" {
