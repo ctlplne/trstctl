@@ -3531,6 +3531,37 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 			t.Errorf("NOTICE missing %q", want)
 		}
 	}
+
+	// AH-fa72c599: the copyright line is a legal fact, not prose, and until this
+	// guard existed nothing in CI read it. ee/ ships source-visible under a
+	// proprietary licence, so the holder named in ee/LICENSE is the party a
+	// commercial counterparty must contract with — and it named nobody
+	// ("Copyright (c) trstctl author.", no year) while NOTICE named a different,
+	// plural holder with a year. Pin the holder and a four-digit year on both
+	// files, and pin that the two agree, so the open-core and proprietary halves
+	// of one repository cannot state two different owners. Changing the holder is
+	// a deliberate legal act; it must be a deliberate edit here too.
+	const copyrightHolder = "certctl LLC"
+	copyrightLine := regexp.MustCompile(`(?m)^Copyright \(c\) (\d{4}) ([^.]+)\.`)
+	holderLines := make(map[string]string, 2)
+	for _, path := range []string{"../NOTICE", "../ee/LICENSE"} {
+		match := copyrightLine.FindStringSubmatch(read(t, path))
+		if match == nil {
+			t.Errorf("%s carries no dated copyright line; it must read %q",
+				path, "Copyright (c) <year> "+copyrightHolder+".")
+			continue
+		}
+		if match[2] != copyrightHolder {
+			t.Errorf("%s names copyright holder %q, want %q", path, match[2], copyrightHolder)
+		}
+		holderLines[path] = match[1] + " " + match[2]
+	}
+	if len(holderLines) == 2 && holderLines["../NOTICE"] != holderLines["../ee/LICENSE"] {
+		t.Errorf("NOTICE and ee/LICENSE disagree on the copyright line (%q vs %q); "+
+			"one repository must name one holder and one year",
+			holderLines["../NOTICE"], holderLines["../ee/LICENSE"])
+	}
+
 	staleLicensePhrases := []string{
 		"license is undecided",
 		"no license file is published",

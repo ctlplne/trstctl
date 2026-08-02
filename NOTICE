@@ -4,7 +4,7 @@ trstctl core is MPL-2.0 open-source software. Enterprise, Provider, PQC, and
 other license-gated features live under ee/ as proprietary material and require a
 valid offline Ed25519-signed commercial license before production use.
 
-Copyright (c) 2026 trstctl authors.
+Copyright (c) 2026 certctl LLC.
 
 This product includes third-party open-source components. Their notices and
 licenses remain with the dependency manifests and lockfiles for each component.
