@@ -50,7 +50,8 @@ GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAG
 # and delete the ratchet -- docs/golangci_caps_test.go fails if both exist, so
 # the two cannot silently overlap.
 #
-# TODO(AH-57d4ba74): burn .ee-lint-baseline to 0, then fold ee/ in here.
+# Tracked by audit-harness backlog AH-57d4ba74: burn .ee-lint-baseline down to 0,
+# then fold ./ee/... into GO_PACKAGES above and delete the ratchet.
 GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...
 GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...
 GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
@@ -345,7 +346,7 @@ spine-burst: ## Capture and analyze an event-spine burst artifact (SPINE-002; de
 lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools are absent
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1
 
-lint: ee-lint-ratchet ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, and action-pin checks
+lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, and action-pin checks
 	@echo ">> gofmt"
 	@unformatted=$$(git ls-files -z --cached --others --exclude-standard -- '*.go' ':!:**/testdata/**' | xargs -0 sh -c 'for file do [ ! -f "$$file" ] || gofmt -l -s "$$file"; done' sh); \
 	if [ -n "$$unformatted" ]; then \
@@ -405,6 +406,16 @@ lint: ee-lint-ratchet ## Run the full lint gate: gofmt, go vet, architecture lin
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) pcas-caller-gate pcas-no-skip-gate; \
 	fi
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate xrec-caller-gate vdec-caller-gate
+	@# ee/ ratchet runs LAST, deliberately: as a prerequisite it executed before the
+	@# golangci-lint discovery above and made `make lint` fail with "golangci-lint is
+	@# required" instead of the fail-closed message CODE-005 asserts. It also honours
+	@# LINT_ALLOW_PARTIAL, because lint-partial is the explicit escape hatch for a
+	@# machine without the optional tools and must stay usable there.
+	@if [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
+		echo "!! WARNING: ee/ lint ratchet NOT run by lint-partial; run 'make ee-lint-ratchet' for it."; \
+	else \
+		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) ee-lint-ratchet; \
+	fi
 
 .PHONY: editions-gate
 .PHONY: vault-compat-gate
