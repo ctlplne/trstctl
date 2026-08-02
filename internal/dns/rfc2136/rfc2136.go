@@ -64,7 +64,7 @@ type Provider struct {
 	creds  Credentials
 	ex     Exchanger
 	now    func() time.Time
-	nextID func() uint16
+	nextID func() (uint16, error)
 }
 
 // Option configures a Provider.
@@ -80,8 +80,10 @@ func WithNow(now func() time.Time) Option {
 	return func(p *Provider) { p.now = now }
 }
 
-// WithID injects DNS message IDs for deterministic tests.
-func WithID(next func() uint16) Option {
+// WithID injects DNS message IDs for deterministic tests. The seam returns an
+// error so a test can exercise the fail-closed path taken when no unpredictable
+// transaction id can be drawn.
+func WithID(next func() (uint16, error)) Option {
 	return func(p *Provider) { p.nextID = next }
 }
 
@@ -155,7 +157,10 @@ func (p *Provider) update(ctx context.Context, class uint16, ttl uint32, name, v
 }
 
 func (p *Provider) buildUpdate(class uint16, ttl uint32, name, value string) ([]byte, uint16, error) {
-	id := p.nextID()
+	id, err := p.nextID()
+	if err != nil {
+		return nil, 0, err
+	}
 	var msg []byte
 	msg = appendUint16(msg, id)
 	msg = appendUint16(msg, opcodeUpdate)
@@ -164,7 +169,6 @@ func (p *Provider) buildUpdate(class uint16, ttl uint32, name, value string) ([]
 	msg = appendUint16(msg, 1) // updates
 	msg = appendUint16(msg, 0) // additional; TSIG appended below rewrites this
 
-	var err error
 	if msg, err = appendQuestion(msg, p.zone, dnsTypeSOA, dnsClassIN); err != nil {
 		return nil, 0, err
 	}
@@ -209,12 +213,12 @@ func (e udpExchange) Exchange(ctx context.Context, msg []byte) ([]byte, error) {
 	return append([]byte(nil), buf[:n]...), nil
 }
 
-func randomID() uint16 {
+func randomID() (uint16, error) {
 	b, err := crypto.RandomBytes(2)
 	if err != nil {
-		return uint16(time.Now().UnixNano()) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
+		return 0, fmt.Errorf("rfc2136: draw DNS transaction id: %w", err)
 	}
-	return binary.BigEndian.Uint16(b)
+	return binary.BigEndian.Uint16(b), nil
 }
 
 func appendQuestion(msg []byte, name string, typ, class uint16) ([]byte, error) {

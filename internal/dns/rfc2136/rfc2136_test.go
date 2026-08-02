@@ -16,7 +16,7 @@ func TestProviderBuildsAddAndDeleteUpdates(t *testing.T) {
 	p := New("127.0.0.1:5353", "example.com", Credentials{
 		KeyName: "update-key.example.com",
 		Secret:  []byte("tsig-secret"),
-	}, WithExchange(fx), WithID(func() uint16 { return 0x1201 }), WithNow(func() time.Time {
+	}, WithExchange(fx), WithID(func() (uint16, error) { return 0x1201, nil }), WithNow(func() time.Time {
 		return time.Unix(1700000000, 0)
 	}))
 
@@ -53,7 +53,7 @@ func TestProviderConformsThroughDynamicUpdateExchange(t *testing.T) {
 	p := New("127.0.0.1:5353", "example.com", Credentials{
 		KeyName: "update-key.example.com",
 		Secret:  []byte("tsig-secret"),
-	}, WithExchange(fx), WithID(func() uint16 { return 0x4401 }), WithNow(func() time.Time {
+	}, WithExchange(fx), WithID(func() (uint16, error) { return 0x4401, nil }), WithNow(func() time.Time {
 		return time.Unix(1700000000, 0)
 	}))
 
