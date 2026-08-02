@@ -9,22 +9,42 @@
 #   - the Dockerfile runtime stage builds FROM the injectable ${BASE_IMAGE} arg;
 #   - the release workflow resolves @sha256 digests and passes them as
 #     BUILD_IMAGE and BASE_IMAGE.
+#
+# The two Dockerfile stages are selected BY NAME ('AS build' / 'AS runtime'), never
+# by position. Positional selection (first FROM / last FROM) rotted silently once
+# the Dockerfile grew a leading 'FROM scratch AS context-audit' audit stage and a
+# trailing 'FROM runtime AS demo' stage: the guard then inspected two stages it
+# does not document and failed unconditionally, which guards nothing.
 set -euo pipefail
 
+# from_stage_line <dockerfile> <stage>
+# Echo the single `FROM ... AS <stage>` line. Returns 1 and echoes nothing unless
+# EXACTLY ONE such stage exists, so deleting, renaming, or duplicating the stage is
+# a loud failure rather than a silent pass. A trailing `# ...` comment is tolerated.
+from_stage_line() {
+	local df="$1" stage="$2" lines count
+	lines="$(grep -iE "^[[:space:]]*FROM[[:space:]].*[[:space:]]AS[[:space:]]+${stage}[[:space:]]*(#.*)?\$" "$df" 2>/dev/null || true)"
+	count="$(printf '%s' "$lines" | grep -c '[^[:space:]]' || true)"
+	[[ "$count" -eq 1 ]] || return 1
+	printf '%s\n' "$lines"
+}
+
 # build_from_uses_arg <dockerfile>
-# True (0) iff the FIRST `FROM` (the build stage) references ${BUILD_IMAGE}.
+# True (0) iff the stage NAMED `build` exists exactly once and references
+# ${BUILD_IMAGE}.
 build_from_uses_arg() {
-	local df="$1" first
-	first="$(grep -E '^[[:space:]]*FROM[[:space:]]' "$df" | head -1)"
-	[[ "$first" == *'${BUILD_IMAGE}'* || "$first" == *'$BUILD_IMAGE'* ]]
+	local df="$1" line
+	line="$(from_stage_line "$df" build)" || return 1
+	[[ "$line" == *'${BUILD_IMAGE}'* || "$line" == *'$BUILD_IMAGE'* ]]
 }
 
 # runtime_from_uses_arg <dockerfile>
-# True (0) iff the LAST `FROM` (the runtime stage) references ${BASE_IMAGE}.
+# True (0) iff the stage NAMED `runtime` exists exactly once and references
+# ${BASE_IMAGE}.
 runtime_from_uses_arg() {
-	local df="$1" last
-	last="$(grep -E '^[[:space:]]*FROM[[:space:]]' "$df" | tail -1)"
-	[[ "$last" == *'${BASE_IMAGE}'* || "$last" == *'$BASE_IMAGE'* ]]
+	local df="$1" line
+	line="$(from_stage_line "$df" runtime)" || return 1
+	[[ "$line" == *'${BASE_IMAGE}'* || "$line" == *'$BASE_IMAGE'* ]]
 }
 
 # workflow_resolves_digest <workflow>
@@ -43,14 +63,20 @@ main() {
 	local release="${root}/.github/workflows/release.yml"
 	local rc=0
 
-	if build_from_uses_arg "$df"; then
+	if ! from_stage_line "$df" build >/dev/null; then
+		echo "FAIL: Dockerfile has no unique 'FROM ... AS build' stage — the base-pin guard cannot be evaluated; do not rename, remove, or duplicate the build stage ($df)"
+		rc=1
+	elif build_from_uses_arg "$df"; then
 		echo "ok:   Dockerfile build stage builds FROM \${BUILD_IMAGE} (injectable)"
 	else
 		echo "FAIL: Dockerfile build FROM is a hardcoded base — must use \${BUILD_IMAGE} so the release pipeline can pin a digest ($df)"
 		rc=1
 	fi
 
-	if runtime_from_uses_arg "$df"; then
+	if ! from_stage_line "$df" runtime >/dev/null; then
+		echo "FAIL: Dockerfile has no unique 'FROM ... AS runtime' stage — the base-pin guard cannot be evaluated; do not rename, remove, or duplicate the runtime stage ($df)"
+		rc=1
+	elif runtime_from_uses_arg "$df"; then
 		echo "ok:   Dockerfile runtime stage builds FROM \${BASE_IMAGE} (injectable)"
 	else
 		echo "FAIL: Dockerfile runtime FROM is a hardcoded base — must use \${BASE_IMAGE} so the release pipeline can pin a digest ($df)"
