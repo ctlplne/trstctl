@@ -52,9 +52,10 @@ Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and th
 - `ee/pqcruntime`: the complete PQC issuance object graph attached by the one
   AN-9 seam — licensed leaf signer, hybrid CSR inspection/parsing, and
   multi-key SPIFFE SVID issuance.
-- `ee/succession`: Proof-Carrying Algorithm Succession (PCAS), a patented
-  feature set — the append-only, per-identity cryptographic-succession
-  lifecycle and posture projection.
+- `ee/succession`: Proof-Carrying Algorithm Succession (PCAS), a patent-pending
+  feature set — certctl LLC filed a US provisional application covering it in
+  July 2026 and nothing has issued — the append-only, per-identity
+  cryptographic-succession lifecycle and posture projection.
 - `ee/translog`: the PCAS transparency log — signed tree heads and Merkle
   inclusion/consistency proofs.
 - `ee/rpverify`: the offline relying-party verifier for PCAS succession

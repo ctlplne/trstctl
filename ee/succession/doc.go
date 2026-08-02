@@ -8,9 +8,11 @@
 // and dual-signed succession records over a common commitment), whose limbs
 // the files and subpackages below carry under their own claim citations.
 //
-// PCAS is a patented feature set and lives entirely under ee/ (SPDX
-// LicenseRef-trstctl-EE); MPL core never imports it outside the tagged attach
-// seam (AN-9, HARNESS §1.6). This package touches no core code.
+// PCAS is a patent-pending feature set — certctl LLC filed a US
+// provisional application covering it in July 2026 and nothing has issued —
+// and it lives entirely under ee/ (SPDX LicenseRef-trstctl-EE); MPL core never
+// imports it outside the tagged attach seam (AN-9, HARNESS §1.6). This package
+// touches no core code.
 //
 // This file set (card PCAS-01) provides two things:
 //
