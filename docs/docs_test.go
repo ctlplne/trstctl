@@ -1037,6 +1037,51 @@ func TestMkdocsNavResolves(t *testing.T) {
 	}
 }
 
+// navAllowlist names the Markdown pages that live under the MkDocs docs_dir —
+// and are therefore rendered and published — while deliberately having no nav
+// entry. Every entry states why. Keep this list short: an un-navigated page is
+// still a live public URL that no menu reaches, so nothing routes a reviewer to
+// it before it ships.
+var navAllowlist = map[string]string{
+	"journeys/first-certificate.md": "redirect stub only: the walkthrough merged into getting-started.md in the 2026-07-14 docs overhaul (see docs_test.go TestJourneyRedirectStubs); the page survives so existing inbound links keep resolving",
+	"guides/est-enrollment.md":      "redirect stub only: the EST content moved into features/enrollment-protocols.md (navigated); this page survives so existing inbound links, including README.md, keep resolving",
+	"design/ssh-trust-rewrite.md":   "historical design record for F44, superseded by features/ssh.md (navigated), which links to it inline; kept because limitations.md and internal/agent/sshtrust cite it as the design of record",
+}
+
+// TestMkdocsNavCoversEveryPage is the reverse direction of
+// TestMkdocsNavResolves. MkDocs renders every Markdown file under docs_dir, not
+// only the files the nav names, so a page with no nav entry still ships as a
+// public URL that no menu leads to and no review path covers. Every page must be
+// reachable from the nav, be moved out of docs_dir, or be on the
+// explicitly-justified allowlist above.
+func TestMkdocsNavCoversEveryPage(t *testing.T) {
+	cfg := read(t, "../mkdocs.yml")
+	navigated := map[string]bool{}
+	for _, r := range mdRef.FindAllString(cfg, -1) {
+		navigated[filepath.ToSlash(r)] = true
+	}
+	for _, page := range allMarkdown(t) {
+		rel := filepath.ToSlash(page)
+		if navigated[rel] {
+			continue
+		}
+		if reason, ok := navAllowlist[rel]; ok {
+			if strings.TrimSpace(reason) == "" {
+				t.Errorf("navAllowlist[%q] must state why the page is published without a nav entry", rel)
+			}
+			continue
+		}
+		t.Errorf("docs/%s is rendered and published by MkDocs but no nav entry reaches it; add it to the nav in mkdocs.yml, move it out of docs_dir, or add it to navAllowlist with a stated reason", rel)
+	}
+	for rel := range navAllowlist {
+		if _, err := os.Stat(filepath.FromSlash(rel)); err != nil {
+			t.Errorf("navAllowlist names %q, which no longer exists under docs/; drop the stale entry", rel)
+		} else if navigated[rel] {
+			t.Errorf("navAllowlist names %q, which the nav now reaches; drop the stale entry", rel)
+		}
+	}
+}
+
 // TestConnectorGuideTracksSDK: the connector authoring guide names the real SDK
 // surface, and those symbols still exist in the SDK.
 func TestConnectorGuideTracksSDK(t *testing.T) {

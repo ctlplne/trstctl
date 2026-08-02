@@ -69,11 +69,13 @@ nav:
       - Client SDKs: features/client-sdks.md
       - Extensibility & plugins: features/extensibility-plugins.md
       - Graph, query & AI: features/graph-query-ai.md
+  - The web console: web-console.md
   - Glossary: glossary.md
   - Install: install.md
   - Air-gapped install: airgap.md
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
+  - Accessibility (VPAT): accessibility-vpat.md
   - Observability: observability.md
   - Performance:
       - SLO matrix: performance.md
@@ -82,6 +84,7 @@ nav:
   - Operations & resilience: operations.md
   - Prove isolation (trstctl doctor): operations/doctor.md
   - CLI: cli.md
+  - Terraform provider: terraform-provider.md
   - Telemetry: telemetry.md
   - Privacy data catalog: privacy-data-catalog.md
   - Troubleshooting: troubleshooting.md
@@ -100,6 +103,7 @@ nav:
           - Google Workspace: operator/oidc-runbooks/google-workspace.md
       - CA key ceremony: runbooks/key-ceremony.md
       - Incident response: runbooks/incident-response.md
+      - Outbox dead letters: runbooks/outbox-dead-letters.md
       - Fleet rollout: runbooks/fleet-rollout.md
       - Fleet rollback: runbooks/fleet-rollback.md
       - Signer recovery: runbooks/signer-recovery.md
