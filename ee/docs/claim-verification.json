@@ -1,0 +1,57 @@
+{
+  "_readme": [
+    "Human-maintained sidecar for ee/docs/claim-traceability.md. This file is the ONLY",
+    "place the Applications table and the Verified column are edited; the markdown page",
+    "is generated, and a hand edit to it is caught by",
+    "`scripts/ci/extract-claim-traceability.py --check` (make claim-traceability-check).",
+    "",
+    "applications: one entry per filed application, keyed by the family label used in",
+    "  ee/ claim citations. Every family cited anywhere in ee/ source MUST appear here",
+    "  or the generator refuses to run, so a new family cannot quietly ship without its",
+    "  filing data. Fields, all strings:",
+    "    subject         short title of the application as filed.",
+    "    application_no  the USPTO application serial. Leave empty until counsel",
+    "                    confirms it is publishable in an open repository.",
+    "    filed           YYYY-MM-DD, or YYYY-MM when only the month is being recorded.",
+    "    converted_by    normally left empty: the generator computes filing + 12 months,",
+    "                    the deadline to convert a US provisional to a non-provisional,",
+    "                    at the same precision the filing date was given. Set it",
+    "                    explicitly only to record a date counsel has fixed otherwise.",
+    "  An empty string renders as an explicit TODO in the table, so an unfilled field is",
+    "  visible rather than silently blank.",
+    "",
+    "verified: sparse map of \"FAMILY-CLAIM\" to counsel's verification note, e.g.",
+    "  \"AGID-3\": \"reviewed 2026-09-14, practises as claimed\". Any claim absent from the",
+    "  map renders as _[counsel]_, meaning no review has been recorded yet.",
+    "",
+    "certctl LLC holds four US provisional applications, filed July 2026. Nothing has",
+    "issued, so the marking stays \"patent pending\" (guarded by docs/patent_marking_test.go)."
+  ],
+  "applications": {
+    "AGID": {
+      "subject": "",
+      "application_no": "",
+      "filed": "2026-07",
+      "converted_by": ""
+    },
+    "PCAS": {
+      "subject": "",
+      "application_no": "",
+      "filed": "2026-07",
+      "converted_by": ""
+    },
+    "VDEC": {
+      "subject": "",
+      "application_no": "",
+      "filed": "2026-07",
+      "converted_by": ""
+    },
+    "XREC": {
+      "subject": "",
+      "application_no": "",
+      "filed": "2026-07",
+      "converted_by": ""
+    }
+  },
+  "verified": {}
+}
