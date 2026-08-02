@@ -20,6 +20,76 @@ idempotent before the ledger row is written. Migrations are idempotent where the
 create cluster-global objects (for example the RLS role), so a partial run is
 safe to retry.
 
+## Applied migrations are content-checksummed (OPS-MIG-CKSUM-001)
+
+The ledger records **what** ran, not merely that something ran. Alongside
+`version` and `applied_at`, `schema_migrations` carries:
+
+| column | meaning |
+| --- | --- |
+| `name` | the migration filename applied under this version |
+| `checksum` | `sha256:<hex>` of that file's content |
+| `checksum_adopted_at` | non-NULL if the digest was *adopted* rather than *observed at apply time* |
+
+On every run, before applying anything, the runner re-hashes each embedded file
+whose version is already in the ledger and compares:
+
+- **Digest matches** — nothing to do; the migration is not re-run.
+- **Digest differs** — the run **fails closed** and the node does not start. A
+  shipped migration was edited in place, so this node's schema and the file the
+  binary is reading are no longer the same artefact, and the binary cannot know
+  which half of the edit ran here.
+- **A different filename claims an applied version** — the run fails closed with
+  a version-collision error. This used to be a silent skip: the colliding
+  migration never ran and nothing said so. Extension migrations must use the
+  reserved `>= 900000` band.
+
+The digest is taken over the file with line endings normalized to `\n` and
+trailing newlines trimmed, so the same file checked out under a different
+`core.autocrlf` does not read as an edit.
+
+### Upgrading an existing install (no backfill step, no brick)
+
+Deployments installed before checksums existed have ledger rows with
+`checksum IS NULL`. The first run of a checksum-aware binary **adopts** the
+on-disk digest for those rows and stamps `checksum_adopted_at` — it does not
+fail. The upgrade is therefore an ordinary rolling upgrade: no data migration,
+no manual backfill, no downtime, and no new flag.
+
+Adoption is honest about its limit: it makes today's files the baseline and
+closes the window from here on; it **cannot** detect an edit made *before* the
+upgrade. The stamp is how you find the rows that carry that caveat:
+
+```sql
+SELECT version, name, checksum_adopted_at
+  FROM schema_migrations
+ WHERE checksum_adopted_at IS NOT NULL
+ ORDER BY version;
+```
+
+Rolling *back* to a pre-checksum binary is also safe: the three columns are
+nullable, the older binary simply ignores them, and the newer binary adopts
+whatever the older one recorded on the next boot.
+
+### If a node refuses to start (break-glass)
+
+A mismatch stops the rollout with the previous nodes still serving — that is the
+intent, not a failure of the upgrade. Do not reach for the override first:
+
+1. **Diff the migration file** against the shipped release. If it was edited,
+   revert the file and redeploy. Do not "fix" the ledger.
+2. Only if you have **confirmed this node's schema is the one you want** — for
+   example you knowingly hand-patched it — clear the recorded identity so the
+   next boot re-adopts the current file. The re-adopted row is stamped and shows
+   up in the query above:
+
+    ```sql
+    UPDATE schema_migrations SET name = NULL, checksum = NULL WHERE version = <N>;
+    ```
+
+There is deliberately no environment variable or flag for this: re-adoption is a
+per-version, audited write to the ledger, not a switch that can be left on.
+
 ## Concurrent instances are safe (advisory lock)
 
 In a multi-replica deployment, several instances may boot at once and all try to
@@ -178,7 +248,9 @@ only rollback, so rehearse the pattern against a populated copy first.
 
 Add a new numbered file to the store's migrations directory (next integer prefix);
 never edit or renumber an already-shipped migration, since deployments track
-applied versions by number. Keep migrations additive and non-destructive so the
+applied versions by number. This is no longer only a convention: the runner
+records a content digest per applied version and refuses to start on a mismatch
+(see [Applied migrations are content-checksummed](#applied-migrations-are-content-checksummed-ops-mig-cksum-001)). Keep migrations additive and non-destructive so the
 forward-only policy stays low-risk; for a change to a populated table, follow the
 [online-safe patterns above](#online-safe-migrations-on-populated-tables-expandcontract)
 so it does not take a long `ACCESS EXCLUSIVE` lock. Any new persistent table is

@@ -2137,7 +2137,9 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		"schema_migrations",
 		"migrationNoTransaction(body)",
 		"splitMigrationStatements",
-		"INSERT INTO schema_migrations (version) VALUES ($1)",
+		"INSERT INTO schema_migrations (version, name, checksum) VALUES ($1, $2, $3)",
+		"ErrMigrationChecksumMismatch",
+		"ErrMigrationVersionCollision",
 		"func (s *Store) PendingMigrations",
 	} {
 		if !strings.Contains(migrateGo, want) {

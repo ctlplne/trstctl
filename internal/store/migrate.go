@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 //go:embed migrations/*.sql
@@ -70,6 +73,17 @@ func configureMigrationSession(ctx context.Context, conn *pgxpool.Conn) error {
 // file must be safe to retry before the ledger row is recorded. Migrations are
 // forward-only by policy (see docs/migrations.md); recovery from a bad migration is
 // a restore from the pre-migration backup.
+//
+// The ledger records WHAT ran, not merely that something ran (OPS-MIG-CKSUM-001):
+// each row carries the migration's file name and a sha256 content digest. Before
+// applying anything, an already-applied version whose embedded file no longer
+// hashes to what was recorded is a hard error (ErrMigrationChecksumMismatch), and
+// a second file claiming an applied version is a hard error
+// (ErrMigrationVersionCollision) rather than the silent skip it used to be.
+// Ledger rows written before digests existed carry NULL and are ADOPTED on the
+// first run of this runner, so an existing deployment upgrades with no backfill
+// step and without failing to boot; docs/migrations.md carries the operator
+// recovery for a genuine mismatch.
 func (s *Store) Migrate(ctx context.Context) error {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
@@ -92,26 +106,25 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := conn.Exec(ctx,
-		"CREATE TABLE IF NOT EXISTS schema_migrations (version bigint PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())"); err != nil {
-		return fmt.Errorf("store: create migrations ledger: %w", err)
+	// The ledger is runner-owned rather than a numbered migration: it must exist
+	// before any migration can be recorded, so its own shape is upgraded here. The
+	// three identity columns are ADDITIVE and NULLABLE on purpose — a deployment
+	// installed by an older binary gets them empty (adopted below, not rejected),
+	// and a rollback to a pre-checksum binary keeps writing rows this runner can
+	// still read. This runs under the advisory lock and the bounded lock_timeout.
+	for _, ddl := range []string{
+		"CREATE TABLE IF NOT EXISTS schema_migrations (version bigint PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
+		"ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS name text",
+		"ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum text",
+		"ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum_adopted_at timestamptz",
+	} {
+		if _, err := conn.Exec(ctx, ddl); err != nil {
+			return fmt.Errorf("store: create migrations ledger: %w", err)
+		}
 	}
 
-	applied := make(map[int64]bool)
-	rows, err := conn.Query(ctx, "SELECT version FROM schema_migrations")
+	led, err := loadMigrationLedger(ctx, conn)
 	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var v int64
-		if err := rows.Scan(&v); err != nil {
-			rows.Close()
-			return err
-		}
-		applied[v] = true
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
 		return err
 	}
 
@@ -119,7 +132,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := applyMigrationSet(ctx, conn, applied, coreNames, func(name string) ([]byte, error) {
+	if err := applyMigrationSet(ctx, conn, led, coreNames, func(name string) ([]byte, error) {
 		return migrationFS.ReadFile("migrations/" + name)
 	}); err != nil {
 		return err
@@ -133,7 +146,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := applyMigrationSet(ctx, conn, applied, names, func(name string) ([]byte, error) {
+		if err := applyMigrationSet(ctx, conn, led, names, func(name string) ([]byte, error) {
 			return fs.ReadFile(src, "migrations/"+name)
 		}); err != nil {
 			return err
@@ -149,28 +162,155 @@ func (s *Store) Migrate(ctx context.Context) error {
 // Extension code, wired only through the tagged ee_attach seam, registers its own
 // migrations here; the core-only build registers none, so core applies zero
 // extension migrations. Extension migrations must use versions in a reserved high
-// band (>= 900000) so they cannot collide with core versions. Call before Migrate.
+// band (>= 900000) so they cannot collide with core versions; a collision is now
+// DETECTED rather than silently skipped — if the version is already recorded under
+// a different file name, Migrate fails with ErrMigrationVersionCollision.
+// Call before Migrate.
 func (s *Store) WithExtraMigrations(fsys fs.FS) *Store {
 	s.extraMigrations = append(s.extraMigrations, fsys)
 	return s
 }
 
-// applyMigrationSet applies the named migrations that are not yet in applied,
-// recording each in the schema_migrations ledger. read returns a migration's SQL
-// body by name. It honors the `-- migrate: no-transaction` opt-out exactly as the
-// core path does.
-func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, applied map[int64]bool, names []string, read func(name string) ([]byte, error)) error {
+// ErrMigrationChecksumMismatch means an already-applied migration's file no longer
+// hashes to what was recorded under that version: a shipped migration was edited
+// in place. The run fails closed, because this node's schema and the file the
+// binary is reading are no longer the same artefact and the binary cannot know
+// which half of the edit actually ran here. docs/migrations.md has the recovery.
+var ErrMigrationChecksumMismatch = errors.New("store: applied migration content differs from the embedded file")
+
+// ErrMigrationVersionCollision means two different migration files claim the same
+// version — typically an extension migration numbered outside the reserved
+// >= 900000 band onto a core version that is already applied. Before the ledger
+// recorded names this was a SILENT skip: the colliding migration never ran, and
+// nothing said so.
+var ErrMigrationVersionCollision = errors.New("store: two migrations claim the same version")
+
+// ledgerRow is one schema_migrations row's identity. An empty string means SQL
+// NULL: a row applied by a binary that predates content digests.
+type ledgerRow struct {
+	name     string
+	checksum string
+}
+
+// migrationLedger is schema_migrations as it stood at the start of a run: which
+// versions are applied, and what was applied under each. It is the difference
+// between "migration 42 ran here" and "THIS migration 42 ran here".
+type migrationLedger struct {
+	applied map[int64]bool
+	rows    map[int64]ledgerRow
+}
+
+// migrationChecksum is the content digest recorded for an applied migration. Line
+// endings are normalized to "\n" and trailing newlines trimmed before hashing, so
+// the same file checked out under a different core.autocrlf — or re-saved by an
+// editor that adds a final newline — does not read as an edit and refuse to boot.
+// Nothing else is normalized: comments and whitespace are inside the digest,
+// because a shipped migration is immutable by policy (docs/migrations.md) and the
+// runner cannot tell a comment fix from a DDL edit. Hashing goes through the AN-3
+// crypto boundary rather than crypto/sha256 directly.
+func migrationChecksum(body []byte) string {
+	normalized := strings.ReplaceAll(string(body), "\r\n", "\n")
+	normalized = strings.TrimRight(normalized, "\n")
+	return "sha256:" + crypto.SHA256Hex([]byte(normalized))
+}
+
+// loadMigrationLedger reads the applied set together with each row's recorded
+// identity. name/checksum are NULL for rows applied before the ledger carried
+// digests; they read back as empty strings and are adopted during this run.
+func loadMigrationLedger(ctx context.Context, conn *pgxpool.Conn) (*migrationLedger, error) {
+	led := &migrationLedger{applied: make(map[int64]bool), rows: make(map[int64]ledgerRow)}
+	rows, err := conn.Query(ctx,
+		"SELECT version, coalesce(name, ''), coalesce(checksum, '') FROM schema_migrations")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			v   int64
+			row ledgerRow
+		)
+		if err := rows.Scan(&v, &row.name, &row.checksum); err != nil {
+			return nil, err
+		}
+		led.applied[v] = true
+		led.rows[v] = row
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return led, nil
+}
+
+// record notes an identity this run just wrote, so later sets in the same run see it.
+func (l *migrationLedger) record(version int64, name, checksum string) {
+	l.applied[version] = true
+	l.rows[version] = ledgerRow{name: name, checksum: checksum}
+}
+
+// reconcile decides what an already-applied version means for the file now on
+// disk. Three outcomes, and the middle one is the entire upgrade story for
+// deployments that predate this ledger shape:
+//
+//   - a DIFFERENT file claims this version -> ErrMigrationVersionCollision. This
+//     is the case that used to be a silent `continue`.
+//   - the row carries NO digest (it predates checksums) -> ADOPT the on-disk
+//     digest and stamp checksum_adopted_at. An existing install therefore boots
+//     normally on first upgrade: no backfill migration, no manual step, no brick.
+//   - the row carries a digest that differs -> ErrMigrationChecksumMismatch.
+//
+// Adoption is honest about its limit: it makes today's files the baseline and
+// closes the window from here on; it cannot detect an edit made BEFORE the
+// upgrade. checksum_adopted_at is how an operator finds the rows that carry that
+// caveat, and clearing name/checksum is how an operator deliberately re-adopts.
+// Versions in the ledger with no corresponding file are not visited at all, so a
+// core-only binary against an ee-migrated database is unaffected.
+func (l *migrationLedger) reconcile(ctx context.Context, conn *pgxpool.Conn, version int64, name, checksum string) error {
+	row := l.rows[version]
+	if row.name != "" && row.name != name {
+		return fmt.Errorf("%w: version %d was applied as %q but %q also claims it; extension migrations must use the reserved >= 900000 version band (Store.WithExtraMigrations)",
+			ErrMigrationVersionCollision, version, row.name, name)
+	}
+	if row.checksum == "" {
+		if _, err := conn.Exec(ctx,
+			"UPDATE schema_migrations SET name = $2, checksum = $3, checksum_adopted_at = now() WHERE version = $1 AND checksum IS NULL",
+			version, name, checksum); err != nil {
+			return fmt.Errorf("store: adopt content digest for migration %s: %w", name, err)
+		}
+		l.rows[version] = ledgerRow{name: name, checksum: checksum}
+		return nil
+	}
+	if row.checksum != checksum {
+		return fmt.Errorf("%w: migration %d was applied with %s but %s now hashes to %s; a shipped migration must never be edited in place — add a new migration instead. If this node's schema is confirmed correct, re-adopt the file with: UPDATE schema_migrations SET name = NULL, checksum = NULL WHERE version = %d; (docs/migrations.md)",
+			ErrMigrationChecksumMismatch, version, row.checksum, name, checksum, version)
+	}
+	return nil
+}
+
+// applyMigrationSet applies the named migrations that are not yet in the ledger,
+// recording each one's version, file name and content digest. read returns a
+// migration's SQL body by name. It honors the `-- migrate: no-transaction` opt-out
+// exactly as the core path does. A migration whose version is already applied is
+// still READ and HASHED — the skip is verified, not assumed.
+func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, led *migrationLedger, names []string, read func(name string) ([]byte, error)) error {
+	applied := led.applied
 	for _, name := range names {
 		version, err := versionOf(name)
 		if err != nil {
 			return fmt.Errorf("store: bad migration name %q: %w", name, err)
 		}
-		if applied[version] {
-			continue
-		}
 		body, err := read(name)
 		if err != nil {
 			return err
+		}
+		checksum := migrationChecksum(body)
+		if applied[version] {
+			// Forward-only: an applied version is never re-run. But "already
+			// applied" is now checked against what was applied.
+			if err := led.reconcile(ctx, conn, version, name, checksum); err != nil {
+				return err
+			}
+			continue
 		}
 		if migrationNoTransaction(body) {
 			for _, stmt := range splitMigrationStatements(string(body)) {
@@ -178,10 +318,10 @@ func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, applied map[int6
 					return fmt.Errorf("store: apply no-transaction migration %s: %w", name, err)
 				}
 			}
-			if _, err := conn.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", version); err != nil {
+			if _, err := conn.Exec(ctx, "INSERT INTO schema_migrations (version, name, checksum) VALUES ($1, $2, $3)", version, name, checksum); err != nil {
 				return fmt.Errorf("store: record no-transaction migration %s: %w", name, err)
 			}
-			applied[version] = true
+			led.record(version, name, checksum)
 			continue
 		}
 		tx, err := conn.Begin(ctx)
@@ -192,14 +332,14 @@ func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, applied map[int6
 			_ = tx.Rollback(ctx)
 			return fmt.Errorf("store: apply migration %s: %w", name, err)
 		}
-		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", version); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations (version, name, checksum) VALUES ($1, $2, $3)", version, name, checksum); err != nil {
 			_ = tx.Rollback(ctx)
 			return fmt.Errorf("store: record migration %s: %w", name, err)
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("store: commit migration %s: %w", name, err)
 		}
-		applied[version] = true
+		led.record(version, name, checksum)
 	}
 	return nil
 }
