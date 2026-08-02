@@ -40,12 +40,8 @@
     ]
   },
   "enforce_admins": true,
-  "required_pull_request_reviews": {
-    "required_approving_review_count": 1,
-    "require_code_owner_reviews": true,
-    "dismiss_stale_reviews": true,
-    "require_last_push_approval": true
-  },
+  "_comment_reviews": "DELIBERATELY NULL. trstctl has one maintainer. GitHub does not let an author approve their own pull request, so required_approving_review_count:1 plus require_code_owner_reviews and require_last_push_approval made main unmergeable by the only person who can merge to it. A required reviewer that cannot be produced is not a control; it is a gate that gets routed around, and routing around gates is how real failures get through. The controls that DO bind a single maintainer are kept and strengthened instead: enforce_admins keeps every required status check binding on the owner, and the 34 contexts above are the actual review. .github/CODEOWNERS still routes review REQUESTS on root-of-trust paths so those changes announce themselves. Restore this block verbatim the day a second maintainer exists.",
+  "required_pull_request_reviews": null,
   "required_linear_history": true,
   "allow_force_pushes": false,
   "allow_deletions": false,

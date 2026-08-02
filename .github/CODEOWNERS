@@ -11,44 +11,51 @@
 # codified; codifying it here makes the gate provable from the artifact, and
 # docs/codeowners_test.go asserts every security-critical path below stays covered.
 #
-# Owner: @ctlplne/security is the maintainer team for these paths. `ctlplne` is the
-# canonical namespace for clone URLs and container images (github.com/ctlplne/trstctl,
-# ghcr.io/ctlplne/trstctl). It is NOT the module namespace: the Go module paths are
-# vanity paths under trstctl.com and deliberately do not match the code host — see
-# the Install section of clients/sdk/README.md for the go-import hosting that needs.
-# This team must exist on GitHub — create @ctlplne/security and add the
-# maintainer(s) — or CODEOWNERS will not resolve to a valid reviewer.
-# The coverage test only requires that each critical path resolves to a non-empty owner.
+# Owner: @imfeelingtheagi is the sole maintainer. This file previously named a
+# @ctlplne/security TEAM that does not exist on GitHub, which made every rule
+# below unresolvable — and, with require_code_owner_reviews enabled, made main
+# unmergeable. Ownership now names a real account.
+#
+# `ctlplne` remains the canonical namespace for clone URLs and container images
+# (github.com/ctlplne/trstctl, ghcr.io/ctlplne/trstctl). It is NOT the module
+# namespace: the Go module paths are vanity paths under trstctl.com and
+# deliberately do not match the code host — see the Install section of
+# clients/sdk/README.md for the go-import hosting that needs.
+#
+# What this file still buys a single maintainer: GitHub auto-requests review on
+# matching paths, so a change to the root of trust announces itself in the PR
+# rather than relying on the author noticing. The coverage test asserts every
+# security-critical path below resolves to a non-empty owner.
 
 # Default owner for everything not matched more specifically below.
-*                               @ctlplne/security
+*                               @imfeelingtheagi
 
 # --- Security-critical: the root of trust (TEST-006) ------------------------
 # A compromise of any of these is, per README.md AN-4, "the company is over." They get
 # explicit, mandatory ownership so no change lands without a security review.
 
 # AN-3 — the sole cryptography boundary. Nothing else may import crypto/*.
-/internal/crypto/                @ctlplne/security
+/internal/crypto/                @imfeelingtheagi
 
 # AN-4 — the isolated signing service (private-key operations) and its gRPC wire
 # contract (internal/signing/proto — the boundary to the most sensitive process).
-/internal/signing/               @ctlplne/security
-/internal/signing/proto/         @ctlplne/security
-/cmd/trstctl-signer/            @ctlplne/security
+/internal/signing/               @imfeelingtheagi
+/internal/signing/proto/         @imfeelingtheagi
+/cmd/trstctl-signer/            @imfeelingtheagi
 
 # AN-1 — multi-tenant storage, RLS policies, and migrations.
-/internal/store/                 @ctlplne/security
+/internal/store/                 @imfeelingtheagi
 
 # The architecture linter that enforces AN-1, AN-2, AN-3, AN-5, AN-8 and AN-9 in CI
 # — weakening it silently weakens every guardrail, so it is owned alongside the
 # crypto/signer/store. AN-4, AN-6 and AN-7 have no analyzer; see MAINTAINERS.md.
-/tools/trstctllint/             @ctlplne/security
+/tools/trstctllint/             @imfeelingtheagi
 
 # --- Security & supply-chain process surfaces -------------------------------
 # CI/release pipelines, the security policy, and the disclosure docs gate what ships
 # and how, so they carry explicit ownership too.
-/.github/                        @ctlplne/security
-/.github/workflows/              @ctlplne/security
-/.github/CODEOWNERS              @ctlplne/security
-/SECURITY.md                     @ctlplne/security
-/deploy/                         @ctlplne/security
+/.github/                        @imfeelingtheagi
+/.github/workflows/              @imfeelingtheagi
+/.github/CODEOWNERS              @imfeelingtheagi
+/SECURITY.md                     @imfeelingtheagi
+/deploy/                         @imfeelingtheagi

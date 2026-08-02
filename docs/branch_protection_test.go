@@ -19,7 +19,7 @@ type branchProtection struct {
 		Contexts []string `json:"contexts"`
 	} `json:"required_status_checks"`
 	EnforceAdmins              bool `json:"enforce_admins"`
-	RequiredPullRequestReviews struct {
+	RequiredPullRequestReviews *struct {
 		RequiredApprovingReviewCount int  `json:"required_approving_review_count"`
 		RequireCodeOwnerReviews      bool `json:"require_code_owner_reviews"`
 	} `json:"required_pull_request_reviews"`
@@ -90,11 +90,41 @@ func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 	if !bp.EnforceAdmins {
 		t.Error("branch-protection.json must set enforce_admins (maintainers are bound by the gate too)")
 	}
-	if !bp.RequiredPullRequestReviews.RequireCodeOwnerReviews {
-		t.Error("branch-protection.json must require code-owner reviews (so the root of trust gets a security review)")
-	}
-	if bp.RequiredPullRequestReviews.RequiredApprovingReviewCount < 1 {
-		t.Error("branch-protection.json must require at least one approving review")
+	// Review requirements are conditional on there being someone to review.
+	//
+	// trstctl has one maintainer, and GitHub does not let an author approve their
+	// own pull request, so requiring an approving review made main unmergeable by
+	// the only person who can merge to it. The original policy also named a
+	// @ctlplne/security TEAM that does not exist, so require_code_owner_reviews
+	// could not have resolved even with a second person.
+	//
+	// This guard therefore does not demand reviews unconditionally — a requirement
+	// nobody can satisfy is not a control, it is a gate that gets routed around.
+	// It demands that ONE of the two coherent states holds, so the file can never
+	// drift into "reviews disabled and nothing replacing them":
+	//
+	//   (a) reviews are required, with a code-owner review and >= 1 approval; or
+	//   (b) reviews are explicitly null AND the compensating controls are real —
+	//       enforce_admins binds the owner to every required check, and the
+	//       required-context set is non-empty, so CI is the review.
+	//
+	// Restore (a) the day a second maintainer exists.
+	if bp.RequiredPullRequestReviews == nil {
+		if !bp.EnforceAdmins {
+			t.Error("branch-protection.json waives pull-request reviews but does not set enforce_admins; " +
+				"with neither, nothing binds the maintainer to the gate at all")
+		}
+		if len(bp.RequiredStatusChecks.Contexts) == 0 {
+			t.Error("branch-protection.json waives pull-request reviews but requires no status checks; " +
+				"CI is the compensating control for a single maintainer, so it cannot also be empty")
+		}
+	} else {
+		if !bp.RequiredPullRequestReviews.RequireCodeOwnerReviews {
+			t.Error("branch-protection.json requires reviews but not code-owner reviews (so the root of trust gets a security review)")
+		}
+		if bp.RequiredPullRequestReviews.RequiredApprovingReviewCount < 1 {
+			t.Error("branch-protection.json requires reviews but sets no approving-review count")
+		}
 	}
 	if !bp.RequiredLinearHistory {
 		t.Error("branch-protection.json must require linear history")

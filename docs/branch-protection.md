@@ -25,10 +25,20 @@ Merging to `main` requires:
 - **All required status checks green**, branch up to date (`strict`) — every CI
   gate plus the security scans below. A check that runs but isn't listed doesn't
   block merge; a listed, failing check **does**.
-- **At least one approving review**, plus code-owner approval on root-of-trust
-  paths (`require_code_owner_reviews`); a new push dismisses stale approvals
-  (`dismiss_stale_reviews`) and must itself be re-approved
-  (`require_last_push_approval`) — no sneak-in commit rides in unapproved.
+- **No approving-review requirement**, deliberately. trstctl has one maintainer,
+  and GitHub does not let an author approve their own pull request, so
+  `required_approving_review_count: 1` — together with `require_code_owner_reviews`
+  and `require_last_push_approval` — made `main` unmergeable by the only person who
+  can merge to it. The policy also named a `@ctlplne/security` **team that does not
+  exist**, so code-owner review could not have resolved even with a second person.
+  A required reviewer nobody can produce is not a control; it is a gate that gets
+  routed around. `required_pull_request_reviews` is therefore `null`, and the
+  compensating controls carry the weight: `enforce_admins` keeps every one of the
+  required checks binding on the owner, so **CI is the review**.
+  `.github/CODEOWNERS` still routes review *requests* on root-of-trust paths, so a
+  change there announces itself in the pull request. Restore the review block
+  verbatim the day a second maintainer exists — `docs/branch_protection_test.go`
+  accepts either state and rejects "reviews off with nothing replacing them".
 - **Linear history** (`required_linear_history`: squash/rebase, no merge commits),
   **no force-pushes or deletion** (`allow_force_pushes: false`,
   `allow_deletions: false`).
@@ -132,9 +142,11 @@ read access.
 assigns mandatory reviewers: the AN-3 crypto boundary (`internal/crypto`), the AN-4
 isolated signer (`internal/signing`, `cmd/trstctl-signer`, `proto`), the AN-1
 multi-tenant store (`internal/store`), and the architecture linter
-(`tools/trstctllint`) are owned explicitly, so `require_code_owner_reviews` means no
-change to the root of trust merges without a security review.
-`docs/codeowners_test.go` asserts each path stays covered.
+(`tools/trstctllint`) are owned explicitly. With a single maintainer this routes a
+review *request* rather than blocking the merge (see above), so a root-of-trust
+change is announced in the pull request instead of passing silently.
+`docs/codeowners_test.go` asserts each path stays covered, and ownership now names
+the maintainer's account rather than a team that was never created.
 
 ## Apply it (repo admin)
 
