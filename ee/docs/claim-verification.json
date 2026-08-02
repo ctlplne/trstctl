@@ -17,7 +17,7 @@
     "                    the deadline to convert a US provisional to a non-provisional,",
     "                    at the same precision the filing date was given. Set it",
     "                    explicitly only to record a date counsel has fixed otherwise.",
-    "  An empty string renders as an explicit TODO in the table, so an unfilled field is",
+    "  An empty string renders as an explicit pending marker in the table, so an unfilled field is",
     "  visible rather than silently blank.",
     "",
     "verified: sparse map of \"FAMILY-CLAIM\" to counsel's verification note, e.g.",
