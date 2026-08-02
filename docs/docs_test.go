@@ -3532,6 +3532,45 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 		}
 	}
 
+	// AH-b6d9fb29: NOTICE told readers "CLA and DCO workflows are out of scope"
+	// while CONTRIBUTING.md, README.md and .github/pull_request_template.md all
+	// operate both -- so a reader who took NOTICE at its word would open a pull
+	// request with unsigned commits and be bounced by the merge checklist. Pin
+	// NOTICE to CONTRIBUTING.md in BOTH directions: whichever workflow
+	// CONTRIBUTING.md operates, NOTICE must state; whichever it retires, NOTICE
+	// must stop advertising. A sole-maintainer project is exactly the one where a
+	// stale process sentence sits unread for a year, so CI reads it instead.
+	// Compare on whitespace-collapsed text so re-wrapping either file cannot
+	// split a phrase across a line break and fake a disagreement.
+	flat := func(s string) string { return strings.Join(strings.Fields(s), " ") }
+	noticeFlat := flat(notice)
+	contributingFlat := flat(strings.ToLower(read(t, "../CONTRIBUTING.md")))
+	for _, w := range []struct{ workflow, phrase string }{
+		{"DCO", "developer certificate of origin"},
+		{"CLA", "contributor license agreement"},
+	} {
+		switch {
+		case strings.Contains(contributingFlat, w.phrase) && !strings.Contains(noticeFlat, w.phrase):
+			t.Errorf("CONTRIBUTING.md operates the %s workflow (%q) but NOTICE does not state it; "+
+				"NOTICE is what a packager or commercial counterparty reads first and it must not "+
+				"contradict the contribution contract", w.workflow, w.phrase)
+		case !strings.Contains(contributingFlat, w.phrase) && strings.Contains(noticeFlat, w.phrase):
+			t.Errorf("NOTICE states the %s workflow (%q) but CONTRIBUTING.md no longer operates it; "+
+				"retire it in both files or in neither", w.workflow, w.phrase)
+		}
+	}
+	// NOTICE may record that the project has a single author; it may not tell
+	// readers the contribution workflows do not apply while CONTRIBUTING.md and
+	// .github/pull_request_template.md require DCO sign-off on every core commit
+	// and a signed CLA for every ee/ change.
+	for _, dismissal := range []string{"out of scope", "do not apply", "are not used", "no signed-off-by"} {
+		if strings.Contains(noticeFlat, dismissal) {
+			t.Errorf("NOTICE waves off the contribution workflows with %q; CONTRIBUTING.md and "+
+				".github/pull_request_template.md require DCO sign-off for core and a CLA for ee/",
+				dismissal)
+		}
+	}
+
 	// AH-fa72c599: the copyright line is a legal fact, not prose, and until this
 	// guard existed nothing in CI read it. ee/ ships source-visible under a
 	// proprietary licence, so the holder named in ee/LICENSE is the party a
