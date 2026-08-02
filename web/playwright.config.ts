@@ -6,9 +6,10 @@ import { defineConfig, devices } from "@playwright/test";
  * (deploy/demo/docker-compose.yml, self-signed TLS on :9443, local SSO signs
  * in automatically). Point TRSTCTL_E2E_URL elsewhere to run against another
  * deployment. One-time browser setup: `npm run e2e:install`; then
- * `npm run e2e`. Visual baselines are written on first run
- * (`npx playwright test --update-snapshots`) and belong in review like any
- * other pinned artifact.
+ * `npm run e2e`. Visual baselines are local-only and untracked: record them for
+ * the machine you are on with `npm run e2e -- --update-snapshots`, read the diff
+ * in review, and do not commit them — Playwright keys each file to the recording
+ * platform and the one CI job that runs this suite is ubuntu-latest.
  *
  * These tests are additive to the 140+-file Vitest suite: Vitest owns
  * behavior; Playwright owns real-browser smoke (navigation, focus, rendering)

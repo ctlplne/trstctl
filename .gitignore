@@ -82,8 +82,12 @@ cover.out.nogen
 # working artifacts, not committable repo content.
 docs-internal/
 
-# S-C4/S-C8: browser-test and workbench artifacts (baselines under
-# web/e2e/**-snapshots ARE committed; reports and builds are not)
+# S-C4/S-C8: browser-test and workbench artifacts. Visual baselines are
+# local-only (web/DESIGN.md): Playwright keys each file to the recording
+# platform and the only CI job that invokes Playwright is ubuntu-latest, so a
+# committed baseline from any other machine could never be compared against.
+# docs/visual_baselines_test.go (CODE-109) is the load-bearing gate.
+/web/e2e/*-snapshots/
 /web/test-results/
 /web/playwright-report/
 /web/.storybook-static/

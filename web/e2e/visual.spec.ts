@@ -2,9 +2,11 @@ import { expect, test, type Page } from "@playwright/test";
 import { signIn, spaceSmoke } from "./helpers";
 
 /** S-C4 visual regression: pixel baselines for the shell and one page per
- * space, dark theme (the flagship). First run writes the baselines
- * (`npx playwright test --update-snapshots`); commit them and any later diff
- * is a conscious design decision. Dynamic regions (live counts, timestamps)
+ * space, dark theme (the flagship). Baselines are local-only and untracked:
+ * `npm run e2e -- --update-snapshots` records them for THIS machine and a later
+ * diff is a conscious design decision. Nothing is committed, because Playwright
+ * keys each file to the recording platform and CI runs only on ubuntu-latest.
+ * Dynamic regions (live counts, timestamps)
  * are masked so data drift never fails a visual check. */
 
 test.beforeEach(async ({ page }) => {

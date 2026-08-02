@@ -1699,8 +1699,11 @@ jobs:
         run: npm run storybook:build
 
   # S-C4: browser e2e against the seeded demo stack. Manual-only
-  # (workflow_dispatch) until the visual baselines are generated and committed
-  # from a first local run; the smoke spec runs regardless of baselines.
+  # (workflow_dispatch) because it needs Docker plus a browser install, which is
+  # too heavy for the per-PR path. Scope is the shell smoke spec: visual
+  # regression (e2e/visual.spec.ts) is local-only by design, because this runner
+  # is ubuntu-latest and could only ever record or compare -linux baselines. See
+  # web/DESIGN.md and docs/visual_baselines_test.go (CODE-109).
   web-e2e:
     name: web e2e (Playwright shell smoke, manual)
     if: github.event_name == 'workflow_dispatch'

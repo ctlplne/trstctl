@@ -166,9 +166,15 @@ the same change.
   they pin, with the rationale in the diff — never loosened to "make it pass".
 - **Playwright (S-C4)** owns real-browser smoke and pixels: run
   `npm run e2e:install` once, then `npm run e2e` against the seeded demo stack
-  (or `TRSTCTL_E2E_URL`). Visual baselines are committed, so a diff is a design
-  decision. Type-check the suite with `npx tsc -p e2e/tsconfig.json --noEmit`.
-  Keep specs shallow — depth belongs in Vitest.
+  (or `TRSTCTL_E2E_URL`). Visual regression (`e2e/visual.spec.ts`) is
+  **local-only**. Playwright names every baseline
+  `<name>-<project>-<platform>.png` after the machine that recorded it, and the
+  one CI job that invokes Playwright runs on `ubuntu-latest` — so a baseline
+  recorded anywhere else could never be compared against. Record them per machine
+  with `npm run e2e -- --update-snapshots`, read the diff in review, and leave
+  them untracked; `docs/visual_baselines_test.go` (CODE-109) enforces that.
+  Type-check the suite with `npx tsc -p e2e/tsconfig.json --noEmit`. Keep specs
+  shallow — depth belongs in Vitest.
 - **Storybook (S-C8)** is the component workbench: `npm run storybook`, static
   build via `npm run storybook:build`. Stories render against the real tokens
   (the preview imports `index.css`) with axe on every story. New shared

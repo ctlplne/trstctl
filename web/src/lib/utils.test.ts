@@ -8,8 +8,10 @@ import { cn } from "@/lib/utils";
  * token size) as an unknown text-COLOR utility and silently dropped it when a
  * real color utility followed through cn(). This suite pins the fix for every
  * token rung so a tailwind-merge upgrade or a config regression fails here —
- * not in a design review. Pixel-level rendering drift is separately guarded by
- * the Playwright visual suite (web/e2e/visual.spec.ts) once baselines exist. */
+ * not in a design review. Pixel-level rendering drift is separately checked by
+ * the Playwright visual suite (web/e2e/visual.spec.ts), which is local-only:
+ * baselines are recorded per machine and are never committed, so that suite is a
+ * review aid rather than a CI guard. This one is the CI guard. */
 
 const tokenSizes = ["text-2xs", "text-caption", "text-body", "text-title", "text-heading", "text-display"] as const;
 
