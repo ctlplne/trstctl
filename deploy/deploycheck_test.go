@@ -4,9 +4,11 @@ package deploy_test
 
 import (
 	"bytes"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -533,6 +535,17 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 	var offenders []string
 	err := filepath.Walk(deployDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			// A path that vanished between readdir and lstat holds no image
+			// reference, so it is not this check's business. This is a real race,
+			// not a hypothetical: deploy/helm's airgap-bundle test plants and then
+			// removes untracked fixtures (operator-secret.tmp, .fuse_hidden_*)
+			// INSIDE the real chart directory — that is the point of it, since it
+			// proves the bundler ships only tracked files — and `go test ./...`
+			// runs that package concurrently with this one. Skipping only
+			// fs.ErrNotExist keeps every other walk error fatal.
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
 			return err
 		}
 		if info.IsDir() {
