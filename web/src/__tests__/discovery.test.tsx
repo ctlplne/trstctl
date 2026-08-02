@@ -123,7 +123,13 @@ function seedDiscoveryMocks() {
     structurally_unobservable: 1,
     classes: [
       { class: "tls-endpoint", status: "OBSERVED", source_kinds: ["network"], observed_by: ["edge-net"], last_observed_at: "2026-06-20T10:03:05Z" },
-      { class: "ct-exposed-certificate", status: "OBSERVABLE-UNOBSERVED", source_kinds: ["ct_log"], reason: "no configured source observes this class", action: "configure a discovery source of kind ct_log (needs: monitored-domains-configured)" },
+      {
+        class: "ct-exposed-certificate",
+        status: "OBSERVABLE-UNOBSERVED",
+        source_kinds: ["ct_log"],
+        reason: "no configured source observes this class",
+        action: "configure a discovery source of kind ct_log (needs: monitored-domains-configured)",
+      },
       { class: "firmware-embedded-crypto", status: "STRUCTURALLY-UNOBSERVABLE", reason: "no source inspects device firmware" },
     ],
   });
