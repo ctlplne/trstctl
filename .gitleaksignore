@@ -47,3 +47,72 @@ e93479cbe5e54805890245d52d9d651db8fc772b:internal/webui/dist/assets/catalog.es-E
 eef27d10203cdc5e9ac34b75fd78351c2a9e297b:internal/webui/dist/assets/Journeys-BDAQWsqH.js:generic-api-key:13
 eef27d10203cdc5e9ac34b75fd78351c2a9e297b:internal/webui/dist/assets/Journeys-BDAQWsqH.js:generic-api-key:18
 eef27d10203cdc5e9ac34b75fd78351c2a9e297b:internal/webui/dist/assets/index-THMVw8pe.js:generic-api-key:68
+
+# Test-source and testdata fixtures that a `paths` allowlist for `.*_test\.go$`
+# and `(^|/)testdata/` used to hide wholesale: that glob exempted every
+# `*_test.go` file and everything under `testdata/` - over a third of the
+# tracked tree - from EVERY rule. The glob is gone, so each fixture is pinned
+# here individually and a NEW secret in a test source still fails the scan.
+# Every entry below was read at its introducing commit and is a proven
+# non-secret: deterministic PEM vectors, literal "begin private key" marker
+# strings, the internal/aimodel redactor test corpus, idempotency keys, and a
+# fixture filename.
+014424a38e5e2006b90394f22bff5156fe9de783:internal/server/python_sdk_served_test.go:generic-api-key:71
+18a54b6154db470b2eeb9bef9289cbeca296b177:internal/server/codesign_served_test.go:generic-api-key:44
+18a54b6154db470b2eeb9bef9289cbeca296b177:internal/server/codesign_served_test.go:generic-api-key:70
+18a54b6154db470b2eeb9bef9289cbeca296b177:internal/server/managedkeys_localstack_served_test.go:generic-api-key:89
+18a54b6154db470b2eeb9bef9289cbeca296b177:internal/server/transit_served_test.go:generic-api-key:34
+2675b3eae226fec6a63a6fd2fd97ba00778096e5:internal/server/managedkeys_pkcs11_served_test.go:generic-api-key:265
+2e29f0c73a241011258c3d28ea8779266564981c:internal/server/vault_compat_served_test.go:generic-api-key:30
+3e28dd64e16db0dc1b7c9b7e1d5602eaa80248d6:internal/server/discovery_served_test.go:private-key:249
+481beb76b581f042a37c42dcf1e5fa3ca0e42367:internal/ca/azurekv/httpapi_test.go:generic-api-key:70
+481beb76b581f042a37c42dcf1e5fa3ca0e42367:internal/ca/gcpcas/httpapi_test.go:generic-api-key:51
+481beb76b581f042a37c42dcf1e5fa3ca0e42367:internal/secretjson/secretjson_test.go:generic-api-key:42
+481beb76b581f042a37c42dcf1e5fa3ca0e42367:internal/server/dod_managed_key_runtime_test.go:generic-api-key:448
+481beb76b581f042a37c42dcf1e5fa3ca0e42367:internal/server/notifications_served_test.go:generic-api-key:243
+4e63d03598e5856dd6d8452dd2c56b35af7a8789:internal/agent/drift/drift_unix_test.go:private-key:20
+6437b8eb0561be7fe251c9417fef3bff2ec313fc:internal/dns/ns1/ns1_test.go:generic-api-key:218
+64b5c0f72bbba70657668631ab7a773726ace28e:internal/supportbundle/supportbundle_test.go:jwt:29
+65fa613ebf3092dfd018a181277e717930c1c53f:internal/kms/tpm/device_linux_internal_test.go:generic-api-key:69
+65fa613ebf3092dfd018a181277e717930c1c53f:internal/kms/tpm/tpm_test.go:generic-api-key:275
+7015b76baf5e46f55cf434bc1f0cfa86ee690543:internal/server/managedkeys_pkcs11_served_test.go:generic-api-key:194
+8221747b7d62a11259c5269f3700f4f9e0e916d6:internal/aimodel/redactor_test.go:generic-api-key:77
+8221747b7d62a11259c5269f3700f4f9e0e916d6:internal/aimodel/redactor_test.go:generic-api-key:78
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:103
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:108
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:35
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:59
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:60
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:64
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:65
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:77
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:78
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:83
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:generic-api-key:88
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:github-oauth:97
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:github-oauth:98
+8dd9416102e66c36c66a211227c250d5807bc337:internal/aimodel/redactor_test.go:private-key:44
+97ef00d46e51dc371c8b4d368f1e6ffc33a2b02a:internal/secretjson/secretjson_test.go:generic-api-key:29
+9e08b16454a587a48414025481a00bed01030a22:internal/server/remediation_playbooks_served_test.go:generic-api-key:281
+9e08b16454a587a48414025481a00bed01030a22:internal/server/remediation_playbooks_served_test.go:generic-api-key:294
+9e08b16454a587a48414025481a00bed01030a22:internal/server/remediation_playbooks_served_test.go:generic-api-key:338
+a04c8adabe271c5b5407a9a71bd75f1f4b1f814c:internal/aimodel/redactor_test.go:generic-api-key:163
+a04c8adabe271c5b5407a9a71bd75f1f4b1f814c:internal/aimodel/redactor_test.go:github-pat:152
+a04c8adabe271c5b5407a9a71bd75f1f4b1f814c:internal/aimodel/redactor_test.go:github-pat:153
+a04c8adabe271c5b5407a9a71bd75f1f4b1f814c:internal/aimodel/redactor_test.go:github-pat:192
+a04c8adabe271c5b5407a9a71bd75f1f4b1f814c:internal/aimodel/redactor_test.go:slack-bot-token:167
+a04c8adabe271c5b5407a9a71bd75f1f4b1f814c:internal/aimodel/redactor_test.go:slack-bot-token:168
+ab8ac5b03b8f35f47ea6c907653d1c49857409ea:internal/server/aisurface_served_test.go:private-key:112
+b24ef641afd4931e9e7834db09587da78640da1e:internal/server/breakglass_served_test.go:generic-api-key:215
+b2d842e6e696c6e86bdfa461267e49313a3cbd82:internal/server/ssh_journey_served_test.go:generic-api-key:131
+c938ab1222c8aa0cd1137861ab3850410d870797:internal/server/attested_issuance_served_test.go:generic-api-key:55
+caeb97d95f68356a19ed2420857d73a41d77457f:internal/connector/javakeystore/javakeystore_test.go:private-key:19
+caeb97d95f68356a19ed2420857d73a41d77457f:internal/crypto/jks/jks_test.go:private-key:13
+caeb97d95f68356a19ed2420857d73a41d77457f:internal/projections/javakeystore_connector_test.go:private-key:18
+d045a4eea79167209180d2c07e2f691893556d11:internal/server/workload_attester_trust_served_test.go:generic-api-key:88
+d63285d172695e0db57f35e2b8e873fc2923501d:internal/connector/caddy/caddy_test.go:private-key:15
+d63285d172695e0db57f35e2b8e873fc2923501d:internal/connector/envoy/envoy_test.go:private-key:23
+d63285d172695e0db57f35e2b8e873fc2923501d:internal/connector/postfix/postfix_test.go:private-key:18
+d63285d172695e0db57f35e2b8e873fc2923501d:internal/connector/traefik/traefik_test.go:private-key:15
+f35c9820a35dd84b2ea1e6ce1a8f765e6116d925:internal/ca/profilelint/profilelint_test.go:generic-api-key:129
+fe9c68d97f060c976f11ae0f601a72f39ecd2c56:internal/server/aisurface_served_test.go:private-key:96

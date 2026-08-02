@@ -56,7 +56,9 @@ jobs:
 
       # `detect` scans the committed history; `--no-banner --redact` keeps logs
       # clean and never echoes a matched secret. Non-zero exit (a finding) fails
-      # the job. The config (.gitleaks.toml) only allowlists test placeholders.
+      # the job. The config (.gitleaks.toml) allowlists ONLY the published
+      # connector conformance key body; there is no path exemption, and known
+      # fixtures are pinned per finding in .gitleaksignore.
       - name: Scan repository for secrets
         run: ${{ steps.install-gitleaks.outputs.bin }} detect --source . --config .gitleaks.toml --redact --no-banner --verbose
 

@@ -177,10 +177,12 @@ merely reports:
 - **Secret scanning — gitleaks** (`.github/workflows/security.yml`,
   `.gitleaks.toml`, `.gitleaksignore`): installs the same checksum-verified
   Gitleaks `v8.27.2` release used by the served scanner, then scans the
-  full history against gitleaks' default ruleset. Only deterministic PEM
-  test vectors, the published connector conformance keypair, and its old
-  placeholder are allowlisted by exact fingerprint; any other hardcoded
-  secret fails CI.
+  full history against gitleaks' default ruleset. No path is exempt from any
+  rule — `_test.go` sources and `testdata/` fixtures are scanned exactly like
+  production source. The only standing allowlist is the exact key body of the
+  published connector conformance keypair; every other known false positive is
+  pinned one finding at a time in `.gitleaksignore` by exact
+  commit/path/rule/line fingerprint, so any other hardcoded secret fails CI.
 - **Dependency vulnerabilities**: the pinned `govulncheck` job (above) plus
   Dependabot raising update PRs for Go modules, npm, GitHub Actions, and the
   Docker base.
