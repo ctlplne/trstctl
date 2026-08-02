@@ -101,3 +101,9 @@ CLAUDE.md
 # one checkout and is never published - so a fresh clone showed it as untracked
 # AND unignored, and the first `git add -A` in that clone would stage it (AH-0ffc461f).
 .claude/
+
+# Numbered copies some editors leave beside a file they are rewriting
+# (e.g. foo_test.go.455975116197714910). Previously ignored only via
+# .git/info/exclude, which is machine-local and never published, so a clone
+# would see them as stageable (AH-0004, same class as AH-0ffc461f).
+*.go.[0-9]*
