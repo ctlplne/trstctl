@@ -401,12 +401,13 @@ the MSP controls its own downstream hosting, support, and customer pricing.
 Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and
 the offline license verifier stay in MPL core.
 
-**Patent pending.** certctl LLC, a Florida limited liability company, has filed
-four US provisional patent applications covering PCAS (proof-carrying algorithm
+**Provisional patent applications filed.** certctl LLC, a Florida limited
+liability company, has filed four US provisional patent applications covering PCAS (proof-carrying algorithm
 succession), XREC (drift reconciliation), VDEC (attested decommissioning), and
 AGID (agent delegation identity). A provisional application confers no exclusive
-rights and nothing has issued, so "patent pending" is the accurate status and the
-only one this project claims. That does not put the open-source core at risk:
+rights and nothing has issued, so "provisional applications filed" is the precise
+status and the only one this project claims — a reader who checks USPTO will find
+exactly that and nothing more. That does not put the open-source core at risk:
 MPL-2.0 section 2.1(b) grants every recipient of the core a perpetual, worldwide,
 royalty-free patent license under each Contributor's Patent Claims that are
 necessarily infringed by that Contributor's Contributions, so using, modifying,
