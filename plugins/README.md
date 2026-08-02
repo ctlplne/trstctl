@@ -33,9 +33,17 @@ Do not confuse those reference plugins with the shipped first-party integrations
 ## Authoring a plugin
 
 See [`docs/guides/plugin-authoring.md`](../docs/guides/plugin-authoring.md). In
-short: build a WASM module that exports the host's run entrypoint, declare the
-minimal capability grant it needs, and validate it against the conformance suite
-before distribution.
+short: build a WASM module that exports the host's run entrypoint, and validate
+it against the conformance suite before distribution.
+
+The capability grant is the operator's, not the plugin author's.
+The served loader discovers plugins by filename — a `<name>.wasm` with a
+detached `<name>.wasm.sig` beside it — and runs every admitted module under the
+grant built from `plugins.capabilities` and `plugins.path_prefixes` in the
+deployment config. This repository ships no plugin manifest format, so a module
+cannot request a narrower grant than the deployment hands it. Keep
+`plugins.capabilities` minimal: one grant currently covers the CA, connector and
+DNS plugin directories alike.
 
 Built `.wasm` artifacts are **not** committed to this repository; they are produced
 by each plugin's own build and distributed separately with a detached `.wasm.sig`.

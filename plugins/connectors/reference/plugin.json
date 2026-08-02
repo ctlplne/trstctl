@@ -1,8 +1,0 @@
-{
-  "name": "reference-connector",
-  "kind": "connector",
-  "entrypoints": ["run"],
-  "capabilities": ["fs.write"],
-  "artifact": "reference-connector.wasm",
-  "signature": "reference-connector.wasm.sig"
-}

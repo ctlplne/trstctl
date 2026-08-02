@@ -1,8 +1,0 @@
-{
-  "name": "reference-ca",
-  "kind": "ca",
-  "entrypoints": ["run", "issue"],
-  "capabilities": ["fs.write"],
-  "artifact": "reference-ca.wasm",
-  "signature": "reference-ca.wasm.sig"
-}
