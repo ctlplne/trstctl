@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -172,7 +171,17 @@ func LoadQuorumPolicy(dir string) (QuorumPolicy, error) {
 	if dir == "" {
 		return nil, nil
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, quorumPolicyFile))
+	// Through a directory handle: the quorum policy decides how many approvals a
+	// decommission needs, so a symlink in dir must not redirect that read.
+	root, err := os.OpenRoot(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("vdec gate: open quorum policy dir: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	raw, err := root.ReadFile(quorumPolicyFile)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

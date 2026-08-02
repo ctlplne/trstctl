@@ -69,7 +69,7 @@ func (s *DurableAnchorStore) GetRootAnchor(tenantID, keyID string) (RootAnchor, 
 	if err != nil {
 		return RootAnchor{}, err
 	}
-	pubPEM, err := os.ReadFile(pemPath)
+	pubPEM, err := readUnderRoot(pemPath)
 	if err != nil {
 		return RootAnchor{}, err
 	}
@@ -77,7 +77,7 @@ func (s *DurableAnchorStore) GetRootAnchor(tenantID, keyID string) (RootAnchor, 
 	if err != nil {
 		return RootAnchor{}, err
 	}
-	authRef, err := os.ReadFile(authRefPath)
+	authRef, err := readUnderRoot(authRefPath)
 	if err != nil {
 		return RootAnchor{}, err
 	}
@@ -174,4 +174,18 @@ func safeAnchorSegment(s string) bool {
 		}
 	}
 	return true
+}
+
+// readUnderRoot reads a file through a handle on its parent directory instead of
+// by name. The path segments here are already validated, so this is not about
+// traversal in the string: it stops a symlink swapped in at the final component
+// from redirecting the read somewhere else between validation and open, which a
+// name-based read cannot (CWE-22, CWE-367).
+func readUnderRoot(path string) ([]byte, error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	return root.ReadFile(filepath.Base(path))
 }

@@ -98,7 +98,7 @@ func (s *DurableTaskEnvelopeTrustStore) TrustLookup(keyID string) ([]byte, bool)
 	if err != nil {
 		return nil, false
 	}
-	publicDER, err := os.ReadFile(path)
+	publicDER, err := readUnderRoot(path)
 	if err != nil || len(publicDER) == 0 {
 		return nil, false
 	}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -30,7 +29,17 @@ func LoadBreakGlassAuthority(dir string) ([]byte, error) {
 	if dir == "" {
 		return nil, nil
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, BreakGlassAuthorityFile))
+	// Through a directory handle: break-glass authority is the material that
+	// permits an epoch downgrade, so a symlink in dir must not redirect it.
+	root, err := os.OpenRoot(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("pcas signer: open break-glass dir: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	raw, err := root.ReadFile(BreakGlassAuthorityFile)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

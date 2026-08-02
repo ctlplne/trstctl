@@ -32,7 +32,18 @@ func LoadTrustedPlanKeys(dir string) (map[string]crypto.PublicKey, error) {
 	if dir == "" {
 		return nil, nil
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, TrustBundleFile))
+	// Read through a directory handle rather than by name: the trust bundle
+	// decides which keys a reconcile plan is validated against, so a symlink
+	// planted in dir must not be able to redirect that read outside dir.
+	root, err := os.OpenRoot(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("xrec plan: open trust dir: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	raw, err := root.ReadFile(TrustBundleFile)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

@@ -126,8 +126,12 @@ func (s *DurableAttestationTrustStore) markSpent(evidenceDigest []byte) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("delegation: create spent-attestation floor: %w", err)
 	}
-	p := filepath.Join(dir, hex.EncodeToString(evidenceDigest)+".spent")
-	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return fmt.Errorf("delegation: open spent-attestation floor: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	f, err := root.OpenFile(hex.EncodeToString(evidenceDigest)+".spent", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if errors.Is(err, os.ErrExist) {
 		return ErrAttestationReplay
 	}

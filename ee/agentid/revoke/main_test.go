@@ -97,7 +97,7 @@ func newHarness(t *testing.T, dbName string) *harness {
 	if err != nil {
 		t.Fatalf("admin connect: %v", err)
 	}
-	defer admin.Close(ctx)
+	defer func() { _ = admin.Close(ctx) }()
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{dbName}.Sanitize()); err != nil &&
 		!containsAlreadyExists(err.Error()) {
 		t.Fatalf("create db %s: %v", dbName, err)
