@@ -59,8 +59,8 @@ func TestSupply101VulnScansStayRequired(t *testing.T) {
 	ci := read(t, "../.github/workflows/ci.yml")
 	requireAllContained(t, "SUPPLY-101", "ci.yml", ci,
 		"govulncheck:",
-		"go install golang.org/x/vuln/cmd/govulncheck@v1.1.4",
-		"run: govulncheck ./...",
+		"name: Run govulncheck (pinned by Makefile GOVULNCHECK_VERSION)",
+		"run: make vuln",
 		"npm dependency tree SCA (web + TypeScript SDK)",
 		"bash scripts/ci/npm-audit-dependency-surfaces.sh",
 		"npm audit --omit=dev --audit-level=high",

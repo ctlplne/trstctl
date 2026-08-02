@@ -666,19 +666,19 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	mk := repoFile(t, "Makefile")
 	rel := repoFile(t, ".github", "workflows", "release.yml")
 
-	// (1) govulncheck is pinned to a fixed version, not @latest — in CI and in the
-	// Makefile that the tools target uses. The pin may be a literal @vX.Y.Z or a
-	// Make variable that resolves to one.
+	// (1) govulncheck is pinned to a fixed version, not @latest, and the pin lives in
+	// exactly ONE place — GOVULNCHECK_VERSION in the Makefile — which CI consumes by
+	// running `make vuln`, so CI and a local scan cannot drift to different scanners.
 	for name, body := range map[string]string{"ci.yml": ci, "Makefile": mk} {
 		if strings.Contains(body, "govulncheck@latest") {
 			t.Errorf("%s pins govulncheck@latest; pin a fixed version", name)
 		}
-		if !strings.Contains(body, "govulncheck@v") && !strings.Contains(body, "govulncheck@$(GOVULNCHECK_VERSION)") {
-			t.Errorf("%s should install govulncheck at a pinned version", name)
-		}
 	}
-	// The Makefile variable that pins it is itself a fixed semver.
-	mustContainAll(t, "Makefile govulncheck pin", mk, "GOVULNCHECK_VERSION ?= v")
+	if strings.Contains(ci, "govulncheck@v") || !strings.Contains(ci, "run: make vuln") {
+		t.Error("ci.yml must run the gate via `make vuln`, not a second literal govulncheck@v pin")
+	}
+	// The Makefile is the single pin, and the variable is itself a fixed semver.
+	mustContainAll(t, "Makefile govulncheck pin", mk, "GOVULNCHECK_VERSION ?= v", "govulncheck@$(GOVULNCHECK_VERSION)")
 
 	// (2) The npm dependency tree is scanned in CI (it lives outside go.sum), with
 	// a pinned npm scanner and a release-evidence receipt that records advisory

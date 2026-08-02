@@ -792,13 +792,13 @@ jobs:
 
       # Reachability-aware vulnerability scan: fails only on vulnerabilities the
       # code can actually reach (call-graph), not every advisory in the graph.
-      # Pinned to a fixed version so the gate is deterministic (not the moving
-      # @latest).
-      - name: Install govulncheck (pinned)
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-
-      - name: Run govulncheck
-        run: govulncheck ./...
+      # The version pin lives in exactly ONE place — GOVULNCHECK_VERSION in the
+      # Makefile — and `make vuln` installs that pinned scanner and runs it over
+      # ./... (by resolved path, not via PATH). A second literal @vX.Y.Z here is
+      # how CI and a local run silently end up on different scanners, so CI must
+      # not carry one; release.yml already runs the gate this same way.
+      - name: Run govulncheck (pinned by Makefile GOVULNCHECK_VERSION)
+        run: make vuln
 
       # D9: the OSS license audit runs beside the vulnerability scan, so
       # copyleft contamination of the distributed MPL-2.0 binaries is caught

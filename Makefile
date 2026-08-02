@@ -50,8 +50,8 @@ PCAS_E2E_RUN ?= TestINT20_FullStackPCASUserJourneys|TestINT20_PCASWASMParity_NoS
 GOLANGCI_LINT_VERSION ?= v2.12.2
 ACTIONLINT_VERSION ?= v1.7.7
 # Supply-chain tooling, pinned so the vulnerability gate and SBOM are deterministic.
-GOVULNCHECK_VERSION ?= v1.1.4
-CYCLONEDX_GOMOD_VERSION ?= v1.7.0
+GOVULNCHECK_VERSION ?= v1.6.0
+CYCLONEDX_GOMOD_VERSION ?= v1.10.0
 GO_ENV_GOBIN := $(shell $(GO) env GOBIN)
 GO_ENV_GOPATH := $(shell $(GO) env GOPATH)
 GO_TOOL_BIN ?= $(if $(GO_ENV_GOBIN),$(GO_ENV_GOBIN),$(GO_ENV_GOPATH)/bin)
