@@ -311,8 +311,8 @@ not this file.
 | `internal/crypto/seal/seal.go:533` | bounded to maxUint16Value by the guard above (CWE-190) |
 | `internal/crypto/signauth.go:66` | enum purpose and bounded message length framing (CWE-190) |
 | `internal/crypto/signauth.go:76` | enum purpose and bounded message length framing (CWE-190) |
-| `internal/crypto/ssh.go:56` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
-| `internal/crypto/ssh.go:57` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
+| `internal/crypto/ssh.go:69` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
+| `internal/crypto/ssh.go:70` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
 | `internal/crypto/tenantwrap/tenantwrap.go:238` | fixed-format buffer: a wrapped domain KEK has a fixed sealed length; an impossible oversize panics the slice bounds rather than truncating (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:215` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:242` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |

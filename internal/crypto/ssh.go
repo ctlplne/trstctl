@@ -43,6 +43,19 @@ func SignSSHCertificate(caSigner DigestSigner, p SSHCertParams) ([]byte, error) 
 	if p.CertType != ssh.UserCert && p.CertType != ssh.HostCert {
 		return nil, fmt.Errorf("crypto: invalid SSH certificate type %d", p.CertType)
 	}
+	// The validity window is enforced here, at the boundary, not left to the
+	// caller: SignSSHCertificate is exported, and Unix() on a zero or pre-epoch
+	// time.Time is negative, which the uint64 conversion below would wrap into a
+	// far-future ValidBefore -- an OpenSSH certificate that never expires.
+	if p.ValidAfter.IsZero() || p.ValidBefore.IsZero() {
+		return nil, fmt.Errorf("crypto: SSH certificate validity window required")
+	}
+	if p.ValidAfter.Unix() < 0 || p.ValidBefore.Unix() < 0 {
+		return nil, fmt.Errorf("crypto: SSH certificate validity window predates the Unix epoch")
+	}
+	if !p.ValidBefore.After(p.ValidAfter) {
+		return nil, fmt.Errorf("crypto: SSH certificate ValidBefore must be after ValidAfter")
+	}
 	subjectKey, _, _, _, err := ssh.ParseAuthorizedKey(p.SubjectPublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse subject SSH key: %w", err)
