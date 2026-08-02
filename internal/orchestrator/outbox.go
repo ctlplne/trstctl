@@ -52,6 +52,12 @@ type Record struct {
 	Attempts       int
 	LastError      string
 	Payload        []byte
+	// LeaseHeld reports that a dispatch worker currently holds this row's lease
+	// (status 'processing' with an unexpired lease_until). An in-request drainer
+	// that performs the external call itself must skip such a row: the leaseholder
+	// is already performing that same effect and is the only party allowed to
+	// complete the row (AN-6).
+	LeaseHeld bool
 }
 
 type claimedOutboxEntry struct {
@@ -761,6 +767,85 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 	return nil
 }
 
+// ErrOutboxLeaseHeld reports that a completion was refused because a dispatch
+// worker currently holds the row's lease. The leaseholder owns finalization, so
+// the durable intent is not lost — but the caller must not report success, or it
+// would retire an item whose effect another worker is still performing.
+var ErrOutboxLeaseHeld = errors.New("orchestrator: outbox entry is leased by a dispatch worker")
+
+// CompleteByKey marks the tenant's (destination, idempotencyKey) entry delivered on
+// behalf of an in-request drainer that performed the external call itself instead of
+// going through DispatchScoped. It is the only sanctioned completion outside
+// finalizeClaim, and it carries the same two invariants:
+//
+//   - The lease predicate. finalizeClaim completes only a row this worker leased
+//     ("status = 'processing' AND worker_id = $3"), which is what stops two workers
+//     from completing the same item. A caller that never claimed the row holds no
+//     lease, so the equivalent guarantee here is the inverse: refuse any row a
+//     dispatch worker is currently holding and report ErrOutboxLeaseHeld. An expired
+//     lease is fair game — claimOne's own recovery sweep already treats
+//     "lease_until <= now" as reclaimable.
+//   - The circuit breaker. finalizeClaim's success branch calls recordCircuitSuccess
+//     so a destination that just answered stops being treated as failing. A
+//     completion that skips it leaves the lane's circuit open and keeps the
+//     dispatcher backing off a healthy endpoint.
+//
+// completed reports whether this call flipped the row; false with a nil error means
+// the entry was already delivered or is no longer present. ErrOutboxLeaseHeld is
+// never mapped to success: a caller that swallows it reports an item retired while
+// the leaseholder is still performing its effect.
+func (o *Outbox) CompleteByKey(ctx context.Context, tenantID, destination, idempotencyKey string) (completed bool, err error) {
+	if tenantID == "" || destination == "" || idempotencyKey == "" {
+		return false, errors.New("orchestrator: complete outbox entry requires tenant, destination and idempotency key")
+	}
+	now := o.clockNow()
+	msg := Message{TenantID: tenantID, Destination: destination, IdempotencyKey: idempotencyKey}
+	leaseHeld := false
+	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		scanErr := tx.QueryRow(ctx,
+			`UPDATE outbox
+			    SET status = 'delivered',
+			        delivered_at = now(),
+			        last_error = NULL,
+			        worker_id = NULL,
+			        lease_until = NULL
+			  WHERE tenant_id = $1
+			    AND destination = $2
+			    AND idempotency_key = $3
+			    AND status <> 'delivered'
+			    AND (status <> 'processing' OR lease_until IS NULL OR lease_until <= $4)
+			RETURNING id, COALESCE(NULLIF(effect_lane, ''), destination)`,
+			tenantID, destination, idempotencyKey, now).
+			Scan(&msg.ID, &msg.EffectLane)
+		if !errors.Is(scanErr, pgx.ErrNoRows) {
+			return scanErr
+		}
+		// Nothing flipped: either the entry is already delivered/absent, or a dispatch
+		// worker holds a live lease on it. Tell those apart so a lease collision is
+		// reported instead of silently reading like a replay.
+		return tx.QueryRow(ctx,
+			`SELECT count(*) > 0
+			   FROM outbox
+			  WHERE tenant_id = $1
+			    AND destination = $2
+			    AND idempotency_key = $3
+			    AND status = 'processing'
+			    AND lease_until > $4`,
+			tenantID, destination, idempotencyKey, now).Scan(&leaseHeld)
+	})
+	if err != nil {
+		return false, err
+	}
+	if leaseHeld {
+		return false, ErrOutboxLeaseHeld
+	}
+	if msg.ID == 0 {
+		return false, nil
+	}
+	o.recordCircuitSuccess(msg, now)
+	return true, nil
+}
+
 // persistedDeliveryError is deliberately closed-set. An external system may echo
 // the credential/private key just sent to it in an error response; persisting
 // arbitrary err.Error() would turn that attacker-controlled body into an
@@ -958,12 +1043,14 @@ func (o *Outbox) CircuitStates() []CircuitSnapshot {
 // under RLS.
 func (o *Outbox) Pending(ctx context.Context, tenantID string) ([]Record, error) {
 	var out []Record
+	now := o.clockNow()
 	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id, tenant_id::text, destination, payload, idempotency_key, status, attempts, COALESCE(last_error, '')
+			`SELECT id, tenant_id::text, destination, payload, idempotency_key, status, attempts, COALESCE(last_error, ''),
+			        (status = 'processing' AND lease_until IS NOT NULL AND lease_until > $2) AS lease_held
 			   FROM outbox
 			  WHERE tenant_id = $1 AND status <> 'delivered'
-			  ORDER BY id`, tenantID)
+			  ORDER BY id`, tenantID, now)
 		if err != nil {
 			return err
 		}
@@ -971,7 +1058,7 @@ func (o *Outbox) Pending(ctx context.Context, tenantID string) ([]Record, error)
 		for rows.Next() {
 			var r Record
 			if err := rows.Scan(&r.ID, &r.TenantID, &r.Destination, &r.Payload,
-				&r.IdempotencyKey, &r.Status, &r.Attempts, &r.LastError); err != nil {
+				&r.IdempotencyKey, &r.Status, &r.Attempts, &r.LastError, &r.LeaseHeld); err != nil {
 				return err
 			}
 			out = append(out, r)

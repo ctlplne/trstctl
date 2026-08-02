@@ -95,6 +95,12 @@ func (q dynamicSecretOutboxQueue) Pending(ctx context.Context) ([]dynsecret.Revo
 		if rec.Destination != dynamicSecretRevokeDestination {
 			continue
 		}
+		if rec.LeaseHeld {
+			// The outbox dispatcher is performing this revocation right now under its
+			// lease. Handing it to the in-request drainer as well would run the same
+			// provider revoke twice, and only the leaseholder may complete the row (AN-6).
+			continue
+		}
 		var item dynsecret.RevokeItem
 		if err := json.Unmarshal(rec.Payload, &item); err != nil {
 			return nil, err
@@ -104,23 +110,33 @@ func (q dynamicSecretOutboxQueue) Pending(ctx context.Context) ([]dynsecret.Revo
 	return out, nil
 }
 
+// completeSecretIntegrationOutbox marks one secret-integration outbox row delivered
+// through the orchestrator (AN-6) instead of hand-rolling the UPDATE.
+//
+// These two queues are drained twice: by the outbox dispatcher
+// (secretIntegrationOutboxDispatcher handles dynsecret.revoke and secret.sync.*),
+// and in-request by dynsecret.Engine.RunRevocations / secretsync.Engine.RunDeliveries
+// through Queue.Done. Only the dispatcher ever holds a lease, so a hand-rolled
+// "status <> 'delivered'" completion here could flip a row a dispatch worker was
+// still holding — the double-completion the lease predicate exists to prevent — and
+// never recorded the destination's circuit success, leaving a healthy endpoint
+// backed off. Outbox.CompleteByKey carries both.
+//
+// orchestrator.ErrOutboxLeaseHeld is deliberately NOT mapped to nil. The queues'
+// Pending already skips rows a dispatch worker holds, so this can only fire when the
+// dispatcher claimed the row after this drainer read it; reporting success there
+// would retire an item whose effect the leaseholder is still performing.
+func completeSecretIntegrationOutbox(ctx context.Context, ob *orchestrator.Outbox, tenantID, destination, idempotencyKey string) error {
+	if ob == nil {
+		return errors.New("server: secret integration outbox completion requires an outbox")
+	}
+	_, err := ob.CompleteByKey(ctx, tenantID, destination, idempotencyKey)
+	return err
+}
+
 func (q dynamicSecretOutboxQueue) Done(ctx context.Context, leaseID string) error {
-	key := dynamicSecretRevokeKey(leaseID)
-	return q.store.WithTenant(ctx, q.tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`UPDATE outbox
-			    SET status = 'delivered',
-			        delivered_at = now(),
-			        last_error = NULL,
-			        worker_id = NULL,
-			        lease_until = NULL
-			  WHERE tenant_id = $1
-			    AND destination = $2
-			    AND idempotency_key = $3
-			    AND status <> 'delivered'`,
-			q.tenantID, dynamicSecretRevokeDestination, key)
-		return err
-	})
+	return completeSecretIntegrationOutbox(ctx, q.outbox, q.tenantID,
+		dynamicSecretRevokeDestination, dynamicSecretRevokeKey(leaseID))
 }
 
 func dynamicSecretRevokeKey(leaseID string) string {
@@ -181,6 +197,12 @@ func (q secretSyncOutboxQueue) Pending(ctx context.Context) ([]secretsync.SyncIt
 		if rec.Destination != secretSyncDestination(q.target) {
 			continue
 		}
+		if rec.LeaseHeld {
+			// The outbox dispatcher is pushing this item right now under its lease.
+			// Handing it to the in-request drainer as well would deliver the same secret
+			// twice, and only the leaseholder may complete the row (AN-6).
+			continue
+		}
 		var payload secretSyncOutboxPayload
 		if err := json.Unmarshal(rec.Payload, &payload); err != nil {
 			wipeSyncItems(out)
@@ -197,22 +219,8 @@ func (q secretSyncOutboxQueue) Pending(ctx context.Context) ([]secretsync.SyncIt
 }
 
 func (q secretSyncOutboxQueue) Done(ctx context.Context, id string) error {
-	key := secretSyncOutboxKey(q.target, id)
-	return q.store.WithTenant(ctx, q.tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`UPDATE outbox
-			    SET status = 'delivered',
-			        delivered_at = now(),
-			        last_error = NULL,
-			        worker_id = NULL,
-			        lease_until = NULL
-			  WHERE tenant_id = $1
-			    AND destination = $2
-			    AND idempotency_key = $3
-			    AND status <> 'delivered'`,
-			q.tenantID, secretSyncDestination(q.target), key)
-		return err
-	})
+	return completeSecretIntegrationOutbox(ctx, q.outbox, q.tenantID,
+		secretSyncDestination(q.target), secretSyncOutboxKey(q.target, id))
 }
 
 func secretSyncDestination(target string) string {
