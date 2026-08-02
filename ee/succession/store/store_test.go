@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"strings"
@@ -39,7 +40,7 @@ func TestMain(m *testing.M) {
 	port := freePort()
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(port).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
 		BinariesPath(dir + "/bin").
@@ -57,13 +58,21 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func freePort() int {
+// freePort returns an ephemeral TCP port as uint32, the type embedded-postgres
+// takes, so no narrowing conversion happens at the call site. The listener's
+// port is a Go int; it is range-checked here against the TCP port space before
+// the (now provably in-range) conversion.
+func freePort() uint32 {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
 	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port
+	p := l.Addr().(*net.TCPAddr).Port
+	if p < 0 || p > math.MaxUint16 {
+		panic(fmt.Sprintf("listener returned out-of-range TCP port %d", p))
+	}
+	return uint32(p)
 }
 
 func newRepo(t *testing.T) *pcasstore.Repo {
@@ -84,7 +93,7 @@ func rec(identity string, epoch uint64) pcasstore.Record {
 	return pcasstore.Record{
 		IdentityID: identity, Epoch: epoch, PredecessorEpoch: epoch - 1,
 		PredecessorAlg: "ECDSA-P256", SuccessorAlg: "Ed25519",
-		SuccessorPub: []byte{byte(epoch)}, Encoded: []byte{0xAB, byte(epoch)},
+		SuccessorPub: []byte{byte(epoch & 0xFF)}, Encoded: []byte{0xAB, byte(epoch & 0xFF)},
 	}
 }
 

@@ -4,6 +4,7 @@ package taskenv
 
 import (
 	"bytes"
+	"math"
 	"testing"
 	"time"
 
@@ -209,6 +210,47 @@ func TestVerifySignatureAndExpiry(t *testing.T) {
 	// Nil lookup fails closed.
 	if err := VerifySignatureAndExpiry(signed, now, nil); err == nil {
 		t.Fatal("nil trust lookup passed verification")
+	}
+}
+
+// TestWriteI64 pins the canonical int64 encoding to hand-written expected bytes at the
+// signed boundaries. writeI64 emits the 8-byte big-endian two's-complement form; because
+// the envelope digest binds Expiry.NotBefore / Expiry.NotAfter through it, any drift here
+// would silently change every previously computed envelope digest. The expectations below
+// are written out literally (not derived from a conversion) so this test is an independent
+// oracle for the encoding, including the negative and minimum cases where sign extension
+// is what the per-byte mask has to discard.
+func TestWriteI64(t *testing.T) {
+	cases := []struct {
+		name string
+		in   int64
+		want []byte
+	}{
+		{"zero", 0, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+		{"one", 1, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}},
+		{"minus-one", -1, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+		{"minus-two", -2, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}},
+		{"max-int64", math.MaxInt64, []byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+		{"min-int64", math.MinInt64, []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+		// Sample expiry bounds as used by sampleEnvelope, plus their negations.
+		{"positive-1000", 1000, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xe8}},
+		{"negative-1000", -1000, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc, 0x18}},
+		{"positive-2000", 2000, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0xd0}},
+		// Distinct byte in every position: catches a transposed shift or index.
+		{"byte-pattern", 0x0123456789abcdef, []byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}},
+		{"byte-pattern-negative", -0x0123456789abcdef, []byte{0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x11}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var b bytes.Buffer
+			writeI64(&b, tc.in)
+			if got := b.Bytes(); !bytes.Equal(got, tc.want) {
+				t.Fatalf("writeI64(%d) = % x, want % x", tc.in, got, tc.want)
+			}
+			if b.Len() != 8 {
+				t.Fatalf("writeI64(%d) wrote %d bytes, want 8 (fixed width)", tc.in, b.Len())
+			}
+		})
 	}
 }
 

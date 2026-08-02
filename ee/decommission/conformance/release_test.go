@@ -36,14 +36,15 @@ func TestEdition_AllVDECPackagesAreEE(t *testing.T) {
 		if !strings.HasPrefix(d, "ee/") {
 			t.Fatalf("VDEC package tree %q is not under ee/", d)
 		}
-		err := filepath.WalkDir(filepath.Join(root, d), func(path string, de os.DirEntry, err error) error {
+		dir := filepath.Join(root, d)
+		err := filepath.WalkDir(dir, func(path string, de os.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if de.IsDir() || !strings.HasSuffix(path, ".go") {
 				return nil
 			}
-			b, err := os.ReadFile(path)
+			b, err := readWalkedUnder(dir, path)
 			if err != nil {
 				return err
 			}
@@ -75,7 +76,7 @@ func TestEdition_AllVDECPackagesAreEE(t *testing.T) {
 		if !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		b, err := os.ReadFile(path)
+		b, err := readWalkedUnder(root, path)
 		if err != nil {
 			return err
 		}
@@ -110,8 +111,7 @@ func TestZeroRemoval_BasicKeyDestructionIntact(t *testing.T) {
 		},
 	}
 	for rel, needles := range required {
-		path := filepath.Join(root, rel)
-		b, err := os.ReadFile(path)
+		b, err := readRelUnder(root, rel)
 		if err != nil {
 			t.Fatalf("read zero-removal file %s: %v", rel, err)
 		}
@@ -209,7 +209,7 @@ func TestConformance_TraceabilityMatrixAllClaimsProven(t *testing.T) {
 	// `make claim-traceability-check`. A claim counts as proven only when the
 	// generated table carries a row for it with both an implementation and a test.
 	root := moduleRoot(t)
-	table, err := os.ReadFile(filepath.Join(root, "ee/docs/claim-traceability.md"))
+	table, err := readRelUnder(root, "ee/docs/claim-traceability.md")
 	if err != nil {
 		t.Fatalf("VDEC-TRACE-001: generated claim-traceability table unreadable: %v", err)
 	}
@@ -264,6 +264,31 @@ func TestConformance_AllInvariantGuardsPresent(t *testing.T) {
 	}
 }
 
+// readRelUnder reads rel -- interpreted relative to dir -- through a directory
+// handle scoped to dir. These conformance gates decide whether a release is
+// allowed to ship, so the bytes they judge must come from inside the tree being
+// audited: os.Root resolves every path component at the syscall layer and
+// refuses a ".." component or a symlink that leaves dir, which a plain
+// os.ReadFile of a walked path would silently follow.
+func readRelUnder(dir, rel string) ([]byte, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	return root.ReadFile(rel)
+}
+
+// readWalkedUnder is readRelUnder for a path produced by filepath.WalkDir over
+// dir, which yields absolute paths.
+func readWalkedUnder(dir, path string) ([]byte, error) {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return nil, err
+	}
+	return readRelUnder(dir, rel)
+}
+
 func moduleRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -312,7 +337,7 @@ func mustReadAllGoTests(t *testing.T, root string) string {
 		if de.IsDir() || !strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		raw, err := os.ReadFile(path)
+		raw, err := readWalkedUnder(root, path)
 		if err != nil {
 			return err
 		}

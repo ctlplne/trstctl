@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -51,8 +52,8 @@ func MarshalFields(f succession.CommitmentFields) []byte {
 	putBytes(&b, f.SuccessorPub)
 	putStr(&b, f.PolicyRef)
 	putStr(&b, f.HashAlg)
-	putU64(&b, uint64(f.NotBefore))
-	putU64(&b, uint64(f.NotAfter))
+	putI64(&b, f.NotBefore)
+	putI64(&b, f.NotAfter)
 	putU64(&b, uint64(f.CommitmentVersion))
 	putStr(&b, string(f.RecordType))
 	putBytes(&b, f.AuthzDigest)
@@ -106,16 +107,19 @@ func UnmarshalFields(in []byte) (succession.CommitmentFields, error) {
 	if f.HashAlg, ok = r.str(); !ok {
 		return bad()
 	}
-	var nb, na uint64
-	if nb, ok = r.u64(); !ok {
+	if f.NotBefore, ok = r.i64(); !ok {
 		return bad()
 	}
-	if na, ok = r.u64(); !ok {
+	if f.NotAfter, ok = r.i64(); !ok {
 		return bad()
 	}
-	f.NotBefore, f.NotAfter = int64(nb), int64(na)
 	var cv uint64
 	if cv, ok = r.u64(); !ok {
+		return bad()
+	}
+	// CommitmentVersion is a uint32 on the wire's 8-byte integer field; anything wider
+	// is not a version this build can represent, so fail closed rather than truncate.
+	if cv > math.MaxUint32 {
 		return bad()
 	}
 	f.CommitmentVersion = uint32(cv)
@@ -230,6 +234,23 @@ func putU64(b *bytes.Buffer, v uint64) {
 	b.Write(n[:])
 }
 
+// putI64 writes v as the same 8-byte big-endian two's-complement field putU64 would
+// have written for the reinterpreted scalar. Each byte is masked straight out of v,
+// so no signed/unsigned conversion happens and the wire format is unchanged.
+func putI64(b *bytes.Buffer, v int64) {
+	n := [8]byte{
+		byte(v >> 56 & 0xFF),
+		byte(v >> 48 & 0xFF),
+		byte(v >> 40 & 0xFF),
+		byte(v >> 32 & 0xFF),
+		byte(v >> 24 & 0xFF),
+		byte(v >> 16 & 0xFF),
+		byte(v >> 8 & 0xFF),
+		byte(v & 0xFF),
+	}
+	b.Write(n[:])
+}
+
 func putBytes(b *bytes.Buffer, v []byte) {
 	putU64(b, uint64(len(v)))
 	b.Write(v)
@@ -252,6 +273,22 @@ func (r *fieldReader) u64() (uint64, bool) {
 		return 0, false
 	}
 	v := binary.BigEndian.Uint64(r.b[:8])
+	r.b = r.b[8:]
+	return v, true
+}
+
+// i64 reads the 8-byte big-endian two's-complement field written by putI64. The value
+// is accumulated byte by byte (each byte widens cleanly to int64), which is
+// bit-identical to reinterpreting the big-endian unsigned read as int64 but performs
+// no narrowing or sign-reinterpreting conversion.
+func (r *fieldReader) i64() (int64, bool) {
+	if len(r.b) < 8 {
+		return 0, false
+	}
+	var v int64
+	for _, c := range r.b[:8] {
+		v = v<<8 | int64(c)
+	}
 	r.b = r.b[8:]
 	return v, true
 }

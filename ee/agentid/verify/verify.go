@@ -3,6 +3,7 @@
 package verify
 
 import (
+	"encoding/binary"
 	"errors"
 	"strings"
 
@@ -271,10 +272,11 @@ func reprDigest(repr []byte) []byte {
 	return crypto.SHA256Sum(b)
 }
 
+// appendVerifyU64 appends v as the AGID 8-byte BIG-ENDIAN length frame (most
+// significant byte first). The framing is part of the digest preimage, so this
+// encoding is fixed: it must stay byte-for-byte what the signer emitted.
 func appendVerifyU64(b []byte, v uint64) []byte {
-	return append(b,
-		byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32),
-		byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	return binary.BigEndian.AppendUint64(b, v)
 }
 
 // normOp normalizes an operation identifier (trim + lowercase) for comparison,

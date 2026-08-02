@@ -122,7 +122,11 @@ func (b *keyBuilder) snapshot() KeyState {
 
 func Fold(seq []eventspec.Event) (Projection, error) {
 	builders := make(map[ProjectionKey]*keyBuilder)
+	// position is the 1-based ordinal of the event within seq, tracked as uint64
+	// so the ledger position never needs a width conversion.
+	var position uint64
 	for i, e := range seq {
+		position++
 		payload, err := Decode(e)
 		if err != nil {
 			return nil, fmt.Errorf("depstate: fold event %d (%s): %w", i, e.Type, err)
@@ -133,7 +137,7 @@ func Fold(seq []eventspec.Event) (Projection, error) {
 		}
 		b := builderFor(builders, c.tenantID, c.keyID)
 		b.apply(c.op, c.dependent)
-		b.advance(ledgerPosition(e, i))
+		b.advance(ledgerPosition(e, position))
 	}
 	out := make(Projection, len(builders))
 	for key, b := range builders {
@@ -195,9 +199,11 @@ func builderFor(builders map[ProjectionKey]*keyBuilder, tenantID, keyID string) 
 	return b
 }
 
-func ledgerPosition(e eventspec.Event, index int) uint64 {
+// ledgerPosition reports the ledger position of e, falling back to its 1-based
+// ordinal within the folded sequence when the event carries no sequence number.
+func ledgerPosition(e eventspec.Event, position uint64) uint64 {
 	if e.Sequence != 0 {
 		return e.Sequence
 	}
-	return uint64(index + 1)
+	return position
 }

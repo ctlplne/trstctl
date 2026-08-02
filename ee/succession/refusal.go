@@ -50,7 +50,7 @@ func refusalMessage(a RefusalArtifact) []byte {
 	writeField(&b, []byte(a.TenantID))
 	writeField(&b, a.RequestDigest)
 	writeField(&b, []byte(a.Constraint))
-	writeUint(&b, uint64(a.IssuedAt))
+	writeInt(&b, a.IssuedAt)
 	return b.Bytes()
 }
 

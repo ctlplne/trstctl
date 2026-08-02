@@ -238,7 +238,16 @@ type vectorExpect struct {
 
 func readVerifyVector(t *testing.T, name string) verifyVector {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", "vectors", name))
+	root, err := os.OpenRoot(filepath.Join("testdata", "vectors"))
+	if err != nil {
+		t.Fatalf("open vector root: %v", err)
+	}
+	defer func() {
+		if cerr := root.Close(); cerr != nil {
+			t.Errorf("close vector root: %v", cerr)
+		}
+	}()
+	data, err := root.ReadFile(name)
 	if err != nil {
 		t.Fatalf("read vector %s: %v", name, err)
 	}

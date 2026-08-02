@@ -148,8 +148,8 @@ func (f CommitmentFields) encode() ([]byte, error) {
 	writeField(&b, f.SuccessorPub)
 	writeField(&b, []byte(f.PolicyRef))
 	writeField(&b, []byte(f.HashAlg))
-	writeUint(&b, uint64(f.NotBefore))
-	writeUint(&b, uint64(f.NotAfter))
+	writeInt(&b, f.NotBefore)
+	writeInt(&b, f.NotAfter)
 	return b.Bytes(), nil
 }
 
@@ -174,8 +174,8 @@ func (f CommitmentFields) encodeV2(predID, succID uint64) []byte {
 	writeField(&b, f.SuccessorPub)
 	writeField(&b, []byte(f.PolicyRef))
 	writeField(&b, []byte(f.HashAlg))
-	writeUint(&b, uint64(f.NotBefore))
-	writeUint(&b, uint64(f.NotAfter))
+	writeInt(&b, f.NotBefore)
+	writeInt(&b, f.NotAfter)
 	// v2 additional bound fields:
 	writeField(&b, []byte(f.RecordType))
 	writeField(&b, f.AuthzDigest)
@@ -205,5 +205,23 @@ func writeField(b *bytes.Buffer, v []byte) {
 func writeUint(b *bytes.Buffer, v uint64) {
 	var x [8]byte
 	binary.BigEndian.PutUint64(x[:], v)
+	b.Write(x[:])
+}
+
+// writeInt appends v as its 8-byte two's-complement big-endian encoding. Each
+// byte is extracted by masking the low 8 bits of an arithmetic shift, so the
+// output is bit-for-bit identical to writeUint of v's two's-complement pattern
+// for every int64 including negatives — the canonical encodings this backs are
+// signature-covered and must not change. See TestWriteInt_TwosComplementBytes.
+func writeInt(b *bytes.Buffer, v int64) {
+	var x [8]byte
+	x[0] = byte(v >> 56 & 0xFF)
+	x[1] = byte(v >> 48 & 0xFF)
+	x[2] = byte(v >> 40 & 0xFF)
+	x[3] = byte(v >> 32 & 0xFF)
+	x[4] = byte(v >> 24 & 0xFF)
+	x[5] = byte(v >> 16 & 0xFF)
+	x[6] = byte(v >> 8 & 0xFF)
+	x[7] = byte(v & 0xFF)
 	b.Write(x[:])
 }

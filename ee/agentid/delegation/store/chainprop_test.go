@@ -4,20 +4,67 @@ package store_test
 
 import (
 	"context"
-	"encoding/binary"
+	"math"
 	"reflect"
 	"testing"
+
 	"trstctl.com/trstctl/ee/proptest"
 
 	agidstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 )
 
 // seqDig makes a distinct 32-byte digest for an integer so chain nodes have unique
-// ids in the property test.
+// ids in the property test. The leading 8 bytes are i+1 big-endian, written by
+// masking each byte out of the value rather than converting the scalar to uint64
+// (the bytes are identical either way; see TestSeqDig_BigEndianBytes).
 func seqDig(i int) []byte {
 	b := make([]byte, 32)
-	binary.BigEndian.PutUint64(b, uint64(i)+1)
+	v := i + 1
+	b[0] = byte(v >> 56 & 0xFF)
+	b[1] = byte(v >> 48 & 0xFF)
+	b[2] = byte(v >> 40 & 0xFF)
+	b[3] = byte(v >> 32 & 0xFF)
+	b[4] = byte(v >> 24 & 0xFF)
+	b[5] = byte(v >> 16 & 0xFF)
+	b[6] = byte(v >> 8 & 0xFF)
+	b[7] = byte(v & 0xFF)
 	return b
+}
+
+// TestSeqDig_BigEndianBytes pins seqDig's leading 8 bytes against hand-written
+// literals at the boundaries, so the mask-based byte extraction is verified to be
+// bit-identical to a big-endian uint64 encoding of i+1 without using a conversion
+// as its own oracle.
+func TestSeqDig_BigEndianBytes(t *testing.T) {
+	cases := []struct {
+		in   int
+		want [8]byte
+	}{
+		{in: -1, want: [8]byte{0, 0, 0, 0, 0, 0, 0, 0}},                                        // -1+1 = 0
+		{in: 0, want: [8]byte{0, 0, 0, 0, 0, 0, 0, 1}},                                         // 0+1 = 1
+		{in: 1, want: [8]byte{0, 0, 0, 0, 0, 0, 0, 2}},                                         // 1+1 = 2
+		{in: 254, want: [8]byte{0, 0, 0, 0, 0, 0, 0, 0xFF}},                                    // 255
+		{in: 255, want: [8]byte{0, 0, 0, 0, 0, 0, 0x01, 0x00}},                                 // 256
+		{in: 0xFFFFFFFE, want: [8]byte{0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF}},                    // 2^32-1
+		{in: 0xFFFFFFFF, want: [8]byte{0, 0, 0, 0x01, 0x00, 0x00, 0x00, 0x00}},                 // 2^32
+		{in: -2, want: [8]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}},                // -1 two's complement
+		{in: math.MaxInt64 - 1, want: [8]byte{0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}}, // MaxInt64
+		{in: math.MinInt64, want: [8]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}},     // MinInt64+1
+	}
+	for _, tc := range cases {
+		got := seqDig(tc.in)
+		if len(got) != 32 {
+			t.Fatalf("seqDig(%d): len %d, want 32", tc.in, len(got))
+		}
+		if !reflect.DeepEqual(got[:8], tc.want[:]) {
+			t.Errorf("seqDig(%d) head = %v, want %v", tc.in, got[:8], tc.want)
+		}
+		for i := 8; i < 32; i++ {
+			if got[i] != 0 {
+				t.Errorf("seqDig(%d): tail byte %d = %d, want 0", tc.in, i, got[i])
+			}
+		}
+	}
 }
 
 // TestChainFetch_OrderedAndGaplessProperty is the property that FetchChain returns a
@@ -37,19 +84,23 @@ func TestChainFetch_OrderedAndGaplessProperty(t *testing.T) {
 		base := seed * 100
 		var records []agidstore.DelegationRecord
 		var wantOrder [][]byte
+		// seq counts the ledger sequence as a uint64 from the start, so the
+		// record/issuance sequences never round-trip through a signed int.
+		var seq uint64
 		for i := 0; i < length; i++ {
 			d := seqDig(base + i)
 			wantOrder = append(wantOrder, d)
+			seq++
 			if i == 0 {
 				records = append(records, agidstore.DelegationRecord{
 					RecordDigest: d, RootAnchor: true, DelegatorID: "root", DelegateID: "d0",
-					Encoded: []byte("e"), Seq: uint64(i + 1),
+					Encoded: []byte("e"), Seq: seq,
 				})
 			} else {
 				records = append(records, agidstore.DelegationRecord{
 					RecordDigest: d, ParentDigest: seqDig(base + i - 1), RootAnchor: false,
 					DelegatorID: "d" + itoa(i-1), DelegateID: "d" + itoa(i),
-					Encoded: []byte("e"), Seq: uint64(i + 1),
+					Encoded: []byte("e"), Seq: seq,
 				})
 			}
 		}
@@ -65,7 +116,7 @@ func TestChainFetch_OrderedAndGaplessProperty(t *testing.T) {
 		if err := repo.InsertIssuance(ctx, tenantA, agidstore.Issuance{
 			CredentialID: cred, SubjectID: "leaf-subject",
 			ChainHeadDigest: leaf.RecordDigest, ChainDigest: seqDig(base + 500),
-			AgentStackDigest: seqDig(base + 600), Seq: uint64(length + 1),
+			AgentStackDigest: seqDig(base + 600), Seq: seq + 1,
 		}); err != nil {
 			t.Fatalf("seed %d issuance: %v", seed, err)
 		}

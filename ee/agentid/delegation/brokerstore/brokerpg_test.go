@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"strings"
@@ -61,7 +62,7 @@ func startPG() {
 	}
 	inst := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(port).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
 		BinariesPath(dir + "/bin").
@@ -85,13 +86,21 @@ func ensurePG(t *testing.T) string {
 	return pgDSN
 }
 
-func freeTCPPort() (int, error) {
+// freeTCPPort reserves an ephemeral port and returns it as the uint32 the embedded-postgres
+// config expects, so no narrowing conversion is needed at the call site. The kernel only ever
+// hands back a 16-bit port; the bound check makes that provable here and fails closed rather
+// than wrapping if the assumption ever breaks.
+func freeTCPPort() (uint32, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port, nil
+	p := l.Addr().(*net.TCPAddr).Port
+	if p < 0 || p > math.MaxUint16 {
+		return 0, fmt.Errorf("listener reported out-of-range TCP port %d", p)
+	}
+	return uint32(p), nil
 }
 
 // sharedStore opens (once for the whole package) a single core store against one AGID

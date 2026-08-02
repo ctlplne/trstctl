@@ -72,6 +72,83 @@ func TestProviderOptionRejectsInlineSecretConfig(t *testing.T) {
 	}
 }
 
+func TestReadCredentialFileReadsThroughParentDirectoryHandle(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "token")
+	if err := os.WriteFile(path, []byte("managed-key-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := readCredentialFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, []byte("managed-key-token")) {
+		t.Fatalf("readCredentialFile() = %q, want the file contents", raw)
+	}
+}
+
+func TestReadCredentialFileFollowsIndirectionInsideTheDirectory(t *testing.T) {
+	// Kubernetes projected secret volumes publish token -> ..data/token, with
+	// ..data itself a symlink to a timestamped sibling. Both hops stay inside the
+	// mount directory, so credential loading must keep working there.
+	dir := t.TempDir()
+	generation := filepath.Join(dir, "..2026_08_02_00_00_00")
+	if err := os.Mkdir(generation, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(generation, "token"), []byte("projected"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("..2026_08_02_00_00_00", filepath.Join(dir, "..data")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..data", "token"), filepath.Join(dir, "token")); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := readCredentialFile(filepath.Join(dir, "token"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, []byte("projected")) {
+		t.Fatalf("readCredentialFile() = %q, want the projected secret", raw)
+	}
+}
+
+func TestReadCredentialFileRefusesSymlinkOutOfTheDirectory(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+	if err := os.WriteFile(outside, []byte("not-the-credential"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "token")
+	if err := os.Symlink(outside, path); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := readCredentialFile(path)
+	if err == nil {
+		t.Fatalf("readCredentialFile() = %q, want refusal of an escaping symlink", raw)
+	}
+	if bytes.Contains(raw, []byte("not-the-credential")) {
+		t.Fatal("readCredentialFile returned bytes from outside the credential directory")
+	}
+}
+
+func TestCredentialLoadsFileReferencedByConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pin")
+	if err := os.WriteFile(path, []byte(" 1234\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	value, destroy, err := credential("pkcs11 user PIN", nil, path, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer destroy()
+	if !bytes.Equal(value, []byte("1234")) {
+		t.Fatalf("credential() = %q, want the trimmed file payload", value)
+	}
+}
+
 func TestManagedKeySignerEgressRequiresHTTPSExceptExplicitLoopback(t *testing.T) {
 	tests := []struct {
 		name     string

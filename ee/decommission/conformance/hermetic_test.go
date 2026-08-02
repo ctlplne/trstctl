@@ -23,14 +23,15 @@ var (
 
 func TestHermetic_EESourcesResolveInputsInsideModule(t *testing.T) {
 	root := moduleRoot(t)
-	err := filepath.WalkDir(filepath.Join(root, "ee"), func(path string, de os.DirEntry, err error) error {
+	eeDir := filepath.Join(root, "ee")
+	err := filepath.WalkDir(eeDir, func(path string, de os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if de.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		b, err := os.ReadFile(path)
+		b, err := readWalkedUnder(eeDir, path)
 		if err != nil {
 			return err
 		}

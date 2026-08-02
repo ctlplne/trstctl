@@ -113,7 +113,7 @@ func findingMessage(f Finding) []byte {
 	writeField(&b, []byte(f.TenantID))
 	writeField(&b, []byte(f.Algorithm))
 	writeField(&b, []byte(f.Reason))
-	writeUint(&b, uint64(f.ObservedAt))
+	writeInt(&b, f.ObservedAt)
 	return b.Bytes()
 }
 
@@ -125,7 +125,7 @@ func planMessage(p Plan) []byte {
 	writeField(&b, []byte(p.TenantID))
 	writeField(&b, p.FindingDigest)
 	writeField(&b, []byte(p.TargetAlgorithm))
-	writeUint(&b, uint64(p.CreatedAt))
+	writeInt(&b, p.CreatedAt)
 	return b.Bytes()
 }
 
@@ -142,7 +142,7 @@ func decisionMessage(d Decision) []byte {
 	} else {
 		writeUint(&b, 0)
 	}
-	writeUint(&b, uint64(d.DecidedAt))
+	writeInt(&b, d.DecidedAt)
 	return b.Bytes()
 }
 
@@ -248,5 +248,25 @@ func writeField(b *bytes.Buffer, v []byte) {
 func writeUint(b *bytes.Buffer, v uint64) {
 	var x [8]byte
 	binary.BigEndian.PutUint64(x[:], v)
+	b.Write(x[:])
+}
+
+// writeInt appends v in the same frozen 8-byte big-endian two's-complement encoding
+// writeUint produces for the corresponding unsigned bit pattern. The bytes are masked
+// out of v directly instead of round-tripping through an unsigned conversion: >> on a
+// signed value sign-extends and & 0xFF keeps the low 8 bits, so each byte is exactly
+// the two's-complement octet. Signed-message encodings are frozen; see
+// TestWriteInt_TwosComplementBytes for the byte-for-byte boundary vectors.
+func writeInt(b *bytes.Buffer, v int64) {
+	x := [8]byte{
+		byte(v >> 56 & 0xFF),
+		byte(v >> 48 & 0xFF),
+		byte(v >> 40 & 0xFF),
+		byte(v >> 32 & 0xFF),
+		byte(v >> 24 & 0xFF),
+		byte(v >> 16 & 0xFF),
+		byte(v >> 8 & 0xFF),
+		byte(v & 0xFF),
+	}
 	b.Write(x[:])
 }

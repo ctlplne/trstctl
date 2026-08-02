@@ -282,9 +282,7 @@ func TestRepresentation_RandomizedDeterminism(t *testing.T) {
 	toolPool := []string{"fs.read", "fs.write", "net.http", "db.query", "shell.exec", "kv.get"}
 	for i := 0; i < 200; i++ {
 		prompt := make([]byte, 1+rng.Intn(64))
-		for j := range prompt {
-			prompt[j] = byte(rng.Intn(256))
-		}
+		_, _ = rng.Read(prompt)
 		n := rng.Intn(len(toolPool) + 1)
 		tools := append([]string(nil), toolPool[:n]...)
 		rng.Shuffle(len(tools), func(a, b int) { tools[a], tools[b] = tools[b], tools[a] })

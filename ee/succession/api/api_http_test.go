@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -46,7 +47,7 @@ func TestMain(m *testing.M) {
 	}
 	port := freePort()
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
-		Version(embeddedpostgres.V16).Port(uint32(port)).
+		Version(embeddedpostgres.V16).Port(port).
 		RuntimePath(dir + "/rt").DataPath(dir + "/data").BinariesPath(dir + "/bin").
 		Logger(io.Discard).StartTimeout(60 * time.Second))
 	if err := pg.Start(); err != nil {
@@ -61,10 +62,18 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func freePort() int {
+// freePort reserves an ephemeral TCP port and returns it as the uint32 that
+// embedded-postgres expects, so no narrowing conversion is needed at the call
+// site. A TCP port is always in [0, 65535]; anything else means the listener
+// address was not what we asked for, which is not recoverable in TestMain.
+func freePort() uint32 {
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port
+	p := l.Addr().(*net.TCPAddr).Port
+	if p < 0 || p > math.MaxUint16 {
+		panic(fmt.Sprintf("freePort: ephemeral port %d out of range", p))
+	}
+	return uint32(p)
 }
 
 func openStore(t *testing.T) *corestore.Store {

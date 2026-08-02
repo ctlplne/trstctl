@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"testing"
@@ -45,7 +46,7 @@ func TestMain(m *testing.M) {
 	port := freePort()
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(port).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
 		BinariesPath(dir + "/bin").
@@ -63,13 +64,23 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func freePort() int {
+// freePort returns an ephemeral TCP port in the type embedded-postgres wants (uint32),
+// so the port is carried end-to-end as one type and never re-narrowed at the call site.
+// net.TCPAddr.Port is a plain int, so the kernel-assigned value is range-checked against
+// the actual TCP port space before it is used; anything outside it means the listener
+// reported something that is not a port, and the harness fails loudly rather than
+// silently starting Postgres on a wrapped port number.
+func freePort() uint32 {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
 	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port
+	p := l.Addr().(*net.TCPAddr).Port
+	if p < 1 || p > math.MaxUint16 {
+		panic(fmt.Sprintf("freePort: listener reported out-of-range TCP port %d", p))
+	}
+	return uint32(p)
 }
 
 func newStore(t *testing.T) *corestore.Store {

@@ -100,7 +100,7 @@ func (c *Cascade) Reconcile(ctx context.Context, from uint64) (int, error) {
 				   (tenant_id, directive_id, subject_id, reason, watermark, terminal, seq)
 				 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)
 				 ON CONFLICT (tenant_id, directive_id) DO NOTHING`,
-				dir.DirectiveID, dir.SubjectID, dir.Reason, int64(dir.Watermark), dir.Terminal, int64(dir.Seq)); err != nil {
+				dir.DirectiveID, dir.SubjectID, dir.Reason, dir.Watermark, dir.Terminal, dir.Seq); err != nil {
 				return fmt.Errorf("revoke: reconcile directive row: %w", err)
 			}
 			for _, j := range jobRows {

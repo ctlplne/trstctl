@@ -80,9 +80,19 @@ func packageGoFiles(t *testing.T) []string {
 // the verify path constructs no network client and issues no revocation-status
 // query (AGID-claim-7 / INV-A7 offline property).
 func TestNoNetworkClientInVerifyPath(t *testing.T) {
+	// Read the audited sources through a directory handle rooted at the package
+	// directory: every read is resolved inside that root by the kernel, so a
+	// symlink or ".." component in a listed name cannot pull in a file from
+	// outside the package being audited.
+	pkgRoot, err := os.OpenRoot(".")
+	if err != nil {
+		t.Fatalf("open package directory: %v", err)
+	}
+	defer func() { _ = pkgRoot.Close() }()
+
 	fset := token.NewFileSet()
 	for _, f := range packageGoFiles(t) {
-		src, err := os.ReadFile(f)
+		src, err := pkgRoot.ReadFile(f)
 		if err != nil {
 			t.Fatalf("read %s: %v", f, err)
 		}

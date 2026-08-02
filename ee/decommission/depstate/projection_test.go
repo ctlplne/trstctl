@@ -186,12 +186,14 @@ func TestDepState_UnaccountedDependentBlocksDestroy(t *testing.T) {
 
 func TestDepState_FoldEqualsReplayOverGeneratedSequences(t *testing.T) {
 	classes := []DependentClass{DependentCiphertext, DependentWrappedKey, DependentCredential, DependentLeasedSecret, DependentDataSet}
+	depIDs := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
+	keySuffixes := []string{"a", "b", "c"}
 	for seed := int64(0); seed < 50; seed++ {
 		rng := proptest.New(seed)
 		var seq []eventspec.Event
 		for i := 0; i < 40; i++ {
-			dep := Dependent{Class: classes[rng.Intn(len(classes))], ID: string(rune('a' + rng.Intn(8)))}
-			keyID := "key-" + string(rune('a'+rng.Intn(3)))
+			dep := Dependent{Class: classes[rng.Intn(len(classes))], ID: depIDs[rng.Intn(len(depIDs))]}
+			keyID := "key-" + keySuffixes[rng.Intn(len(keySuffixes))]
 			switch rng.Intn(5) {
 			case 0:
 				seq = append(seq, mustEncode(t, DependencyReleasedV1{TenantID: "tenant-a", KeyID: keyID, Dependent: dep}))

@@ -5,11 +5,36 @@ package kmip
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	servedkmip "trstctl.com/trstctl/ee/kmip"
 )
+
+// asInt32 reinterprets the 32 bits of u as a two's-complement signed value.
+// KMIP encodes Integer as a big-endian signed 32-bit field, so the wire value
+// has to be read back as uint32 and then reinterpreted rather than clamped.
+// Below the sign bit the value converts directly; at or above it, masking the
+// sign bit off leaves a value that provably fits in int32, and subtracting the
+// bias restores the negative magnitude without overflowing.
+func asInt32(u uint32) int32 {
+	if u <= math.MaxInt32 {
+		return int32(u)
+	}
+	return int32(u&math.MaxInt32) - math.MaxInt32 - 1
+}
+
+// asInt64 reinterprets the 64 bits of u as a two's-complement signed value,
+// by the same construction as asInt32. KMIP encodes DateTime as a big-endian
+// signed 64-bit POSIX timestamp, so pre-epoch instants arrive with the high
+// bit set and must not be clamped.
+func asInt64(u uint64) int64 {
+	if u <= math.MaxInt64 {
+		return int64(u)
+	}
+	return int64(u&math.MaxInt64) - math.MaxInt64 - 1
+}
 
 func DecodeSnapshotTTLV(frame []byte) (Snapshot, error) {
 	root, err := servedkmip.ParseTTLV(frame)
@@ -140,7 +165,7 @@ func valueInt(v servedkmip.TTLV) int {
 	if len(v.Value) != 4 {
 		return 0
 	}
-	return int(int32(binary.BigEndian.Uint32(v.Value)))
+	return int(asInt32(binary.BigEndian.Uint32(v.Value)))
 }
 
 func valueBytes(v servedkmip.TTLV) []byte {
@@ -154,5 +179,5 @@ func valueTime(v servedkmip.TTLV) time.Time {
 	if v.Type != servedkmip.TTLVDateTime || len(v.Value) != 8 {
 		return time.Time{}
 	}
-	return time.Unix(int64(binary.BigEndian.Uint64(v.Value)), 0).UTC()
+	return time.Unix(asInt64(binary.BigEndian.Uint64(v.Value)), 0).UTC()
 }

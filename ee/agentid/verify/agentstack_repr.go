@@ -325,12 +325,20 @@ func (d *reprDecoder) readBytes() ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	if n > reprMaxDecodeLen || n > uint64(d.remaining()) {
+	// Bound the hostile length header against the allocation cap FIRST, so the
+	// narrowing below is exact: n <= reprMaxDecodeLen (1 MiB) fits an int on every
+	// platform this builds for. Only then compare it against what is actually left
+	// in the buffer.
+	if n > reprMaxDecodeLen {
 		return nil, false
 	}
-	out := make([]byte, n)
-	copy(out, d.buf[d.pos:d.pos+int(n)])
-	d.pos += int(n)
+	size := int(n)
+	if size > d.remaining() {
+		return nil, false
+	}
+	out := make([]byte, size)
+	copy(out, d.buf[d.pos:d.pos+size])
+	d.pos += size
 	return out, true
 }
 

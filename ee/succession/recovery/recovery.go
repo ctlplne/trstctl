@@ -117,7 +117,7 @@ func encodeStatement(s RecoveryStatement) []byte {
 func encodeRoster(threshold int, roster []Approver) []byte {
 	var b bytes.Buffer
 	writeField(&b, []byte(rosterDomain))
-	writeUint(&b, uint64(threshold))
+	writeInt(&b, threshold)
 	writeUint(&b, uint64(len(roster)))
 	for _, a := range roster {
 		writeField(&b, []byte(a.ID))
@@ -239,5 +239,18 @@ func writeField(b *bytes.Buffer, v []byte) {
 func writeUint(b *bytes.Buffer, v uint64) {
 	var x [8]byte
 	binary.BigEndian.PutUint64(x[:], v)
+	b.Write(x[:])
+}
+
+// writeInt appends v's 64-bit two's-complement big-endian encoding. The bytes are
+// masked out of v directly rather than routed through a signed->unsigned
+// conversion, so the encoding is byte-identical for every int value (including
+// negatives, which sign-extend) on both 32- and 64-bit platforms. Keeping the
+// bytes identical matters: this feeds the trust-root roster signature.
+func writeInt(b *bytes.Buffer, v int) {
+	var x [8]byte
+	for i := range x {
+		x[i] = byte(v >> (8 * (7 - i)) & 0xFF)
+	}
 	b.Write(x[:])
 }

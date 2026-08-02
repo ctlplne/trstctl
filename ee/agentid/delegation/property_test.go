@@ -34,15 +34,15 @@ func TestProperty_ComparatorMonotonicityReCheckedInSigner(t *testing.T) {
 	for i := 0; i < 300; i++ {
 		parentScopes := randScopes()
 		childScopes := randScopes()
-		parentBudget := uint64(rng.Intn(1000) + 1)
-		childBudget := uint64(rng.Intn(1000) + 1)
+		parentBudget := nonNegU64(rng.Intn(1000) + 1)
+		childBudget := nonNegU64(rng.Intn(1000) + 1)
 		// Keep the DEPTH dimension always within (childDepth < parentDepth) and set each
 		// hop's depth_remaining equal to its authority depth ceiling, so depth ACCOUNTING
 		// (remaining <= ceiling, strict decrement) always passes and the ONLY thing that
 		// can flip the gate's decision is the AUTHORITY-NARROWING comparison on the set /
 		// budget dimensions. That isolates the differential against WithinParent.
-		parentDepth := uint32(rng.Intn(4) + 3) // >= 3
-		childDepth := uint32(rng.Intn(int(parentDepth)))
+		parentDepth := nonNegU32(rng.Intn(4) + 3) // >= 3
+		childDepth := nonNegU32(rng.Intn(int(parentDepth)))
 		if childDepth == parentDepth {
 			childDepth = parentDepth - 1
 		}

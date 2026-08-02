@@ -5,8 +5,8 @@ package kmip
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -244,8 +244,14 @@ func ttlvText(tag uint32, value string) []byte {
 }
 
 func ttlvInteger(tag uint32, value int32) []byte {
+	// KMIP Integer is a big-endian two's-complement 32-bit field. Masking the
+	// bytes out directly is bit-identical to reinterpreting through uint32 and
+	// keeps negative values intact.
 	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], uint32(value))
+	buf[0] = byte(value >> 24 & 0xFF)
+	buf[1] = byte(value >> 16 & 0xFF)
+	buf[2] = byte(value >> 8 & 0xFF)
+	buf[3] = byte(value & 0xFF)
 	return ttlvEncode(tag, servedkmip.TTLVInteger, buf[:])
 }
 
@@ -254,18 +260,34 @@ func ttlvBytes(tag uint32, value []byte) []byte {
 }
 
 func ttlvDateTime(tag uint32, value time.Time) []byte {
+	// KMIP DateTime is a big-endian two's-complement 64-bit POSIX timestamp.
+	secs := value.Unix()
 	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], uint64(value.Unix()))
+	buf[0] = byte(secs >> 56 & 0xFF)
+	buf[1] = byte(secs >> 48 & 0xFF)
+	buf[2] = byte(secs >> 40 & 0xFF)
+	buf[3] = byte(secs >> 32 & 0xFF)
+	buf[4] = byte(secs >> 24 & 0xFF)
+	buf[5] = byte(secs >> 16 & 0xFF)
+	buf[6] = byte(secs >> 8 & 0xFF)
+	buf[7] = byte(secs & 0xFF)
 	return ttlvEncode(tag, servedkmip.TTLVDateTime, buf[:])
 }
 
 func ttlvEncode(tag uint32, typ servedkmip.TTLVType, value []byte) []byte {
-	out := make([]byte, 8+len(value)+ttlvPadding(len(value)))
-	out[0] = byte(tag >> 16)
-	out[1] = byte(tag >> 8)
-	out[2] = byte(tag)
+	n := len(value)
+	if n < 0 || n > math.MaxInt32 {
+		panic("xrec kmip test: TTLV value length does not fit the 4-byte length field")
+	}
+	out := make([]byte, 8+n+ttlvPadding(n))
+	out[0] = byte(tag >> 16 & 0xFF)
+	out[1] = byte(tag >> 8 & 0xFF)
+	out[2] = byte(tag & 0xFF)
 	out[3] = byte(typ)
-	binary.BigEndian.PutUint32(out[4:8], uint32(len(value)))
+	out[4] = byte(n >> 24 & 0xFF)
+	out[5] = byte(n >> 16 & 0xFF)
+	out[6] = byte(n >> 8 & 0xFF)
+	out[7] = byte(n & 0xFF)
 	copy(out[8:], value)
 	return out
 }
@@ -330,3 +352,96 @@ func mustTime(s string) time.Time {
 }
 
 func mustUnix(s string) int64 { return mustTime(s).Unix() }
+
+// TestAsInt32_TwosComplement pins asInt32 to hand-written expected values at
+// the sign boundary. The expectations are literals on purpose: the stdlib
+// int32(u) conversion is the thing under replacement, so it cannot be the
+// oracle.
+func TestAsInt32_TwosComplement(t *testing.T) {
+	cases := []struct {
+		name string
+		in   uint32
+		want int32
+	}{
+		{"zero", 0x00000000, 0},
+		{"one", 0x00000001, 1},
+		{"max_int32", 0x7FFFFFFF, 2147483647},
+		{"min_int32", 0x80000000, -2147483648},
+		{"min_int32_plus_one", 0x80000001, -2147483647},
+		{"minus_two", 0xFFFFFFFE, -2},
+		{"max_uint32_is_minus_one", 0xFFFFFFFF, -1},
+		{"rsa_2048", 0x00000800, 2048},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := asInt32(tc.in); got != tc.want {
+				t.Fatalf("asInt32(%#08x) = %d, want %d", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAsInt64_TwosComplement pins asInt64 the same way asInt32 is pinned.
+func TestAsInt64_TwosComplement(t *testing.T) {
+	cases := []struct {
+		name string
+		in   uint64
+		want int64
+	}{
+		{"zero", 0x0000000000000000, 0},
+		{"one", 0x0000000000000001, 1},
+		{"max_int64", 0x7FFFFFFFFFFFFFFF, 9223372036854775807},
+		{"min_int64", 0x8000000000000000, -9223372036854775808},
+		{"min_int64_plus_one", 0x8000000000000001, -9223372036854775807},
+		{"minus_two", 0xFFFFFFFFFFFFFFFE, -2},
+		{"max_uint64_is_minus_one", 0xFFFFFFFFFFFFFFFF, -1},
+		{"above_uint32", 0x0000000100000000, 4294967296},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := asInt64(tc.in); got != tc.want {
+				t.Fatalf("asInt64(%#016x) = %d, want %d", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTTLVEncodeBigEndianBytes pins the masked byte emission in the fixture
+// encoders, including negative values, which the previous uint conversion
+// path never exercised.
+func TestTTLVEncodeBigEndianBytes(t *testing.T) {
+	t.Run("integer_negative", func(t *testing.T) {
+		got := ttlvInteger(0x420001, -2)
+		want := []byte{
+			0x42, 0x00, 0x01, byte(servedkmip.TTLVInteger),
+			0x00, 0x00, 0x00, 0x04,
+			0xFF, 0xFF, 0xFF, 0xFE,
+			0x00, 0x00, 0x00, 0x00,
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("ttlvInteger(-2) = % x, want % x", got, want)
+		}
+	})
+	t.Run("integer_positive", func(t *testing.T) {
+		got := ttlvInteger(0x420001, 2048)
+		if !bytes.Equal(got[8:12], []byte{0x00, 0x00, 0x08, 0x00}) {
+			t.Fatalf("ttlvInteger(2048) value = % x, want 00 00 08 00", got[8:12])
+		}
+	})
+	t.Run("datetime_pre_epoch", func(t *testing.T) {
+		got := ttlvDateTime(0x420002, time.Unix(-2, 0).UTC())
+		want := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE}
+		if !bytes.Equal(got[8:16], want) {
+			t.Fatalf("ttlvDateTime(-2) value = % x, want % x", got[8:16], want)
+		}
+	})
+	t.Run("tag_and_length_bytes", func(t *testing.T) {
+		got := ttlvEncode(0xABCDEF, servedkmip.TTLVByteString, []byte{0x01, 0x02, 0x03})
+		if got[0] != 0xAB || got[1] != 0xCD || got[2] != 0xEF {
+			t.Fatalf("tag bytes = % x, want ab cd ef", got[:3])
+		}
+		if !bytes.Equal(got[4:8], []byte{0x00, 0x00, 0x00, 0x03}) {
+			t.Fatalf("length bytes = % x, want 00 00 00 03", got[4:8])
+		}
+	})
+}

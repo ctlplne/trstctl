@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 )
 
@@ -19,14 +18,24 @@ import (
 // and ledger-reconcile embodiments (HighWater, PCAS-18) layer stronger anti-rollback
 // on top for restore-from-backup scenarios.
 type DurableFloorStore struct {
-	mu   sync.Mutex
-	path string
-	m    map[string]uint64
+	mu  sync.Mutex
+	dir string
+	m   map[string]uint64
 }
+
+// floorFileName is the fixed basename of the floor file inside the custody directory.
+// The name is a constant and never derived from a request, so the only variable part
+// of the location is the operator-configured directory the store is rooted at.
+const floorFileName = "pcas-epoch-floors.json"
 
 // NewDurableFloorStore opens (or creates) the durable floor file under dir. dir is
 // the signer's own custody directory (the signer opens no control-plane store). The
 // file is created 0600 in a 0700 directory.
+//
+// Every read and write goes through an os.Root opened on dir, so the floor file, its
+// temp file, and the rename are all resolved inside the custody directory by the
+// kernel: a symlink or ".." planted in that directory cannot redirect the signer's
+// floor state to a path outside its own custody.
 func NewDurableFloorStore(dir string) (*DurableFloorStore, error) {
 	if dir == "" {
 		return nil, fmt.Errorf("minter: durable floor store requires a directory")
@@ -34,7 +43,7 @@ func NewDurableFloorStore(dir string) (*DurableFloorStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("minter: create floor dir: %w", err)
 	}
-	s := &DurableFloorStore{path: filepath.Join(dir, "pcas-epoch-floors.json"), m: map[string]uint64{}}
+	s := &DurableFloorStore{dir: dir, m: map[string]uint64{}}
 	if err := s.load(); err != nil {
 		return nil, err
 	}
@@ -42,7 +51,13 @@ func NewDurableFloorStore(dir string) (*DurableFloorStore, error) {
 }
 
 func (s *DurableFloorStore) load() error {
-	b, err := os.ReadFile(s.path)
+	root, err := os.OpenRoot(s.dir)
+	if err != nil {
+		return fmt.Errorf("minter: open floor dir: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+
+	b, err := root.ReadFile(floorFileName)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil // no floors yet
@@ -98,8 +113,14 @@ func (s *DurableFloorStore) writeAtomic(m map[string]uint64) error {
 	if err != nil {
 		return fmt.Errorf("minter: encode floors: %w", err)
 	}
-	tmp := s.path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	root, err := os.OpenRoot(s.dir)
+	if err != nil {
+		return fmt.Errorf("minter: open floor dir: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+
+	tmp := floorFileName + ".tmp"
+	f, err := root.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("minter: open floor tmp: %w", err)
 	}
@@ -114,7 +135,7 @@ func (s *DurableFloorStore) writeAtomic(m map[string]uint64) error {
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("minter: close floor tmp: %w", err)
 	}
-	if err := os.Rename(tmp, s.path); err != nil {
+	if err := root.Rename(tmp, floorFileName); err != nil {
 		return fmt.Errorf("minter: rename floor file: %w", err)
 	}
 	return nil

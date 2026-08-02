@@ -138,11 +138,19 @@ func TestRPVerify_NoNegotiationNoProviderLoad(t *testing.T) {
 	// Concrete dynamic-loading / provider-registration API constructs (not prose):
 	// their absence in the verify path is the design-around (PCAS-claim-13).
 	forbidden := []string{`"plugin"`, "plugin.Open", "dlopen", "LoadLibrary", "RegisterProvider", "SelectProvider("}
+	// Read the sources through an os.Root rooted at the package directory: the
+	// glob results are plain names within it, and the handle refuses symlink or
+	// ".." escape at the syscall layer.
+	root, err := os.OpenRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {
 			continue
 		}
-		b, err := os.ReadFile(f)
+		b, err := root.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
 		}

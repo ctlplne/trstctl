@@ -107,10 +107,11 @@ func TestFuzz_DigestWitnessDecode(t *testing.T) {
 }
 
 func FuzzDigestWitnessDecode(f *testing.F) {
-	for _, path := range vectorPaths(f) {
-		raw, err := os.ReadFile(path)
+	vectors := vectorsRoot(f)
+	for _, name := range vectorNames(f) {
+		raw, err := vectors.ReadFile(name)
 		if err != nil {
-			f.Fatalf("read seed %s: %v", path, err)
+			f.Fatalf("read seed %s: %v", name, err)
 		}
 		f.Add(raw)
 	}
@@ -154,20 +155,22 @@ func TestEdition_CoreBuildLinksNoXREC(t *testing.T) {
 
 func TestEdition_AllXRECPackagesAreEE(t *testing.T) {
 	root := repoRoot(t)
+	repo := repoRootHandle(t)
 	mplSPDX := []byte("SPDX-License-Identifier: " + "MPL-2.0")
 	err := filepath.WalkDir(filepath.Join(root, "ee", "reconcile"), func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") {
 			return err
 		}
-		raw, err := os.ReadFile(path)
+		rel := relPath(root, path)
+		raw, err := repo.ReadFile(rel)
 		if err != nil {
 			return err
 		}
 		if !bytes.Contains(raw, []byte("SPDX-License-Identifier: LicenseRef-trstctl-EE")) {
-			return fmt.Errorf("%s missing LicenseRef-trstctl-EE SPDX", relPath(root, path))
+			return fmt.Errorf("%s missing LicenseRef-trstctl-EE SPDX", rel)
 		}
 		if bytes.Contains(raw, mplSPDX) {
-			return fmt.Errorf("%s carries MPL SPDX inside XREC", relPath(root, path))
+			return fmt.Errorf("%s carries MPL SPDX inside XREC", rel)
 		}
 		return nil
 	})
@@ -186,7 +189,7 @@ func TestEdition_AllXRECPackagesAreEE(t *testing.T) {
 		if strings.HasPrefix(rel, "ee/reconcile/") {
 			return nil
 		}
-		raw, err := os.ReadFile(path)
+		raw, err := repo.ReadFile(rel)
 		if err != nil {
 			return err
 		}
@@ -214,7 +217,7 @@ func TestZeroRemoval_CoreVisibilityIntact(t *testing.T) {
 			t.Fatalf("zero-removal free surface %s missing or not a directory", dir)
 		}
 	}
-	api := readText(t, filepath.Join(root, "internal", "api", "api.go"))
+	api := readText(t, repoRootHandle(t), filepath.Join("internal", "api", "api.go"))
 	for _, route := range []string{
 		"/api/v1/discovery/sources",
 		"/api/v1/discovery/runs",
@@ -302,32 +305,57 @@ type vectorPlaneState struct {
 
 func readPublishedVectors(t testing.TB) []publishedVector {
 	t.Helper()
-	paths := vectorPaths(t)
-	out := make([]publishedVector, 0, len(paths))
-	for _, path := range paths {
-		raw, err := os.ReadFile(path)
+	vectors := vectorsRoot(t)
+	names := vectorNames(t)
+	out := make([]publishedVector, 0, len(names))
+	for _, name := range names {
+		raw, err := vectors.ReadFile(name)
 		if err != nil {
-			t.Fatalf("read vector %s: %v", path, err)
+			t.Fatalf("read vector %s: %v", name, err)
 		}
 		var vector publishedVector
 		if err := json.Unmarshal(raw, &vector); err != nil {
-			t.Fatalf("decode vector %s: %v", path, err)
+			t.Fatalf("decode vector %s: %v", name, err)
 		}
 		out = append(out, vector)
 	}
 	return out
 }
 
-func vectorPaths(t testing.TB) []string {
+func vectorsDir(t testing.TB) string {
 	t.Helper()
-	matches, err := filepath.Glob(filepath.Join(repoRoot(t), "ee", "reconcile", "conformance", "testdata", "vectors", "*.fixture.json"))
+	return filepath.Join(repoRoot(t), "ee", "reconcile", "conformance", "testdata", "vectors")
+}
+
+// vectorsRoot opens the published-vector directory as a directory handle so the
+// fixture reads below are confined to it: a symlink or ".." planted in testdata
+// cannot redirect a conformance read outside the vector corpus.
+func vectorsRoot(t testing.TB) *os.Root {
+	t.Helper()
+	root, err := os.OpenRoot(vectorsDir(t))
+	if err != nil {
+		t.Fatalf("open vectors dir: %v", err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	return root
+}
+
+// vectorNames returns the base names of the published vectors, relative to
+// vectorsRoot.
+func vectorNames(t testing.TB) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(vectorsDir(t), "*.fixture.json"))
 	if err != nil {
 		t.Fatalf("glob vectors: %v", err)
 	}
 	if len(matches) == 0 {
 		t.Fatal("no published XREC conformance vectors found")
 	}
-	return matches
+	names := make([]string, 0, len(matches))
+	for _, match := range matches {
+		names = append(names, filepath.Base(match))
+	}
+	return names
 }
 
 func fixtureFromVector(t testing.TB, vector publishedVector) conformanceFixture {
@@ -537,6 +565,20 @@ func repoRoot(t testing.TB) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
 }
 
+// repoRootHandle opens the repository root as a directory handle. Reads that go
+// through it stay inside the checkout and refuse symlink or ".." escape at the
+// syscall layer, which keeps these edition-boundary scans honest even if the
+// tree they walk is hostile.
+func repoRootHandle(t testing.TB) *os.Root {
+	t.Helper()
+	root, err := os.OpenRoot(repoRoot(t))
+	if err != nil {
+		t.Fatalf("open repo root: %v", err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	return root
+}
+
 func relPath(root, path string) string {
 	rel, err := filepath.Rel(root, path)
 	if err != nil {
@@ -545,11 +587,11 @@ func relPath(root, path string) string {
 	return filepath.ToSlash(rel)
 }
 
-func readText(t *testing.T, path string) string {
+func readText(t *testing.T, repo *os.Root, rel string) string {
 	t.Helper()
-	raw, err := os.ReadFile(path)
+	raw, err := repo.ReadFile(rel)
 	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
+		t.Fatalf("read %s: %v", rel, err)
 	}
 	return string(raw)
 }

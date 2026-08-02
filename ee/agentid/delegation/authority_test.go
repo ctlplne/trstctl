@@ -4,6 +4,8 @@ package delegation_test
 
 import (
 	"bytes"
+	"fmt"
+	"math"
 	"testing"
 	"trstctl.com/trstctl/ee/proptest"
 
@@ -279,6 +281,27 @@ func TestAuthority_EffectiveBudgetIsMinAlongChain(t *testing.T) {
 
 // --- property tests -------------------------------------------------------------
 
+// nonNegU64 / nonNegU32 widen a value the property generator produced into the
+// unsigned domain type the Authority field uses. proptest.Rand.Intn is documented to
+// return a value in [0, n), so the guard never fires -- but it makes the
+// non-negativity a CHECKED precondition at the conversion rather than an assumption
+// spread across the generator, and a generator that ever regressed would fail the
+// test loudly instead of wrapping into a huge budget or depth that silently changes
+// which side of the comparator the property is asserting.
+func nonNegU64(n int) uint64 {
+	if n < 0 {
+		panic(fmt.Sprintf("delegation test: nonNegU64 got negative value %d", n))
+	}
+	return uint64(n)
+}
+
+func nonNegU32(n int) uint32 {
+	if n < 0 || n > math.MaxUint32 {
+		panic(fmt.Sprintf("delegation test: nonNegU32 got out-of-range value %d", n))
+	}
+	return uint32(n)
+}
+
 // randAuthority builds a random authority set drawn from a small fixed universe so
 // that subset relationships actually occur with useful frequency.
 func randAuthority(r *proptest.Rand) delegation.Authority {
@@ -300,9 +323,9 @@ func randAuthority(r *proptest.Rand) delegation.Authority {
 		Scopes:   pick(scopeU),
 		Tools:    pick(toolU),
 		Classes:  pick(classU),
-		Spend:    delegation.Budget{Amount: uint64(r.Intn(1000)), Currency: "USD"},
-		Rate:     delegation.Rate{Limit: uint64(r.Intn(1000)), Per: "minute"},
-		Depth:    uint32(r.Intn(10)),
+		Spend:    delegation.Budget{Amount: nonNegU64(r.Intn(1000)), Currency: "USD"},
+		Rate:     delegation.Rate{Limit: nonNegU64(r.Intn(1000)), Per: "minute"},
+		Depth:    nonNegU32(r.Intn(10)),
 		Validity: delegation.Window{NotBefore: nb, NotAfter: nb + dur},
 	}
 }
@@ -351,8 +374,8 @@ func TestAuthority_MinBudgetFoldProperty(t *testing.T) {
 		chain := make([]delegation.Authority, n)
 		wantSpend, wantRate := ^uint64(0), ^uint64(0)
 		for j := 0; j < n; j++ {
-			s := uint64(r.Intn(10000))
-			rt := uint64(r.Intn(10000))
+			s := nonNegU64(r.Intn(10000))
+			rt := nonNegU64(r.Intn(10000))
 			chain[j] = delegation.Authority{Spend: delegation.Budget{Amount: s, Currency: "USD"}, Rate: delegation.Rate{Limit: rt, Per: "minute"}}
 			if s < wantSpend {
 				wantSpend = s

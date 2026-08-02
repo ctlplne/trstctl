@@ -142,7 +142,10 @@ func TestEpoch_TwoCounterIndependenceProperty(t *testing.T) {
 		rng := proptest.New(seed)
 		id := NewGenesis("id", "t", algs[0], []byte{0})
 		rc := &fakeByok{v: 0, alg: algs[0]}
-		successions, rotations := 0, 0
+		// successions is counted in the domain type so it compares to
+		// id.Epoch() directly, with no narrowing conversion.
+		var successions AlgorithmEpoch
+		rotations := 0
 		last := id.Epoch()
 		for n := 0; n < 60; n++ {
 			if rng.Intn(2) == 0 {
@@ -165,7 +168,7 @@ func TestEpoch_TwoCounterIndependenceProperty(t *testing.T) {
 			}
 			last = id.Epoch()
 		}
-		if int(id.Epoch()) != successions {
+		if id.Epoch() != successions {
 			t.Fatalf("seed %d: epoch=%d != successions=%d", seed, id.Epoch(), successions)
 		}
 		if rc.Version() != rotations {

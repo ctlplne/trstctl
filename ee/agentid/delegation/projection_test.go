@@ -234,6 +234,6 @@ func (f forest) chainHasSubject(head, subj string) bool {
 // unique, comparable ids.
 func seqDigest(i int) []byte {
 	b := make([]byte, 32)
-	binary.BigEndian.PutUint64(b, uint64(i)+1)
+	binary.BigEndian.PutUint64(b, nonNegU64(i)+1)
 	return b
 }

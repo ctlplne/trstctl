@@ -3,6 +3,7 @@
 package conformance
 
 import (
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,24 +58,34 @@ func TestEdition_CoreBuildLinksNoPCAS(t *testing.T) {
 // decision, honored fleet-wide: no PCAS file is MPL-2.0).
 func TestEdition_AllPCASPackagesAreEE(t *testing.T) {
 	root := moduleRoot(t)
+	// Walk and read the PCAS trees through an os.Root handle on the module root. Every
+	// path is resolved by the kernel relative to that handle, so a symlink or ".."
+	// component inside a package tree cannot make this gate read (or report on) a file
+	// outside the module.
+	modRoot, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open module root %s: %v", root, err)
+	}
+	defer func() { _ = modRoot.Close() }()
 	for _, d := range pcasPackageDirs {
 		if !strings.HasPrefix(d, "ee/") {
 			t.Fatalf("PCAS package tree %q is not under ee/", d)
 		}
-		err := filepath.WalkDir(filepath.Join(root, d), func(path string, de os.DirEntry, err error) error {
+		err := fs.WalkDir(modRoot.FS(), d, func(path string, de fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if de.IsDir() || !strings.HasSuffix(path, ".go") {
 				return nil
 			}
-			b, err := os.ReadFile(path)
+			b, err := modRoot.ReadFile(path)
 			if err != nil {
 				return err
 			}
 			first := firstNonBlankLine(string(b))
 			if first != "// SPDX-License-Identifier: LicenseRef-trstctl-EE" {
-				t.Fatalf("PCAS file %s: first line %q is not the LicenseRef-trstctl-EE SPDX header", path, first)
+				t.Fatalf("PCAS file %s: first line %q is not the LicenseRef-trstctl-EE SPDX header",
+					filepath.Join(root, path), first)
 			}
 			return nil
 		})

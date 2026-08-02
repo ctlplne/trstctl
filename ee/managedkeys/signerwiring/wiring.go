@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -362,11 +363,27 @@ func credential(name string, inline []byte, file string, required bool) ([]byte,
 		}
 		return nil, func() {}, nil
 	}
-	raw, err := os.ReadFile(file)
+	raw, err := readCredentialFile(file)
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("read %s file: %w", name, err)
 	}
 	return lockCredentialBytes(name, raw, required)
+}
+
+// readCredentialFile reads a managed-key credential through a handle on its
+// parent directory instead of by name. These files carry authority-bearing key
+// material (cloud tokens, HSM PINs, TPM auth) that the isolated signer loads at
+// startup, so a symlink swapped in at the final component must not be able to
+// redirect the read somewhere else between the operator's configuration and the
+// open. os.Root resolves every component at the syscall layer and refuses one
+// that leaves the directory (CWE-22, CWE-367).
+func readCredentialFile(path string) ([]byte, error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	return root.ReadFile(filepath.Base(path))
 }
 
 func lockCredentialBytes(name string, fileBuffer []byte, required bool) ([]byte, func(), error) {

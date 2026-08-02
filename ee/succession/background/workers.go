@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"trstctl.com/trstctl/ee/succession"
@@ -132,6 +133,10 @@ func (w *checkpointWorker) runOnce(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("pcas checkpoint worker: transparency-log head: %w", err)
 		}
+		logTreeSize, err := checkpointTreeSize(logHead.TreeSize)
+		if err != nil {
+			return fmt.Errorf("pcas checkpoint worker: %w", err)
+		}
 		for _, rec := range latestByIdentity(records) {
 			fields := recordFields(rec)
 			issuedAt := time.Now().UTC()
@@ -142,7 +147,7 @@ func (w *checkpointWorker) runOnce(ctx context.Context) error {
 				Epoch:           rec.Epoch,
 				Algorithm:       crypto.Algorithm(rec.SuccessorAlg),
 				PublicKeyDER:    rec.SuccessorPub,
-				LogTreeSize:     uint64(logHead.TreeSize),
+				LogTreeSize:     logTreeSize,
 				LogRootHash:     logHead.RootHash,
 				IssuedAt:        issuedAt.Unix(),
 			}
@@ -370,7 +375,11 @@ func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.C
 	}
 	window := w.validityWindow
 	if policy.ValidityWindowSeconds > 0 {
-		window = time.Duration(policy.ValidityWindowSeconds) * time.Second
+		d, err := validityWindowDuration(policy.ValidityWindowSeconds)
+		if err != nil {
+			return fmt.Errorf("pcas retirement worker: identity %s epoch %d: %w", policy.IdentityID, policy.PredecessorEpoch, err)
+		}
+		window = d
 	}
 	ctrl, err := retirement.New(retirement.Config{
 		Roster: roster,
@@ -528,6 +537,37 @@ func transparencyHead(records []pcasstore.Record) (translog.STH, error) {
 		}
 	}
 	return tlog.Head()
+}
+
+// checkpointTreeSize carries a transparency-log tree size from the translog
+// package's Go int into the uint64 the signed checkpoint binds. A tree size is a
+// leaf count and is never negative in practice; the guard makes that provable at
+// the conversion and fails the checkpoint round closed rather than signing a
+// wrapped, astronomically large tree size that no verifier could reconcile with
+// the log it can rebuild (PCAS-claim-29).
+func checkpointTreeSize(treeSize int) (uint64, error) {
+	if treeSize < 0 {
+		return 0, fmt.Errorf("transparency-log tree size %d is negative", treeSize)
+	}
+	return uint64(treeSize), nil
+}
+
+// maxValidityWindowSeconds is the largest whole-second window representable as a
+// time.Duration, which counts nanoseconds in a signed 64-bit integer:
+// math.MaxInt64 nanoseconds divided by 1e9 nanoseconds per second (~292 years).
+const maxValidityWindowSeconds uint64 = math.MaxInt64 / 1_000_000_000
+
+// validityWindowDuration converts a retirement policy's persisted validity
+// window — stored and carried on the API as a uint64 second count — into a
+// time.Duration. Windows beyond maxValidityWindowSeconds are not representable,
+// so the worker rejects them instead of wrapping into a negative duration, which
+// would silently treat every relying-party attestation as already expired and
+// stall the quorum.
+func validityWindowDuration(seconds uint64) (time.Duration, error) {
+	if seconds > maxValidityWindowSeconds {
+		return 0, fmt.Errorf("validity window of %d seconds exceeds the maximum representable window of %d seconds", seconds, maxValidityWindowSeconds)
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 func recordFields(rec pcasstore.Record) succession.CommitmentFields {

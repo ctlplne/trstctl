@@ -204,11 +204,13 @@ func VerifyAggregateOffline(a AggregateEvidence, publishedEvidenceDigests [][]by
 }
 
 // appendU64 appends v as 8 big-endian bytes. Local helper so the aggregation stays
-// std-hash-free (the digest itself is taken inside internal/crypto, AN-3).
+// std-hash-free (the digest itself is taken inside internal/crypto, AN-3). Each byte is
+// MASKED out of v (& 0xFF) rather than narrowed, so every octet is by construction in
+// range and the encoding is exactly the same big-endian byte string as before.
 func appendU64(b []byte, v uint64) []byte {
 	return append(b,
-		byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32),
-		byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+		byte((v>>56)&0xFF), byte((v>>48)&0xFF), byte((v>>40)&0xFF), byte((v>>32)&0xFF),
+		byte((v>>24)&0xFF), byte((v>>16)&0xFF), byte((v>>8)&0xFF), byte(v&0xFF))
 }
 
 // bytesEqual is a length-then-content comparison (these are public digests, not secrets).

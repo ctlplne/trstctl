@@ -119,7 +119,7 @@ func reachSetFor(tenantID string, cardinality int, maxSens reach.Sensitivity) re
 }
 
 func nodeID(i int) string {
-	return "res:node-" + string(rune('a'+i))
+	return "res:node-" + string(asRune('a'+i))
 }
 
 // spanSet builds a reachable set the engine has classified as spanning `span` tenants (a

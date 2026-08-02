@@ -61,7 +61,10 @@ func TestCounterFree_RefusesSameRollbacks(t *testing.T) {
 		mc := mk(newMemFloor())
 		for n := 0; n < 20; n++ {
 			req := baseReq()
-			req.AssertedPredecessorEpoch = uint64(rng.Intn(4)) // mix of current + rollback/skip
+			// Drawn as a uint64 so the epoch is the request's own type end to end:
+			// AssertedPredecessorEpoch is a uint64, and 2^64 is a multiple of 4, so
+			// the remainder is uniform over [0,4) — a mix of current + rollback/skip.
+			req.AssertedPredecessorEpoch = rng.Uint64() % 4
 			req.TargetAlgorithm = crypto.ECDSAP384
 			_, eh := mh.MintSuccessor(ctx, req)
 			_, ec := mc.MintSuccessor(ctx, req)

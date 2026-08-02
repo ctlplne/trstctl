@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 
@@ -157,7 +158,16 @@ func TestINT10_IndependentEncoderAgrees(t *testing.T) {
 	v2.AttestationEvidenceDigest = []byte{8}
 	v2.AttestationType = "tpm"
 	v2.DelegationPath = "deleg"
-	for name, f := range map[string]succession.CommitmentFields{"v1": v1, "v2": v2} {
+	// Pre-epoch (negative) unix seconds exercise the signed two's-complement path of
+	// both encoders; agreement there is what makes diffInt a faithful independent
+	// re-implementation of the reference writeInt rather than a positive-only one.
+	v1neg := v1
+	v1neg.NotBefore, v1neg.NotAfter = math.MinInt64, -1
+	v2neg := v2
+	v2neg.NotBefore, v2neg.NotAfter = -62135596800, math.MaxInt64
+	for name, f := range map[string]succession.CommitmentFields{
+		"v1": v1, "v2": v2, "v1_negative_times": v1neg, "v2_negative_times": v2neg,
+	} {
 		ref, err := succession.Commit(f)
 		if err != nil {
 			t.Fatalf("%s reference commit: %v", name, err)
@@ -211,6 +221,59 @@ func diffUint(b *bytes.Buffer, v uint64) {
 	b.Write(x[:])
 }
 
+// diffInt appends v as its 8-byte two's-complement big-endian encoding — the
+// canonical encoding of the signed unix-second fields (not_before / not_after).
+// Each byte is produced by masking the low 8 bits of an arithmetic shift, so
+// negative values encode to the same bytes as the unsigned two's-complement
+// pattern with no reinterpreting conversion anywhere. TestDiffInt_TwosComplementBytes
+// pins the output against hand-written literals at the boundaries, and
+// TestINT10_IndependentEncoderAgrees pins agreement with the reference encoder
+// for both positive and negative timestamps.
+func diffInt(b *bytes.Buffer, v int64) {
+	var x [8]byte
+	x[0] = byte(v >> 56 & 0xFF)
+	x[1] = byte(v >> 48 & 0xFF)
+	x[2] = byte(v >> 40 & 0xFF)
+	x[3] = byte(v >> 32 & 0xFF)
+	x[4] = byte(v >> 24 & 0xFF)
+	x[5] = byte(v >> 16 & 0xFF)
+	x[6] = byte(v >> 8 & 0xFF)
+	x[7] = byte(v & 0xFF)
+	b.Write(x[:])
+}
+
+// TestDiffInt_TwosComplementBytes pins diffInt against hand-written expected bytes at
+// the signed boundaries. The expected values are written out literally rather than
+// derived from a Go conversion, so this test is an independent oracle for the
+// two's-complement big-endian encoding the signature-covered commitment depends on.
+func TestDiffInt_TwosComplementBytes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   int64
+		want []byte
+	}{
+		{"zero", 0, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+		{"one", 1, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}},
+		{"minus_one", -1, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}},
+		{"minus_two", -2, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE}},
+		{"minus_256", -256, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00}},
+		{"thousand", 1000, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xE8}},
+		{"byte_order", 72623859790382856, []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}},
+		{"max_int64", math.MaxInt64, []byte{0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}},
+		{"min_int64", math.MinInt64, []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+		{"max_int64_minus_one", math.MaxInt64 - 1, []byte{0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE}},
+		{"min_int64_plus_one", math.MinInt64 + 1, []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var b bytes.Buffer
+			diffInt(&b, tc.in)
+			if got := b.Bytes(); !bytes.Equal(got, tc.want) {
+				t.Fatalf("diffInt(%d) = % x, want % x", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func diffCommit(f succession.CommitmentFields) ([]byte, error) {
 	predID, ok := diffRegistry[f.PredecessorAlg]
 	if !ok {
@@ -241,8 +304,8 @@ func diffCommit(f succession.CommitmentFields) ([]byte, error) {
 	diffField(&b, f.SuccessorPub)
 	diffField(&b, []byte(f.PolicyRef))
 	diffField(&b, []byte(f.HashAlg))
-	diffUint(&b, uint64(f.NotBefore))
-	diffUint(&b, uint64(f.NotAfter))
+	diffInt(&b, f.NotBefore)
+	diffInt(&b, f.NotAfter)
 	if f.CommitmentVersion >= 2 {
 		diffField(&b, []byte(f.RecordType))
 		diffField(&b, f.AuthzDigest)

@@ -13,6 +13,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 
 	"trstctl.com/trstctl/ee/succession"
@@ -60,7 +61,7 @@ func eventDigest(e events.Event) []byte {
 	var b bytes.Buffer
 	writeField(&b, []byte(e.Type))
 	writeField(&b, []byte(e.TenantID))
-	writeUint(&b, uint64(e.SchemaVersion))
+	writeInt(&b, e.SchemaVersion)
 	writeField(&b, e.Data)
 	return crypto.SHA256Sum(b.Bytes())
 }
@@ -102,6 +103,9 @@ func projectionDigest(p succession.Posture) []byte {
 // BuildReplayAttestation computes the head + projection checkpoint over the first
 // offset events and signs the pairing with signer.
 func BuildReplayAttestation(seq []events.Event, offset int, signer crypto.Signer) (ReplayAttestation, error) {
+	if offset < 0 {
+		return ReplayAttestation{}, fmt.Errorf("audit: negative ledger offset %d", offset)
+	}
 	cp, err := ProjectionCheckpoint(seq, offset)
 	if err != nil {
 		return ReplayAttestation{}, err
@@ -133,13 +137,21 @@ func VerifyReplayAttestation(signerPubDER []byte, a ReplayAttestation) error {
 // countersigning, and detects a tampered ledger, stale offset, or a digest of a
 // different projection.
 func VerifyAgainstLedger(seq []events.Event, a ReplayAttestation) error {
-	if int(a.LedgerOffset) > len(seq) {
+	// The wire offset is an unsigned 64-bit field; no ledger this process can hold
+	// reaches beyond an int, so a wider value is a malformed attestation, not a
+	// ledger we should truncate the offset for.
+	raw := a.LedgerOffset
+	if raw > math.MaxInt {
+		return errors.New("audit: attestation offset exceeds the addressable ledger range")
+	}
+	offset := int(raw)
+	if offset > len(seq) {
 		return errors.New("audit: attestation offset exceeds the ledger")
 	}
-	if !bytes.Equal(a.AuditChainHead, AuditChainHead(seq, int(a.LedgerOffset))) {
+	if !bytes.Equal(a.AuditChainHead, AuditChainHead(seq, offset)) {
 		return errors.New("audit: audit-chain head mismatch")
 	}
-	cp, err := ProjectionCheckpoint(seq, int(a.LedgerOffset))
+	cp, err := ProjectionCheckpoint(seq, offset)
 	if err != nil {
 		return err
 	}
@@ -182,5 +194,24 @@ func writeField(b *bytes.Buffer, v []byte) {
 func writeUint(b *bytes.Buffer, v uint64) {
 	var x [8]byte
 	binary.BigEndian.PutUint64(x[:], v)
+	b.Write(x[:])
+}
+
+// writeInt appends the eight big-endian bytes of v's two's-complement
+// representation, sign-extended to 64 bits. Each byte is masked out of v rather
+// than obtained by widening v to uint64, so the encoding is reinterpretation
+// only: the bytes are identical to those writeUint would emit for the same
+// value, which keeps every previously computed digest stable.
+func writeInt(b *bytes.Buffer, v int) {
+	x := [8]byte{
+		byte(v >> 56 & 0xFF),
+		byte(v >> 48 & 0xFF),
+		byte(v >> 40 & 0xFF),
+		byte(v >> 32 & 0xFF),
+		byte(v >> 24 & 0xFF),
+		byte(v >> 16 & 0xFF),
+		byte(v >> 8 & 0xFF),
+		byte(v & 0xFF),
+	}
 	b.Write(x[:])
 }

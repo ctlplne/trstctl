@@ -19,13 +19,19 @@ import (
 func TestPureMLDSALeafInteroperatesWithStockOpenSSL(t *testing.T) {
 	openssl := requireOpenSSLMLDSA(t)
 	dir := t.TempDir()
+	// Read the OpenSSL artefacts back through a directory handle rather than by
+	// name: this test hands the bytes straight to the CSR parser and the leaf
+	// signer, so a symlink or ".." planted in dir must not be able to redirect
+	// the read outside the temp dir.
+	root := openTempRoot(t, dir)
+	const csrName = "leaf.csr"
 	keyPath := filepath.Join(dir, "leaf-key.pem")
-	csrPath := filepath.Join(dir, "leaf.csr")
+	csrPath := filepath.Join(dir, csrName)
 	runOpenSSL(t, openssl, "genpkey", "-algorithm", "ML-DSA-65", "-out", keyPath)
 	runOpenSSL(t, openssl, "req", "-new", "-key", keyPath,
 		"-subj", "/CN=pure-mldsa.example", "-addext", "subjectAltName=DNS:pure-mldsa.example",
 		"-outform", "DER", "-out", csrPath)
-	csrDER, err := os.ReadFile(csrPath)
+	csrDER, err := root.ReadFile(csrName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,14 +83,19 @@ func TestGeneratedMLDSAPKCS8InteroperatesWithStockOpenSSL(t *testing.T) {
 	defer key.Destroy()
 	defer secret.Wipe(pkcs8)
 	dir := t.TempDir()
+	// Same confinement as above: the public key OpenSSL derives is compared
+	// against the SPKI we marshal, so the read must not be redirectable out of
+	// the temp dir by a planted symlink.
+	root := openTempRoot(t, dir)
+	const pubName = "pub.der"
 	keyPath := filepath.Join(dir, "key.der")
-	pubPath := filepath.Join(dir, "pub.der")
+	pubPath := filepath.Join(dir, pubName)
 	if err := os.WriteFile(keyPath, pkcs8, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	runOpenSSL(t, openssl, "pkey", "-inform", "DER", "-in", keyPath, "-check", "-noout")
 	runOpenSSL(t, openssl, "pkey", "-inform", "DER", "-in", keyPath, "-pubout", "-outform", "DER", "-out", pubPath)
-	gotPub, err := os.ReadFile(pubPath)
+	gotPub, err := root.ReadFile(pubName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +106,18 @@ func TestGeneratedMLDSAPKCS8InteroperatesWithStockOpenSSL(t *testing.T) {
 	if !bytes.Equal(gotPub, wantPub) {
 		t.Fatal("OpenSSL derived a different ML-DSA public key from RFC 9881 seed PKCS#8")
 	}
+}
+
+// openTempRoot opens dir as a directory handle whose reads are confined to it
+// at the syscall layer, and closes it when the test ends.
+func openTempRoot(t *testing.T, dir string) *os.Root {
+	t.Helper()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatalf("open temp dir %s: %v", dir, err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	return root
 }
 
 func requireOpenSSLMLDSA(t *testing.T) string {

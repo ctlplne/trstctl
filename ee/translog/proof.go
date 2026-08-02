@@ -63,11 +63,11 @@ func (l *Log) Prove(index int) (Proof, error) {
 func EncodeProof(p Proof) []byte {
 	var b bytes.Buffer
 	b.WriteString(proofDomain)
-	writeU64(&b, uint64(p.STH.TreeSize))
-	writeU64(&b, uint64(p.STH.Timestamp))
+	writeI64(&b, int64(p.STH.TreeSize))
+	writeI64(&b, p.STH.Timestamp)
 	writeChunk(&b, p.STH.RootHash)
 	writeChunk(&b, p.STH.Signature)
-	writeU64(&b, uint64(p.Index))
+	writeI64(&b, int64(p.Index))
 	writeU64(&b, uint64(len(p.AuditPath)))
 	for _, h := range p.AuditPath {
 		writeChunk(&b, h)
@@ -83,7 +83,7 @@ func DecodeProof(in []byte) (Proof, error) {
 	}
 	var p Proof
 	treeSize, ok1 := r.u64()
-	ts, ok2 := r.u64()
+	ts, ok2 := r.i64()
 	root, ok3 := r.chunk()
 	sig, ok4 := r.chunk()
 	idx, ok5 := r.u64()
@@ -103,7 +103,10 @@ func DecodeProof(in []byte) (Proof, error) {
 	if treeSize > uint64(maxInt) || idx > uint64(maxInt) {
 		return Proof{}, ErrProofMalformed
 	}
-	p.STH = STH{TreeSize: int(treeSize), RootHash: root, Timestamp: int64(ts), Signature: sig}
+	// Timestamp is a full-range two's-complement field, so it is decoded as signed
+	// (r.i64) rather than range-checked: rejecting the upper half would make pre-epoch
+	// heads undecodable and break EncodeProof/DecodeProof round-tripping.
+	p.STH = STH{TreeSize: int(treeSize), RootHash: root, Timestamp: ts, Signature: sig}
 	p.Index = int(idx)
 	p.AuditPath = make([][]byte, 0, n)
 	for i := uint64(0); i < n; i++ {
@@ -158,6 +161,14 @@ func writeU64(b *bytes.Buffer, v uint64) {
 	b.Write(n[:])
 }
 
+// writeI64 writes v in the same eight-byte big-endian slot as writeU64, carrying
+// negative values in two's complement. (*reader).i64 is its decoding inverse.
+func writeI64(b *bytes.Buffer, v int64) {
+	var n [8]byte
+	putI64BE(&n, v)
+	b.Write(n[:])
+}
+
 func writeChunk(b *bytes.Buffer, v []byte) {
 	writeU64(b, uint64(len(v)))
 	b.Write(v)
@@ -180,6 +191,18 @@ func (r *reader) u64() (uint64, bool) {
 	v := binary.BigEndian.Uint64(r.b[:8])
 	r.b = r.b[8:]
 	return v, true
+}
+
+// i64 reads the same eight-byte big-endian slot as u64, but reinterprets it as the
+// signed value writeI64 wrote, so negative fields survive the round trip.
+func (r *reader) i64() (int64, bool) {
+	if len(r.b) < 8 {
+		return 0, false
+	}
+	var w [8]byte
+	copy(w[:], r.b[:8])
+	r.b = r.b[8:]
+	return i64BE(w), true
 }
 
 func (r *reader) chunk() ([]byte, bool) {

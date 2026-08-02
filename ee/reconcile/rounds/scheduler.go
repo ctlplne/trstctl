@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -313,7 +314,13 @@ func deterministicJitter(max time.Duration) time.Duration {
 	if span <= 0 {
 		return 0
 	}
-	return time.Duration(int64(h.Sum64()%uint64(span+1)) - int64(max))
+	// span is even and positive, so span+1 never overflows int64 and the
+	// modulus is at most MaxInt64; offset therefore always fits in an int64.
+	offset := h.Sum64() % uint64(span+1)
+	if offset > math.MaxInt64 {
+		return 0
+	}
+	return time.Duration(int64(offset)) - max
 }
 
 func clampJitter(v, max time.Duration) time.Duration {

@@ -188,12 +188,21 @@ func (d *decoder) readBytes() ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	if n > maxDecodeLen || n > uint64(d.remaining()) {
+	// Bound the untrusted length before narrowing it. maxDecodeLen (1 MiB) is far
+	// below MaxInt32, so any length that clears this check is exactly
+	// representable as an int on every supported platform, and the remaining-
+	// buffer comparison below can then be made in int space without converting
+	// either side. A hostile length header still only produces a false return.
+	if n > maxDecodeLen {
 		return nil, false
 	}
-	out := make([]byte, n)
-	copy(out, d.buf[d.pos:d.pos+int(n)])
-	d.pos += int(n)
+	size := int(n)
+	if size > d.remaining() {
+		return nil, false
+	}
+	out := make([]byte, size)
+	copy(out, d.buf[d.pos:d.pos+size])
+	d.pos += size
 	return out, true
 }
 

@@ -75,8 +75,12 @@ func (r *Repo) RebuildTenant(ctx context.Context, tenantID string, seq []eventsp
 				return err
 			}
 		}
-		for i, e := range seq {
-			if err := insertCompletionFromEvent(ctx, tx, tenantID, e, ledgerPosition(e, i)); err != nil {
+		// position is the 1-based ordinal of the event within seq, tracked as
+		// uint64 so the ledger position never needs a width conversion.
+		var position uint64
+		for _, e := range seq {
+			position++
+			if err := insertCompletionFromEvent(ctx, tx, tenantID, e, ledgerPosition(e, position)); err != nil {
 				return err
 			}
 		}
@@ -471,9 +475,11 @@ func dependentKey(dep depstate.Dependent) string {
 	return string(dep.Class) + "\x00" + dep.ID
 }
 
-func ledgerPosition(e eventspec.Event, index int) uint64 {
+// ledgerPosition reports the ledger position of e, falling back to its 1-based
+// ordinal within the rebuilt sequence when the event carries no sequence number.
+func ledgerPosition(e eventspec.Event, position uint64) uint64 {
 	if e.Sequence != 0 {
 		return e.Sequence
 	}
-	return uint64(index + 1)
+	return position
 }

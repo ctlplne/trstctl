@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -138,8 +139,24 @@ func cloneEvent(ev eventspec.Event) eventspec.Event {
 }
 
 func countJSONLines(path string) (uint64, error) {
-	f, err := os.Open(path)
-	if os.IsNotExist(err) {
+	dir, name := filepath.Split(path)
+	if strings.TrimSpace(dir) == "" {
+		dir = "."
+	}
+	// Replay the refusal log through a directory handle rather than by name:
+	// the sequence recovered here is what the next refusal event is numbered
+	// from, so a symlink planted in the floor dir must not be able to redirect
+	// that read outside dir.
+	root, err := os.OpenRoot(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("vdec gate: open refusal sink dir for replay: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	f, err := root.Open(name)
+	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil
 	}
 	if err != nil {

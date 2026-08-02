@@ -538,9 +538,9 @@ not this file.
 | `docs/lint_gate_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_gate_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/vuln_gate_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `ee/decommission/conformance/release_test.go:413` | fixed argv, no user input (CWE-78) |
-| `ee/rpverify/verifier_test.go:372` | fixed argv, no user input (CWE-78) |
-| `ee/succession/conformance/edition_test.go:107` | fixed argv, no user input (CWE-78) |
+| `ee/decommission/conformance/release_test.go:438` | fixed argv, no user input (CWE-78) |
+| `ee/rpverify/verifier_test.go:380` | fixed argv, no user input (CWE-78) |
+| `ee/succession/conformance/edition_test.go:118` | fixed argv, no user input (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:153` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:179` | live-sshd test harness validating its own config with the resolved sshd binary (CWE-78) |

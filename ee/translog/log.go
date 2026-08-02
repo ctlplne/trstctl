@@ -4,7 +4,6 @@ package translog
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"sync"
 	"time"
@@ -104,9 +103,9 @@ func encodeSTH(s STH) []byte {
 	var b bytes.Buffer
 	b.WriteString(sthDomain)
 	var num [8]byte
-	binary.BigEndian.PutUint64(num[:], uint64(s.TreeSize))
+	putI64BE(&num, int64(s.TreeSize))
 	b.Write(num[:])
-	binary.BigEndian.PutUint64(num[:], uint64(s.Timestamp))
+	putI64BE(&num, s.Timestamp)
 	b.Write(num[:])
 	b.Write(s.RootHash)
 	return b.Bytes()

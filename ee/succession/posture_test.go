@@ -101,11 +101,11 @@ func TestFold_EqualsReferenceUnderRandomSequences(t *testing.T) {
 			id := ids[rng.Intn(len(ids))]
 			switch rng.Intn(3) {
 			case 0:
-				payloads = append(payloads, FindingV1{IdentityID: id, TenantID: "t", Algorithm: "RSA2048", PublicKeyDER: []byte{byte(rng.Intn(256))}})
+				payloads = append(payloads, FindingV1{IdentityID: id, TenantID: "t", Algorithm: "RSA2048", PublicKeyDER: []byte{byte(rng.Intn(256) & 0xFF)}})
 			case 1:
 				e := epoch[id] + 1
 				epoch[id] = e
-				payloads = append(payloads, SuccessionV1{IdentityID: id, TenantID: "t", PredecessorEpoch: e - 1, Epoch: e, SuccessorAlgorithm: "alg", SuccessorPublicKeyDER: []byte{byte(rng.Intn(256))}, AlgorithmClass: ClassHybrid})
+				payloads = append(payloads, SuccessionV1{IdentityID: id, TenantID: "t", PredecessorEpoch: e - 1, Epoch: e, SuccessorAlgorithm: "alg", SuccessorPublicKeyDER: []byte{byte(rng.Intn(256) & 0xFF)}, AlgorithmClass: ClassHybrid})
 			default:
 				payloads = append(payloads, RetirementV1{IdentityID: id, TenantID: "t", Epoch: epoch[id]})
 			}

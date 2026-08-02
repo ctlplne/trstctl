@@ -40,7 +40,7 @@ func (c SignedEpochCheckpoint) encode() []byte {
 	writeField(&b, c.PublicKeyDER)
 	writeUint(&b, c.LogTreeSize)
 	writeField(&b, c.LogRootHash)
-	writeUint(&b, uint64(c.IssuedAt))
+	writeInt(&b, c.IssuedAt)
 	return b.Bytes()
 }
 

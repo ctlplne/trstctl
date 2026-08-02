@@ -275,7 +275,22 @@ func writeU64(b *bytes.Buffer, v uint64) {
 	b.Write(x[:])
 }
 
-func writeI64(b *bytes.Buffer, v int64) { writeU64(b, uint64(v)) }
+// writeI64 appends v as 8 big-endian two's-complement bytes -- the same encoding a
+// uint64 reinterpretation would produce, but each byte is MASKED out of v directly so
+// no value-changing conversion happens anywhere on the canonicalization path. The
+// canonical byte string (and therefore every AGID authority digest) is unchanged.
+func writeI64(b *bytes.Buffer, v int64) {
+	var x [8]byte
+	x[0] = byte(v >> 56 & 0xFF)
+	x[1] = byte(v >> 48 & 0xFF)
+	x[2] = byte(v >> 40 & 0xFF)
+	x[3] = byte(v >> 32 & 0xFF)
+	x[4] = byte(v >> 24 & 0xFF)
+	x[5] = byte(v >> 16 & 0xFF)
+	x[6] = byte(v >> 8 & 0xFF)
+	x[7] = byte(v & 0xFF)
+	b.Write(x[:])
+}
 
 // CanonicalDigest returns the SHA-256 of the canonical bytes of a, routed through the
 // internal/crypto AN-3 boundary.

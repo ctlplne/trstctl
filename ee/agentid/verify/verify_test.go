@@ -357,3 +357,36 @@ func TestCredential_ShortTTLNoStatusQuery(t *testing.T) {
 	// acceptance above were all decided from the credential + the injected clock
 	// alone -- no revocation-status query was issued.
 }
+
+// TestAppendVerifyU64FramingIsBigEndian pins the 8-byte length frame used in the
+// agent-stack representation digest PREIMAGE to hand-written expected bytes. The
+// frame is byte-for-byte part of what the signer hashed, so a change here silently
+// breaks every AGID-04 agent-stack binding rather than failing loudly; the literals
+// below (not a second encoder) are the oracle.
+func TestAppendVerifyU64FramingIsBigEndian(t *testing.T) {
+	cases := []struct {
+		name string
+		v    uint64
+		want []byte
+	}{
+		{"zero", 0, []byte{0, 0, 0, 0, 0, 0, 0, 0}},
+		{"one", 1, []byte{0, 0, 0, 0, 0, 0, 0, 1}},
+		{"byte-boundary", 256, []byte{0, 0, 0, 0, 0, 0, 1, 0}},
+		{"ascending", 0x0102030405060708, []byte{1, 2, 3, 4, 5, 6, 7, 8}},
+		{"max-int64", 1<<63 - 1, []byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+		{"min-negative-bit-pattern", 1 << 63, []byte{0x80, 0, 0, 0, 0, 0, 0, 0}},
+		{"max-uint64", 1<<64 - 1, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Appends to a non-empty buffer: the prefix must be preserved untouched.
+			got := appendVerifyU64([]byte{0xAA}, tc.v)
+			if len(got) != 9 || got[0] != 0xAA {
+				t.Fatalf("appendVerifyU64 clobbered prefix: %x", got)
+			}
+			if !bytes.Equal(got[1:], tc.want) {
+				t.Fatalf("appendVerifyU64(%#x) = %x, want %x", tc.v, got[1:], tc.want)
+			}
+		})
+	}
+}

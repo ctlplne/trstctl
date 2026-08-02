@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -33,9 +34,14 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	port := freePort()
+	port, err := freePort()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "embedded postgres port:", err)
+		_ = os.RemoveAll(dir)
+		os.Exit(1)
+	}
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
-		Version(embeddedpostgres.V16).Port(uint32(port)).
+		Version(embeddedpostgres.V16).Port(port).
 		RuntimePath(dir + "/rt").DataPath(dir + "/data").BinariesPath(dir + "/bin").
 		Logger(io.Discard).StartTimeout(60 * time.Second))
 	if err := pg.Start(); err != nil {
@@ -50,10 +56,25 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func freePort() int {
-	l, _ := net.Listen("tcp", "127.0.0.1:0")
+// freePort reserves an ephemeral TCP port and returns it in the uint32 form the
+// embedded-postgres config expects, so no narrowing conversion is needed at the
+// call site. It fails closed if the kernel ever hands back a port outside the
+// 16-bit TCP port range.
+func freePort() (uint32, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, fmt.Errorf("listen on ephemeral port: %w", err)
+	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port
+	addr, ok := l.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0, fmt.Errorf("listen on ephemeral port: unexpected address type %T", l.Addr())
+	}
+	p := addr.Port
+	if p < 0 || p > math.MaxUint16 {
+		return 0, fmt.Errorf("listen on ephemeral port: port %d out of range", p)
+	}
+	return uint32(p), nil
 }
 
 type mapResolver map[string]crypto.Signer

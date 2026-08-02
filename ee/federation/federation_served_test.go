@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -41,7 +42,7 @@ func TestMain(m *testing.M) {
 	port := freePort()
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(port).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
 		BinariesPath(dir + "/bin").
@@ -65,13 +66,19 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func freePort() int {
+// freePort reserves an ephemeral TCP port and reports it as a uint32, the width
+// the embedded-postgres builder takes, so no caller needs a width conversion.
+func freePort() uint32 {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
 	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port
+	p := l.Addr().(*net.TCPAddr).Port
+	if p <= 0 || p > math.MaxUint16 {
+		panic(fmt.Sprintf("freePort: listener reported out-of-range TCP port %d", p))
+	}
+	return uint32(p)
 }
 
 func TestFederationReplicatesTrustAndReadStateForFailover(t *testing.T) {

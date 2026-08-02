@@ -346,9 +346,10 @@ type witnessMemoryLog struct {
 }
 
 func (m *witnessMemoryLog) Append(_ context.Context, e eventspec.Event) (eventspec.Event, error) {
-	e.Sequence = uint64(len(m.events) + 1)
+	seq := len(m.events) + 1
+	e.Sequence = uint64(seq)
 	if e.Time.IsZero() {
-		e.Time = time.Unix(1800000000+int64(e.Sequence), 0).UTC()
+		e.Time = time.Unix(1800000000+int64(seq), 0).UTC()
 	}
 	m.events = append(m.events, e)
 	return e, nil

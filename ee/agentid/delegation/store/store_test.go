@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"reflect"
@@ -43,7 +44,7 @@ func TestMain(m *testing.M) {
 	port := freePort()
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(port).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
 		BinariesPath(dir + "/bin").
@@ -61,13 +62,21 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func freePort() int {
+// freePort binds an ephemeral TCP port and returns it in the uint32 form the
+// embedded-postgres config takes. The kernel-assigned port is range-checked here
+// (rather than converted blindly) so an implausible value fails the harness loudly
+// instead of wrapping into a different port number.
+func freePort() uint32 {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
 	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port
+	p := l.Addr().(*net.TCPAddr).Port
+	if p < 0 || p > math.MaxUint16 {
+		panic(fmt.Sprintf("agid store test: implausible ephemeral port %d", p))
+	}
+	return uint32(p)
 }
 
 // newRepoOn opens a core store against a fresh database, registers the AGID DDL

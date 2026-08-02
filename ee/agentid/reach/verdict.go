@@ -144,9 +144,9 @@ func (rs ReachableSet) canonicalBytes() []byte {
 	b = appendStr(b, reachPrefix)
 	b = appendStr(b, "reachable-set")
 	b = appendStr(b, rs.TenantID)
-	b = appendU64(b, uint64(rs.Cardinality))
-	b = appendU64(b, uint64(rs.MaxSensitivity))
-	b = appendU64(b, uint64(rs.TenantSpan))
+	b = appendI64(b, int64(rs.Cardinality))
+	b = appendI64(b, int64(rs.MaxSensitivity))
+	b = appendI64(b, int64(rs.TenantSpan))
 	// nodes, sorted by id so the digest is a pure function of the set's CONTENT, not the
 	// slice order it happens to be built in (defensive: Resolve already id-sorts, but a
 	// caller assembling a set by hand still gets an order-independent digest).
@@ -156,7 +156,7 @@ func (rs ReachableSet) canonicalBytes() []byte {
 	for _, n := range nodes {
 		b = appendStr(b, n.ID)
 		b = appendStr(b, n.Kind)
-		b = appendU64(b, uint64(n.Sensitivity))
+		b = appendI64(b, int64(n.Sensitivity))
 		labels := append([]string(nil), n.Labels...)
 		sort.Strings(labels)
 		b = appendU64(b, uint64(len(labels)))
@@ -205,6 +205,30 @@ func appendU64(b []byte, v uint64) []byte {
 	var x [8]byte
 	binary.BigEndian.PutUint64(x[:], v)
 	return append(b, x[:]...)
+}
+
+// appendI64 writes a SIGNED value as the same 8 fixed big-endian bytes appendU64 would
+// write for that value's two's-complement bit pattern. The canonical encoding is a
+// bit-level commitment, not an arithmetic one: it must be reproducible across runs and
+// machines and must not change for any input, so the bytes are MASKED straight out of v
+// rather than reinterpreted through an unsigned conversion. Each byte is
+// `byte(v>>k & 0xFF)`, i.e. bits k..k+7 of v, which is exactly big-endian byte
+// (56-k)/8 of uint64(v). Go's right shift on a signed operand is arithmetic, so the
+// sign-extension bits above the mask are discarded and negative values encode to their
+// full-width two's-complement bytes — identical to the previous
+// appendU64(b, uint64(v)) for every value of v. appendi64_test.go pins the byte strings
+// at 0, 1, -1, MaxInt64, and MinInt64 against hand-written literals.
+func appendI64(b []byte, v int64) []byte {
+	return append(b,
+		byte(v>>56&0xFF),
+		byte(v>>48&0xFF),
+		byte(v>>40&0xFF),
+		byte(v>>32&0xFF),
+		byte(v>>24&0xFF),
+		byte(v>>16&0xFF),
+		byte(v>>8&0xFF),
+		byte(v&0xFF),
+	)
 }
 
 // normLabel normalizes a label/sensitivity value: trim surrounding whitespace and
@@ -311,9 +335,9 @@ func (v Verdict) CanonicalBytes() []byte {
 	b = appendStr(b, v.TenantID)
 	b = appendBytes(b, v.SubjectDigest)
 	b = appendBytes(b, v.ReachableDigest)
-	b = appendU64(b, uint64(v.Cardinality))
-	b = appendU64(b, uint64(v.MaxSensitivity))
-	b = appendU64(b, uint64(v.TenantSpan))
+	b = appendI64(b, int64(v.Cardinality))
+	b = appendI64(b, int64(v.MaxSensitivity))
+	b = appendI64(b, int64(v.TenantSpan))
 	// determination
 	b = appendStr(b, "determination")
 	b = appendStr(b, v.Determination.RequesterClass)
@@ -325,7 +349,7 @@ func (v Verdict) CanonicalBytes() []byte {
 		b = appendBytes(b, vi.OffendingDigest)
 	}
 	b = appendStr(b, v.Watermark)
-	b = appendU64(b, uint64(v.IssuedAt))
+	b = appendI64(b, v.IssuedAt)
 	b = appendStr(b, v.Key.ID)
 	b = appendStr(b, v.Key.Algorithm)
 	return b

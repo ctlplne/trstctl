@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -567,7 +568,7 @@ func startEmbeddedPostgres(t *testing.T) (string, func()) {
 	port := freeTCPPort(t)
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(port).
 		RuntimePath(filepath.Join(dir, "rt")).
 		DataPath(filepath.Join(dir, "data")).
 		BinariesPath(filepath.Join(dir, "bin")).
@@ -635,14 +636,24 @@ func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), strin
 	}, keyDir
 }
 
-func freeTCPPort(t *testing.T) int {
+// freeTCPPort returns an unused loopback port as a uint32 — the type
+// embedded-postgres' Port option takes — so the port is carried end-to-end
+// without a narrowing conversion at the call site. The kernel-assigned port is
+// range-checked here (a TCP port is a 16-bit number) and the test fails closed
+// if it is ever outside that range.
+func freeTCPPort(t *testing.T) uint32 {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("free port: %v", err)
 	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port
+	p := l.Addr().(*net.TCPAddr).Port
+	if p > 0 && p <= math.MaxUint16 {
+		return uint32(p)
+	}
+	t.Fatalf("free port: listener reported out-of-range TCP port %d", p)
+	return 0
 }
 
 func leafCSR(t *testing.T) []byte {

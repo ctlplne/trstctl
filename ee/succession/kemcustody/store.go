@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,9 +140,13 @@ func (s *Store) saveLocked(handle string, protoAlg signerpb.Algorithm, key *pqc.
 		return err
 	}
 	defer secret.Wipe(privateBytes)
+	algByte, err := algorithmByte(protoAlg)
+	if err != nil {
+		return err
+	}
 	plaintext := make([]byte, 0, len(kemMagic)+1+len(privateBytes))
 	plaintext = append(plaintext, kemMagic...)
-	plaintext = append(plaintext, byte(protoAlg))
+	plaintext = append(plaintext, algByte)
 	plaintext = append(plaintext, privateBytes...)
 	defer secret.Wipe(plaintext)
 	sealed, err := seal.Seal(s.wrapper, plaintext, []byte(sanitizeHandle(handle)))
@@ -152,6 +157,18 @@ func (s *Store) saveLocked(handle string, protoAlg signerpb.Algorithm, key *pqc.
 		return err
 	}
 	return os.WriteFile(s.path(handle), sealed, 0o600)
+}
+
+// algorithmByte narrows a proto algorithm to the single byte used by the sealed
+// KEM record header. The record format reserves exactly one byte for the
+// algorithm, so any value outside 0..255 is unrepresentable and fails closed
+// rather than being silently truncated into a different algorithm.
+func algorithmByte(protoAlg signerpb.Algorithm) (byte, error) {
+	v := int32(protoAlg)
+	if v < 0 || v > math.MaxUint8 {
+		return 0, fmt.Errorf("kem custody: algorithm %d is not representable in the sealed KEM record", v)
+	}
+	return byte(v), nil
 }
 
 func (s *Store) loadLocked(handle string) (*pqc.KEMPrivateKey, error) {

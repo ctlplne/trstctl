@@ -304,9 +304,21 @@ func mustTime(s string) *time.Time {
 
 func mustUnix(s string) int64 { return mustTime(s).Unix() }
 
+// vectorsRoot opens testdata/vectors as an os.Root so vector reads are confined
+// to that directory: the kernel refuses symlink and ".." escapes at open time.
+func vectorsRoot(t *testing.T) *os.Root {
+	t.Helper()
+	root, err := os.OpenRoot(filepath.Join("testdata", "vectors"))
+	if err != nil {
+		t.Fatalf("open vectors dir: %v", err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	return root
+}
+
 func mustReadVector(t *testing.T, name string, seed []byte) []byte {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", "vectors", name))
+	b, err := vectorsRoot(t).ReadFile(name)
 	if err != nil {
 		t.Fatalf("read vector %s: %v\nseed vector:\n%s", name, err, seed)
 	}
@@ -343,7 +355,7 @@ type vectorFixture struct {
 
 func mustReadFixture(t *testing.T, name string) ObservedRecord {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", "vectors", name+".fixture.json"))
+	b, err := vectorsRoot(t).ReadFile(name + ".fixture.json")
 	if err != nil {
 		t.Fatalf("read fixture %s: %v", name, err)
 	}

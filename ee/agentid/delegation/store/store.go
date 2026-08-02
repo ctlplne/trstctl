@@ -220,7 +220,7 @@ func (r *Repo) InsertDelegationRecord(ctx context.Context, tenantID string, rec 
 			    depth_remaining, not_before, not_after, encoded, seq)
 			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 			rec.RecordDigest, nilIfEmpty(rec.ParentDigest), rec.RootAnchor, rec.DelegatorID, rec.DelegateID,
-			int64(rec.DepthRemaining), rec.NotBefore, rec.NotAfter, rec.Encoded, int64(rec.Seq))
+			rec.DepthRemaining, rec.NotBefore, rec.NotAfter, rec.Encoded, rec.Seq)
 		if err != nil {
 			return fmt.Errorf("agid store: insert delegation record: %w", err)
 		}
@@ -237,7 +237,7 @@ func (r *Repo) InsertIssuance(ctx context.Context, tenantID string, iss Issuance
 			    task_envelope_digest, not_before, not_after, attestation_ref, seq)
 			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 			iss.CredentialID, iss.SubjectID, iss.ChainHeadDigest, iss.ChainDigest, iss.AgentStackDigest,
-			nilIfEmpty(iss.TaskEnvelopeDigest), iss.NotBefore, iss.NotAfter, nilIfEmpty(iss.AttestationRef), int64(iss.Seq))
+			nilIfEmpty(iss.TaskEnvelopeDigest), iss.NotBefore, iss.NotAfter, nilIfEmpty(iss.AttestationRef), iss.Seq)
 		if err != nil {
 			return fmt.Errorf("agid store: insert issuance: %w", err)
 		}
@@ -253,7 +253,7 @@ func (r *Repo) InsertAttestationBinding(ctx context.Context, tenantID string, ab
 			`INSERT INTO agent_attestation_bindings
 			   (tenant_id, binding_id, credential_id, evidence_digest, attestation_class, verified_at, seq)
 			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)`,
-			ab.BindingID, ab.CredentialID, ab.EvidenceDigest, ab.AttestationClass, ab.VerifiedAt, int64(ab.Seq))
+			ab.BindingID, ab.CredentialID, ab.EvidenceDigest, ab.AttestationClass, ab.VerifiedAt, ab.Seq)
 		if err != nil {
 			return fmt.Errorf("agid store: insert attestation binding: %w", err)
 		}
@@ -268,7 +268,7 @@ func (r *Repo) InsertRefusalRecord(ctx context.Context, tenantID string, rr Refu
 			`INSERT INTO agent_refusal_records
 			   (tenant_id, refusal_id, subject_id, failed_check, request_digest, signature, seq)
 			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)`,
-			rr.RefusalID, rr.SubjectID, rr.FailedCheck, nilIfEmpty(rr.RequestDigest), rr.Signature, int64(rr.Seq))
+			rr.RefusalID, rr.SubjectID, rr.FailedCheck, nilIfEmpty(rr.RequestDigest), rr.Signature, rr.Seq)
 		if err != nil {
 			return fmt.Errorf("agid store: insert refusal record: %w", err)
 		}
@@ -301,7 +301,7 @@ func InsertRevocationDirectiveWithJobsTx(ctx context.Context, tx pgx.Tx, dir Rev
 		`INSERT INTO agent_revocation_directives
 		   (tenant_id, directive_id, subject_id, reason, watermark, terminal, seq)
 		 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)`,
-		dir.DirectiveID, dir.SubjectID, dir.Reason, int64(dir.Watermark), dir.Terminal, int64(dir.Seq)); err != nil {
+		dir.DirectiveID, dir.SubjectID, dir.Reason, dir.Watermark, dir.Terminal, dir.Seq); err != nil {
 		return fmt.Errorf("agid store: insert revocation directive: %w", err)
 	}
 	for _, j := range jobs {
@@ -310,7 +310,7 @@ func InsertRevocationDirectiveWithJobsTx(ctx context.Context, tx pgx.Tx, dir Rev
 			   (tenant_id, directive_id, idempotency_key, credential_id, follow_on, completion_ref, seq)
 			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)
 			 ON CONFLICT (tenant_id, directive_id, idempotency_key) DO NOTHING`,
-			dir.DirectiveID, j.IdempotencyKey, j.CredentialID, j.FollowOn, nilIfEmpty(j.CompletionRef), int64(j.Seq)); err != nil {
+			dir.DirectiveID, j.IdempotencyKey, j.CredentialID, j.FollowOn, nilIfEmpty(j.CompletionRef), j.Seq); err != nil {
 			return fmt.Errorf("agid store: insert revocation job %q: %w", j.IdempotencyKey, err)
 		}
 	}
@@ -413,22 +413,19 @@ func (r *Repo) FetchDescendantSet(ctx context.Context, tenantID, subjectID strin
 			`SELECT record_digest, parent_digest, root_anchor, delegator_id, delegate_id,
 			        depth_remaining, not_before, not_after, encoded, seq
 			   FROM agent_delegation_records
-			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND seq <= $1`, int64(watermark))
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND seq <= $1`, watermark)
 		if err != nil {
 			return fmt.Errorf("agid store: load records for descendants: %w", err)
 		}
 		for drows.Next() {
 			var rec DelegationRecord
 			var parent []byte
-			var depth, seq int64
 			if err := drows.Scan(&rec.RecordDigest, &parent, &rec.RootAnchor, &rec.DelegatorID, &rec.DelegateID,
-				&depth, &rec.NotBefore, &rec.NotAfter, &rec.Encoded, &seq); err != nil {
+				&rec.DepthRemaining, &rec.NotBefore, &rec.NotAfter, &rec.Encoded, &rec.Seq); err != nil {
 				drows.Close()
 				return fmt.Errorf("agid store: scan record for descendants: %w", err)
 			}
 			rec.ParentDigest = parent
-			rec.DepthRemaining = uint32(depth)
-			rec.Seq = uint64(seq)
 			byDigest[string(rec.RecordDigest)] = rec
 		}
 		if err := drows.Err(); err != nil {
@@ -445,7 +442,7 @@ func (r *Repo) FetchDescendantSet(ctx context.Context, tenantID, subjectID strin
 		irows, err := tx.Query(ctx,
 			`SELECT credential_id, chain_head_digest FROM agent_issuances
 			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND seq <= $1
-			  ORDER BY credential_id ASC`, int64(watermark))
+			  ORDER BY credential_id ASC`, watermark)
 		if err != nil {
 			return fmt.Errorf("agid store: load issuances for descendants: %w", err)
 		}
@@ -511,14 +508,13 @@ func chainContainsSubject(byDigest map[string]DelegationRecord, head []byte, sub
 func scanRecord(ctx context.Context, tx pgx.Tx, recordDigest []byte) (DelegationRecord, bool, error) {
 	var rec DelegationRecord
 	var parent []byte
-	var depth, seq int64
 	e := tx.QueryRow(ctx,
 		`SELECT record_digest, parent_digest, root_anchor, delegator_id, delegate_id,
 		        depth_remaining, not_before, not_after, encoded, seq
 		   FROM agent_delegation_records
 		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND record_digest = $1`, recordDigest).
 		Scan(&rec.RecordDigest, &parent, &rec.RootAnchor, &rec.DelegatorID, &rec.DelegateID,
-			&depth, &rec.NotBefore, &rec.NotAfter, &rec.Encoded, &seq)
+			&rec.DepthRemaining, &rec.NotBefore, &rec.NotAfter, &rec.Encoded, &rec.Seq)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return DelegationRecord{}, false, nil
 	}
@@ -526,8 +522,6 @@ func scanRecord(ctx context.Context, tx pgx.Tx, recordDigest []byte) (Delegation
 		return DelegationRecord{}, false, fmt.Errorf("agid store: scan delegation record: %w", e)
 	}
 	rec.ParentDigest = parent
-	rec.DepthRemaining = uint32(depth)
-	rec.Seq = uint64(seq)
 	return rec, true, nil
 }
 
@@ -574,7 +568,7 @@ type RevocationEffect struct {
 func (r *Repo) FetchRevocationDirective(ctx context.Context, tenantID, directiveID string) (dir RevocationDirective, found bool, err error) {
 	err = r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		var reason string
-		var watermark, seq int64
+		var watermark, seq uint64
 		var terminal bool
 		var subject string
 		e := tx.QueryRow(ctx,
@@ -590,7 +584,7 @@ func (r *Repo) FetchRevocationDirective(ctx context.Context, tenantID, directive
 		}
 		dir = RevocationDirective{
 			DirectiveID: directiveID, SubjectID: subject, Reason: reason,
-			Watermark: uint64(watermark), Terminal: terminal, Seq: uint64(seq),
+			Watermark: watermark, Terminal: terminal, Seq: seq,
 		}
 		found = true
 		return nil
@@ -616,13 +610,11 @@ func (r *Repo) FetchRevocationJobs(ctx context.Context, tenantID, directiveID st
 		for rows.Next() {
 			var j RevocationJob
 			var completion []byte
-			var seq int64
-			if err := rows.Scan(&j.IdempotencyKey, &j.CredentialID, &j.FollowOn, &completion, &seq); err != nil {
+			if err := rows.Scan(&j.IdempotencyKey, &j.CredentialID, &j.FollowOn, &completion, &j.Seq); err != nil {
 				return fmt.Errorf("agid store: scan revocation job: %w", err)
 			}
 			j.DirectiveID = directiveID
 			j.CompletionRef = completion
-			j.Seq = uint64(seq)
 			out = append(out, j)
 		}
 		return rows.Err()
@@ -653,7 +645,7 @@ func RecordEffectIfAbsentTx(ctx context.Context, tx pgx.Tx, eff RevocationEffect
 		        AND directive_id = $1 AND idempotency_key = $2
 		 )`,
 		eff.DirectiveID, eff.IdempotencyKey, eff.CredentialID, eff.EffectClass,
-		eff.Executor, eff.CompletedAt, eff.EvidenceBody, eff.EvidenceSig, eff.EvidencePub, int64(eff.Seq))
+		eff.Executor, eff.CompletedAt, eff.EvidenceBody, eff.EvidenceSig, eff.EvidencePub, eff.Seq)
 	if err != nil {
 		return false, fmt.Errorf("agid store: record revocation effect: %w", err)
 	}
@@ -677,7 +669,7 @@ func RecordEffectIfAbsentTx(ctx context.Context, tx pgx.Tx, eff RevocationEffect
 // scoped to tenantID by RLS. found is false when no effect has been recorded yet.
 func (r *Repo) FetchEffect(ctx context.Context, tenantID, directiveID, idempotencyKey string) (eff RevocationEffect, found bool, err error) {
 	err = r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		var seq, completedAt int64
+		var completedAt int64
 		e := tx.QueryRow(ctx,
 			`SELECT credential_id, effect_class, executor, completed_at,
 			        evidence_body, evidence_sig, evidence_pub, seq
@@ -685,7 +677,7 @@ func (r *Repo) FetchEffect(ctx context.Context, tenantID, directiveID, idempoten
 			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 			    AND directive_id = $1 AND idempotency_key = $2`, directiveID, idempotencyKey).
 			Scan(&eff.CredentialID, &eff.EffectClass, &eff.Executor, &completedAt,
-				&eff.EvidenceBody, &eff.EvidenceSig, &eff.EvidencePub, &seq)
+				&eff.EvidenceBody, &eff.EvidenceSig, &eff.EvidencePub, &eff.Seq)
 		if errors.Is(e, pgx.ErrNoRows) {
 			return nil
 		}
@@ -695,7 +687,6 @@ func (r *Repo) FetchEffect(ctx context.Context, tenantID, directiveID, idempoten
 		eff.DirectiveID = directiveID
 		eff.IdempotencyKey = idempotencyKey
 		eff.CompletedAt = completedAt
-		eff.Seq = uint64(seq)
 		found = true
 		return nil
 	})
@@ -820,13 +811,11 @@ func (r *Repo) IncompleteJobs(ctx context.Context, tenantID, directiveID string)
 		for rows.Next() {
 			var j RevocationJob
 			var completion []byte
-			var seq int64
-			if err := rows.Scan(&j.IdempotencyKey, &j.CredentialID, &j.FollowOn, &completion, &seq); err != nil {
+			if err := rows.Scan(&j.IdempotencyKey, &j.CredentialID, &j.FollowOn, &completion, &j.Seq); err != nil {
 				return fmt.Errorf("agid store: scan incomplete job: %w", err)
 			}
 			j.DirectiveID = directiveID
 			j.CompletionRef = completion
-			j.Seq = uint64(seq)
 			out = append(out, j)
 		}
 		return rows.Err()

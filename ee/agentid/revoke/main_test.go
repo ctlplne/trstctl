@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"testing"
@@ -50,7 +51,7 @@ func TestMain(m *testing.M) {
 	port := freePort()
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
+		Port(port).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
 		BinariesPath(dir + "/bin").
@@ -68,13 +69,21 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func freePort() int {
+// freePort returns a free TCP port in the type embedded-postgres wants (uint32), so the
+// harness carries one type end-to-end instead of narrowing at the call site. The kernel
+// only ever hands back a 16-bit port; the explicit range check makes that provable here
+// and fails the harness loudly rather than silently wrapping.
+func freePort() uint32 {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
 	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port
+	p := l.Addr().(*net.TCPAddr).Port
+	if p < 0 || p > math.MaxUint16 {
+		panic(fmt.Sprintf("freePort: out-of-range TCP port %d", p))
+	}
+	return uint32(p)
 }
 
 // harness bundles the live substrates a cascade test drives.
