@@ -28,6 +28,7 @@ func TestDependencyFreshnessSLOHasReportAndOwnerQueue(t *testing.T) {
 			UpdateType            string `json:"update_type"`
 			Owner                 string `json:"owner"`
 			Status                string `json:"status"`
+			BehindSince           string `json:"behind_since"`
 			NextReviewBy          string `json:"next_review_by"`
 			DeferralUntil         string `json:"deferral_until"`
 			Rationale             string `json:"rationale"`
@@ -91,6 +92,16 @@ func TestDependencyFreshnessSLOHasReportAndOwnerQueue(t *testing.T) {
 				t.Fatalf("tracked upgrade %q accepted_deferral must include deferral_until YYYY-MM-DD: %v", upgrade.Name, err)
 			}
 		}
+		// CODE-109: the class age budget is measured from behind_since, so every row
+		// that is not already current has to carry one. Without it the declared
+		// max_age_days is documentation rather than a gate.
+		if upgrade.Status != "current" {
+			if _, err := time.Parse(time.DateOnly, upgrade.BehindSince); err != nil {
+				t.Fatalf("tracked upgrade %q has status %q and must record behind_since YYYY-MM-DD: %v", upgrade.Name, upgrade.Status, err)
+			}
+		} else if strings.TrimSpace(upgrade.BehindSince) != "" {
+			t.Fatalf("tracked upgrade %q is status current but still records behind_since %q", upgrade.Name, upgrade.BehindSince)
+		}
 	}
 	for _, want := range []string{
 		"github.com/fergusstrange/embedded-postgres",
@@ -134,6 +145,15 @@ func TestDependencyFreshnessGateIsWiredSeparatelyFromVulnerabilityScanning(t *te
 	} {
 		if !strings.Contains(ci, want) {
 			t.Errorf("ci.yml missing dependency freshness or separate SCA wiring %q", want)
+		}
+	}
+
+	// CODE-109: the checker accepts "-" so the enforcement guards can feed it a mutated
+	// report on stdin. The gate itself must never take that path -- it has to read the
+	// committed report.
+	for name, body := range map[string]string{"Makefile": makefile, "ci.yml": ci} {
+		if strings.Contains(body, "check-dependency-freshness.mjs -") {
+			t.Errorf("%s must run the dependency freshness gate against the committed report, not stdin", name)
 		}
 	}
 

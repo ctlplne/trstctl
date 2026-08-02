@@ -6,6 +6,15 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const reportPath = path.join(repoRoot, "deploy/supply-chain/dependency-freshness.json");
+// The committed report is the only thing that gates a build: the Makefile target and
+// the CI job pass no argument. The single accepted argument is "-", which reads a report
+// from stdin, so the CODE-109 guard test can feed the checker a mutated copy of the real
+// report and prove the age budget actually fails without writing to the tracked file.
+const reportArg = process.argv[2] ?? "";
+if (reportArg !== "" && reportArg !== "-") {
+  console.error(`FAIL: the only accepted argument is "-" (read the report from stdin), got ${reportArg}`);
+  process.exit(1);
+}
 
 function fail(message) {
   console.error(`FAIL: ${message}`);
@@ -85,7 +94,7 @@ const requiredSecurityLinks = new Set([
   "S-7268c77e",
 ]);
 
-const report = readJSON(reportPath);
+const report = reportArg === "-" ? JSON.parse(fs.readFileSync(0, "utf8")) : readJSON(reportPath);
 if (report.schema_version !== 1) {
   fail(`schema_version must be 1, got ${report.schema_version}`);
 }
@@ -112,12 +121,14 @@ for (const finding of requiredSecurityLinks) {
 }
 
 const sloClasses = new Set();
+const ageBudgetDays = new Map();
 for (const slo of report.freshness_slos ?? []) {
   if (!slo.class || !slo.owner || !Number.isInteger(slo.max_age_days) || slo.max_age_days <= 0) {
     fail(`freshness_slos rows must carry class, owner, and positive max_age_days: ${JSON.stringify(slo)}`);
     continue;
   }
   sloClasses.add(slo.class);
+  ageBudgetDays.set(slo.class, slo.max_age_days);
 }
 for (const required of requiredSLOClasses) {
   if (!sloClasses.has(required)) {
@@ -146,11 +157,40 @@ for (const upgrade of report.tracked_upgrades ?? []) {
     fail(`tracked upgrade ${upgrade.name} next_review_by ${upgrade.next_review_by} is in the past`);
   }
 
+  let deferralUntil = null;
   if (upgrade.status === "accepted_deferral") {
-    const until = parseDateOnly(upgrade.deferral_until, `${upgrade.name}.deferral_until`);
-    if (until && until < today) {
+    deferralUntil = parseDateOnly(upgrade.deferral_until, `${upgrade.name}.deferral_until`);
+    if (deferralUntil && deferralUntil < today) {
       fail(`tracked upgrade ${upgrade.name} deferral_until ${upgrade.deferral_until} is in the past`);
     }
+  }
+
+  // CODE-109: the declared SLO has to bite. Every row that is not already "current"
+  // records behind_since -- the earliest date this repository observed the row as not
+  // current -- and that age is measured against the max_age_days of its class. Rolling
+  // next_review_by forward no longer keeps a stale dependency compliant; the only way
+  // past the budget is an accepted_deferral whose deferral_until still covers today.
+  if (upgrade.status !== "current") {
+    if (typeof upgrade.behind_since !== "string" || upgrade.behind_since.trim() === "") {
+      fail(`tracked upgrade ${upgrade.name} has status ${upgrade.status} and must record behind_since (YYYY-MM-DD), the date it was first observed behind its latest release`);
+    } else {
+      const behindSince = parseDateOnly(upgrade.behind_since, `${upgrade.name}.behind_since`);
+      const budgetDays = ageBudgetDays.get(upgrade.freshness_slo_class);
+      if (behindSince && behindSince > today) {
+        fail(`tracked upgrade ${upgrade.name} behind_since ${upgrade.behind_since} is in the future`);
+      } else if (behindSince && budgetDays !== undefined) {
+        const behindDays = daysBetween(behindSince, today);
+        if (behindDays > budgetDays) {
+          if (upgrade.status !== "accepted_deferral") {
+            fail(`tracked upgrade ${upgrade.name} has been behind since ${upgrade.behind_since} (${behindDays} days), over the ${budgetDays}-day ${upgrade.freshness_slo_class} budget: upgrade it, or record status accepted_deferral with a dated deferral_until`);
+          } else if (!deferralUntil || deferralUntil < today) {
+            fail(`tracked upgrade ${upgrade.name} has been behind since ${upgrade.behind_since} (${behindDays} days), over the ${budgetDays}-day ${upgrade.freshness_slo_class} budget, and its deferral_until ${upgrade.deferral_until || "(missing)"} does not cover today`);
+          }
+        }
+      }
+    }
+  } else if (typeof upgrade.behind_since === "string" && upgrade.behind_since.trim() !== "") {
+    fail(`tracked upgrade ${upgrade.name} is status current but still records behind_since ${upgrade.behind_since}`);
   }
 
   if (upgrade.ecosystem === "gomod") {

@@ -50,6 +50,7 @@
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Store/Operations",
       "status": "planned",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "Bundled eval PostgreSQL affects local integration tests and single-node eval startup; upgrades must refresh committed archive pins and Trivy receipts instead of moving only go.mod."
@@ -63,6 +64,7 @@
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Spine/Events",
       "status": "planned",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "Embedded JetStream is the AN-2 event source of truth; update work must run replay, projection, chaos, and outbox recovery tests together."
@@ -76,6 +78,7 @@
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Policy/Security",
       "status": "planned",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "OPA evaluates tenant policy in-process; upgrades must keep Rego behavior, policy property tests, and not-reachable advisory documentation aligned."
@@ -89,6 +92,7 @@
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Pluginhost/Security",
       "status": "planned",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "WASM sandbox upgrades can change capability and host-call behavior; they need pluginhost conformance and sandbox regression tests."
@@ -102,6 +106,7 @@
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Store/Tenant-isolation",
       "status": "planned",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "pgx sits under every RLS-enforced PostgreSQL path; upgrades must keep tenant context, migrations, and integration tests green."
@@ -115,6 +120,7 @@
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Transport/Signer",
       "status": "current",
+      "behind_since": "",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "SEC-de4eb072 upgrades the agent, SPIFFE, and signer RPC transport to the fixed GO-2026-6061 release; UDS, mTLS, workload, process-boundary, editions, and whole-module vulnerability gates pass."
@@ -128,6 +134,7 @@
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Console",
       "status": "accepted_deferral",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "2026-09-19",
       "rationale": "React 19 needs a console compatibility pass across routing, auth context, accessibility tests, and the embedded Vite bundle; it is tracked as planned work rather than Dependabot churn."
@@ -141,6 +148,7 @@
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Console",
       "status": "accepted_deferral",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "2026-09-19",
       "rationale": "React DOM moves with React; the acceptance gate is the full console test, coverage, build, and embedded-bundle drift check."
@@ -154,6 +162,7 @@
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Console",
       "status": "needs_human",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "SEC-5b43d4b3: upgraded to the latest published compatible release and kept all route tests green, but that release has a newer advisory and the named fully patched release is not published; do not suppress npm audit."
@@ -167,6 +176,7 @@
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Build",
       "status": "current",
+      "behind_since": "",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "S-7268c77e: upgraded the release build tool to the current patched Vite release; generated API checks, bundle hashing, Docker build, and Go embed tests pass."
@@ -180,6 +190,7 @@
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Quality",
       "status": "current",
+      "behind_since": "",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "S-7268c77e: upgraded Vitest with coverage-v8 to the current patched release; the full 696-test run and unchanged coverage floors pass under the supported worker model."
@@ -193,6 +204,7 @@
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Quality",
       "status": "current",
+      "behind_since": "",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
       "rationale": "S-7268c77e: moved coverage-v8 with Vitest and proved the formerly vacuous exclusion pattern now measures production code while preserving all configured floors."
@@ -206,6 +218,7 @@
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Design-system",
       "status": "accepted_deferral",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "2026-09-19",
       "rationale": "Tailwind v4 changes CSS generation and plugin behavior; upgrade must preserve the shadcn-style console shell and visual regression gates."
@@ -219,6 +232,7 @@
       "freshness_slo_class": "developer-tooling",
       "owner": "Web/Build",
       "status": "accepted_deferral",
+      "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "2026-09-19",
       "rationale": "TypeScript 6 should be upgraded with the generated OpenAPI types and strict build/typecheck gates, not as an isolated manifest bump."
