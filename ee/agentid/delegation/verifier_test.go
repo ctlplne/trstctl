@@ -163,6 +163,11 @@ func TestSignerGate_UsesDurableAnchorSourceDynamically(t *testing.T) {
 // recording call order, the gate verifies the whole chain and approves BEFORE any key op,
 // and exactly one key op runs, strictly after the gate consult. It also asserts a refused
 // chain yields ZERO key ops.
+//
+// It is also the test-side citation for independent AGID-claim-35: the gate consult and
+// the single key op both happen inside one signer process whose custody holds the issuance
+// key material in locked buffers (limb (a) of the claim's custody boundary), and the
+// ordering assertion is the claim's verify-before-any-private-key-operation limb.
 func TestIssue_VerifiesChainBeforeKeyOp(t *testing.T) {
 	reg := (*ToolRegistry)(nil)
 	envs, anchors, bc := singleAnchorChain(t, reg, "t1", "fido2:root-authenticator")

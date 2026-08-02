@@ -37,6 +37,17 @@ import (
 // end-to-end -- production provisions the real, durable issuing-CA handle (a remaining
 // AGID-INT-WIRE hardening item), but issuance is never fail-OPEN: without a gate approval
 // this key op is never reached.
+//
+// CUSTODY BOUNDARY -- independent AGID-claim-35, limb (a). This file is the custody half
+// of the claim-35 boundary: the issuance key material (the signer-held issuing CA key,
+// and every agent key minted under it) is created and kept inside the isolated signer
+// process by signing.SignerCustody, whose GenerateSuccessorKey routes through the signer
+// KeyFactory to crypto.GenerateLockedKey -- an mlock'd, MADV_DONTDUMP, zeroize-on-Destroy
+// buffer (AN-8). Nothing but public DER and the issued certificate DER crosses back out,
+// so the issuance key material is never released outside the boundary. The verify half of
+// the same claim is verifier.go, which runs in this same process. Limb (b) of the claim's
+// custody boundary -- an HSM/KMS with a sole authorized invoker -- is not wired to this
+// path; see the custody-boundary note in verifier.go.
 
 // IssuanceKeyOpConfig configures the in-signer issuance key op at attach time. Every field
 // is optional; the zero value yields a working key op that bootstraps a signer-internal

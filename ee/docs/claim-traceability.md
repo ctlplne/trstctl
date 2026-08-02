@@ -22,13 +22,13 @@ it cannot drift from the code it describes.
 | VDEC | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
 | XREC | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
 
-Citations parsed: **923 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **931 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
 | Claim | Implementation | Tests | Verified |
 |---|---|---|---|
-| 1 | `ee/agentid/delegation/bind.go`, `ee/agentid/delegation/brokerstore/precondition.go`, `ee/agentid/delegation/refusal.go` _(+1 more)_ | `ee/agentid/delegation/bind_test.go` | _[counsel]_ |
+| 1 | `ee/agentid/delegation/bind.go`, `ee/agentid/delegation/brokerstore/precondition.go`, `ee/agentid/delegation/refusal.go` _(+2 more)_ | `ee/agentid/delegation/bind_test.go`, `ee/agentid/delegation/signer_subprocess_test.go` | _[counsel]_ |
 | 2 | `ee/agentid/delegation/bind.go`, `ee/agentid/delegation/taskenvelope.go`, `ee/agentid/delegation/verifier.go` _(+3 more)_ | `ee/agentid/delegation/taskenvelope_test.go` | _[counsel]_ |
 | 3 | `ee/agentid/delegation/authority.go` | `ee/agentid/delegation/authority_test.go` | _[counsel]_ |
 | 4 | `ee/agentid/delegation/authority.go` | `ee/agentid/delegation/authority_test.go` | _[counsel]_ |
@@ -57,10 +57,12 @@ Citations parsed: **923 qualified**, **0 bare** (bare citations infer their fami
 | 27 | `ee/agentid/agentstack/representation.go`, `ee/agentid/delegation/carriage/carriage.go`, `ee/agentid/delegation/carriage/token.go` _(+2 more)_ | `ee/agentid/delegation/carriage/carriage_test.go` | _[counsel]_ |
 | 28 | `ee/agentid/intgate/doc.go`, `ee/agentid/intgate/inventory.go`, `ee/agentid/verify/doc.go` _(+5 more)_ | `ee/agentid/intgate/floor_test.go`, `ee/agentid/verify/verify_test.go`, `ee/agentid/verify/wasm_parity_test.go` | _[counsel]_ |
 | 29 | `ee/agentid/verify/agentstack_repr.go`, `ee/agentid/verify/doc.go`, `ee/agentid/verify/policy.go` _(+1 more)_ | `ee/agentid/verify/property_test.go`, `ee/agentid/verify/verify_test.go` | _[counsel]_ |
+| 30 | `ee/agentid/delegation/signerwiring.go` | `ee/agentid/delegation/signer_subprocess_test.go` | _[counsel]_ |
 | 31 | `ee/agentid/delegation/bind.go`, `ee/agentid/delegation/brokerstore/precondition.go`, `ee/agentid/delegation/verifier.go` _(+2 more)_ | `ee/agentid/delegation/carriage/carriage_test.go`, `ee/agentid/delegation/taskenvelope_test.go`, `ee/agentid/delegation/verifier_test.go` _(+1 more)_ | _[counsel]_ |
 | 32 | `ee/agentid/delegation/verifier.go`, `ee/agentid/delegation/wire.go` | `ee/agentid/delegation/attest_gate_test.go` | _[counsel]_ |
 | 33 | `ee/agentid/orchestrator/revocation.go`, `ee/agentid/revoke/aggregate.go`, `ee/agentid/revoke/terminal.go` | `ee/agentid/intwire/intwire_test.go`, `ee/agentid/revoke/terminal_test.go` | _[counsel]_ |
 | 34 | `ee/agentid/delegation/bind.go` | `ee/agentid/delegation/bind_test.go` | _[counsel]_ |
+| 35 | `ee/agentid/delegation/issuancekeyop.go`, `ee/agentid/delegation/verifier.go` | `ee/agentid/delegation/verifier_test.go` | _[counsel]_ |
 
 ## PCAS
 

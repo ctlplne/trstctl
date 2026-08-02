@@ -23,6 +23,13 @@ import (
 // GatedIssue again. This is the AGID-INT-WIRE process-boundary/restart proof for the
 // root-anchor provisioning path: the signer reads public trust anchors from durable local
 // state while linking no SQL, NATS, or HTTP.
+//
+// It is also the executed-medium proof for AGID-claim-30 (the non-transitory
+// computer-readable-medium form of AGID-claim-1): the test compiles the shipped
+// trstctl-signer program image, executes it as a separate OS process, and drives
+// GatedIssue over the real transport, so the stored instructions are shown to cause the
+// control plane to perform the method rather than an in-process test harness standing in
+// for it. The construction seam those instructions are built from is signerwiring.go.
 func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds and launches the real trstctl-signer binary")

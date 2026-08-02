@@ -43,6 +43,30 @@ import (
 // only; the after-approval keygen/certify is the signer's. This preserves INV-A1 by
 // construction here (the gate approves; the key op is the signer's) and keeps the gate
 // testable with software crypto + fakes.
+//
+// CUSTODY BOUNDARY -- independent AGID-claim-35. Claim 35 is the custody-boundary variant
+// of AGID-claim-1: the same verify-before-keygen spine, but reciting explicitly that the
+// verifying happens within an isolated signing process that custodies the issuance key
+// material such that it is never released outside a custody boundary, the boundary being
+// one of (a) a process holding the issuance key material in memory-locked buffers, or
+// (b) a hardware security module or key-management service together with an enforcement
+// component that is its sole authorized invoker.
+//
+// THIS TREE PRACTISES LIMB (a) ONLY. The Gate itself holds no issuance key -- its only key
+// is the refusal signer -- but it executes inside cmd/trstctl-signer, and that same
+// process custodies the AGID issuing-CA key and the generated agent keys as mlock'd,
+// MADV_DONTDUMP, zeroize-on-Destroy material: signing.SignerCustody.GenerateSuccessorKey
+// routes through the signer KeyFactory to crypto.GenerateLockedKey (AN-8), and
+// issuancekeyop.go is where this side of the boundary lives. Verification and issuance-key
+// custody are therefore the same process boundary, which is what the claim recites.
+//
+// Limb (b) is NOT practised for AGID issuance key material. The KMS/HSM providers in
+// ee/managedkeys/signerwiring are installed by signing.WithManagedKeyProviders onto a
+// separate managed-key runtime that serves the managed-key lifecycle RPCs; they are not
+// reachable from the SignerCustody path issuancekeyop.go generates the issuing CA and
+// agent keys through, and no component is designated their sole authorized invoker. The
+// claim recites the boundary as one of (a) or (b), so limb (a) alone reads on it; limb (b)
+// is an unimplemented alternative recorded here rather than left implied.
 
 // RootAnchor is one root anchor the signer holds in its trust store: the delegator
 // public key DER that a valid chain's root hop must be signed by, plus a

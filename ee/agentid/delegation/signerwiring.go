@@ -22,6 +22,19 @@ import (
 // root-anchor check with a signed refusal -- never an unverified approval. The
 // min-attestation-class policy and the attestation verifier are likewise supplied by the
 // deployment.
+//
+// SHIPPED-ARTIFACT / CRM SURFACE -- AGID-claim-30. Claim 30 is the non-transitory
+// computer-readable-medium form of AGID-claim-1: a medium storing instructions that, when
+// executed by one or more processors of a machine-credential control plane, cause it to
+// perform that method. This file is the honest anchor for that form. It is the
+// construction seam the SHIPPED trstctl-signer binary links: cmd/trstctl-signer/ee_attach.go
+// calls NewSignerGate and NewSignerIssuanceKeyOp here, and the resulting program image --
+// the release binary and the packages that carry it, produced from this source by the
+// release pipeline -- is the medium whose stored instructions perform the method on
+// execution. The end-to-end proof that the medium does so when executed is
+// TestSignerBinaryAGIDRootAnchorsSurviveRestart in signer_subprocess_test.go, which builds
+// the real binary, runs it as a separate process, and drives GatedIssue across the
+// transport twice, including across a restart.
 
 // SignerConfig configures the production gate at attach time. Every field is optional;
 // the zero value yields a working, fail-closed gate that approves only the free
