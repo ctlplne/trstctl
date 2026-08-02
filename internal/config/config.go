@@ -1802,9 +1802,9 @@ func Default() *Config {
 		Lifecycle:  Lifecycle{RenewBefore: "720h", AlertBefore: "336h", NotBeforeSkew: "5m"}, // 30d renew, 14d alert, 5m issuance backdate
 		Connectors: Connectors{HTTPTimeout: "15s"},
 		AirGap:     AirGap{Enabled: false, AllowPrivate: true},
-		// Telemetry is OFF by default (privacy-first; decided position). The
-		// endpoint and interval are defaults that take effect only on opt-in.
-		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trstctl.com/v1/usage", Interval: "24h", InstanceIDFile: "data/telemetry/instance-id"},
+		// Telemetry is OFF by default (privacy-first) and ships NO default endpoint:
+		// the project runs no public collector, so Validate rejects enabled+empty.
+		Telemetry: Telemetry{Enabled: false, Endpoint: "", Interval: "24h", InstanceIDFile: "data/telemetry/instance-id"},
 		// OTLP export is OFF by default. When enabled, it sends traces and audit
 		// event metadata only to the operator's collector endpoint.
 		OTLP: OTLP{Enabled: false, Timeout: "5s", QueueSize: 1024, ServiceName: "trstctl"},
@@ -2712,8 +2712,8 @@ func validateOptionalServices(c *Config) []error {
 	// Telemetry only constrains anything when the operator has opted in;
 	// disabled telemetry needs no endpoint or interval.
 	if c.Telemetry.Enabled {
-		if c.Telemetry.Endpoint == "" {
-			errs = append(errs, errors.New("telemetry.endpoint is required when telemetry is enabled"))
+		if strings.TrimSpace(c.Telemetry.Endpoint) == "" {
+			errs = append(errs, errors.New("telemetry.endpoint is required when telemetry is enabled: trstctl ships no default collector, so set TRSTCTL_TELEMETRY_ENDPOINT to an https collector you operate"))
 		} else if u, err := url.Parse(c.Telemetry.Endpoint); err != nil || u.Scheme != "https" || u.Host == "" {
 			errs = append(errs, fmt.Errorf("telemetry.endpoint %q must be an absolute https URL", c.Telemetry.Endpoint))
 		}

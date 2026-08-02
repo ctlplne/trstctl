@@ -453,12 +453,15 @@ development emulator. It cannot relax transport security for a remote Rekor serv
 ## Telemetry
 
 Telemetry is **off by default** and never sends anything unless you opt in. When
-enabled, it sends only coarse, anonymized, non-PII data.
+enabled, it sends only coarse, anonymized, non-PII data to a collector you name.
+The project operates no public telemetry collector, so there is no default
+endpoint: enabling telemetry without `TRSTCTL_TELEMETRY_ENDPOINT` is a
+configuration error and trstctl refuses to start.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_TELEMETRY_ENABLED` | `false` | Set `true` to opt in. A malformed value is ignored (stays off). |
-| `TRSTCTL_TELEMETRY_ENDPOINT` | `https://telemetry.trstctl.com/v1/usage` | Where reports go; must be `https`. |
+| `TRSTCTL_TELEMETRY_ENDPOINT` | empty | Required when telemetry is enabled; must be an absolute `https` URL for a collector you operate. There is no default. |
 | `TRSTCTL_TELEMETRY_INTERVAL` | `24h` | Reporting interval. |
 | `TRSTCTL_TELEMETRY_INSTANCE_ID_FILE` | `data/telemetry/instance-id` | Local file holding the random anonymous instance ID. Required when telemetry is enabled. |
 

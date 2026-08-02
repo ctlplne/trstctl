@@ -1,9 +1,14 @@
 # Telemetry (opt-in, off by default)
 
-trstctl can send a small amount of anonymized usage data to help the project
-understand adoption and prioritize work. **It is off by default and never sends
-anything unless you explicitly turn it on.** This is a decided, privacy-first
-position for a self-hosted product used in regulated environments.
+trstctl can send a small amount of anonymized usage data to a collector that you
+name. **It is off by default and never sends anything unless you explicitly turn
+it on.** This is a decided, privacy-first position for a self-hosted product used
+in regulated environments.
+
+The project operates no public telemetry collector, and trstctl ships no default
+endpoint. The setting exists so an operator running a fleet can aggregate their
+own coarse usage counts. If you turn telemetry on you must point it at an
+`https` collector you run, and trstctl refuses to start if you do not.
 
 ## What is sent (only when enabled)
 
@@ -41,13 +46,15 @@ not in the payload — by construction, the payload struct has no place to put i
 
 ## How to opt in
 
-Telemetry is enabled only when you set it explicitly:
+Telemetry is enabled only when you set it explicitly, and you must supply the
+collector yourself — there is no default endpoint to fall back on:
 
 ```bash
 # environment
 export TRSTCTL_TELEMETRY_ENABLED=true
+# required: an https collector you operate
+export TRSTCTL_TELEMETRY_ENDPOINT=https://telemetry.internal.example/v1/usage
 # optional overrides
-export TRSTCTL_TELEMETRY_ENDPOINT=https://telemetry.trstctl.com/v1/usage
 export TRSTCTL_TELEMETRY_INTERVAL=24h
 export TRSTCTL_TELEMETRY_INSTANCE_ID_FILE=/data/telemetry/instance-id
 ```
@@ -55,15 +62,18 @@ export TRSTCTL_TELEMETRY_INSTANCE_ID_FILE=/data/telemetry/instance-id
 or in the config file:
 
 ```json
-{ "telemetry": { "enabled": true, "interval": "24h" } }
+{ "telemetry": { "enabled": true, "endpoint": "https://telemetry.internal.example/v1/usage", "interval": "24h" } }
 ```
 
-When enabled, the endpoint must be an absolute `https://` URL and the interval a
-positive Go duration. `TRSTCTL_TELEMETRY_INSTANCE_ID_FILE` must name a writable
-local file for the random anonymous instance ID. trstctl validates this on boot
-and refuses to start on a bad telemetry configuration. A typo in
-`TRSTCTL_TELEMETRY_ENABLED` (anything that is not a recognized boolean) is
-ignored and leaves telemetry **off**.
+When enabled, the endpoint is required and must be an absolute `https://` URL,
+and the interval a positive Go duration. Enabling telemetry without an endpoint
+fails validation with `telemetry.endpoint is required` — a startup error, never
+a silent no-op that posts into the void.
+`TRSTCTL_TELEMETRY_INSTANCE_ID_FILE` must name a writable local file for the
+random anonymous instance ID. trstctl validates this on boot and refuses to
+start on a bad telemetry configuration. A typo in `TRSTCTL_TELEMETRY_ENABLED`
+(anything that is not a recognized boolean) is ignored and leaves telemetry
+**off**.
 
 Air-gapped installs are stricter: when `TRSTCTL_AIRGAP_ENABLED=true`, trstctl
 refuses to start with `TRSTCTL_TELEMETRY_ENABLED=true`. That turns "off by

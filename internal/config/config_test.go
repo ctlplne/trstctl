@@ -664,10 +664,36 @@ func TestTelemetryOffByDefault(t *testing.T) {
 	}
 }
 
-// TestTelemetryOptInViaEnv: the operator opts in explicitly through the
-// environment, and the endpoint/interval defaults are present.
+// TestTelemetryHasNoDefaultEndpoint pins the fail-closed default: the project
+// operates no public telemetry collector, so nothing may ship a compiled-in
+// destination. A default here would aim an opted-in operator's reports at a host
+// nobody answers.
+func TestTelemetryHasNoDefaultEndpoint(t *testing.T) {
+	if got := Default().Telemetry.Endpoint; got != "" {
+		t.Fatalf("telemetry.endpoint default = %q, want empty: there is no public collector, so opting in must require naming one", got)
+	}
+	cfg, err := Load(func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Telemetry.Endpoint != "" {
+		t.Errorf("an empty environment must not supply a telemetry endpoint, got %q", cfg.Telemetry.Endpoint)
+	}
+}
+
+// TestTelemetryOptInViaEnv: opting in through the environment requires the
+// operator to name their own collector. Enabling without an endpoint is a
+// startup error, not a silent no-op; enabling with one keeps the other defaults.
 func TestTelemetryOptInViaEnv(t *testing.T) {
-	env := map[string]string{"TRSTCTL_TELEMETRY_ENABLED": "true"}
+	onlyEnabled := map[string]string{"TRSTCTL_TELEMETRY_ENABLED": "true"}
+	if _, err := Load(func(k string) string { return onlyEnabled[k] }); err == nil {
+		t.Fatal("TRSTCTL_TELEMETRY_ENABLED=true without an endpoint must fail configuration validation")
+	} else if !strings.Contains(err.Error(), "telemetry.endpoint is required") {
+		t.Errorf("the error must name the missing endpoint, got: %v", err)
+	}
+
+	const collector = "https://telemetry.internal.example/v1/usage"
+	env := map[string]string{"TRSTCTL_TELEMETRY_ENABLED": "true", "TRSTCTL_TELEMETRY_ENDPOINT": collector}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -675,8 +701,8 @@ func TestTelemetryOptInViaEnv(t *testing.T) {
 	if !cfg.Telemetry.Enabled {
 		t.Error("TRSTCTL_TELEMETRY_ENABLED=true must enable telemetry")
 	}
-	if cfg.Telemetry.Endpoint == "" {
-		t.Error("an enabled telemetry config must have a default endpoint")
+	if cfg.Telemetry.Endpoint != collector {
+		t.Errorf("telemetry endpoint = %q, want the operator-supplied collector %q", cfg.Telemetry.Endpoint, collector)
 	}
 	if cfg.Telemetry.InstanceIDFile == "" {
 		t.Error("an enabled telemetry config must have a default instance-id file")
